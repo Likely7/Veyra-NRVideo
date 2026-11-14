@@ -3,6 +3,7 @@
 // Veyra changes: polling latest frames, leased shared textures/fences, crop,
 // timestamp contract, DXGI compatibility ingress and shared enhancement graph.
 #include "veyra/source/ScreenCaptureSource.h"
+#include "veyra/source/VirtualDesktop.h"
 #include "veyra/Log.h"
 #include <d3d11_4.h>
 #include <dxgi1_6.h>
@@ -20,6 +21,7 @@
 #include <format>
 #include <sstream>
 #include <mutex>
+#include <utility>
 extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/buffer.h>
@@ -34,6 +36,11 @@ int64_t host100ns(){return std::chrono::duration_cast<std::chrono::nanoseconds>(
 int64_t qpc100ns(){LARGE_INTEGER q{},f{};QueryPerformanceCounter(&q);QueryPerformanceFrequency(&f);return int64_t(static_cast<long double>(q.QuadPart)*10000000/f.QuadPart);}
 void check(HRESULT hr,const char* op){if(FAILED(hr)){log::error("screen",std::format("{} hr=0x{:08X}",op,uint32_t(hr)));winrt::check_hresult(hr);}}
 struct NativeHandle {HANDLE value=nullptr;~NativeHandle(){if(value)CloseHandle(value);}};
+// A window on a hidden virtual desktop is still composed and captured, but many
+// programs stop drawing while their desktop is not shown (Chromium browsers treat it
+// as occluded), so a long pause is explained instead of looking like a hang.
+constexpr wchar_t otherDesktopNotice[]=L"窗口在其他虚拟桌面上，暂时没有新画面：部分程序（如 Chrome、Edge）在所在桌面不显示时会暂停绘制";
+constexpr int64_t otherDesktopQuiet100ns=20000000;
 // The list is shared with the GUI thread, which excludes windows shown during a
 // capture. This thread never calls a window function while holding the lock, so it
 // can never wait on a GUI thread that waits on the lock.
@@ -138,14 +145,29 @@ bool ScreenCaptureOptions::parse(const std::wstring& uri,ScreenCaptureOptions& o
 std::vector<ScreenCaptureTarget> ScreenCaptureSource::targets(ScreenTargetKind kind){
     std::vector<ScreenCaptureTarget> result;
     if(kind==ScreenTargetKind::Window){
+        struct Walk {std::vector<ScreenCaptureTarget>& list;vdesk::Lookup desktops;size_t other=0;} walk{result};
         EnumWindows([](HWND window,LPARAM param)->BOOL{
+            auto& walk=*reinterpret_cast<Walk*>(param);
             DWORD pid=0;GetWindowThreadProcessId(window,&pid);
             if(pid==GetCurrentProcessId()||!IsWindowVisible(window)||GetWindow(window,GW_OWNER)||GetWindowTextLengthW(window)==0)return TRUE;
-            DWORD cloaked=0;DwmGetWindowAttribute(window,DWMWA_CLOAKED,&cloaked,sizeof(cloaked));if(cloaked)return TRUE;
+            // A cloaked window is not on screen and is left out, except one the shell
+            // cloaked because it is on another virtual desktop: WGC still captures it.
+            DWORD cloaked=0;DwmGetWindowAttribute(window,DWMWA_CLOAKED,&cloaked,sizeof(cloaked));
+            vdesk::Placement desktop;if(cloaked&&!walk.desktops.otherDesktop(window,desktop))return TRUE;
             wchar_t title[1024]{};GetWindowTextW(window,title,1024);RECT r{};GetClientRect(window,&r);
             if(r.right<=0||r.bottom<=0)return TRUE;
-            reinterpret_cast<std::vector<ScreenCaptureTarget>*>(param)->push_back({ScreenTargetKind::Window,uint64_t(window),pid,title,unsigned(r.right),unsigned(r.bottom),0});return TRUE;
-        },reinterpret_cast<LPARAM>(&result));
+            ScreenCaptureTarget target{ScreenTargetKind::Window,uint64_t(window),pid,title,unsigned(r.right),unsigned(r.bottom),0};
+            target.otherDesktop=desktop.other;target.desktopNumber=desktop.number;target.desktopName=std::move(desktop.name);
+            if(desktop.other)++walk.other;
+            walk.list.push_back(std::move(target));return TRUE;
+        },reinterpret_cast<LPARAM>(&walk));
+        // Windows on the shown desktop keep their Z order and come first (the default
+        // pick stays one of them); each other desktop follows in Task View order.
+        std::stable_sort(result.begin(),result.end(),[](const ScreenCaptureTarget& a,const ScreenCaptureTarget& b){
+            return std::pair{a.otherDesktop,a.desktopNumber}<std::pair{b.otherDesktop,b.desktopNumber};
+        });
+        if(walk.other||!walk.desktops.available())
+            log::info("screen",std::format("windows listed={} onOtherVirtualDesktops={} desktopManager={}",result.size(),walk.other,walk.desktops.available()));
     }else{
         EnumDisplayMonitors(nullptr,nullptr,[](HMONITOR monitor,HDC,LPRECT,LPARAM param)->BOOL{
             MONITORINFOEXW info{};info.cbSize=sizeof(info);if(!GetMonitorInfoW(monitor,&info))return TRUE;
@@ -202,6 +224,9 @@ struct ScreenCaptureSource::Impl {
     AVFrame* frame=nullptr;
     uint64_t signal=0,sequence=0;int64_t lastPts=0,nextPts=0,clockOffset=0,lastColorCheck=0;
     DWORD targetPid=0;bool hdr=false,wasWaiting=false,exclusion=false;
+    // The captured window is on a virtual desktop that is not shown (checked once a
+    // second, without COM) and the host time of the last delivered frame.
+    bool otherDesktop=false;int64_t lastFrameHost=0;
     // An output's color space changes only with the display configuration, which
     // invalidates the DXGI factory. Walking the outputs with a new factory every
     // second cost about 0.4 ms on the engine thread (one 20 ms spike, bench
@@ -302,6 +327,8 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         const auto& o=p.options;HWND window=o.kind==ScreenTargetKind::Window?reinterpret_cast<HWND>(o.target):nullptr;
         if(window){GetWindowThreadProcessId(window,&p.targetPid);if(!IsWindow(window)||p.targetPid==GetCurrentProcessId())throw winrt::hresult_error(E_INVALIDARG,L"窗口已关闭或属于 Veyra");}
         HMONITOR monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):reinterpret_cast<HMONITOR>(o.target);
+        p.otherDesktop=window&&vdesk::shellCloaked(window);
+        if(p.otherDesktop)log::info("screen","target window is on another virtual desktop; WGC captures it while that desktop is hidden");
         p.displayHdr(monitor,p.hdr);p.format=p.hdr?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_B8G8R8A8_UNORM;
         p.consumer=static_cast<ID3D12Device*>(desc.d3d12Device);
         ComPtr<IDXGIFactory4> factory;check(CreateDXGIFactory1(IID_PPV_ARGS(&factory)),"factory");ComPtr<IDXGIAdapter> adapter;
@@ -334,8 +361,8 @@ bool ScreenCaptureSource::open(const SourceOpenDesc& desc){
         p.updateRate(monitor);p.info.hardwareDecodeActive=true;
         p.info.videoDecodePath=o.method==ScreenCaptureMethod::Wgc?"WGC shared GPU":"DXGI duplication shared GPU";
         p.info.containerName="screen";p.info.videoCodecName="GPU RGB";p.info.videoPixelFormatName=p.hdr?"scRGB FP16":"BGRA8 sRGB";p.color();
-        p.clockOffset=host100ns()-qpc100ns();p.frame=av_frame_alloc();if(!p.frame)throw std::bad_alloc();
-        log::info("screen",std::format("opened method={} target={} size={}x{} hdr={} fpsLimit={:.3f} followDisplay={} cursor={} borderless={} pool=6 cpuReadback=0 audioCapture=0",unsigned(o.method),o.target,p.info.width,p.info.height,p.hdr,p.info.averageFps,o.fps==0,o.cursor,o.borderless||o.kind==ScreenTargetKind::Monitor));
+        p.clockOffset=host100ns()-qpc100ns();p.lastFrameHost=host100ns();p.frame=av_frame_alloc();if(!p.frame)throw std::bad_alloc();
+        log::info("screen",std::format("opened method={} target={} size={}x{} hdr={} fpsLimit={:.3f} followDisplay={} cursor={} borderless={} otherVirtualDesktop={} pool=6 cpuReadback=0 audioCapture=0",unsigned(o.method),o.target,p.info.width,p.info.height,p.hdr,p.info.averageFps,o.fps==0,o.cursor,o.borderless||o.kind==ScreenTargetKind::Monitor,p.otherDesktop));
         return true;
     }catch(const winrt::hresult_error& e){p.message=std::format(L"屏幕采集失败 0x{:08X}：{}",uint32_t(e.code()),e.message().c_str());log::error("screen",winrt::to_string(p.message));}
     catch(const std::exception& e){p.message=L"屏幕采集资源分配失败";log::error("screen",e.what());}
@@ -353,6 +380,13 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
             const auto monitor=window?MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST):reinterpret_cast<HMONITOR>(p.options.target);
             MONITORINFO mi{sizeof(mi)};
             if(!GetMonitorInfoW(monitor,&mi)){p.message=L"显示器已断开，请重新选择目标";return SourceReadStatus::Error;}
+            if(window){
+                // Switching virtual desktops (or moving the window to another one)
+                // keeps the session; only the explanation for a quiet window changes.
+                const bool other=vdesk::shellCloaked(window);
+                if(other!=p.otherDesktop){p.otherDesktop=other;log::info("screen",std::format("target window virtual desktop shown={}",!other));}
+                if(!other&&p.message==otherDesktopNotice)p.message.clear();
+            }
             if(!p.options.fps)p.updateRate(monitor);
             bool hdr=p.hdr;
             if(p.displayHdr(monitor,hdr)&&hdr!=p.hdr){
@@ -378,6 +412,7 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
                 // Apply a settled size even when no further frame arrives.
                 if(p.pendingSize.Width>0&&p.pendingSize.Height>0&&p.resizeSettled(p.pendingSize,now))p.applyPendingSize();
                 else p.recoverStaticResize(now);
+                if(p.otherDesktop&&p.message.empty()&&now-p.lastFrameHost>otherDesktopQuiet100ns)p.message=otherDesktopNotice;
                 return SourceReadStatus::Waiting;
             }
             const auto size=captured.ContentSize();
@@ -420,7 +455,7 @@ SourceReadStatus ScreenCaptureSource::read(pipeline::FramePacket& packet,const A
         if(p.wasWaiting||p.lastPts&&pts-p.lastPts>std::max<int64_t>(p.interval()*2,1000000))packet.flags|=uint32_t(pipeline::FrameFlagBits::Discontinuity);
         packet.hardwareSurface={slot->consumer.Get(),0,p.fence.Get(),p.signal,w,h};
         p.nextPts=std::max(p.nextPts+p.interval(),pts+p.interval()/2);
-        p.lastPts=pts;p.wasWaiting=false;p.message.clear();++p.metrics.delivered;
+        p.lastPts=pts;p.wasWaiting=false;p.message.clear();p.lastFrameHost=packet.arrivalHost100ns;++p.metrics.delivered;
         // WGC's compositor timestamp can be ahead of the CPU callback. Keep
         // that signed delta in diagnostics, not in the ingress CPU duration.
         p.metrics.ageMs=double(packet.arrivalHost100ns-now)/10000;

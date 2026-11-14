@@ -1,4 +1,5 @@
 #include "veyra/source/ScreenCaptureSource.h"
+#include "veyra/source/VirtualDesktop.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/pipeline/EnhanceGraph.h"
@@ -6,6 +7,8 @@
 #include "veyra/engine/EngineController.h"
 #include <windows.h>
 #include <dwmapi.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -16,12 +19,26 @@ extern "C" {
 using namespace veyra;
 namespace {
 int failures=0;
+GUID homeDesktop{};
+// The test pattern moves itself: Windows only lets a process move its own windows.
+// WM_APP+3 goes to another virtual desktop, WM_APP+4 back; both return 1 on success.
+LRESULT moveDesktop(HWND w,bool away){
+    constexpr CLSID managerClass{0xaa509086,0x5ca9,0x4c25,{0x8f,0x95,0x58,0x9d,0x3c,0x07,0xb4,0x8a}}; // CLSID_VirtualDesktopManager
+    Microsoft::WRL::ComPtr<IVirtualDesktopManager> manager;
+    if(FAILED(CoCreateInstance(managerClass,nullptr,CLSCTX_ALL,IID_PPV_ARGS(&manager))))return 0;
+    if(!away)return SUCCEEDED(manager->MoveWindowToDesktop(w,homeDesktop));
+    if(FAILED(manager->GetWindowDesktopId(w,&homeDesktop)))return 0;
+    for(const auto& desktop:source::vdesk::desktops())
+        if(desktop.id!=homeDesktop&&SUCCEEDED(manager->MoveWindowToDesktop(w,desktop.id)))return 1;
+    return 0;
+}
 void check(bool pass,const char* name){std::cout<<"SCREEN "<<name<<" pass="<<pass<<std::endl;failures+=!pass;}
 void pump(){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
 LRESULT CALLBACK pattern(HWND w,UINT m,WPARAM wp,LPARAM lp){
     if(m==WM_TIMER){InvalidateRect(w,nullptr,FALSE);return 0;}
     if(m==WM_APP+1){KillTimer(w,1);return 0;}
     if(m==WM_APP+2){SetTimer(w,1,16,nullptr);return 0;}
+    if(m==WM_APP+3||m==WM_APP+4)return moveDesktop(w,m==WM_APP+3);
     if(m==WM_PAINT){PAINTSTRUCT ps;auto dc=BeginPaint(w,&ps);RECT r;GetClientRect(w,&r);
         const COLORREF colors[]={RGB(225,30,45),RGB(20,210,70),RGB(25,60,225)};
         for(int i=0;i<3;++i){RECT band{r.right*i/3,0,r.right*(i+1)/3,r.bottom};auto brush=CreateSolidBrush(colors[i]);FillRect(dc,&band,brush);DeleteObject(brush);}
@@ -140,6 +157,36 @@ int wmain(int argc,wchar_t** argv){
     }
     DestroyWindow(excluded);
     options.left=options.top=options.right=options.bottom=0;
+    // Windows virtual desktops: a window on a desktop that is not shown is cloaked by
+    // the shell, yet must stay listed and keep being captured with real content.
+    // Needs a second desktop (Win+Ctrl+D); without one the case is reported as skipped.
+    if(source::vdesk::desktops().size()<2)std::cout<<"SCREEN virtual desktop cases skipped: create a second desktop with Win+Ctrl+D"<<std::endl;
+    else{
+        SetWindowPos(child.window,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+        DWORD_PTR moved=0;
+        const bool away=SendMessageTimeoutW(child.window,WM_APP+3,0,0,SMTO_ABORTIFHUNG,5000,&moved)&&moved;
+        check(away,"test window moves to another virtual desktop");
+        if(away){
+            Sleep(300);
+            check(source::vdesk::shellCloaked(child.window),"window on another virtual desktop is cloaked by the shell");
+            bool listed=false;
+            for(const auto& t:source::ScreenCaptureSource::targets(source::ScreenTargetKind::Window))
+                if(t.handle==uint64_t(child.window))listed=t.otherDesktop&&t.desktopNumber>0;
+            check(listed,"window on another virtual desktop stays listed with its desktop number");
+            options.kind=source::ScreenTargetKind::Window;options.target=uint64_t(child.window);options.method=source::ScreenCaptureMethod::Wgc;options.fps=60;options.cursor=false;
+            desc.path=options.uri();const bool ok=source.open(desc)&&next(source,p,&f,5000);
+            check(ok&&content(ctx,ring,source,p,f),"WGC window on another virtual desktop actual RGB content");if(!ok)std::wcerr<<source.status()<<std::endl;
+            const auto before=source.metrics().delivered;end=GetTickCount64()+1000;
+            while(GetTickCount64()<end){source.read(p,&f);pump();Sleep(2);}
+            std::cout<<"VDESK oneSecondFrames="<<source.metrics().delivered-before<<std::endl;
+            check(ok&&source.metrics().delivered>before+20,"window on another virtual desktop keeps delivering frames");
+            source.close();
+            DWORD_PTR back=0;
+            check(SendMessageTimeoutW(child.window,WM_APP+4,0,0,SMTO_ABORTIFHUNG,5000,&back)&&back,"test window returns to the shown desktop");
+            Sleep(300);
+            check(!source::vdesk::shellCloaked(child.window),"window back on the shown desktop is not cloaked");
+        }
+    }
     options.kind=source::ScreenTargetKind::Window;options.target=uint64_t(child.window);options.method=source::ScreenCaptureMethod::Wgc;desc.path=options.uri();check(source.open(desc),"window reopen");PostMessageW(child.window,WM_CLOSE,0,0);WaitForSingleObject(process.hProcess,3000);check(source.read(p,&f)==source::SourceReadStatus::Error,"closed target reports error");source.close();
     std::cout<<"SCREEN failures="<<failures<<std::endl;return failures?1:0;
 }

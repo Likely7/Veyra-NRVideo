@@ -1,5 +1,6 @@
 // QML bridge: Capture responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/source/VirtualDesktop.h"
 #include "veyra/source/WasapiAudioInput.h"
 #include "VirtualCaptureAudioSetup.h"
 
@@ -581,12 +582,23 @@ QVariantList QmlPlayerBridge::screenTargets() const {
         QVariantMap item;
         item["id"] = QString::number(target.handle);
         QString label = QString::fromWCharArray(target.name.c_str());
+        // A window on another virtual desktop (Win+Ctrl+D) is captured without
+        // switching to it; the label names that desktop as Task View shows it.
+        if (target.otherDesktop) {
+            const QString name = QString::fromStdWString(target.desktopName);
+            const QString desktop = !target.desktopNumber ? tr("其他桌面")
+                : name.isEmpty() ? tr("桌面 %1").arg(target.desktopNumber)
+                : tr("桌面 %1 · %2").arg(target.desktopNumber).arg(name);
+            label = QStringLiteral("[%1] %2").arg(desktop, label);
+        }
         if (target.width > 0)
             label += QStringLiteral(" · %1x%2").arg(target.width).arg(target.height);
         if (target.refresh > 0) label += QStringLiteral(" · %1Hz").arg(target.refresh);
         item["label"] = label;
         item["width"] = int(target.width);
         item["height"] = int(target.height);
+        item["otherDesktop"] = target.otherDesktop;
+        item["desktop"] = int(target.desktopNumber);
         out << item;
     }
     return out;
@@ -635,6 +647,16 @@ bool QmlPlayerBridge::startScreenCapture() {
     // second, late pointer otherwise), the picture must match the screen 1:1 for
     // clicks to land where they are seen (no crop), and the yellow border goes.
     const bool game = o.value("passthrough").toBool();
+    // 游戏模式 hands the foreground to the captured window, and activating a window
+    // on another virtual desktop makes Windows switch to that desktop, away from
+    // the picture. Checked live: the window may have moved since the list was read.
+    if (game && value.kind == source::ScreenTargetKind::Window) {
+        source::vdesk::Placement desktop;
+        if (source::vdesk::Lookup{}.otherDesktop(reinterpret_cast<void*>(value.target), desktop)) {
+            emit notice(tr("游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获"), true);
+            return false;
+        }
+    }
     if (game) {
         value.cursor = false; value.borderless = true;
         value.left = value.top = value.right = value.bottom = 0;
@@ -647,8 +669,10 @@ bool QmlPlayerBridge::startScreenCapture() {
         if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
             emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
     } else impl_->gameModeUri.clear();
-    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={}", int(value.kind), int(value.method),
-        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game));
+    bool otherDesktop = false;
+    for (const auto& t : impl_->screenList) if (t.handle == value.target) otherDesktop = t.otherDesktop;
+    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={} otherVirtualDesktop={}", int(value.kind), int(value.method),
+        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game, otherDesktop));
     openSourceUri(value.uri(), wideOf(screenTargetLabel()), o.value("fill").toBool());
     impl_->screenFitClient = impl_->screenFitImage = QSize();
     if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }

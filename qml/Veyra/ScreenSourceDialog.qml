@@ -24,6 +24,13 @@ DialogLayer {
         function onDialogChanged() { if (dialogHost.dialog === "screen") veyra.refreshCaptureTargets() }
     }
     readonly property var o: veyra.screenOptions
+    // The chosen window is on another Windows virtual desktop (Win+Ctrl+D).
+    readonly property bool otherDesktopTarget: {
+        const targets = veyra.screenTargets, id = veyra.screenTargetId
+        for (let i = 0; i < targets.length; ++i)
+            if (targets[i].id === id) return targets[i].otherDesktop === true
+        return false
+    }
 
     DialogSection { text: qsTr("目标") }
     DialogGroup {
@@ -38,7 +45,8 @@ DialogLayer {
         }
         VRow {
             label: qsTr("捕获目标")
-            hint: veyra.screenTargets.length === 0 ? qsTr("未找到可捕获的窗口或显示器") : ""
+            hint: veyra.screenTargets.length === 0 ? qsTr("未找到可捕获的窗口或显示器")
+                  : screenDialog.otherDesktopTarget ? qsTr("这个窗口在其他虚拟桌面上，不用切换桌面即可捕获；部分程序在所在桌面不显示时会暂停绘制") : ""
             RowLayout {
                 spacing: 6
                 VSelect {
@@ -56,7 +64,9 @@ DialogLayer {
     DialogGroup {
         VRow {
             label: qsTr("游戏模式")
-            hint: screenDialog.o.kind === 1
+            hint: screenDialog.o.kind === 0 && screenDialog.otherDesktopTarget && screenDialog.o.passthrough === true
+                  ? qsTr("游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获")
+                  : screenDialog.o.kind === 1
                   ? qsTr("开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
                   : qsTr("贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
             VSwitch {

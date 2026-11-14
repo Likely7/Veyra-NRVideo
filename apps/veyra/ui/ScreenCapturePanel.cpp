@@ -30,12 +30,18 @@ void layout(){
 }
 void methods(){const bool monitor=selection(Kind)==1;EnableWindow(child(Method),monitor);if(!monitor)SendMessageW(child(Method),CB_SETCURSEL,0,0);const bool wgc=selection(Method)==0;EnableWindow(child(Cursor),wgc);if(!wgc)SendMessageW(child(Cursor),BM_SETCHECK,BST_UNCHECKED,0);}
 void stopPreview(){if(preview){preview.reset();preview=std::make_unique<engine::EngineController>();}previewWidth=previewHeight=0;if(outline)ShowWindow(outline,SW_HIDE);}
+// A window on another virtual desktop (Win+Ctrl+D) is captured without switching to it.
+std::wstring label(const source::ScreenCaptureTarget& t){
+    if(!t.otherDesktop)return t.name;
+    const std::wstring desktop=!t.desktopNumber?std::wstring(L"其他桌面"):t.desktopName.empty()?std::format(L"桌面 {}",t.desktopNumber):std::format(L"桌面 {} · {}",t.desktopNumber,t.desktopName);
+    return L"["+desktop+L"] "+t.name;
+}
 void resetCrop(){for(int id=Left;id<=Bottom;++id)SetDlgItemInt(panelWindow,id,0,FALSE);if(outline)ShowWindow(outline,SW_HIDE);}
 void enumerate(){
     auto old=selection(Target);uint64_t handle=old>=0&&size_t(old)<targets.size()?targets[old].handle:0;
     targets=source::ScreenCaptureSource::targets(selection(Kind)==1?source::ScreenTargetKind::Monitor:source::ScreenTargetKind::Window);
     SendMessageW(child(Target),CB_RESETCONTENT,0,0);int selected=0;
-    for(size_t i=0;i<targets.size();++i){add(child(Target),targets[i].name.c_str());if(targets[i].handle==handle)selected=int(i);}
+    for(size_t i=0;i<targets.size();++i){add(child(Target),label(targets[i]).c_str());if(targets[i].handle==handle)selected=int(i);}
     SendMessageW(child(Target),CB_SETCURSEL,selected,0);EnableWindow(child(Start),!targets.empty());EnableWindow(child(PreviewStart),!targets.empty());methods();
     if(targets.empty())SetWindowTextW(child(State),L"没有可采集的目标");
 }
