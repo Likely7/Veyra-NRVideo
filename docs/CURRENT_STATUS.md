@@ -1,3 +1,5 @@
+> **2026-11-13 2.1.6已公开发布（最新）**：用户授权已执行，main/v2.1.6/v2.1.6-sources推送到Likely7/Veyra-NRVideo，发行7244307、产品f46df7f/EXEbf27ebed/PE2.1.6.0。两公开完整包/对应源码/摘要、服务端SHA/大小、匿名下载入口/Latest/两QR各220已验证；更新说明汇总2.1.5以来全部更新和数据条件/代价。ANR作者禁止Beta再分发，公开包无ANR资产，自写适配与本机完整实验包保留。公开产物releases/codex-release-2.1.6-20261113，原本机UI/ANR入口和用户配置不改；build仍codex-build-2.1.6-20261113。读docs/RELEASE_NOTES_2.1.6.md、BUILD_2.1.6.md及RELEASE_2.1.6_EXECUTION_2026-11-13.md/reports同任务FINAL.json。后续新增Release仍需明确授权，不关机。
+
 > **2.1.6公开发布准备（用户已授权）**：汇总2.1.5以来全部更新和分阶段A/B数据，产品EXEbf27ebed保持。ANR协作者明确禁止当前Beta再分发，公开包不含其运行资产，独立适配源码和本机原实验包保留。发布结果以RELEASE_2.1.6_EXECUTION_2026-11-13.md与reports/codex-release-2.1.6-20261113/FINAL.json为准；此前无发布授权为历史，不关机。
 
 > **2.1.6界面补充已交付**：录制旁回放开关、HDR高级区默认折叠；旧启动器已更新且保留原配置。见[执行记录](REPLAY_HDR_UI_2026-11-13.md)，包目录test-packages/codex-replay-hdr-ui-20261113。
