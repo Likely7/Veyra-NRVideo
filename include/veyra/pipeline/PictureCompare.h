@@ -58,45 +58,73 @@ public:
     // Components a repeat may have beyond the band: 63 in 3840x2160 NV12, 15 in
     // 1920x1080 NV12, none below 196608 components.
     static constexpr uint64_t toleranceFor(uint64_t components) { return components / 196608; }
+    // A sample this far beyond the band is a new picture whatever the rest
+    // holds, so the comparison stops there: `over` then saturates at this bound
+    // and max8 covers the compared part. Repeats (at most toleranceFor(): 63 in
+    // 4K NV12) and the smallest real new picture seen (156) are far below it,
+    // so their counts stay exact; a moving game frame reaches it in its first
+    // rows instead of after all 12 MB (T911 4K60: 0.9 ms of each new frame's
+    // capture callback, 1.8 ms at P95, went to comparing and copying).
+    static constexpr uint64_t kDecidedOver = 4096;
     struct Result {
         uint64_t id = 0;       // picture number; equal ids show the same picture
         bool repeat = false;   // at most toleranceFor() components beyond the band of the reference
-        uint64_t over = 0;     // components beyond the band
+        uint64_t over = 0;     // components beyond the band (saturates at kDecidedOver for a new picture)
         unsigned max8 = 0;     // largest difference, 8-bit scale
+        bool commit = false;   // deferred: commit() must copy this new picture into the reference
     };
     // Ids of different references never collide (space in the top byte).
     explicit PictureReference(unsigned space = 0) : space_(uint64_t(space & 0xFF) << 56) {}
-    void reset() { valid_ = false; }
+    void reset() { valid_ = false; pending_ = false; }
 
     // band: per-component tolerance in the stored unit (bandFor(); ignored for Exact).
-    Result observe(const PicturePlane* planes, unsigned count, PictureComponents kind, unsigned band = kBand8) {
+    // deferCopy: a new picture is numbered at once but becomes the reference only
+    // in commit(), which the caller runs with the same planes after it handed the
+    // frame on (the capture callback publishes first). Until then the reference
+    // is invalid, so a missed commit makes the next sample new, never a repeat.
+    Result observe(const PicturePlane* planes, unsigned count, PictureComponents kind, unsigned band = kBand8, bool deferCopy = false) {
         if (kind == PictureComponents::Exact) band = 0;
         Result r;
         size_t total = 0;
         for (unsigned p = 0; p < count; ++p) total += planes[p].rowBytes * planes[p].rows;
-        if (valid_ && total == bytes_ && kind == kind_ && band == band_) {
+        const uint64_t tolerance = toleranceFor(kind == PictureComponents::Words ? total / 2 : total);
+        if (valid_ && !pending_ && total == bytes_ && kind == kind_ && band == band_) {
+            const uint64_t decided = std::max<uint64_t>(tolerance + 1, kDecidedOver);
             const uint8_t* ref = reference_.data(); unsigned max = 0;
-            for (unsigned p = 0; p < count; ++p)
-                for (unsigned y = 0; y < planes[p].rows; ++y, ref += planes[p].rowBytes) {
+            for (unsigned p = 0; p < count && r.over < decided; ++p)
+                for (unsigned y = 0; y < planes[p].rows && r.over < decided; ++y, ref += planes[p].rowBytes) {
                     const uint8_t* row = planes[p].data + size_t(y) * planes[p].pitch;
                     if (kind == PictureComponents::Words) compareWords(row, ref, planes[p].rowBytes, band, r.over, max);
                     else compareBytes(row, ref, planes[p].rowBytes, band, r.over, max);
                 }
             r.max8 = band ? (max * kBand8 + band / 2) / band : max;
-            if (r.over <= toleranceFor(kind == PictureComponents::Words ? total / 2 : total)) { r.id = space_ | id_; r.repeat = true; return r; }
+            if (r.over <= tolerance) { r.id = space_ | id_; r.repeat = true; return r; }
         }
         // A new picture becomes the reference.
+        bytes_ = total; kind_ = kind; band_ = band; id_ = (id_ + 1) & 0x00FFFFFFFFFFFFFFull;
+        r.id = space_ | id_;
+        if (deferCopy) { valid_ = false; pending_ = true; r.commit = true; return r; }
+        copyReference(planes, count, total);
+        return r;
+    }
+    // Copies the picture a deferred observe() numbered; no-op otherwise.
+    void commit(const PicturePlane* planes, unsigned count) {
+        if (!pending_) return;
+        pending_ = false;
+        size_t total = 0;
+        for (unsigned p = 0; p < count; ++p) total += planes[p].rowBytes * planes[p].rows;
+        if (total == bytes_) copyReference(planes, count, total);
+    }
+
+private:
+    void copyReference(const PicturePlane* planes, unsigned count, size_t total) {
         if (reference_.size() < total) reference_.resize(total);
         uint8_t* ref = reference_.data();
         for (unsigned p = 0; p < count; ++p)
             for (unsigned y = 0; y < planes[p].rows; ++y, ref += planes[p].rowBytes)
                 std::memcpy(ref, planes[p].data + size_t(y) * planes[p].pitch, planes[p].rowBytes);
-        bytes_ = total; kind_ = kind; band_ = band; valid_ = true; id_ = (id_ + 1) & 0x00FFFFFFFFFFFFFFull;
-        r.id = space_ | id_;
-        return r;
+        valid_ = true;
     }
-
-private:
     static void compareBytes(const uint8_t* a, const uint8_t* b, size_t n, unsigned band, uint64_t& over, unsigned& max) {
         const __m128i limit = _mm_set1_epi8(char(band)), zero = _mm_setzero_si128();
         __m128i peak = zero; size_t i = 0; uint64_t count = 0;
@@ -134,7 +162,7 @@ private:
     size_t bytes_ = 0;
     uint64_t id_ = 0, space_ = 0;
     unsigned band_ = 0;
-    bool valid_ = false;
+    bool valid_ = false, pending_ = false;
     PictureComponents kind_ = PictureComponents::Bytes;
 };
 

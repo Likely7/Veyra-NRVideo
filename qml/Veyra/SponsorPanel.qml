@@ -1,4 +1,4 @@
-// 设置 → 赞助作者: the author's pages, then Ko-fi, then the WeChat / Alipay codes for
+// 设置 → 赞助作者: the author's pages, then Patreon, then the WeChat / Alipay codes for
 // users in mainland China (the order the author asked for, 2026-10-19).
 //
 // The page names a link by id only; the bridge owns the addresses
@@ -192,49 +192,58 @@ ColumnLayout {
 
     SectionTitle {
         text: qsTr("请作者喝杯咖啡")
-        hint: qsTr("金额随意，每一份支持都是很大的鼓励")
+        hint: qsTr("Patreon 主页查看作者动态，咖啡赞助为 US$5。")
     }
 
-    // Ko-fi first, for everyone: drawn as its official "Buy me a coffee" button (the
-    // one in the README).
     Flow {
-        id: kofiRow
+        id: patreonFlow
         property real motionDy: 0
-        transform: Translate { y: kofiRow.motionDy }
+        transform: Translate { y: patreonFlow.motionDy }
         Layout.fillWidth: true
         spacing: 14
-        Rectangle {
-            id: kofi
-            objectName: "sponsor-link-kofi"
-            width: kofiContent.implicitWidth + 40
-            height: 46
-            radius: height / 2
-            color: kofiHover.hovered ? "#83AFF5" : "#72A4F2"
-            Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
-            scale: kofiTap.pressed ? 0.96 : 1.0
-            Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
-            Row {
-                id: kofiContent
-                anchors.centerIn: parent
-                spacing: 9
-                Image {
-                    anchors.verticalCenter: parent.verticalCenter
-                    width: 34; height: 34
-                    source: "sponsor/kofi.svg"
-                    sourceSize.width: Math.ceil(34 * panel.dpr)
-                    sourceSize.height: Math.ceil(34 * panel.dpr)
+        Repeater {
+            model: [
+                { id: "patreon", label: qsTr("Patreon 主页"), background: "#B82131", hover: "#D32F40" },
+                { id: "patreonCoffee", label: qsTr("☕ 请作者喝杯咖啡 · US$5"), background: "#92400E", hover: "#A84A10" }
+            ]
+            delegate: Rectangle {
+                id: support
+                required property var modelData
+                objectName: "sponsor-link-" + modelData.id
+                implicitWidth: supportContent.implicitWidth + 40
+                width: Math.min(implicitWidth, patreonFlow.width)
+                height: 46
+                radius: height / 2
+                color: supportHover.hovered ? modelData.hover : modelData.background
+                Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
+                scale: supportTap.pressed ? 0.96 : 1.0
+                Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                RowLayout {
+                    id: supportContent
+                    anchors.fill: parent
+                    anchors.leftMargin: 20
+                    anchors.rightMargin: 20
+                    spacing: 9
+                    Image {
+                        Layout.preferredWidth: 28
+                        Layout.preferredHeight: 28
+                        source: "sponsor/patreon.svg"
+                        sourceSize.width: Math.ceil(28 * panel.dpr)
+                        sourceSize.height: Math.ceil(28 * panel.dpr)
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: support.modelData.label
+                        color: "#FFFFFF"
+                        font.family: Theme.fontUi
+                        font.pixelSize: 16
+                        font.weight: Font.Bold
+                        elide: Text.ElideRight
+                    }
                 }
-                Text {
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: "Buy me a coffee"
-                    color: "#FFFFFF"
-                    font.family: Theme.fontUi
-                    font.pixelSize: 16
-                    font.weight: Font.Bold
-                }
+                HoverHandler { id: supportHover; cursorShape: Qt.PointingHandCursor }
+                TapHandler { id: supportTap; onTapped: panel.openLink(support.modelData.id) }
             }
-            HoverHandler { id: kofiHover; cursorShape: Qt.PointingHandCursor }
-            TapHandler { id: kofiTap; onTapped: panel.openLink("kofi") }
         }
     }
 

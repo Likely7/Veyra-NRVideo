@@ -4,8 +4,10 @@ import QtQuick.Layouts
 Rectangle {
     id: sel
     property string value: ""
-    readonly property color valueColor: options.some(o => o.label === value && o.danger === true) ? Theme.err : Theme.t1
-    property var options: []      // [{ id, label }]
+    readonly property var selectedOption: options.find(o => o.label === value) || ({})
+    readonly property color valueColor: selectedOption.danger === true ? Theme.err
+                                       : selectedOption.gold === true ? Theme.warn : Theme.t1
+    property var options: []      // [{ id, label, danger?, gold? }]
     // .pop h6: the design titles a select's menu with the row label (core.js sel()).
     property string title: ""
     signal picked(string id)
@@ -50,7 +52,7 @@ Rectangle {
                 if (p instanceof VRow) return p.label
             return ""
         }
-        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value, disabled: o.disabled === true, danger: o.danger === true, note: o.note || "" }))
+        items: sel.options.map(o => ({ label: o.label, checked: o.label === sel.value, disabled: o.disabled === true, danger: o.danger === true, gold: o.gold === true, note: o.note || "" }))
         onPicked: (i, o) => sel.picked(sel.options[i].id)
     }
 }

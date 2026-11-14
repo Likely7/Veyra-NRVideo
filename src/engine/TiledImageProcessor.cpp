@@ -60,7 +60,7 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
         }
         // Source-normalized regions are mapped to this padded tile. Halo exceeds
         // the maximum feather, so clipping at tile edges cannot alter core pixels.
-        engine::EnhancementSettings tileSettings;tileSettings.nr=desc.enableNr;tileSettings.model=desc.model;tileSettings.residual=desc.residual;tileSettings.protection=desc.protection;
+        engine::EnhancementSettings tileSettings;tileSettings.nr=desc.enableNr;tileSettings.model=desc.model;tileSettings.residual=desc.residual;tileSettings.protection=desc.protection;tileSettings.exclusion=desc.exclusion;
         // Protection is tile-local; grading remains the same ordered chain as
         // the full image. Default colour settings would reject an enabled grade
         // (or a nonempty additional chain) before the first tile is processed.
@@ -69,7 +69,7 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
         tileSettings.antiAlias=desc.antiAlias[0];
         for(uint32_t i=1;i<kMaxAntiAliasInstances;++i)
             if(desc.antiAlias[i].configured()){tileSettings.additionalAntiAlias[i-1]=desc.antiAlias[i];tileSettings.additionalAntiAliasCount=i;}
-        for(auto& q:tileSettings.protection.regions){
+        for(auto* mask:{&tileSettings.protection,&tileSettings.exclusion})for(auto& q:mask->regions){
             // A rectangle clipped to the tile is the same rectangle; an ellipse
             // clipped would be a different ellipse, so it keeps its full box.
             const float low=q.ellipse?-64.0f:0.0f,high=q.ellipse?65.0f:1.0f;

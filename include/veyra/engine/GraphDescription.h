@@ -11,7 +11,7 @@ inline void describeNrLayers(const EnhancementSettings& settings,pipeline::Enhan
     desc.nrRuntime=settings.nrRuntime;
     desc.nrTemporal=settings.residual.correction.enabled?settings.residual.correction.usesHistory():settings.nrTemporal;
     desc.nrAntiFlicker=settings.residual.correction.enabled?NrAntiFlicker::Flow:settings.nrAntiFlicker;
-    desc.model=settings.model;desc.residual=settings.residual;desc.protection=settings.protection;
+    desc.model=settings.model;desc.residual=settings.residual;desc.protection=settings.protection;desc.exclusion=settings.exclusion;
     desc.nrHoldStrength=settings.nrHoldStrength;desc.nrHoldTolerance=settings.nrHoldTolerance;
     desc.nrReuse=settings.nr?settings.nrReuse:NrReuseMode::Off;
     desc.nrLayersModel.clear();desc.nrLayersResidual.clear();

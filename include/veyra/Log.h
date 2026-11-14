@@ -2,8 +2,11 @@
 
 #include <cstdint>
 #include <cstdio>
+#include <condition_variable>
+#include <deque>
 #include <mutex>
 #include <string>
+#include <thread>
 #include "veyra/diagnostics/DiagnosticEvent.h"
 #include "veyra/diagnostics/FrameTrace.h"
 
@@ -40,6 +43,13 @@ public:
     void setRotation(uint64_t startBytes, uint64_t runningBytes);
     void closeFile();
     void setConsoleEnabled(bool enabled);
+    // Enable before realtime producers start. Output I/O then belongs to a
+    // worker; a slow stdout/file never holds the producer/diagnostic mutex.
+    // Explicit flush/close remain barriers, including crash/teardown markers.
+    bool startAsync();
+    struct AsyncStats { size_t queuedLines=0,queuedBytes=0,highWaterBytes=0;uint64_t dropped=0; };
+    AsyncStats asyncStats();
+    static constexpr size_t kMaxQueuedLines=4096,kMaxQueuedBytes=2*1024*1024;
 
     void write(LogLevel level, const char* component, const std::string& message);
 
@@ -54,7 +64,19 @@ public:
 
 private:
     bool rotateLocked(const char* reason);
+    void writeSink(LogLevel level, const std::string& line);
+    void flushSink();
+    void writerLoop();
+    struct PendingLine { LogLevel level;uint64_t sequence;std::string text; };
     std::mutex mutex_;
+    std::mutex sinkMutex_;
+    std::condition_variable writerWake_,flushDone_;
+    std::deque<PendingLine> pending_;
+    std::thread writer_;
+    bool async_=false,stopping_=false;
+    size_t queuedBytes_=0,highWaterBytes_=0;
+    uint64_t issued_=0,written_=0,dropped_=0,reportedDropped_=0;
+    uint64_t flushRequested_=0,flushCompleted_=0,flushTarget_=0;
     std::mutex traceMutex_;
     diagnostics::FrameTrace frameTrace_;
     std::FILE* file_ = nullptr;

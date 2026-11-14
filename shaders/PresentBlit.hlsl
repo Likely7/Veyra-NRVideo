@@ -133,11 +133,12 @@ float4 psMain(VSOut input) : SV_Target
     if(srcDims.w>0){
         float fit=min(dstDims.x/srcDims.x,dstDims.y/srcDims.y)*srcDims.w;
         uv=(input.uv-.5)*dstDims.xy/(srcDims.xy*fit)+dstDims.zw;
-        if(any(uv<0)||any(uv>1))return float4(0,0,0,1);
+        if(any(uv<0)||any(uv>1))return float4(0,0,0,(uint(srcDims.z+0.5)&256)?0:1);
     }
     uint flags=uint(srcDims.z+0.5);
     uv=PresentationSourceUv(uv,(flags>>6)&3);
     float4 color=(flags&2)?FineSample(uv):sourceTex.SampleLevel(linearClamp,uv,0);
+    if((flags&256)&&color.a>1e-6)color.rgb/=color.a;
     if(flags&32)color.rgb=HdrDecodePq(color.rgb);
     if(flags&8)color.rgb*=203.0/80.0; // SDR comparison white in an HDR output.
     // Custom: static HDR curve, on absolute nits (the working space is linear
@@ -145,12 +146,10 @@ float4 psMain(VSOut input) : SV_Target
     if(flags&16)color.rgb=HdrCurve(color.rgb*80.0,curve0,curve1)/80.0;
     if(flags&1){float3 c=max(color.rgb,0);color.rgb=lerp(1.055*pow(c,1.0/2.4)-0.055,c*12.92,step(c,0.0031308));}
     if(flags&4)color.rgb=HdrEncodePq(color.rgb);
-    // 抖动放在传输函数编码之后、写回之前：那时值已经是最终输出域的 0..1，
-    // 一个 10 位台阶的偏移才是准确的。加在前面会被后面的非线性曲线放大。
-    // The dither goes after the transfer-function encode and just before the write: only
-    // then is the value in the final 0..1 output domain, where one 10-bit step is the
-    // right size. Applied earlier the later non-linear curve would scale it.
-    if(flags&256){
+    if(flags&256)color.rgb*=color.a;
+    // Custom dither (moved off 256, which now carries the alpha round trip): the
+    // offset belongs after the transfer encode, where one 10-bit step is exact.
+    if(flags&512){
         const int2 p=int2(input.pos.xy);
         color.rgb=saturate(color.rgb+DitherOffset(uint2(p)));
     }

@@ -1,17 +1,24 @@
 # 开发与验证入口
 
-> **2026-11-07 迁移**：项目已整体搬到 `D:\Program\Veyra`（E 盘不存在了，桌面共用 Git 库也不存在）。本表是当前唯一有效的路径；`docs/` 下其他文档里的 `E:/项目/Veyra/...` 是当时记录，按日期理解。
+> 2026-11-13全效果剔除修复：当前app仍tests/codex-fg-quality-labels-20261113/app，EXE00b39a4f…。补齐EffectExclusion并更新PresentBlit_ps，修复ANR遮罩合成提交顺序；88个build着色器逐SHA核验，原main入口/用户配置保持。[修复与真实像素/导出验证](EFFECT_EXCLUSION_REPAIR_2026-11-13.md)。
+
+> 2026-11-13补帧标注：最新本地app为tests/codex-fg-quality-labels-20261113/app，源/build仍为下表main目录。原main启动器已指向新app并保留原manual-profile，用户原运行实例未中断。参见[标注改动与验证](FG_QUALITY_LABELS_2026-11-13.md)。
+
+> 2026-11-13：当前本地main及独立验收入口见[整合记录](MAIN_CLAUDE_ANR_INTEGRATION_2026-11-13.md)。Claude原脏树和旧ANR入口保留作原样证据，不再把旧共享build当当前主线程序。公开发行包与本轮测试目录分开；ANR组件未获本轮公开分发授权。
+
 
 ## 路径
 
 | 用途 | 当前入口 |
 |---|---|
-| 源码与 Git 库 | `D:\Program\Veyra\src`（`.git` 在仓库根） |
-| 构建目录 | `D:\Program\Veyra\build`（Ninja，CMake 3.31，Release x64） |
-| 依赖 | `D:\Program\Veyra\deps`（FFmpeg 等） |
-| Qt | `D:\Program Files\Qt\6.8.3\msvc2022_64` |
-| 部署（定制版 + 作者版双切换） | `D:\Program\Veyra-2.1.3-NVIDIA-win64-portable` |
-| 历史文档快照 | `D:\Program\Veyra\md-backup-20261025`（10-25 的 5 份旧文档，仅存档） |
+| 源码施工树 | `E:/项目/Veyra/worktrees/main-claude-anr-20261113` |
+| 共用Git库 | `C:/Users/123/Desktop/Veyra DLSS Video Player/.git`，不可按旧副本删除 |
+| 可复用构建 | `E:/项目/Veyra/build/codex-main-claude-anr-20261113` |
+| 正式包/源码 | `E:/项目/Veyra/releases/codex-release-2.1.5-20261110`（含对应源码/摘要） |
+| 当前完整运行供体 | `E:/项目/Veyra/releases/codex-release-2.1.5-20261110` 的不可变NVIDIA/AMD ZIP；不要复制正在使用的解压目录 |
+| 基础依赖 | `E:/项目/Veyra/deps/core`；其他根看`E:/项目/Veyra/deps/DEPENDENCY_ROOTS.json` |
+| Qt | `E:/项目/Veyra/deps/qt/6.8.3/msvc2022_64` |
+
 
 当前活动分支 `test/merge-213`（2.1.3 + 定制 + 修复）；`main` 与上游 `origin/main` 同步在 `8fa2d2fc`。
 
@@ -20,7 +27,8 @@
 改完代码后增量构建（约 2 秒起）：
 
 ```powershell
-cmake --build D:\Program\Veyra\build --target veyra_qml_ui -j 8
+python -X utf8 -B scripts/acceptance/build-recording-handoff.py --task codex-main-claude-anr-20261113 --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --build-dir 'E:/项目/Veyra/build/codex-main-claude-anr-20261113' --reconfigure --label 2.1.5-main-integration-test --jobs 2 veyra_qml_ui
+
 ```
 
 首次配置或 CMakeLists 变更后需要重新 configure，参数是 2.1.3 定制版实际使用的组合（必须在 VS 2022 x64 环境里，先 `call vcvars64.bat`）：
@@ -46,7 +54,13 @@ cmake -S D:\Program\Veyra\src -B D:\Program\Veyra\build -G Ninja `
 
 ## 验证
 
-**构建后必跑**（2026-11-10 起）：`scripts/verify-build.ps1` 把四件事做成一次检查——构建、三个单元测试、部署一致性（部署 exe 必须等于刚构建的 exe）、运行时启动/退出并只看本次新增日志。任何一项失败退出码为 1。
+- 先构建产品与改动相关目标，再运行相应unit/contract/QML/实际启动检查；每进程≤300秒。
+- 桥接/QML结构变更应覆盖UI合同、翻译、QtQuick、设置/预设保存恢复、采集对话框与实际私有配置启动，确保无绑定/创建错误。公有QML属性、方法、信号及配置格式保持。
+- 处理图、补帧、音频、导出发生行为变更时，再加对应GPU/输出检查。没有相关变更不要用重复全量测试代替推进。
+- 产品使用任务共享的测试运行目录；更换EXE/QML时先创建新文件再替换，避免通过硬链接覆盖正式供体原件。运行库/模型原字节不改。
+- 从历史包/旧测试目录继承运行组件后，必须用本次实际build的着色器同步并校验，不能继承供体的旧shaders当本轮产物。目标程序退出后执行 `py -3.11 -X utf8 -B -I scripts/acceptance/sync-built-shaders.py --build-dir <本次build> --app-dir <本次app> --apply --report <E盘本任务回执>`，再去掉`--apply`独立检查，所有build着色器SHA一致才可验收/交付。正常package-qml-release.py本来会复制build/shaders；手工私有stage也必须遵守。
+- 不使用真实用户配置，不自动连接PS5/PC/Xbox或采集卡，不停止他人进程。实卡验证边界如实写明。
+
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File D:\Program\Veyra\src\scripts\verify-build.ps1

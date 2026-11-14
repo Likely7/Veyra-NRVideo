@@ -22,22 +22,29 @@
 #include <nvsdk_ngx.h>
 
 #include <cstdint>
+#include <memory>
+#include <string>
 
 #include "veyra/Result.h"
 
 namespace veyra::ngx {
 
 class NgxCoreHost;
+class AnrProvider;
 class FgCompatibilitySession;
 
 class DlssFgBackend {
 public:
-    DlssFgBackend() = default;
+    DlssFgBackend();
     void setCompatibility(FgCompatibilitySession* session) { compatibility_=session; }
     ~DlssFgBackend();
 
     DlssFgBackend(const DlssFgBackend&) = delete;
     DlssFgBackend& operator=(const DlssFgBackend&) = delete;
+
+    struct CreateDesc;
+    bool openAnr(ID3D12Device*,const std::wstring& runtimeRoot,unsigned& maximum);
+    bool create(ID3D12GraphicsCommandList*,NVSDK_NGX_Parameter*,const CreateDesc&,Status&);
 
     struct Capability {
         bool available = false;
@@ -105,6 +112,7 @@ public:
     uint32_t height() const { return height_; }
 
 private:
+    std::unique_ptr<AnrProvider> anr_;
     FgCompatibilitySession* compatibility_=nullptr;
     NVSDK_NGX_Handle* handle_ = nullptr;
     uint64_t createResult_ = 0;

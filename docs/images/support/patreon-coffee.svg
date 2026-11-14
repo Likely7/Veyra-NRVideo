@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="244" height="36" viewBox="0 0 244 36" role="img" aria-label="Buy me a coffee on Patreon for US$5">
+  <title>Buy me a coffee on Patreon for US$5</title>
+  <rect width="244" height="36" rx="6" fill="#92400e"/>
+  <g transform="translate(10 7)" fill="none" stroke="#fff" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M2 6h13v8a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4zM15 7h2a3 3 0 0 1 0 6h-2M0 21h18M5 2v1M10 1v2"/>
+  </g>
+  <text x="40" y="23" fill="#fff" font-family="Verdana,DejaVu Sans,sans-serif" font-size="12" font-weight="700">BUY ME A COFFEE · US$5</text>
+</svg>

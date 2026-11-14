@@ -40,10 +40,6 @@ int main(int argc, char** argv) {
     expect(i18n::text(QStringLiteral("英伟达低延迟不可用，当前使用低排队（详见日志） · 输出上限：关闭 · 垂直同步：屏幕队列 1 帧，读帧前等待刷新 · 显示同步：垂直同步")),
            QStringLiteral("NVIDIA Low Latency unavailable; using low queue depth (see the log) · Output cap: off · VSync: 1-frame display queue, waits for refresh before reading a frame · Display sync: VSync"),
            "presentation fallback status pieces");
-    // The NVIDIA low latency hint names the option labels; the catalog key must match the QML text exactly.
-    expect(QCoreApplication::translate("Any", "减少处理排队。高负载时建议选「开」而不是「开＋增强」：增强有概率导致掉帧，还会提高 GPU 频率、增加功耗。"),
-           QStringLiteral("Reduce processing queue depth. Under heavy load, choose On rather than On + Boost: Boost can drop frames, and it raises GPU clocks and power use."),
-           "NVIDIA low latency heavy-load hint");
     // Unknown text and paths come back unchanged.
     expect(i18n::text(QStringLiteral("D:/视频/我的片子.mkv")), QStringLiteral("D:/视频/我的片子.mkv"), "path untouched");
 

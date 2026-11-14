@@ -27,7 +27,9 @@ public:
         if(real){source_.complete(now);output_.complete(now);}
         for(unsigned i=0;i<valid;++i){generated_.complete(now);output_.complete(now);}
     }
-    void presented(bool generated,int64_t now){std::lock_guard lock(mutex_);presented_.complete(now);presentPace_.complete(now);(generated?generatedPresented_:realPresented_).complete(now);}
+    // paceAt: when the Present call began (0 = now). The 1% low spaces presents
+    // by that time, as RTSS and PresentMon do; rates count completions at now.
+    void presented(bool generated,int64_t now,int64_t paceAt=0){std::lock_guard lock(mutex_);presented_.complete(now);presentPace_.complete(paceAt>0&&paceAt<=now?paceAt:now);(generated?generatedPresented_:realPresented_).complete(now);}
     void xess(uint64_t count,int64_t now){std::lock_guard lock(mutex_);for(uint64_t i=0;i<count;++i)xess_.complete(now);}
     void snapshot(diagnostics::FrameFlowMetrics& m,int64_t now)const{
         std::lock_guard lock(mutex_);m.validGeneratedFps=generated_.rate(now);m.presentSubmitFps=presented_.rate(now);
@@ -130,10 +132,10 @@ public:
         std::lock_guard lock(mutex_);latency_.push_back({end,double(end-begin)/10000});
         while(latency_.size()>8192||(!latency_.empty()&&latency_.front().time<=end-10000000))latency_.pop_front();
     }
-    void presented(bool generated,uint64_t fence,int64_t now){
+    void presented(bool generated,uint64_t fence,int64_t now,int64_t paceAt=0){
         std::lock_guard lock(mutex_);
         if(generated)++metrics_.counters.generatedPresented;else ++metrics_.counters.realPresented;
-        metrics_.latest.consumerFence=fence;rates_->presented(generated,now);
+        metrics_.latest.consumerFence=fence;rates_->presented(generated,now,paceAt);
         metrics_.lastPresent100ns=now;
     }
     diagnostics::FrameFlowMetrics snapshot(int64_t now)const{

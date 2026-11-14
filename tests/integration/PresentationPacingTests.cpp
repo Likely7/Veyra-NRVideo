@@ -7,6 +7,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include "DeadlineWaitChecks.h"
 static HWND movingInput(){
     WNDCLASSW wc{};wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraPacingInput";
     wc.lpfnWndProc=[](HWND w,UINT m,WPARAM a,LPARAM b)->LRESULT{
@@ -21,6 +22,7 @@ static HWND movingInput(){
 }
 int wmain(int argc,wchar_t** argv){
     using namespace veyra::engine;using Clock=std::chrono::steady_clock;
+    if(argc==2&&std::wstring(argv[1])==L"--deadline-wait")return deadlineWaitChecks();
     if(argc==2&&std::wstring(argv[1])==L"--capture-input"){
         auto w=movingInput();const auto end=Clock::now()+std::chrono::seconds(240);
         // A chosen capture rate needs a window that changes faster than the
@@ -45,8 +47,9 @@ int wmain(int argc,wchar_t** argv){
     // latency-screen[-sr|-vfg]: a live window capture, 60 fps unless
     // VEYRA_TEST_SCREEN_FPS says otherwise (near-refresh A/B: 53 fps x 6 = 318
     // on 320 Hz), for capture-to-present A/B runs. mode -1 off, 0 low queue
-    // only, 1 NVIDIA 开, 2 NVIDIA 开＋增强.
+    // only, 1 NVIDIA 开.
     const bool latency=scenario.starts_with(L"latency-");
+    if((latency||scenario.starts_with(L"native-"))&&mode>1)return 2;
     const bool screen=scenario==L"screen-xess"||scenario==L"screen-dlss"||scenario==L"screen-vfg"||latency;
     const bool xess=scenario==L"xess"||scenario==L"screen-xess"||scenario==L"native-xess";
     if(scenario==L"legacy"){if(mode!=-1)return 2;SetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",L"1");}
@@ -96,8 +99,8 @@ int wmain(int argc,wchar_t** argv){
         EngineController engine;engine.setVolume(0,true);
         PresentationSettings p{mode>=0,PacingMode(std::max(0,mode)),DisplaySync(display)};engine.requestPresentation(p);
         const bool native=scenario.starts_with(L"native-");
-        if(native){p.nvidiaLowLatency=mode<0?NvidiaLowLatency::Off:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::On;engine.requestPresentation(p);}
-        if(latency){p.nvidiaLowLatency=mode==1?NvidiaLowLatency::On:mode==2?NvidiaLowLatency::Boost:NvidiaLowLatency::Off;engine.requestPresentation(p);}
+        if(native){p.nvidiaLowLatency=mode<0?NvidiaLowLatency::Off:NvidiaLowLatency::On;engine.requestPresentation(p);}
+        if(latency){p.nvidiaLowLatency=mode==1?NvidiaLowLatency::On:NvidiaLowLatency::Off;engine.requestPresentation(p);}
         EnhancementSettings effects;effects.multiplier=unsigned(multiplier);if(xess)effects.frameGenerationBackend=FrameGenerationBackend::XeSS;
         // latency-screen-sr-vfg: a mode the budget really rejects, for the failed probe path of live VFG.
         const bool overBudgetVfg=scenario==L"latency-screen-sr-vfg";
@@ -167,21 +170,21 @@ int wmain(int argc,wchar_t** argv){
         }
         if(scenario==L"native-lifecycle"){
             const auto beforePause=engine.snapshot().frames;
-            engine.pause(true);check(wait([](auto& s){return s.transport==TransportState::Paused;}),"pause with Boost retained");
-            Sleep(150);engine.pause(false);check(wait([&](auto& s){return s.frames>beforePause+8&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Boost;}),"resume native Boost without a stale prepared input");
+            engine.pause(true);check(wait([](auto& s){return s.transport==TransportState::Paused;}),"pause with On retained");
+            Sleep(150);engine.pause(false);check(wait([&](auto& s){return s.frames>beforePause+8&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::On;}),"resume native On without a stale prepared input");
             engine.pause(true);check(wait([](auto& s){return s.transport==TransportState::Paused;}),"native pause");
             p.enabled=false;p.nvidiaLowLatency=NvidiaLowLatency::Off;engine.requestPresentation(p);
-            check(wait([](auto& s){return s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Off&&!s.presentationEffective.enabled;}),"disable native latency and Boost while paused");
+            check(wait([](auto& s){return s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Off&&!s.presentationEffective.enabled;}),"disable native latency while paused");
             engine.seek(5);const auto seek=engine.snapshot().seekRequested;check(wait([&](auto& s){return s.seekPresented>=seek;}),"native paused seek");
             engine.pause(false);check(wait([](auto& s){return s.position>5.3;}),"native resume");
-            for(auto setting:{NvidiaLowLatency::On,NvidiaLowLatency::Boost,NvidiaLowLatency::Off,NvidiaLowLatency::Boost}){
+            for(auto setting:{NvidiaLowLatency::On,NvidiaLowLatency::On,NvidiaLowLatency::Off,NvidiaLowLatency::On}){
                 const auto before=engine.snapshot().frames;p.enabled=setting!=NvidiaLowLatency::Off;p.nvidiaLowLatency=setting;engine.requestPresentation(p);
                 check(wait([&](auto& s){return s.frames>before+12&&s.presentationEffective.nvidiaLowLatency==setting;}),"native live mode transition retains playback");
             }
             SetWindowPos(window,nullptr,30,30,960,600,SWP_NOZORDER);
-            const auto before=engine.snapshot().frames;check(wait([&](auto& s){return s.frames>before+20&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Boost;}),"native Boost survives resize");
+            const auto before=engine.snapshot().frames;check(wait([&](auto& s){return s.frames>before+20&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::On;}),"native On survives resize");
             const auto session=engine.snapshot().sessionId;engine.open(window,sourcePath,options);
-            check(wait([&](auto& s){return s.sessionId!=session&&s.frames>12&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::Boost;}),"source replacement restores requested Boost on the new device");
+            check(wait([&](auto& s){return s.sessionId!=session&&s.frames>12&&s.presentationEffective.nvidiaLowLatency==NvidiaLowLatency::On;}),"source replacement restores requested On on the new device");
         }
         if(scenario==L"overload"){
             SetEnvironmentVariableW(L"VEYRA_TEST_VIDEO_WORK_MS",L"80");

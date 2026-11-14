@@ -356,4 +356,14 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   std::ifstream h(path);std::string magic;int version=0;h>>magic>>version;pass=pass&&version==34;
   ok=ok&&pass;std::cout<<"dual SR schema34 roundtrip="<<pass<<'\n';
  }
+ {
+  EnhancementSettings mask;mask.exclusion.enabled=true;mask.exclusion.featherPixels=23;
+  mask.protection.enabled=true;mask.protection.regions[1]={.2f,.3f,.7f,.8f,true};
+  mask.exclusion.regions[0]={.1f,.2f,.6f,.7f};mask.exclusion.regions[2]={.3f,.1f,.8f,.9f,true};
+  auto path=p;path+=L"-exclusion";PresetStore writer(path);
+  bool pass=writer.load()&&writer.put(L"mask",mask);PresetStore reader(path);
+  pass=pass&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==mask;
+  std::ifstream header(path);std::string magic;int version=0;header>>magic>>version;
+  pass=pass&&version==37;ok&=pass;std::cout<<"exclusion schema37 rectangle ellipse feather roundtrip="<<pass<<'\n';
+ }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

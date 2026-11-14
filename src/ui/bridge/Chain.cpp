@@ -152,11 +152,32 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::nrLayersChanged,wasValid);return accepted;
 }
 
+QVariantMap QmlPlayerBridge::nrStabilizerState() const {
+    const auto* node=impl_->chain.firstOf(engine::EffectType::NrStabilizer);
+    return {{"enabled",node&&node->enabled},{"strength",node?node->holdStrength:.8f},
+        {"tolerance",node?node->holdTolerance:.02f}};
+}
+bool QmlPlayerBridge::setStabilizerParameter(int index,const QString& key,double value) {
+    if(index<0||uint32_t(index)>=impl_->chain.nodeCount||!std::isfinite(value)||value<0||value>1)return false;
+    auto& node=impl_->chain.nodes[uint32_t(index)];
+    if(node.type!=engine::EffectType::NrStabilizer)return false;
+    const auto previous=node;
+    const bool wasValid=chainValid();
+    if(key==QLatin1String("strength"))node.holdStrength=float(value);
+    else if(key==QLatin1String("tolerance"))node.holdTolerance=float(value);
+    else return false;
+    if(node==previous)return true;
+    if(!impl_->revalidate(true)){
+        const auto error=impl_->validation.message;node=previous;impl_->revalidate();
+        emit notice(uiText(error),true);return false;
+    }
+    emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::nrStabilizerChanged,wasValid);return true;
+}
+
 QVariantList QmlPlayerBridge::effectCatalog() const {
     QVariantList out;
     for (const auto& info : engine::effectCatalog()) {
-        if (info.hidden) continue;
-        if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::Protection) continue;
+        if (info.hidden||(impl_->chain.mode==engine::ChainMode::List&&info.type==engine::EffectType::NrStabilizer))continue;
         if (impl_->chain.mode == engine::ChainMode::Node && info.type == engine::EffectType::FrameGeneration) {
             for(const auto& choice : fgBackendChoices()) {
                 const auto option=choice.toMap();const auto backend=option.value("id").toString();
@@ -192,8 +213,12 @@ QVariantList QmlPlayerBridge::effectCatalog() const {
 
 QString QmlPlayerBridge::chainError() const { return uiText(impl_->validation.message); }
 void QmlPlayerBridge::emitChainChanged() {
+    // A pending drawing belongs to the old document. A mode/preset change or
+    // node deletion must not commit it into another mask or recreate that node.
+    if(!impl_->protDraw.isEmpty())beginProtectionDraw(QString{});
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
     emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
+    emit nrStabilizerChanged();
 }
 // Every chainChanged re-evaluated all chain-bound bindings on every page (the pro
 // and node pages stay loaded) and repainted the node wires: 65-80 ms of interface
@@ -358,8 +383,8 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     const auto cap = effectAvailability(type);
     if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return -1; }
     const bool fgType=type==QLatin1String("dlss-fg")||type==QLatin1String("xess-fg")||
-        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg");
-    const auto fgBackend=type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
+        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg")||type==QLatin1String("anr-fg");
+    const auto fgBackend=type==QLatin1String("anr-fg")?engine::FrameGenerationBackend::Anr:type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
         type==QLatin1String("fsr3-fg")?engine::FrameGenerationBackend::Fsr:
         type==QLatin1String("xess-fg")?engine::FrameGenerationBackend::XeSS:engine::FrameGenerationBackend::Dlss;
     const auto fgCeiling=engine::fsrFrameGeneration(fgBackend)?2u:
@@ -372,7 +397,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         const engine::EffectInfo* info = nullptr;
         for (const auto& item : engine::effectCatalog())
             if ((fg && item.type == engine::EffectType::FrameGeneration) || utf8Of(item.id) == type) info = &item;
-        if (!info || info->hidden || info->type == engine::EffectType::Protection) {
+        if (!info || info->hidden) {
             emit notice(tr("节点模式不支持该效果类型"), true); return -1;
         }
         auto& c = impl_->chain;
@@ -404,8 +429,23 @@ int QmlPlayerBridge::addEffect(const QString& type) {
                     const int at = impl_->layout.indexOf(c, next);
                     const auto t = c.nodes[at].type;
                     if (t == engine::EffectType::FrameGeneration ||
-                        (info->type != engine::EffectType::FrameGeneration && t == engine::EffectType::VideoHdr)) break;
+                        (info->type==engine::EffectType::NrEnhance&&
+                         (t==engine::EffectType::Protection||t==engine::EffectType::NrStabilizer))||
+                        (info->type!=engine::EffectType::FrameGeneration&&info->type!=engine::EffectType::Exclusion&&
+                         (t==engine::EffectType::VideoHdr||t==engine::EffectType::Exclusion)))break;
                     predecessor = next; next = impl_->layout.next[at];
+                }
+                if(info->type==engine::EffectType::NrStabilizer||info->type==engine::EffectType::Protection){
+                    uint32_t current=impl_->layout.inputNext;
+                    while(current>1){
+                        const auto at=impl_->layout.indexOf(c,current);
+                        const auto type=c.nodes[size_t(at)].type;
+                        if(type==engine::EffectType::NrEnhance||
+                           (info->type==engine::EffectType::NrStabilizer&&type==engine::EffectType::Protection)){
+                            predecessor=current;next=impl_->layout.next[size_t(at)];
+                        }
+                        current=impl_->layout.next[size_t(at)];
+                    }
                 }
                 if (predecessor == 0) impl_->layout.inputNext = id;
                 else impl_->layout.next[size_t(impl_->layout.indexOf(c, predecessor))] = id;
@@ -456,9 +496,6 @@ int QmlPlayerBridge::addEffect(const QString& type) {
         }
     }
     if (!found) { emit notice(tr("未知的效果: %1").arg(type), true); return -1; }
-    if (impl_->chain.mode == engine::ChainMode::Node && wanted == engine::EffectType::Protection) {
-        emit notice(tr("节点模式已取消 NR 保护区域；请在列表模式使用全局保护"), true); return -1;
-    }
 
     auto& c = impl_->chain;
     if (c.nodeCount >= engine::kMaxChainNodes) { emit notice(tr("效果链已满"), true); return -1; }
@@ -475,11 +512,14 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if (wanted != engine::EffectType::FrameGeneration) {
         for (uint32_t i = 0; i < c.nodeCount; ++i) {
             const auto& nodeInfo = engine::effectInfo(c.nodes[i].type);
-            if (nodeInfo.mustBeLast||((wanted==engine::EffectType::Color||wanted==engine::EffectType::Beauty)&&c.nodes[i].type==engine::EffectType::VideoHdr)||
+            if (nodeInfo.mustBeLast||(wanted!=engine::EffectType::Exclusion&&c.nodes[i].type==engine::EffectType::Exclusion)||((wanted==engine::EffectType::Color||wanted==engine::EffectType::Beauty)&&c.nodes[i].type==engine::EffectType::VideoHdr)||
                 (wanted==engine::EffectType::NrEnhance&&
-                (c.nodes[i].type==engine::EffectType::Protection||c.nodes[i].type==engine::EffectType::VideoHdr))) { insertAt = i; break; }
+                (c.nodes[i].type==engine::EffectType::Protection||c.nodes[i].type==engine::EffectType::NrStabilizer||c.nodes[i].type==engine::EffectType::VideoHdr))) { insertAt = i; break; }
         }
     }
+    if(wanted==engine::EffectType::NrStabilizer)
+        for(uint32_t i=0;i<c.nodeCount;++i)
+            if(c.nodes[i].type==engine::EffectType::NrEnhance||c.nodes[i].type==engine::EffectType::Protection)insertAt=i+1;
     for (uint32_t i = c.nodeCount; i > insertAt; --i) c.nodes[i] = c.nodes[i - 1];
     if(impl_->selectedNr>=int(insertAt))++impl_->selectedNr;
     if(impl_->selectedColour>=int(insertAt))++impl_->selectedColour;
@@ -645,7 +685,6 @@ bool QmlPlayerBridge::removeEffect(int index) {
     if (index < 0 || uint32_t(index) >= c.nodeCount) return false;
     const auto& info = engine::effectInfo(c.nodes[index].type);
     if (info.mustBeLast) { emit notice(tr("补帧固定为最后一步，不能删除"), true); return false; }
-    const bool live=c.mode==engine::ChainMode::Node||c.nodes[index].type==engine::EffectType::NrEnhance||c.nodes[index].type==engine::EffectType::Color;
     const auto before=c; const int selected=impl_->selectedNr,colourSelected=impl_->selectedColour;
     const auto previousLayout = impl_->layout;
     if (c.mode == engine::ChainMode::Node) {
@@ -659,7 +698,8 @@ bool QmlPlayerBridge::removeEffect(int index) {
     else if(impl_->selectedNr>index)--impl_->selectedNr;
     if(impl_->selectedColour==index)impl_->selectedColour=-1;
     else if(impl_->selectedColour>index)--impl_->selectedColour;
-    if(!impl_->revalidate(live)){
+    // All removals must update the running graph, including list-mode beauty.
+    if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c=before;impl_->layout=previousLayout;impl_->selectedNr=selected;
         impl_->selectedColour=colourSelected;
         impl_->revalidate();emit notice(uiText(error),true);return false;
@@ -988,13 +1028,14 @@ QVariantList QmlPlayerBridge::presetSaveParts() const {
         s.audioOffsetMs != 0);
     const QStringList flowNames{QStringLiteral("NVIDIA NVOF"), tr("AMD 光流"), QStringLiteral("GPU DIS")};
     const QStringList qualityNames{tr("性能"), tr("平衡"), tr("质量")};
-    const QStringList cadenceNames{tr("采用源时间戳"), tr("自动剔除重复帧"), tr("识别 30fps 内容"),
-        tr("识别 50fps 内容"), tr("识别 60fps 内容"), tr("采集 60→30（PS5 30 帧）")};
+    const auto content=engine::currentContentRate(s.content);
+    const auto cadenceName=content==engine::ContentRate::Transport?tr("去重关闭"):
+        content==engine::ContentRate::Capture60To30?QStringLiteral("60→30"):tr("自动去除");
     QString flowSummary = flowNames.value(int(s.opticalFlowBackend)) + QStringLiteral(" · ") +
-        qualityNames.value(int(s.flow)) + QStringLiteral(" · ") + cadenceNames.value(int(s.content));
+        qualityNames.value(int(s.flow)) + QStringLiteral(" · ") + cadenceName;
     if (s.opticalFlowBackend == engine::OpticalFlowBackend::AmdFidelityFx && s.amdFlowHalfResolution)
         flowSummary += QStringLiteral(" · ") + tr("半分辨率");
-    add("flow", tr("光流与内容节奏"), flowSummary,
+    add("flow", tr("光流与去除重复帧"), flowSummary,
         engine::PresetFlowSettings::capture(s) != engine::PresetFlowSettings{});
     return out;
 }

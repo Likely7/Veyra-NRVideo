@@ -263,7 +263,7 @@ bool XessPresenter::beginFrame(uint32_t preparedFrameId,pipeline::FrameIdentity 
     return false;
 #endif
 }
-bool XessPresenter::tag(ID3D12GraphicsCommandList* list,ID3D12Resource* color,ID3D12Resource* motion,ID3D12Resource* depth,RECT region,bool enabled,bool reset,float elapsedMs){
+bool XessPresenter::tag(ID3D12GraphicsCommandList* list,ID3D12Resource* color,ID3D12Resource* motion,ID3D12Resource* depth,RECT region,bool enabled,bool reset,float elapsedMs,ID3D12Resource* ui,ID3D12Resource* hudless){
 #ifdef VEYRA_HAS_XESS
     auto& p=*p_;
     if(!p.check(p.xefgSwapChainSetEnabledFn(p.fg,enabled?1:0),"SetEnabled"))return false;
@@ -279,14 +279,17 @@ bool XessPresenter::tag(ID3D12GraphicsCommandList* list,ID3D12Resource* color,ID
         if(regionColor){data.resourceBase={uint32_t(region.left),uint32_t(region.top)};data.resourceSize={uint32_t(region.right-region.left),uint32_t(region.bottom-region.top)};}
         return p.check(p.xefgSwapChainD3D12TagFrameResourceFn(p.fg,nullptr,p.id,&data),"Tag resource");
     };
-    if(!resource(XEFG_SWAPCHAIN_RES_BACKBUFFER,color,true)||!resource(XEFG_SWAPCHAIN_RES_HUDLESS_COLOR,color,true)||!resource(XEFG_SWAPCHAIN_RES_MOTION_VECTOR,motion,false)||!resource(XEFG_SWAPCHAIN_RES_DEPTH,depth,false))return false;
+    if(!resource(XEFG_SWAPCHAIN_RES_BACKBUFFER,color,true)||
+       !(ui?resource(XEFG_SWAPCHAIN_RES_UI,ui,true):resource(XEFG_SWAPCHAIN_RES_HUDLESS_COLOR,color,true))||
+       (ui&&hudless&&!resource(XEFG_SWAPCHAIN_RES_HUDLESS_COLOR,hudless,true))||
+       !resource(XEFG_SWAPCHAIN_RES_MOTION_VECTOR,motion,false)||!resource(XEFG_SWAPCHAIN_RES_DEPTH,depth,false))return false;
     xefg_swapchain_frame_constant_data_t constants{};
     for(unsigned i=0;i<4;++i){constants.viewMatrix[i*5]=1;constants.projectionMatrix[i*5]=1;}
     constants.motionVectorScaleX=constants.motionVectorScaleY=1;
     constants.resetHistory=reset?1:0;constants.frameRenderTime=elapsedMs;
     return p.check(p.xefgSwapChainTagFrameConstantsFn(p.fg,p.id,&constants),"Tag constants");
 #else
-    (void)list;(void)color;(void)motion;(void)depth;(void)region;(void)enabled;(void)reset;(void)elapsedMs;return false;
+    (void)list;(void)color;(void)motion;(void)depth;(void)region;(void)enabled;(void)reset;(void)elapsedMs;(void)ui;(void)hudless;return false;
 #endif
 }
 bool XessPresenter::beforePresent(){

@@ -1,58 +1,59 @@
-// NVIDIA low latency choice and its hint. UI only: no driver call is made.
-// Field 2026-11-02: On + Boost dropped generated frames under heavy load, so
-// the hint recommends On there.
 import QtQuick
+import QtQuick.Layouts
 import QtTest
 import Veyra
 import VeyraTest 1.0
 Item {
-    id: root
-    width: 640; height: 240
-    NvidiaLowLatencyEditor { id: editor; x: 10; y: 10; width: 560; namePrefix: "test" }
+    id: fixture
+    width: 640; height: 300
+    QtObject {
+        id: bridge
+        property bool nvidiaLowLatencyAvailable: true
+        property int nvidiaLowLatency: 0
+        property bool running: false
+        property string presentationStatus: ""
+    }
+    ColumnLayout {
+        width: parent.width
+        NvidiaLowLatencyEditor { id: list; backend: bridge; namePrefix: "test-list" }
+        NvidiaLowLatencyEditor { id: node; backend: bridge; namePrefix: "test-node" }
+    }
     TestCase {
-        name: "NvidiaLowLatencyHint"
+        name: "NvidiaLowLatencyModes"
         when: windowShown
-        function init(){veyra.nvidiaLowLatencyAvailable=true;veyra.nvidiaLowLatency=2}
-        function cleanup(){veyra.nvidiaLowLatencyAvailable=false;veyra.nvidiaLowLatency=0}
-        function control(name){const child=findChild(editor,name);verify(child!==null,name);return child}
-        function shownText(item,text){
-            if(item.text===text&&item.visible&&item.height>0)return item
-            for(let i=0;i<item.children.length;++i){const found=shownText(item.children[i],text);if(found)return found}
-            return null
-        }
-        function test_hint_recommends_on_under_heavy_load(){
-            const row=control("test-nvidia-low-latency-row")
-            verify(row.hint.indexOf("高负载时建议选「开」而不是「开＋增强」")>=0,row.hint)
-            verify(row.hint.indexOf("掉帧")>=0,row.hint)
-            // The hint quotes the labels the choice really shows.
-            const labels=control("test-nvidia-low-latency").options.map(o=>o.label)
-            compare(labels.length,3)
-            verify(row.hint.indexOf("「"+labels[1]+"」")>=0&&row.hint.indexOf("「"+labels[2]+"」")>=0,row.hint)
-        }
-        function test_hint_is_shown_below_the_choice(){
-            const row=control("test-nvidia-low-latency-row")
-            verify(row.hintBelow)
-            const text=shownText(row,row.hint)
-            verify(text!==null,"hint text visible")
-            compare(text.color,Theme.err,"boost warning is red")
-            const choice=control("test-nvidia-low-latency")
-            verify(text.mapToItem(row,0,0).y>=choice.mapToItem(row,0,0).y+choice.height,"hint sits below the choice")
-        }
-        function test_off_and_on_hide_warning(){
-            const row=control("test-nvidia-low-latency-row")
-            const warning=row.hint
-            for(const mode of [0,1,2,1,0]){
-                veyra.nvidiaLowLatency=mode
-                compare(row.hint,mode===2?warning:"")
-                compare(shownText(row,warning)!==null,mode===2,"warning follows the actual selection")
+        function init(){bridge.nvidiaLowLatencyAvailable=true;bridge.nvidiaLowLatency=0;bridge.running=false;wait(20)}
+        function choice(editor){return findChild(editor,editor.namePrefix+"-nvidia-low-latency")}
+        function test_only_off_and_on(){
+            for(const editor of [list,node]){
+                const control=choice(editor)
+                compare(control.options.length,2)
+                compare(control.options[0].id,"0");compare(control.options[0].label,"关")
+                compare(control.options[1].id,"1");compare(control.options[1].label,"开")
+                compare(control.current,"0")
+                compare(findChild(editor,editor.namePrefix+"-nvidia-low-latency-row").hint,"")
             }
+            compare(bridge.nvidiaLowLatency,0,"creation does not enable low latency")
         }
-        function test_unavailable_keeps_its_own_hint(){
-            veyra.nvidiaLowLatencyAvailable=false
-            const row=control("test-nvidia-low-latency-row")
-            compare(row.hint,"需要 NVIDIA 显卡")
-            compare(row.hintColor,Theme.t3,"unavailable hardware hint is not a boost warning")
-            compare(control("test-nvidia-low-latency").enabled,false)
+        function test_clicks_and_shared_value(){
+            const a=choice(list),b=choice(node)
+            const on=a.currentItem.parent.children[1]
+            mouseClick(on)
+            compare(bridge.nvidiaLowLatency,1);compare(a.current,"1");compare(b.current,"1")
+            const off=b.currentItem.parent.children[0]
+            mouseClick(off)
+            compare(bridge.nvidiaLowLatency,0);compare(a.current,"0");compare(b.current,"0")
+        }
+        function test_legacy_value_has_no_third_selection(){
+            bridge.nvidiaLowLatency=2
+            for(const editor of [list,node]){compare(choice(editor).current,"1");compare(choice(editor).currentIndex,1)}
+        }
+        function test_unavailable_keeps_choice_disabled(){
+            bridge.nvidiaLowLatency=1;bridge.nvidiaLowLatencyAvailable=false
+            for(const editor of [list,node]){
+                compare(choice(editor).enabled,false);compare(choice(editor).current,"0")
+                compare(findChild(editor,editor.namePrefix+"-nvidia-low-latency-row").hint,"需要 NVIDIA 显卡")
+            }
+            compare(bridge.nvidiaLowLatency,1,"hardware visibility does not rewrite the retained setting")
         }
     }
 }

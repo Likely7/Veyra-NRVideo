@@ -16,7 +16,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 **Veyra Windows 免安装软件包累计下载 7.9 万+ 次**（截至 2026-11-08，79,332 次）；**GitHub Release 全部附件累计下载 10.3 万+ 次**（103,337 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
 
-[下载2.1.5免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.5) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.5.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载2.1.6免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.6) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.6.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 **2.1.2 更新：** 双重超分、超采样、英伟达低延迟与 RX 7000 实验 NR；补帧去重／节奏、捕获音频与极简音量修复。[完整更新与迁移](docs/RELEASE_NOTES_2.1.2.md)。
 
@@ -28,6 +28,8 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 **[Veyra 中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)**：整理四个群聊的消息汇总成的 Veyra 使用文档，大部分软件问题、采集卡问题可以先在里面查找答案。
 
 **📖 [English Documentation / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)**：供海外用户查看英文安装指南、采集卡兼容性、常见故障与群友实测经验。
+
+**2.1.6：** 即时回放/F9、麦克风混音/独立音轨、全效果剔除、变帧率自动去重与60→30修复、送帧/日志改进、精修光流、GPU/VFG默认值与HDR折叠。[全部更新与本机数据](docs/RELEASE_NOTES_2.1.6.md)。ANR适配源码保留，公开包不分发其运行组件。
 
 **2.1.5：** 改善采集去重后的补帧节奏，并校正部分采集设备的异常预览时间戳。[完整更新](docs/RELEASE_NOTES_2.1.5.md)。
 
@@ -80,7 +82,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.5-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.5-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.6-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.6-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -128,7 +130,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 | 来源 | 操作要点 |
 |---|---|
 | 采集卡 | 选设备、分辨率、帧率，再选支持的像素格式和音频输入；关闭其他程序占用。PQ/HLG/709、Limited/Full 匹配实际信号。美乐威 Pro Capture 有专用低延迟选项。 |
-| PS5 | 主机启用远程游玩，搜索或手填 IP，使用 PSN Account ID 和主机八位配对码；已保存主机可重连。 |
+| PS5 | 主机启用远程游玩，搜索或手填 IP；点击“获取 Account ID”打开 [PSNTools](https://www.psntools.com/psn/checker)，将查到的数字 ID 或 Base64 ID 填回软件，再输入主机八位配对码。已保存主机可直接重连。 |
 | PC | 主机自行安装配置 Sunshine；Veyra 发现/添加主机、PIN 配对、选应用或桌面连接。Sunshine 不随包安装。 |
 | Xbox | 按设备码流程登录，选开启远程功能的主机。非官方实验功能，服务、账号与主机限制可能影响连接。 |
 | 屏幕 | 选窗口/显示器，避免捕获 Veyra 自身形成递归。 |
@@ -180,6 +182,8 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 ## 开源与构建
 
+2.1.6已整合送帧/采集/低延迟、自动去重/60→30和界面修复；[更新与数据边界](docs/RELEASE_NOTES_2.1.6.md)。ANR自写适配源码可追溯；因上游明确禁止当前Beta第三方再分发，公开包不包含ANR DLL、模型或程序包。
+
 开发从[当前文档入口](docs/README.md)开始：[构建与验证](docs/DEVELOPMENT.md)、[界面代码职责](docs/ARCHITECTURE.md)。历史任务记录已单独归档。
 
 2.1.2 新增 [RX 7000 实验 NR 接入](docs/AMD_RDNA3_NR_PLAN_2026-10-29.md)：支持 Small / Original 与内部百分比，保留 RX 9000 和 NVIDIA 路径。本地协议/UI回归完成，RX 7000 实卡推理尚待验收；2.1.2 已包含该实验路径。
@@ -191,13 +195,20 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <a href="https://discord.gg/qetVZTRkC"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Veyra on Discord" height="36"></a>
   &nbsp;&nbsp;
-  <a href="https://ko-fi.com/likely7"><img src="https://storage.ko-fi.com/cdn/kofi5.png?v=6" alt="Support Veyra on Ko-fi" height="36"></a>
+  <a href="https://www.patreon.com/cw/Likely7" title="Patreon 主页 / Creator page"><img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/support/patreon-home.svg" alt="Patreon 主页 / Creator page" height="36"></a>
+  &nbsp;&nbsp;
+  <a href="https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110" title="请我喝杯咖啡 · US$5 / Coffee support"><img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/support/patreon-coffee.svg" alt="☕ 请我喝杯咖啡 · US$5 / Coffee support" height="36"></a>
+</p>
+
+<p align="center">
+  Patreon 主页查看作者动态；☕ 咖啡按钮直达 US$5 赞助页面。<br>
+  Visit the creator page for updates, or open the US$5 coffee support page.
 </p>
 
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-9-20261110.png" alt="Veyra 交流群 9" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-10-20261111.png" alt="Veyra 交流群 10" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群 9。群码按图片标注于 **2026-11-17 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群 10。群码按图片标注于 **2026-11-18 前**有效，过期请查看仓库更新。

@@ -7,7 +7,7 @@ APP is a staged app whose executable and qml/Veyra come from this build. Per cas
 of Main.qml that loads sponsor-gui.qml (restored afterwards). That QML prints window
 pixel points; this script posts the clicks to the window (the user's cursor never
 moves), so the real TapHandlers receive them. VEYRA_TEST_SPONSOR_NO_BROWSER makes the
-bridge log each address instead of opening a browser: the log must name all six pages
+bridge log each address instead of opening a browser: the log must name all seven pages
 in click order. Each code card is saved as shown and its QR must decode to the same
 payment code as the bundled image (payloads are compared, never printed).
 """
@@ -23,7 +23,8 @@ APP = Path(sys.argv[1])
 LOG = BASE / 'logs' / TASK / ('gui-' + time.strftime('%Y%m%d-%H%M%S')); LOG.mkdir(parents=True)
 LINKS = [('bilibili', 'https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0'), ('douyin', 'https://v.douyin.com/9s06Bf2Inqc/'),
          ('x', 'https://x.com/likely2002'), ('github', 'https://github.com/Likely7'),
-         ('youtube', 'https://www.youtube.com/@Likely7Ai'), ('kofi', 'https://ko-fi.com/likely7')]
+         ('youtube', 'https://www.youtube.com/@Likely7Ai'), ('patreon', 'https://www.patreon.com/cw/Likely7'),
+         ('patreonCoffee', 'https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110')]
 user32 = ctypes.windll.user32
 detector = cv2.QRCodeDetector()
 
@@ -122,7 +123,7 @@ try:
             'no qml errors': not errors,
             'clicks in order': clicks == ['home'] + [n for n, _ in LINKS] + ['about'],
             'home link logged': 'home link' in engine,
-            'six pages in order': opened == [u for _, u in LINKS],
+            'seven pages in order': opened == [u for _, u in LINKS],
             'codes decode as shown': all(code(evidence / f'code-{n}.png') == v for n, v in expected.items()),
             'interface renderer': ('software UI' in engine) == software,
         }

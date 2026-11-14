@@ -47,9 +47,8 @@ void applyLocked(){
     }
     auto set=api.set(GetCurrentProcess(),int(wanted));
     auto verify=api.get(GetCurrentProcess(),&after);
-    // Realtime is the default (field request 2026-10-05). Where Windows refuses it
-    // for this process, High is the closest class it may still grant; the status
-    // then reports Rejected with High as the actual class.
+    // If Windows refuses an explicitly selected Realtime class, retain the
+    // existing High fallback and report Rejected with the actual class.
     if(wanted==GpuPriority::Realtime&&(set<0||verify<0||after!=int(wanted))){
         const auto refused=set<0?set:verify;
         set=api.set(GetCurrentProcess(),int(GpuPriority::High));

@@ -40,6 +40,7 @@ public:
         bool keep = true;
         int64_t contentPts = 0;   // 100 ns, kept frames
         int64_t interval = 0;     // 100 ns from the previous kept frame (0 = unknown)
+        int64_t holdInterval = 0; // static refresh cadence, not the preceding hitch span
         const char* reason = "first";
     };
     struct Stats {
@@ -51,10 +52,14 @@ public:
     void reset() {
         haveKept_ = haveContent_ = skipSpan_ = holding_ = false; prevSample_ = 0; lastKeptSample_ = 0; lastContent_ = 0;
         timeCount_ = 0; timeHead_ = 0; period_ = 0; misses_ = 0;
+        rateCount_ = rateHead_ = 0; observedPeriod_ = 0;ratePictures_=rateLastPicture_=rateLastSequence_=0;
     }
     // picture: picture number of the sample, or nullptr (no CPU picture: keep everything).
     // hintPeriod: expected content period of the selected content rate, 0 = unknown.
-    Decision observe(const uint64_t* picture, int64_t pts, int64_t transport, bool boundary, int64_t hintPeriod = 0) {
+    // captureSequence is supplied only with all-callback PictureReference ids:
+    // their low 56 bits count new pictures even if the engine missed a sample.
+    // Engine-only comparisons have no knowledge of skipped pictures, so pass 0.
+    Decision observe(const uint64_t* picture, int64_t pts, int64_t transport, bool boundary, int64_t hintPeriod = 0,uint64_t captureSequence=0) {
         Decision d;
         ++stats_.observed;
         if (transport <= 0) transport = 166667;
@@ -70,10 +75,11 @@ public:
         }
         if (!continuous) {
             reset(); prevSample_ = pts;
-            return keep(d, pts, previous, transport, picture, Timing::Sample, boundary ? "boundary" : "first");
+            return keep(d, pts, previous, transport, picture, Timing::Sample, boundary ? "boundary" : "first",0,captureSequence);
         }
         if (*picture == kept_) {
-            const int64_t cadence = std::min<int64_t>(period_ > 0 ? period_ : hintPeriod > 0 ? hintPeriod : transport * 2, 666667);
+            const auto measured=measuredPeriod();
+            const int64_t cadence = std::min<int64_t>(measured > 0 ? measured : hintPeriod > 0 ? hintPeriod : transport * 2, 666667);
             if (!holding_) {
                 // A hitch repeats one picture for a few samples: drop those, so
                 // the next picture spans the whole wait.
@@ -85,23 +91,38 @@ public:
             if (pts + transport / 4 < holdDue_) { ++stats_.repeats; d.keep = false; d.reason = "repeat"; return d; }
             holdDue_ = std::max(holdDue_ + cadence, pts + cadence / 2);
             ++stats_.held;
+            d.holdInterval=cadence;
             return keep(d, pts, previous, transport, picture, Timing::Sample, "hold");
         }
         holding_ = false;
-        return keep(d, pts, previous, transport, picture, Timing::Cadence, "new", hintPeriod);
+        return keep(d, pts, previous, transport, picture, Timing::Cadence, "new", hintPeriod,captureSequence);
     }
-    // Estimated content rate of the kept frames (0 until established).
-    double contentFps() const { return period_ > 0 ? 1e7 / double(period_) : 0.0; }
+    // A failed constant-period fit is not an unknown content rate. Measure the
+    // moving pictures separately, including genuinely varying game cadence.
+    // Held static-screen refreshes do not manufacture new content observations.
+    double contentFps() const { const auto period=measuredPeriod();return period > 0 ? 1e7 / double(period) : 0.0; }
+    int64_t intervalHint(int64_t transport) const {
+        return std::max(transport, measuredPeriod() > 0 ? measuredPeriod() : transport);
+    }
     const Stats& stats() const { return stats_; }
 
 private:
     enum class Timing { Sample, Cadence };
     static constexpr unsigned kTimes = 48;
+    int64_t measuredPeriod() const {
+        // A stable fit removes transport-grid quantization from the rate
+        // display, without overriding all-callback picture counts after a miss.
+        if(period_>0&&misses_==0&&observedPeriod_>0&&std::llabs(period_-observedPeriod_)*100<=observedPeriod_*3)
+            return period_;
+        return observedPeriod_;
+    }
     Decision& keep(Decision& d, int64_t pts, int64_t previous, int64_t transport, const uint64_t* picture, Timing timing,
-                   const char* reason, int64_t hint = 0) {
+                   const char* reason, int64_t hint = 0,uint64_t captureSequence=0) {
         d.keep = true; d.reason = reason; ++stats_.kept;
         int64_t content = pts;
+        if (!haveContent_&&picture) observeRate(pts, transport, false,*picture,captureSequence);
         if (timing == Timing::Cadence) {
+            observeRate(pts, transport, skipSpan_,*picture,captureSequence);
             // A span that started at a held (still-screen) frame is not a content period.
             if (skipSpan_) { timeCount_ = 0; timeHead_ = 0; }
             if (timeCount_ == 0) push(lastKeptSample_);
@@ -149,11 +170,39 @@ private:
 
     void push(int64_t time) { times_[timeHead_] = time; timeHead_ = (timeHead_ + 1) % kTimes; timeCount_ = std::min(timeCount_ + 1, kTimes); }
 
+    void observeRate(int64_t pts, int64_t transport, bool afterHold,uint64_t picture,uint64_t captureSequence) {
+        // A still-screen refresh is not an input picture. Do not count the long
+        // hold as a game-frame interval when motion resumes; retain the last
+        // observed rate until the new moving window can replace it.
+        if (afterHold) rateCount_ = rateHead_ = 0;
+        uint64_t changes=1;
+        if(captureSequence&&rateLastSequence_&&captureSequence>rateLastSequence_&&
+           picture>rateLastPicture_&&(picture>>56)==(rateLastPicture_>>56)&&
+           picture-rateLastPicture_<=captureSequence-rateLastSequence_)
+            changes=picture-rateLastPicture_;
+        rateLastPicture_=picture;rateLastSequence_=captureSequence;ratePictures_+=changes;
+        rateTimes_[rateHead_] = pts;
+        rateCounts_[rateHead_] = ratePictures_;
+        rateHead_ = (rateHead_ + 1) % kTimes;
+        rateCount_ = std::min(rateCount_ + 1, kTimes);
+        auto first = (rateHead_ + kTimes - rateCount_) % kTimes;
+        while (rateCount_ > 8 && pts - rateTimes_[first] > 7500000) {
+            --rateCount_; first = (first + 1) % kTimes;
+        }
+        if (rateCount_ >= 8 && pts > rateTimes_[first]&&ratePictures_>rateCounts_[first])
+            observedPeriod_ = std::max(transport, (pts - rateTimes_[first]) / int64_t(ratePictures_-rateCounts_[first]));
+    }
+
     uint64_t kept_ = 0;
     std::array<int64_t, kTimes> times_{};
+    std::array<int64_t, kTimes> rateTimes_{};
+    std::array<uint64_t, kTimes> rateCounts_{};
+    uint64_t ratePictures_=0,rateLastPicture_=0,rateLastSequence_=0;
     unsigned timeCount_ = 0, timeHead_ = 0, misses_ = 0;
+    unsigned rateCount_ = 0, rateHead_ = 0;
     bool haveKept_ = false, haveContent_ = false, skipSpan_ = false, holding_ = false;
     int64_t prevSample_ = 0, lastKeptSample_ = 0, lastContent_ = 0, period_ = 0, holdDue_ = 0;
+    int64_t observedPeriod_ = 0;
     Stats stats_;
 };
 }
