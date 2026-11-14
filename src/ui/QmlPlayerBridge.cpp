@@ -1,6 +1,7 @@
 // QML bridge: Core responsibilities.
 #include "QmlPlayerBridge_p.h"
 #include "veyra/engine/MicrophoneCapture.h"
+#include "veyra/ui/NvidiaVrrProfileController.h"
 
 namespace veyra::ui {
 namespace {
@@ -58,6 +59,10 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    auto* vrrProfile = new NvidiaVrrProfileController(impl_->dataDir, this);
+    nvidiaVrrProfile_ = vrrProfile;
+    connect(vrrProfile, &NvidiaVrrProfileController::notice, this, &QmlPlayerBridge::notice);
+    connect(this, &QmlPlayerBridge::preferencesChanged, vrrProfile, &NvidiaVrrProfileController::changed);
     auto* checker = new UpdateChecker(version(), this);
     updates_ = checker;
     connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);

@@ -470,6 +470,8 @@ class QmlPlayerBridge : public QObject {
     // (switch greyed), 2 it can but the driver setting is off, 3 possible,
     // 4 active; vrrHint explains it beside the switch.
     Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
+    // Explicit per-application driver setup, independent of the presentation switch.
+    Q_PROPERTY(QObject* nvidiaVrrProfile READ nvidiaVrrProfile CONSTANT)
     Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
     Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
     // Display state of the shown monitor for the 信号 card: Windows HDR (-1
@@ -1145,6 +1147,7 @@ public:
     int displaySync() const;
     void setDisplaySync(int value);
     bool variableRefresh() const;
+    QObject* nvidiaVrrProfile() const { return nvidiaVrrProfile_; }
     void setVariableRefresh(bool value);
     int vrrState() const;
     QString vrrHint() const;
@@ -1578,6 +1581,7 @@ private:
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    QObject* nvidiaVrrProfile_ = nullptr;
     QObject* updates_ = nullptr;
 };
 

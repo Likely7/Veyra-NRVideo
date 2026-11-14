@@ -776,8 +776,22 @@ NvAPI_Disp_GetVRRInfo and NvAPI_DISP_GetMonitorCapabilities and renamed
 NV_GET_VRR_INFO_V1 and NV_MONITOR_CAPABILITIES_V1 (generic capability bits)
 layouts (checked against the commit above). It only reads the monitor's
 variable-refresh support and state, for diagnostics and to enable the 可变刷新
-switch; the driver setting is never changed. Same loading rules and the same
+switch; this monitor query never changes driver settings. Same loading rules and the same
 license as above.
+
+`src/gfx/NvidiaVrrProfile.cpp` (2026-11-14) adds minimal renamed DRS v1
+application/profile/setting layouts, QueryInterface IDs and G-SYNC scope enums,
+checked against NVIDIA/nvapi commit
+`51e5aae4bc40c3ccd3fb7d4dfd94256e7bfc496e` (`nvapi.h`,
+`nvapi_interface.h`, `NvApiDriverSettings.h`, MIT). The independently authored
+controller exposes explicit check/repair/restore actions for the current
+application's full-path, isolated driver profile. Unlike the monitor query
+above, this user-invoked operation can save the two application scope values.
+It never enables global G-SYNC, edits another application's profile, or copies
+Profile Inspector implementation code. Original local/inherited values are
+saved before mutation; restoration preserves unrelated settings. No complete
+SDK header or driver DLL is committed or distributed. The same NVIDIA MIT
+notice below applies to the minimal ABI reference declarations.
 
 Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 

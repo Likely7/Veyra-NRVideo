@@ -8,9 +8,10 @@
 #include <string>
 namespace veyra::gfx {
 // Variable refresh (G-SYNC / G-SYNC Compatible) state of the monitor showing
-// a window. Veyra never changes the driver setting; the user enables it in
-// the NVIDIA Control Panel, and the 可变刷新 switch only decides how Veyra
-// presents when it is available (VideoPresenter::configurePresentation).
+// a window. This query never changes driver settings. The user enables G-SYNC
+// in the NVIDIA Control Panel; the separate explicit profile setup can adjust
+// only Veyra's scope. The 可变刷新 switch only decides how Veyra presents when
+// it is available (VideoPresenter::configurePresentation).
 // Minimal ABI declarations checked against NVIDIA/nvapi public interfaces
 // (nvapi_interface.h function IDs, NV_GET_VRR_INFO_V1 and
 // NV_MONITOR_CAPABILITIES_V1 layouts), MIT; same source and loading rules as

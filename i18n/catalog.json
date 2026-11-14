@@ -19918,6 +19918,160 @@
    "zh-TW": "展開",
    "en": "Expand",
    "ja": "展開"
+  },
+  {
+   "zh": "NVIDIA G-SYNC 配置",
+   "src": "qml/NvidiaVrrProfileRow.qml",
+   "zh-TW": "NVIDIA G-SYNC 設定",
+   "en": "NVIDIA G-SYNC setup",
+   "ja": "NVIDIA G-SYNC 設定"
+  },
+  {
+   "zh": "仅为当前软件路径配置窗口和全屏 G-SYNC，可恢复原设置；显示器和驱动的 G-SYNC 总开关仍需开启。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "僅為目前軟體路徑設定視窗和全螢幕 G-SYNC，可還原原設定；顯示器和驅動程式的 G-SYNC 總開關仍需開啟。",
+   "en": "Configure windowed and fullscreen G-SYNC for this application path, with an option to restore the original settings. G-SYNC must also be enabled on the monitor and in the driver.",
+   "ja": "現在のアプリのパスに対してウィンドウと全画面の G-SYNC を設定します。元の設定に戻せます。モニターとドライバー側でも G-SYNC を有効にする必要があります。"
+  },
+  {
+   "zh": "修复",
+   "src": "qml/NvidiaVrrProfileRow.qml",
+   "zh-TW": "修復",
+   "en": "Repair",
+   "ja": "修復"
+  },
+  {
+   "zh": "另一个软件实例正在处理驱动配置，请稍后重试。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "另一個軟體執行個體正在處理驅動程式設定，請稍後重試。",
+   "en": "Another application instance is updating the driver profile. Try again shortly.",
+   "ja": "別のアプリのインスタンスがドライバー設定を処理中です。しばらくしてから再試行してください。"
+  },
+  {
+   "zh": "尚未检查",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "尚未檢查",
+   "en": "Not checked",
+   "ja": "未確認"
+  },
+  {
+   "zh": "尚未配置窗口和全屏",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "尚未設定視窗和全螢幕",
+   "en": "Windowed and fullscreen not configured",
+   "ja": "ウィンドウと全画面は未設定"
+  },
+  {
+   "zh": "已允许窗口和全屏",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "已允許視窗和全螢幕",
+   "en": "Windowed and fullscreen allowed",
+   "ja": "ウィンドウと全画面を許可済み"
+  },
+  {
+   "zh": "当前配置无法单独修改",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "目前設定無法單獨修改",
+   "en": "This profile cannot be changed independently",
+   "ja": "このプロファイルは個別に変更できません"
+  },
+  {
+   "zh": "恢复原设置",
+   "src": "qml/NvidiaVrrProfileRow.qml",
+   "zh-TW": "還原原設定",
+   "en": "Restore original",
+   "ja": "元の設定に戻す"
+  },
+  {
+   "zh": "恢复记录与当前配置不一致",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "還原記錄與目前設定不一致",
+   "en": "Backup does not match the current profile",
+   "ja": "復元記録と現在の設定が一致しません"
+  },
+  {
+   "zh": "操作结果尚未确认，请重新检查。已有恢复记录会保留，不会自动重试写入。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "操作結果尚未確認，請重新檢查。既有還原記錄會保留，不會自動重試寫入。",
+   "en": "The result has not been confirmed. Check again. The backup is retained; writes will not be retried automatically.",
+   "ja": "操作結果を確認できませんでした。再確認してください。復元記録は保持され、書き込みが自動で再試行されることはありません。"
+  },
+  {
+   "zh": "无法保存或清理恢复记录",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "無法儲存或清理還原記錄",
+   "en": "Cannot save or remove the backup",
+   "ja": "復元記録を保存または削除できません"
+  },
+  {
+   "zh": "无法读取 NVIDIA 驱动配置；请检查显卡和驱动是否支持此功能。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "無法讀取 NVIDIA 驅動程式設定；請檢查顯示卡與驅動程式是否支援此功能。",
+   "en": "Cannot read NVIDIA driver profiles. Check whether the GPU and driver support this feature.",
+   "ja": "NVIDIA ドライバーの設定を読み取れません。GPU とドライバーがこの機能に対応しているか確認してください。"
+  },
+  {
+   "zh": "未能确认驱动配置",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "未能確認驅動程式設定",
+   "en": "Driver profile not confirmed",
+   "ja": "ドライバー設定を確認できません"
+  },
+  {
+   "zh": "正在处理驱动配置…",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "正在處理驅動程式設定…",
+   "en": "Processing driver profile…",
+   "ja": "ドライバー設定を処理中…"
+  },
+  {
+   "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "請以系統管理員身分啟動本軟體後重試；完成設定後可恢復一般方式啟動。",
+   "en": "Run this application as administrator and try again. After setup, you can start it normally.",
+   "ja": "このアプリを管理者として起動して再試行してください。設定後は通常の方法で起動できます。"
+  },
+  {
+   "zh": "请检查软件数据目录是否可写。恢复记录保留在该目录的 driver-profiles 文件夹中。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "請檢查軟體資料目錄是否可寫入。還原記錄保留在該目錄的 driver-profiles 資料夾中。",
+   "en": "Check that the application data directory is writable. Backups are kept in its driver-profiles folder.",
+   "ja": "アプリのデータフォルダーに書き込めるか確認してください。復元記録はその中の driver-profiles フォルダーに保存されます。"
+  },
+  {
+   "zh": "配置或恢复记录发生变化，已停止本次操作。请重新检查，必要时使用 Profile Inspector 手动处理。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "設定或還原記錄發生變化，已停止本次操作。請重新檢查，必要時使用 Profile Inspector 手動處理。",
+   "en": "The profile or backup changed, so this operation was stopped. Check again, or use Profile Inspector to handle it manually.",
+   "ja": "設定または復元記録が変更されたため、今回の操作を停止しました。再確認し、必要に応じて Profile Inspector で手動設定してください。"
+  },
+  {
+   "zh": "配置未独立绑定当前程序路径，可能由其他程序共用。请使用 Profile Inspector 单独配置本软件。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "設定未獨立繫結目前程式路徑，可能與其他程式共用。請使用 Profile Inspector 單獨設定本軟體。",
+   "en": "The profile is not exclusive to this application path and may be shared. Use Profile Inspector to configure this application separately.",
+   "ja": "プロファイルが現在のアプリのパス専用ではなく、他のアプリと共有されている可能性があります。Profile Inspector でこのアプリを個別に設定してください。"
+  },
+  {
+   "zh": "需要管理员权限",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "需要系統管理員權限",
+   "en": "Administrator rights required",
+   "ja": "管理者権限が必要です"
+  },
+  {
+   "zh": "驱动配置已保存，请手动重启本软件。是否实际生效仍以驱动和显示器报告为准。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "驅動程式設定已儲存，請手動重新啟動本軟體。是否實際生效仍以驅動程式和顯示器回報為準。",
+   "en": "The driver profile was saved. Restart this application manually. Actual activation still depends on the driver and monitor reports.",
+   "ja": "ドライバー設定を保存しました。このアプリを手動で再起動してください。実際の有効状態はドライバーとモニターの報告で確認してください。"
+  },
+  {
+   "zh": "驱动配置正在被占用",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "驅動程式設定正在被使用",
+   "en": "Driver profile is in use",
+   "ja": "ドライバー設定が使用中です"
   }
  ]
 }

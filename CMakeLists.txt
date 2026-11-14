@@ -116,6 +116,7 @@ veyra_apply_warnings(veyra_logger_tests)
 
 add_library(veyra_gfx STATIC
   src/gfx/GpuSchedulingPriority.cpp
+  src/gfx/NvidiaVrrProfile.cpp
   src/gfx/D3D12DeviceContext.cpp
   src/gfx/CommandSlotRing.cpp
   src/gfx/PresentSink.cpp
@@ -128,6 +129,13 @@ add_library(veyra_gfx STATIC
 veyra_apply_warnings(veyra_gfx)
 target_compile_features(veyra_gfx PUBLIC cxx_std_20)
 target_link_libraries(veyra_gfx PUBLIC veyra_base d3d12 dxgi dxguid)
+
+# Isolated driver-profile policy/ABI tests: no NGX, media source or graphics device.
+add_executable(veyra_vrr_profile_tests tests/unit/NvidiaVrrProfileTests.cpp src/gfx/NvidiaVrrProfile.cpp)
+target_compile_features(veyra_vrr_profile_tests PRIVATE cxx_std_20)
+target_include_directories(veyra_vrr_profile_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_compile_definitions(veyra_vrr_profile_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
+veyra_apply_warnings(veyra_vrr_profile_tests)
 if(EXISTS "${VEYRA_XESS_ROOT}/inc/xess_fg/xefg_swapchain_d3d12.h")
   target_include_directories(veyra_gfx PRIVATE "${VEYRA_XESS_ROOT}/inc")
   target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_XESS=1)
@@ -1152,6 +1160,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # generated. Without this the library links but every signal is unresolved.
   # Keep bridge domains explicit: no source glob or duplicate runtime state.
   target_sources(veyra_qml_bridge PRIVATE
+    src/ui/NvidiaVrrProfileController.cpp
+    include/veyra/ui/NvidiaVrrProfileController.h
     src/ui/bridge/Hardware.cpp
     src/ui/bridge/Status.cpp
     src/ui/bridge/FrameGeneration.cpp
