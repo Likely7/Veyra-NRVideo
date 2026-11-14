@@ -1210,3 +1210,8 @@ GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交�
 
 
 2.1.6收尾完成：产品/包源码1e6d303，EXEd821a4cdd0d3ff724fcd700b0ff4963c2c15e8327e4ec14bdc519a65fac21158，PE2.1.6.0。NVIDIA ZIP728844308字节/SHA5c979ea427870826ab82d5366be50ba0ad9a685077e7b3336b3102938083e87b，AMD719838876/SHAdd40d9359d7239cdbcb2e4504a3e5ebc4f8733506b7734896a852b4928c85d8c；应用/网络源码与SHA256SUMS齐全。最终1669/2293文件、71/700运行清单，全部88着色器；独立解压最小PATH冷启动227/228真实帧、0错误，仅RTX5070基础播放。启动器实启关闭/默认高4/4通过。12组E2E/28实际输出独立解码及设置控件通过；29原树指纹复核、43分支39已合4暂停诊断未动。cleanup.py验证路径/无reparse/无活动进程后退役QA与解压副本5779文件，E空闲增加2729005056字节（逻辑量不冒充物理量）。首次坏包SHA/manifest/错误shader报告保留package-attempt1，坏包已退役。正式产物与DELIVERY在test-packages/codex-build-2.1.6-20261113，完整FINAL/BRANCHES/CLEANUP在reports同任务；后续仅补本验收文档，不改交付二进制。未push/Release/关机。
+
+
+## 2026-11-13 即时回放按钮与HDR收纳
+
+用户要求专业页录制旁加即时回放开关、设置HDR高级区默认折叠。分支codex/replay-controls-hdr-fold-20261113，基线main2dcff36；ProPage常显开关写replayEnabled并与设置同步，原保存/F9保留；曲线预设/曲线参数/元数据默认折叠，输出格式仍外露，HDR已有值不改。补展开三语译文，i18n2845/0。沿用2.1.6 build，3目标7.7s；UI合同、Quick199/0/0、四语双宽八组布局、实际程序同步/保存/收纳/重启保持通过。初始夹具缺qml-tests、同tick/隐藏页视觉树查找失败已修，失败日志保留。新完整包及验收见docs/REPLAY_HDR_UI_2026-11-13.md与reports/test-packages的codex-replay-hdr-ui-20261113；不push/Release/关机。
