@@ -29,4 +29,22 @@ public:
     virtual void discarded()=0;
 };
 
+// The presenter has one capture; a recording and the instant replay buffer
+// both take the presented frame through this.
+class PresentCaptureFanout final : public PresentCapture {
+public:
+    PresentCaptureFanout(PresentCapture& first,PresentCapture& second):first_(first),second_(second){}
+    bool record(ID3D12GraphicsCommandList* list,const Frame& frame) override {
+        const bool a=first_.record(list,frame);
+        const bool b=second_.record(list,frame);
+        return a||b;
+    }
+    // Each one acts only on what it recorded itself.
+    void submitted(ID3D12Fence* fence,uint64_t value) override {first_.submitted(fence,value);second_.submitted(fence,value);}
+    void discarded() override {first_.discarded();second_.discarded();}
+private:
+    PresentCapture& first_;
+    PresentCapture& second_;
+};
+
 } // namespace veyra::engine

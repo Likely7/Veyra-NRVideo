@@ -233,6 +233,17 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
     Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
     Q_PROPERTY(bool recordingAudio READ recordingAudio NOTIFY preferencesChanged)
+    // Microphone (#101): mixed into the recorded sound, or on a track of its own.
+    Q_PROPERTY(bool recordingMicrophone READ recordingMicrophone NOTIFY preferencesChanged)
+    Q_PROPERTY(QString recordingMicrophoneId READ recordingMicrophoneId NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingMicrophoneTrack READ recordingMicrophoneTrack NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantList microphoneDevices READ microphoneDevices NOTIFY microphoneDevicesChanged)
+    // Instant replay (#103): while enabled, the last replaySeconds of the
+    // presented picture and sound stay in memory; saveReplay() writes them
+    // next to the recordings.
+    Q_PROPERTY(bool replayEnabled READ replayEnabled NOTIFY preferencesChanged)
+    Q_PROPERTY(int replaySeconds READ replaySeconds NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap replayState READ replayState NOTIFY replayChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     // Rebindable shortcuts: action -> key sequence text (defaults merged in).
     Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
@@ -1357,6 +1368,10 @@ public:
     Q_INVOKABLE void toggleRecording(const QString& source = QString());
     Q_INVOKABLE void chooseRecordingDirectory();
     Q_INVOKABLE void openRecordingDirectory();
+    // Writes what the replay buffer holds now (source as for recording).
+    Q_INVOKABLE void saveReplay(const QString& source = QString());
+    // Lists the recording endpoints for the microphone choice.
+    Q_INVOKABLE void refreshMicrophones();
     bool recording() const;
     QVariantMap recordingState() const;
     QString recordingDirectory() const;
@@ -1364,6 +1379,13 @@ public:
     int recordingFpsLimit() const;
     bool recordingHevc() const;
     bool recordingAudio() const;
+    bool recordingMicrophone() const;
+    QString recordingMicrophoneId() const;
+    bool recordingMicrophoneTrack() const;
+    QVariantList microphoneDevices() const;
+    bool replayEnabled() const;
+    int replaySeconds() const;
+    QVariantMap replayState() const;
     Q_INVOKABLE void chooseExportPath();
     // The export target without the dialog (the dialog's result, or --export-out in a test).
     void setExportPath(const QString& path);
@@ -1434,6 +1456,8 @@ signals:
     void subtitleTextChanged();
     void preferencesChanged();
     void recordingChanged();
+    void replayChanged();
+    void microphoneDevicesChanged();
     void colourLibraryChanged();
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
@@ -1487,8 +1511,13 @@ private:
     void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
     void updateGameMode();
     void updateGameGeometry();
-    // Game mode's keyboard hook gets the current panel, exit, screenshot and record keys.
+    // Game mode's keyboard hook gets the current panel, exit, screenshot, record and replay keys.
     void applyGameHotkeys();
+    // The recording settings both recorders follow, and the replay buffer
+    // armed (or not) with them; its state for the interface.
+    engine::RecordingSettings recordingOptions() const;
+    void syncReplay();
+    void pollReplay();
     // DLAA anti-aliasing needs the DLSS SR runtime and adapter; false (with a notice) otherwise.
     bool dlaaAllowed();
     // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at

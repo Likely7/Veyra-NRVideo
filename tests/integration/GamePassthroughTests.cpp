@@ -105,6 +105,22 @@ int main(int argc,char** argv){
     check(press(VK_F8,true).action==3&&press(VK_F8,false).consume,"F8 toggles recording");
     check(!press(VK_F7,true,false).consume&&!press(VK_F7,false,false).consume,"other programs keep F7 and F8");
     check(capture.input(VK_F7,true,panel,exit,true).action<0,"unbound screenshot key passes through");
+    GameKeyState replayKeys;const GameKey replay{VK_F9,0};
+    auto replayPress=[&](unsigned vk,bool down,bool owned=true){return replayKeys.input(vk,down,panel,exit,owned,shot,record,replay);};
+    check(replayPress(VK_F9,true).action==4&&replayPress(VK_F9,true).action<0&&replayPress(VK_F9,false).consume,"F9 saves the replay once per press, release paired");
+    check(replayPress(VK_F8,true).action==3&&replayPress(VK_F8,false).consume,"record key unchanged beside the replay key");
+    check(!replayPress(VK_F9,true,false).consume&&!replayPress(VK_F9,false,false).consume,"other programs keep F9");
+    check(replayKeys.input(VK_F9,true,panel,exit,true,shot,record).action<0,"unbound replay key passes through");
+    {
+        const GameKey keys[]={{VK_HOME,0},{VK_HOME,3},{VK_F7,4},{VK_F8,1},{VK_F9,2}};
+        const auto packed=GameHotkeyListener::pack(keys[0],keys[1],keys[2],keys[3],keys[4]);
+        bool same=true;for(unsigned i=0;i<5;++i)same&=GameHotkeyListener::slot(packed,i)==keys[i];
+        check(same,"five hotkey slots survive packing (panel, exit, screenshot, record, replay)");
+        check(GameHotkeyListener::slot(GameHotkeyListener::pack({VK_HOME,0},{VK_HOME,3}),4).vk==0,"unset replay slot reads as unbound");
+    }
+    // --state-only: the key-state checks above, without the hook and SendInput
+    // section below (which types into the desktop).
+    if(argc>1&&std::string(argv[1])=="--state-only"){std::cout<<"state-only failures="<<failures<<std::endl;return failures?1:0;}
 
     const HWND previous=GetForegroundWindow();
     WNDCLASSW wc{};wc.lpfnWndProc=proc;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraGameHotkeyTest";RegisterClassW(&wc);

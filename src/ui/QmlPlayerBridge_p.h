@@ -370,6 +370,10 @@ struct QmlPlayerBridge::Impl {
     // Live recording state published by the engine (see LiveRecorder.h).
     QVariantMap recordingState;
     uint64_t recordingSaved = 0;   // LiveRecorder's finished-file counter already announced
+    QVariantMap replayState;       // the instant replay buffer (#103)
+    uint64_t replaySaved = 0;      // its saved-clip counter already announced
+    QVariantList microphones;      // recording endpoints, {id, label}
+    QString microphoneNotice;      // the microphone failure last announced
   // Custom: the display whose HDR curve is currently applied (see syncHdrDisplayProfile).
   QString hdrProfileDisplay;
   // Custom: the title whose curve is currently applied (see syncHdrTitleProfile).

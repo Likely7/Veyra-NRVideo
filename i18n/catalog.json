@@ -596,6 +596,20 @@
    "ja": "0% でカーブを無効化。ピーク保護とメタデータは独立しています"
   },
   {
+   "zh": "1 分钟",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "1 分鐘",
+   "en": "1 min",
+   "ja": "1 分"
+  },
+  {
+   "zh": "10 分钟",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "10 分鐘",
+   "en": "10 min",
+   "ja": "10 分"
+  },
+  {
    "zh": "1080p · 默认",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "1080p · 預設",
@@ -608,6 +622,20 @@
    "zh-TW": "1080p 像素，隨畫面尺寸縮放；越大越柔",
    "en": "In 1080p pixels, scaled with the picture size; larger is softer",
    "ja": "1080p 換算のピクセル数。画面サイズに合わせて変わり、大きいほど柔らかくなります"
+  },
+  {
+   "zh": "15 秒",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "15 秒",
+   "en": "15 s",
+   "ja": "15 秒"
+  },
+  {
+   "zh": "2 分钟",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "2 分鐘",
+   "en": "2 min",
+   "ja": "2 分"
   },
   {
    "zh": "2 项",
@@ -638,11 +666,25 @@
    "ja": "2X はネイティブ動作、3X / 4X は実験的なアンロックです。失敗の理由は診断を参照してください"
   },
   {
+   "zh": "30 秒",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "30 秒",
+   "en": "30 s",
+   "ja": "30 秒"
+  },
+  {
    "zh": "4 项",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "4 項",
    "en": "4 items",
    "ja": "4 項目"
+  },
+  {
+   "zh": "5 分钟",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "5 分鐘",
+   "en": "5 min",
+   "ja": "5 分"
   },
   {
    "zh": "5 项",
@@ -2360,6 +2402,13 @@
    "ja": "Windows の GPU エンジン使用率（"
   },
   {
+   "zh": "Windows 不允许 Veyra 使用麦克风，请在 设置 → 隐私和安全性 → 麦克风 中允许桌面应用访问",
+   "src": "src/engine/MicrophoneCapture.cpp",
+   "zh-TW": "Windows 不允許 Veyra 使用麥克風，請在 設定 → 隱私權與安全性 → 麥克風 中允許桌面應用程式存取",
+   "en": "Windows does not let Veyra use the microphone; allow desktop apps in Settings → Privacy & security → Microphone",
+   "ja": "Windows が Veyra のマイク使用を許可していません。設定 → プライバシーとセキュリティ → マイク でデスクトップ アプリのアクセスを許可してください"
+  },
+  {
    "zh": "X 为上限",
    "src": "qml/NodePage.qml",
    "zh-TW": "X 為上限",
@@ -2673,6 +2722,13 @@
    "zh-TW": "上一批任務仍在執行或回收",
    "en": "The previous batch is still running or being cleaned up",
    "ja": "前のバッチがまだ実行中か回収中です"
+  },
+  {
+   "zh": "上一段回放仍在保存，请稍后再试",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "上一段回放仍在儲存，請稍後再試",
+   "en": "The previous replay is still being saved; try again shortly",
+   "ja": "前のリプレイを保存中です。しばらくしてからもう一度お試しください"
   },
   {
    "zh": "上一段录制仍在保存，请稍后再试",
@@ -3760,6 +3816,13 @@
    "ja": "保存先"
   },
   {
+   "zh": "保存即时回放",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "儲存即時回放",
+   "en": "Save instant replay",
+   "ja": "インスタントリプレイを保存"
+  },
+  {
    "zh": "保存后设为启动默认",
    "src": "qml/SavePresetDialog.qml",
    "zh-TW": "儲存後設為啟動預設",
@@ -3793,6 +3856,13 @@
    "zh-TW": "儲存異常，播放已保留；可再次儲存",
    "en": "Save error; playback kept and can be saved again",
    "ja": "保存エラー。再生は続行しています。もう一度保存できます"
+  },
+  {
+   "zh": "保存最近的画面和声音（%1）",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "儲存最近的畫面和聲音（%1）",
+   "en": "Save the latest picture and sound (%1)",
+   "ja": "直近の映像と音声を保存（%1）"
   },
   {
    "zh": "保存的 BMD 制式不可用，请重新选择",
@@ -4300,6 +4370,13 @@
    "ja": "互換ソフトウェア"
   },
   {
+   "zh": "内存上限只够保留 %1 秒（约 %2 MB），可降低录制码率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "記憶體上限只夠保留 %1 秒（約 %2 MB），可降低錄製位元率",
+   "en": "The memory cap only holds %1 s (about %2 MB); a lower recording bitrate keeps more",
+   "ja": "メモリ上限で %1 秒（約 %2 MB）しか保持できません。録画のビットレートを下げると長く保持できます"
+  },
+  {
    "zh": "内容亮度远超显示设备能力",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "內容亮度遠超顯示裝置能力",
@@ -4431,6 +4508,13 @@
    "zh-TW": "再次降低到",
    "en": "Reduce the first result to",
    "ja": "基本結果を縮小"
+  },
+  {
+   "zh": "写入回放文件失败（磁盘已满或没有写入权限？）",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "寫入回放檔案失敗（磁碟已滿或沒有寫入權限？）",
+   "en": "Could not write the replay file (disk full or no write permission?)",
+   "ja": "リプレイファイルを書き込めません（ディスクの空き不足、または書き込み権限がありません）"
   },
   {
    "zh": "写入封装文件头",
@@ -5005,6 +5089,41 @@
    "zh-TW": "單擊畫面",
    "en": "Click the picture",
    "ja": "映像をクリック"
+  },
+  {
+   "zh": "即时回放",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "即時回放",
+   "en": "Instant replay",
+   "ja": "インスタントリプレイ"
+  },
+  {
+   "zh": "即时回放写入失败",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "即時回放寫入失敗",
+   "en": "Instant replay buffering failed",
+   "ja": "インスタントリプレイのバッファーに失敗しました"
+  },
+  {
+   "zh": "即时回放已保存：%1",
+   "src": "src/ui/bridge/Recording.cpp",
+   "zh-TW": "即時回放已儲存：%1",
+   "en": "Instant replay saved: %1",
+   "ja": "インスタントリプレイを保存しました：%1"
+  },
+  {
+   "zh": "即时回放未开启",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "即時回放未開啟",
+   "en": "Instant replay is off",
+   "ja": "インスタントリプレイはオフです"
+  },
+  {
+   "zh": "即时回放未开启：设置 → 播放 → 即时回放",
+   "src": "src/ui/bridge/Recording.cpp",
+   "zh-TW": "即時回放未開啟：設定 → 播放 → 即時回放",
+   "en": "Instant replay is off: Settings → Playback → Instant replay",
+   "ja": "インスタントリプレイはオフです：設定 → 再生 → インスタントリプレイ"
   },
   {
    "zh": "卸载 Veyra 虚拟扬声器",
@@ -5588,6 +5707,13 @@
    "ja": "同じ名前のプリセットがすでにあります"
   },
   {
+   "zh": "同时录入麦克风；默认混进录制声音，也可以放在单独的音轨",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "同時錄入麥克風；預設混進錄製聲音，也可以放在單獨的音軌",
+   "en": "Also record a microphone; mixed into the recorded sound by default, or on a track of its own",
+   "ja": "マイクも録音します。既定では録音する音声にミックスし、別のトラックにもできます"
+  },
+  {
    "zh": "同时用这块显卡运算",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "同時用這塊顯示卡運算",
@@ -5791,6 +5917,34 @@
    "ja": "リストモードに戻り、リストの以前の設定とプリセットを復元します。"
   },
   {
+   "zh": "回放 %1",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "回放 %1",
+   "en": "Replay %1",
+   "ja": "リプレイ %1"
+  },
+  {
+   "zh": "回放文件收尾失败：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "回放檔案收尾失敗：",
+   "en": "Could not finish the replay file: ",
+   "ja": "リプレイファイルを完了できません："
+  },
+  {
+   "zh": "回放里还没有画面",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "回放裡還沒有畫面",
+   "en": "The replay buffer has no picture yet",
+   "ja": "リプレイにまだ映像がありません"
+  },
+  {
+   "zh": "回放长度",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "回放長度",
+   "en": "Replay length",
+   "ja": "リプレイの長さ"
+  },
+  {
    "zh": "固定",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "固定",
@@ -5971,6 +6125,13 @@
    "zh-TW": "在主機上開啟 Sunshine 網頁（https://主機IP:47990），進入「PIN」頁，輸入下面的數字並提交：",
    "en": "On the host, open the Sunshine web page (https://host-IP:47990), go to the PIN page, enter the number below and submit:",
    "ja": "ホストで Sunshine の Web ページ（https://ホストIP:47990）を開き、「PIN」ページで下の数字を入力して送信してください："
+  },
+  {
+   "zh": "在内存中保留最近一段画面和声音，按 %1 保存到录制保存位置；会多占用一路硬件编码",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "在記憶體中保留最近一段畫面和聲音，按 %1 儲存到錄製儲存位置；會多占用一路硬體編碼",
+   "en": "Keeps the latest picture and sound in memory; %1 saves them to the recording folder. Uses one more hardware encoder session",
+   "ja": "直近の映像と音声をメモリに保持し、%1 で録画の保存先に保存します。ハードウェアエンコーダーをもう 1 つ使います"
   },
   {
    "zh": "在原画保护之后执行",
@@ -8038,6 +8199,13 @@
    "ja": "再開しました"
   },
   {
+   "zh": "已缓存 %1 秒，占用内存约 %2 MB",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "已快取 %1 秒，佔用記憶體約 %2 MB",
+   "en": "%1 s buffered, about %2 MB of memory",
+   "ja": "%1 秒をバッファー済み、メモリ約 %2 MB"
+  },
+  {
    "zh": "已编码 ",
    "src": "qml/ExportPage.qml",
    "zh-TW": "已編碼 ",
@@ -8141,6 +8309,13 @@
    "zh-TW": "已登出，本機儲存的登入資訊已刪除。",
    "en": "Signed out; the sign-in data saved on this PC was deleted.",
    "ja": "サインアウトしました。この PC に保存されたサインイン情報は削除しました。"
+  },
+  {
+   "zh": "已选设备（未连接）",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "已選裝置（未連接）",
+   "en": "Chosen device (not connected)",
+   "ja": "選択したデバイス（未接続）"
   },
   {
    "zh": "已配对",
@@ -8309,6 +8484,13 @@
    "zh-TW": "開啟使用新版模型 B；關閉使用舊版模型 A。切換會重建 NR，畫面可能有所不同。",
    "en": "On: new model B. Off: legacy model A. Switching rebuilds NR and may change the picture.",
    "ja": "オンは新モデル B、オフは旧モデル A。切り替えると NR を再作成し、映像が変わる場合があります。"
+  },
+  {
+   "zh": "开启后麦克风在第 2 条音轨，剪辑时可单独调整；普通播放器通常只播放第 1 条",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "開啟後麥克風在第 2 條音軌，剪輯時可單獨調整；一般播放器通常只播放第 1 條",
+   "en": "Puts the microphone on audio track 2 to adjust it separately when editing; most players only play track 1",
+   "ja": "マイクを 2 番目の音声トラックに入れ、編集時に個別に調整できます。一般的なプレーヤーは通常 1 番目のトラックのみ再生します"
   },
   {
    "zh": "开启调控",
@@ -8927,6 +9109,13 @@
    "ja": "録画先ドライブの空き容量が 1 GB 未満です"
   },
   {
+   "zh": "录制目录所在磁盘剩余空间不足，无法保存回放",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "錄製目錄所在磁碟剩餘空間不足，無法儲存回放",
+   "en": "Not enough free space on the recording folder's disk to save the replay",
+   "ja": "録画の保存先のディスクに空きが足りないため、リプレイを保存できません"
+  },
+  {
    "zh": "录制码率",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "錄製位元率",
@@ -8946,6 +9135,13 @@
    "zh-TW": "錄製轉換著色器載入失敗",
    "en": "Could not load the recording conversion shader",
    "ja": "録画変換シェーダーを読み込めません"
+  },
+  {
+   "zh": "录制麦克风",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製麥克風",
+   "en": "Record microphone",
+   "ja": "マイクを録音"
   },
   {
    "zh": "往返 ",
@@ -9424,6 +9620,13 @@
    "ja": "選択したデバイスに対応する Magewell Pro Capture のチャンネルが見つかりません"
   },
   {
+   "zh": "找不到所选麦克风，请插回设备或重新选择",
+   "src": "src/engine/MicrophoneCapture.cpp",
+   "zh-TW": "找不到所選麥克風，請插回裝置或重新選擇",
+   "en": "The chosen microphone is not found; plug it back in or choose another",
+   "ja": "選択したマイクが見つかりません。接続し直すか、別のデバイスを選んでください"
+  },
+  {
    "zh": "找不到美乐威运行库 LibMWCapture.dll（应在软件的 runtime\\magewell 文件夹里，或装美乐威驱动/SDK）",
    "src": "src/ui/bridge/Capture.cpp",
    "zh-TW": "找不到美樂威執行庫 LibMWCapture.dll（應在軟體的 runtime\\magewell 資料夾裡，或裝美樂威驅動/SDK）",
@@ -9873,6 +10076,13 @@
    "ja": "再生時のちらつきを抑えます。一時停止の1フレームでは時間的効果は見えません"
   },
   {
+   "zh": "播放时开始缓存；录制码率越高，占用内存越多",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "播放時開始快取；錄製位元率越高，佔用記憶體越多",
+   "en": "Buffering starts when something plays; a higher recording bitrate uses more memory",
+   "ja": "再生中にバッファーを開始します。録画のビットレートが高いほどメモリを多く使います"
+  },
+  {
    "zh": "播放条已显示",
    "src": "qml/Main.qml",
    "zh-TW": "播放條已顯示",
@@ -10258,6 +10468,20 @@
    "ja": "コンテンツ輝度メタデータ（MaxCLL/MaxFALL）を書き込めませんでした"
   },
   {
+   "zh": "无法写入回放文件头",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法寫入回放檔案頭",
+   "en": "Could not write the replay file header",
+   "ja": "リプレイファイルのヘッダーを書き込めません"
+  },
+  {
+   "zh": "无法写入回放文件头：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法寫入回放檔案頭：",
+   "en": "Could not write the replay file header: ",
+   "ja": "リプレイファイルのヘッダーを書き込めません："
+  },
+  {
    "zh": "无法写入导出文件",
    "src": "src/engine/ColorLookStore.cpp",
    "zh-TW": "無法寫入匯出檔案",
@@ -10307,6 +10531,34 @@
    "ja": "一時出力を作成できませんでした（Windows エラー {}）：{}"
   },
   {
+   "zh": "无法创建回放文件封装器",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立回放檔案封裝器",
+   "en": "Could not create the replay file muxer",
+   "ja": "リプレイファイルのマルチプレクサーを作成できません"
+  },
+  {
+   "zh": "无法创建回放文件：",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立回放檔案：",
+   "en": "Could not create the replay file: ",
+   "ja": "リプレイファイルを作成できません："
+  },
+  {
+   "zh": "无法创建回放视频流",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立回放視訊串流",
+   "en": "Could not create the replay video stream",
+   "ja": "リプレイの映像ストリームを作成できません"
+  },
+  {
+   "zh": "无法创建回放音频流",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立回放音訊串流",
+   "en": "Could not create the replay audio stream",
+   "ja": "リプレイの音声ストリームを作成できません"
+  },
+  {
    "zh": "无法创建导出通信资源",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "無法建立匯出通信資源",
@@ -10340,6 +10592,13 @@
    "zh-TW": "無法建立錄製影片串流",
    "en": "Cannot create the recording video stream",
    "ja": "録画の映像ストリームを作成できません"
+  },
+  {
+   "zh": "无法创建录制音频流",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法建立錄製音訊串流",
+   "en": "Could not create the recording audio stream",
+   "ja": "録画の音声ストリームを作成できません"
   },
   {
    "zh": "无法创建拼接输出",
@@ -10431,6 +10690,13 @@
    "zh-TW": "無法開始串流，請查看日誌。",
    "en": "Could not start streaming; see the log.",
    "ja": "ストリーミングを開始できませんでした。ログを確認してください。"
+  },
+  {
+   "zh": "无法开始保存回放",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "無法開始儲存回放",
+   "en": "Could not start saving the replay",
+   "ja": "リプレイの保存を開始できません"
   },
   {
    "zh": "无法打开",
@@ -11509,6 +11775,13 @@
    "zh-TW": "未設定錄製儲存位置",
    "en": "No recording folder is set",
    "ja": "録画の保存先が設定されていません"
+  },
+  {
+   "zh": "未设置快捷键",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "未設定快速鍵",
+   "en": "no shortcut set",
+   "ja": "ショートカット未設定"
   },
   {
    "zh": "未输出",
@@ -13994,6 +14267,13 @@
    "zh-TW": "系統裡沒有可用的 HEVC 硬體編碼器",
    "en": "No HEVC hardware encoder is available on this system",
    "ja": "このシステムには使用できる HEVC ハードウェアエンコーダーがありません"
+  },
+  {
+   "zh": "系统默认麦克风",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "系統預設麥克風",
+   "en": "System default microphone",
+   "ja": "システム既定のマイク"
   },
   {
    "zh": "紫色",
@@ -18077,6 +18357,13 @@
    "ja": "1080p SDR ファイル、SF、NVIDIA 光フローが必要です。超解像、フレーム生成、ちらつき抑制、色調整、美顔、HDR をオフにしてください"
   },
   {
+   "zh": "需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "需先在 設定 → 播放 開啟即時回放；遊戲模式下在遊戲裡也能用",
+   "en": "Turn on instant replay in Settings → Playback first; also works inside the game in game mode",
+   "ja": "先に 設定 → 再生 でインスタントリプレイをオンにしてください。ゲームモード中はゲーム内でも使えます"
+  },
+  {
    "zh": "需系统解码/转换",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "需系統解碼/轉換",
@@ -18180,6 +18467,13 @@
    "zh-TW": "需要光流；關掉則不做時域累積",
    "en": "Needs optical flow; when off there is no temporal accumulation",
    "ja": "オプティカルフローが必要です。オフにすると時間方向の累積を行いません"
+  },
+  {
+   "zh": "需要在 Windows 设置 → 隐私和安全性 → 麦克风 中允许桌面应用访问",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "需要在 Windows 設定 → 隱私權與安全性 → 麥克風 中允許桌面應用程式存取",
+   "en": "Allow desktop apps in Windows Settings → Privacy & security → Microphone",
+   "ja": "Windows の 設定 → プライバシーとセキュリティ → マイク でデスクトップ アプリのアクセスを許可してください"
   },
   {
    "zh": "需要支持 DirectX 12 的硬件显卡",
@@ -19258,6 +19552,41 @@
    "zh-TW": "高品質更耗時；混合檔：每對原始影格的中間影格用前一檔，其餘用後一檔",
    "en": "Higher quality takes longer. Mixed tiers: the middle frame of each source pair uses the first model, the others the second.",
    "ja": "高品質ほど時間がかかります。混合：各元フレーム間の中央の 1 枚に前者、残りに後者を使います。"
+  },
+  {
+   "zh": "麦克风单独音轨",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "麥克風單獨音軌",
+   "en": "Microphone on its own track",
+   "ja": "マイクを別のトラックに"
+  },
+  {
+   "zh": "麦克风无法录音（0x{:08X}）",
+   "src": "src/engine/MicrophoneCapture.cpp",
+   "zh-TW": "麥克風無法錄音（0x{:08X}）",
+   "en": "The microphone cannot record (0x{:08X})",
+   "ja": "マイクで録音できません（0x{:08X}）"
+  },
+  {
+   "zh": "麦克风被其他程序独占，请关闭独占模式后再试",
+   "src": "src/engine/MicrophoneCapture.cpp",
+   "zh-TW": "麥克風被其他程式獨占，請關閉獨占模式後再試",
+   "en": "Another program holds the microphone exclusively; turn off its exclusive mode and try again",
+   "ja": "別のプログラムがマイクを排他使用しています。排他モードをオフにしてからもう一度お試しください"
+  },
+  {
+   "zh": "麦克风设备",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "麥克風裝置",
+   "en": "Microphone device",
+   "ja": "マイクのデバイス"
+  },
+  {
+   "zh": "麦克风：%1",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "麥克風：%1",
+   "en": "Microphone: %1",
+   "ja": "マイク：%1"
   },
   {
    "zh": "黄色",

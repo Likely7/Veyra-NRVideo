@@ -371,6 +371,13 @@ void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(
 bool EngineController::requestRecording(const RecordingSettings& options,std::wstring& error){return recorder_->start(options,error);}
 void EngineController::stopRecording(){recorder_->stop();}
 RecordingStatus EngineController::recordingSnapshot()const{return recorder_->status();}
+bool EngineController::setReplay(bool enabled,const RecordingSettings& options,std::wstring& error){
+    error.clear();
+    if(!enabled){replay_->stop();return true;}
+    return replay_->start(options,error);
+}
+bool EngineController::saveReplay(const std::wstring& directory,std::wstring& error){return replay_->saveReplay(directory,error);}
+RecordingStatus EngineController::replaySnapshot()const{return replay_->status();}
 void EngineController::startExport(const std::wstring& input,const std::wstring& output,PlayerOptions opts,bool hevc){
     if(opts.nodeOrder){
         veyra::log::warn("node-order","export has no runtime node-order transport; request rejected before posting");
@@ -469,6 +476,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     status(L"正在初始化GPU与本地运行时…");
     // A recording belongs to the session (and device) it started in.
     if(recorder_->active())recorder_->sessionEnded(L"已切换播放内容，录制已保存");
+    replay_->sessionEnded({});
     auto extension=std::filesystem::path(path).extension().wstring();for(auto& c:extension)c=towlower(c);
     const bool ordinaryFile=!remoteRequest&&!moonlightRequest&&!xboxRequest&&
         !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
@@ -483,7 +491,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // only name the stopped command list after the removal, so teardown checks once more.
     bool gpuFailureAwaitingRemoval=false;
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;VideoPresenter presenter;
-    presenter.setCapture(recorder_.get());presenter.setDisplayStates(&displayStates_);
+    presenter.setCapture(&captures_);presenter.setDisplayStates(&displayStates_);
     auto& coreCache=gpu->core;auto& recentGraphCache=gpu->recent;auto& graph=gpu->graph;
     auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
     const bool recentCacheAllowed=!GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE",nullptr,0);
@@ -1237,7 +1245,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             };
             OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);
                 // The recording ends with the session; its file is finished in the background.
-                recorder_->sessionEnded(stop_?L"播放已停止，录制已保存":L"播放已结束，录制已保存");}};
+                recorder_->sessionEnded(stop_?L"播放已停止，录制已保存":L"播放已结束，录制已保存");
+                replay_->sessionEnded({});}};
             auto collectTimings=[&]{
                 auto record=[&](const diagnostics::GpuFrameTiming& sample){
                     const auto& fgCost=sample.gpu[size_t(diagnostics::GpuStage::FgBatch)];
@@ -3084,6 +3093,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 loopTrace.mark("flowUpdate");
                 measured.flow=frameFlow->snapshot(host100ns());
                 recorder_->setPresentRateHint(measured.flow.presentSubmitFps);
+                replay_->setPresentRateHint(measured.flow.presentSubmitFps);
                 loopTrace.mark("flowSnapshot");
                 measured.sourceFrames=measured.flow.counters.sourceAccepted;measured.validGenerated=measured.flow.counters.fgReadyValid;measured.submitted=measured.flow.counters.realPresented+measured.flow.counters.generatedPresented;measured.expired=measured.flow.counters.generatedExpiredAfterEval;
                 const double ageP95=liveScheduler?completed.ageP95:captureAges.p95(),waitP95=liveScheduler?completed.waitP95:scheduleWaits.p95(),presentP95=liveScheduler?completed.presentP95:presentTimes.p95();

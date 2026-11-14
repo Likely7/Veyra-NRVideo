@@ -601,6 +601,70 @@ VPage {
                                 onToggled: v => veyra.setPreference("recordAudio", v)
                             }
                         }
+                        // Microphone (#101): mixed into the sound, or a track of its own.
+                        VRow {
+                            label: qsTr("录制麦克风")
+                            hint: qsTr("同时录入麦克风；默认混进录制声音，也可以放在单独的音轨")
+                            VSwitch {
+                                objectName: "set-recmic"
+                                checked: veyra.recordingMicrophone
+                                onToggled: v => { veyra.setPreference("recordMic", v); if (v) veyra.refreshMicrophones() }
+                            }
+                        }
+                        VRow {
+                            visible: veyra.recordingMicrophone
+                            onVisibleChanged: if (visible) veyra.refreshMicrophones()
+                            label: qsTr("麦克风设备")
+                            hint: qsTr("需要在 Windows 设置 → 隐私和安全性 → 麦克风 中允许桌面应用访问")
+                            VSelect {
+                                objectName: "set-recmic-device"
+                                implicitWidth: 230
+                                options: [{ id: "", label: qsTr("系统默认麦克风") }].concat(veyra.microphoneDevices)
+                                value: (options.find(o => o.id === veyra.recordingMicrophoneId)
+                                        || { label: qsTr("已选设备（未连接）") }).label
+                                onPicked: id => veyra.setPreference("recordMicDevice", id)
+                            }
+                        }
+                        VRow {
+                            visible: veyra.recordingMicrophone
+                            label: qsTr("麦克风单独音轨")
+                            hint: qsTr("开启后麦克风在第 2 条音轨，剪辑时可单独调整；普通播放器通常只播放第 1 条")
+                            VSwitch {
+                                objectName: "set-recmic-track"
+                                checked: veyra.recordingMicrophoneTrack
+                                onToggled: v => veyra.setPreference("recordMicTrack", v)
+                            }
+                        }
+                    }
+                    // Instant replay (#103): the last few seconds or minutes in memory.
+                    VGroup {
+                        objectName: "set-replay-group"
+                        VRow {
+                            label: qsTr("即时回放")
+                            hint: qsTr("在内存中保留最近一段画面和声音，按 %1 保存到录制保存位置；会多占用一路硬件编码").arg(veyra.shortcuts.replay || qsTr("快捷键"))
+                            VSwitch {
+                                objectName: "set-replay"
+                                checked: veyra.replayEnabled
+                                onToggled: v => veyra.setPreference("replayEnabled", v)
+                            }
+                        }
+                        VRow {
+                            visible: veyra.replayEnabled
+                            label: qsTr("回放长度")
+                            hint: {
+                                const s = veyra.replayState || {}
+                                if (!s.active || !(s.seconds > 0)) return qsTr("播放时开始缓存；录制码率越高，占用内存越多")
+                                if (s.memoryLimited) return qsTr("内存上限只够保留 %1 秒（约 %2 MB），可降低录制码率").arg(s.seconds).arg(s.megabytes)
+                                return qsTr("已缓存 %1 秒，占用内存约 %2 MB").arg(s.seconds).arg(s.megabytes)
+                            }
+                            VSeg {
+                                objectName: "set-replay-seconds"
+                                options: [{ id: "15", label: qsTr("15 秒") }, { id: "30", label: qsTr("30 秒") }, { id: "60", label: qsTr("1 分钟") },
+                                          { id: "120", label: qsTr("2 分钟") }, { id: "300", label: qsTr("5 分钟") }, { id: "600", label: qsTr("10 分钟") }]
+                                current: String(veyra.replaySeconds)
+                                onPicked: id => veyra.setPreference("replaySeconds", Number(id))
+                            }
+                        }
                     }
                     }
                     VGroup {
@@ -971,6 +1035,7 @@ VPage {
                                 { id: "hold", a: qsTr("按住查看原画") },
                                 { id: "screenshot", a: qsTr("截图"), note: qsTr("游戏模式下在游戏里也能用") },
                                 { id: "record", a: qsTr("开始 / 停止录制"), note: qsTr("游戏模式下在游戏里也能用") },
+                                { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用") },
                                 { id: "toggleMode", a: qsTr("切换极简 / 专业") },
                                 { id: "gamePanel", a: qsTr("游戏模式：调整画面"), note: qsTr("仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合") },
                                 { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") }

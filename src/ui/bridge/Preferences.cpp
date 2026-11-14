@@ -193,8 +193,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // Live recording: the target bitrate for the file, and the frame rate
         // cap (0 keeps the presented rate).
         {"recordBitrateMbps", {0, 400}},
-        {"recordFps", {0, 240}}};
-    static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
+        {"recordFps", {0, 240}},
+        // Instant replay (#103): seconds the buffer keeps.
+        {"replaySeconds", {15, 600}}};
+    static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
@@ -219,6 +221,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = dir;
     } else if (key == QLatin1String("audioDevice")) {
         stored = value.toString();
+    } else if (key == QLatin1String("recordMicDevice")) {
+        // A recording endpoint id (empty: the default recording device).
+        const QString id = value.toString();
+        if (id.size() > 512) return false;
+        stored = id;
     } else if (key == QLatin1String("sliderKeyStep")) {
         // Arrow-key step of a focused slider (设置 → 通用): 1, 0.1 or 0.01.
         bool ok = false; const double v = value.toDouble(&ok);
@@ -298,6 +305,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    // The replay buffer re-arms with what a recording would use.
+    static const QStringList replayKeys{"replayEnabled", "replaySeconds", "recordBitrateMbps", "recordFps", "recordHevc",
+                                        "recordAudio", "recordMic", "recordMicDevice", "recordMicTrack"};
+    if (replayKeys.contains(key)) syncReplay();
     if(key==QLatin1String("hdrFgCompatibility")){
         impl_->presentation.hdrFgCompatibility=impl_->prefBool("hdrFgCompatibility",false);
         impl_->engine.requestPresentation(impl_->presentation);
@@ -463,7 +474,7 @@ namespace {
 const QVariantMap& shortcutDefaults() {
     // Screenshot was Ctrl+S before 2026-10-27; saved custom keys are kept.
     static const QVariantMap d{{"playPause", "Space"}, {"fullscreen", "F"}, {"lock", "Ctrl+L"},
-                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"toggleMode", "Tab"},
+                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"replay", "F9"}, {"toggleMode", "Tab"},
                                {"gamePanel", "Home"}, {"gameExit", "Ctrl+Alt+Home"}};
     return d;
 }
@@ -487,7 +498,7 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
 void QmlPlayerBridge::applyGameHotkeys() {
     const auto keys = shortcuts();
     const auto key = [&keys](const char* action) { return ui::gameKey(QKeySequence(keys.value(action).toString(), QKeySequence::PortableText)); };
-    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"));
+    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"), key("replay"));
     // At start and after every change: a field log then says which key each
     // action answers to (the 2026-11-08 recording report had no way to tell).
     const auto custom = impl_->prefs.value("shortcuts").toMap();

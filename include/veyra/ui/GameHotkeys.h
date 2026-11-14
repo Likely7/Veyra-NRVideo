@@ -36,10 +36,11 @@ class GameKeyState {
 public:
     struct Result { bool consume = false; int action = -1; };
     void seed(unsigned vk, bool down) { if (vk < keys_.size()) keys_[vk] = down; }
-    // Actions: 0 panel, 1 exit, 2 screenshot, 3 record. Everything but exit only
-    // while the picture owns the keys (panelOwned), so Veyra in front never sees
-    // a key twice and other programs keep theirs. An unbound key has vk 0.
-    Result input(unsigned vk, bool down, GameKey panel, GameKey exit, bool panelOwned, GameKey shot = {}, GameKey record = {}) {
+    // Actions: 0 panel, 1 exit, 2 screenshot, 3 record, 4 save replay. Everything
+    // but exit only while the picture owns the keys (panelOwned), so Veyra in
+    // front never sees a key twice and other programs keep theirs. An unbound
+    // key has vk 0.
+    Result input(unsigned vk, bool down, GameKey panel, GameKey exit, bool panelOwned, GameKey shot = {}, GameKey record = {}, GameKey replay = {}) {
         if (vk >= keys_.size()) return {};
         const bool repeat = keys_[vk];
         const bool claimed = claimed_[vk];
@@ -47,7 +48,8 @@ public:
         const bool modifier = vk == VK_CONTROL || vk == VK_LCONTROL || vk == VK_RCONTROL ||
             vk == VK_MENU || vk == VK_LMENU || vk == VK_RMENU || vk == VK_SHIFT || vk == VK_LSHIFT || vk == VK_RSHIFT ||
             vk == VK_LWIN || vk == VK_RWIN;
-        const bool bound = vk == panel.vk || vk == exit.vk || (shot.vk && vk == shot.vk) || (record.vk && vk == record.vk);
+        const bool bound = vk == panel.vk || vk == exit.vk || (shot.vk && vk == shot.vk) || (record.vk && vk == record.vk) ||
+            (replay.vk && vk == replay.vk);
         if (modifier || bound || claimed || repeat) keys_[vk] = down;
         if (!down) { claimed_[vk] = false; return {claimed, -1}; }
         if (claimed) return {true, -1};
@@ -58,7 +60,7 @@ public:
             ((keys_[VK_LWIN] || keys_[VK_RWIN]) ? 8 : 0);
         const GameKey pressed{vk, mods};
         const int action = pressed == exit ? 1 : !panelOwned ? -1 : pressed == panel ? 0 :
-            shot.vk && pressed == shot ? 2 : record.vk && pressed == record ? 3 : -1;
+            shot.vk && pressed == shot ? 2 : record.vk && pressed == record ? 3 : replay.vk && pressed == replay ? 4 : -1;
         if (action < 0) return {};
         claimed_[vk] = true;
         return {true, action};
@@ -71,10 +73,17 @@ class GameHotkeyListener {
 public:
     static constexpr UINT message = WM_APP + 0x347;
     ~GameHotkeyListener() { stop(); }
-    // Four 16-bit slots (vk, mods << 8): panel, exit, screenshot, record.
-    void bindings(GameKey panel, GameKey exit, GameKey shot = {}, GameKey record = {}) {
-        const auto slot = [](GameKey k) { return uint64_t(k.vk & 255) | (uint64_t(k.mods & 15) << 8); };
-        config_.store(slot(panel) | (slot(exit) << 16) | (slot(shot) << 32) | (slot(record) << 48));
+    // Five 12-bit slots (vk, mods << 8): panel, exit, screenshot, record, replay.
+    static constexpr uint64_t pack(GameKey panel, GameKey exit, GameKey shot = {}, GameKey record = {}, GameKey replay = {}) {
+        const auto bits = [](GameKey k) { return uint64_t(k.vk & 255) | (uint64_t(k.mods & 15) << 8); };
+        return bits(panel) | (bits(exit) << 12) | (bits(shot) << 24) | (bits(record) << 36) | (bits(replay) << 48);
+    }
+    static constexpr GameKey slot(uint64_t config, unsigned index) {
+        const unsigned at = index * 12;
+        return {unsigned((config >> at) & 255), unsigned((config >> (at + 8)) & 15)};
+    }
+    void bindings(GameKey panel, GameKey exit, GameKey shot = {}, GameKey record = {}, GameKey replay = {}) {
+        config_.store(pack(panel, exit, shot, record, replay));
         ++epoch_;
     }
     void panelOwned(bool on) { panelOwned_.store(on); }
@@ -122,7 +131,7 @@ private:
     std::thread thread_;
     std::atomic<bool> running_{false}, panelOwned_{false};
     std::atomic<DWORD> deliveryError_{0};
-    std::atomic<uint64_t> config_{uint64_t(VK_HOME) | (uint64_t(VK_HOME) << 16) | (3ull << 24)}, epoch_{0};
+    std::atomic<uint64_t> config_{pack({VK_HOME, 0}, {VK_HOME, 3})}, epoch_{0};
     GameKeyState state_;
     static inline thread_local GameHotkeyListener* self_ = nullptr;
     static LRESULT CALLBACK callback(int code, WPARAM wp, LPARAM lp) {
@@ -132,8 +141,8 @@ private:
             const bool up = wp == WM_KEYUP || wp == WM_SYSKEYUP;
             if (key && (down || up)) {
                 auto& self = *self_; const auto epoch = self.epoch_.load(); const auto config = self.config_.load();
-                const auto slot = [config](unsigned at) { return GameKey{unsigned((config >> at) & 255), unsigned((config >> (at + 8)) & 15)}; };
-                const auto result = self.state_.input(key->vkCode, down, slot(0), slot(16), self.panelOwned_.load(), slot(32), slot(48));
+                const auto result = self.state_.input(key->vkCode, down, slot(config, 0), slot(config, 1), self.panelOwned_.load(),
+                                                      slot(config, 2), slot(config, 3), slot(config, 4));
                 if (result.action >= 0 && epoch == self.epoch_.load() &&
                     !PostMessageW(self.target_, message, WPARAM(result.action), LPARAM(epoch))) {
                     const DWORD error = GetLastError();

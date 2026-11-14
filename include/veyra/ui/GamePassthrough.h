@@ -47,7 +47,7 @@ public:
     // Off: a normal window. Panel: on top and interactive (Home panel open).
     // Through: exact click-through. Scaled: blocks mouse, target retains keyboard/gamepad.
     using Mode = GameInputMode;
-    enum class Event { PanelHotkey, ExitHotkey, ExitUnavailable, HangReleased, ScreenshotHotkey, RecordHotkey };
+    enum class Event { PanelHotkey, ExitHotkey, ExitUnavailable, HangReleased, ScreenshotHotkey, RecordHotkey, ReplayHotkey };
     std::function<void(Event)> onEvent;
 
     GamePassthrough() { s_instance = this; }
@@ -76,7 +76,7 @@ public:
     }
     Mode mode() const { return mode_; }
 
-    void setHotkeys(GameKey panel, GameKey exit, GameKey shot = {}, GameKey record = {}) { keys_.bindings(panel, exit, shot, record); }
+    void setHotkeys(GameKey panel, GameKey exit, GameKey shot = {}, GameKey record = {}, GameKey replay = {}) { keys_.bindings(panel, exit, shot, record, replay); }
     // WGC captures the visible window frame, not an enlarged movie viewport.
     // Coordinates are physical pixels in the fullscreen host's client space.
     RECT pictureBounds() const {
@@ -216,10 +216,10 @@ private:
         }
         auto* self = reinterpret_cast<GamePassthrough*>(GetWindowLongPtrW(window, GWLP_USERDATA));
         if (self && message == GameHotkeyListener::message) {
-            if (self->keys_.current(lp) && self->mode_ != Mode::Off && wp <= 3 &&
+            if (self->keys_.current(lp) && self->mode_ != Mode::Off && wp <= 4 &&
                 (wp == 1 || self->panelOwned_)) {
                 veyra::log::info("game-mode", std::format("hotkey received action={} epoch={}", wp, lp));
-                static constexpr Event events[] = {Event::PanelHotkey, Event::ExitHotkey, Event::ScreenshotHotkey, Event::RecordHotkey};
+                static constexpr Event events[] = {Event::PanelHotkey, Event::ExitHotkey, Event::ScreenshotHotkey, Event::RecordHotkey, Event::ReplayHotkey};
                 if (self->onEvent) self->onEvent(events[wp]);
             }
             return 0;

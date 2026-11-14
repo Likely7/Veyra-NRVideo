@@ -1,5 +1,6 @@
 // QML bridge: Core responsibilities.
 #include "QmlPlayerBridge_p.h"
+#include "veyra/engine/MicrophoneCapture.h"
 
 namespace veyra::ui {
 namespace {
@@ -85,6 +86,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
     }
     applyGameHotkeys();
+    syncReplay();
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
     impl_->applyComputeGpu();
@@ -143,6 +145,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // The game has the keyboard in game mode; the hook hands these over.
         case E::ScreenshotHotkey: takeScreenshot(); break;
         case E::RecordHotkey: toggleRecording(QStringLiteral("game-hotkey")); break;
+        case E::ReplayHotkey: saveReplay(QStringLiteral("game-hotkey")); break;
         }
     };
     auto* gameBeat = new QTimer(this);
@@ -384,6 +387,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             state["seconds"]=live.seconds;
             state["files"]=int(live.files);
             state["audio"]=live.audio;
+            state["microphone"]=live.microphone;
             if(state!=impl_->recordingState){
                 const auto previous=impl_->recordingState;
                 impl_->recordingState=state;
@@ -397,6 +401,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                                               :tr("录制已保存：%1（%2）").arg(state.value("path").toString(),note),false);
                 }else if(live.active&&!note.isEmpty()&&note!=previous.value("note").toString())emit notice(note,false);
             }
+        }
+        pollReplay();
+        {
+            // One notice per microphone failure, whichever recorder listens.
+            const bool listening=impl_->recordingState.value("microphone").toBool()||impl_->replayState.value("microphone").toBool();
+            const auto mic=listening?engine::microphoneStatus():engine::MicrophoneStatus{};
+            const QString reason=listening&&!mic.open&&!mic.error.empty()?uiText(mic.error):QString();
+            if(reason!=impl_->microphoneNotice){impl_->microphoneNotice=reason;if(!reason.isEmpty())emit notice(tr("麦克风：%1").arg(reason),true);}
         }
   // Custom: a display change re-applies that device's HDR curve. The id check is
   // a few Win32 calls, so this is safe on the polling path.

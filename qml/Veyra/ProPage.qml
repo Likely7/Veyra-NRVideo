@@ -421,6 +421,21 @@ VPage {
                     }
                 }
             }
+            // Instant replay (#103): while the buffer is on, the time it holds;
+            // a click saves it, as the replay shortcut does.
+            VButton {
+                id: replayBtn
+                objectName: "pro-replay-save"
+                visible: veyra.replayEnabled
+                readonly property var replay: veyra.replayState || ({})
+                readonly property int held: Math.max(0, replay.seconds || 0)
+                iconName: "clock"
+                text: replay.saving ? qsTr("保存中…")
+                      : qsTr("回放 %1").arg(Math.floor(held / 60) + ":" + (held % 60 < 10 ? "0" : "") + held % 60)
+                tip: qsTr("保存最近的画面和声音（%1）").arg(veyra.shortcuts.replay || qsTr("未设置快捷键"))
+                enabled: !replay.saving && held > 0
+                onClicked: veyra.saveReplay("pro-button")
+            }
             VButton {
                 id: presetBtn
                 iconName: "layers"
