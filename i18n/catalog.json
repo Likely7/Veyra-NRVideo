@@ -19909,6 +19909,15 @@
    "zh-TW": "；預設“高”，同時執行遊戲或其他重負載程式變慢時可改為“普通”",
    "en": "; High by default. If a game or other heavy program running alongside slows down, choose Normal",
    "ja": "；既定は「高」。同時に動かすゲームや重い処理が遅くなる場合は「通常」に変更してください"
+  },
+  {
+   "zh": "展开",
+   "src": [
+    "qml/Veyra/SettingsPage.qml"
+   ],
+   "zh-TW": "展開",
+   "en": "Expand",
+   "ja": "展開"
   }
  ]
 }

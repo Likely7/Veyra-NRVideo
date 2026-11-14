@@ -421,6 +421,22 @@ VPage {
                     }
                 }
             }
+            RowLayout {
+                objectName: "pro-replay-control"
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 6
+                Text {
+                    text: qsTr("即时回放")
+                    color: Theme.t2
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsBody
+                }
+                VSwitch {
+                    objectName: "pro-replay-toggle"
+                    checked: veyra.replayEnabled
+                    onToggled: checked => veyra.setPreference("replayEnabled", checked)
+                }
+            }
             // Instant replay (#103): while the buffer is on, the time it holds;
             // a click saves it, as the replay shortcut does.
             VButton {
