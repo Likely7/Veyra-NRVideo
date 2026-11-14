@@ -21,6 +21,7 @@ VH3 1.0 VH3.qml
 VIcon 1.0 VIcon.qml
 VPill 1.0 VPill.qml
 VRow 1.0 VRow.qml
+NvidiaVrrProfileRow 1.0 NvidiaVrrProfileRow.qml
 VSeg 1.0 VSeg.qml
 VSelect 1.0 VSelect.qml
 VSlider 1.0 VSlider.qml

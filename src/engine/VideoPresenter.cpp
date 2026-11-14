@@ -598,7 +598,7 @@ void VideoPresenter::applyDisplayState(const DisplayState& state){
     const auto hz=state.refreshHz;const auto& vrr=state.vrr;
     if(refreshQueried_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
     refreshHz_=hz;sink_.setDisplayRefreshHz(hz);
-    if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; enabled by the user in the NVIDIA Control Panel, never changed by Veyra)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
+    if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; read-only monitor query, per-application setup is a separate explicit action)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
     vrr_=vrr;refreshQueried_=true;displayStateSerial_=state.serial;
 }
 double VideoPresenter::displayRefreshHz(){
