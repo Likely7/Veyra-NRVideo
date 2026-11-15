@@ -1294,7 +1294,7 @@
    "zh-TW": "FSR 4 ML 提供方不可用（需要支援的 RX 9000 和驅動），已改用 FSR 3.1；原因見日誌",
    "en": "FSR 4 ML provider unavailable (needs a supported RX 9000 and driver); switched to FSR 3.1. See the log",
    "ja": "FSR 4 ML が使用できません（対応する RX 9000 とドライバーが必要）。FSR 3.1 に切り替えました。理由はログを参照してください",
-   "ko": ""
+   "ko": "FSR 4 ML을 사용할 수 없어 FSR 3.1로 전환했습니다(지원되는 RX 9000 및 드라이버 필요). 자세한 내용은 로그를 확인하세요."
   },
   {
    "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志",
@@ -1302,7 +1302,7 @@
    "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已關閉補幀；原因見日誌",
    "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); frame generation turned off. See the log",
    "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。フレーム生成をオフにしました。理由はログを参照してください",
-   "ko": ""
+   "ko": "AMD FRC를 시작하지 못해 프레임 생성을 껐습니다(AMD GPU와 드라이버에 포함된 AMF 런타임 필요). 자세한 내용은 로그를 확인하세요."
   },
   {
    "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已恢复上一套参数",
@@ -1310,7 +1310,7 @@
    "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已恢復上一套參數",
    "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); the previous settings were restored",
    "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。前の設定に戻しました",
-   "ko": ""
+   "ko": "AMD FRC를 시작하지 못했습니다(AMD GPU와 드라이버에 포함된 AMF 런타임 필요). 이전 설정이 복원되었습니다."
   },
   {
    "zh": "AMD FRC · 视频补帧 · 2X",
@@ -1318,7 +1318,7 @@
    "zh-TW": "AMD FRC · 影片補幀 · 2X",
    "en": "AMD FRC · video frame interpolation · 2X",
    "ja": "AMD FRC · 映像フレーム補間 · 2X",
-   "ko": ""
+   "ko": "AMD FRC · 영상 프레임 보간 · 2X"
   },
   {
    "zh": "AMD 驱动自带的视频补帧（AMF FRC），只用前后两帧画面估算运动，固定 2X",
@@ -1326,7 +1326,7 @@
    "zh-TW": "AMD 驅動內建的影片補幀（AMF FRC），只用前後兩格畫面估算動態，固定 2X",
    "en": "Video frame interpolation built into the AMD driver (AMF FRC); it estimates motion from the two pictures only, fixed at 2X",
    "ja": "AMD ドライバー内蔵の映像フレーム補間（AMF FRC）。前後 2 枚の映像だけから動きを推定し、2X 固定です",
-   "ko": ""
+   "ko": "AMD 드라이버에 포함된 영상 프레임 보간(AMF FRC)입니다. 앞뒤 두 프레임만으로 움직임을 추정하며 2배로 고정됩니다."
   },
   {
    "zh": "需要 AMD 显卡（驱动自带 AMF 运行库）",
@@ -1334,7 +1334,7 @@
    "zh-TW": "需要 AMD 顯示卡（驅動內建 AMF 執行庫）",
    "en": "Requires an AMD GPU (AMF runtime from the AMD driver)",
    "ja": "AMD GPU が必要です（ドライバー付属の AMF ランタイム）",
-   "ko": ""
+   "ko": "AMD GPU 필요(드라이버에 포함된 AMF 런타임)"
   },
   {
    "zh": "FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志",
@@ -1342,7 +1342,7 @@
    "zh-TW": "FSR 4 ML 執行失敗，已改用 FSR 3.1；錯誤碼見日誌",
    "en": "FSR 4 ML failed while running; switched to FSR 3.1. Error codes are in the log",
    "ja": "FSR 4 ML の実行に失敗したため、FSR 3.1 に切り替えました。エラーコードはログを参照してください",
-   "ko": ""
+   "ko": "FSR 4 ML 실행에 실패해 FSR 3.1로 전환했습니다. 오류 코드는 로그를 확인하세요."
   },
   {
    "zh": "FSR 4 ML 未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数",
@@ -1366,7 +1366,7 @@
    "zh-TW": "FSR 4 ML 需要支援的 RX 9000 和驅動，無法使用時自動改用 FSR 3.1；尚未在 RX 9000 實卡上驗證",
    "en": "FSR 4 ML needs a supported RX 9000 and driver and switches to FSR 3.1 when unavailable; not yet verified on an actual RX 9000",
    "ja": "FSR 4 ML には対応する RX 9000 とドライバーが必要で、使用できないときは FSR 3.1 に自動で切り替えます。RX 9000 の実機ではまだ検証していません",
-   "ko": ""
+   "ko": "FSR 4 ML은 지원되는 RX 9000과 드라이버가 필요하며, 사용할 수 없으면 FSR 3.1로 자동 전환합니다. 실제 RX 9000 GPU에서는 아직 검증되지 않았습니다."
   },
   {
    "zh": "FXAA：最快，整体略柔",
@@ -4919,7 +4919,7 @@
    "zh-TW": "關閉啟動音樂",
    "en": "Turn the startup music off",
    "ja": "起動時の音楽をオフ",
-   "ko": ""
+   "ko": "시작 음악 끄기"
   },
   {
    "zh": "关闭弹性与转场",
@@ -4983,7 +4983,7 @@
    "zh-TW": "其他桌面",
    "en": "Other desktop",
    "ja": "別のデスクトップ",
-   "ko": ""
+   "ko": "다른 데스크톱"
   },
   {
    "zh": "兼容",
@@ -5831,7 +5831,7 @@
    "zh-TW": "按一下或按任意鍵略過",
    "en": "Click or press any key to skip",
    "ja": "クリックまたは任意のキーでスキップ",
-   "ko": ""
+   "ko": "클릭하거나 아무 키나 누르면 건너뜁니다"
   },
   {
    "zh": "单击曲线加点并拖动 · 右键删点 · 最多 8 点",
@@ -6655,7 +6655,7 @@
    "zh-TW": "啟動動畫",
    "en": "Startup animation",
    "ja": "起動アニメーション",
-   "ko": ""
+   "ko": "시작 애니메이션"
   },
   {
    "zh": "启动后自动继续上次内容",
@@ -6703,7 +6703,7 @@
    "zh-TW": "啟動音樂",
    "en": "Startup music",
    "ja": "起動時の音楽",
-   "ko": ""
+   "ko": "시작 음악"
   },
   {
    "zh": "启动默认",
@@ -10863,7 +10863,7 @@
    "zh-TW": "開啟啟動音樂",
    "en": "Turn the startup music on",
    "ja": "起動時の音楽をオン",
-   "ko": ""
+   "ko": "시작 음악 켜기"
   },
   {
    "zh": "打开字幕编码器",
@@ -12520,7 +12520,7 @@
    "zh-TW": "日落",
    "en": "Dusk",
    "ja": "日没",
-   "ko": ""
+   "ko": "노을"
   },
   {
    "zh": "日落天空的渐变强度，带抖动防色带",
@@ -12528,7 +12528,7 @@
    "zh-TW": "日落天空的漸層強度，帶抖動以防色帶",
    "en": "Strength of the sunset sky gradient, dithered against banding",
    "ja": "夕焼け空のグラデーションの強さ（バンディング防止のディザ付き）",
-   "ko": ""
+   "ko": "노을 하늘 그라데이션의 강도입니다. 디더링을 더해 색 띠가 생기는 것을 줄입니다."
   },
   {
    "zh": "日落渐变",
@@ -12536,7 +12536,7 @@
    "zh-TW": "日落漸層",
    "en": "Sunset gradient",
    "ja": "夕焼けグラデーション",
-   "ko": ""
+   "ko": "노을 그라데이션"
   },
   {
    "zh": "日落配色下打开软件时播放，单击或按任意键可跳过",
@@ -12544,7 +12544,7 @@
    "zh-TW": "日落配色下開啟軟體時播放，按一下或按任意鍵可略過",
    "en": "Plays when Veyra starts in the Dusk color scheme; click or press any key to skip",
    "ja": "日没の配色で起動したときに再生します。クリックまたは任意のキーでスキップできます",
-   "ko": ""
+   "ko": "노을 테마로 Veyra를 시작할 때 재생합니다. 클릭하거나 아무 키나 누르면 건너뜁니다."
   },
   {
    "zh": "日落：深靛紫底、日落渐变强调色；经典：原来的黑灰配色",
@@ -12552,7 +12552,7 @@
    "zh-TW": "日落：深靛紫底、日落漸層強調色；經典：原來的黑灰配色",
    "en": "Dusk: deep indigo-violet with a sunset gradient accent; Classic: the original black and grey",
    "ja": "日没：深い藍紫のベースと夕焼けグラデーションのアクセント。クラシック：従来の黒とグレー",
-   "ko": ""
+   "ko": "노을은 짙은 남보라색 배경에 노을빛 그라데이션 강조색을 사용합니다. 클래식은 기존의 검정·회색 테마입니다."
   },
   {
    "zh": "旧版格式列表",
@@ -13320,7 +13320,7 @@
    "zh-TW": "找不到音樂檔：程式目錄下的 media/startup-music.mp3",
    "en": "Music file not found: media/startup-music.mp3 in the program folder",
    "ja": "音楽ファイルが見つかりません：プログラムフォルダーの media/startup-music.mp3",
-   "ko": ""
+   "ko": "음악 파일을 찾을 수 없습니다: 프로그램 폴더의 media/startup-music.mp3"
   },
   {
    "zh": "未指定",
@@ -13768,7 +13768,7 @@
    "zh-TW": "桌面 %1",
    "en": "Desktop %1",
    "ja": "デスクトップ %1",
-   "ko": ""
+   "ko": "데스크톱 %1"
   },
   {
    "zh": "桌面 %1 · %2",
@@ -13776,7 +13776,7 @@
    "zh-TW": "桌面 %1 · %2",
    "en": "Desktop %1 · %2",
    "ja": "デスクトップ %1 · %2",
-   "ko": ""
+   "ko": "데스크톱 %1 · %2"
   },
   {
    "zh": "档位",
@@ -15056,7 +15056,7 @@
    "zh-TW": "遊戲模式需要視窗和 Veyra 在同一個虛擬桌面：請把視窗移到目前桌面，或關閉遊戲模式後直接擷取",
    "en": "Game mode needs the window on the same virtual desktop as Veyra: move the window to the current desktop, or turn game mode off and capture it directly",
    "ja": "ゲームモードではウィンドウと Veyra が同じ仮想デスクトップにある必要があります。ウィンドウを現在のデスクトップに移すか、ゲームモードをオフにしてそのままキャプチャーしてください",
-   "ko": ""
+   "ko": "게임 모드를 사용하려면 창과 Veyra가 같은 가상 데스크톱에 있어야 합니다. 창을 현재 데스크톱으로 옮기거나, 게임 모드를 끄고 바로 캡처하세요."
   },
   {
    "zh": "游戏模式：调整画面",
@@ -15648,7 +15648,7 @@
    "zh-TW": "介面配色",
    "en": "Color scheme",
    "ja": "配色",
-   "ko": ""
+   "ko": "색상 테마"
   },
   {
    "zh": "界面随时可调，不影响播放和增强设置。",
@@ -16056,7 +16056,7 @@
    "zh-TW": "視窗在其他虛擬桌面上，暫時沒有新畫面：部分程式（如 Chrome、Edge）在所在桌面不顯示時會暫停繪製",
    "en": "The window is on another virtual desktop and has no new picture yet: some programs (such as Chrome and Edge) stop drawing while their desktop is not shown",
    "ja": "ウィンドウは別の仮想デスクトップにあり、新しい映像がまだありません。一部のプログラム（Chrome、Edge など）は、そのデスクトップが表示されていない間は描画を止めます",
-   "ko": ""
+   "ko": "창이 다른 가상 데스크톱에 있어 아직 새 화면이 없습니다. 일부 프로그램(Chrome, Edge 등)은 해당 데스크톱이 표시되지 않는 동안 화면을 그리지 않습니다."
   },
   {
    "zh": "窗口小于裁剪范围，等待尺寸恢复",
@@ -16544,7 +16544,7 @@
    "zh-TW": "經典",
    "en": "Classic",
    "ja": "クラシック",
-   "ko": ""
+   "ko": "클래식"
   },
   {
    "zh": "继续上次",
@@ -19968,7 +19968,7 @@
    "zh-TW": "這個視窗在其他虛擬桌面上，不用切換桌面即可擷取；部分程式在所在桌面不顯示時會暫停繪製",
    "en": "This window is on another virtual desktop and can be captured without switching to it; some programs stop drawing while their desktop is not shown",
    "ja": "このウィンドウは別の仮想デスクトップにあり、切り替えずにキャプチャーできます。一部のプログラムは、そのデスクトップが表示されていない間は描画を止めます",
-   "ko": ""
+   "ko": "이 창은 다른 가상 데스크톱에 있지만 데스크톱을 전환하지 않고 캡처할 수 있습니다. 일부 프로그램은 해당 데스크톱이 표시되지 않는 동안 화면을 그리지 않습니다."
   },
   {
    "zh": "这个目标所在的显示器接在 %1 上，Veyra 在 %2 上处理：每帧画面都要由 Windows 在两块显卡之间复制，延迟更高。双显卡分工时，建议把显示器接到处理用的显卡上（笔记本可开独显直连）",
@@ -19976,7 +19976,7 @@
    "zh-TW": "這個目標所在的顯示器接在 %1 上，Veyra 在 %2 上處理：每格畫面都要由 Windows 在兩張顯示卡之間複製，延遲更高。雙顯示卡分工時，建議把顯示器接到處理用的顯示卡上（筆電可開啟獨顯直連）",
    "en": "The display this target is on is connected to %1, while Veyra processes on %2: Windows copies every frame between the two GPUs, which adds latency. When two GPUs share the work, connect the display to the processing GPU (on a laptop, turn on the discrete-GPU-only (MUX) mode)",
    "ja": "この対象が映っているディスプレイは %1 に接続され、Veyra は %2 で処理しています。毎フレーム Windows が 2 つの GPU の間でコピーするため、遅延が増えます。2 つの GPU で分担する場合は、ディスプレイを処理用の GPU に接続してください（ノート PC では dGPU 直結モードをオンに）",
-   "ko": ""
+   "ko": "이 대상이 표시되는 모니터는 %1에 연결되어 있고 Veyra는 %2에서 처리합니다. Windows가 매 프레임을 두 GPU 사이에서 복사해야 하므로 지연이 늘어납니다. 두 GPU로 작업을 나눌 때는 모니터를 처리용 GPU에 연결하는 것이 좋습니다(노트북은 dGPU 직결 모드를 켜세요)."
   },
   {
    "zh": "这个语言的翻译没有找到，界面保持简体中文",
@@ -21072,7 +21072,7 @@
    "zh-TW": "隨啟動動畫播放一次，開啟任何播放來源後自動暫停",
    "en": "Plays once with the startup animation and pauses when any source opens",
    "ja": "起動アニメーションと一緒に一度だけ再生し、ソースを開くと自動で一時停止します",
-   "ko": ""
+   "ko": "시작 애니메이션과 함께 한 번 재생하며, 재생 소스를 열면 자동으로 일시중지합니다."
   },
   {
    "zh": "隐藏播放条",
@@ -22922,7 +22922,7 @@
    "zh-TW": "NVIDIA G-SYNC 設定",
    "en": "NVIDIA G-SYNC setup",
    "ja": "NVIDIA G-SYNC 設定",
-   "ko": ""
+   "ko": "NVIDIA G-SYNC 설정"
   },
   {
    "zh": "仅为当前软件路径配置窗口和全屏 G-SYNC，可恢复原设置；显示器和驱动的 G-SYNC 总开关仍需开启。",
@@ -22930,7 +22930,7 @@
    "zh-TW": "僅為目前軟體路徑設定視窗和全螢幕 G-SYNC，可還原原設定；顯示器和驅動程式的 G-SYNC 總開關仍需開啟。",
    "en": "Configure windowed and fullscreen G-SYNC for this application path, with an option to restore the original settings. G-SYNC must also be enabled on the monitor and in the driver.",
    "ja": "現在のアプリのパスに対してウィンドウと全画面の G-SYNC を設定します。元の設定に戻せます。モニターとドライバー側でも G-SYNC を有効にする必要があります。",
-   "ko": ""
+   "ko": "현재 프로그램 경로에만 창 모드·전체 화면 G-SYNC를 설정하며, 원래 설정으로 되돌릴 수 있습니다. 모니터와 드라이버에서도 G-SYNC가 켜져 있어야 합니다."
   },
   {
    "zh": "修复",
@@ -22938,7 +22938,7 @@
    "zh-TW": "修復",
    "en": "Repair",
    "ja": "修復",
-   "ko": ""
+   "ko": "복구"
   },
   {
    "zh": "另一个软件实例正在处理驱动配置，请稍后重试。",
@@ -22946,7 +22946,7 @@
    "zh-TW": "另一個軟體執行個體正在處理驅動程式設定，請稍後重試。",
    "en": "Another application instance is updating the driver profile. Try again shortly.",
    "ja": "別のアプリのインスタンスがドライバー設定を処理中です。しばらくしてから再試行してください。",
-   "ko": ""
+   "ko": "다른 Veyra 인스턴스가 드라이버 프로필을 처리하고 있습니다. 잠시 후 다시 시도하세요."
   },
   {
    "zh": "尚未检查",
@@ -22954,7 +22954,7 @@
    "zh-TW": "尚未檢查",
    "en": "Not checked",
    "ja": "未確認",
-   "ko": ""
+   "ko": "확인 전"
   },
   {
    "zh": "尚未配置窗口和全屏",
@@ -22962,7 +22962,7 @@
    "zh-TW": "尚未設定視窗和全螢幕",
    "en": "Windowed and fullscreen not configured",
    "ja": "ウィンドウと全画面は未設定",
-   "ko": ""
+   "ko": "창 모드·전체 화면 미설정"
   },
   {
    "zh": "已允许窗口和全屏",
@@ -22970,7 +22970,7 @@
    "zh-TW": "已允許視窗和全螢幕",
    "en": "Windowed and fullscreen allowed",
    "ja": "ウィンドウと全画面を許可済み",
-   "ko": ""
+   "ko": "창 모드·전체 화면 허용됨"
   },
   {
    "zh": "当前配置无法单独修改",
@@ -22978,7 +22978,7 @@
    "zh-TW": "目前設定無法單獨修改",
    "en": "This profile cannot be changed independently",
    "ja": "このプロファイルは個別に変更できません",
-   "ko": ""
+   "ko": "현재 프로필은 따로 수정할 수 없음"
   },
   {
    "zh": "恢复原设置",
@@ -22986,7 +22986,7 @@
    "zh-TW": "還原原設定",
    "en": "Restore original",
    "ja": "元の設定に戻す",
-   "ko": ""
+   "ko": "원래 설정 복원"
   },
   {
    "zh": "恢复记录与当前配置不一致",
@@ -22994,7 +22994,7 @@
    "zh-TW": "還原記錄與目前設定不一致",
    "en": "Backup does not match the current profile",
    "ja": "復元記録と現在の設定が一致しません",
-   "ko": ""
+   "ko": "백업이 현재 프로필과 일치하지 않음"
   },
   {
    "zh": "操作结果尚未确认，请重新检查。已有恢复记录会保留，不会自动重试写入。",
@@ -23002,7 +23002,7 @@
    "zh-TW": "操作結果尚未確認，請重新檢查。既有還原記錄會保留，不會自動重試寫入。",
    "en": "The result has not been confirmed. Check again. The backup is retained; writes will not be retried automatically.",
    "ja": "操作結果を確認できませんでした。再確認してください。復元記録は保持され、書き込みが自動で再試行されることはありません。",
-   "ko": ""
+   "ko": "작업 결과를 아직 확인하지 못했습니다. 다시 확인하세요. 기존 백업은 유지되며 쓰기를 자동으로 다시 시도하지 않습니다."
   },
   {
    "zh": "无法保存或清理恢复记录",
@@ -23010,7 +23010,7 @@
    "zh-TW": "無法儲存或清理還原記錄",
    "en": "Cannot save or remove the backup",
    "ja": "復元記録を保存または削除できません",
-   "ko": ""
+   "ko": "백업을 저장하거나 정리할 수 없음"
   },
   {
    "zh": "无法读取 NVIDIA 驱动配置；请检查显卡和驱动是否支持此功能。",
@@ -23018,7 +23018,7 @@
    "zh-TW": "無法讀取 NVIDIA 驅動程式設定；請檢查顯示卡與驅動程式是否支援此功能。",
    "en": "Cannot read NVIDIA driver profiles. Check whether the GPU and driver support this feature.",
    "ja": "NVIDIA ドライバーの設定を読み取れません。GPU とドライバーがこの機能に対応しているか確認してください。",
-   "ko": ""
+   "ko": "NVIDIA 드라이버 프로필을 읽을 수 없습니다. GPU와 드라이버가 이 기능을 지원하는지 확인하세요."
   },
   {
    "zh": "未能确认驱动配置",
@@ -23026,7 +23026,7 @@
    "zh-TW": "未能確認驅動程式設定",
    "en": "Driver profile not confirmed",
    "ja": "ドライバー設定を確認できません",
-   "ko": ""
+   "ko": "드라이버 프로필을 확인하지 못함"
   },
   {
    "zh": "正在处理驱动配置…",
@@ -23034,7 +23034,7 @@
    "zh-TW": "正在處理驅動程式設定…",
    "en": "Processing driver profile…",
    "ja": "ドライバー設定を処理中…",
-   "ko": ""
+   "ko": "드라이버 프로필 처리 중…"
   },
   {
    "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
@@ -23042,7 +23042,7 @@
    "zh-TW": "請以系統管理員身分啟動本軟體後重試；完成設定後可恢復一般方式啟動。",
    "en": "Run this application as administrator and try again. After setup, you can start it normally.",
    "ja": "このアプリを管理者として起動して再試行してください。設定後は通常の方法で起動できます。",
-   "ko": ""
+   "ko": "Veyra를 관리자 권한으로 실행한 뒤 다시 시도하세요. 설정을 마친 후에는 평소처럼 실행해도 됩니다."
   },
   {
    "zh": "请检查软件数据目录是否可写。恢复记录保留在该目录的 driver-profiles 文件夹中。",
@@ -23050,7 +23050,7 @@
    "zh-TW": "請檢查軟體資料目錄是否可寫入。還原記錄保留在該目錄的 driver-profiles 資料夾中。",
    "en": "Check that the application data directory is writable. Backups are kept in its driver-profiles folder.",
    "ja": "アプリのデータフォルダーに書き込めるか確認してください。復元記録はその中の driver-profiles フォルダーに保存されます。",
-   "ko": ""
+   "ko": "Veyra 데이터 폴더에 쓰기 권한이 있는지 확인하세요. 백업은 이 폴더 안의 driver-profiles 폴더에 보관됩니다."
   },
   {
    "zh": "配置或恢复记录发生变化，已停止本次操作。请重新检查，必要时使用 Profile Inspector 手动处理。",
@@ -23058,7 +23058,7 @@
    "zh-TW": "設定或還原記錄發生變化，已停止本次操作。請重新檢查，必要時使用 Profile Inspector 手動處理。",
    "en": "The profile or backup changed, so this operation was stopped. Check again, or use Profile Inspector to handle it manually.",
    "ja": "設定または復元記録が変更されたため、今回の操作を停止しました。再確認し、必要に応じて Profile Inspector で手動設定してください。",
-   "ko": ""
+   "ko": "프로필 또는 백업이 변경되어 이번 작업을 중지했습니다. 다시 확인하고, 필요하면 Profile Inspector에서 직접 처리하세요."
   },
   {
    "zh": "配置未独立绑定当前程序路径，可能由其他程序共用。请使用 Profile Inspector 单独配置本软件。",
@@ -23066,7 +23066,7 @@
    "zh-TW": "設定未獨立繫結目前程式路徑，可能與其他程式共用。請使用 Profile Inspector 單獨設定本軟體。",
    "en": "The profile is not exclusive to this application path and may be shared. Use Profile Inspector to configure this application separately.",
    "ja": "プロファイルが現在のアプリのパス専用ではなく、他のアプリと共有されている可能性があります。Profile Inspector でこのアプリを個別に設定してください。",
-   "ko": ""
+   "ko": "이 프로필은 현재 프로그램 경로에만 연결되어 있지 않아 다른 프로그램과 함께 쓰일 수 있습니다. Profile Inspector에서 Veyra를 따로 설정하세요."
   },
   {
    "zh": "需要管理员权限",
@@ -23074,7 +23074,7 @@
    "zh-TW": "需要系統管理員權限",
    "en": "Administrator rights required",
    "ja": "管理者権限が必要です",
-   "ko": ""
+   "ko": "관리자 권한 필요"
   },
   {
    "zh": "驱动配置已保存，请手动重启本软件。是否实际生效仍以驱动和显示器报告为准。",
@@ -23082,7 +23082,7 @@
    "zh-TW": "驅動程式設定已儲存，請手動重新啟動本軟體。是否實際生效仍以驅動程式和顯示器回報為準。",
    "en": "The driver profile was saved. Restart this application manually. Actual activation still depends on the driver and monitor reports.",
    "ja": "ドライバー設定を保存しました。このアプリを手動で再起動してください。実際の有効状態はドライバーとモニターの報告で確認してください。",
-   "ko": ""
+   "ko": "드라이버 프로필을 저장했습니다. Veyra를 직접 다시 시작하세요. 실제 적용 여부는 드라이버와 모니터에 표시되는 상태로 확인하세요."
   },
   {
    "zh": "驱动配置正在被占用",
@@ -23090,7 +23090,7 @@
    "zh-TW": "驅動程式設定正在被使用",
    "en": "Driver profile is in use",
    "ja": "ドライバー設定が使用中です",
-   "ko": ""
+   "ko": "드라이버 프로필 사용 중"
   },
   {
    "zh": "2. 回到 Veyra，在“音频输入”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。",
@@ -23098,7 +23098,7 @@
    "zh-TW": "2. 回到 Veyra，在「音訊輸入」選「Veyra 虛擬揚聲器」，再連接擷取。音訊輸出選擇實際耳機或喇叭，即可使用音畫同步。\n\n可選改名：在 Windows 聲音的「播放」頁開啟 CABLE Input 的內容，在「一般」中改成「Veyra 擷取音訊」。",
    "en": "2. In Veyra, select Veyra virtual speaker under Audio input, then connect capture. Select real headphones or speakers as the audio output to use A/V sync.\n\nOptional: rename CABLE Input to Veyra capture audio in Windows Sound → Playback → Properties → General.",
    "ja": "2. Veyraの「音声入力」で「Veyra仮想スピーカー」を選択して接続します。出力に実際のヘッドホンやスピーカーを選ぶと、音声と映像の同期を利用できます。\n\n必要に応じて、Windowsのサウンド → 再生 → CABLE Inputのプロパティ → 全般で名前を変更できます。",
-   "ko": ""
+   "ko": "2. Veyra로 돌아와 ‘오디오 입력’에서 ‘Veyra 가상 스피커’를 선택한 뒤 캡처를 연결합니다. 오디오 출력으로 실제 헤드폰이나 스피커를 선택하면 오디오·영상 동기화를 사용할 수 있습니다.\n\n이름 변경(선택): Windows 소리 설정의 ‘재생’ 탭에서 CABLE Input의 속성을 열고, ‘일반’에서 이름을 ‘Veyra 캡처 오디오’로 바꿀 수 있습니다."
   },
   {
    "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。",
@@ -23106,7 +23106,7 @@
    "zh-TW": "PS5 仍會傳送一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同時只允許一個遠端遊玩連線。再次串流時記得選擇上方的「音訊輸入」。",
    "en": "PS5 still sends a 720p 30fps keep-alive video at about 5 Mbps, discarded on arrival. PS5 allows only one Remote Play connection at a time. Select an Audio input above when streaming again.",
    "ja": "PS5は接続維持用に720p 30fps、約5Mbpsの映像を送信しますが、このPCでは受信後すぐに破棄します。PS5のリモートプレイは同時に1接続のみです。再配信時は上の「音声入力」を選択してください。",
-   "ko": ""
+   "ko": "PS5는 연결 유지를 위해 720p 30fps, 약 5Mbps 영상을 계속 보내며 이 PC는 받는 즉시 폐기합니다. PS5에는 리모트 플레이를 한 번에 하나만 연결할 수 있습니다. 다시 스트리밍할 때는 위의 ‘오디오 입력’을 선택하세요."
   },
   {
    "zh": "上次的音频输入未连接，请插回设备或重新选择音频输入",
@@ -23114,7 +23114,7 @@
    "zh-TW": "上次的音訊輸入未連接，請重新連接裝置或選擇音訊輸入",
    "en": "The previous audio input is disconnected. Reconnect it or select another audio input.",
    "ja": "前回の音声入力が接続されていません。再接続するか、音声入力を選び直してください。",
-   "ko": ""
+   "ko": "이전 오디오 입력이 끊어졌습니다. 장치를 다시 연결하거나 오디오 입력을 다시 선택하세요."
   },
   {
    "zh": "不采集音频",
@@ -23122,7 +23122,7 @@
    "zh-TW": "不擷取音訊",
    "en": "No audio input",
    "ja": "音声を取り込まない",
-   "ko": ""
+   "ko": "오디오 캡처 안 함"
   },
   {
    "zh": "关闭后仍可录制和保存回放；本机不播放采集声音",
@@ -23130,7 +23130,7 @@
    "zh-TW": "關閉後仍可錄製和儲存重播；本機不播放擷取聲音",
    "en": "When off, recording and replay still receive audio; capture sound is not played locally.",
    "ja": "オフでも録画とリプレイに音声は保存されます。取り込んだ音声はこのPCでは再生されません。",
-   "ko": ""
+   "ko": "꺼도 녹화와 리플레이 저장은 계속됩니다. 캡처한 소리만 이 PC에서 재생하지 않습니다."
   },
   {
    "zh": "录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入",
@@ -23138,7 +23138,7 @@
    "zh-TW": "錄入所選音訊輸入，不受音量、靜音和本機音訊監聽開關影響；擷取卡需選擇音訊輸入",
    "en": "Records the selected audio input regardless of volume, mute or local monitoring. Select an audio input for capture cards.",
    "ja": "選択した音声入力を音量、ミュート、ローカルモニター設定に関係なく録音します。キャプチャーカードでは音声入力を選択してください。",
-   "ko": ""
+   "ko": "음량, 음소거, 이 PC에서 듣기 설정과 관계없이 선택한 오디오 입력을 녹음합니다. 캡처 카드는 오디오 입력을 선택해야 합니다."
   },
   {
    "zh": "录制采集卡声音需选择输入；本机监听可独立关闭",
@@ -23146,7 +23146,7 @@
    "zh-TW": "錄製擷取卡聲音需選擇輸入；本機監聽可獨立關閉",
    "en": "Select an audio input to record capture-card sound. Local monitoring can be turned off independently.",
    "ja": "キャプチャーカードの音声を録音するには入力を選択してください。ローカルモニターは個別にオフにできます。",
-   "ko": ""
+   "ko": "캡처 카드 소리를 녹음하려면 입력을 선택하세요. 이 PC에서 듣기는 따로 끌 수 있습니다."
   },
   {
    "zh": "本机音频监听",
@@ -23154,7 +23154,7 @@
    "zh-TW": "本機音訊監聽",
    "en": "Local audio monitoring",
    "ja": "ローカル音声モニター",
-   "ko": ""
+   "ko": "이 PC에서 듣기"
   },
   {
    "zh": "音频输入",
@@ -23162,7 +23162,7 @@
    "zh-TW": "音訊輸入",
    "en": "Audio input",
    "ja": "音声入力",
-   "ko": ""
+   "ko": "오디오 입력"
   },
   {
    "zh": "显示区域红框",
@@ -23170,7 +23170,7 @@
    "zh-TW": "顯示區域紅框",
    "en": "Show region outlines",
    "ja": "領域の赤枠を表示",
-   "ko": ""
+   "ko": "영역 테두리 표시"
   },
   {
    "zh": "选中区域后可拖动位置；红框不会写入录制或导出",
@@ -23178,7 +23178,7 @@
    "zh-TW": "選中區域後可拖曳位置；紅框不會寫入錄製或匯出",
    "en": "Select a region to move it. Outlines are excluded from recordings and exports.",
    "ja": "領域を選択して移動できます。赤枠は録画や書き出しに含まれません。",
-   "ko": ""
+   "ko": "영역을 선택한 뒤 드래그해 위치를 옮길 수 있습니다. 빨간 테두리는 녹화나 내보내기에 포함되지 않습니다."
   },
   {
    "zh": "已选中",
@@ -23186,7 +23186,7 @@
    "zh-TW": "已選中",
    "en": "Selected",
    "ja": "選択中",
-   "ko": ""
+   "ko": "선택됨"
   },
   {
    "zh": "选中",
@@ -23194,7 +23194,7 @@
    "zh-TW": "選中",
    "en": "Select",
    "ja": "選択",
-   "ko": ""
+   "ko": "선택"
   },
   {
    "zh": "打开软件播放一次，动画结束后继续；打开媒体或关闭声音立即停止",
@@ -23202,7 +23202,7 @@
    "zh-TW": "開啟軟體播放一次，動畫結束後繼續；開啟媒體或關閉聲音立即停止",
    "en": "Plays once on launch, continuing after the intro. Opening media or turning sound off stops it immediately.",
    "ja": "起動時に一度再生し、アニメ終了後も継続。メディアを開くか音声をオフにすると即停止します。",
-   "ko": ""
+   "ko": "시작할 때 한 번 재생하며 애니메이션이 끝난 뒤에도 이어집니다. 미디어를 열거나 소리를 끄면 바로 멈춥니다."
   },
   {
    "zh": "停止本次启动音乐",
@@ -23210,7 +23210,7 @@
    "zh-TW": "停止本次啟動音樂",
    "en": "Stop music for this launch",
    "ja": "今回の起動音楽を停止",
-   "ko": ""
+   "ko": "이번 시작 음악 중지"
   },
   {
    "zh": "每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次",
@@ -23218,7 +23218,7 @@
    "zh-TW": "每次啟動播放一次，動畫結束後繼續；此開關會儲存，角落按鈕僅停止本次",
    "en": "Plays once per launch, continuing after the intro. This setting is saved; the corner button stops only this launch.",
    "ja": "起動ごとに一度再生し、アニメ終了後も継続。この設定は保存され、隅のボタンは今回のみ停止します。",
-   "ko": ""
+   "ko": "시작할 때마다 한 번 재생하며 애니메이션이 끝난 뒤에도 이어집니다. 이 설정은 저장되며, 모서리 버튼은 이번 재생만 멈춥니다."
   }
  ]
 }
