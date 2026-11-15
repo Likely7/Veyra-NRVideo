@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/veyra-app-icon.png" alt="Veyra" width="140">
+<img src="assets/veyra-logo-dusk.webp" alt="Veyra" width="140">
 
 # Veyra
 

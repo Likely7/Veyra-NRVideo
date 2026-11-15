@@ -1297,3 +1297,6 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 脚本reports同任务init.py/docs.py/freeze.py及后续package/upload/verify，全部输出E盘同任务目录。先草稿上传与服务端SHA检查再公开/Latest，音乐不进源码，ANR禁止Beta再分发不扩大。远端验证及清理最终以FINAL.json/发行执行记录为准，不群发、不关机。
 
 2.1.9正式发布并核验：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.9，发行tag d442b4e、实际产品b430d98、EXEc8a53dc7/PE2.1.9.0；两完整包/两源码/SHA上传，服务端digest/大小、匿名入口、Latest、正文/README/12群原图/双码各220及零起点教程通过。音乐只运行包、无ANR、DLL/88shader和四次解压冷启动通过，原2.1.6两Release保护通过。脚本路径/失败与纠正/实际资产SHA见RELEASE_2.1.9_EXECUTION_2026-11-15.md与reports同任务FINAL。发布后仅追加验收文档，不改tag/二进制/已发布ZIP；群公告669字符提供用户自行发，不群发、不关机。
+## 2026-11-15 README顶部替换日落新Logo
+
+用户要求用新Logo替换README顶部老图。README.md/README_CN.md现有顶部手柄图改为已发布的assets/veyra-logo-dusk.webp，保持原140/160宽度和位置。英文兼容README_EN.md原无Logo且指向README.md，保持该入口。无图像重绘/裁剪、无程序/发行包/版本标签改动，作者/教程及12群/赞助区保持。命令git diff --check、main快进/推送nrvideo main，远端README与Logo原字节验证结果见E:/项目/Veyra/reports/codex-readme-dusk-logo-20261115/FINAL.json；不关机。

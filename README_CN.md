@@ -16,7 +16,7 @@
 </p>
 <!-- veyra-creator-and-tutorials:end -->
 
-<p align="center"><img src="assets/veyra-app-icon.png" alt="Veyra" width="160"></p>
+<p align="center"><img src="assets/veyra-logo-dusk.webp" alt="Veyra" width="160"></p>
 
 <p align="center">
   <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/assets/veyra-2.0.0-promo.mp4">
