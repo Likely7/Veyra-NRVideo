@@ -610,7 +610,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("录制声音")
-                            hint: qsTr("录入播放器正在播放的声音，不受音量和静音影响；采集卡需要开启音频监听")
+                            hint: qsTr("录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入")
                             VSwitch {
                                 objectName: "set-recaudio"
                                 checked: veyra.recordingAudio

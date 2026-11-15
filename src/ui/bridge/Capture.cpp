@@ -192,7 +192,7 @@ void QmlPlayerBridge::setCapturePixelId(const QString& id) {
 }
 QVariantList QmlPlayerBridge::captureAudioInputs() const {
     // Only what the user picks explicitly is ever opened (1.4.4 rule).
-    QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不监听音频")}}};
+    QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不采集音频")}}};
     if(impl_->captureAudioMissing)out<<QVariantMap{{"id",-4},{"label",tr("上次的音频输入未连接")},{"disabled",true}};
     for (const auto& d : impl_->captureVideo)
         if (d.path == impl_->captureDevice)
@@ -467,7 +467,7 @@ bool QmlPlayerBridge::startCaptureSession() {
     if(device<0){emit notice(tr("请先选择采集设备和格式"),true);return false;}
     if(!format){emit notice(i.captureFormatKey.empty()&&i.capturePrefs.formatKey.empty()?tr("请先选择分辨率和像素格式"):tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return false;}
     if(!format->supported){emit notice(tr("设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式"),true);return false;}
-    if(i.captureAudioMissing){emit notice(tr("上次的音频输入未连接，请插回设备或重新选择音频监听"),true);return false;}
+    if(i.captureAudioMissing){emit notice(tr("上次的音频输入未连接，请插回设备或重新选择音频输入"),true);return false;}
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
     if (audioDevice && audioDevice->virtualSpeaker) {

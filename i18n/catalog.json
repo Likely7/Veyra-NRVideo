@@ -645,13 +645,6 @@
    "ja": "2 項目"
   },
   {
-   "zh": "2. 回到 Veyra，在“音频监听”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "2. 回到 Veyra，在“音訊監聽”選“Veyra 虛擬揚聲器”，再連接擷取。音訊輸出選真實耳機或音箱，即可使用音畫同步。\n\n可選改名：在 Windows 聲音的“播放”頁開啟 CABLE Input 的屬性，在“常規”裡改成“Veyra 擷取音訊”。",
-   "en": "2. In Veyra, select Veyra Virtual Speaker under Audio monitoring, then connect the capture card. Select your physical headphones or speakers as the output to use audio/video sync.\n\nOptional rename: On the Playback tab in Windows Sound, open CABLE Input properties. On General, rename it to Veyra Capture Audio.",
-   "ja": "2. Veyra の「音声モニター」で「Veyra 仮想スピーカー」を選んでから接続します。出力先に実際のヘッドホンまたはスピーカーを選ぶと、映像と音声の同期を利用できます。\n\n名前を変更する場合は、Windows の「サウンド」の「再生」で CABLE Input のプロパティを開き、「全般」で Veyra キャプチャ音声に変更します。"
-  },
-  {
    "zh": "203 = 中性；调高整体变亮，峰值不变",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "203 = 中性；調高整體變亮，峰值不變",
@@ -1891,13 +1884,6 @@
    "ja": "PS5 本体"
   },
   {
-   "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得打开上面的「音频监听」。",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "PS5 仍會發一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同一時間只允許一個遠程遊玩連線。再串流時記得打開上面的「音訊監聽」。",
-   "en": "The PS5 still sends a 720p 30 fps keepalive picture of about 5 Mbps, which this PC drops on arrival. A PS5 allows one Remote Play connection at a time. When re-streaming, turn on Audio monitoring above.",
-   "ja": "PS5 は 720p 30fps・約 5 Mbps の維持用映像を送り続けますが、この PC は受け取ってすぐ破棄します。PS5 のリモートプレイ接続は同時に 1 つだけです。再ストリーミングするときは上の「音声モニター」をオンにしてください。"
-  },
-  {
    "zh": "PS5 仍被串流会话占用，请结束其他串流或稍后重试；无需重新配对。",
    "src": "src/source/RemotePlaySessionSource.cpp",
    "zh-TW": "PS5 仍被串流會話占用，請結束其他串流或稍後重試；無需重新配對。",
@@ -2822,13 +2808,6 @@
    "ja": "前回の音声入力が接続されていません"
   },
   {
-   "zh": "上次的音频输入未连接，请插回设备或重新选择音频监听",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "上次的音訊輸入未連接，請重新插入裝置或選擇音訊監聽",
-   "en": "The previous audio input is disconnected. Reconnect it or select an audio input",
-   "ja": "前回の音声入力が接続されていません。再接続するか音声入力を選び直してください"
-  },
-  {
    "zh": "上次采集时显卡设备丢失",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "上次擷取時顯示卡裝置遺失",
@@ -2981,13 +2960,6 @@
    "zh-TW": "不是有效的 .vpcolor 檔案",
    "en": "Not a valid .vpcolor file",
    "ja": "有効な .vpcolor ファイルではありません"
-  },
-  {
-   "zh": "不监听音频",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "不監聽音訊",
-   "en": "Don't monitor audio",
-   "ja": "音声をモニターしない"
   },
   {
    "zh": "不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连",
@@ -5642,13 +5614,6 @@
    "zh-TW": "只能開啟本地檔案",
    "en": "Only local files can be opened",
    "ja": "開けるのはローカルファイルだけです"
-  },
-  {
-   "zh": "只连接明确选中的输入，默认不监听",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "只連接明確選中的輸入，預設不監聽",
-   "en": "Connects only the input you select explicitly; no monitoring by default",
-   "ja": "明示的に選んだ入力だけを接続します。既定ではモニターしません"
   },
   {
    "zh": "可以保存",
@@ -9030,13 +8995,6 @@
    "zh-TW": "當前非 NVIDIA 適配器：NR、NVIDIA 超解析與 DLSS 已停用；可使用 XeSS 預覽和 AMD 光流",
    "en": "Not an NVIDIA adapter: NR, NVIDIA super resolution and DLSS are disabled; XeSS preview and AMD optical flow are available",
    "ja": "NVIDIA 以外のアダプターです：NR、NVIDIA 超解像、DLSS は無効です。XeSS のプレビューと AMD オプティカルフローは使えます"
-  },
-  {
-   "zh": "录入播放器正在播放的声音，不受音量和静音影响；采集卡需要开启音频监听",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "錄入播放器正在播放的聲音，不受音量和靜音影響；擷取卡需要開啟音訊監聽",
-   "en": "Records player audio before volume and mute; capture cards need audio monitoring enabled",
-   "ja": "音量・ミュート適用前の音声を録音します。キャプチャーカードでは音声モニターを有効にしてください"
   },
   {
    "zh": "录制",
@@ -18721,13 +18679,6 @@
    "ja": "音声のドリフト補正をリセットできませんでした"
   },
   {
-   "zh": "音频监听",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "音訊監聽",
-   "en": "Audio monitoring",
-   "ja": "音声モニター"
-  },
-  {
    "zh": "音频线程异常，请重新打开采集",
    "src": "src/sink/CaptureAudioSession.cpp",
    "zh-TW": "音訊執行緒異常，請重新開啟擷取",
@@ -20156,6 +20107,69 @@
    "zh-TW": "驅動程式設定正在被使用",
    "en": "Driver profile is in use",
    "ja": "ドライバー設定が使用中です"
+  },
+  {
+   "zh": "2. 回到 Veyra，在“音频输入”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "2. 回到 Veyra，在「音訊輸入」選「Veyra 虛擬揚聲器」，再連接擷取。音訊輸出選擇實際耳機或喇叭，即可使用音畫同步。\n\n可選改名：在 Windows 聲音的「播放」頁開啟 CABLE Input 的內容，在「一般」中改成「Veyra 擷取音訊」。",
+   "en": "2. In Veyra, select Veyra virtual speaker under Audio input, then connect capture. Select real headphones or speakers as the audio output to use A/V sync.\n\nOptional: rename CABLE Input to Veyra capture audio in Windows Sound → Playback → Properties → General.",
+   "ja": "2. Veyraの「音声入力」で「Veyra仮想スピーカー」を選択して接続します。出力に実際のヘッドホンやスピーカーを選ぶと、音声と映像の同期を利用できます。\n\n必要に応じて、Windowsのサウンド → 再生 → CABLE Inputのプロパティ → 全般で名前を変更できます。"
+  },
+  {
+   "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "PS5 仍會傳送一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同時只允許一個遠端遊玩連線。再次串流時記得選擇上方的「音訊輸入」。",
+   "en": "PS5 still sends a 720p 30fps keep-alive video at about 5 Mbps, discarded on arrival. PS5 allows only one Remote Play connection at a time. Select an Audio input above when streaming again.",
+   "ja": "PS5は接続維持用に720p 30fps、約5Mbpsの映像を送信しますが、このPCでは受信後すぐに破棄します。PS5のリモートプレイは同時に1接続のみです。再配信時は上の「音声入力」を選択してください。"
+  },
+  {
+   "zh": "上次的音频输入未连接，请插回设备或重新选择音频输入",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "上次的音訊輸入未連接，請重新連接裝置或選擇音訊輸入",
+   "en": "The previous audio input is disconnected. Reconnect it or select another audio input.",
+   "ja": "前回の音声入力が接続されていません。再接続するか、音声入力を選び直してください。"
+  },
+  {
+   "zh": "不采集音频",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "不擷取音訊",
+   "en": "No audio input",
+   "ja": "音声を取り込まない"
+  },
+  {
+   "zh": "关闭后仍可录制和保存回放；本机不播放采集声音",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "關閉後仍可錄製和儲存重播；本機不播放擷取聲音",
+   "en": "When off, recording and replay still receive audio; capture sound is not played locally.",
+   "ja": "オフでも録画とリプレイに音声は保存されます。取り込んだ音声はこのPCでは再生されません。"
+  },
+  {
+   "zh": "录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄入所選音訊輸入，不受音量、靜音和本機音訊監聽開關影響；擷取卡需選擇音訊輸入",
+   "en": "Records the selected audio input regardless of volume, mute or local monitoring. Select an audio input for capture cards.",
+   "ja": "選択した音声入力を音量、ミュート、ローカルモニター設定に関係なく録音します。キャプチャーカードでは音声入力を選択してください。"
+  },
+  {
+   "zh": "录制采集卡声音需选择输入；本机监听可独立关闭",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "錄製擷取卡聲音需選擇輸入；本機監聽可獨立關閉",
+   "en": "Select an audio input to record capture-card sound. Local monitoring can be turned off independently.",
+   "ja": "キャプチャーカードの音声を録音するには入力を選択してください。ローカルモニターは個別にオフにできます。"
+  },
+  {
+   "zh": "本机音频监听",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "本機音訊監聽",
+   "en": "Local audio monitoring",
+   "ja": "ローカル音声モニター"
+  },
+  {
+   "zh": "音频输入",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "音訊輸入",
+   "en": "Audio input",
+   "ja": "音声入力"
   }
  ]
 }

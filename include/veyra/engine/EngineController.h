@@ -259,6 +259,8 @@ public:
     bool rotatePreviewClockwise(uint64_t session){std::lock_guard lock(mutex_);if(session!=snapshot_.sessionId||(!snapshot_.running&&!snapshot_.image))return false;previewView_.rotateClockwise();return true;}
     PreviewView previewView()const{std::lock_guard lock(mutex_);return previewView_;}
     void setVolume(float gain,bool mute);
+    // Local capture monitoring only. Recording takes PCM before this gain.
+    void setCaptureAudioMonitoring(bool enabled);
     bool selectAudioTrack(uint64_t sessionId,int streamIndex);
     void seek(double seconds){if(!std::isfinite(seconds)||seconds<0)return;std::lock_guard lock(mutex_);snapshot_.seekTarget=seconds;++snapshot_.seekRequested;seekSeconds_.store(seconds);}
     void saveFrame(const std::wstring& path);
@@ -331,6 +333,7 @@ private:
     EnhancementSettings desired_;uint64_t nextRevision_=1;
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_
     std::atomic<bool> stop_{false},paused_{false},muted_{false};
+    std::atomic<bool> captureAudioMonitoring_{true};
     std::atomic<float> volume_{1};uint64_t sessionId_=0;
     std::atomic<double> seekSeconds_{-1};
     std::atomic<double> requestedPlaybackRate_{1};

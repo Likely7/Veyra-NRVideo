@@ -27,6 +27,16 @@ ColumnLayout {
             }
         }
         VRow {
+            visible: veyra.sourceKind === "capture"
+            label: qsTr("本机音频监听")
+            hint: qsTr("关闭后仍可录制和保存回放；本机不播放采集声音")
+            VSwitch {
+                objectName: "pro-capture-audio-monitor"
+                checked: veyra.preferences.captureAudioMonitor !== false
+                onToggled: v => veyra.setPreference("captureAudioMonitor", v)
+            }
+        }
+        VRow {
             label: qsTr("声音同步")
             hint: veyra.audioSyncMode === 0 ? (veyra.audioSyncLive ? qsTr("软件估算补偿 ") + veyra.audioCompensationMs.toFixed(0) + " ms" : qsTr("自动估算 · 采集卡 / PS5 实时输入时生效"))
                   : veyra.audioSyncMode === 1 ? qsTr("手动偏移 · 实时输入时生效") : qsTr("关闭补偿")
