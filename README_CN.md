@@ -32,7 +32,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 **Veyra Windows 免安装软件包累计下载 7.9 万+ 次**（截至 2026-11-08，79,332 次）；**GitHub Release 全部附件累计下载 10.3 万+ 次**（103,337 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
 
-[下载2.1.6免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.6) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.6.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载2.1.9免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.9) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.9.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 **2.1.2 更新：** 双重超分、超采样、英伟达低延迟与 RX 7000 实验 NR；补帧去重／节奏、捕获音频与极简音量修复。[完整更新与迁移](docs/RELEASE_NOTES_2.1.2.md)。
 
@@ -45,7 +45,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 **📖 [English Documentation / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)**：供海外用户查看英文安装指南、采集卡兼容性、常见故障与群友实测经验。
 
-**2.1.6：** 即时回放/F9、麦克风混音/独立音轨、全效果剔除、变帧率自动去重与60→30修复、送帧/日志改进、精修光流、GPU/VFG默认值与HDR折叠。[全部更新与本机数据](docs/RELEASE_NOTES_2.1.6.md)。ANR适配源码保留，公开包不分发其运行组件。
+**2.1.9 ·《迎接GTA6降临》：** 日落界面/片头与每次启动音乐、全效果剔除红框拖动、XeSS捕获卡死与采集录音修复、跨虚拟桌面窗口、G-SYNC配置、双卡路径诊断及AMD补帧。[完整更新与验证边界](docs/RELEASE_NOTES_2.1.9.md)。ANR运行组件继续不随包分发。
 
 **2.1.5：** 改善采集去重后的补帧节奏，并校正部分采集设备的异常预览时间戳。[完整更新](docs/RELEASE_NOTES_2.1.5.md)。
 
@@ -98,7 +98,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.6-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.6-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 **Veyra-2.1.9-NVIDIA-win64-portable.zip** 或 **Veyra-2.1.9-AMD-win64-portable.zip**，用 Windows 或 7-Zip 完整解压到可写新目录，运行 **veyra_qml_ui.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -198,7 +198,7 @@ QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未�
 
 ## 开源与构建
 
-2.1.6已整合送帧/采集/低延迟、自动去重/60→30和界面修复；[更新与数据边界](docs/RELEASE_NOTES_2.1.6.md)。ANR自写适配源码可追溯；因上游明确禁止当前Beta第三方再分发，公开包不包含ANR DLL、模型或程序包。
+2.1.9新增日落界面/音乐、剔除区域编辑、捕获卡死与录音修复及兼容更新；[完整更新和边界](docs/RELEASE_NOTES_2.1.9.md)。保留此前自动去重/60→30与送帧修复。ANR自写适配源码可追溯，公开包继续不带上游禁止Beta再分发的运行组件。
 
 开发从[当前文档入口](docs/README.md)开始：[构建与验证](docs/DEVELOPMENT.md)、[界面代码职责](docs/ARCHITECTURE.md)。历史任务记录已单独归档。
 
@@ -224,7 +224,7 @@ Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3
 <p align="center">
   <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
   &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-10-20261111.png" alt="Veyra 交流群 10" width="220">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-12-20261115.png" alt="Veyra 交流群 12" width="220">
 </p>
 
-左：微信赞助（自愿，不影响功能）；右：交流群 10。群码按图片标注于 **2026-11-18 前**有效，过期请查看仓库更新。
+左：微信赞助（自愿，不影响功能）；右：交流群 12。群码按图片标注于 **2026-11-22 前**有效，过期请查看仓库更新。

@@ -1289,3 +1289,9 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 同一配置8次实际启动（临时停止/重启两轮、设置关/重启关、设置开/重启开）退出0/无错误、偏好true/true/true/true/false/false/true/true；提前静音。命令py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-startup-music-restart-20261115/{prepare.py,restart.py}，记录RESTART.json/PREFERENCE-REPAIR.json；i18n提取检查0缺失/0占位问题。源/包/缓存/日志均E盘，C++算法及运行组件不改，EXE因内嵌翻译资源重链；封包保护拦截未同步的旧QA EXE，更新后复测，不绕过校验。后续本地main、两完整包和原入口原子替换/冷启动结果见该任务FINAL.json。无push/Release/关机。
 
 启动音乐跟进交付：产品b430d98，EXE因内嵌词库资源重链c8a53dc7…，新EXE下8次实际重启与两包四次冷启动通过。NVIDIA/AMD ZIP分别730929571/721924034字节；两包及对应源码/SHA已逐文件核验后原子同步原2.1.9下载路径和app，原测试启动器仍使用已修复的manual-NVIDIA配置。全部DLL和BGM原件不变，源码无MP3/DLL。相关旧Main/词库/manifest及之前摘要/报告归档archives/codex-startup-music-restart-20261115，不覆盖其他任务或用户设置。原日志已明确的按钮false修正true；设置页明确的长期关闭未全局迁移。包校验第一次正确拦截旧QA EXE，按实际资源重链更新并重测后封包。实际部署变更文件见该任务DEPLOY.json与FINAL.json；不push/Release/关机。
+
+## 2026-11-15 公开发布2.1.9《迎接GTA6降临》
+
+用户确认测试正常并明确授权GitHub发布、全量更新公告、最新12群原图和1000字以内群公告。发行分支codex/release-2.1.9-20261115基于main ca614ef，远端main c327d45；已归档2.1.6两Release正文/标签/资产身份、本地最终交付。仅发行文档/README/二维码/包元数据，不重编译已验EXEc8a53dc7，产品b430d98生产源码不变。双语更新、条件/边界、对应源码/固定依赖文档齐全；原图复制12群，11月22日前、两QR各220、作者/英中教程保留且英文零起点；群公告669字符。
+
+脚本reports同任务init.py/docs.py/freeze.py及后续package/upload/verify，全部输出E盘同任务目录。先草稿上传与服务端SHA检查再公开/Latest，音乐不进源码，ANR禁止Beta再分发不扩大。远端验证及清理最终以FINAL.json/发行执行记录为准，不群发、不关机。
