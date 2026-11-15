@@ -61,6 +61,7 @@
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlDiskCache.h"
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "veyra/ui/StartupMusic.h"
 #include "veyra/ui/ThumbnailProvider.h"
 
 using namespace veyra;
@@ -748,6 +749,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             outcome.toStdString(), cache.digest.isEmpty() ? "none" : cache.digest.toStdString(), cache.files, cache.bytes, ms));
     }
 
+    // The 日落 startup music (StartupMusic.h): the user's file next to the program, if any.
+    // Declared before the engine, so it outlives every QML reference to it.
+    ui::StartupMusic startupMusic(QCoreApplication::applicationDirPath() + QStringLiteral("/media/startup-music.mp3"));
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("vySoftwareUi"), softwareUi);
     auto* thumbnails = new ui::ThumbnailProvider;
@@ -756,6 +760,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                      [thumbnails](const QString& path) { thumbnails->setSource(path); });
     engine.addImportPath(QCoreApplication::applicationDirPath() + "/qml");
     engine.rootContext()->setContextProperty(QStringLiteral("veyra"), &bridge);
+    engine.rootContext()->setContextProperty(QStringLiteral("vyMusic"), &startupMusic);
     bridge.setQmlEngine(&engine);   // Qt.uiLanguage drives the per-language font (Theme.qml)
 
     QObject::connect(&engine, &QQmlApplicationEngine::objectCreationFailed, &app,

@@ -114,15 +114,17 @@ Item {
         color: Qt.rgba(1, 1, 1, 0.12)
         gradient: slider.trackGradient
     }
-    Rectangle {
+    // The accent, or the sunset gradient laid along the whole track.
+    VAccentFill {
         objectName: "vslider-fill"
         anchors.verticalCenter: track.verticalCenter
         height: 4
         radius: 9
-        color: Theme.accent
         visible: (!slider.center || slider.showCenterFill) && !slider.trackGradient
         width: track.width * (slider.center ? Math.abs(slider.frac - 0.5) : slider.frac)
         x: slider.center ? track.width * Math.min(0.5, slider.frac) : 0
+        span: track.width
+        spanX: x
     }
     Rectangle {
         id: knob

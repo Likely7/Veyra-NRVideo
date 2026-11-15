@@ -1230,3 +1230,15 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 ## 2026-11-13 2.1.6正式发布已核实
 
 用户授权公开，发行7244307/产品f46df7f、EXEbf27ebed/PE2.1.6.0。NVIDIA/AMD公开完整包与应用/网络源码、SHA256SUMS已上传，源码Release先公开，应用v2.1.6随后设Latest；服务端大小/SHA、正文、标签、匿名HTTP200/ZIP前缀、摘要GET、两QR字节/各220及四固定源码链接核验。公开包无ANR资产：作者最新Beta禁止再分发；自写适配保留，当前本机完整ANR包/用户配置不改。两公开包重新解压最小PATH播放213/221帧、无ERROR，实际UI明确ANR不可用、回放/麦克风默认关、顶部开关/HDR折叠存在。旧2.1.5正文/标签/资产与源码SHA保持，29原树指纹保护。脚本/日志/失败边界/包SHA及清理详见RELEASE_2.1.6_EXECUTION_2026-11-13.md与reports/codex-release-2.1.6-20261113/FINAL.json；仅退役本轮验证副本，公开包/对应源码/build/证据保留。最后只追加本验收文档，不改tag/二进制；未群发、未关机。
+
+## 2026-11-14 日落配色与经典切换（Claude，未提交）
+
+分支 claude/dusk-palette-20261114（main 20955b5）。按用户参考 GTA6 封面的要求，新增日落配色（默认）：靛紫底、日落渐变强调色、暮色背景图；设置 → 外观 → 界面配色可切回经典，经典取值与原型完全一致。Theme 令牌、VAccentFill 渐变填充、shade() 着色、make-backdrop-dusk.py 背景图、palette 偏好与 6 条词库。QML 199/0/0、界面合同 3/3、翻译 0 缺失；两套配色真实程序截图（软件与 GPU 绘制）及手动入口冒烟通过。详见 docs/DUSK_PALETTE_2026-11-14.md 与 reports/claude-dusk-palette-20261114。
+
+同日追加：日落配色下 Logo 换成用户提供的霓虹渐变像素手柄（原图存 assets/veyra-logo-dusk.webp，make-logo-dusk.py 生成同画布的 logo-dusk.png），首页/顶部栏/关于三处同位置替换，首页呼吸光改淡粉；经典仍为原白色 Logo；程序文件/任务栏图标未改。QML 199/0/0，两套配色截图核对。
+
+同日追加：用户觉得日落配色饱和度偏高，色相明度不变下调约1/4（底色/卡片/背景图×0.72按亮度保持，强调色与渐变HLS×0.8，shade偏移与首页呼吸光同步）；QML 199/0/0，前后对比图见reports同任务dusk-saturation-before-after.png。
+
+## 2026-11-15 日落首页字标、启动动画与启动音乐（Claude，未提交）
+
+用户要求日落主题下首页换成其"Veyra NR"字标（饱和度稍降），并加入场动画；随后参考其GTA6 Logo出场录屏、要求去塑料光效、拆字做视差、动效更炸，最后要求BGM随启动卡点播放一次、打开任意播放源自动暂停、角落可关声音。同一分支/工作树/build继续：make-wordmark-dusk.py生成色度×0.8字标、柔光与三层视差（尾巴边缘填色抠出、被挡处按纸片调和补画）；新DuskIntro.qml 3.26s卡BGM实测拍；新StartupMusic（Media Foundation媒体引擎纯音频）读程序目录media/startup-music.mp3，动画以音乐位置为时钟；首页右下角静音按钮与设置→外观"启动动画""启动音乐"。BGM来源/授权未知，不进Git/包，仅复制到测试stage。EXE9a27ebb7…；QML199/0/0、合同3、i18n2859、真实程序14场景（静音播放）通过，同步0–1ms。测试中BGM曾意外外放约7秒、测试窗被真实点击一次。记录见DUSK_PALETTE_2026-11-14.md末节与reports/claude-dusk-intro-20261115/FINAL.json；未合main/push/发布。

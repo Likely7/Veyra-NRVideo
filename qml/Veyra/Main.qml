@@ -70,6 +70,7 @@ Window {
     }
     Binding { target: Theme; property: "reduced"; value: veyra.reducedMotion || root.test.reducedMotion === true }
     Binding { target: Theme; property: "accentName"; value: veyra.preferences.accent || "orange" }
+    Binding { target: Theme; property: "paletteName"; value: veyra.preferences.palette || "dusk" }
     Binding { target: Theme; property: "backdropLevel"; value: veyra.preferences.backdrop !== undefined ? veyra.preferences.backdrop : 1 }
 
     // Cinema geometry: the main window ends at the picture. The independent pill
@@ -943,6 +944,50 @@ Window {
         root.y = a.y + Math.round((a.height - root.height) / 2)
     }
     onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
+    // 日落 startup intro (DuskIntro.qml, 2026-11-15): on a plain start to the home page in the
+    // dusk palette, unless 设置 → 外观 → 启动动画 is off, animations are reduced or a test
+    // switch is set. Its clock starts with the first frame on screen; a page change (a file
+    // from the command line, a resumed source) fades it out at once.
+    Loader {
+        id: introLoader
+        anchors.fill: parent
+        z: 1000
+        active: false
+        sourceComponent: DuskIntro {
+            skipText: qsTr("单击或按任意键跳过")
+            musicClock: () => { const s = vyMusic.position(); return s >= 0 ? s * 1000 : -1 }
+            onFrame: target = root.introTarget()
+            onRevealHome: homePage.introHold = false
+            onFinished: root.endIntro()
+        }
+        onLoaded: item.target = root.introTarget()
+    }
+    function introTarget() {
+        const w = homePage.wordmarkItem
+        return w ? w.mapToItem(introLoader, 0, 0, w.width, w.height) : Qt.rect(0, 0, 0, 0)
+    }
+    function endIntro() {
+        const i = introLoader.item
+        if (i) veyra.logUi("ui-intro", (i.dismissing ? "dismissed" : "finished") + " ms=" + Math.round(i.ms) + " frames=" + i.frames
+                           + " worstFrameMs=" + Math.round(i.worstFrameMs) + " size=" + root.width + "x" + root.height)
+        homePage.introHold = false
+        introLoader.active = false
+        root.contentItem.forceActiveFocus()
+    }
+    Connections {
+        target: root
+        enabled: introLoader.item !== null
+        function onFrameSwapped() {
+            const i = introLoader.item
+            if (!i || i.running || i.dismissing || i.ms !== 0) return
+            // The music and the intro start together; the intro then follows the music's clock.
+            i.followMusic = root.musicOn && vyMusic.state === "loading"
+            if (i.followMusic) vyMusic.play()
+            i.start()
+            veyra.logUi("ui-intro", "started music=" + i.followMusic)
+        }
+        function onPageChanged() { if (introLoader.item && root.page !== "home") introLoader.item.dismiss() }
+    }
     Component.onCompleted: {
         veyra.updates.startAutomaticCheck()
         applyStartupSize()
@@ -956,6 +1001,64 @@ Window {
         videoHost.syncRect()
         if (root.test.menu !== undefined) testMenuTimer.start()
         if (root.test.fullBar !== undefined) testFullTimer.start()
+        if ((veyra.preferences.palette || "dusk") !== "classic" && veyra.preferences.introAnimation !== false
+                && !veyra.reducedMotion && root.page === "home" && Object.keys(root.test).length === 0) {
+            homePage.introHold = true
+            introLoader.active = true
+            // The music is opened now so its first beat is not late; it starts with the intro.
+            if (root.musicOn && vyMusic.available) vyMusic.prepare(veyra.volume)
+        }
+    }
+
+    // 日落 startup music (StartupMusic.h, media/startup-music.mp3): played once with the
+    // intro, paused for good when any source opens. 设置 → 外观 → 启动音乐 and the button below
+    // share one preference; muting also silences the music that is playing.
+    readonly property bool musicOn: typeof vyMusic !== "undefined" && veyra.preferences.introMusic !== false
+    readonly property bool musicSounding: typeof vyMusic !== "undefined" && (vyMusic.state === "loading" || vyMusic.state === "playing")
+    readonly property bool sourceOpen: veyra.hasSource
+    onSourceOpenChanged: if (sourceOpen && musicSounding) { vyMusic.pause(); veyra.logUi("ui-music", "paused: a source opened") }
+    // Bottom right of the home page, above the intro too, while the music plays.
+    Rectangle {
+        id: musicButton
+        objectName: "music-toggle"
+        z: 1001
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        width: 34
+        height: 34
+        radius: 17
+        visible: root.musicSounding && root.page === "home"
+        color: musicHover.hovered ? Theme.card3 : Qt.rgba(0, 0, 0, 0.28)
+        border.width: 1
+        border.color: Theme.stroke2
+        VIcon {
+            anchors.centerIn: parent
+            name: "music"
+            size: 16
+            color: vyMusic.muted ? Theme.t3 : Theme.t1
+        }
+        // Muted: the note crossed out.
+        Rectangle {
+            visible: vyMusic.muted
+            anchors.centerIn: parent
+            width: 22
+            height: 2
+            radius: 1
+            rotation: -45
+            color: Theme.t2
+        }
+        HoverHandler { id: musicHover; cursorShape: Qt.PointingHandCursor }
+        TapHandler {
+            onTapped: {
+                const on = vyMusic.muted
+                vyMusic.muted = !on
+                veyra.setPreference("introMusic", on)
+                veyra.logUi("ui-music", on ? "unmuted (button)" : "muted (button)")
+            }
+        }
+        ToolTip.visible: musicHover.hovered
+        ToolTip.text: vyMusic.muted ? qsTr("打开启动音乐") : qsTr("关闭启动音乐")
     }
     // The menu anchors on laid-out buttons, so it opens once the page has settled.
     // --full-bar shown|hidden: enter fullscreen with the control window held shown

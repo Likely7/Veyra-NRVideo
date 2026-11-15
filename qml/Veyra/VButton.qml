@@ -34,6 +34,13 @@ Rectangle {
     scale: tap.pressed ? 0.95 : 1.0
     Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
 
+    // The dusk palette's sunset accent: a primary button is the gradient.
+    VAccentFill {
+        anchors.fill: parent
+        radius: parent.radius
+        visible: btn.primary && Theme.accentGradient
+    }
+
     Row {
         id: content
         anchors.centerIn: parent
