@@ -1982,7 +1982,7 @@
    "zh-TW": "NVIDIA VFG 👑（頂級補幀品質） · RTX 30（實驗）/ 40 / 50",
    "en": "NVIDIA VFG 👑 (Top-tier frame generation quality) · RTX 30 (experimental) / 40 / 50",
    "ja": "NVIDIA VFG 👑（最高級のフレーム生成品質） · RTX 30（実験）/ 40 / 50",
-   "ko": "NVIDIA VFG 🌻(최고 수준의 프레임 생성 품질) · RTX 30(실험용) / 40 / 50"
+   "ko": "NVIDIA VFG 👑(최고 수준의 프레임 생성 품질) · RTX 30(실험용) / 40 / 50"
   },
   {
    "zh": "NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志",
