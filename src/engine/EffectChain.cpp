@@ -17,6 +17,8 @@ constexpr std::array<EffectInfo, effectTypeCount> kCatalog{{
     {EffectType::FrameGeneration, effectTypeName(EffectType::FrameGeneration), "补帧", 1, false, true, false, false, false},
     {EffectType::AntiAliasing, effectTypeName(EffectType::AntiAliasing), "抗锯齿", kMaxAntiAliasInstances, true, false, false, false, false, false},
     {EffectType::Beauty, effectTypeName(EffectType::Beauty), "美颜", kMaxBeautyInstances, true, false, false, false, false, false},
+    {EffectType::NrStabilizer, effectTypeName(EffectType::NrStabilizer), "NR 输出稳定器", 1, false, false, false, false, false},
+    {EffectType::Exclusion, effectTypeName(EffectType::Exclusion), "全效果剔除", 1, false, false, true, false, false},
 }};
 } // namespace
 
@@ -57,7 +59,7 @@ ChainValidation NodeGraphLayout::validate(const EffectChain& chain) const {
         if (ids[i] < 2 || ids[i] >= nextId) return {false, "节点标识无效"};
         for (uint32_t j = 0; j < i; ++j)
             if (ids[i] == ids[j]) return {false, "节点标识重复"};
-        if (size_t(n.type) >= effectTypeCount || n.type == EffectType::Protection)
+        if (size_t(n.type) >= effectTypeCount)
             return {false, "节点模式不支持该效果类型"};
         if (++counts[size_t(n.type)] > effectInfo(n.type).maxInstances)
             return {false, "已存在节点（含未连接节点）超过数量上限"};
@@ -238,10 +240,13 @@ ChainValidation validateChain(const EffectChain& chain) {
         const auto& node = chain.nodes[i];
         const auto index = size_t(node.type);
         if (index >= effectTypeCount) return {false, "未知效果类型"};
-        if (chain.mode == ChainMode::Node && node.type == EffectType::Protection)
-            return {false, "节点模式已取消 NR 保护区域，请迁移旧节点配置"};
         if(node.type==EffectType::NrEnhance&&!pipeline::validNrSizePolicy(node.nr.sizePolicy))
             return {false, "NR 内部处理分辨率非法"};
+        if((node.type==EffectType::Protection||node.type==EffectType::Exclusion)&&!node.protection.validate().empty())
+            return {false,"保护区域参数无效"};
+        if(node.type==EffectType::NrStabilizer&&(!std::isfinite(node.holdStrength)||node.holdStrength<0||node.holdStrength>1||
+           !std::isfinite(node.holdTolerance)||node.holdTolerance<0||node.holdTolerance>1))
+            return {false,"稳定器参数超出范围"};
         if(node.type==EffectType::Beauty&&!node.beauty.validate().empty())
             return {false, "美颜参数超出范围"};
         ++seen[index];
@@ -276,8 +281,21 @@ ChainValidation validateChain(const EffectChain& chain) {
             if (fgIndex >= 0 && hdrIndex > fgIndex) return {false, "RTX Video HDR 只能放在补帧前面"};
             for (uint32_t j = uint32_t(hdrIndex) + 1; j < chain.nodeCount; ++j) {
                 if (!chain.nodes[j].enabled) continue;
-                if (chain.nodes[j].type != EffectType::FrameGeneration) return {false, "RTX Video HDR 之后只能接补帧"};
+                if (chain.nodes[j].type != EffectType::FrameGeneration && chain.nodes[j].type != EffectType::Exclusion)
+                    return {false, "RTX Video HDR 之后只能接全效果剔除与补帧"};
             }
+        }
+    }
+    for(uint32_t i=0;i<chain.nodeCount;++i){
+        const auto& node=chain.nodes[i];
+        if(!node.enabled)continue;
+        for(uint32_t j=i+1;j<chain.nodeCount;++j){
+            if(!chain.nodes[j].enabled)continue;
+            if(node.type==EffectType::Exclusion&&chain.nodes[j].type!=EffectType::FrameGeneration)
+                return {false,"全效果剔除必须位于其他画质效果之后、补帧之前"};
+            if(node.type==EffectType::NrStabilizer&&
+               (chain.nodes[j].type==EffectType::NrEnhance||chain.nodes[j].type==EffectType::Protection))
+                return {false,"NR 稳定器必须位于最后一层 NR 与 NR 保护区域之后"};
         }
     }
     const ChainNrParams* firstNr=nullptr;
@@ -337,12 +355,18 @@ EffectChain toChain(const EnhancementSettings& settings) {
         nr.nr.sizePolicy = layer.sizePolicy;
     }
     append(EffectType::Protection, settings.protection.enabled).protection = settings.protection;
+    if(settings.nrHoldStrength>0){
+        auto& hold=append(EffectType::NrStabilizer,true);
+        hold.holdStrength=settings.nrHoldStrength;hold.holdTolerance=settings.nrHoldTolerance;
+    }
     // Untouched beauty adds no node either.
     if(settings.beauty.configured()||settings.additionalBeautyCount)
         append(EffectType::Beauty,settings.beauty.enabled).beauty=settings.beauty;
     for(uint32_t i=0;i<std::min(settings.additionalBeautyCount,kMaxBeautyInstances-1);++i)
         append(EffectType::Beauty,settings.additionalBeauty[i].enabled).beauty=settings.additionalBeauty[i];
     append(EffectType::VideoHdr, settings.videoHdr.enabled).videoHdr = settings.videoHdr;
+    if(settings.exclusion!=ProtectionSettings{})
+        append(EffectType::Exclusion,settings.exclusion.enabled).protection=settings.exclusion;
     append(EffectType::FrameGeneration, settings.multiplier > 1);
     return chain;
 }
@@ -380,6 +404,11 @@ ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const C
         uint32_t index = 0;
         while (index < source.nodeCount && (used[index] || source.nodes[index].type != order.types[i])) ++index;
         if (index == source.nodeCount) {
+            if(order.types[i]==EffectType::NrStabilizer||order.types[i]==EffectType::Exclusion){
+                restored.nodes[i]=ChainNode{};
+                restored.nodes[i].type=order.types[i];restored.nodes[i].enabled=false;
+                continue;
+            }
             bool& untouched = order.types[i] == EffectType::AntiAliasing ? untouchedAa : untouchedBeauty;
             if ((order.types[i] != EffectType::AntiAliasing && order.types[i] != EffectType::Beauty) || !untouched)
                 return {false, "运行节点顺序与实例参数数量不匹配"};
@@ -434,6 +463,8 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
     settings.nrTemporal = false;
     settings.lowLatency = false;
     settings.protection = ProtectionSettings{};
+    settings.exclusion = ProtectionSettings{};
+    if(chain.mode==ChainMode::Node)settings.nrHoldStrength=0;
     settings.videoHdr = VideoHdrSettings{};
     settings.multiplier = 1;
     settings.fgStrictAdmission = chain.fgStrictAdmission;
@@ -472,10 +503,8 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
             ++settings.nrLayerCount;
             break;
         case EffectType::Protection:
-            if (chain.mode == ChainMode::List) {
-                settings.protection = node.protection;
-                settings.protection.enabled = node.enabled;
-            }
+            settings.protection = node.protection;
+            settings.protection.enabled = node.enabled;
             break;
         case EffectType::VideoHdr:
             settings.videoHdr = node.videoHdr;
@@ -505,6 +534,14 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
                 beauty=node.beauty;
                 beauty.enabled=node.enabled;
             }
+            break;
+        case EffectType::NrStabilizer:
+            settings.nrHoldStrength=node.enabled?node.holdStrength:0;
+            settings.nrHoldTolerance=node.holdTolerance;
+            break;
+        case EffectType::Exclusion:
+            settings.exclusion=node.protection;
+            settings.exclusion.enabled=node.enabled;
             break;
         case EffectType::Count:
             break;
@@ -575,13 +612,13 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         for (uint32_t i = 0; i < chain.nodeCount; ++i)
             if (chain.nodes[i].enabled && chain.nodes[i].type == EffectType::NrEnhance) nrActive = true;
         const std::array<EffectType, effectTypeCount> order = nrFirst
-            ? std::array{EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::Beauty,
-                EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::FrameGeneration}
+            ? std::array{EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty,
+                EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
             : nrActive
-            ? std::array{EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection,
-                EffectType::Beauty, EffectType::AntiAliasing, EffectType::VideoHdr, EffectType::FrameGeneration}
+            ? std::array{EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer,
+                EffectType::Beauty, EffectType::AntiAliasing, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
             : std::array{EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance,
-                EffectType::Protection, EffectType::Beauty, EffectType::VideoHdr, EffectType::FrameGeneration};
+                EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration};
         for (const auto type : order)
             for (uint32_t i = 0; i < chain.nodeCount; ++i)
                 if (chain.nodes[i].type == type) append(i);
@@ -703,8 +740,6 @@ bool ChainSession::select(ChainMode mode) {
     if (!initialized[target]) {
         configurations[target] = configurations[size_t(active)];
         configurations[target].chain.mode = mode;
-        removeLegacyNodeProtection(configurations[target].chain,
-            &configurations[target].selectedNr, &configurations[target].selectedColour);
         initialized[target] = true;
     }
     active = mode;
@@ -728,6 +763,7 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     };
     if (planOf(previous) != planOf(next)) return true;
     if (previous.lowLatency != next.lowLatency) return true;
+    if(previous.exclusion.enabled!=next.exclusion.enabled)return true;
     // The output stabiliser's pass exists only when it is on (EnhanceGraph::createNrHoldPass).
     if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
     // NR inference reuse allocates its pass only when on (EnhanceGraph::createNrReusePass);

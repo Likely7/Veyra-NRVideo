@@ -56,8 +56,13 @@ DialogLayer {
     DialogGroup {
         VRow {
             label: "PSN Account ID"
-            hint: qsTr("账号数字 ID 或 8 字节 Base64，不是昵称；登录 PSN 后自动填入")
-            DialogTextField { implicitWidth: 240; text: veyra.ps5.account || ""; onEdited: text => veyra.ps5Set("account", text) }
+            hint: qsTr("点击获取 Account ID，在网页查询后复制到这里。支持数字 ID 或 8 字节 Base64，不是 PSN 昵称。")
+            hintBelow: true
+            RowLayout {
+                spacing: 6
+                DialogTextField { objectName: "ps5-account-id"; implicitWidth: 240; text: veyra.ps5.account || ""; onEdited: text => veyra.ps5Set("account", text) }
+                VButton { objectName: "ps5-account-lookup"; text: qsTr("获取 Account ID"); ghost: true; onClicked: veyra.ps5OpenAccountChecker() }
+            }
         }
         VRow {
             label: qsTr("8 位配对码")
@@ -72,19 +77,6 @@ DialogLayer {
             label: qsTr("删除配对")
             hint: qsTr("只删除本机保存的这台主机；以后需要重新配对")
             VButton { text: qsTr("删除"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Forget() }
-        }
-    }
-    DialogSection { text: qsTr("PSN 账号") }
-    DialogGroup {
-        VRow {
-            label: veyra.ps5.psnReady ? qsTr("已登录") : qsTr("未登录")
-            hint: qsTr("在 Sony 网页登录后复制回调地址再提交；软件不接触密码")
-            RowLayout {
-                spacing: 6
-                VButton { text: qsTr("登录 PSN"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnLogin() }
-                VButton { text: qsTr("提交登录结果"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5PsnComplete() }
-                VButton { text: qsTr("退出"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.psnReady; onClicked: veyra.ps5PsnForget() }
-            }
         }
     }
     DialogSection { text: qsTr("串流（重连生效）") }

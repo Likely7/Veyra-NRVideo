@@ -40,6 +40,8 @@ ColourPanel 1.0 ColourPanel.qml
 VScrollBar 1.0 VScrollBar.qml
 VConfirm 1.0 VConfirm.qml
 NrLayerEditor 1.0 NrLayerEditor.qml
+MaskEditor 1.0 MaskEditor.qml
+DedupModeRow 1.0 DedupModeRow.qml
 NrWebPad 1.0 NrWebPad.qml
 SrStageEditor 1.0 SrStageEditor.qml
 AntiAliasEditor 1.0 AntiAliasEditor.qml

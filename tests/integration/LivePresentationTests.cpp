@@ -108,7 +108,7 @@ int inactiveEffectsTest(const wchar_t* input,const wchar_t* output,bool nodeMode
 // --dedup-* replay (ContentDedup.h). Not inlined, snapshots built on the heap:
 // wmain already holds many PlayerSnapshot locals, and two more overflowed its
 // 1 MiB stack before the first line ran.
-__declspec(noinline) static int runContentCadenceReplay(engine::EngineController& engine,const std::wstring& mode,bool fg){
+__declspec(noinline) static int runContentCadenceReplay(engine::EngineController& engine,const std::wstring& mode,bool fg,const std::filesystem::path& output,bool requireNr=false,bool requireSr=false){
     using namespace std::chrono_literals;
     auto pumpUntil=[&](auto predicate,std::chrono::seconds limit){
         const auto deadline=std::chrono::steady_clock::now()+limit;
@@ -119,10 +119,12 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
         return false;
     };
     std::unique_ptr<engine::PlayerSnapshot> start,end;
-    const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&(!fg||start->fgActive);},25s);
-    std::cout<<(started?"PASS ":"FAIL ")<<(fg?"replay starts with DLSS 2X":"replay starts without frame generation")<<std::endl;
+    const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&(!fg||start->fgActive)&&(!requireNr||start->nrActive)&&(!requireSr||start->srActive);},25s);
+    std::cout<<(started?"PASS ":"FAIL ")<<(fg?"replay starts with frame generation":"replay starts without frame generation")<<std::endl;
     const auto begin=std::chrono::steady_clock::now();
-    pumpUntil([&]{end.reset(new engine::PlayerSnapshot(engine.snapshot()));return end->failed||std::chrono::steady_clock::now()-begin>=20s;},25s);
+    wchar_t durationText[16]{};
+    const int sampleSeconds=GetEnvironmentVariableW(L"VEYRA_TEST_CADENCE_SECONDS",durationText,16)?std::clamp(_wtoi(durationText),5,75):20;
+    pumpUntil([&]{end.reset(new engine::PlayerSnapshot(engine.snapshot()));return end->failed||std::chrono::steady_clock::now()-begin>=std::chrono::seconds(sampleSeconds);},std::chrono::seconds(sampleSeconds+5));
     std::wcout<<L"DEDUP_RESULT mode="<<mode;
     std::cout<<" frames="<<end->frames-start->frames<<" skipped="<<end->captureRateSkipped-start->captureRateSkipped<<" generated="<<end->generated-start->generated
              <<" contentFps="<<end->contentFps<<" realPresented="<<end->metrics.flow.counters.realPresented-start->metrics.flow.counters.realPresented
@@ -132,6 +134,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
     std::cout<<(ran?"PASS ":"FAIL ")<<"content-cadence replay runs"<<std::endl;
     engine.stop();const bool drained=pumpUntil([&]{return engine.idle();},8s);
     std::cout<<(drained?"PASS ":"FAIL ")<<"content-cadence replay drains"<<std::endl;
+    std::ofstream trace(output/"frame-trace.txt",std::ios::binary);trace<<Logger::instance().diagnosticReport();trace.close();
+    Logger::instance().flush();
     return started&&ran&&drained?0:1;
 }
 int wmain(int argc,wchar_t**argv){
@@ -222,7 +226,7 @@ int wmain(int argc,wchar_t**argv){
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",L"1");
     const bool settingsRebuild=argc==4&&wcscmp(argv[3],L"--settings-rebuild")==0;
     if(!settingsRebuild&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0||std::wstring(argv[3]).rfind(L"--dedup-",0)==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
-    std::filesystem::create_directories(argv[2]);Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
+    std::filesystem::create_directories(argv[2]);Logger::instance().startAsync();Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
     HWND window=CreateWindowExW(0,L"STATIC",L"Live scheduler replay",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!window)return 3;engine::EngineController engine;engine::PlayerOptions options;options.nr=false;options.fg=false;options.captureReplayForTest=true;
     const bool nrFirst=argc==4&&wcscmp(argv[3],L"--nr-first")==0;
@@ -259,7 +263,13 @@ int wmain(int argc,wchar_t**argv){
     const bool dedupNoFg=dedupMode.ends_with(L"-nofg");if(dedupNoFg)dedupMode.resize(dedupMode.size()-5);
     if(dedupRun){
         options.softwareDecode=true;options.fg=!dedupNoFg;options.fgMultiplier=2;
+        if(dedupMode.starts_with(L"nr-")){options.nr=true;dedupMode.erase(0,3);}
+        if(dedupMode.starts_with(L"sr-")){options.sr=true;options.settings.videoSrQuality=2;dedupMode.erase(0,3);}
         options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+        if(dedupMode.starts_with(L"anr-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Anr;dedupMode.erase(0,4);}
+        else if(dedupMode.starts_with(L"vfg-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;dedupMode.erase(0,4);}
+        else if(dedupMode.starts_with(L"xess-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;dedupMode.erase(0,5);}
+        else if(dedupMode.starts_with(L"fsr-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;dedupMode.erase(0,4);}
         options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:dedupMode==L"half"?engine::ContentRate::Capture60To30:
             dedupMode==L"fps30"?engine::ContentRate::Fps30:engine::ContentRate::Transport;
         engine.setVolume(0,true);ShowWindow(window,SW_SHOWNOACTIVATE);
@@ -268,7 +278,7 @@ int wmain(int argc,wchar_t**argv){
     int failures=0;auto check=[&](bool pass,const char* s){std::cout<<(pass?"PASS ":"FAIL ")<<s<<std::endl;if(!pass)++failures;};
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
     engine.open(window,argv[1],options);
-    if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode,!dedupNoFg);DestroyWindow(window);CoUninitialize();return result;}
+    if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode,!dedupNoFg,argv[2],options.nr,options.sr);DestroyWindow(window);CoUninitialize();return result;}
     if(settingsRebuild){
         check(until([](const auto& s){return s.frames>20&&s.nrActive&&s.fgActive;},30),"original NR 1080p and DLSS 2X start on the actual video");
         for(unsigned round=0;round<8&&!failures;++round){
@@ -399,7 +409,9 @@ int wmain(int argc,wchar_t**argv){
         DestroyWindow(window);CoUninitialize();return failures?1:0;
     }
     if(sourceGap){
-        check(until([](const auto& s){return s.frames==12&&s.metrics.flow.counters.realPresented==12&&s.processedCompleted==12;}),"source Waiting still completes and presents all outstanding real frames");
+        // First NR+FG creation can take >8 s with a cold driver cache. The
+        // assertion still has to catch the same 400 ms wait at exactly frame 12.
+        check(until([](const auto& s){return s.frames==12&&s.metrics.flow.counters.realPresented==12&&s.processedCompleted==12;},30),"source Waiting still completes and presents all outstanding real frames");
         check(until([](const auto& s){return s.frames>=20;}),"source resumes after gap without deadlock");
         // The fixture can take roughly a minute in this host and this path intentionally runs
         // every source frame through the live scheduler; leave headroom for

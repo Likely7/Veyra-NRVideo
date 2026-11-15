@@ -59,10 +59,7 @@ add_library(veyra_remoteplay_chiaki STATIC
     "${VEYRA_ROOT}/src/remoteplay/ChiakiBackend.cpp"
     "${VEYRA_ROOT}/src/remoteplay/ChiakiRegistration.cpp"
     "${VEYRA_ROOT}/src/remoteplay/ProfileStore.cpp"
-    "${VEYRA_ROOT}/src/remoteplay/PsnAuth.cpp"
     "${VEYRA_ROOT}/src/remoteplay/Discovery.cpp")
 target_compile_features(veyra_remoteplay_chiaki PUBLIC cxx_std_20)
 target_compile_definitions(veyra_remoteplay_chiaki PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(VEYRA_PSN_JSON REQUIRED IMPORTED_TARGET json-c)
-target_link_libraries(veyra_remoteplay_chiaki PUBLIC veyra_remoteplay_core PRIVATE chiaki-lib crypt32 iphlpapi shell32 ole32 winhttp PkgConfig::VEYRA_PSN_JSON)
+target_link_libraries(veyra_remoteplay_chiaki PUBLIC veyra_remoteplay_core PRIVATE chiaki-lib crypt32 iphlpapi shell32 ole32 winhttp)

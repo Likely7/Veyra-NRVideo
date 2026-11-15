@@ -1,11 +1,29 @@
 #include "veyra/ngx/DlssFgBackend.h"
 
 #include <windows.h>
+#include "veyra/ngx/AnrProvider.h"
+
+namespace {
+thread_local veyra::ngx::AnrProvider* directFgProvider=nullptr;
+NVSDK_NGX_Result DispatchFgCreate(ID3D12GraphicsCommandList* l,NVSDK_NGX_Feature f,NVSDK_NGX_Parameter* p,NVSDK_NGX_Handle** h){
+    return directFgProvider?directFgProvider->create(l,f,const_cast<NVSDK_NGX_Parameter*>(p),h):NVSDK_NGX_D3D12_CreateFeature(l,f,p,h);
+}
+NVSDK_NGX_Result DispatchFgEvaluate(ID3D12GraphicsCommandList* l,const NVSDK_NGX_Handle* h,const NVSDK_NGX_Parameter* p,PFN_NVSDK_NGX_ProgressCallback_C callback){
+    return directFgProvider?directFgProvider->evaluate(l,h,const_cast<NVSDK_NGX_Parameter*>(p)):NVSDK_NGX_D3D12_EvaluateFeature_C(l,h,p,callback);
+}
+}
+
 
 // NGX SDK helper headers trigger /W4 warnings; suppress for this TU.
 #pragma warning(push, 0)
 #include <nvsdk_ngx_defs_dlssg.h>
+// Reuse the SDK parameter writer with a scoped per-call dispatch. This is a
+// compile-time adapter, not a runtime hook; native DLSS retains its original API.
+#define NVSDK_NGX_D3D12_CreateFeature DispatchFgCreate
+#define NVSDK_NGX_D3D12_EvaluateFeature_C DispatchFgEvaluate
 #include <nvsdk_ngx_helpers_dlssg.h>
+#undef NVSDK_NGX_D3D12_EvaluateFeature_C
+#undef NVSDK_NGX_D3D12_CreateFeature
 #pragma warning(pop)
 
 #include <format>
@@ -56,8 +74,9 @@ __declspec(noinline) NVSDK_NGX_Result CallCreateDlssg(
     NVSDK_NGX_Handle** handle,
     NVSDK_NGX_Parameter* params,
     NVSDK_NGX_DLSSG_Create_Params* createParams,
-    uint32_t& sehCode)
+    uint32_t& sehCode, AnrProvider* provider=nullptr)
 {
+    auto* previousProvider=directFgProvider;directFgProvider=provider;
     sehCode = 0;
     NVSDK_NGX_Result result = NVSDK_NGX_Result_Fail;
     __try {
@@ -68,6 +87,7 @@ __declspec(noinline) NVSDK_NGX_Result CallCreateDlssg(
         sehCode = static_cast<uint32_t>(GetExceptionCode());
         result = NVSDK_NGX_Result_FAIL_PlatformError;
     }
+    directFgProvider=previousProvider;
     return result;
 }
 
@@ -77,8 +97,9 @@ __declspec(noinline) NVSDK_NGX_Result CallEvaluateDlssg(
     NVSDK_NGX_Parameter* params,
     NVSDK_NGX_D3D12_DLSSG_Eval_Params* evalParams,
     NVSDK_NGX_DLSSG_Opt_Eval_Params* optEvalParams,
-    uint32_t& sehCode)
+    uint32_t& sehCode, AnrProvider* provider=nullptr)
 {
+    auto* previousProvider=directFgProvider;directFgProvider=provider;
     sehCode = 0;
     NVSDK_NGX_Result result = NVSDK_NGX_Result_Fail;
     __try {
@@ -88,16 +109,17 @@ __declspec(noinline) NVSDK_NGX_Result CallEvaluateDlssg(
         sehCode = static_cast<uint32_t>(GetExceptionCode());
         result = NVSDK_NGX_Result_FAIL_PlatformError;
     }
+    directFgProvider=previousProvider;
     return result;
 }
 
 __declspec(noinline) NVSDK_NGX_Result CallReleaseDlssg(
-    NVSDK_NGX_Handle* handle, uint32_t& sehCode)
+    NVSDK_NGX_Handle* handle, uint32_t& sehCode, AnrProvider* provider=nullptr)
 {
     sehCode = 0;
     NVSDK_NGX_Result result = NVSDK_NGX_Result_Fail;
     __try {
-        result = NVSDK_NGX_D3D12_ReleaseFeature(handle);
+        result = provider?provider->release(handle):NVSDK_NGX_D3D12_ReleaseFeature(handle);
     }
     __except (LogDlssgException(GetExceptionInformation())) {
         sehCode = static_cast<uint32_t>(GetExceptionCode());
@@ -107,6 +129,8 @@ __declspec(noinline) NVSDK_NGX_Result CallReleaseDlssg(
 }
 
 } // namespace
+
+DlssFgBackend::DlssFgBackend()=default;
 
 DlssFgBackend::~DlssFgBackend()
 {
@@ -205,7 +229,16 @@ bool DlssFgBackend::create(NgxCoreHost& coreHost,
                            const CreateDesc& desc,
                            Status& status)
 {
-    (void)coreHost;
+    (void)coreHost;return create(cmdList,params,desc,status);
+}
+
+bool DlssFgBackend::openAnr(ID3D12Device* device,const std::wstring& root,unsigned& maximum){
+    anr_=std::make_unique<AnrProvider>();return anr_->open(device,root,maximum);
+}
+
+bool DlssFgBackend::create(ID3D12GraphicsCommandList* cmdList,NVSDK_NGX_Parameter* params,const CreateDesc& desc,Status& status){
+    if(anr_)params=anr_->parameters();
+    if(anr_&&(desc.width<640||desc.height<360||desc.width>7680||desc.height>4320)){log::error("anr","ANR V.B15 requires a working extent from 640x360 through 7680x4320");status=Status::InvalidArgument;return false;}
     if (handle_ != nullptr) {
         release();
     }
@@ -245,7 +278,7 @@ bool DlssFgBackend::create(NgxCoreHost& coreHost,
     uint32_t sehCode = 0;
     if(compatibility_&&!compatibility_->beginCreate(cmdList)){status=Status::DeviceFailure;return false;}
     const NVSDK_NGX_Result result = CallCreateDlssg(cmdList, 1, 1, &handle_,
-        params, &createParams, sehCode);
+        params, &createParams, sehCode, anr_.get());
     const bool restored=!compatibility_||compatibility_->endCreate(result==NVSDK_NGX_Result_Success);
     createResult_ = static_cast<uint64_t>(result);
 
@@ -276,7 +309,7 @@ bool DlssFgBackend::release()
     bool ok=true;
     if (handle_ != nullptr) {
         uint32_t sehCode = 0;
-        const NVSDK_NGX_Result result = CallReleaseDlssg(handle_, sehCode);
+        const NVSDK_NGX_Result result = CallReleaseDlssg(handle_, sehCode, anr_.get());
         ok=result==NVSDK_NGX_Result_Success&&sehCode==0;
         (result == NVSDK_NGX_Result_Success ? log::info : log::error)("ngx", std::format("fg-backend: ReleaseFeature result={} evaluates={} resets={}",
             ngxResultString(static_cast<uint64_t>(result)), evaluateCount_, resetCount_));
@@ -293,6 +326,14 @@ bool DlssFgBackend::evaluate(ID3D12GraphicsCommandList* cmdList,
                              const EvalDesc& desc,
                              Status& status)
 {
+    if(anr_){
+        params=anr_->parameters();
+        if(desc.backbuffer)desc.backbuffer->SetName(L"ANR backbuffer");
+        if(desc.depth)desc.depth->SetName(L"ANR depth");
+        if(desc.mvecs)desc.mvecs->SetName(L"ANR motion");
+        if(desc.outputInterpolated)desc.outputInterpolated->SetName(L"ANR generated");
+        if(desc.outputDisableInterpolation)desc.outputDisableInterpolation->SetName(L"ANR disable interpolation");
+    }
     if (fatal_) {
         status = Status::DeviceFailure;
         return false;
@@ -382,9 +423,22 @@ bool DlssFgBackend::evaluate(ID3D12GraphicsCommandList* cmdList,
     // Monotonic real-frame id (uint64 via the C++ Set overload).
     params->Set(NVSDK_NGX_DLSSG_Parameter_BackbufferFrameID, static_cast<unsigned long long>(desc.frameId));
 
+    // ANR V.B15 copies depth/motion through its Vulkan bridge. Its D3D12
+    // entry/exit contract for these two resources is COPY_DEST, whereas the
+    // shared graph and NVIDIA provider use NON_PIXEL_SHADER_RESOURCE. Restore
+    // the graph contract around the call; never change shared flow tracking.
+    D3D12_RESOURCE_BARRIER bridge[2]{};
+    if(anr_){
+        ID3D12Resource* inputs[]={desc.depth,desc.mvecs};
+        for(unsigned i=0;i<2;++i){
+            bridge[i].Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            bridge[i].Transition={inputs[i],D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,D3D12_RESOURCE_STATE_COPY_DEST};
+        }
+        cmdList->ResourceBarrier(2,bridge);
+    }
     uint32_t sehCode = 0;
     const NVSDK_NGX_Result result = CallEvaluateDlssg(cmdList, handle_, params,
-        &evalParams, &optParams, sehCode);
+        &evalParams, &optParams, sehCode, anr_.get());
     if(result != NVSDK_NGX_Result_Success || log::verboseFrameLogs())
         log::info("ngx", std::format("fg-backend: Evaluate #{} frameId={} reset={} generatedCount={} subframe={} result={} seh={}",
             evaluateCount_ + 1, desc.frameId, desc.reset ? 1 : 0,desc.multiFrameCount,desc.multiFrameIndex,
@@ -397,6 +451,10 @@ bool DlssFgBackend::evaluate(ID3D12GraphicsCommandList* cmdList,
         // work. Teardown releases the handle through the protected call.
         status = Status::DeviceFailure;
         return false;
+    }
+    if(anr_){
+        for(auto& barrier:bridge)std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);
+        cmdList->ResourceBarrier(2,bridge);
     }
     ++evaluateCount_;
     return true;

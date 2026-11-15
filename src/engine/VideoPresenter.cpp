@@ -4,9 +4,11 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/sink/ImageExportSink.h"
+#include <array>
+#include <memory>
 namespace veyra::engine {
-bool VideoPresenter::beginSourceInput(){
-    if(!reflexInputFrame_&&reflex_.active())reflexInputFrame_=reflex_.begin();
+bool VideoPresenter::beginSourceInput(uint64_t stallUs){
+    if(!reflexInputFrame_&&reflex_.active())reflexInputFrame_=reflex_.begin(stallUs);
     auto* xess=sink_.xess();if(!xess)return true;
     // Waiting/filtered inputs keep the same preparation ID. Do not sleep again
     // until one accepted source has been submitted to the enhancement graph.
@@ -83,11 +85,12 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     }
     if(!reuse&&!sink_.initialize(ctx.device(),queue,d,st))return false;
     if(reuse)veyra::log::info("present-reuse",std::format("retained native swapchain generation={} format={} fg={} output={}x{}; rebinding drained graph descriptors",generation_,unsigned(graph.outputFormat()),graph.fgEnabled(),graph.workWidth(),graph.workHeight()));
-    pass_={};rtvs_.Reset();compositeTarget_.Reset();
+    pass_={};rtvs_.Reset();compositeTarget_.Reset();exclusionUiTarget_.Reset();exclusionHudlessTarget_.Reset();
+    exclusionUiEnabled_=graph.xessEnabled()&&graph.exclusionEnabled();
     std::vector<uint8_t> vs,ps;
     // The output pool contains both parities of every generated subframe.
     // Comparison references follow it; derive offsets to cover VFG through 8X.
-    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||!pipeline::loadShaderBytes("PresentBlit_ps.dxil",ps)||!pass_.create(ctx.device(),vs,ps,pipeline::kOutputPoolSlots+4,graph.outputFormat(),16))return false;
+    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||!pipeline::loadShaderBytes("PresentBlit_ps.dxil",ps)||!pass_.create(ctx.device(),vs,ps,pipeline::kOutputPoolSlots+8,graph.outputFormat(),16))return false;
     if(sink_.xess()){
         std::vector<uint8_t> cs;
         if(!pipeline::loadShaderBytes("PresentMotion.dxil",cs)||!presentMotionPass_.create(ctx.device(),cs,4,1,1,16))return false;
@@ -108,12 +111,18 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     // Opening a source never opts the user in or allocates the copy surface.
     // configurePresentation applies the saved global choice on the GPU owner.
     copyBeforePresent_=false;
-    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=4;
+    D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=6;
     if(FAILED(ctx.device()->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtvs_))))return false;
     inc_=ctx.device()->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);if(!refresh(ctx.device()))return false;
     veyra::log::info("present-copy",std::format("enabled={} format={} extent={}x{} (GPU-only final composition; no pixel readback)",copyBeforePresent_,unsigned(graph.outputFormat()),sink_.bufferWidth(),sink_.bufferHeight()));
     for(unsigned i=0;i<pipeline::kOutputPoolSlots;++i)pipeline::makeSrv(ctx.device(),i<2?graph.videoFrameResource(i):graph.generatedFrameResource(i-2),graph.outputFormat(),{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i)*pass_.increment});
     for(unsigned i=0;i<4;++i)pipeline::makeSrv(ctx.device(),i<2?graph.sourceReference(i):graph.baseReference(i-2),DXGI_FORMAT_R16G16B16A16_FLOAT,{pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(i+pipeline::kOutputPoolSlots)*pass_.increment});
+    if(exclusionUiEnabled_)for(unsigned i=0;i<2;++i)
+        pipeline::makeSrv(ctx.device(),graph.exclusionUi(i),graph.outputFormat(),
+            {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+4+i)*pass_.increment});
+    if(exclusionUiEnabled_)for(unsigned i=0;i<2;++i)
+        pipeline::makeSrv(ctx.device(),graph.unmaskedVideo(i),graph.outputFormat(),
+            {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+6+i)*pass_.increment});
     if(!reuse)startDisplayState();
     return true;
 }
@@ -156,6 +165,23 @@ bool VideoPresenter::refresh(ID3D12Device* device){
             }
         }
         if(compositeTarget_)device->CreateRenderTargetView(compositeTarget_.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(3)*inc_});
+    }
+    if(exclusionUiEnabled_){
+        auto desc=bb->GetDesc();
+        unsigned index=4;
+        for(auto* surface:{std::addressof(exclusionUiTarget_),std::addressof(exclusionHudlessTarget_)}){
+            if(!*surface||(*surface)->GetDesc().Width!=desc.Width||
+               (*surface)->GetDesc().Height!=desc.Height||(*surface)->GetDesc().Format!=desc.Format){
+                D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+                desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+                D3D12_CLEAR_VALUE clear{};clear.Format=desc.Format;
+                const auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,
+                    D3D12_RESOURCE_STATE_COMMON,&clear,IID_PPV_ARGS(surface->ReleaseAndGetAddressOf()));
+                if(FAILED(hr)){veyra::log::error("exclusion",std::format("XeSS composition allocation hr=0x{:X}",unsigned(hr)));return false;}
+            }
+            device->CreateRenderTargetView(surface->Get(),nullptr,
+                {rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(index++)*inc_});
+        }
     }
     return true;
 }
@@ -409,7 +435,45 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             // This timer covers application commands, not provider execution.
             gpuTimer_.mark(list,diagnostics::GpuStage::FgBatch);
             const RECT fullBuffer{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};
-            if(!xess->tag(list,bb,mapped,depth,fullBuffer,true,reset,elapsed)){xessFailed_=true;return false;}
+            ID3D12Resource* ui=nullptr;
+            ID3D12Resource* hudless=nullptr;
+            if(exclusionUiEnabled_){
+                ui=exclusionUiTarget_.Get();
+                auto* sourceUi=graph.exclusionUi(slot);
+                pipeline::StateTracker uiState;
+                uiState.transition(list,sourceUi,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                uiState.transition(list,ui,D3D12_RESOURCE_STATE_RENDER_TARGET);
+                const D3D12_CPU_DESCRIPTOR_HANDLE uiRtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(4)*inc_};
+                const float transparent[4]{};
+                list->ClearRenderTargetView(uiRtv,transparent,0,nullptr);
+                list->OMSetRenderTargets(1,&uiRtv,FALSE,nullptr);
+                const D3D12_RECT all{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};
+                list->RSSetScissorRects(1,&all);
+                list->SetDescriptorHeaps(1,heaps);
+                list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
+                auto uiDims=std::to_array(dims);uiDims[2]=mainFlags+256.f;
+                list->SetGraphicsRoot32BitConstants(0,16,uiDims.data(),0);
+                list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+
+                    size_t(pipeline::kOutputPoolSlots+4+slot)*pass_.increment});
+                list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+                list->DrawInstanced(3,1,0,0);
+                uiState.transition(list,sourceUi,D3D12_RESOURCE_STATE_COMMON);
+                uiState.transition(list,ui,D3D12_RESOURCE_STATE_COMMON);
+                hudless=exclusionHudlessTarget_.Get();
+                auto* sourceHudless=graph.unmaskedVideo(slot);
+                uiState.transition(list,sourceHudless,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+                uiState.transition(list,hudless,D3D12_RESOURCE_STATE_RENDER_TARGET);
+                const D3D12_CPU_DESCRIPTOR_HANDLE hudlessRtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(5)*inc_};
+                list->ClearRenderTargetView(hudlessRtv,black,0,nullptr);
+                list->OMSetRenderTargets(1,&hudlessRtv,FALSE,nullptr);
+                list->SetGraphicsRoot32BitConstants(0,16,dims,0);
+                list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+
+                    size_t(pipeline::kOutputPoolSlots+6+slot)*pass_.increment});
+                list->DrawInstanced(3,1,0,0);
+                uiState.transition(list,sourceHudless,D3D12_RESOURCE_STATE_COMMON);
+                uiState.transition(list,hudless,D3D12_RESOURCE_STATE_COMMON);
+            }
+            if(!xess->tag(list,bb,mapped,depth,fullBuffer,true,reset,elapsed,ui,hudless)){xessFailed_=true;return false;}
             gpuTimer_.mark(list,diagnostics::GpuStage::FgBatch,true);
         }else if(!xess->tag(list,bb,motion,depth,fgRect,false,reset,elapsed)){xessFailed_=true;return false;}
         // A present that carried no NEW source frame is a repeat, not a
@@ -436,6 +500,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         publishLiveCoverage(hdrCurve,identity);lastBuffer_=backBufferIndex;hasPresented_=true;
     if(presentationQueue_)graph.presentationSubmitted(slot,fence,ring.lastSignaledValue());
     const auto dxgiStart=std::chrono::steady_clock::now();
+    lastPresentCallHost100ns_=std::chrono::duration_cast<std::chrono::nanoseconds>(dxgiStart.time_since_epoch()).count()/100;
     reflex_.presentStart(reflexFrame,generated);
     const bool presented=sink_.present(st);
     reflex_.presentEnd(reflexFrame,generated);
@@ -506,7 +571,7 @@ void VideoPresenter::close(){
     xessInputId_=0;xessWork_={};xessWorkPosition_=0;
     reflex_.close();reflexFrame_=reflexInputFrame_=0;
     if(presentationRing_.initialized())presentationRing_.drainQueue();
-    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();copyBeforePresent_=copyEligible_=false;rtvs_.Reset();
+    hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();exclusionUiTarget_.Reset();exclusionHudlessTarget_.Reset();exclusionUiEnabled_=false;copyBeforePresent_=copyEligible_=false;rtvs_.Reset();
     probeStats_.Reset();probeReadback_.Reset();probeCpuViews_.Reset();probePass_={};probePending_=false;probeFailed_=false;probeNext_={};probeCurve_={};probeIdentity_={};liveCoverage_={};pass_={};sink_.shutdown();
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
@@ -657,8 +722,8 @@ PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceConte
     // carries out-of-band markers, never another source-frame Sleep.
     std::wstring latency=L"低延迟队列：已开启";
     if(requested.nvidiaLowLatency!=NvidiaLowLatency::Off){
-        if(reflex_.enable(ctx.device(),requested.nvidiaLowLatency==NvidiaLowLatency::Boost,fg,presentationQueue_.Get()))
-            latency=requested.nvidiaLowLatency==NvidiaLowLatency::Boost?L"英伟达低延迟：开＋增强（已启用）":L"英伟达低延迟：开（已启用）";
+        if(reflex_.enable(ctx.device(),fg,presentationQueue_.Get()))
+            latency=L"英伟达低延迟：开（已启用）";
         else{effective.nvidiaLowLatency=NvidiaLowLatency::Off;latency=L"英伟达低延迟不可用，当前使用低排队（详见日志）";}
     }
     status=join({latency,cap,queue,syncMode,syncDetail});

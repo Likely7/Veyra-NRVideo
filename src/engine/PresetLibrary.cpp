@@ -52,6 +52,9 @@ void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
     if(e.contents&presetContentMask(PresetContent::FrameGeneration))s.fgMotion=e.globals->fgMotion;
     else{s.frameGenerationBackend=fg;s.fgMotion=fgMotion;s.vfgQuality=quality;}
 }
+bool hasOutputControls(const EffectChain& chain) {
+    return chain.countOf(EffectType::Exclusion)||chain.countOf(EffectType::NrStabilizer);
+}
 std::string utf8(const std::wstring& s) {
     if (s.empty()) return {};
     const int n = WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, s.data(), int(s.size()), nullptr, 0, nullptr, nullptr);
@@ -98,6 +101,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
     const auto directVideoAi=std::filesystem::path(path_).concat(L".video-ai");
@@ -155,6 +159,9 @@ bool PresetLibrary::load() {
     // DLAA anti-aliasing nodes (library v20, session v15).
     const auto dlaaPath=std::filesystem::path(path_).concat(L".dlaa");
     if(std::filesystem::exists(directDlaa))path_=directDlaa;else if(std::filesystem::exists(dlaaPath))path_=dlaaPath;
+    const auto controlsPath=std::filesystem::path(path_).concat(L".output-controls");
+    if(std::filesystem::exists(directControls))path_=directControls;
+    else if(std::filesystem::exists(controlsPath))path_=controlsPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -164,8 +171,7 @@ bool PresetLibrary::load() {
     const std::string data((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
     std::vector<PresetEntry> loaded;
     std::wstring def, parseError;
-    bool migrated = false;
-    if (!parse(data, loaded, def, parseError, &migrated)) {
+    if (!parse(data, loaded, def, parseError)) {
         corrupt_ = true;
         error_ = parseError.empty() ? L"预设库损坏或版本不支持；原文件已保留，禁止覆盖" : parseError;
         return false;
@@ -174,10 +180,6 @@ bool PresetLibrary::load() {
     // user who deleted nothing always sees them.
     entries_ = std::move(loaded);
     defaultName_ = def;
-    if (migrated) {
-        path_ = std::filesystem::path(path_).concat(L".p3-node");
-        error_ = L"旧节点预设的 NR 保护区域已移除；其余参数保留，后续保存到 .p3-node 文件，原文件不覆盖";
-    }
     addBuiltins();
     for (auto& entry : entries_) entry.builtin = entry.builtin || (entry.name == L"原画" || entry.name == L"流畅" || entry.name == L"均衡" || entry.name == L"极致");
     if (!includeBuiltins_) {
@@ -251,6 +253,8 @@ bool PresetLibrary::save() {
     // Opting into a new model must leave the older build's library intact.
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 21")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
+    if(!path_.wstring().ends_with(L".output-controls")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 20")&&!path_.wstring().ends_with(L".dlaa"))path_=std::filesystem::path(path_).concat(L".dlaa");
     if(!path_.wstring().ends_with(L".dlaa")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 19")&&!path_.wstring().ends_with(L".dual-sr-any"))path_=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -293,6 +297,7 @@ bool PresetLibrary::save() {
     }
     }
     }
+    } // .output-controls owns every subsequent edit, even after deleting the new nodes.
     std::error_code ec;
     std::filesystem::create_directories(path_.parent_path(), ec);
     const auto temporary = std::filesystem::path(path_).concat(L".tmp");
@@ -563,9 +568,13 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
             case EffectType::Color: return 0;
             case EffectType::AntiAliasing: return 1;
             case EffectType::SuperResolution: return 2;
-            case EffectType::NrEnhance: case EffectType::Beauty: return 3;
-            case EffectType::VideoHdr: return 4;
-            default: return 5;
+            case EffectType::NrEnhance: return 3;
+            case EffectType::Protection: return 4;
+            case EffectType::NrStabilizer: return 5;
+            case EffectType::Beauty: return 6;
+            case EffectType::VideoHdr: return 7;
+            case EffectType::Exclusion: return 8;
+            default: return 9;
             }
         };
         std::stable_sort(nodes.nodes.begin(), nodes.nodes.begin() + nodes.nodeCount,
@@ -693,11 +702,11 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
     const bool vfg=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
-        if(e.fg.backend==FrameGenerationBackend::Vfg||e.fg.vfgQuality!=1||
-           (e.globals&&(e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->vfgQuality!=1)))return true;
+        if((e.fg.backend==FrameGenerationBackend::Vfg||e.fg.backend==FrameGenerationBackend::Anr)||e.fg.vfgQuality!=1||
+           (e.globals&&((e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->fgBackend==FrameGenerationBackend::Anr)||e.globals->vfgQuality!=1)))return true;
         if(!e.nodeConfiguration)return false;const auto& c=*e.nodeConfiguration;
-        return c.fgBackend==FrameGenerationBackend::Vfg||c.vfgQuality!=1||
-            (c.editor&&c.editor->globals&&(c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->vfgQuality!=1));
+        return (c.fgBackend==FrameGenerationBackend::Vfg||c.fgBackend==FrameGenerationBackend::Anr)||c.vfgQuality!=1||
+            (c.editor&&c.editor->globals&&((c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->fgBackend==FrameGenerationBackend::Anr)||c.editor->globals->vfgQuality!=1));
     });
     const bool correction=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
         for(unsigned i=0;i<e.chain.nodeCount;++i)if(e.chain.nodes[i].nr.residual.extendedSchema())return true;
@@ -766,7 +775,11 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     const bool dlaa=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
         return dlaaChain(e.chain)||(e.nodeConfiguration&&(dlaaChain(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&dlaaChain(e.nodeConfiguration->editor->nodes))));});
-    const int version=std::max(minimumVersion, dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool outputControls=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return hasOutputControls(e.chain)||(e.nodeConfiguration&&(hasOutputControls(e.nodeConfiguration->chain)||
+            (e.nodeConfiguration->editor&&hasOutputControls(e.nodeConfiguration->editor->nodes))));
+    });
+    const int version=std::max(minimumVersion, outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -801,6 +814,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
                 writeAntiAlias(o, n.aa);
                 o << ' ';
             }
+            if(n.type==EffectType::NrStabilizer)o<<n.holdStrength<<' '<<n.holdTolerance<<' ';
             if (version>=15 && n.type == EffectType::Beauty) {
                 writeBeauty(o, n.beauty);
                 o << ' ';
@@ -840,7 +854,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,20):20;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,21):21;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -854,7 +868,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             (e.contents & ~(version>=10?kPresetAllContent:kPresetLegacyContent)) ||
             nodeCount > kMaxChainNodes || e.fg.multiplier < 1 || e.fg.multiplier > (version>=7?8u:6u)) { error = L"预设库字段超出范围"; return false; }
         if(version>=7&&!(in>>e.fg.vfgQuality)){error=L"预设库 VFG 质量字段损坏";return false;}
-        if(fgBackend<0||fgBackend>(version>=7?4:3)){error=L"预设库补帧后端无效";return false;}
+        if(fgBackend<0||fgBackend>(version>=7?5:3)){error=L"预设库补帧后端无效";return false;}
         e.name = wide(name);
         e.note = wide(note);
         e.kind = static_cast<ChainMode>(kind);
@@ -884,6 +898,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             }
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
             if (type < 0 || type >= int(EffectType::Count) || (version < 14 && type >= int(EffectType::AntiAliasing)) ||
+                (version < 21 && type >= int(EffectType::NrStabilizer)) ||
                 enabled < 0 || enabled > 1 || !validNrRuntime(static_cast<NrRuntime>(runtime)) ||
                 temporal < 0 || temporal > 1 || lowLatency < 0 || lowLatency > 1 || protEnabled < 0 || protEnabled > 1 || hdrEnabled < 0 || hdrEnabled > 1) {
                 error = L"预设库节点取值超出范围"; return false;
@@ -917,6 +932,9 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if (version < 20 && node.type == EffectType::AntiAliasing && node.aa.usesDlaa()) {
                 error = L"预设库版本不支持 DLAA 抗锯齿"; return false;
             }
+            if(node.type==EffectType::NrStabilizer&&!(in>>node.holdStrength>>node.holdTolerance)){
+                error=L"预设库稳定器字段损坏";return false;
+            }
             if (version >= 15 && node.type == EffectType::Beauty && !readBeauty(in, node.beauty)) {
                 error = L"预设库节点美颜参数损坏"; return false;
             }
@@ -935,7 +953,6 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if (auto* color = e.chain.firstOf(EffectType::Color)) color->color = e.color;
         }
         auto compatible = e.chain;
-        if (removeLegacyNodeProtection(compatible) && migrated) *migrated = true;
         if (auto verdict = validateChain(compatible); !verdict.accepted) { error = L"预设库链路违反顺序规则"; return false; }
         if (!preserveLegacy) e.chain = compatible;
         if (version >= 4) {
@@ -967,7 +984,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if(!(in>>backend>>quality>>half>>content)||half<0||half>1){error=L"预设光流字段损坏";return false;}
                 PresetFlowSettings f{OpticalFlowBackend(backend),FlowQuality(quality),half!=0,ContentRate(content)};
                 EnhancementSettings contract;f.apply(contract);
-                if(!contract.validate().empty()){error=L"预设光流或内容节奏无效";return false;}
+                if(!contract.validate().empty()){error=L"预设光流或去除重复帧设置无效";return false;}
                 e.flow=f;
             }
         }
@@ -984,7 +1001,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto& editor = session.configurations[1].editor;
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
-    const auto usesVfg=[](const ChainGlobalSettings& g){return g.fgBackend==FrameGenerationBackend::Vfg||g.vfgQuality!=1;};
+    const auto usesVfg=[](const ChainGlobalSettings& g){return (g.fgBackend==FrameGenerationBackend::Vfg||g.fgBackend==FrameGenerationBackend::Anr)||g.vfgQuality!=1;};
     const bool vfg=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return usesVfg(c)||(c.editor&&c.editor->globals&&usesVfg(*c.editor->globals));});
     // Session v6 carries the static HDR output tuning (curve + metadata).
     const auto tuningCustom=[](const ChainConfiguration& c){
@@ -1025,7 +1042,10 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             return n.type==EffectType::AntiAliasing&&n.aa.method==AntiAliasMethod::Dlaa;});};
     const bool dlaa=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
         return dlaaChain(c.chain)||(c.editor&&dlaaChain(c.editor->nodes));});
-    const int version = dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const bool outputControls=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
+        return hasOutputControls(c.chain)||(c.editor&&hasOutputControls(c.editor->nodes));
+    });
+    const int version = outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -1079,7 +1099,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 15) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 16) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -1094,13 +1114,10 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
         parsed.configurations[i].chain = entries[i].chain;
-        auto& configuration = parsed.configurations[i];
-        if (removeLegacyNodeProtection(configuration.chain, &configuration.selectedNr, &configuration.selectedColour) && migrated)
-            *migrated = true;
     }
     if (hasEditor) {
         if (!parsed.initialized[1]) return false;
@@ -1128,7 +1145,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
         for (uint32_t i = 0; i < count; ++i) {
@@ -1145,6 +1162,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
     const auto directVideoAi=std::filesystem::path(path_).concat(L".video-ai");
@@ -1200,6 +1218,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     // DLAA anti-aliasing nodes (library v20, session v15).
     const auto dlaaPath=std::filesystem::path(path_).concat(L".dlaa");
     if(std::filesystem::exists(directDlaa))path_=directDlaa;else if(std::filesystem::exists(dlaaPath))path_=dlaaPath;
+    const auto controlsPath=std::filesystem::path(path_).concat(L".output-controls");
+    if(std::filesystem::exists(directControls))path_=directControls;
+    else if(std::filesystem::exists(controlsPath))path_=controlsPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1207,12 +1228,7 @@ bool ChainSessionStore::load(ChainSession& session) {
         std::ifstream file(path_, std::ios::binary);
         if (file) {
             const std::string data((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-            bool migrated = false;
-            if (!file.bad() && decode(data, session, &migrated)) {
-                if (migrated) {
-                    path_ = std::filesystem::path(path_).concat(L".p3-node");
-                    error_ = L"旧节点配置的 NR 保护区域已移除；列表保护及其他节点参数保留，后续保存到 .p3-node 文件，原文件不覆盖";
-                }
+            if (!file.bad() && decode(data, session)) {
                 return true;
             }
         }
@@ -1229,6 +1245,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 16")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
+    if(!path_.wstring().ends_with(L".output-controls")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 15")&&!path_.wstring().ends_with(L".dlaa"))path_=std::filesystem::path(path_).concat(L".dlaa");
     if(!path_.wstring().ends_with(L".dlaa")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 14")&&!path_.wstring().ends_with(L".dual-sr-any"))path_=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -1271,6 +1289,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
     }
     }
+    } // Keep upgraded sessions in their own sidecar after disabling/removing controls.
     std::error_code ec;
     if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path(), ec);
     if (ec) { error_ = L"模式会话目录无法创建"; return false; }

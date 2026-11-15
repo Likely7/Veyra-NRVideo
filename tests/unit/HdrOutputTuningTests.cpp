@@ -501,7 +501,7 @@ int main() {
         EnhancementSettings applied;
         if(restored.entries().size()==1)PresetLibrary::apply(restored.entries()[0],applied);
         check(applied.hdrCurve==s.hdrCurve&&applied.hdrMetadata==s.hdrMetadata&&applied.residual.total==5&&
-            applied.model.style==2&&applied.residual.correction.neutral==.31f&&applied.content==ContentRate::Fps30,
+            applied.model.style==2&&applied.residual.correction.neutral==.31f&&applied.content==ContentRate::Auto,
             "persist: HDR preset applies while retaining NR five, style controls and Flow");
         auto session=std::make_unique<ChainSession>(ChainSession::initial(s));
         check(session->select(ChainMode::Node),"persist: initialize separate node settings");

@@ -145,7 +145,7 @@ struct EnhanceGraphDesc {
     engine::FrameGenerationBackend frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
     uint32_t vfgQuality=1;
     bool vfgAsyncSubmission=false; // preview-only; export retains synchronous SDK verdicts
-    bool vfgAutoRegulate=true;
+    bool vfgAutoRegulate=false;
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
@@ -172,6 +172,7 @@ struct EnhanceGraphDesc {
     std::vector<engine::NrAntiFlicker> nrLayersAntiFlicker;
     std::vector<engine::ProtectionSettings> nrLayersProtection;
     engine::ProtectionSettings protection;
+    engine::ProtectionSettings exclusion;
     // Stage-5 output stabiliser (anti-flicker). 0 keeps the pass unallocated and
     // the dispatch skipped, so a default session is byte-identical to a build
     // without it. See shaders/NrHold.hlsl.
@@ -514,6 +515,8 @@ struct EnhanceGraphDesc {
                 if(step.type==EffectType::VideoHdr)rank=7;
                 if(step.type==EffectType::FrameGeneration)rank=8;
             }
+            if(step.type==EffectType::NrStabilizer)rank=split?5:nrBeforeSr?2:3;
+            if(step.type==EffectType::Exclusion)rank=split?7:runtimeNodeOrder?5:4;
             if(rank<lastRank)return "ordered node execution is not supported by fixed dispatcher";
             lastRank=rank;
             if(step.input!=cursor||!step.processing.valid()||!step.output.valid()||
@@ -619,7 +622,11 @@ public:
     // `hardwareSurface` carries the decoded texture for paths whose surface
     // does not travel inside the AVFrame (D3D11VA). It must be provided exactly
     // when frame->format == AV_PIX_FMT_D3D11 and is unused otherwise.
-    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false);
+    // Optional owner-thread checkpoint: may present an older leased frame on
+    // an independent command ring only. Must not re-enter process, reset,
+    // timing collection, or structural/settings mutation. Resolving an old
+    // lease's status and recording its consumer fence are allowed. Never retained.
+    bool process(const AVFrame* frame, double ptsMs, bool reset, FrameOutputs& out, uint64_t sourceFrameId = 0, const ColorDescription* color = nullptr, const HardwareSurfaceInput* hardwareSurface = nullptr, bool retainReferences = true, const FgAdmission& admitFg = {}, unsigned previewMultiplier = 0, bool pausedResidualRefresh = false, const std::function<void()>& previewCheckpoint = {});
     bool nextFrameSlotAvailable()const {
         const unsigned slot=unsigned(realFrameIndex_%2);
         if(presentationFences_[slot]&&presentationFences_[slot]->GetCompletedValue()<presentationValues_[slot])return false;
@@ -698,6 +705,9 @@ public:
     ID3D12Fence* contextFence() const;
     ID3D12Resource* baseReference(unsigned slot=0)const{return baseReferences_[slot%2].Get();}
     ID3D12Resource* sourceReference(unsigned slot=0)const{return sourceReferences_[slot%2].Get();}
+    ID3D12Resource* exclusionUi(unsigned slot)const{return exclusionUi_[slot%2].Get();}
+    ID3D12Resource* unmaskedVideo(unsigned slot)const{return videoFrame_[slot%2].Get();}
+    bool exclusionEnabled()const{return desc_.exclusion.enabled;}
     bool srEnabled() const { return srEnabled_; }
     bool nrEnabled() const { return nrEnabled_; }
     bool fgEnabled() const { return fgEnabled_; }
@@ -907,10 +917,10 @@ private:
     uint32_t nrLayerCount_=1;
     ComPtr<ID3D12Resource> presentMotion_[2];
     bool presentMotionValid_[2]={};
-    // XeSS present-path motion with the optical-flow source: per-pixel refined NVOF or
-    // FidelityFX vectors with disocclusion fill (FlowRefine/FlowFill), never zeroed. NR/SR
-    // keep the validated baseFlow_. desc.fgMotionRefine=false (or VEYRA_TEST_FLOW_REFINE=0)
-    // restores the previous input.
+    // FG motion with the optical-flow source (XeSS present path, and graph DLSS/FSR/ANR since
+    // 2026-11-13): per-pixel refined NVOF or FidelityFX vectors with disocclusion fill
+    // (FlowRefine/FlowFill), never zeroed. NR/SR keep the validated baseFlow_.
+    // desc.fgMotionRefine=false (or VEYRA_TEST_FLOW_REFINE=0) restores the previous input.
     bool flowRefine_=false;
     ComPtr<ID3D12Resource> fgFlowRefined_,fgFlowFilled_,fgBaseFlow_;
     // NVOF backward output (previous->current) for the refinement's forward-backward check
@@ -931,6 +941,9 @@ private:
     ComPtr<ID3D12Resource> flowTex_;
     ComPtr<ID3D12Resource> depthTex_;
     ComPtr<ID3D12Resource> genFrame_[kGeneratedPoolSlots];
+    ComPtr<ID3D12Resource> exclusionVideo_[2],exclusionScratch_,exclusionUi_[2];
+    ComputePass exclusionPass_;
+    bool composeExclusion(ID3D12GraphicsCommandList*,unsigned outputIndex,unsigned rawParity,bool ui);
     ComPtr<ID3D12Resource> fgDisable_[kGeneratedPoolSlots],fgDisableReadback_[kGeneratedPoolSlots],fgDisableInit_;
     std::array<const volatile uint8_t*,kGeneratedPoolSlots> fgDisableMapped_{};
     ComPtr<ID3D12Resource> nrZeroMotion_;

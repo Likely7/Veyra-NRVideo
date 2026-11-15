@@ -105,16 +105,16 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     // A GPU/provider failure arrives after command admission. Match the exact
     // accepted revision so a stale rejection cannot overwrite a newer choice.
     // Opening a source assigns a new revision to the already accepted request.
-    // VFG startup/runtime recovery keeps that revision and disables only FG.
+    // VFG/ANR startup/runtime recovery keeps that revision and disables only FG.
     // Never reconcile a rejection older than the UI's latest accepted edit.
-    const bool recoveredVfg=snapshot.rejectedRevision>=pendingFgRevision_&&
+    const bool recoveredGraphFg=snapshot.rejectedRevision>=pendingFgRevision_&&
         snapshot.desired.revision==snapshot.rejectedRevision&&
-        requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg&&
+        (requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Anr)&&
         snapshot.desired.frameGenerationBackend==requestedFgBackend_&&
         snapshot.desired.vfgQuality==requestedVfgQuality_&&
         requestedFgMultiplier_>1&&snapshot.desired.multiplier==1&&
         !snapshot.backendWarning.empty();
-    if(pendingFgRevision_&&(snapshot.rejectedRevision==pendingFgRevision_||recoveredVfg)&&
+    if(pendingFgRevision_&&(snapshot.rejectedRevision==pendingFgRevision_||recoveredGraphFg)&&
        pending_.frameGenerationBackend==requestedFgBackend_&&pending_.multiplier==requestedFgMultiplier_&&
        pending_.vfgQuality==requestedVfgQuality_){
         pending_.frameGenerationBackend=snapshot.desired.frameGenerationBackend;
@@ -135,8 +135,10 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     return frame;
 }
 
-bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& settings,
+bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& savedSettings,
                                   std::optional<veyra::engine::ChainRuntimeOrder> order) {
+    auto settings=savedSettings;
+    settings.content=veyra::engine::currentContentRate(settings.content);
     uint64_t acceptedRevision=0;
     if (!engine_.requestSettings(settings, order,&acceptedRevision)) return false;
     veyra::log::info("ui-settings-request", std::format(

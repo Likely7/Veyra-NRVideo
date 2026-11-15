@@ -1,6 +1,6 @@
 // .pop / .opt — the design's popover menu (core.js app.menu, app.css .pop).
 //
-// Items: [{ label, note, icon, checked, disabled, tag, sep, head }] like the design's
+// Items: [{ label, note, icon, checked, disabled, danger, gold, tag, sep, head }] like the design's
 // list; `picked(index, item)` fires 130 ms after the click, once the check has moved,
 // and the menu closes (core.js: setTimeout(() => { closeMenu(); onPick(o) }, 130)).
 // Opening (M14): opacity .15s, scale .9 -> 1 and translate 0 8px -> 0 over .45s
@@ -267,7 +267,8 @@ Popup {
                                             Layout.fillWidth: true
                                             Layout.minimumWidth: 0
                                             text: row.modelData.label
-                                            color: row.modelData.danger === true ? Theme.err : Theme.t1
+                                            color: row.modelData.danger === true ? Theme.err
+                                                   : row.modelData.gold === true ? Theme.warn : Theme.t1
                                             font.family: Theme.fontUi
                                             font.pixelSize: Theme.fsBody
                                             font.weight: Font.Medium

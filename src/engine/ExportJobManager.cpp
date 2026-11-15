@@ -34,7 +34,8 @@ struct Shared {
     // 12: SR prescale/output fields change the shared settings layout.
     // 13: independent second SR parameters. 14: srOutput (the supersample
     // shrink) is honoured again; a version 13 worker would silently ignore it.
-    static constexpr DWORD kVersion=14;
+    // 15: final exclusion mask and independent output-control node payloads.
+    static constexpr DWORD kVersion=15;
     DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;

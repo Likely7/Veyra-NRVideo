@@ -5,6 +5,7 @@
 #include <chrono>
 #include <cstdint>
 #include <format>
+#include <intrin.h>
 #include "veyra/Log.h"
 namespace veyra::gfx {
 // Renamed public NVAPI ABI subset: NVIDIA/nvapi
@@ -27,7 +28,6 @@ public:
     ReflexSession& operator=(const ReflexSession&)=delete;
     ~ReflexSession(){close();}
     bool active()const{return active_;}
-    bool boost()const{return active_&&boost_;}
     bool disablePending()const{return driverEnabled_&&!active_;}
     bool failed()const{return failed_;}
     uint64_t sleepCount()const{return sleeps_;}
@@ -46,10 +46,10 @@ public:
         }
         return true;
     }
-    bool enable(ID3D12Device* device,bool boost=false,bool generated=false,ID3D12CommandQueue* queue=nullptr){
-        if(active_&&device_==device&&boost_==boost&&generated_==generated&&queue_==queue)return true;
+    bool enable(ID3D12Device* device,bool generated=false,ID3D12CommandQueue* queue=nullptr){
+        if(active_&&device_==device&&generated_==generated&&queue_==queue)return true;
         if(!disable())return false;
-        device_=device;queue_=queue;failed_=false;queueMarkers_=false;boost_=boost;generated_=generated;
+        device_=device;queue_=queue;failed_=false;stalled_=false;stallHistory_=0;queueMarkers_=false;generated_=generated;
         if(!load()||!api_.set||!api_.sleep||!api_.marker){log::warn("reflex","required system-driver low-latency interfaces unavailable");return false;}
         if(generated&&(!api_.notify||!queue)){
             log::warn("reflex","frame generation needs out-of-band notification and an owned presentation queue");return false;
@@ -62,9 +62,9 @@ public:
             if(r&&generated)return false;
             queueMarkers_=r==0;
         }
-        SleepParams p{};p.version=sizeof(p)|(1u<<16);p.low=1;p.boost=boost;p.markers=1;
+        SleepParams p{};p.version=sizeof(p)|(1u<<16);p.low=1;p.boost=0;p.markers=1; // Boost is deliberately unavailable; keep the NVAPI ABI field zero.
         const int r=api_.set(device_,&p);
-        log::info("reflex",std::format("enable status={} intervalUs=0 boost={} frameGeneration={} queueMarkers={}",r,boost,generated,queueMarkers_));
+        log::info("reflex",std::format("enable status={} intervalUs=0 boost={} frameGeneration={} queueMarkers={}",r,false,generated,queueMarkers_));
         sleeps_=sleepUs_=maxSleepUs_=markers_=oobMarkers_=realPresents_=generatedPresents_=0;firstFrame_=next_+1;
         return active_=driverEnabled_=r==0;
     }
@@ -74,15 +74,32 @@ public:
         const int r=api_.marker(device_,&p);
         if(r)fail("marker",r);else{++markers_;if(frame<firstFrame_+2)log::info("reflex-marker",std::format("source={} type={} status=0",frame,type));}
     }
-    uint64_t begin(){
+    // stallUs: the caller already holds the source read until the GPU finished
+    // the previous one, so a Sleep longer than this cannot be queue control.
+    // Field log 2026-11-12 (RTX 4070 Ti SUPER, 160 Hz, fullscreen DLSS/VFG):
+    // the driver slept 26 ms before every 59.94 fps source while the GPU work
+    // took about 1.4 ms, and 30 frames a second reached the screen. Ten such
+    // sleeps out of the last sixteen end low latency for the session; the
+    // caller reports it and keeps the low queue. 0 disables the check.
+    static constexpr unsigned kStallWindow=16,kStallSleeps=10;
+    uint64_t begin(uint64_t stallUs=0){
         if(!active_)return 0;
         // How long the driver really holds the source read, for the disable log.
         const auto start=std::chrono::steady_clock::now();
         const int r=api_.sleep(device_);if(r){fail("sleep",r);return 0;}
         const auto us=uint64_t(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now()-start).count());
         ++sleeps_;sleepUs_+=us;maxSleepUs_=std::max(maxSleepUs_,us);
+        if(stallUs){
+            stallHistory_=((stallHistory_<<1)|uint32_t(us>stallUs))&((1u<<kStallWindow)-1);
+            if(unsigned(__popcnt(stallHistory_))>=kStallSleeps){
+                log::warn("reflex",std::format("sleep stall: {} of the last {} sleeps exceeded {} us (last {} us, mean {:.3f} ms); low latency disabled for this session",
+                    __popcnt(stallHistory_),kStallWindow,stallUs,us,sleepUs_/1000.0/double(sleeps_)));
+                stalled_=true;fail("sleep-stall",0);return 0;
+            }
+        }
         const auto frame=++next_;mark(frame,0);return active_?frame:0;
     }
+    bool stalled()const{return stalled_;}
     void renderStart(uint64_t frame){mark(frame,1);mark(frame,2);}
     void renderEnd(uint64_t frame){if(queueMarkers_)mark(frame,3);}
     void blitStart(uint64_t frame){if(eligible(frame))++presentId_;if(queueMarkers_)queueMark(frame,9);}
@@ -123,7 +140,8 @@ private:
         if(!init)return false;const int r=init();initialized_=r==0;if(r)log::warn("reflex",std::format("initialize status={}",r));return initialized_;
     }
     DriverApi api_{};HMODULE module_=nullptr;ID3D12Device* device_=nullptr;ID3D12CommandQueue* queue_=nullptr;
-    bool initialized_=false,active_=false,driverEnabled_=false,boost_=false,generated_=false,queueMarkers_=false,failed_=false;
+    bool initialized_=false,active_=false,driverEnabled_=false,generated_=false,queueMarkers_=false,failed_=false,stalled_=false;
+    uint32_t stallHistory_=0;
     uint64_t next_=0,firstFrame_=1,presentId_=0,sleeps_=0,sleepUs_=0,maxSleepUs_=0,markers_=0,oobMarkers_=0,realPresents_=0,generatedPresents_=0;
 };
 }

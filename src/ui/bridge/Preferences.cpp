@@ -1,5 +1,6 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/ngx/AnrProvider.h"
 
 namespace veyra::ui {
 // --- shell preferences -------------------------------------------------------
@@ -76,6 +77,9 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
+    const auto anrDirectory=ngx::AnrProvider::directory(runtime::localRuntimeDirectory().wstring());
+    out<<QVariantMap{{"name",QStringLiteral("ANR FG")},{"detail",QString::fromStdWString(anrDirectory)},
+        {"loaded",ngx::AnrProvider::available(runtime::localRuntimeDirectory().wstring())},{"experimental",true}};
     const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
     const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},
@@ -189,8 +193,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // Live recording: the target bitrate for the file, and the frame rate
         // cap (0 keeps the presented rate).
         {"recordBitrateMbps", {0, 400}},
-        {"recordFps", {0, 240}}};
-    static const QStringList flags{"recordHevc", "recordAudio", "subtitleEnabled", "subtitleBackground", "subtitleFit",
+        {"recordFps", {0, 240}},
+        // Instant replay (#103): seconds the buffer keeps.
+        {"replaySeconds", {15, 600}}};
+    static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
@@ -215,6 +221,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = dir;
     } else if (key == QLatin1String("audioDevice")) {
         stored = value.toString();
+    } else if (key == QLatin1String("recordMicDevice")) {
+        // A recording endpoint id (empty: the default recording device).
+        const QString id = value.toString();
+        if (id.size() > 512) return false;
+        stored = id;
     } else if (key == QLatin1String("sliderKeyStep")) {
         // Arrow-key step of a focused slider (设置 → 通用): 1, 0.1 or 0.01.
         bool ok = false; const double v = value.toDouble(&ok);
@@ -294,6 +305,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    // The replay buffer re-arms with what a recording would use.
+    static const QStringList replayKeys{"replayEnabled", "replaySeconds", "recordBitrateMbps", "recordFps", "recordHevc",
+                                        "recordAudio", "recordMic", "recordMicDevice", "recordMicTrack"};
+    if (replayKeys.contains(key)) syncReplay();
     if(key==QLatin1String("hdrFgCompatibility")){
         impl_->presentation.hdrFgCompatibility=impl_->prefBool("hdrFgCompatibility",false);
         impl_->engine.requestPresentation(impl_->presentation);
@@ -305,9 +320,9 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     }
     if(key==QLatin1String("gpuPriority")){
         const auto value=impl_->prefString("gpuPriority");
-        // Unset means the default, 实时 (field request 2026-10-05).
+        // Unset means High (user default, 2026-11-13); saved choices stay explicit.
         gfx::requestGpuPriority(value==QLatin1String("normal")?gfx::GpuPriority::Normal:
-                                value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Realtime);
+                                value==QLatin1String("realtime")?gfx::GpuPriority::Realtime:gfx::GpuPriority::High);
     }
     if(key==QLatin1String("overlayCompat"))updateLiveCompanionCompat();
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
@@ -459,7 +474,7 @@ namespace {
 const QVariantMap& shortcutDefaults() {
     // Screenshot was Ctrl+S before 2026-10-27; saved custom keys are kept.
     static const QVariantMap d{{"playPause", "Space"}, {"fullscreen", "F"}, {"lock", "Ctrl+L"},
-                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"toggleMode", "Tab"},
+                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"replay", "F9"}, {"toggleMode", "Tab"},
                                {"gamePanel", "Home"}, {"gameExit", "Ctrl+Alt+Home"}};
     return d;
 }
@@ -483,7 +498,7 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
 void QmlPlayerBridge::applyGameHotkeys() {
     const auto keys = shortcuts();
     const auto key = [&keys](const char* action) { return ui::gameKey(QKeySequence(keys.value(action).toString(), QKeySequence::PortableText)); };
-    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"));
+    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"), key("replay"));
     // At start and after every change: a field log then says which key each
     // action answers to (the 2026-11-08 recording report had no way to tell).
     const auto custom = impl_->prefs.value("shortcuts").toMap();
@@ -577,7 +592,8 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
         {"x", "https://x.com/likely2002"},
         {"github", "https://github.com/Likely7"},
         {"youtube", "https://www.youtube.com/@Likely7Ai"},
-        {"kofi", "https://ko-fi.com/likely7"},
+        {"patreon", "https://www.patreon.com/cw/Likely7"},
+        {"patreonCoffee", "https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110"},
     };
     for (const auto& [name, url] : links) {
         if (id != QLatin1StringView(name)) continue;

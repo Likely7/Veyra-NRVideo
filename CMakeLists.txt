@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.5 LANGUAGES C CXX RC)
+project(veyra VERSION 2.1.6 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.1.5" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.1.6" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -109,6 +109,11 @@ target_compile_definitions(veyra_base PUBLIC
 target_include_directories(veyra_base PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 
+add_executable(veyra_logger_tests tests/unit/LoggerTests.cpp)
+target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
+veyra_apply_warnings(veyra_logger_tests)
+
 add_library(veyra_gfx STATIC
   src/gfx/GpuSchedulingPriority.cpp
   src/gfx/D3D12DeviceContext.cpp
@@ -155,6 +160,7 @@ add_library(veyra_ngx STATIC
   src/ngx/DlssSrBackend.cpp
     src/ngx/VideoSrBackend.cpp
     src/ngx/TrueHdrBackend.cpp
+  src/ngx/AnrProvider.cpp
   src/ngx/DlssFgBackend.cpp
   src/ngx/FgCompatibilitySession.cpp
   src/ngx/compat/hde/hde64.c
@@ -296,6 +302,7 @@ add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
 enable_testing()
 add_subdirectory(tests/screenshot-alpha)
+veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
 # Nv12Upload: byte buffer -> luma/chroma planes (copy-free upload path).
 veyra_add_compute_shader(veyra_shader_nv12_upload Nv12Upload)
 # PresentBlit: fullscreen-triangle pixel blit onto flip-model back buffers.
@@ -669,7 +676,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -1491,7 +1498,7 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_repair_fg_tests PRIVATE veyra_pipeline veyra_sinks veyra_nvof)
 
   # Headless quality-core runner (Playbook R3.3): the phase5 gate's quality
-  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp)
+  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp src/engine/ReplayBuffer.cpp src/engine/MicrophoneCapture.cpp)
   target_sources(veyra_pipeline PRIVATE src/guidance/AmdOpticalFlow.cpp
     src/guidance/GpuDisOpticalFlow.cpp third_party/gpu-dis/src/gpu/native_strict_dis_provider.cpp)
   target_include_directories(veyra_pipeline PRIVATE third_party/gpu-dis/src/gpu)
@@ -1529,6 +1536,11 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_preset_library_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_preset_library_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_preset_library_tests PRIVATE veyra_base)
+  add_executable(veyra_anr_settings_tests tests/unit/AnrSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
+  target_compile_features(veyra_anr_settings_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_anr_settings_tests PRIVATE veyra_base)
+  target_compile_options(veyra_anr_settings_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_anr_settings_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   add_executable(veyra_vfg_settings_tests tests/unit/VfgSettingsTests.cpp src/engine/PresetLibrary.cpp src/engine/PresetStore.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_vfg_settings_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_vfg_settings_tests PRIVATE /utf-8)
@@ -1610,6 +1622,11 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_options(veyra_repair_preset_tests PRIVATE /utf-8)
   target_compile_definitions(veyra_repair_preset_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_repair_preset_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_executable(veyra_replay_buffer_tests tests/unit/ReplayBufferTests.cpp src/engine/ReplayBuffer.cpp src/sink/RecordingAudioTap.cpp)
+  target_compile_features(veyra_replay_buffer_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_replay_buffer_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_replay_buffer_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_replay_buffer_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   add_executable(veyra_ui_contract_tests tests/unit/UiContractTests.cpp src/engine/PresetStore.cpp)
   target_compile_features(veyra_ui_contract_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_ui_contract_tests PRIVATE /utf-8)

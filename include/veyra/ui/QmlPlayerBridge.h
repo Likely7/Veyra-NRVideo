@@ -195,7 +195,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString remotePlayHost READ remotePlayHost WRITE setRemotePlayHost NOTIFY settingsChanged)
     Q_PROPERTY(QString remotePlayPin READ remotePlayPin WRITE setRemotePlayPin NOTIFY settingsChanged)
     // P4-e PS5 Remote Play, ported from the 1.4.4 panel: saved pairings (shared
-    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, PSN login,
+    // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, Account ID lookup,
     // wake, stream profile, decode/sampling, view-only, login PIN, controller
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
@@ -233,6 +233,17 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
     Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
     Q_PROPERTY(bool recordingAudio READ recordingAudio NOTIFY preferencesChanged)
+    // Microphone (#101): mixed into the recorded sound, or on a track of its own.
+    Q_PROPERTY(bool recordingMicrophone READ recordingMicrophone NOTIFY preferencesChanged)
+    Q_PROPERTY(QString recordingMicrophoneId READ recordingMicrophoneId NOTIFY preferencesChanged)
+    Q_PROPERTY(bool recordingMicrophoneTrack READ recordingMicrophoneTrack NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantList microphoneDevices READ microphoneDevices NOTIFY microphoneDevicesChanged)
+    // Instant replay (#103): while enabled, the last replaySeconds of the
+    // presented picture and sound stay in memory; saveReplay() writes them
+    // next to the recordings.
+    Q_PROPERTY(bool replayEnabled READ replayEnabled NOTIFY preferencesChanged)
+    Q_PROPERTY(int replaySeconds READ replaySeconds NOTIFY preferencesChanged)
+    Q_PROPERTY(QVariantMap replayState READ replayState NOTIFY replayChanged)
     Q_PROPERTY(QString dataDirectory READ dataDirectory CONSTANT)
     // Rebindable shortcuts: action -> key sequence text (defaults merged in).
     Q_PROPERTY(QVariantMap shortcuts READ shortcuts NOTIFY preferencesChanged)
@@ -410,6 +421,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
+    Q_PROPERTY(QVariantMap exclusionState READ exclusionState NOTIFY protectionChanged)
+    Q_PROPERTY(QVariantMap nrStabilizerState READ nrStabilizerState NOTIFY nrStabilizerChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
     Q_PROPERTY(int audioOffsetMs READ audioOffsetMs WRITE setAudioOffsetMs NOTIFY settingsChanged)
     // 1.4.4 声音补偿: 0 自动(软件估算) / 1 手动 / 2 关闭; live sources only.
@@ -821,9 +834,7 @@ public:
     Q_INVOKABLE bool ps5Connect();
     Q_INVOKABLE void ps5Wake();
     Q_INVOKABLE void ps5Forget();
-    Q_INVOKABLE void ps5PsnLogin();
-    Q_INVOKABLE void ps5PsnComplete();
-    Q_INVOKABLE void ps5PsnForget();
+    Q_INVOKABLE void ps5OpenAccountChecker();
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
@@ -1083,6 +1094,14 @@ public:
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
     QVariantMap protectionState() const;
+    QVariantMap exclusionState() const;
+    QVariantMap nrStabilizerState() const;
+    Q_INVOKABLE bool beginMaskDraw(bool allEffects,const QString& shape);
+    Q_INVOKABLE bool setMaskEnabled(bool allEffects,bool enabled);
+    Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
+    Q_INVOKABLE bool removeMaskRegion(bool allEffects,int index);
+    Q_INVOKABLE bool clearMaskRegions(bool allEffects);
+    Q_INVOKABLE bool setStabilizerParameter(int index,const QString& key,double value);
     Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
     void setColorEnabled(bool value);
@@ -1349,6 +1368,10 @@ public:
     Q_INVOKABLE void toggleRecording(const QString& source = QString());
     Q_INVOKABLE void chooseRecordingDirectory();
     Q_INVOKABLE void openRecordingDirectory();
+    // Writes what the replay buffer holds now (source as for recording).
+    Q_INVOKABLE void saveReplay(const QString& source = QString());
+    // Lists the recording endpoints for the microphone choice.
+    Q_INVOKABLE void refreshMicrophones();
     bool recording() const;
     QVariantMap recordingState() const;
     QString recordingDirectory() const;
@@ -1356,6 +1379,13 @@ public:
     int recordingFpsLimit() const;
     bool recordingHevc() const;
     bool recordingAudio() const;
+    bool recordingMicrophone() const;
+    QString recordingMicrophoneId() const;
+    bool recordingMicrophoneTrack() const;
+    QVariantList microphoneDevices() const;
+    bool replayEnabled() const;
+    int replaySeconds() const;
+    QVariantMap replayState() const;
     Q_INVOKABLE void chooseExportPath();
     // The export target without the dialog (the dialog's result, or --export-out in a test).
     void setExportPath(const QString& path);
@@ -1426,6 +1456,8 @@ signals:
     void subtitleTextChanged();
     void preferencesChanged();
     void recordingChanged();
+    void replayChanged();
+    void microphoneDevicesChanged();
     void colourLibraryChanged();
     // Emitted only when the underlying snapshot actually changed, so QML
     // bindings do not re-evaluate 60 times a second for nothing.
@@ -1449,6 +1481,7 @@ signals:
     void beautyChanged();
     void colourParamsChanged();
     void protectionChanged();
+    void nrStabilizerChanged();
     void recentFilesChanged();
     void presetsChanged();
     void exportChanged();
@@ -1478,8 +1511,13 @@ private:
     void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
     void updateGameMode();
     void updateGameGeometry();
-    // Game mode's keyboard hook gets the current panel, exit, screenshot and record keys.
+    // Game mode's keyboard hook gets the current panel, exit, screenshot, record and replay keys.
     void applyGameHotkeys();
+    // The recording settings both recorders follow, and the replay buffer
+    // armed (or not) with them; its state for the interface.
+    engine::RecordingSettings recordingOptions() const;
+    void syncReplay();
+    void pollReplay();
     // DLAA anti-aliasing needs the DLSS SR runtime and adapter; false (with a notice) otherwise.
     bool dlaaAllowed();
     // 抖音直播伴侣 running (gfx/PresentationHooks.h): Realtime GPU priority is capped at
@@ -1501,8 +1539,9 @@ private:
     // connecting note, and start the engine once the page and window have settled.
     void openAfterCinema(const QString& pending, std::function<void()> open);
     void rememberSource(const QString& kind, const QString& label);
-    // Edits the list chain's protection node; rolls back when refused.
-    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit);
+    // Edits either mask node in the active chain; rolls back when refused.
+    QVariantMap maskState(bool allEffects) const;
+    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects=false);
     engine::ColorSettings selectedColourSettings() const;
     bool commitColour(const engine::ColorSettings& colour);
     // Reads the export job's snapshot and emits exportChanged.

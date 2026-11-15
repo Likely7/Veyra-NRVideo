@@ -10,8 +10,9 @@ namespace veyra::engine {
 enum class PacingMode : unsigned { LowQueue, Even, Reflex };
 enum class DisplaySync : unsigned { Tearing, Vsync, Automatic };
 enum class OutputRateMode : unsigned { Off, FollowDisplay, Custom };
-enum class NvidiaLowLatency : unsigned { Off, On, Boost };
-constexpr NvidiaLowLatency savedNvidiaLowLatency(int value){return value>=0&&value<=2?NvidiaLowLatency(value):NvidiaLowLatency::Off;}
+enum class NvidiaLowLatency : unsigned { Off=0, On=1 };
+// Legacy value 2 selected On + Boost; keep the opt-in, but never enable Boost.
+constexpr NvidiaLowLatency savedNvidiaLowLatency(int value){return value==1||value==2?NvidiaLowLatency::On:NvidiaLowLatency::Off;}
 struct PresentationSettings {
     // Low-latency queue: DXGI maximum frame latency 1 instead of 3.
     // Native NVIDIA Reflex is selected separately below. Reduces queueing,
@@ -29,13 +30,13 @@ struct PresentationSettings {
     bool variableRefresh=false;
     NvidiaLowLatency nvidiaLowLatency=NvidiaLowLatency::Off;
     bool operator==(const PresentationSettings&) const = default;
-    bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&unsigned(nvidiaLowLatency)<=2&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
+    bool valid()const{return unsigned(mode)<=2&&unsigned(display)<=2&&unsigned(outputRate)<=2&&unsigned(nvidiaLowLatency)<=1&&std::isfinite(customFps)&&customFps>=1.0&&customFps<=1000.0;}
 };
-// Who owns the low queue in the interface: on an NVIDIA adapter the three
-// NVIDIA states (开/开＋增强 imply it, 关 clears it); on another adapter the
+// Who owns the low queue in the interface: on an NVIDIA adapter the two
+// NVIDIA states (开 implies it, 关 clears it); on another adapter the
 // plain low-queue switch, and the NVIDIA choice is only kept for the next
 // NVIDIA session. Returns whether `enabled` had to change (review 2026-10-29:
-// a kept 开＋增强 used to force the queue on an AMD compute GPU for good).
+// a kept NVIDIA choice used to force the queue on an AMD compute GPU for good).
 constexpr bool syncNvidiaLowLatencyQueue(PresentationSettings& p,bool nvidiaAdapter){
     const bool queue=p.nvidiaLowLatency!=NvidiaLowLatency::Off;
     if(!nvidiaAdapter||p.enabled==queue)return false;

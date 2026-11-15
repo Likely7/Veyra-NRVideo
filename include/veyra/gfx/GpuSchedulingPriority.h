@@ -5,7 +5,7 @@ namespace veyra::gfx {
 enum class GpuPriority : int { Normal=2, High=4, Realtime=5 };
 enum class GpuPriorityState { Pending, Applied, Unavailable, Rejected };
 struct GpuPriorityStatus {
-    GpuPriority requested=GpuPriority::Normal;
+    GpuPriority requested=GpuPriority::High;
     int actual=-1;
     GpuPriorityState state=GpuPriorityState::Pending;
     uint32_t status=0;
