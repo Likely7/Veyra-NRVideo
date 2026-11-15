@@ -1112,7 +1112,8 @@ Upstream collaborator selimsandal explicitly states that third-party redistribut
 - Source: https://github.com/GPUOpen-LibrariesAndSDKs/AMF, tag v1.5.3 (commit 57ee0cfb0e1a08d9041f77435653794c1b012be0), public headers `amf/public/include` only, used at build time for AMD FRC (frame rate conversion).
 - License: MIT, Copyright (c) Advanced Micro Devices, Inc. (see LICENSE.txt in that tag; each header carries the MIT notice).
 - Nothing from the SDK is redistributed in Veyra packages. The AMF runtime (`amfrt64.dll`) belongs to the user's AMD driver and is loaded from the Windows system directory only.
-# Startup music in runnable packages (2026-11-15)
+
+## Startup music in runnable packages (2026-11-15)
 
 The user supplied BGM.MP3 and confirmed permission to distribute the exact file
 in Veyra runnable packages. The asset is separate from Veyra source code and its
@@ -1121,4 +1122,3 @@ Runtime path: `media/startup-music.mp3`, 1847011 bytes, SHA256
 `3005aa601f06a97d3968fd9fa171e870fceb4ec47586f1e950c9ed3c7875fb6a`.
 Each runnable package includes its separate notice and manifest. Windows Media
 Foundation provides decoding; no additional codec or audio SDK is bundled.
-

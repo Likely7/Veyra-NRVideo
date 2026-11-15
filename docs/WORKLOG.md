@@ -1275,9 +1275,8 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 用户明确纠正英文教程应从零开始。移除英文YouTube链接t=324s与05:24标签，同步三份README顶部、作者/教程标准块、RELEASE_SUPPORT及当前v2.1.6应用/源码Release底部。执行：py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-creator-links-20261115/from-zero.py；git diff --check、远端README内容、两Release正文与原资产/标签/二维码保护检查，实际发布结果见reports/codex-creator-links-20261115/from-zero/FINAL.json。仅文档和Release正文，不携带本地main未发布改动。
 ## 2026-11-15 2.1.9整合、区域可视编辑与启动音乐
 
-用户授权本地main整合并跳到2.1.9，BGM仅进运行包。隔离codex/integrate-2.1.9-20261115基于main2f0e499，原29工作树HEAD/脏文件SHA与变动快照在reports/archives同任务；Claude日落81498ed、AMF/FSR4 b31d536、录音10e502e、浏览器挂起61c9f9c及nrvideo/main文档均已并入整合分支。WORKLOG冲突保留双方，Preferences保留录音监听、启动动画/音乐全部开关。暂停的四分支不并。
+用户授权本地main整合并跳到2.1.9，BGM仅进运行包。隔离codex/integrate-2.1.9-20261115基于main2f0e499，原工作树HEAD/脏文件SHA与变动快照在reports/archives同任务；Claude日落81498ed、AMF/FSR4 b31d536、录音10e502e、浏览器挂起61c9f9c及nrvideo/main文档均已并入整合分支。WORKLOG冲突保留双方，Preferences保留录音监听、启动动画/音乐全部开关。暂停的四分支不并。
 
 全效果剔除持久红框、选中拖动、仅释放提交、独立显示层；音乐独立片头播放一次，媒体打开意图/手动关闭立即停止，加载前取消也不能复活。原曲SHA3005aa60…1847011字节留deps，不进源码。构建与测试命令：scripts/acceptance/build-recording-handoff.py --task codex-build-2.1.9-20261115 --root E:/项目/Veyra/worktrees/integrate-2.1.9-20261115 --label 2.1.9 --jobs 2 --option VEYRA_AMF_SDK_ROOT=E:/项目/Veyra/deps/amf-sdk-1.5.3-20261114 [本次目标]；reports同任务qa.py stage/cpu/music/mask/resize/amf、fg.py、regress.py、visual.py/verify_visual.py。实际命令参数在这些脚本和构建receipt。测试、日志、临时文件均E盘同任务目录。
 
 209/0/0 Quick、原曲115.826秒自然结束（全程静音）与四种取消、四语实际区域编辑、Windows真实鼠标窗口/全屏各拖一次及截图/14帧录制独立检查通过；XeSS2X/4X各六次WGC resize、FSR4回退/后端切换、AMF核显45/45中间帧/最大误差0.5px/debug0、全效果剔除GPU、静音PCM双消费者/回放缓冲/呈现工作线程通过。失败构建、按钮重叠与修复、运行中stage拒绝和报告解码错误保留，详见BUILD_2.1.9_2026-11-15.md。最终包/源码/main提交/冷启动及清理以reports同任务FINAL.json和收尾记录为准；不push/Release/关机。
-
