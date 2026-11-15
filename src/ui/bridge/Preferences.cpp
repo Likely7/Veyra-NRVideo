@@ -290,7 +290,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = value.toBool();
     } else if (key == QLatin1String("language")) {
         const QString v = value.toString();
-        static const QStringList languages{"auto", "zh-CN", "zh-TW", "en", "ja"};
+        static const QStringList languages{"auto", "zh-CN", "zh-TW", "en", "ja", "ko"};
         if (!languages.contains(v)) return false;
         stored = v;
     } else if (key == QLatin1String("monitorGpu")) {

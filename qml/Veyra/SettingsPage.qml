@@ -298,7 +298,8 @@ VPage {
                                     { id: "zh-CN", label: qsTr("简体中文") },
                                     { id: "zh-TW", label: qsTr("繁體中文") },
                                     { id: "en", label: "English" },
-                                    { id: "ja", label: qsTr("日本語") }
+                                    { id: "ja", label: qsTr("日本語") },
+                                    { id: "ko", label: "한국어" }
                                 ]
                                 value: (options.find(o => o.id === (veyra.preferences.language || "auto")) || options[0]).label
                                 onPicked: id => veyra.setPreference("language", id)
