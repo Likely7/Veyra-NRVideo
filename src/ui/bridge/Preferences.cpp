@@ -869,8 +869,8 @@ QVariantList QmlPlayerBridge::exportTracks()const{
     for(const auto& track:item->info.tracks){const auto& selection=track.audio?item->media.audio:item->media.subtitles;
         const bool selected=selection.policy==engine::ExportTrackPolicy::All||selection.contains(track.index);
         result<<QVariantMap{{"index",track.index},{"audio",track.audio},{"selected",selected},{"compatible",track.compatible},
-            {"label",QStringLiteral("%1 · %2 · %3%4").arg(track.index).arg(utf8Of(track.codec)).arg(utf8Of(track.language)).arg(track.channels?QStringLiteral(" · %1 声道").arg(track.channels):QString())},
-            {"title",utf8Of(track.title)},{"action",utf8Of(track.action)}};
+            {"label",QStringLiteral("%1 · %2 · %3%4").arg(track.index).arg(utf8Of(track.codec)).arg(utf8Of(track.language)).arg(track.channels?tr(" · %1 声道").arg(track.channels):QString())},
+            {"title",utf8Of(track.title)},{"action",uiText(track.action)}};
     }
     return result;
 }

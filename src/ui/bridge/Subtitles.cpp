@@ -117,7 +117,7 @@ void QmlPlayerBridge::tickSubtitles() {
         i.subAlignTrack >= 0 && size_t(i.subAlignTrack) < i.subTracks.size()) {
         i.subTracks[size_t(i.subAlignTrack)].offsetMs = i.subAlignOffset.load();
         std::lock_guard lock(i.subAlignMutex);
-        i.subStatus = tr("自动对齐：%1（Z/X 可微调）").arg(QString::fromStdWString(i.subAlignDetail));
+        i.subStatus = tr("自动对齐：%1（Z/X 可微调）").arg(uiText(i.subAlignDetail));
         veyra::log::info("subtitle", std::format("auto align applied offsetMs={}", i.subAlignOffset.load()));
         changed = true;
     }
