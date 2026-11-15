@@ -317,6 +317,10 @@ void EngineController::stop(){
 }
 void EngineController::pause(bool p){paused_=p;std::lock_guard lock(mutex_);if(snapshot_.running)snapshot_.transport=p?TransportState::Paused:TransportState::Playing;}
 void EngineController::setVolume(float gain,bool mute){if(!std::isfinite(gain))return;volume_=std::clamp(gain,0.0f,1.0f);muted_=mute;}
+void EngineController::setCaptureAudioMonitoring(bool enabled){
+    if(captureAudioMonitoring_.exchange(enabled)!=enabled)
+        log::info("capture-audio-monitor",std::format("enabled={} recordingBeforeGain=1 inputUnchanged=1",enabled));
+}
 bool EngineController::selectAudioTrack(uint64_t session,int streamIndex){
     std::lock_guard lock(mutex_);
     if(session!=snapshot_.sessionId||!snapshot_.running||snapshot_.failed||snapshot_.capture||snapshot_.image)return false;
@@ -965,7 +969,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             captureSource.setAudioIngress(unsigned(options.settings.captureAudio));
             captureSource.setVerticalFlip(options.settings.captureFlipVertical);
             captureSource.setBufferMode(unsigned(options.settings.captureBuffer));
-            if(physicalCapture&&!captureSource.start()){status(L"无法启动采集，请查看诊断",true);break;}
+            if(physicalCapture){
+                // Commit monitoring before the first PCM can reach the endpoint,
+                // including deferred bitstream/vendor sessions.
+                captureSource.setAudioGain(muted_||!captureAudioMonitoring_?0.0f:volume_.load());
+                captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
+                if(!captureSource.start()){status(L"无法启动采集，请查看诊断",true);break;}
+            }
             {std::lock_guard lock(mutex_);snapshot_.duration=duration;snapshot_.nominalSourceFps=isImage?0:activeSource->info().averageFps;snapshot_.running=true;snapshot_.transport=TransportState::Playing;snapshot_.image=isImage;snapshot_.capture=isCapture;snapshot_.applied=options.snapshot();snapshot_.desired=desired_;}
             status(isImage?L"图片已增强，可保存PNG/JPEG":std::format(L"{} | 输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",isRemote?L"PS5 串流":isMoonlight?L"PC 串流":isXbox?L"Xbox 串流":isCapture?L"实时采集":L"播放",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）"));
             pipeline::EnhanceGraph::FrameOutputs out;bool reset=true,hasOutput=false,audioRebuffering=false,seekPreviewPending=false;
@@ -1600,7 +1610,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     captureSource.setAudioIngress(unsigned(options.settings.captureAudio));
                     captureSource.setVerticalFlip(options.settings.captureFlipVertical);
                     captureSource.setBufferMode(unsigned(options.settings.captureBuffer));
-                    if(captureSource.reconnect(muted_?0.0f:volume_.load(),unsigned(options.settings.audioSync),options.settings.audioOffsetMs)){
+                    if(captureSource.reconnect(muted_||!captureAudioMonitoring_?0.0f:volume_.load(),unsigned(options.settings.audioSync),options.settings.audioOffsetMs)){
                         captureRecovering=false;reset=true;pendingResetCause=pipeline::ResetReason::DeviceLost;captureSampler.reset();
                         {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;
                             if(captureSource.info().videoDecodePath=="decklink")snapshot_.nominalSourceFps=captureSource.info().averageFps;}
@@ -1650,10 +1660,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     status(alive?L"视频队列或呈现失败；GPU 未报告设备移除，请查看诊断":L"GPU 设备已移除或驱动已重置；请稍后重新连接，可切换 NR 运行库后重试",true);break;
                 }
                 const float gain=muted_?0.0f:volume_.load();audio.setGain(gain);
-                if(physicalCapture)captureSource.recoverAudio(gain,unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
+                const float captureGain=captureAudioMonitoring_?gain:0.0f;
+                if(physicalCapture)captureSource.recoverAudio(captureGain,unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
                 captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
                 captureSource.setVerticalFlip(options.settings.captureFlipVertical);
-                if(physicalCapture){const bool available=captureSource.setAudioGain(gain);const auto audioState=captureSource.audioState();std::lock_guard lock(mutex_);snapshot_.audioAvailable=available;snapshot_.captureAudio=audioState;snapshot_.audioInputChannels=audioState.inputChannels;snapshot_.audioOutputChannels=audioState.outputChannels;}
+                if(physicalCapture){const bool available=captureSource.setAudioGain(captureGain);const auto audioState=captureSource.audioState();std::lock_guard lock(mutex_);snapshot_.audioAvailable=available;snapshot_.captureAudio=audioState;snapshot_.audioInputChannels=audioState.inputChannels;snapshot_.audioOutputChannels=audioState.outputChannels;}
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                 if(remote){remote->setAudioGain(gain);remote->setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
                     const auto state=remote->audioState();const auto session=remote->sessionSnapshot();const auto rates=remote->rates();

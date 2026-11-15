@@ -197,7 +197,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // Instant replay (#103): seconds the buffer keeps.
         {"replaySeconds", {15, 600}}};
     static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
-                                   "subtitleSecondLanguage", "audioForceStereo", "holdCompare",
+                                   "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
     QVariant stored;
     if (ranges.contains(key)) {
@@ -305,6 +305,8 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if(key==QLatin1String("captureAudioMonitor"))
+        impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // The replay buffer re-arms with what a recording would use.
     static const QStringList replayKeys{"replayEnabled", "replaySeconds", "recordBitrateMbps", "recordFps", "recordHevc",
                                         "recordAudio", "recordMic", "recordMicDevice", "recordMicTrack"};

@@ -79,6 +79,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+    impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // The last volume (user 2026-11-08: it came back at 100% every launch).
     // Mute stays per session; profiles without the key keep 100%.
     if (impl_->prefs.contains(QStringLiteral("volume"))) {

@@ -296,14 +296,23 @@ DialogLayer {
     DialogSection { text: qsTr("音频") }
     DialogGroup {
         VRow {
-            label: qsTr("音频监听")
-            hint: qsTr("只连接明确选中的输入，默认不监听")
+            label: qsTr("音频输入")
+            hint: qsTr("录制采集卡声音需选择输入；本机监听可独立关闭")
             VSelect {
                 objectName: "capture-audio"
                 implicitWidth: 260
-                value: captureDialog.labelOf(veyra.captureAudioInputs, veyra.captureAudioChoice, qsTr("不监听音频"))
+                value: captureDialog.labelOf(veyra.captureAudioInputs, veyra.captureAudioChoice, qsTr("不采集音频"))
                 options: veyra.captureAudioInputs
                 onPicked: id => veyra.captureAudioChoice = Number(id)
+            }
+        }
+        VRow {
+            label: qsTr("本机音频监听")
+            hint: qsTr("关闭后仍可录制和保存回放；本机不播放采集声音")
+            VSwitch {
+                objectName: "capture-audio-monitor"
+                checked: veyra.preferences.captureAudioMonitor !== false
+                onToggled: v => veyra.setPreference("captureAudioMonitor", v)
             }
         }
         VRow {
@@ -413,7 +422,7 @@ DialogLayer {
             objectName: "capture-virtual-audio-follow-up"
             visible: virtualAudioGuide.operation !== 2
             Layout.fillWidth: true
-            text: qsTr("2. 回到 Veyra，在“音频监听”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。")
+            text: qsTr("2. 回到 Veyra，在“音频输入”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。")
             color: Theme.t2
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsBody
@@ -511,7 +520,7 @@ DialogLayer {
         objectName: "capture-ps5-note"
         visible: captureDialog.pcOn
         text: (captureDialog.pcStatus.length > 0 ? captureDialog.pcStatus + "\n" : "")
-              + qsTr("PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得打开上面的「音频监听」。")
+              + qsTr("PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。")
     }
     DialogSection { text: qsTr("格式与画面") }
     DialogGroup {

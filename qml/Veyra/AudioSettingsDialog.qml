@@ -88,6 +88,18 @@ DialogLayer {
             }
         }
     }
+    DialogGroup {
+        visible: veyra.sourceKind === "capture"
+        VRow {
+            label: qsTr("本机音频监听")
+            hint: qsTr("关闭后仍可录制和保存回放；本机不播放采集声音")
+            VSwitch {
+                objectName: "audio-capture-monitor"
+                checked: veyra.preferences.captureAudioMonitor !== false
+                onToggled: v => veyra.setPreference("captureAudioMonitor", v)
+            }
+        }
+    }
     DialogSection { text: qsTr("音画同步") }
     DialogGroup {
         VRow {
