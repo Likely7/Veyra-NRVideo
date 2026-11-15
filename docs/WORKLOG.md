@@ -1287,3 +1287,5 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 用户反馈第二次启动无音乐。manual-NVIDIA原日志14:46:18.304停止7.33秒、18.514写introMusic=false、18.515记录stopped(button)，后两次新进程无源且从0秒停止，确定为本次按钮误写长期偏好，并非曲目只允许终身播一次。codex/startup-music-session-stop-20261115基于main d9e7c11：角落按钮仅stopStartupMusicForSession，不写偏好；设置开关保留长期保存，四语提示明确区分。按已证实日志只恢复manual-NVIDIA被按钮误写的false，原文件与证据归档，未全局重置用户偏好。
 
 同一配置8次实际启动（临时停止/重启两轮、设置关/重启关、设置开/重启开）退出0/无错误、偏好true/true/true/true/false/false/true/true；提前静音。命令py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-startup-music-restart-20261115/{prepare.py,restart.py}，记录RESTART.json/PREFERENCE-REPAIR.json；i18n提取检查0缺失/0占位问题。源/包/缓存/日志均E盘，C++算法及运行组件不改，EXE因内嵌翻译资源重链；封包保护拦截未同步的旧QA EXE，更新后复测，不绕过校验。后续本地main、两完整包和原入口原子替换/冷启动结果见该任务FINAL.json。无push/Release/关机。
+
+启动音乐跟进交付：产品b430d98，EXE因内嵌词库资源重链c8a53dc7…，新EXE下8次实际重启与两包四次冷启动通过。NVIDIA/AMD ZIP分别730929571/721924034字节；两包及对应源码/SHA已逐文件核验后原子同步原2.1.9下载路径和app，原测试启动器仍使用已修复的manual-NVIDIA配置。全部DLL和BGM原件不变，源码无MP3/DLL。相关旧Main/词库/manifest及之前摘要/报告归档archives/codex-startup-music-restart-20261115，不覆盖其他任务或用户设置。原日志已明确的按钮false修正true；设置页明确的长期关闭未全局迁移。包校验第一次正确拦截旧QA EXE，按实际资源重链更新并重测后封包。实际部署变更文件见该任务DEPLOY.json与FINAL.json；不push/Release/关机。
