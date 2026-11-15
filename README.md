@@ -28,6 +28,14 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 <br>
 
+[![GitHub Trending C++ #1](https://img.shields.io/badge/GitHub_Trending-C%2B%2B_%231-D1AF63?style=for-the-badge&logo=github&logoColor=white)](https://gitnova.dev/r/Likely7/Veyra-NRVideo)
+[![GitHub Trending Global #11](https://img.shields.io/badge/GitHub_Trending-Global_%2311-687B91?style=for-the-badge&logo=github&logoColor=white)](https://gitnova.dev/r/Likely7/Veyra-NRVideo)
+
+<br>
+<sub>GitHub Trending daily rankings · C++ #1 and Global #11, Nov 13–15, 2026 · <a href="https://gitnova.dev/r/Likely7/Veyra-NRVideo">Historical record</a></sub>
+
+<br>
+
 [![GitHub Stars](https://img.shields.io/github/stars/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Stars)](https://github.com/Likely7/Veyra-NRVideo/stargazers)
 [![GitHub Forks](https://img.shields.io/github/forks/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Forks)](https://github.com/Likely7/Veyra-NRVideo/network/members)
 [![Latest Release](https://img.shields.io/github/v/release/Likely7/Veyra-NRVideo?style=for-the-badge&logo=github&label=Release)](https://github.com/Likely7/Veyra-NRVideo/releases/latest)
