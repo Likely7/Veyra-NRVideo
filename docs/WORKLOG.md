@@ -1230,3 +1230,8 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 ## 2026-11-13 2.1.6正式发布已核实
 
 用户授权公开，发行7244307/产品f46df7f、EXEbf27ebed/PE2.1.6.0。NVIDIA/AMD公开完整包与应用/网络源码、SHA256SUMS已上传，源码Release先公开，应用v2.1.6随后设Latest；服务端大小/SHA、正文、标签、匿名HTTP200/ZIP前缀、摘要GET、两QR字节/各220及四固定源码链接核验。公开包无ANR资产：作者最新Beta禁止再分发；自写适配保留，当前本机完整ANR包/用户配置不改。两公开包重新解压最小PATH播放213/221帧、无ERROR，实际UI明确ANR不可用、回放/麦克风默认关、顶部开关/HDR折叠存在。旧2.1.5正文/标签/资产与源码SHA保持，29原树指纹保护。脚本/日志/失败边界/包SHA及清理详见RELEASE_2.1.6_EXECUTION_2026-11-13.md与reports/codex-release-2.1.6-20261113/FINAL.json；仅退役本轮验证副本，公开包/对应源码/build/证据保留。最后只追加本验收文档，不改tag/二进制；未群发、未关机。
+
+
+## 2026-11-15 GitHub主页与教程入口
+
+用户要求X/YouTube作者主页与英中教程，放README顶部及Release底部。账号从现有Preferences.cpp核对为x.com/likely2002、youtube.com/@Likely7Ai；教程按用户原地址，英文保留t=324s，中文BV1KvsE6bEPw。README英/中/兼容入口三份及RELEASE_SUPPORT模板复用CREATOR_AND_TUTORIAL_LINKS块；当前v2.1.6应用/源码两Release底部同步添加。远端main有独立star-history提交、本地main另有Claude未发布功能，故从nrvideo/main独立docs分支施工，仅推文档，不携带未发布引擎改动。站点抓取受YouTube节流/X403/B站限制，不把HTTP状态冒充账号正确；主账号以用户既有程序常量、教程以本轮明确链接为准。原Release正文/资产/tag和README已归档至E:/项目/Veyra/{archives,reports}/codex-creator-links-20261115，实际远端验证与资产未变结果见FINAL.json。无程序/运行库/标签/包替换，不群发、不关机。
