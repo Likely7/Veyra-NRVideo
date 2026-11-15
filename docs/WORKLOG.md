@@ -1265,3 +1265,11 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 ## 2026-11-15 日落首页字标、启动动画与启动音乐（Claude，未提交）
 
 用户要求日落主题下首页换成其"Veyra NR"字标（饱和度稍降），并加入场动画；随后参考其GTA6 Logo出场录屏、要求去塑料光效、拆字做视差、动效更炸，最后要求BGM随启动卡点播放一次、打开任意播放源自动暂停、角落可关声音。同一分支/工作树/build继续：make-wordmark-dusk.py生成色度×0.8字标、柔光与三层视差（尾巴边缘填色抠出、被挡处按纸片调和补画）；新DuskIntro.qml 3.26s卡BGM实测拍；新StartupMusic（Media Foundation媒体引擎纯音频）读程序目录media/startup-music.mp3，动画以音乐位置为时钟；首页右下角静音按钮与设置→外观"启动动画""启动音乐"。BGM来源/授权未知，不进Git/包，仅复制到测试stage。EXE9a27ebb7…；QML199/0/0、合同3、i18n2859、真实程序14场景（静音播放）通过，同步0–1ms。测试中BGM曾意外外放约7秒、测试窗被真实点击一次。记录见DUSK_PALETTE_2026-11-14.md末节与reports/claude-dusk-intro-20261115/FINAL.json；未合main/push/发布。
+## 2026-11-15 GitHub主页与教程入口
+
+用户要求X/YouTube作者主页与英中教程，放README顶部及Release底部。账号从现有Preferences.cpp核对为x.com/likely2002、youtube.com/@Likely7Ai；教程按用户原地址，英文保留t=324s，中文BV1KvsE6bEPw。README英/中/兼容入口三份及RELEASE_SUPPORT模板复用CREATOR_AND_TUTORIAL_LINKS块；当前v2.1.6应用/源码两Release底部同步添加。远端main有独立star-history提交、本地main另有Claude未发布功能，故从nrvideo/main独立docs分支施工，仅推文档，不携带未发布引擎改动。站点抓取受YouTube节流/X403/B站限制，不把HTTP状态冒充账号正确；主账号以用户既有程序常量、教程以本轮明确链接为准。原Release正文/资产/tag和README已归档至E:/项目/Veyra/{archives,reports}/codex-creator-links-20261115，实际远端验证与资产未变结果见FINAL.json。无程序/运行库/标签/包替换，不群发、不关机。
+
+
+## 2026-11-15 英文教程改为从头播放
+
+用户明确纠正英文教程应从零开始。移除英文YouTube链接t=324s与05:24标签，同步三份README顶部、作者/教程标准块、RELEASE_SUPPORT及当前v2.1.6应用/源码Release底部。执行：py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-creator-links-20261115/from-zero.py；git diff --check、远端README内容、两Release正文与原资产/标签/二维码保护检查，实际发布结果见reports/codex-creator-links-20261115/from-zero/FINAL.json。仅文档和Release正文，不携带本地main未发布改动。
