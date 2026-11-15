@@ -8,7 +8,7 @@
 
 <p align="center">
   <strong>视频教程 / Video tutorials</strong>：
-  <a href="https://www.youtube.com/watch?v=ZJ42jzNAbik&amp;t=324s">English · YouTube（05:24）</a>
+  <a href="https://www.youtube.com/watch?v=ZJ42jzNAbik">English · YouTube</a>
   &nbsp;|&nbsp;
   <a href="https://www.bilibili.com/video/BV1KvsE6bEPw/">中文 · 哔哩哔哩</a>
 </p>
