@@ -1159,6 +1159,13 @@ endif()
 # separate small library rather than into veyra_engine: the product build must
 # never depend on Qt being installed.
 if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
+  # The 日落 palette's startup music (StartupMusic.h): Media Foundation's media engine.
+  add_library(veyra_startup_music STATIC src/ui/StartupMusic.cpp include/veyra/ui/StartupMusic.h)
+  set_target_properties(veyra_startup_music PROPERTIES AUTOMOC ON)
+  target_compile_features(veyra_startup_music PUBLIC cxx_std_20)
+  target_compile_options(veyra_startup_music PRIVATE /utf-8)
+  target_include_directories(veyra_startup_music PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_startup_music PUBLIC veyra_base Qt6::Core PRIVATE ole32 oleaut32 mfplat mfuuid)
   add_library(veyra_update_checker STATIC src/ui/UpdateChecker.cpp include/veyra/ui/UpdateChecker.h)
   set_target_properties(veyra_update_checker PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_update_checker PUBLIC cxx_std_20)
@@ -1318,7 +1325,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Reserve only: pages are committed as they are touched.
   target_link_options(veyra_qml_ui PRIVATE /STACK:8388608)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
-  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine Qt6::CorePrivate dbghelp ole32)
+  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine veyra_startup_music Qt6::CorePrivate dbghelp ole32)
 
   add_executable(veyra_qml_data_tests tests/unit/QmlDataDirectoryTests.cpp src/ui/QmlDataDirectory.cpp)
   add_executable(veyra_game_passthrough_tests tests/integration/GamePassthroughTests.cpp)

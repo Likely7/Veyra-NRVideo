@@ -50,7 +50,7 @@ Rectangle {
     }
     implicitHeight: 92
     radius: 30
-    color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.86)
+    color: Theme.shade(22, 22, 26, 0.86)
     border.width: 1
     border.color: Qt.rgba(1, 1, 1, 0.1)
 
@@ -252,11 +252,21 @@ Rectangle {
                         radius: 9
                         color: Qt.rgba(1, 1, 1, 0.14)
                         Behavior on height { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
+                        // White; the sunset gradient along the rail in the dusk palette.
                         Rectangle {
                             width: parent.width * seekArea.frac
                             height: parent.height
                             radius: 9
                             color: "#FFFFFF"
+                            visible: !Theme.accentGradient
+                        }
+                        VAccentFill {
+                            width: parent.width * seekArea.frac
+                            height: parent.height
+                            radius: 9
+                            farEnd: true
+                            span: parent.width
+                            visible: Theme.accentGradient
                         }
                     }
                     // .seek .thumb: 11px dot, scale 0 -> 1 over .4s --spring on hover.

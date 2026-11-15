@@ -94,7 +94,7 @@ Item {
         implicitWidth: content.implicitWidth + 20
         height: 44
         radius: height / 2
-        color: "#000000"
+        color: Theme.shade(0, 0, 0)
         border.width: 1
         border.color: Qt.rgba(1, 1, 1, 0.1)
         // Over the picture on the cinema page: cut out of the video window.
@@ -131,12 +131,12 @@ Item {
                 Rectangle {
                     anchors.fill: parent
                     radius: height / 2
-                    color: logoHover.hovered ? "#1A1A1F" : Qt.rgba(0.102, 0.102, 0.122, 0)
+                    color: logoHover.hovered ? Theme.shade(26, 26, 31) : Theme.shade(26, 26, 31, 0)
                     Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                 }
                 Image {
                     anchors.centerIn: parent
-                    source: "logo.png"
+                    source: Theme.logoImage
                     sourceSize.width: 26
                     fillMode: Image.PreserveAspectFit
                 }
@@ -159,7 +159,7 @@ Item {
                     width: 32
                     height: 30
                     radius: 999
-                    color: "#26262D"
+                    color: Theme.shade(38, 38, 45)
                     x: {
                         let idx = 0
                         for (let i = 0; i < dockRoot.items.length; ++i)
@@ -310,7 +310,7 @@ Item {
                     Rectangle {
                         anchors.fill: parent
                         radius: height / 2
-                        color: whover.hovered ? (wbtn.modelData.id === "close" ? Qt.rgba(1, 0.365, 0.365, 0.22) : "#1A1A1F") : "transparent"
+                        color: whover.hovered ? (wbtn.modelData.id === "close" ? Qt.rgba(1, 0.365, 0.365, 0.22) : Theme.shade(26, 26, 31)) : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                     }
                     VIcon {

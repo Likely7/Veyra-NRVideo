@@ -4300,6 +4300,13 @@
    "ja": "同じキャプチャーカードを使っている他のソフトを閉じてください"
   },
   {
+   "zh": "关闭启动音乐",
+   "src": "qml/Main.qml",
+   "zh-TW": "關閉啟動音樂",
+   "en": "Turn the startup music off",
+   "ja": "起動時の音楽をオフ"
+  },
+  {
    "zh": "关闭弹性与转场",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "關閉彈性與轉場",
@@ -5091,6 +5098,13 @@
    "ja": "単一ノードか、個数が上限に達しているためコピーできません"
   },
   {
+   "zh": "单击或按任意键跳过",
+   "src": "qml/Main.qml",
+   "zh-TW": "按一下或按任意鍵略過",
+   "en": "Click or press any key to skip",
+   "ja": "クリックまたは任意のキーでスキップ"
+  },
+  {
    "zh": "单击曲线加点并拖动 · 右键删点 · 最多 8 点",
    "src": "qml/ColourCurve.qml",
    "zh-TW": "單擊曲線加點並拖曳 · 右鍵刪點 · 最多 8 點",
@@ -5805,6 +5819,13 @@
    "ja": "起動とウィンドウ"
   },
   {
+   "zh": "启动动画",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動動畫",
+   "en": "Startup animation",
+   "ja": "起動アニメーション"
+  },
+  {
    "zh": "启动后自动继续上次内容",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "啟動後自動繼續上次內容",
@@ -5838,6 +5859,13 @@
    "zh-TW": "啟動視窗大小",
    "en": "Window size at startup",
    "ja": "起動時のウィンドウサイズ"
+  },
+  {
+   "zh": "启动音乐",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動音樂",
+   "en": "Startup music",
+   "ja": "起動時の音楽"
   },
   {
    "zh": "启动默认",
@@ -9473,6 +9501,13 @@
    "ja": "Windows の録音設定を開く"
   },
   {
+   "zh": "打开启动音乐",
+   "src": "qml/Main.qml",
+   "zh-TW": "開啟啟動音樂",
+   "en": "Turn the startup music on",
+   "ja": "起動時の音楽をオン"
+  },
+  {
    "zh": "打开字幕编码器",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "開啟字幕編碼器",
@@ -10916,6 +10951,41 @@
    "ja": "日本語"
   },
   {
+   "zh": "日落",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "日落",
+   "en": "Dusk",
+   "ja": "日没"
+  },
+  {
+   "zh": "日落天空的渐变强度，带抖动防色带",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "日落天空的漸層強度，帶抖動以防色帶",
+   "en": "Strength of the sunset sky gradient, dithered against banding",
+   "ja": "夕焼け空のグラデーションの強さ（バンディング防止のディザ付き）"
+  },
+  {
+   "zh": "日落渐变",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "日落漸層",
+   "en": "Sunset gradient",
+   "ja": "夕焼けグラデーション"
+  },
+  {
+   "zh": "日落配色下打开软件时播放，单击或按任意键可跳过",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "日落配色下開啟軟體時播放，按一下或按任意鍵可略過",
+   "en": "Plays when Veyra starts in the Dusk color scheme; click or press any key to skip",
+   "ja": "日没の配色で起動したときに再生します。クリックまたは任意のキーでスキップできます"
+  },
+  {
+   "zh": "日落：深靛紫底、日落渐变强调色；经典：原来的黑灰配色",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "日落：深靛紫底、日落漸層強調色；經典：原來的黑灰配色",
+   "en": "Dusk: deep indigo-violet with a sunset gradient accent; Classic: the original black and grey",
+   "ja": "日没：深い藍紫のベースと夕焼けグラデーションのアクセント。クラシック：従来の黒とグレー"
+  },
+  {
    "zh": "旧版格式列表",
    "src": "qml/CaptureLegacyPicker.qml",
    "zh-TW": "舊版格式清單",
@@ -11579,6 +11649,13 @@
    "zh-TW": "未找到擷取裝置。連接後點擊刷新。",
    "en": "No capture device found. Connect one and click Refresh.",
    "ja": "キャプチャーデバイスが見つかりません。接続してから「更新」を押してください。"
+  },
+  {
+   "zh": "未找到音乐文件：程序目录下的 media/startup-music.mp3",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "找不到音樂檔：程式目錄下的 media/startup-music.mp3",
+   "en": "Music file not found: media/startup-music.mp3 in the program folder",
+   "ja": "音楽ファイルが見つかりません：プログラムフォルダーの media/startup-music.mp3"
   },
   {
    "zh": "未指定",
@@ -13611,6 +13688,13 @@
    "ja": "表示言語"
   },
   {
+   "zh": "界面配色",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "介面配色",
+   "en": "Color scheme",
+   "ja": "配色"
+  },
+  {
    "zh": "界面随时可调，不影响播放和增强设置。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "介面隨時可調，不影響播放和增強設定。",
@@ -14386,6 +14470,13 @@
    "zh-TW": "細節保護",
    "en": "Detail protection",
    "ja": "ディテール保護"
+  },
+  {
+   "zh": "经典",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "經典",
+   "en": "Classic",
+   "ja": "クラシック"
   },
   {
    "zh": "继续上次",
@@ -18341,6 +18432,13 @@
    "zh-TW": "降低的是基礎超分後的畫面，不是原始輸入；選項必須小於基礎結果和第二次超分目標。",
    "en": "This reduces the base SR result, not the original input. Select a size below both the base result and the second SR target.",
    "ja": "基本超解像の結果を縮小します。元の入力ではありません。基本結果と2回目の目標の両方より小さいサイズを選択してください。"
+  },
+  {
+   "zh": "随启动动画播放一次，打开任意播放源后自动暂停",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "隨啟動動畫播放一次，開啟任何播放來源後自動暫停",
+   "en": "Plays once with the startup animation and pauses when any source opens",
+   "ja": "起動アニメーションと一緒に一度だけ再生し、ソースを開くと自動で一時停止します"
   },
   {
    "zh": "隐藏播放条",

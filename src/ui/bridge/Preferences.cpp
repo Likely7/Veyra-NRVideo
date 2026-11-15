@@ -203,7 +203,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"replaySeconds", {15, 600}}};
     static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
                                    "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "holdCompare",
-                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect"};
+                                   "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
+                                   // 设置 → 外观 → 启动动画 (the dusk palette's intro, DuskIntro.qml); unset = on.
+                                   "introAnimation",
+                                   // 设置 → 外观 → 启动音乐 and the music button (Main.qml); unset = on.
+                                   "introMusic"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -235,6 +239,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // Arrow-key step of a focused slider (设置 → 通用): 1, 0.1 or 0.01.
         bool ok = false; const double v = value.toDouble(&ok);
         if (!ok || !(qFuzzyCompare(v, 1.0) || qFuzzyCompare(v, 0.1) || qFuzzyCompare(v, 0.01))) return false;
+        stored = v;
+    } else if (key == QLatin1String("palette")) {
+        // 设置 → 外观 → 界面配色 (Theme.qml): 日落 or the original 经典 palette.
+        const QString v = value.toString();
+        if (v != QLatin1String("dusk") && v != QLatin1String("classic")) return false;
         stored = v;
     } else if (key == QLatin1String("accent")) {
         const QString v = value.toString();

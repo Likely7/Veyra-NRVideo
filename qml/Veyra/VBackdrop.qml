@@ -26,7 +26,7 @@ Item {
             Image {
                 anchors.fill: parent
                 visible: Theme.backdropLevel !== 0
-                source: Theme.backdropLevel === 2 ? "backdrop-strong.png" : "backdrop.png"
+                source: Theme.backdropImage
                 smooth: true
             }
             Rectangle {
@@ -50,12 +50,13 @@ Item {
             // 设置 → 背景渐变强度: 0 = flat base colour, 1 = the design's gradient,
             // 2 = backdrop-strong.png: the same generator (tools/qt_probe/make-backdrop.py,
             // same seed and grain) with the stops' distance from the edge colour x1.8.
+            // The dusk palette uses backdrop-dusk(-strong).png (make-backdrop-dusk.py).
             Image {
                 id: fill
                 visible: false
                 width: backdrop.width
                 height: backdrop.height
-                source: Theme.backdropLevel === 2 ? "backdrop-strong.png" : "backdrop.png"
+                source: Theme.backdropImage
                 smooth: true
             }
 

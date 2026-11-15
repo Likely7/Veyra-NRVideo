@@ -1254,3 +1254,14 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 585项构建305.9s、翻译2876/0/0；生产CaptureAudioSession零增益220块：实际输出210240样本全零，取声峰值0.25，双消费者52800/105600帧且时间戳单调。缓冲37/0、UI合同、Quick退出0（未输出项数不伪报）、四语实际开关/保存/重启及三组6个录制/回放MP4独立解码/频谱通过。测试stage先漏QtTest DLL、再漏qml-tests，失败回执保留，补齐后Quick47.17s退出0。真实Elgato/其他GPU/无输出端点未验，合成麦克风不冒充实物。执行命令、详细边界见docs/CAPTURE_RECORD_AUDIO_2026-11-15.md，所有输出E:/项目/Veyra下codex-capture-record-audio-20261115任务；最终包/源码/SHA见reports同任务FINAL。未合main/push/Release/关机。
 
 交付收尾：产品dfa2328/EXEbe83186d，完整NVIDIA ZIP725809972字节/SHA69977c0e…，精确源码ZIP/SHA256SUMS与独立手动入口齐全。1664包文件逐SHA、97原DLL、88着色器与最小PATH新配置冷启动176真实帧/0错误通过。封包首轮保护拦截PR104/108新增QML，按精确源码差异补全NvidiaVrrProfileRow/qmldir后通过，拒绝记录保留；不是忽略保护继续打包。打包与冷启动命令/失败/结果见reports同任务package.py、cold.py、PACKAGE/COLD/FINAL.json及执行文档末节。最终保留当前app/build/完整包/对应源码/必要证据，不改真实配置/主线/已发布包，不关机。
+## 2026-11-14 日落配色与经典切换（Claude，未提交）
+
+分支 claude/dusk-palette-20261114（main 20955b5）。按用户参考 GTA6 封面的要求，新增日落配色（默认）：靛紫底、日落渐变强调色、暮色背景图；设置 → 外观 → 界面配色可切回经典，经典取值与原型完全一致。Theme 令牌、VAccentFill 渐变填充、shade() 着色、make-backdrop-dusk.py 背景图、palette 偏好与 6 条词库。QML 199/0/0、界面合同 3/3、翻译 0 缺失；两套配色真实程序截图（软件与 GPU 绘制）及手动入口冒烟通过。详见 docs/DUSK_PALETTE_2026-11-14.md 与 reports/claude-dusk-palette-20261114。
+
+同日追加：日落配色下 Logo 换成用户提供的霓虹渐变像素手柄（原图存 assets/veyra-logo-dusk.webp，make-logo-dusk.py 生成同画布的 logo-dusk.png），首页/顶部栏/关于三处同位置替换，首页呼吸光改淡粉；经典仍为原白色 Logo；程序文件/任务栏图标未改。QML 199/0/0，两套配色截图核对。
+
+同日追加：用户觉得日落配色饱和度偏高，色相明度不变下调约1/4（底色/卡片/背景图×0.72按亮度保持，强调色与渐变HLS×0.8，shade偏移与首页呼吸光同步）；QML 199/0/0，前后对比图见reports同任务dusk-saturation-before-after.png。
+
+## 2026-11-15 日落首页字标、启动动画与启动音乐（Claude，未提交）
+
+用户要求日落主题下首页换成其"Veyra NR"字标（饱和度稍降），并加入场动画；随后参考其GTA6 Logo出场录屏、要求去塑料光效、拆字做视差、动效更炸，最后要求BGM随启动卡点播放一次、打开任意播放源自动暂停、角落可关声音。同一分支/工作树/build继续：make-wordmark-dusk.py生成色度×0.8字标、柔光与三层视差（尾巴边缘填色抠出、被挡处按纸片调和补画）；新DuskIntro.qml 3.26s卡BGM实测拍；新StartupMusic（Media Foundation媒体引擎纯音频）读程序目录media/startup-music.mp3，动画以音乐位置为时钟；首页右下角静音按钮与设置→外观"启动动画""启动音乐"。BGM来源/授权未知，不进Git/包，仅复制到测试stage。EXE9a27ebb7…；QML199/0/0、合同3、i18n2859、真实程序14场景（静音播放）通过，同步0–1ms。测试中BGM曾意外外放约7秒、测试窗被真实点击一次。记录见DUSK_PALETTE_2026-11-14.md末节与reports/claude-dusk-intro-20261115/FINAL.json；未合main/push/发布。
