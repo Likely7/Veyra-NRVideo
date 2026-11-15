@@ -13,6 +13,7 @@
 #include <vector>
 #include "veyra/engine/FrameRateWindow.h"
 #include "veyra/engine/FrameFlowWindow.h"
+#include "veyra/engine/ProviderSubmissionCounter.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/PresentationSettings.h"
 #include <cmath>
@@ -116,6 +117,40 @@ int main(){
     check(std::abs(rate.rate(30000000)-30)<.01,"30 real completions are not multiplied by FG");
     rate.reset(0);for(int i=1;i<=1000;++i)rate.complete(i*10000);
     check(rate.rate(10000000)==1000,"completion rate has no 60 or 120fps cap");
+    {
+        using veyra::engine::ProviderSubmissionCounter;
+        ProviderSubmissionCounter counter;
+        auto d=counter.observe(7,52,39);
+        check(d.presented==52&&d.generated==39&&!d.restarted,"first provider report counts its real completions");
+        d=counter.observe(8,1,0);
+        check(d.presented==1&&d.generated==0&&d.restarted,"resize with unchanged settings never subtracts old XeSS totals");
+        d=counter.observe(8,4,3);
+        check(d.presented==3&&d.generated==3&&!d.restarted,"new provider session advances from its own baseline");
+        d=counter.observe(8,0,0);
+        check(d.presented==0&&d.generated==0&&d.restarted,"provider-local resize rollback is safe without a presenter generation change");
+        counter.reset(8,100,75);d=counter.observe(8,104,75);
+        check(d.presented==4&&d.generated==0,"settings revision baseline excludes previously reported provider totals");
+        d=counter.observe(8,104,78);
+        check(d.presented==0&&d.generated==3,"asynchronous generated-only report is consumed independently");
+        d=counter.observe(9,200,150);
+        check(d.presented==200&&d.generated==150&&d.restarted,"session generation catches a restart even when new totals exceed old totals");
+        d=counter.observe(10,0,0);d=counter.observe(10,4,3);
+        check(d.presented==4&&d.generated==3,"backend off and on starts a fresh bounded delta");
+        veyra::engine::CountedFrameRateWindow counted;counted.reset(0);
+        for(int i=1;i<=60;++i)counted.complete(i*166666,4);
+        check(std::abs(counted.rate(10000000)-240)<.01,"weighted provider rate preserves actual 4X reports");
+        check(counted.rate(15000000)==120&&counted.rate(20000000)==0,"weighted reports expire without fabricating output");
+        constexpr uint64_t fieldRemaining=0xffffffff7f04d88bULL; // saved R15 in the 21:05:46 dump
+        counted.reset(0);counted.complete(10000000,fieldRemaining);
+        check(std::isfinite(counted.rate(10000000))&&counted.rate(20000000)==0,"near-UINT64_MAX SDK report does bounded work and expires");
+        veyra::engine::FrameCompletionRates rates(0);
+        const auto begin=std::chrono::steady_clock::now();
+        rates.xess(fieldRemaining,10000000);
+        veyra::diagnostics::FrameFlowMetrics metrics;rates.snapshot(metrics,10000000);
+        check(std::chrono::steady_clock::now()-begin<std::chrono::milliseconds(500)&&std::isfinite(metrics.xessSdkSubmitFps),"actual FrameCompletionRates consumes the field underflow value without a CPU loop");
+        rates.snapshot(metrics,20000000);
+        check(metrics.xessSdkSubmitFps==0,"provider report cannot pin measured FPS after the source stops");
+    }
     using veyra::source::captureDuration;using veyra::engine::liveSourceInterval100ns;
     using veyra::source::captureDiscontinuity;
     {

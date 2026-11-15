@@ -14,6 +14,7 @@
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/engine/TimingWindow.h"
 #include "veyra/engine/FrameFlowWindow.h"
+#include "veyra/engine/ProviderSubmissionCounter.h"
 #include "veyra/engine/AutoNrController.h"
 #include "veyra/engine/AutoNrReuseController.h"
 #include "veyra/engine/LiveFgAdmission.h"
@@ -1118,7 +1119,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // so per-call deltas systematically miss updates that land just
             // after a submission; feeding the cumulative difference at the
             // next submission cannot lose them. Reset with the presenter.
-            uint64_t fedXessPresented=0,fedXessGenerated=0;
+            ProviderSubmissionCounter xessSubmissions;
             double playbackSpeedLastPts=0;Clock::time_point playbackSpeedLastWall{};
             CaptureHalfRate captureSampler;
             CapturePreviewClock capturePreviewClock;
@@ -2684,7 +2685,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // Admission predictions and the XeSS gate must not carry
                     // samples across a settings revision (new backend/dimensions);
                     // soft preview-skip history breaks do NOT reopen them.
-                    if(settingsChanged){fedXessPresented=fedXessGenerated=0;}
+                    if(settingsChanged)xessSubmissions.reset(presenter.generation(),presenter.xessPresentedCount(),presenter.xessGeneratedCount());
                     playbackSpeedLastWall={};
                     if(liveScheduler){liveStats={};liveSubmissions.clear();liveAges.clear();liveWaits.clear();livePresent.clear();livePresentGpu.clear();liveReady.clear();}
                     if(settingsChanged||!completionRates)completionRates=std::make_shared<FrameCompletionRates>(host100ns());
@@ -2796,7 +2797,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // loop, so all of these are declared above it. Adding a reference to a
                     // local declared after that guard is now a compile error instead of a
                     // silent dangling reference.
-                    if(!liveScheduler->push([this,&anchor,&anchorMs,&captureSource,&fedXessGenerated,&fedXessPresented,&lastFilePresentLateness,&lastFilePresentedMs,&liveSubmissions,&presentationCompletedReal,
+                    if(!liveScheduler->push([this,&anchor,&anchorMs,&captureSource,&xessSubmissions,&lastFilePresentLateness,&lastFilePresentedMs,&liveSubmissions,&presentationCompletedReal,
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                         &remote,
 #endif
@@ -2939,8 +2940,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             // lands just after the call and would then never be counted.
                             {
                                 const auto xessPresentedTotal=presenter.xessPresentedCount(),xessGeneratedTotal=presenter.xessGeneratedCount();
-                                const uint64_t xessPresented=xessPresentedTotal-fedXessPresented,xessGenerated=xessGeneratedTotal-fedXessGenerated;
-                                if(xessPresented){flow->xessSubmitted(xessPresented,xessGenerated,host100ns());fedXessPresented=xessPresentedTotal;fedXessGenerated=xessGeneratedTotal;}
+                                const auto delta=xessSubmissions.observe(presenter.generation(),xessPresentedTotal,xessGeneratedTotal);
+                                if(delta.restarted)veyra::log::info("provider-count-reset",std::format("generation={} presentedTotal={} generatedTotal={} new session baseline=0",presenter.generation(),xessPresentedTotal,xessGeneratedTotal));
+                                if(delta.presented||delta.generated)flow->xessSubmitted(delta.presented,delta.generated,host100ns());
 
                             }
                             if(didPresent&&!isCapture){
