@@ -868,7 +868,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 // A live backend/multiplier switch must not turn a working FG
                 // session into effects-off playback when the new provider fails.
-                if(preserveWorkingFg&&failure==FailedBackend::Fg)return false;
+                // FSR 4 ML that the provider does not offer switches to FSR 3.1
+                // below rather than rolling the request back.
+                if(preserveWorkingFg&&failure==FailedBackend::Fg&&selected.settings.frameGenerationBackend!=FrameGenerationBackend::Fsr4)return false;
                 if(preserveWorkingNr&&failure==FailedBackend::Nr)return false;
                 auto reduced=selected.snapshot();
                 // Requested multiplier above this GPU's capability: clamp to what
@@ -905,7 +907,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
-                        backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已关闭补帧；原因见日志";
+                    {
+                        backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志";
+                        veyra::log::warn("fsr-fg","FSR 4 ML unavailable on this adapter/driver; switching to FSR 3.1 at 2X");
+                    }
                     else if((ngxResult&0xFFF00000u)==0xBAD00000u)
                         backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L"："+ngxFailureHint(ngxResult)+std::format(L"（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",ngxResult,ctx.adapter().driverVersion);
                     else if(!clampedOverCapability)
@@ -2632,7 +2637,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             describeStages(stageRequest(options),options.snapshot(),gd);
                             if(!initializePreview(gd,options)){if(!stop_)status(L"增强故障后的基础图重建失败",true);break;}
                             publishFrameGenerationCapabilities();
-                            backendRecoveryWarning=std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志"+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
+                            const bool mlToFsr3=failedComponent==FailedBackend::Fg&&attempted.frameGenerationBackend==FrameGenerationBackend::Fsr4&&
+                                options.settings.frameGenerationBackend==FrameGenerationBackend::Fsr;
+                            backendRecoveryWarning=(mlToFsr3?std::wstring(L"FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志"):
+                                std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志")+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
                             {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.rejectedRevision=attempted.revision;snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
                             veyra::log::warn("backend-recovery",std::format("runtime component={} disabled; rebuilt revision={} nr={} sr={} multiplier={}; retry next source frame",unsigned(failedComponent),options.settings.revision,options.nr,options.sr,options.snapshot().multiplier));
                             finishReset(diagnostics::ResetOutcome::Failed);reset=true;pendingResetCause=pipeline::ResetReason::Settings;

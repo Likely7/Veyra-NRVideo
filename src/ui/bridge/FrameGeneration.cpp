@@ -20,7 +20,7 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         QVariantMap{{"id","dlss"},{"label",tr("DLSS 帧生成")}},
         QVariantMap{{"id","xess"},{"label",tr("Intel XeSS · 实验")}},
         QVariantMap{{"id","fsr3"},{"label",tr("FSR 3.1 · 2X")}},
-        QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000 · 实验")}},
+        QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000")}},
         QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50")},{"gold",true}}
     };
     const auto caps = effectCapabilities();
@@ -44,7 +44,7 @@ QString QmlPlayerBridge::fgProviderText() const {
     }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
         return tr("实际运行：FSR %1 · 2X").arg(QString::fromStdString(s.fsrProviderVersion));
-    if(fgBackendName()==QLatin1String("fsr4"))return tr("FSR 4 ML 需要支持的 RX 9000 和驱动；实卡待验");
+    if(fgBackendName()==QLatin1String("fsr4"))return tr("FSR 4 ML 需要支持的 RX 9000 和驱动，不可用时自动改用 FSR 3.1；尚未在 RX 9000 实卡上验证");
     if(fgBackendName()==QLatin1String("fsr3"))return tr("FSR 3.1 跨厂商补帧 · 最高 2X");
     if(fgBackendName()==QLatin1String("xess"))
         return fgMaxMultiplier()<4?tr("当前 XeSS 模块未匹配 3X / 4X 解锁版本；2X 可用，请在组件页核对版本"):

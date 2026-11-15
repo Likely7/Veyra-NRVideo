@@ -65,7 +65,14 @@ inline bool disableFailedBackend(EnhancementSettings& settings,FailedBackend bac
     case FailedBackend::VideoHdr:settings.videoHdr.enabled=false;break;
     case FailedBackend::Nr:settings.nr=false;break;
     case FailedBackend::Sr:settings.sr=false;break;
-    case FailedBackend::Fg:settings.multiplier=1;break;
+    // FSR 4 ML needs an RX 9000 whose driver provider offers the ML version.
+    // Without it FSR 3.1 (any DirectX 12 GPU) keeps 2X frame generation running
+    // instead of turning it off; the caller says so. A failing FSR 3.1 then
+    // turns frame generation off as before.
+    case FailedBackend::Fg:
+        if(settings.frameGenerationBackend==FrameGenerationBackend::Fsr4)settings.frameGenerationBackend=FrameGenerationBackend::Fsr;
+        else settings.multiplier=1;
+        break;
     case FailedBackend::NgxCore:
         disableDlaa();
         settings.videoHdr.enabled=false;

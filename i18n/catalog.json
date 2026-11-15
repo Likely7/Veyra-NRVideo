@@ -1135,18 +1135,18 @@
    "ja": "FSR 3.1 ベンダー共通フレーム生成 · 最大 2X"
   },
   {
-   "zh": "FSR 4 ML · RX 9000 · 实验",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "FSR 4 ML · RX 9000 · 實驗",
-   "en": "FSR 4 ML · RX 9000 · experimental",
-   "ja": "FSR 4 ML · RX 9000 · 実験的"
+   "zh": "FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "FSR 4 ML 提供方不可用（需要支援的 RX 9000 和驅動），已改用 FSR 3.1；原因見日誌",
+   "en": "FSR 4 ML provider unavailable (needs a supported RX 9000 and driver); switched to FSR 3.1. See the log",
+   "ja": "FSR 4 ML が使用できません（対応する RX 9000 とドライバーが必要）。FSR 3.1 に切り替えました。理由はログを参照してください"
   },
   {
-   "zh": "FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已关闭补帧；原因见日志",
+   "zh": "FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志",
    "src": "src/engine/EngineController.cpp",
-   "zh-TW": "FSR 4 ML 提供方不可用（需要支援的 RX 9000 和驅動），已關閉補幀；原因見日誌",
-   "en": "FSR 4 ML provider unavailable (needs a supported RX 9000 and driver); frame generation turned off. See the log",
-   "ja": "FSR 4 ML が使用できません（対応する RX 9000 とドライバーが必要）。フレーム生成をオフにしました。理由はログを参照してください"
+   "zh-TW": "FSR 4 ML 執行失敗，已改用 FSR 3.1；錯誤碼見日誌",
+   "en": "FSR 4 ML failed while running; switched to FSR 3.1. Error codes are in the log",
+   "ja": "FSR 4 ML の実行に失敗したため、FSR 3.1 に切り替えました。エラーコードはログを参照してください"
   },
   {
    "zh": "FSR 4 ML 未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数",
@@ -1163,11 +1163,11 @@
    "ja": "FSR 4 ML のフレーム生成は AMD RX 9000 のみ対応です。この GPU では使えないため、現在のフレーム生成方式のままにしました"
   },
   {
-   "zh": "FSR 4 ML 需要支持的 RX 9000 和驱动；实卡待验",
+   "zh": "FSR 4 ML 需要支持的 RX 9000 和驱动，不可用时自动改用 FSR 3.1；尚未在 RX 9000 实卡上验证",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "FSR 4 ML 需要支援的 RX 9000 和驅動；實卡待驗",
-   "en": "FSR 4 ML needs a supported RX 9000 and driver; not yet tested on real cards",
-   "ja": "FSR 4 ML には対応する RX 9000 とドライバーが必要です。実機での検証は未完了です"
+   "zh-TW": "FSR 4 ML 需要支援的 RX 9000 和驅動，無法使用時自動改用 FSR 3.1；尚未在 RX 9000 實卡上驗證",
+   "en": "FSR 4 ML needs a supported RX 9000 and driver and switches to FSR 3.1 when unavailable; not yet verified on an actual RX 9000",
+   "ja": "FSR 4 ML には対応する RX 9000 とドライバーが必要で、使用できないときは FSR 3.1 に自動で切り替えます。RX 9000 の実機ではまだ検証していません"
   },
   {
    "zh": "FXAA：最快，整体略柔",

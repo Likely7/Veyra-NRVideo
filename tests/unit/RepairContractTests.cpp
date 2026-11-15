@@ -640,6 +640,9 @@ int main(){
         check(engine::defaultFrameGenerationBackend(0x1002)==F::Fsr,"AMD fresh session prefers FSR");
         check(engine::defaultFrameGenerationBackend(0x8086)==F::Fsr,"Intel fresh session prefers FSR");
         check(engine::defaultFrameGenerationBackend(0x10DE)==F::Dlss,"NVIDIA fresh session retains DLSS default");
+        check(engine::defaultFrameGenerationBackend(0x1002,true)==F::Fsr4,"AMD RX 9000 fresh session prefers FSR 4 ML");
+        check(engine::defaultFrameGenerationBackend(0x10DE,true)==F::Dlss&&engine::defaultFrameGenerationBackend(0x8086,true)==F::Fsr,
+            "the RX 9000 flag only applies to AMD adapters");
         const engine::FrameGenerationAvailability crossVendor{false,true,true,false,false};
         check(engine::restoredFrameGenerationBackend(F::Dlss,crossVendor)==F::Fsr,"unavailable saved DLSS moves to FSR ahead of XeSS");
         check(engine::restoredFrameGenerationBackend(F::Vfg,crossVendor)==F::Fsr,"unavailable NVIDIA VFG moves to cross-vendor FSR");
@@ -654,6 +657,17 @@ int main(){
         check(engine::restoredFrameGenerationBackend(F::Vfg,nvidia)==F::Vfg,"available manual VFG is never replaced");
         const engine::FrameGenerationAvailability ml{false,true,true,true,false};
         check(engine::restoredFrameGenerationBackend(F::Fsr4,ml)==F::Fsr4,"supported manually selected FSR4 remains FSR4");
+        check(engine::restoredFrameGenerationBackend(F::Dlss,ml)==F::Fsr4,"unavailable saved DLSS on RX 9000 moves to FSR 4 ML");
+        check(engine::restoredFrameGenerationBackend(F::Fsr,ml)==F::Fsr,"usable manual FSR 3.1 choice on RX 9000 is retained");
+        check(engine::restoredFrameGenerationBackend(F::Fsr4,crossVendor)==F::Fsr,"FSR 4 ML outside RX 9000 moves to FSR 3.1");
+        {
+            engine::EnhancementSettings ml4;ml4.frameGenerationBackend=F::Fsr4;ml4.multiplier=2;ml4.nr=true;
+            check(engine::disableFailedBackend(ml4,engine::FailedBackend::Fg)&&ml4.frameGenerationBackend==F::Fsr&&ml4.multiplier==2&&ml4.nr,
+                "FSR 4 ML failure switches to FSR 3.1 at 2X and keeps NR");
+            check(engine::disableFailedBackend(ml4,engine::FailedBackend::Fg)&&ml4.frameGenerationBackend==F::Fsr&&ml4.multiplier==1,
+                "a failing FSR 3.1 then turns frame generation off");
+            check(!engine::disableFailedBackend(ml4,engine::FailedBackend::Fg),"no further FG recovery after frame generation is off");
+        }
     }
     std::cout<<checks<<" checks "<<failures<<" failures\n";return failures?1:0;
 }

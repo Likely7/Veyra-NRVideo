@@ -716,7 +716,9 @@ struct QmlPlayerBridge::Impl {
                     initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
                     initial.videoSrQuality=engine::kVideoSrFsr;
                 }
-                initial.frameGenerationBackend=engine::defaultFrameGenerationBackend(desc.VendorId);
+                // RX 9000 starts on FSR 4 ML (the same name rule as its menu gate, effectGpu()).
+                initial.frameGenerationBackend=engine::defaultFrameGenerationBackend(desc.VendorId,
+                    QString::fromWCharArray(desc.Description).contains(QStringLiteral("RX 90"),Qt::CaseInsensitive));
                 facade.setPending(initial);
                 veyra::log::info("nr-default",std::format("adapter={} selected={}",utf8Of(std::wstring(desc.Description)).toStdString(),engine::nrRuntimeName(initial.nrRuntime)));
                 break;
