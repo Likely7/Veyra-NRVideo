@@ -59,8 +59,50 @@ bool content(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,source::Scr
     out={};ring.drainQueue();graph.shutdown();return ok;
 }
 }
+int xessResize(HWND target,unsigned multiplier,bool resizeTarget,unsigned seconds=45){
+    using Clock=std::chrono::steady_clock;
+    HWND host=CreateWindowW(L"STATIC",L"Veyra XeSS capture regression",WS_OVERLAPPEDWINDOW|WS_VISIBLE,900,40,640,400,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    SetWindowDisplayAffinity(host,WDA_EXCLUDEFROMCAPTURE);
+    engine::EngineController controller;engine::PlayerOptions settings;
+    settings.nr=settings.sr=false;settings.fg=true;settings.fgMultiplier=multiplier;settings.settings.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
+    source::ScreenCaptureOptions options;options.target=uint64_t(target);options.fps=60;options.cursor=false;
+    controller.open(host,options.uri(),settings);
+    const auto end=Clock::now()+std::chrono::seconds(resizeTarget?100:seconds);
+    auto lastProgress=Clock::now(),lastReport=Clock::now();uint64_t lastFrames=0;unsigned dimensions=0,lastW=0,lastH=0,phase=0;bool ok=true;
+    const SIZE sizes[]={{800,451},{1280,720},{800,450},{1280,721},{960,540},{800,451}};
+    auto nextResize=Clock::now()+std::chrono::seconds(3);
+    while(Clock::now()<end){
+        pump();Sleep(10);const auto s=controller.snapshot();
+        if(s.failed){std::wcout<<L"XESS failure "<<s.status<<std::endl;ok=false;break;}
+        if(s.frames>lastFrames){lastFrames=s.frames;lastProgress=Clock::now();}
+        if(s.sourceWidth&&s.sourceHeight&&(s.sourceWidth!=lastW||s.sourceHeight!=lastH)){
+            lastW=s.sourceWidth;lastH=s.sourceHeight;++dimensions;
+            std::cout<<"XESS_DIMENSIONS "<<lastW<<'x'<<lastH<<" frames="<<s.frames<<std::endl;
+        }
+        if(Clock::now()-lastReport>std::chrono::seconds(1)){
+            lastReport=Clock::now();const auto& f=s.metrics.flow;
+            std::cout<<"XESS_PROGRESS multiplier="<<multiplier<<" frames="<<s.frames<<" presented="<<f.counters.xessSdkPresented<<" providerFps="<<f.xessSdkSubmitFps<<std::endl;
+            if(!std::isfinite(f.xessSdkSubmitFps)||f.xessSdkSubmitFps>100000||f.counters.xessSdkPresented>1000000){ok=false;break;}
+        }
+        if(Clock::now()-lastProgress>std::chrono::seconds(12)){ok=false;break;}
+        if(resizeTarget&&Clock::now()>=nextResize&&s.frames>20){
+            if(phase==std::size(sizes)){if(Clock::now()-lastProgress<std::chrono::seconds(1))break;}
+            else{
+                RECT r{0,0,sizes[phase].cx,sizes[phase].cy};AdjustWindowRectEx(&r,DWORD(GetWindowLongPtrW(target,GWL_STYLE)),FALSE,DWORD(GetWindowLongPtrW(target,GWL_EXSTYLE)));
+                SetWindowPos(target,nullptr,40,40,r.right-r.left,r.bottom-r.top,SWP_NOZORDER|SWP_NOACTIVATE);
+                ++phase;nextResize=Clock::now()+std::chrono::seconds(3);
+            }
+        }
+    }
+    const auto s=controller.snapshot();ok=ok&&s.running&&!s.failed&&s.frames>100&&dimensions>=(resizeTarget?6u:2u)&&s.metrics.flow.counters.xessSdkPresented>0;
+    check(ok,resizeTarget?"XeSS real WGC repeated resize continues provider and frame progress":"browser video fullscreen keeps XeSS capture progressing");
+    controller.stop();const auto drain=Clock::now()+std::chrono::seconds(10);while(!controller.idle()&&Clock::now()<drain){pump();Sleep(10);}
+    check(controller.idle(),"XeSS resize engine drains after stop");DestroyWindow(host);return ok&&controller.idle()?0:1;
+}
 int wmain(int argc,wchar_t** argv){
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    if(argc>3&&std::wstring(argv[1])==L"--xess-window")
+        return xessResize(reinterpret_cast<HWND>(_wcstoui64(argv[2],nullptr,0)),unsigned(_wtoi(argv[3])),false,argc>4?unsigned(_wtoi(argv[4])):45);
     if(argc>1&&std::wstring(argv[1])==L"--target"){
         WNDCLASSW wc{};wc.lpfnWndProc=pattern;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraScreenTestPattern";RegisterClassW(&wc);
         auto window=CreateWindowW(wc.lpszClassName,L"Veyra capture test pattern",WS_OVERLAPPEDWINDOW|WS_VISIBLE,40,40,660,420,nullptr,nullptr,wc.hInstance,nullptr);SetTimer(window,1,16,nullptr);
@@ -70,6 +112,7 @@ int wmain(int argc,wchar_t** argv){
     STARTUPINFOW si{sizeof(si)};PROCESS_INFORMATION process{};if(!CreateProcessW(path,command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&si,&process))return 2;
     struct Child {PROCESS_INFORMATION p;HWND window=nullptr;~Child(){if(window)PostMessageW(window,WM_CLOSE,0,0);if(WaitForSingleObject(p.hProcess,3000)==WAIT_TIMEOUT)TerminateProcess(p.hProcess,1);CloseHandle(p.hThread);CloseHandle(p.hProcess);}} child{process};
     for(int i=0;i<100&&!child.window;++i){for(auto& t:source::ScreenCaptureSource::targets(source::ScreenTargetKind::Window))if(t.processId==process.dwProcessId)child.window=HWND(t.handle);Sleep(20);}if(!child.window)return 3;
+    if(argc>1&&std::wstring(argv[1])==L"--xess-resize")return xessResize(child.window,argc>2?unsigned(_wtoi(argv[2])):4,true);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 4;
     source::ScreenCaptureOptions options;check(options.fps==0,"default follows display refresh");options.target=uint64_t(child.window);options.fps=60;options.cursor=false;
