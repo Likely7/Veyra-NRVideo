@@ -20303,6 +20303,20 @@
    "zh-TW": "開啟軟體播放一次，動畫結束後繼續；開啟媒體或關閉聲音立即停止",
    "en": "Plays once on launch, continuing after the intro. Opening media or turning sound off stops it immediately.",
    "ja": "起動時に一度再生し、アニメ終了後も継続。メディアを開くか音声をオフにすると即停止します。"
+  },
+  {
+   "zh": "停止本次启动音乐",
+   "src": "qml/Veyra/Main.qml",
+   "zh-TW": "停止本次啟動音樂",
+   "en": "Stop music for this launch",
+   "ja": "今回の起動音楽を停止"
+  },
+  {
+   "zh": "每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "每次啟動播放一次，動畫結束後繼續；此開關會儲存，角落按鈕僅停止本次",
+   "en": "Plays once per launch, continuing after the intro. This setting is saved; the corner button stops only this launch.",
+   "ja": "起動ごとに一度再生し、アニメ終了後も継続。この設定は保存され、隅のボタンは今回のみ停止します。"
   }
  ]
 }

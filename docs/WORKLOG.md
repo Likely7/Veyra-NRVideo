@@ -1282,3 +1282,8 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 209/0/0 Quick、原曲115.826秒自然结束（全程静音）与四种取消、四语实际区域编辑、Windows真实鼠标窗口/全屏各拖一次及截图/14帧录制独立检查通过；XeSS2X/4X各六次WGC resize、FSR4回退/后端切换、AMF核显45/45中间帧/最大误差0.5px/debug0、全效果剔除GPU、静音PCM双消费者/回放缓冲/呈现工作线程通过。失败构建、按钮重叠与修复、运行中stage拒绝和报告解码错误保留，详见BUILD_2.1.9_2026-11-15.md。最终包/源码/main提交/冷启动及清理以reports同任务FINAL.json和收尾记录为准；不push/Release/关机。
 
 2.1.9封包收尾：main已快进08edece，产品EXE5363b83e…/PE2.1.9.0；两ZIP分别730927504与721921977字节，SHA d365cd7d…/940a2715…；源ZIP0b5dd8ac…，不含MP3/DLL/LIB/PDB。两包1687/2311文件、97/90原DLL、88递归shader、ZIP CRC/逐文件SHA通过；BGM原字节及单独manifest均已封入。NVIDIA/AMD各首页和视频四次最小PATH冷启动退出0/无错误，片头完成后音乐继续，视频入口音乐未出声就停止，分别180/183真实提交帧。冷启动首轮断言误用ended（实际finished），改报告后重跑通过；无代码变更。脚本package219.py/cold219.py/merge_main.py/finalize.py及PACKAGE/MAIN/COLD/FAILURES/CLEANUP/FINAL在reports同任务。包对应源码08edece，后续提交仅收尾记录。全程无push/Release/关机。
+## 2026-11-15 2.1.9角落静音误存永久关闭
+
+用户反馈第二次启动无音乐。manual-NVIDIA原日志14:46:18.304停止7.33秒、18.514写introMusic=false、18.515记录stopped(button)，后两次新进程无源且从0秒停止，确定为本次按钮误写长期偏好，并非曲目只允许终身播一次。codex/startup-music-session-stop-20261115基于main d9e7c11：角落按钮仅stopStartupMusicForSession，不写偏好；设置开关保留长期保存，四语提示明确区分。按已证实日志只恢复manual-NVIDIA被按钮误写的false，原文件与证据归档，未全局重置用户偏好。
+
+同一配置8次实际启动（临时停止/重启两轮、设置关/重启关、设置开/重启开）退出0/无错误、偏好true/true/true/true/false/false/true/true；提前静音。命令py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-startup-music-restart-20261115/{prepare.py,restart.py}，记录RESTART.json/PREFERENCE-REPAIR.json；i18n提取检查0缺失/0占位问题。源/包/缓存/日志均E盘，EXE和运行组件不改；后续增量构建、本地main、两完整包和原入口原子替换/冷启动结果见该任务FINAL.json。无push/Release/关机。

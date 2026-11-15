@@ -1055,6 +1055,11 @@ Window {
     // intent or the shared setting/button permanently stops it for this launch.
     readonly property bool musicOn: typeof vyMusic !== "undefined" && veyra.preferences.introMusic !== false
     readonly property bool musicSounding: typeof vyMusic !== "undefined" && (vyMusic.state === "loading" || vyMusic.state === "playing")
+    function stopStartupMusicForSession() {
+        if (typeof vyMusic === "undefined") return
+        vyMusic.pause()
+        veyra.logUi("ui-music", "stopped for this launch (button)")
+    }
     readonly property bool sourceOpen: veyra.hasSource
     onSourceOpenChanged: if (sourceOpen && typeof vyMusic !== "undefined") vyMusic.pause()
     // Bottom right of the home page, above the intro too, while the music plays.
@@ -1090,14 +1095,10 @@ Window {
         }
         HoverHandler { id: musicHover; cursorShape: Qt.PointingHandCursor }
         TapHandler {
-            onTapped: {
-                vyMusic.pause()
-                veyra.setPreference("introMusic", false)
-                veyra.logUi("ui-music", "stopped (button)")
-            }
+            onTapped: root.stopStartupMusicForSession()
         }
         ToolTip.visible: musicHover.hovered
-        ToolTip.text: qsTr("关闭启动音乐")
+        ToolTip.text: qsTr("停止本次启动音乐")
     }
     // The menu anchors on laid-out buttons, so it opens once the page has settled.
     // --full-bar shown|hidden: enter fullscreen with the control window held shown

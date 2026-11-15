@@ -184,12 +184,12 @@ VPage {
                                 onToggled: checked => veyra.setPreference("introAnimation", checked)
                             }
                         }
-                        // Its music (StartupMusic.h): the same preference as the button in the
-                        // bottom right corner; turning it off also silences the music now.
+                        // This saved switch controls future launches. The corner button
+                        // stops only the current launch and leaves this preference intact.
                         VRow {
                             label: qsTr("启动音乐")
                             hint: typeof vyMusic !== "undefined" && vyMusic.available
-                                  ? qsTr("打开软件播放一次，动画结束后继续；打开媒体或关闭声音立即停止")
+                                  ? qsTr("每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次")
                                   : qsTr("未找到音乐文件：程序目录下的 media/startup-music.mp3")
                             VSwitch {
                                 objectName: "set-intro-music"
