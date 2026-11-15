@@ -1,6 +1,7 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/ngx/AnrProvider.h"
+#include "veyra/gfx/AmfFrcBackend.h"
 
 namespace veyra::ui {
 // --- shell preferences -------------------------------------------------------
@@ -80,6 +81,10 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     const auto anrDirectory=ngx::AnrProvider::directory(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("ANR FG")},{"detail",QString::fromStdWString(anrDirectory)},
         {"loaded",ngx::AnrProvider::available(runtime::localRuntimeDirectory().wstring())},{"experimental",true}};
+    // AMD FRC: the AMF runtime of the AMD driver, never shipped with Veyra.
+    wchar_t systemDirectory[MAX_PATH]{};GetSystemDirectoryW(systemDirectory,MAX_PATH);
+    out<<QVariantMap{{"name",QStringLiteral("AMD FRC (AMF)")},{"detail",QString::fromWCharArray(systemDirectory)+QStringLiteral("\\amfrt64.dll")},
+        {"loaded",gfx::AmfFrcBackend::runtimeInstalled()}};
     const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
     const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},

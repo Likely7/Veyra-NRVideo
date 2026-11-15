@@ -4,6 +4,7 @@
 #include "veyra/pipeline/AmdNrProvider.h"
 #include "veyra/pipeline/VfxSrBackend.h"
 #include "veyra/ngx/AnrProvider.h"
+#include "veyra/gfx/AmfFrcBackend.h"
 
 namespace veyra::ui {
 
@@ -111,6 +112,8 @@ static QVariantMap scanEffectCapabilities() {
     add("xess", H::CrossVendor, exists(data / "intel/experimental/libxess_fg.dll") && exists(data / "intel/experimental/libxell.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("fsr3", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("fsr4", H::Fsr4, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要 AMD RX 9000"));
+    // AMD FRC uses the AMF runtime the AMD driver installs; nothing ships with Veyra.
+    add("amdfrc", H::AmdFrc, gfx::AmfFrcBackend::runtimeInstalled(), QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
     add("hdr", H::Nvidia, exists(nr / "nvngx_truehdr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("flow0", H::Nvidia, true, QObject::tr("需要 NVIDIA RTX 显卡及 NVOF 驱动"));
     add("flow1", H::CrossVendor, true, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
@@ -136,6 +139,7 @@ QString fgEffectId(engine::FrameGenerationBackend backend) {
     case engine::FrameGenerationBackend::Fsr4: return "fsr4";
     case engine::FrameGenerationBackend::Vfg: return "vfg";
     case engine::FrameGenerationBackend::Anr: return "anr";
+    case engine::FrameGenerationBackend::AmdFrc: return "amdfrc";
     }
     return {};
 }
@@ -158,7 +162,7 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
     const auto caps = currentEffectCapabilities();
     const auto available = [&](const char* id) { return caps.value(id).toMap().value("available").toBool(); };
     const engine::FrameGenerationAvailability fgAvailable{
-        available("dlss"),available("xess"),available("fsr3"),available("fsr4"),available("vfg"),available("anr")};
+        available("dlss"),available("xess"),available("fsr3"),available("fsr4"),available("vfg"),available("anr"),available("amdfrc")};
     QStringList reasons;
     const auto sanitize = [&](engine::EffectChain& chain, engine::ChainGlobalSettings& globals) {
         // Also migrate disabled stages: keeping an unavailable DLSS selection
@@ -166,7 +170,7 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
         const auto savedBackend = globals.fgBackend;
         globals.fgBackend = engine::restoredFrameGenerationBackend(savedBackend,fgAvailable);
         if (globals.fgBackend != savedBackend) {
-            if (engine::fsrFrameGeneration(globals.fgBackend)) chain.fgMultiplier=2;
+            if (engine::twoXFrameGeneration(globals.fgBackend)) chain.fgMultiplier=2;
             else if (globals.fgBackend==engine::FrameGenerationBackend::XeSS)
                 chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,globals.fgBackend,2);
             else chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,globals.fgBackend,6);
@@ -222,7 +226,7 @@ QVariantMap QmlPlayerBridge::effectAvailability(const QString& id) const {
         id == "sr" ? "sr" + QString::number(s.videoSrQuality) : id == "video-hdr" ? QString("hdr") :
         id == "frame-generation" ? fgEffectId(s.frameGenerationBackend) :
         id == "dlss-fg" ? QString("dlss") : id == "xess-fg" ? QString("xess") :
-        id == "fsr3-fg" ? QString("fsr3") : id == "fsr4-fg" ? QString("fsr4") : id == "vfg-fg" ? QString("vfg") : id == "anr-fg" ? QString("anr") : id;
+        id == "fsr3-fg" ? QString("fsr3") : id == "fsr4-fg" ? QString("fsr4") : id == "vfg-fg" ? QString("vfg") : id == "anr-fg" ? QString("anr") : id == "amdfrc-fg" ? QString("amdfrc") : id;
     const auto caps = effectCapabilities();
     return caps.contains(key) ? caps.value(key).toMap() : QVariantMap{{"available", true}, {"reason", QString{}}};
 }

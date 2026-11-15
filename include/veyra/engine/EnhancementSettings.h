@@ -43,12 +43,19 @@ inline bool validNrReuseMode(NrReuseMode v) {
 }
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
-enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5 };
+// AmdFrc: AMD AMF FRC, the video frame interpolation of the AMD driver (gfx::AmfFrcBackend).
+enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5, AmdFrc = 6 };
 constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
 }
+// Providers that generate exactly one frame per pair.
+constexpr bool twoXFrameGeneration(FrameGenerationBackend backend) {
+    return fsrFrameGeneration(backend) || backend == FrameGenerationBackend::AmdFrc;
+}
+// Not NVIDIA-only (AMD FRC runs on AMD GPUs; its own runtime refuses others).
 constexpr bool crossVendorFrameGeneration(FrameGenerationBackend backend) {
-    return backend == FrameGenerationBackend::Anr || backend == FrameGenerationBackend::XeSS || fsrFrameGeneration(backend);
+    return backend == FrameGenerationBackend::Anr || backend == FrameGenerationBackend::XeSS || fsrFrameGeneration(backend) ||
+        backend == FrameGenerationBackend::AmdFrc;
 }
 // Frame generation that runs inside the present sink (external frame
 // interpolation swapchain) instead of the in-graph DLSSG backend.
@@ -166,7 +173,8 @@ enum class AudioSyncMode { Automatic, Manual, Off };
 enum class HdrOutputMode { Hdr10, ScRgb };
 enum class MotionSource { Zero, OpticalFlow, Automatic };
 constexpr bool motionUsesFlow(MotionSource source,FrameGenerationBackend backend=FrameGenerationBackend::Dlss) {
-    return backend!=FrameGenerationBackend::Vfg&&
+    // VFG and AMD FRC estimate motion themselves from the two pictures.
+    return backend!=FrameGenerationBackend::Vfg&&backend!=FrameGenerationBackend::AmdFrc&&
         (source==MotionSource::OpticalFlow||(source==MotionSource::Automatic&&backend!=FrameGenerationBackend::XeSS));
 }
 constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend backend) {
@@ -177,6 +185,7 @@ constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend bac
     case FrameGenerationBackend::Fsr4: return "AMD-FSR4-ML";
     case FrameGenerationBackend::Vfg: return "NVIDIA-VFG";
     case FrameGenerationBackend::Anr: return "ANR-FG";
+    case FrameGenerationBackend::AmdFrc: return "AMD-FRC";
     }
     return "unknown";
 }
@@ -631,7 +640,7 @@ struct EnhancementSettings {
                 return "active NR layers must share runtime and NR/SR order";
         }
         if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";
-        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Anr)return "invalid frame generation backend";
+        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::AmdFrc)return "invalid frame generation backend";
         if(vfgQuality>=kVfgQualityCount)return "invalid VFG quality";
         // The XeSS provider reports its own generated-frame ceiling at session
         // start; the engine clamps/rejects above it, so validation only guards
@@ -640,6 +649,7 @@ struct EnhancementSettings {
         // The AMD 3.1.x provider delivers one generated frame per present; the
         // probe measured the same count for 2/3/4 requested frames.
         if(fsrFrameGeneration(frameGenerationBackend)&&multiplier>2)return "AMD FSR frame generation supports up to 2X";
+        if(frameGenerationBackend==FrameGenerationBackend::AmdFrc&&multiplier>2)return "AMD FRC supports 2X only";
         if(!validVideoSrQuality(videoSrQuality))return "invalid video SR quality";
         if(dlssSrModel>=kDlssSrModelCount)return "invalid DLSS SR model";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";

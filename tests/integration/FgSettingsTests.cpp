@@ -20,7 +20,12 @@ int wmain(int argc,wchar_t** argv) {
     // FSR 4 ML on an adapter whose provider does not offer it (any non-RX 9000,
     // such as this NVIDIA test machine): the engine switches to FSR 3.1 at 2X.
     const bool fsr4Fallback=argc==4&&std::wstring_view(argv[3])==L"fsr4-fallback";
-    if(argc==4&&!probeFailure&&!backendSwitch&&!fsr4Fallback)return 2;
+    // AMD FRC through the engine: "amdfrc" on an AMD adapter (VEYRA_COMPUTE_ADAPTER_LUID
+    // selects it) generates at 2X; "amdfrc-other" on another vendor either generates (an AMD
+    // driver's AMF runtime may drive that GPU too) or turns FG off with a notice.
+    const bool amdFrc=argc==4&&std::wstring_view(argv[3])==L"amdfrc";
+    const bool amdFrcRefused=argc==4&&std::wstring_view(argv[3])==L"amdfrc-other";
+    if(argc==4&&!probeFailure&&!backendSwitch&&!fsr4Fallback&&!amdFrc&&!amdFrcRefused)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
     std::filesystem::create_directories(argv[2]);
@@ -122,8 +127,24 @@ int wmain(int argc,wchar_t** argv) {
                     <<L" warning="<<s.backendWarning.size()<<std::endl;
             }
         }
+        if((amdFrc||amdFrcRefused)&&!failures){
+            const auto before=engine.snapshot();
+            auto settings=before.desired;settings.nr=settings.sr=false;
+            settings.frameGenerationBackend=FrameGenerationBackend::AmdFrc;settings.multiplier=2;
+            if(check(engine.requestSettings(settings),"request AMD FRC 2X")){
+                if(amdFrc)check(wait([&](const auto& s){return !s.applying&&s.fgActive&&s.applied.frameGenerationBackend==FrameGenerationBackend::AmdFrc&&
+                    s.applied.multiplier==2&&s.frames>=before.frames+30&&s.generated>=before.generated+25;},40),"AMD FRC generates at 2X");
+                else check(wait([&](const auto& s){return !s.applying&&s.frames>=before.frames+30&&
+                    ((s.fgActive&&s.applied.frameGenerationBackend==FrameGenerationBackend::AmdFrc&&s.applied.multiplier==2&&s.generated>=before.generated+25)||
+                     (!s.fgActive&&!s.backendWarning.empty()&&s.generated==before.generated));},40),
+                    "AMD FRC on another vendor either generates at 2X or is refused while playback continues");
+                const auto s=engine.snapshot();
+                std::wcout<<L"AMD_FRC applied="<<int(s.applied.frameGenerationBackend)<<L" multiplier="<<s.applied.multiplier<<L" frames="<<s.frames
+                    <<L" generated="<<s.generated<<L" warning="<<s.backendWarning.size()<<std::endl;
+            }
+        }
         for(const unsigned multiplier:{2u,6u,1u,6u}){
-            if(probeFailure||backendSwitch||fsr4Fallback)break;
+            if(probeFailure||backendSwitch||fsr4Fallback||amdFrc||amdFrcRefused)break;
             if(failures)break;
             const auto beforeSwitch=engine.snapshot();
             auto settings=beforeSwitch.desired;

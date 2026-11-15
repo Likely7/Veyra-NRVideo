@@ -1,6 +1,8 @@
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/engine/FrameGenerationSelection.h"
 #include "veyra/engine/BackendRecovery.h"
+#include "veyra/engine/DisplayFgBudget.h"
+#include "veyra/engine/ExportFeaturePolicy.h"
 #include "veyra/diagnostics/DiagnosticEvent.h"
 #include "veyra/diagnostics/FrameMetrics.h"
 #include "veyra/diagnostics/ResetCause.h"
@@ -660,6 +662,27 @@ int main(){
         check(engine::restoredFrameGenerationBackend(F::Dlss,ml)==F::Fsr4,"unavailable saved DLSS on RX 9000 moves to FSR 4 ML");
         check(engine::restoredFrameGenerationBackend(F::Fsr,ml)==F::Fsr,"usable manual FSR 3.1 choice on RX 9000 is retained");
         check(engine::restoredFrameGenerationBackend(F::Fsr4,crossVendor)==F::Fsr,"FSR 4 ML outside RX 9000 moves to FSR 3.1");
+        {
+            // AMD FRC (AMF frame rate conversion): AMD-only, 2X, own motion, never auto-selected.
+            engine::FrameGenerationAvailability amd{false,true,true,false,false,false,true};
+            check(amd.supports(F::AmdFrc)&&!crossVendor.supports(F::AmdFrc),"AMD FRC availability is its own flag");
+            check(engine::restoredFrameGenerationBackend(F::AmdFrc,amd)==F::AmdFrc,"a usable manual AMD FRC choice is retained");
+            check(engine::restoredFrameGenerationBackend(F::Dlss,amd)==F::Fsr,"AMD FRC is never chosen automatically");
+            check(engine::restoredFrameGenerationBackend(F::AmdFrc,crossVendor)==F::Fsr,"AMD FRC without the AMF runtime moves to FSR 3.1");
+            check(engine::twoXFrameGeneration(F::AmdFrc)&&!engine::fsrFrameGeneration(F::AmdFrc)&&engine::crossVendorFrameGeneration(F::AmdFrc),
+                "AMD FRC is 2X only, not FSR, and not NVIDIA-only");
+            check(!engine::motionUsesFlow(engine::MotionSource::OpticalFlow,F::AmdFrc)&&!engine::motionUsesFlow(engine::MotionSource::Automatic,F::AmdFrc),
+                "AMD FRC estimates its own motion (no optical-flow session)");
+            check(engine::displayFgMultiplierSelectable(F::AmdFrc,2)&&!engine::displayFgMultiplierSelectable(F::AmdFrc,3),"AMD FRC offers 2X only");
+            check(engine::exportFrameGenerationSupported(F::AmdFrc,false),"AMD FRC writes graph textures, so export can use it");
+            check(engine::frameGenerationBackendName(F::AmdFrc)=="AMD-FRC","AMD FRC name");
+            engine::EnhancementSettings frc;frc.frameGenerationBackend=F::AmdFrc;frc.multiplier=2;
+            check(frc.validate().empty(),"AMD FRC 2X settings are valid");
+            frc.multiplier=3;check(!frc.validate().empty(),"AMD FRC above 2X is invalid");
+            frc.multiplier=2;engine::EnhancementSettings failed=frc;
+            check(engine::disableFailedBackend(failed,engine::FailedBackend::Fg)&&failed.multiplier==1&&failed.frameGenerationBackend==F::AmdFrc,
+                "a failing AMD FRC turns frame generation off and keeps the choice");
+        }
         {
             engine::EnhancementSettings ml4;ml4.frameGenerationBackend=F::Fsr4;ml4.multiplier=2;ml4.nr=true;
             check(engine::disableFailedBackend(ml4,engine::FailedBackend::Fg)&&ml4.frameGenerationBackend==F::Fsr&&ml4.multiplier==2&&ml4.nr,

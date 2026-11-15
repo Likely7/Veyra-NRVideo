@@ -11,6 +11,7 @@ QString QmlPlayerBridge::fgBackendName() const {
     case engine::FrameGenerationBackend::Fsr4:return QStringLiteral("fsr4");
     case engine::FrameGenerationBackend::Vfg:return QStringLiteral("vfg");
     case engine::FrameGenerationBackend::Anr:return QStringLiteral("anr");
+    case engine::FrameGenerationBackend::AmdFrc:return QStringLiteral("amdfrc");
     }
     return {};
 }
@@ -21,6 +22,7 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         QVariantMap{{"id","xess"},{"label",tr("Intel XeSS · 实验")}},
         QVariantMap{{"id","fsr3"},{"label",tr("FSR 3.1 · 2X")}},
         QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000")}},
+        QVariantMap{{"id","amdfrc"},{"label",tr("AMD FRC · 视频补帧 · 2X")}},
         QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50")},{"gold",true}}
     };
     const auto caps = effectCapabilities();
@@ -44,6 +46,7 @@ QString QmlPlayerBridge::fgProviderText() const {
     }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
         return tr("实际运行：FSR %1 · 2X").arg(QString::fromStdString(s.fsrProviderVersion));
+    if(fgBackendName()==QLatin1String("amdfrc"))return tr("AMD 驱动自带的视频补帧（AMF FRC），只用前后两帧画面估算运动，固定 2X");
     if(fgBackendName()==QLatin1String("fsr4"))return tr("FSR 4 ML 需要支持的 RX 9000 和驱动，不可用时自动改用 FSR 3.1；尚未在 RX 9000 实卡上验证");
     if(fgBackendName()==QLatin1String("fsr3"))return tr("FSR 3.1 跨厂商补帧 · 最高 2X");
     if(fgBackendName()==QLatin1String("xess"))
@@ -67,7 +70,7 @@ int xessCeiling(const engine::PlayerSnapshot& s) {
     return std::max(cap, seen);
 }
 void QmlPlayerBridge::setFgBackendName(const QString& value) {
-    if(value!=QLatin1String("anr")&&value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")){emit notice(tr("未知补帧后端"),true);return;}
+    if(value!=QLatin1String("anr")&&value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")&&value!=QLatin1String("amdfrc")){emit notice(tr("未知补帧后端"),true);return;}
     const auto availability = effectCapabilities().value(value).toMap();
     if (!availability.value("available").toBool()) { emit notice(availability.value("reason").toString(), true); emit settingsChanged(); return; }
     auto s = settings();
@@ -76,6 +79,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
                     : value == QLatin1String("fsr3") ? engine::FrameGenerationBackend::Fsr
                     : value == QLatin1String("fsr4") ? engine::FrameGenerationBackend::Fsr4
                     : value == QLatin1String("vfg") ? engine::FrameGenerationBackend::Vfg
+                    : value == QLatin1String("amdfrc") ? engine::FrameGenerationBackend::AmdFrc
                     : engine::FrameGenerationBackend::Dlss;
     if (s.frameGenerationBackend == want) return;
     if(want==engine::FrameGenerationBackend::Vfg&&(!vfgHardwarePossible()||!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))){
@@ -93,7 +97,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
     auto& chain = impl_->chain;
     const auto beforeMultiplier = chain.fgMultiplier;
     const int cap = want == engine::FrameGenerationBackend::XeSS ? xessCeiling(impl_->snapshot)
-                  : engine::fsrFrameGeneration(want) ? 2 : want==engine::FrameGenerationBackend::Vfg?8:6;
+                  : engine::twoXFrameGeneration(want) ? 2 : want==engine::FrameGenerationBackend::Vfg?8:6;
     chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,want,uint32_t(cap));
     const bool clamped = chain.fgMultiplier != beforeMultiplier;
     if(!impl_->commit(s)){
@@ -115,7 +119,7 @@ int QmlPlayerBridge::fgMaxMultiplier() const {
     if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Anr)
         return s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Anr&&s.fgCapabilityKnown&&s.fgMultiFrameMax>0?std::clamp(s.fgMultiFrameMax+1,2,6):6;
     if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg)return 8;
-    if(engine::fsrFrameGeneration(settings().frameGenerationBackend))return 2;
+    if(engine::twoXFrameGeneration(settings().frameGenerationBackend))return 2;
     if (settings().frameGenerationBackend == engine::FrameGenerationBackend::XeSS)
         return xessCeiling(s);
     if (s.fgCapabilityKnown && s.fgMultiFrameMax > 0) return std::clamp(s.fgMultiFrameMax + 1, 2, 6);

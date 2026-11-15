@@ -1142,6 +1142,41 @@
    "ja": "FSR 4 ML が使用できません（対応する RX 9000 とドライバーが必要）。FSR 3.1 に切り替えました。理由はログを参照してください"
   },
   {
+   "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已關閉補幀；原因見日誌",
+   "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); frame generation turned off. See the log",
+   "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。フレーム生成をオフにしました。理由はログを参照してください"
+  },
+  {
+   "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已恢复上一套参数",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已恢復上一套參數",
+   "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); the previous settings were restored",
+   "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。前の設定に戻しました"
+  },
+  {
+   "zh": "AMD FRC · 视频补帧 · 2X",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "AMD FRC · 影片補幀 · 2X",
+   "en": "AMD FRC · video frame interpolation · 2X",
+   "ja": "AMD FRC · 映像フレーム補間 · 2X"
+  },
+  {
+   "zh": "AMD 驱动自带的视频补帧（AMF FRC），只用前后两帧画面估算运动，固定 2X",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "AMD 驅動內建的影片補幀（AMF FRC），只用前後兩格畫面估算動態，固定 2X",
+   "en": "Video frame interpolation built into the AMD driver (AMF FRC); it estimates motion from the two pictures only, fixed at 2X",
+   "ja": "AMD ドライバー内蔵の映像フレーム補間（AMF FRC）。前後 2 枚の映像だけから動きを推定し、2X 固定です"
+  },
+  {
+   "zh": "需要 AMD 显卡（驱动自带 AMF 运行库）",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 AMD 顯示卡（驅動內建 AMF 執行庫）",
+   "en": "Requires an AMD GPU (AMF runtime from the AMD driver)",
+   "ja": "AMD GPU が必要です（ドライバー付属の AMF ランタイム）"
+  },
+  {
    "zh": "FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "FSR 4 ML 執行失敗，已改用 FSR 3.1；錯誤碼見日誌",

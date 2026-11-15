@@ -109,7 +109,8 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     // Never reconcile a rejection older than the UI's latest accepted edit.
     const bool recoveredGraphFg=snapshot.rejectedRevision>=pendingFgRevision_&&
         snapshot.desired.revision==snapshot.rejectedRevision&&
-        (requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Anr)&&
+        (requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Anr||
+         requestedFgBackend_==veyra::engine::FrameGenerationBackend::AmdFrc)&&
         snapshot.desired.frameGenerationBackend==requestedFgBackend_&&
         snapshot.desired.vfgQuality==requestedVfgQuality_&&
         requestedFgMultiplier_>1&&snapshot.desired.multiplier==1&&

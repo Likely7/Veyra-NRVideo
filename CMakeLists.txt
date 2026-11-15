@@ -124,6 +124,7 @@ add_library(veyra_gfx STATIC
   src/gfx/XessMfgUnlock.cpp
   src/gfx/XessPacing.cpp
   src/gfx/FsrFgPresenter.cpp
+  src/gfx/AmfFrcBackend.cpp
   src/gfx/FsrSrBackend.cpp
 )
 veyra_apply_warnings(veyra_gfx)
@@ -139,6 +140,15 @@ veyra_apply_warnings(veyra_vrr_profile_tests)
 if(EXISTS "${VEYRA_XESS_ROOT}/inc/xess_fg/xefg_swapchain_d3d12.h")
   target_include_directories(veyra_gfx PRIVATE "${VEYRA_XESS_ROOT}/inc")
   target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_XESS=1)
+endif()
+# AMD AMF SDK headers (MIT) for AMD FRC; the runtime comes with the AMD driver.
+set(VEYRA_AMF_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party_local/amd/AMF-SDK-1.5.3" CACHE PATH "AMD AMF SDK (include/core, include/components)")
+if(EXISTS "${VEYRA_AMF_SDK_ROOT}/include/components/FRC.h")
+  target_include_directories(veyra_gfx PRIVATE "${VEYRA_AMF_SDK_ROOT}/include")
+  target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_AMF=1)
+  target_link_libraries(veyra_gfx PRIVATE ole32)
+else()
+  message(STATUS "AMF SDK headers not found at ${VEYRA_AMF_SDK_ROOT}; AMD FRC is unavailable in this build")
 endif()
 if(EXISTS "${VEYRA_FIDELITYFX2_ROOT}/framegeneration/include/dx12/ffx_api_framegeneration_dx12.h")
   target_include_directories(veyra_gfx PRIVATE
@@ -1070,6 +1080,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_fg_sustained_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_fg_sustained_tests PRIVATE veyra_engine)
   add_executable(veyra_fg_presentation_tests tests/integration/FgPresentationTests.cpp)
+  add_executable(veyra_amf_frc_tests tests/integration/AmfFrcTests.cpp)
+  target_compile_features(veyra_amf_frc_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_amf_frc_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  target_link_libraries(veyra_amf_frc_tests PRIVATE veyra_engine)
   add_executable(veyra_fsr_switch_tests tests/integration/FsrFgSwitchTests.cpp)
   target_compile_features(veyra_fsr_switch_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_fsr_switch_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})

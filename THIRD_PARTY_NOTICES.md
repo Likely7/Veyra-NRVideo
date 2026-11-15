@@ -1106,3 +1106,9 @@ At the inspected commit the ANR core source and a clear integration/redistributi
 ### ANR public release boundary (2026-11-13)
 
 Upstream collaborator selimsandal explicitly states that third-party redistribution is not allowed until a full-release license is issued: https://github.com/apex-compute/ANR/issues/9#issuecomment-6857895225 (2026-11-13T15:49:32Z). Veyra 2.1.6 public packages contain none of ANR's provider DLL, model/program packs, configuration or generated bridge loader. The host adapter remains independently written Veyra source. Existing private local test copies are not public Release assets; no automated download, mirror, repackaged or renamed ANR payload is offered. The previous dated local research/measurements remain historical evidence, not a grant of redistribution rights.
+
+## AMD Advanced Media Framework (AMF) SDK headers
+
+- Source: https://github.com/GPUOpen-LibrariesAndSDKs/AMF, tag v1.5.3 (commit 57ee0cfb0e1a08d9041f77435653794c1b012be0), public headers `amf/public/include` only, used at build time for AMD FRC (frame rate conversion).
+- License: MIT, Copyright (c) Advanced Micro Devices, Inc. (see LICENSE.txt in that tag; each header carries the MIT notice).
+- Nothing from the SDK is redistributed in Veyra packages. The AMF runtime (`amfrt64.dll`) belongs to the user's AMD driver and is loaded from the Windows system directory only.
