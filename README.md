@@ -30,10 +30,10 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 <p align="center">
   <a href="https://gitnova.dev/r/Likely7/Veyra-NRVideo">
-    <img src="assets/veyra-trending-cpp.svg" alt="GitHub Trending C++ Daily #1 — November 13–15, 2026" width="440">
+    <img src="assets/veyra-trending-cpp.svg" alt="GitHub Trending C++ Daily #1 — November 13–15, 2026" width="385">
   </a>
   <a href="https://gitnova.dev/r/Likely7/Veyra-NRVideo">
-    <img src="assets/veyra-trending-global.svg" alt="GitHub Trending Global Daily #11 — November 13–14, 2026" width="440">
+    <img src="assets/veyra-trending-global.svg" alt="GitHub Trending Global Daily #11 — November 13–14, 2026" width="385">
   </a>
 </p>
 
@@ -47,7 +47,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 <br>
 
-**79K+ cumulative Veyra portable-package downloads** (79,332 as of 2026-11-08) · **103K+ downloads across all GitHub Release assets** (103,337 including source archives, checksums and images). [GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · Counts are download events, not unique users.
+**112K+ Veyra portable-package downloads** (112,870) · **140K+ total GitHub Release asset downloads** (140,848 including source archives, checksums and images). [GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · As of 2026-11-15. Download events, not unique users.
 
 <br>
 
