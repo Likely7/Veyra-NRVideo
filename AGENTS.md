@@ -1,3 +1,5 @@
+> **2026-11-15 2.1.9《迎接GTA6降临》已公开发布（最新）**：应用/source两Release已发布，应用Latest；tag d442b4e，产品b430d98/EXEc8a53dc7/PE2.1.9.0。两个完整显卡包/两源码/SHA、服务端摘要/大小、匿名入口/README/12群原图（11月22日前）/双码各220及零起点教程均核对；音乐只运行包、ANR资产排除、原DLL/88shader与四次重新解压冷启动通过，旧2.1.6保护。发行产物releases/codex-release-2.1.9-20261115，记录docs/RELEASE_2.1.9_EXECUTION_2026-11-15.md及reports同任务FINAL.json。用户已确认本地测试无问题，其他硬件/跨卡掉帧边界仍按验证说明；后续新发布仍需用户授权，不群发、不关机。
+
 > **2026-11-15 当前用户授权公开2.1.9《迎接GTA6降临》**：已确认测试无问题，要求发布GitHub、完整更新公告、最新12群二维码，发布后提供1000字以内群公告。按docs/RELEASE_2.1.9_PLAN_2026-11-15.md执行；原产品b430d98/EXEc8a53dc7保持，音乐只进运行包、ANR Beta资产继续排除；无关机或代发群消息授权。此前“未push/发布”仅为各阶段历史，实际结果看发行执行记录及reports/codex-release-2.1.9-20261115/FINAL.json。
 
 > **2026-11-15 2.1.9启动音乐重启修复（最新）**：角落停止按钮误存introMusic=false，现只停止本次；设置页开关仍保存长期选择。日志已确认manual-NVIDIA由旧按钮误关，备份后恢复true。相同配置8次进程启动/临时停与重启/永久关与重启/重新开均通过；新EXE内嵌词库资源重链c8a53dc7…，C++算法及DLL/音乐不改，产品b430d98。两个完整包、对应源码、SHA已更新并同步原2.1.9入口；四次最小PATH冷启动通过。双GPU识别/HIP/NVAPI和跨卡路径诊断均保留，不扩大其性能结论。源码/日志/验收见docs/STARTUP_MUSIC_RESTART_2026-11-15.md和reports/codex-startup-music-restart-20261115/FINAL.json。未push/发布/关机。

@@ -1295,3 +1295,5 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 用户确认测试正常并明确授权GitHub发布、全量更新公告、最新12群原图和1000字以内群公告。发行分支codex/release-2.1.9-20261115基于main ca614ef，远端main c327d45；已归档2.1.6两Release正文/标签/资产身份、本地最终交付。仅发行文档/README/二维码/包元数据，不重编译已验EXEc8a53dc7，产品b430d98生产源码不变。双语更新、条件/边界、对应源码/固定依赖文档齐全；原图复制12群，11月22日前、两QR各220、作者/英中教程保留且英文零起点；群公告669字符。
 
 脚本reports同任务init.py/docs.py/freeze.py及后续package/upload/verify，全部输出E盘同任务目录。先草稿上传与服务端SHA检查再公开/Latest，音乐不进源码，ANR禁止Beta再分发不扩大。远端验证及清理最终以FINAL.json/发行执行记录为准，不群发、不关机。
+
+2.1.9正式发布并核验：https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.9，发行tag d442b4e、实际产品b430d98、EXEc8a53dc7/PE2.1.9.0；两完整包/两源码/SHA上传，服务端digest/大小、匿名入口、Latest、正文/README/12群原图/双码各220及零起点教程通过。音乐只运行包、无ANR、DLL/88shader和四次解压冷启动通过，原2.1.6两Release保护通过。脚本路径/失败与纠正/实际资产SHA见RELEASE_2.1.9_EXECUTION_2026-11-15.md与reports同任务FINAL。发布后仅追加验收文档，不改tag/二进制/已发布ZIP；群公告669字符提供用户自行发，不群发、不关机。
