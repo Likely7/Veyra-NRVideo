@@ -1286,4 +1286,4 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 
 用户反馈第二次启动无音乐。manual-NVIDIA原日志14:46:18.304停止7.33秒、18.514写introMusic=false、18.515记录stopped(button)，后两次新进程无源且从0秒停止，确定为本次按钮误写长期偏好，并非曲目只允许终身播一次。codex/startup-music-session-stop-20261115基于main d9e7c11：角落按钮仅stopStartupMusicForSession，不写偏好；设置开关保留长期保存，四语提示明确区分。按已证实日志只恢复manual-NVIDIA被按钮误写的false，原文件与证据归档，未全局重置用户偏好。
 
-同一配置8次实际启动（临时停止/重启两轮、设置关/重启关、设置开/重启开）退出0/无错误、偏好true/true/true/true/false/false/true/true；提前静音。命令py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-startup-music-restart-20261115/{prepare.py,restart.py}，记录RESTART.json/PREFERENCE-REPAIR.json；i18n提取检查0缺失/0占位问题。源/包/缓存/日志均E盘，EXE和运行组件不改；后续增量构建、本地main、两完整包和原入口原子替换/冷启动结果见该任务FINAL.json。无push/Release/关机。
+同一配置8次实际启动（临时停止/重启两轮、设置关/重启关、设置开/重启开）退出0/无错误、偏好true/true/true/true/false/false/true/true；提前静音。命令py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-startup-music-restart-20261115/{prepare.py,restart.py}，记录RESTART.json/PREFERENCE-REPAIR.json；i18n提取检查0缺失/0占位问题。源/包/缓存/日志均E盘，C++算法及运行组件不改，EXE因内嵌翻译资源重链；封包保护拦截未同步的旧QA EXE，更新后复测，不绕过校验。后续本地main、两完整包和原入口原子替换/冷启动结果见该任务FINAL.json。无push/Release/关机。
