@@ -1249,3 +1249,5 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 用户截图反馈2.1.6关闭监听就录不到采集卡音频。对照2.1.5/6，渲染取声和采集PCM链路没改，原“不监听”实际关闭了音频输入；不把未复现的版本回归归咎于麦克风。独立codex/capture-record-audio-20261115基于main2f0e499：输入选择与本机监听拆开，captureAudioMonitor保存/启动/实时/恢复/重连生效，录制/回放仍在增益前取声，不自动选输入；三处共用开关与四语说明同步。
 
 585项构建305.9s、翻译2876/0/0；生产CaptureAudioSession零增益220块：实际输出210240样本全零，取声峰值0.25，双消费者52800/105600帧且时间戳单调。缓冲37/0、UI合同、Quick退出0（未输出项数不伪报）、四语实际开关/保存/重启及三组6个录制/回放MP4独立解码/频谱通过。测试stage先漏QtTest DLL、再漏qml-tests，失败回执保留，补齐后Quick47.17s退出0。真实Elgato/其他GPU/无输出端点未验，合成麦克风不冒充实物。执行命令、详细边界见docs/CAPTURE_RECORD_AUDIO_2026-11-15.md，所有输出E:/项目/Veyra下codex-capture-record-audio-20261115任务；最终包/源码/SHA见reports同任务FINAL。未合main/push/Release/关机。
+
+交付收尾：产品dfa2328/EXEbe83186d，完整NVIDIA ZIP725809972字节/SHA69977c0e…，精确源码ZIP/SHA256SUMS与独立手动入口齐全。1664包文件逐SHA、97原DLL、88着色器与最小PATH新配置冷启动176真实帧/0错误通过。封包首轮保护拦截PR104/108新增QML，按精确源码差异补全NvidiaVrrProfileRow/qmldir后通过，拒绝记录保留；不是忽略保护继续打包。打包与冷启动命令/失败/结果见reports同任务package.py、cold.py、PACKAGE/COLD/FINAL.json及执行文档末节。最终保留当前app/build/完整包/对应源码/必要证据，不改真实配置/主线/已发布包，不关机。

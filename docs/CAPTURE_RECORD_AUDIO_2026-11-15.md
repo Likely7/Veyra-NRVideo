@@ -23,3 +23,7 @@
 本机RTX5070；Elgato实卡、其他GPU与无可用音频输出端点的环境未验证。本实现仍使用既有WASAPI输出端点，以零增益关闭本机监听，不宣称新增无输出设备录音能力。独立分支codex/capture-record-audio-20261115，基线本地main 2f0e499（含此前已合入的PR104/108）；其他Claude工作树、用户配置、驱动与正式包不改。
 
 本地完整NVIDIA测试包、精确应用源码及摘要放`E:/项目/Veyra/test-packages/codex-capture-record-audio-20261115`，构建保留`build/codex-capture-record-audio-20261115`。运行库沿用公开2.1.6原件，不带ANR或测试音频/个人数据；最终文件名、SHA与打包验证以FINAL回执为准。未合main、未push、未发布GitHub Release、未关机。
+
+封包已完成：产品源码dfa2328853b2019b7002702d01d66d833702923b，EXE be83186dff151fc2437800337b01e506681aec8f0f06dc4935c34e06020f8d44。完整NVIDIA ZIP725809972字节、SHA69977c0eba15e62520d5503851873c7aa553eba592e6841761d7d8443a106693；对应源码SHAa97e6d48f18495ec55fbbc78508ddb00b101b55c97af5f92a08d0cb44d2db73e。1664个包内文件逐SHA/ZIP CRC校验，97个DLL均与正式供体相同；公开包内无ANR、测试DLL/媒体/配置。首次封包的六文件保护规则拦截本地main自带PR104/108的其他QML变动，未生成可交付ZIP；改为按精确Git差异审核资源，补含新增NvidiaVrrProfileRow/qmldir。此为封包清单修正，未再改产品代码。失败记录package-attempt1.json与package.py命令保留。
+
+package.py完成源ZIP、完整包及清单后，cold.py在该完整包目录、最小PATH、全新私有配置下启动：退出0、176真实提交帧、0错误，监听false在引擎启动时确认。手动入口“启动采集录音修复测试.cmd”使用独立manual-profile，默认监听false/录制声音true，不自动连接任何设备。完整包/app/build/六输出/必要证据保留，未复制用户数据。最后仅追加本段交付记录，不改变产品源码或已校验包字节。
