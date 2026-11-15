@@ -207,7 +207,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
                                    // 设置 → 外观 → 启动动画 (the dusk palette's intro, DuskIntro.qml); unset = on.
                                    "introAnimation",
                                    // 设置 → 外观 → 启动音乐 and the music button (Main.qml); unset = on.
-                                   "introMusic"};
+                                   "introMusic", "exclusionOverlay"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);

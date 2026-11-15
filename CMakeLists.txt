@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.6 LANGUAGES C CXX RC)
+project(veyra VERSION 2.1.9 LANGUAGES C CXX RC)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.1.6" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "2.1.9" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
@@ -824,6 +824,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_include_directories(veyra_control_paint_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/ui)
   target_link_libraries(veyra_control_paint_tests PRIVATE veyra_base comctl32 gdiplus uxtheme gdi32 user32 ole32)
   target_compile_features(veyra_live_timing_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_live_timing_tests PRIVATE /utf-8)
   target_include_directories(veyra_live_timing_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
   add_executable(veyra_repair_contract_tests tests/unit/RepairContractTests.cpp)
@@ -1166,6 +1167,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_options(veyra_startup_music PRIVATE /utf-8)
   target_include_directories(veyra_startup_music PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_startup_music PUBLIC veyra_base Qt6::Core PRIVATE ole32 oleaut32 mfplat mfuuid)
+  add_executable(veyra_startup_music_tests tests/qml/StartupMusicTests.cpp)
+  target_link_libraries(veyra_startup_music_tests PRIVATE veyra_startup_music)
   add_library(veyra_update_checker STATIC src/ui/UpdateChecker.cpp include/veyra/ui/UpdateChecker.h)
   set_target_properties(veyra_update_checker PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_update_checker PUBLIC cxx_std_20)

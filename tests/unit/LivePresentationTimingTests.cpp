@@ -14,6 +14,7 @@
 #include "veyra/engine/FrameRateWindow.h"
 #include "veyra/engine/FrameFlowWindow.h"
 #include "veyra/engine/ProviderSubmissionCounter.h"
+#include "veyra/ui/MaskGeometry.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/PresentationSettings.h"
 #include <cmath>
@@ -25,6 +26,20 @@ int main(){
     int failed=0;
     auto check=[&](bool ok,const char* label){printf("%s %s\n",ok?"PASS":"FAIL",label);if(!ok)++failed;};
     using veyra::engine::CaptureHalfRate;
+    {
+        using namespace veyra;
+        const engine::ProtectionRect region{.1f,.2f,.45f,.65f,false};
+        for(unsigned turn=0;turn<4;++turn)for(int mode:{0,1,2,3,4,5,6})for(float zoom:{.6f,1.f,2.4f}){
+            engine::PreviewView view;view.userQuarterTurns=turn;view.mode=mode;view.zoom=zoom;view.centerX=.35f;view.centerY=.62f;
+            const auto b=ui::mask::hostBounds(region,view,1100,700,1920,1080);
+            const auto center=view.sourcePoint((b[0]+b[2])*.5f,(b[1]+b[3])*.5f,1100,700,1920,1080);
+            check(std::abs(center.first-.275f)<1e-5f&&std::abs(center.second-.425f)<1e-5f,"mask overlay inverse matches presenter under rotation/aspect/zoom/pan");
+        }
+        const auto edge=ui::mask::moved(region,5,-5);
+        check(std::abs(edge.right-1)<1e-6f&&std::abs(edge.top)<1e-6f&&std::abs((edge.right-edge.left)-.35f)<1e-6f,"drag clamps to source boundary preserving region size");
+        auto ellipse=region;ellipse.ellipse=true;
+        check(!ui::mask::contains(ellipse,.101f,.201f)&&ui::mask::contains(ellipse,.275f,.425f),"ellipse selection rejects bounding-box corners");
+    }
     for(int64_t interval:{166667LL,333333LL}){
         veyra::engine::PresentationScheduler scheduler;
         veyra::engine::PresentationCadence cadence;

@@ -197,6 +197,8 @@ void QmlPlayerBridge::tickPlaylist() {
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    endExclusionMove(false);
+    impl_->exclusionSelected=-1;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
@@ -211,6 +213,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     impl_->exportTrimStartSeconds = 0.0;
     impl_->exportTrimEndSeconds = 0.0;
     emit exportChanged();
+    emit mediaOpenRequested();
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
     const std::wstring wide = wideOf(path);

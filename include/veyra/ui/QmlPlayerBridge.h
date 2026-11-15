@@ -421,6 +421,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
+    Q_PROPERTY(bool exclusionOverlayVisible READ exclusionOverlayVisible WRITE setExclusionOverlayVisible NOTIFY protectionChanged)
     Q_PROPERTY(QVariantMap exclusionState READ exclusionState NOTIFY protectionChanged)
     Q_PROPERTY(QVariantMap nrStabilizerState READ nrStabilizerState NOTIFY nrStabilizerChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
@@ -1098,6 +1099,12 @@ public:
     QVariantMap protectionState() const;
     QVariantMap exclusionState() const;
     QVariantMap nrStabilizerState() const;
+    bool exclusionOverlayVisible() const;
+    void setExclusionOverlayVisible(bool visible);
+    Q_INVOKABLE void selectExclusionRegion(int index);
+    Q_INVOKABLE bool beginExclusionMove(double x,double y);
+    Q_INVOKABLE void updateExclusionMove(double x,double y);
+    Q_INVOKABLE bool endExclusionMove(bool commit);
     Q_INVOKABLE bool beginMaskDraw(bool allEffects,const QString& shape);
     Q_INVOKABLE bool setMaskEnabled(bool allEffects,bool enabled);
     Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
@@ -1448,6 +1455,7 @@ public:
     Q_INVOKABLE void refreshComponentList();
 
 signals:
+    void mediaOpenRequested(); // Synchronous intent, before opening or waiting for success.
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
@@ -1543,6 +1551,7 @@ private:
     void openAfterCinema(const QString& pending, std::function<void()> open);
     void rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
+    void updateMaskOverlay();
     QVariantMap maskState(bool allEffects) const;
     bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects=false);
     engine::ColorSettings selectedColourSettings() const;

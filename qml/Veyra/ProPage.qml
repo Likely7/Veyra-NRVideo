@@ -503,7 +503,7 @@ VPage {
                 id: protectionDraw
                 objectName: "pro-protection-draw"
                 anchors.fill: parent
-                enabled: veyra.protectionDrawShape.length > 0
+                enabled: false // Main.qml owns mask input on every page and in fullscreen.
                 visible: enabled
                 cursorShape: Qt.CrossCursor
                 preventStealing: true

@@ -216,6 +216,8 @@ void QmlPlayerBridge::emitChainChanged() {
     // A pending drawing belongs to the old document. A mode/preset change or
     // node deletion must not commit it into another mask or recreate that node.
     if(!impl_->protDraw.isEmpty())beginProtectionDraw(QString{});
+    endExclusionMove(false);
+    impl_->exclusionSelected=-1;
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
     emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
     emit nrStabilizerChanged();

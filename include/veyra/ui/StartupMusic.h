@@ -5,10 +5,10 @@
 #include <memory>
 
 namespace veyra::ui {
-// The 日落 palette's startup music (2026-11-15): one file, played once with the startup intro
+// Startup music (2026-11-15): one file, played once independently of the startup intro
 // (DuskIntro.qml) through the Media Foundation media engine in audio-only mode, Windows' own
 // MP3 decoder. The intro takes its clock from position(), so its beats stay on the music.
-// The file is the user's and is not part of the source tree or the packages: it is read from
+// The user authorizes the file in runtime packages only, excluded from Git/source archives: read from
 // media/startup-music.mp3 next to the program; without it nothing plays and the intro runs on
 // its own clock.
 class StartupMusic : public QObject {

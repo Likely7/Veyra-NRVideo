@@ -752,6 +752,11 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // The 日落 startup music (StartupMusic.h): the user's file next to the program, if any.
     // Declared before the engine, so it outlives every QML reference to it.
     ui::StartupMusic startupMusic(QCoreApplication::applicationDirPath() + QStringLiteral("/media/startup-music.mp3"));
+    QObject::connect(&bridge, &ui::QmlPlayerBridge::mediaOpenRequested, &startupMusic, &ui::StartupMusic::pause);
+    QObject::connect(&bridge, &ui::QmlPlayerBridge::preferencesChanged, &startupMusic, [&] {
+        if (bridge.preferences().value(QStringLiteral("introMusic")).isValid()
+            && !bridge.preferences().value(QStringLiteral("introMusic")).toBool()) startupMusic.pause();
+    });
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("vySoftwareUi"), softwareUi);
     auto* thumbnails = new ui::ThumbnailProvider;

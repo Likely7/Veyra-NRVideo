@@ -105,16 +105,24 @@ void StartupMusic::prepare(double volume) {
     hr = MFCreateAttributes(&attributes, 2);
     if (FAILED(hr)) return fail("attributes", hr);
     p_->notify = new EngineNotify(this);
-    attributes->SetUnknown(MF_MEDIA_ENGINE_CALLBACK, p_->notify);
-    attributes->SetUINT32(MF_MEDIA_ENGINE_AUDIO_CATEGORY, AudioCategory_Media);
+    hr = attributes->SetUnknown(MF_MEDIA_ENGINE_CALLBACK, p_->notify);
+    if (FAILED(hr)) return fail("callback", hr);
+    hr = attributes->SetUINT32(MF_MEDIA_ENGINE_AUDIO_CATEGORY, AudioCategory_Media);
+    if (FAILED(hr)) return fail("audio category", hr);
     hr = factory->CreateInstance(MF_MEDIA_ENGINE_AUDIOONLY, attributes.Get(), &p_->engine);
     if (FAILED(hr)) return fail("media engine", hr);
-    p_->engine->SetAutoPlay(FALSE);
-    p_->engine->SetLoop(FALSE);                     // once, as the user asked
-    p_->engine->SetPreload(MF_MEDIA_ENGINE_PRELOAD_AUTOMATIC);
-    p_->engine->SetVolume(std::clamp(volume, 0.0, 1.0));
-    p_->engine->SetMuted(p_->muted ? TRUE : FALSE);
+    hr = p_->engine->SetAutoPlay(FALSE);
+    if (FAILED(hr)) return fail("autoplay off", hr);
+    hr = p_->engine->SetLoop(FALSE);                     // once, as the user asked
+    if (FAILED(hr)) return fail("loop off", hr);
+    hr = p_->engine->SetPreload(MF_MEDIA_ENGINE_PRELOAD_AUTOMATIC);
+    if (FAILED(hr)) return fail("preload", hr);
+    hr = p_->engine->SetVolume(std::clamp(volume, 0.0, 1.0));
+    if (FAILED(hr)) return fail("volume", hr);
+    hr = p_->engine->SetMuted(p_->muted ? TRUE : FALSE);
+    if (FAILED(hr)) return fail("mute", hr);
     BSTR url = SysAllocString(reinterpret_cast<const wchar_t*>(p_->path.utf16()));
+    if (!url) return fail("source allocation", E_OUTOFMEMORY);
     hr = p_->engine->SetSource(url);
     SysFreeString(url);
     if (FAILED(hr)) return fail("source", hr);
@@ -130,10 +138,15 @@ void StartupMusic::play() {
 }
 
 void StartupMusic::pause() {
-    if (!p_->engine || (p_->state != QLatin1String("loading") && p_->state != QLatin1String("playing"))) return;
+    // Consumed even before prepare(): a command-line/auto-resume source can open first.
+    if (p_->state == QLatin1String("paused") || p_->state == QLatin1String("ended")) return;
     p_->playWanted = false;
-    p_->engine->Pause();
-    log::info("startup-music", std::format("paused at {:.2f} s", p_->engine->GetCurrentTime()));
+    const double at = p_->engine ? p_->engine->GetCurrentTime() : 0.0;
+    if (p_->engine) {
+        const HRESULT hr = p_->engine->Pause();
+        if (FAILED(hr)) log::warn("startup-music", std::format("pause hr=0x{:08X}", static_cast<unsigned>(hr)));
+    }
+    log::info("startup-music", std::format("stopped permanently at {:.2f} s", at));
     release();                                      // it does not resume: let the audio device go
     setState(QStringLiteral("paused"));
 }
@@ -144,6 +157,7 @@ double StartupMusic::position() const {
 }
 
 void StartupMusic::engineEvent(unsigned long event, unsigned long long param1, unsigned long param2) {
+    if (!p_->engine) return; // Ignore callbacks queued before stop/shutdown.
     switch (event) {
     case MF_MEDIA_ENGINE_EVENT_PLAYING:
         if (p_->playWanted) {

@@ -507,6 +507,7 @@ bool QmlPlayerBridge::startCaptureSession() {
 }
 void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
     rememberPosition(true);
+    emit mediaOpenRequested();
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
     impl_->sourceLabel = label;

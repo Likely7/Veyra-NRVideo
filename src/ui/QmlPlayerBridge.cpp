@@ -59,6 +59,10 @@ bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    connect(this,&QmlPlayerBridge::mediaOpenRequested,this,[this]{
+        endExclusionMove(false);impl_->exclusionSelected=-1;beginProtectionDraw(QString{});
+        emit protectionChanged();
+    });
     auto* vrrProfile = new NvidiaVrrProfileController(impl_->dataDir, this);
     nvidiaVrrProfile_ = vrrProfile;
     connect(vrrProfile, &NvidiaVrrProfileController::notice, this, &QmlPlayerBridge::notice);
@@ -430,6 +434,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             else emit notice(tr("显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。")
                                  .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
         }
+        updateMaskOverlay();
         tickSubtitles();
         tickImageBatch();
         tickCapture();

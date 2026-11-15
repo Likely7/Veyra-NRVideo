@@ -187,17 +187,16 @@ VPage {
                         // Its music (StartupMusic.h): the same preference as the button in the
                         // bottom right corner; turning it off also silences the music now.
                         VRow {
-                            visible: Theme.dusk
                             label: qsTr("启动音乐")
                             hint: typeof vyMusic !== "undefined" && vyMusic.available
-                                  ? qsTr("随启动动画播放一次，打开任意播放源后自动暂停")
+                                  ? qsTr("打开软件播放一次，动画结束后继续；打开媒体或关闭声音立即停止")
                                   : qsTr("未找到音乐文件：程序目录下的 media/startup-music.mp3")
                             VSwitch {
                                 objectName: "set-intro-music"
                                 checked: veyra.preferences.introMusic !== false
                                 onToggled: checked => {
                                     veyra.setPreference("introMusic", checked)
-                                    if (typeof vyMusic !== "undefined") vyMusic.muted = !checked
+                                    if (!checked && typeof vyMusic !== "undefined") vyMusic.pause()
                                 }
                             }
                         }

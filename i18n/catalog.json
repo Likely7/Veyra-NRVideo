@@ -20268,6 +20268,41 @@
    "zh-TW": "音訊輸入",
    "en": "Audio input",
    "ja": "音声入力"
+  },
+  {
+   "zh": "显示区域红框",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "顯示區域紅框",
+   "en": "Show region outlines",
+   "ja": "領域の赤枠を表示"
+  },
+  {
+   "zh": "选中区域后可拖动位置；红框不会写入录制或导出",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "選中區域後可拖曳位置；紅框不會寫入錄製或匯出",
+   "en": "Select a region to move it. Outlines are excluded from recordings and exports.",
+   "ja": "領域を選択して移動できます。赤枠は録画や書き出しに含まれません。"
+  },
+  {
+   "zh": "已选中",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "已選中",
+   "en": "Selected",
+   "ja": "選択中"
+  },
+  {
+   "zh": "选中",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "選中",
+   "en": "Select",
+   "ja": "選択"
+  },
+  {
+   "zh": "打开软件播放一次，动画结束后继续；打开媒体或关闭声音立即停止",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "開啟軟體播放一次，動畫結束後繼續；開啟媒體或關閉聲音立即停止",
+   "en": "Plays once on launch, continuing after the intro. Opening media or turning sound off stops it immediately.",
+   "ja": "起動時に一度再生し、アニメ終了後も継続。メディアを開くか音声をオフにすると即停止します。"
   }
  ]
 }
