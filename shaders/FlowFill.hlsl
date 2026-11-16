@@ -44,15 +44,22 @@ void main(uint3 id : SV_DispatchThreadID)
     float bestScore = 1e9;
     float2 vector = own.xy;
     [loop] for (int r = 0; r < 9; ++r) {
+        const float distancePenalty = distanceWeight * kRadii[r];
+        // Colour distance is non-negative and the distance penalty is
+        // non-decreasing for the configured non-negative weight. Once the
+        // best score reaches this lower bound, no direction at this radius
+        // or any larger radius can improve it.
+        if (distanceWeight >= 0.0 && bestScore <= distancePenalty) break;
         [unroll] for (int d = 0; d < 8; ++d) {
             const int2 q = p + kDirections[d] * kRadii[r];
             if (any(q < 0) || q.x >= int(flowW) || q.y >= int(flowH)) continue;
             const float4 candidate = refined[q];
             if (!confident(q, candidate)) continue;
             const float3 delta = currentColor[q].rgb - colour;
-            const float score = dot(abs(delta), float3(1, 1, 1)) + distanceWeight * kRadii[r];
+            const float score = dot(abs(delta), float3(1, 1, 1)) + distancePenalty;
             if (score < bestScore) { bestScore = score; vector = candidate.xy; }
         }
+        if (distanceWeight >= 0.0 && bestScore <= distancePenalty) break;
     }
     output[p] = vector;
 }
