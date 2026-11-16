@@ -114,6 +114,14 @@ target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
 veyra_apply_warnings(veyra_logger_tests)
 
+# Exact branch-and-bound contracts for the optical-flow refinement shaders.
+# This CPU-only test needs neither the proprietary optical-flow SDKs nor a GPU.
+add_executable(veyra_flow_search_pruning_tests tests/unit/FlowSearchPruningTests.cpp)
+target_compile_features(veyra_flow_search_pruning_tests PRIVATE cxx_std_20)
+target_compile_options(veyra_flow_search_pruning_tests PRIVATE /utf-8)
+target_compile_definitions(veyra_flow_search_pruning_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+veyra_apply_warnings(veyra_flow_search_pruning_tests)
+
 add_library(veyra_gfx STATIC
   src/gfx/GpuSchedulingPriority.cpp
   src/gfx/NvidiaVrrProfile.cpp
