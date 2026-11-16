@@ -63,7 +63,7 @@
 
 - 按Veyra实际使用的显卡选择NVIDIA或AMD完整便携包，完整解压到新的可写目录，运行`veyra_qml_ui.exe`；只需一个运行包，源码包用于重编译。
 - 原有明确保存的设置继续保留。启动音乐：角落按钮只停止本次；要一直关闭，请到设置→外观关闭启动音乐。
-- 最新交流群换为**12群**，原图标注于**2026-11-22前有效**；赞助、Discord、作者主页和英中教程保留，英文视频从零开始播放。
+- 最新交流群换为**13群**，原图标注于**2026-11-23前有效**；赞助、Discord、作者主页和英中教程保留，英文视频从零开始播放。
 
 ## English
 
@@ -79,4 +79,4 @@
 - **AMD:** added driver-backed AMF FRC 2X. New RX9000 configurations prefer FSR4 ML; unavailable/failed ML falls back to FSR3.1 2X in preview with an explicit notice. Saved FSR3.1 choices remain; export does not silently substitute backends. RX9000 ML and discrete AMD hardware coverage remain limited.
 - **Evidence:** component tests 209/0/0; eight same-profile launch cycles; original audio ends once around 115.8 s; 12 WGC resize transitions; actual region dragging and screenshot/record checks; AMD iGPU synthetic FRC midpoint checks 45/45, maximum 0.5 px error. These are module/stage checks, not a general game-FPS or optical-latency claim.
 
-Choose one complete NVIDIA/AMD portable package for the GPU used by Veyra and extract into a new writable folder. All 88 shaders, notices/manifests and runtime identities are checked. Source assets and fixed dependency-source links are provided separately. ANR beta binaries remain excluded. Previous 2.1.6 dedup/60→30/NV12, replay/microphone and default-setting changes are preserved, not counted again as new work. Community QR updated to group 12, valid before 2026-11-22.
+Choose one complete NVIDIA/AMD portable package for the GPU used by Veyra and extract into a new writable folder. All 88 shaders, notices/manifests and runtime identities are checked. Source assets and fixed dependency-source links are provided separately. ANR beta binaries remain excluded. Previous 2.1.6 dedup/60→30/NV12, replay/microphone and default-setting changes are preserved, not counted again as new work. Community QR updated to group 13, valid before 2026-11-23.
