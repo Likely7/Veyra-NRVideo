@@ -10,6 +10,15 @@ Rectangle {
     radius: 99
     color: checked ? Theme.accent : Qt.rgba(1, 1, 1, 0.14)
     Behavior on color { ColorAnimation { duration: Theme.d(250) } }
+    // The dusk palette's sunset accent: the on track is the gradient, faded in
+    // and out with the colour.
+    VAccentFill {
+        anchors.fill: parent
+        radius: parent.radius
+        visible: Theme.accentGradient && opacity > 0
+        opacity: sw.checked ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: Theme.d(250) } }
+    }
 
     Rectangle {
         id: knob

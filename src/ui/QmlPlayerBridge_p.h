@@ -528,6 +528,11 @@ struct QmlPlayerBridge::Impl {
     QString protDraw;                         // "" | rect | ellipse
     bool protExclusion=false;
     HWND protOverlay = nullptr;
+    int exclusionSelected = -1;
+    bool exclusionDragging = false;
+    engine::ProtectionRect exclusionOriginal{}, exclusionPreview{};
+    std::pair<float,float> exclusionDragStart{};
+    QVariantList maskOverlayGeometry; // Repaint only when view, geometry or selection changes.
     // --- performance orbs / status light (#13) ---
     ui::live_status::DashboardHistory history;
     int historyTicks = 0;
@@ -731,7 +736,9 @@ struct QmlPlayerBridge::Impl {
                     initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
                     initial.videoSrQuality=engine::kVideoSrFsr;
                 }
-                initial.frameGenerationBackend=engine::defaultFrameGenerationBackend(desc.VendorId);
+                // RX 9000 starts on FSR 4 ML (the same name rule as its menu gate, effectGpu()).
+                initial.frameGenerationBackend=engine::defaultFrameGenerationBackend(desc.VendorId,
+                    QString::fromWCharArray(desc.Description).contains(QStringLiteral("RX 90"),Qt::CaseInsensitive));
                 facade.setPending(initial);
                 veyra::log::info("nr-default",std::format("adapter={} selected={}",utf8Of(std::wstring(desc.Description)).toStdString(),engine::nrRuntimeName(initial.nrRuntime)));
                 break;

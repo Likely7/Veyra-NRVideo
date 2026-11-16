@@ -10,6 +10,8 @@ VSubGroup 1.0 VSubGroup.qml
 DialogHost 1.0 DialogHost.qml
 StreamHud 1.0 StreamHud.qml
 VBackdrop 1.0 VBackdrop.qml
+VAccentFill 1.0 VAccentFill.qml
+DuskIntro 1.0 DuskIntro.qml
 VButton 1.0 VButton.qml
 VCard 1.0 VCard.qml
 VDot 1.0 VDot.qml
@@ -21,6 +23,7 @@ VH3 1.0 VH3.qml
 VIcon 1.0 VIcon.qml
 VPill 1.0 VPill.qml
 VRow 1.0 VRow.qml
+NvidiaVrrProfileRow 1.0 NvidiaVrrProfileRow.qml
 VSeg 1.0 VSeg.qml
 VSelect 1.0 VSelect.qml
 VSlider 1.0 VSlider.qml

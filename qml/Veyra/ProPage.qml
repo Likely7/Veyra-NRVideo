@@ -502,7 +502,7 @@ VPage {
                 id: protectionDraw
                 objectName: "pro-protection-draw"
                 anchors.fill: parent
-                enabled: veyra.protectionDrawShape.length > 0
+                enabled: false // Main.qml owns mask input on every page and in fullscreen.
                 visible: enabled
                 cursorShape: Qt.CrossCursor
                 preventStealing: true
@@ -599,11 +599,21 @@ VPage {
                         height: 3
                         radius: 9
                         color: Qt.rgba(1, 1, 1, 0.14)
+                        // White; the sunset gradient along the rail in the dusk palette.
                         Rectangle {
                             width: parent.width * proSeekArea.frac
                             height: parent.height
                             radius: 9
                             color: "#FFFFFF"
+                            visible: !Theme.accentGradient
+                        }
+                        VAccentFill {
+                            width: parent.width * proSeekArea.frac
+                            height: parent.height
+                            radius: 9
+                            farEnd: true
+                            span: parent.width
+                            visible: Theme.accentGradient
                         }
                     }
                     // Press or drag anywhere on the rail: the picture follows the
@@ -1134,7 +1144,7 @@ VPage {
         width: quickOrbRow.implicitWidth + 24
         height: quickOrbRow.implicitHeight + 16
         radius: 18
-        color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.94)
+        color: Theme.shade(22, 22, 26, 0.94)
         border.width: 1
         border.color: Theme.stroke2
         RowLayout {

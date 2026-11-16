@@ -92,7 +92,7 @@ VPage {
             width: openingRow.implicitWidth + 32
             height: 40
             radius: height / 2
-            color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.92)
+            color: Theme.shade(22, 22, 26, 0.92)
             border.width: 1
             border.color: Theme.stroke2
             Row {
@@ -125,7 +125,7 @@ VPage {
             width: bufferingRow.implicitWidth + 32
             height: Math.max(40, bufferingText.height + 20)
             radius: coverRadius
-            color: Qt.rgba(22 / 255, 22 / 255, 26 / 255, 0.92)
+            color: Theme.shade(22, 22, 26, 0.92)
             border.width: 1
             border.color: Theme.stroke2
             Row {

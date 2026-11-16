@@ -1,0 +1,59 @@
+name: G-SYNC profile checks
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/vrr-profile-checks.yml'
+      - 'tests/vrr-profile/**'
+      - 'tests/unit/NvidiaVrrProfileTests.cpp'
+      - 'tests/qml/quick/tst_vrr_profile.qml'
+      - 'include/veyra/gfx/NvidiaVrrProfile.h'
+      - 'src/gfx/NvidiaVrrProfile.cpp'
+      - 'include/veyra/ui/NvidiaVrrProfileController.h'
+      - 'src/ui/NvidiaVrrProfileController.cpp'
+      - 'qml/Veyra/**'
+      - 'i18n/catalog.json'
+  push:
+    branches: ['codex/vrr-profile-button-*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vrr-profile-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  focused-checks:
+    runs-on: windows-2022
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
+        with:
+          version: '6.8.3'
+          arch: 'win64_msvc2022_64'
+          cache: true
+      - name: Configure focused tests without media or AI SDKs
+        run: cmake -S tests/vrr-profile -B out/vrr-profile -G "Visual Studio 17 2022" -A x64
+      - name: Compile native adapter and Qt controller
+        run: cmake --build out/vrr-profile --config Release --parallel 2
+      - name: Prepare offscreen fonts
+        shell: pwsh
+        run: |
+          $fontDirectory = Join-Path $env:RUNNER_TEMP 'veyra-vrr-fonts'
+          New-Item -ItemType Directory -Force -Path $fontDirectory | Out-Null
+          foreach ($fontName in @('segoeui.ttf', 'msyh.ttc')) {
+            $fontFile = Join-Path $env:WINDIR ('Fonts/' + $fontName)
+            if (Test-Path -LiteralPath $fontFile) {
+              Copy-Item -LiteralPath $fontFile -Destination $fontDirectory
+            }
+          }
+          "QT_QPA_FONTDIR=$fontDirectory" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Run policy, mocked controller, and four-language UI tests
+        run: ctest --test-dir out/vrr-profile -C Release --output-on-failure --timeout 120
+      - name: Check translations
+        run: python -X utf8 -B scripts/i18n/extract.py --check

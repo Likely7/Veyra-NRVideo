@@ -495,6 +495,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
+    Q_PROPERTY(bool exclusionOverlayVisible READ exclusionOverlayVisible WRITE setExclusionOverlayVisible NOTIFY protectionChanged)
     Q_PROPERTY(QVariantMap exclusionState READ exclusionState NOTIFY protectionChanged)
     Q_PROPERTY(QVariantMap nrStabilizerState READ nrStabilizerState NOTIFY nrStabilizerChanged)
     Q_PROPERTY(bool colorEnabled READ colorEnabled WRITE setColorEnabled NOTIFY settingsChanged)
@@ -544,6 +545,8 @@ class QmlPlayerBridge : public QObject {
     // (switch greyed), 2 it can but the driver setting is off, 3 possible,
     // 4 active; vrrHint explains it beside the switch.
     Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
+    // Explicit per-application driver setup, independent of the presentation switch.
+    Q_PROPERTY(QObject* nvidiaVrrProfile READ nvidiaVrrProfile CONSTANT)
     Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
     Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
     // Display state of the shown monitor for the 信号 card: Windows HDR (-1
@@ -1170,6 +1173,12 @@ public:
     QVariantMap protectionState() const;
     QVariantMap exclusionState() const;
     QVariantMap nrStabilizerState() const;
+    bool exclusionOverlayVisible() const;
+    void setExclusionOverlayVisible(bool visible);
+    Q_INVOKABLE void selectExclusionRegion(int index);
+    Q_INVOKABLE bool beginExclusionMove(double x,double y);
+    Q_INVOKABLE void updateExclusionMove(double x,double y);
+    Q_INVOKABLE bool endExclusionMove(bool commit);
     Q_INVOKABLE bool beginMaskDraw(bool allEffects,const QString& shape);
     Q_INVOKABLE bool setMaskEnabled(bool allEffects,bool enabled);
     Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
@@ -1219,6 +1228,7 @@ public:
     int displaySync() const;
     void setDisplaySync(int value);
     bool variableRefresh() const;
+    QObject* nvidiaVrrProfile() const { return nvidiaVrrProfile_; }
     void setVariableRefresh(bool value);
     int vrrState() const;
     QString vrrHint() const;
@@ -1611,6 +1621,8 @@ public:
     void setDoviFollowAverage(bool on);
 
 signals:
+    void mediaOpenRequested(); // Synchronous intent, before opening or waiting for success.
+
     void bilibiliActionDone(const QString& op, bool ok, const QString& error);
     void bilibiliListReady(const QString& kind, const QVariantList& items, int generation);
     void bilibiliObjectReady(const QString& kind, const QVariantMap& object, int generation);
@@ -1625,6 +1637,7 @@ signals:
     void bilibiliQrStarted(const QString& qrUrl, bool ok, const QString& error);
     void bilibiliQrPolled(const QString& state);
     void bilibiliAccountReady(const QVariantMap& account, bool ok);
+
 
     void playlistRequested();
     void nodeAnchorsChanged();
@@ -1721,6 +1734,7 @@ private:
     void openAfterCinema(const QString& pending, std::function<void()> open);
     void rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
+    void updateMaskOverlay();
     QVariantMap maskState(bool allEffects) const;
     bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects=false);
     engine::ColorSettings selectedColourSettings() const;
@@ -1761,6 +1775,7 @@ private:
 
     struct Impl;
     std::unique_ptr<Impl> impl_;
+    QObject* nvidiaVrrProfile_ = nullptr;
     QObject* updates_ = nullptr;
 };
 

@@ -25,12 +25,26 @@ struct ScreenCaptureTarget {
     uint32_t processId=0;
     std::wstring name;
     unsigned width=0,height=0,refresh=0;
+    // A window on another Windows virtual desktop (cloaked by the shell, still
+    // captured by WGC). desktopNumber is that desktop's 1-based Task View position
+    // (0 if Windows does not say), desktopName the user's name for it (may be empty).
+    // Such windows are listed after those on the shown desktop.
+    bool otherDesktop=false;
+    unsigned desktopNumber=0;
+    std::wstring desktopName;
+    // LUID of the adapter that drives the display the target is shown on (the source
+    // adapter of its Windows display path), 0 if Windows does not say. When this is not
+    // the adapter Veyra processes on, Windows copies every captured frame between the
+    // two GPUs (issue #107).
+    uint64_t displayAdapter=0;
 };
 struct ScreenCaptureMetrics {uint64_t received=0,delivered=0,dropped=0;double ageMs=0;};
 // While a monitor capture runs, Veyra's own windows are excluded from it. A window
 // shown after the capture opened (the control pill appears ~0.1 s later) is passed
 // here by the GUI thread before it becomes visible; outside a capture it is a no-op.
 void excludeWindowFromScreenCapture(void* window); // an HWND
+// The adapter (LUID) driving a monitor's display path, 0 if Windows does not say.
+uint64_t displayAdapterLuid(void* monitor); // an HMONITOR
 class ScreenCaptureSource final:public IFrameSource {
 public:
     ScreenCaptureSource();~ScreenCaptureSource() override;

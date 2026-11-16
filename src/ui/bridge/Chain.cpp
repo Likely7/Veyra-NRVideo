@@ -216,6 +216,8 @@ void QmlPlayerBridge::emitChainChanged() {
     // A pending drawing belongs to the old document. A mode/preset change or
     // node deletion must not commit it into another mask or recreate that node.
     if(!impl_->protDraw.isEmpty())beginProtectionDraw(QString{});
+    endExclusionMove(false);
+    impl_->exclusionSelected=-1;
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
     emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
     emit nrStabilizerChanged();
@@ -383,11 +385,11 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     const auto cap = effectAvailability(type);
     if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return -1; }
     const bool fgType=type==QLatin1String("dlss-fg")||type==QLatin1String("xess-fg")||
-        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg")||type==QLatin1String("anr-fg");
-    const auto fgBackend=type==QLatin1String("anr-fg")?engine::FrameGenerationBackend::Anr:type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
+        type==QLatin1String("fsr3-fg")||type==QLatin1String("fsr4-fg")||type==QLatin1String("vfg-fg")||type==QLatin1String("anr-fg")||type==QLatin1String("amdfrc-fg");
+    const auto fgBackend=type==QLatin1String("amdfrc-fg")?engine::FrameGenerationBackend::AmdFrc:type==QLatin1String("anr-fg")?engine::FrameGenerationBackend::Anr:type==QLatin1String("vfg-fg")?engine::FrameGenerationBackend::Vfg:type==QLatin1String("fsr4-fg")?engine::FrameGenerationBackend::Fsr4:
         type==QLatin1String("fsr3-fg")?engine::FrameGenerationBackend::Fsr:
         type==QLatin1String("xess-fg")?engine::FrameGenerationBackend::XeSS:engine::FrameGenerationBackend::Dlss;
-    const auto fgCeiling=engine::fsrFrameGeneration(fgBackend)?2u:
+    const auto fgCeiling=engine::twoXFrameGeneration(fgBackend)?2u:
         fgBackend==engine::FrameGenerationBackend::XeSS?uint32_t(xessCeiling(impl_->snapshot)):fgBackend==engine::FrameGenerationBackend::Vfg?8u:6u;
     if(fgType&&fgBackend==engine::FrameGenerationBackend::Vfg&&(!vfgHardwarePossible()||!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))){
         emit notice(!vfgHardwarePossible()?tr("VFG 需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"):tr("未找到 VFG 运行组件，请在组件页核对路径"),true);return -1;

@@ -1,4 +1,5 @@
 #include "veyra/source/ScreenCaptureSource.h"
+#include "veyra/source/VirtualDesktop.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/pipeline/EnhanceGraph.h"
@@ -6,6 +7,9 @@
 #include "veyra/engine/EngineController.h"
 #include <windows.h>
 #include <dwmapi.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
+#include <dxgi1_6.h>
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -16,12 +20,26 @@ extern "C" {
 using namespace veyra;
 namespace {
 int failures=0;
+GUID homeDesktop{};
+// The test pattern moves itself: Windows only lets a process move its own windows.
+// WM_APP+3 goes to another virtual desktop, WM_APP+4 back; both return 1 on success.
+LRESULT moveDesktop(HWND w,bool away){
+    constexpr CLSID managerClass{0xaa509086,0x5ca9,0x4c25,{0x8f,0x95,0x58,0x9d,0x3c,0x07,0xb4,0x8a}}; // CLSID_VirtualDesktopManager
+    Microsoft::WRL::ComPtr<IVirtualDesktopManager> manager;
+    if(FAILED(CoCreateInstance(managerClass,nullptr,CLSCTX_ALL,IID_PPV_ARGS(&manager))))return 0;
+    if(!away)return SUCCEEDED(manager->MoveWindowToDesktop(w,homeDesktop));
+    if(FAILED(manager->GetWindowDesktopId(w,&homeDesktop)))return 0;
+    for(const auto& desktop:source::vdesk::desktops())
+        if(desktop.id!=homeDesktop&&SUCCEEDED(manager->MoveWindowToDesktop(w,desktop.id)))return 1;
+    return 0;
+}
 void check(bool pass,const char* name){std::cout<<"SCREEN "<<name<<" pass="<<pass<<std::endl;failures+=!pass;}
 void pump(){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
 LRESULT CALLBACK pattern(HWND w,UINT m,WPARAM wp,LPARAM lp){
     if(m==WM_TIMER){InvalidateRect(w,nullptr,FALSE);return 0;}
     if(m==WM_APP+1){KillTimer(w,1);return 0;}
     if(m==WM_APP+2){SetTimer(w,1,16,nullptr);return 0;}
+    if(m==WM_APP+3||m==WM_APP+4)return moveDesktop(w,m==WM_APP+3);
     if(m==WM_PAINT){PAINTSTRUCT ps;auto dc=BeginPaint(w,&ps);RECT r;GetClientRect(w,&r);
         const COLORREF colors[]={RGB(225,30,45),RGB(20,210,70),RGB(25,60,225)};
         for(int i=0;i<3;++i){RECT band{r.right*i/3,0,r.right*(i+1)/3,r.bottom};auto brush=CreateSolidBrush(colors[i]);FillRect(dc,&band,brush);DeleteObject(brush);}
@@ -41,8 +59,50 @@ bool content(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,source::Scr
     out={};ring.drainQueue();graph.shutdown();return ok;
 }
 }
+int xessResize(HWND target,unsigned multiplier,bool resizeTarget,unsigned seconds=45){
+    using Clock=std::chrono::steady_clock;
+    HWND host=CreateWindowW(L"STATIC",L"Veyra XeSS capture regression",WS_OVERLAPPEDWINDOW|WS_VISIBLE,900,40,640,400,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    SetWindowDisplayAffinity(host,WDA_EXCLUDEFROMCAPTURE);
+    engine::EngineController controller;engine::PlayerOptions settings;
+    settings.nr=settings.sr=false;settings.fg=true;settings.fgMultiplier=multiplier;settings.settings.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
+    source::ScreenCaptureOptions options;options.target=uint64_t(target);options.fps=60;options.cursor=false;
+    controller.open(host,options.uri(),settings);
+    const auto end=Clock::now()+std::chrono::seconds(resizeTarget?100:seconds);
+    auto lastProgress=Clock::now(),lastReport=Clock::now();uint64_t lastFrames=0;unsigned dimensions=0,lastW=0,lastH=0,phase=0;bool ok=true;
+    const SIZE sizes[]={{800,451},{1280,720},{800,450},{1280,721},{960,540},{800,451}};
+    auto nextResize=Clock::now()+std::chrono::seconds(3);
+    while(Clock::now()<end){
+        pump();Sleep(10);const auto s=controller.snapshot();
+        if(s.failed){std::wcout<<L"XESS failure "<<s.status<<std::endl;ok=false;break;}
+        if(s.frames>lastFrames){lastFrames=s.frames;lastProgress=Clock::now();}
+        if(s.sourceWidth&&s.sourceHeight&&(s.sourceWidth!=lastW||s.sourceHeight!=lastH)){
+            lastW=s.sourceWidth;lastH=s.sourceHeight;++dimensions;
+            std::cout<<"XESS_DIMENSIONS "<<lastW<<'x'<<lastH<<" frames="<<s.frames<<std::endl;
+        }
+        if(Clock::now()-lastReport>std::chrono::seconds(1)){
+            lastReport=Clock::now();const auto& f=s.metrics.flow;
+            std::cout<<"XESS_PROGRESS multiplier="<<multiplier<<" frames="<<s.frames<<" presented="<<f.counters.xessSdkPresented<<" providerFps="<<f.xessSdkSubmitFps<<std::endl;
+            if(!std::isfinite(f.xessSdkSubmitFps)||f.xessSdkSubmitFps>100000||f.counters.xessSdkPresented>1000000){ok=false;break;}
+        }
+        if(Clock::now()-lastProgress>std::chrono::seconds(12)){ok=false;break;}
+        if(resizeTarget&&Clock::now()>=nextResize&&s.frames>20){
+            if(phase==std::size(sizes)){if(Clock::now()-lastProgress<std::chrono::seconds(1))break;}
+            else{
+                RECT r{0,0,sizes[phase].cx,sizes[phase].cy};AdjustWindowRectEx(&r,DWORD(GetWindowLongPtrW(target,GWL_STYLE)),FALSE,DWORD(GetWindowLongPtrW(target,GWL_EXSTYLE)));
+                SetWindowPos(target,nullptr,40,40,r.right-r.left,r.bottom-r.top,SWP_NOZORDER|SWP_NOACTIVATE);
+                ++phase;nextResize=Clock::now()+std::chrono::seconds(3);
+            }
+        }
+    }
+    const auto s=controller.snapshot();ok=ok&&s.running&&!s.failed&&s.frames>100&&dimensions>=(resizeTarget?6u:2u)&&s.metrics.flow.counters.xessSdkPresented>0;
+    check(ok,resizeTarget?"XeSS real WGC repeated resize continues provider and frame progress":"browser video fullscreen keeps XeSS capture progressing");
+    controller.stop();const auto drain=Clock::now()+std::chrono::seconds(10);while(!controller.idle()&&Clock::now()<drain){pump();Sleep(10);}
+    check(controller.idle(),"XeSS resize engine drains after stop");DestroyWindow(host);return ok&&controller.idle()?0:1;
+}
 int wmain(int argc,wchar_t** argv){
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    if(argc>3&&std::wstring(argv[1])==L"--xess-window")
+        return xessResize(reinterpret_cast<HWND>(_wcstoui64(argv[2],nullptr,0)),unsigned(_wtoi(argv[3])),false,argc>4?unsigned(_wtoi(argv[4])):45);
     if(argc>1&&std::wstring(argv[1])==L"--target"){
         WNDCLASSW wc{};wc.lpfnWndProc=pattern;wc.hInstance=GetModuleHandleW(nullptr);wc.lpszClassName=L"VeyraScreenTestPattern";RegisterClassW(&wc);
         auto window=CreateWindowW(wc.lpszClassName,L"Veyra capture test pattern",WS_OVERLAPPEDWINDOW|WS_VISIBLE,40,40,660,420,nullptr,nullptr,wc.hInstance,nullptr);SetTimer(window,1,16,nullptr);
@@ -52,6 +112,7 @@ int wmain(int argc,wchar_t** argv){
     STARTUPINFOW si{sizeof(si)};PROCESS_INFORMATION process{};if(!CreateProcessW(path,command.data(),nullptr,nullptr,FALSE,0,nullptr,nullptr,&si,&process))return 2;
     struct Child {PROCESS_INFORMATION p;HWND window=nullptr;~Child(){if(window)PostMessageW(window,WM_CLOSE,0,0);if(WaitForSingleObject(p.hProcess,3000)==WAIT_TIMEOUT)TerminateProcess(p.hProcess,1);CloseHandle(p.hThread);CloseHandle(p.hProcess);}} child{process};
     for(int i=0;i<100&&!child.window;++i){for(auto& t:source::ScreenCaptureSource::targets(source::ScreenTargetKind::Window))if(t.processId==process.dwProcessId)child.window=HWND(t.handle);Sleep(20);}if(!child.window)return 3;
+    if(argc>1&&std::wstring(argv[1])==L"--xess-resize")return xessResize(child.window,argc>2?unsigned(_wtoi(argv[2])):4,true);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;dd.enableDebugLayer=true;
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 4;
     source::ScreenCaptureOptions options;check(options.fps==0,"default follows display refresh");options.target=uint64_t(child.window);options.fps=60;options.cursor=false;
@@ -128,6 +189,25 @@ int wmain(int argc,wchar_t** argv){
     HWND excluded=CreateWindowW(L"STATIC",L"Screen exclusion test",WS_OVERLAPPEDWINDOW|WS_VISIBLE,880,40,200,160,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     DWORD affinity=0;check(GetWindowDisplayAffinity(excluded,&affinity)&&affinity==WDA_NONE,"initial own window remains capturable");
     auto monitors=source::ScreenCaptureSource::targets(source::ScreenTargetKind::Monitor);check(!monitors.empty(),"enumerate monitors");
+    {   // Issue #107: each monitor names the adapter driving its display path, the
+        // adapter DXGI lists it under; a window target names its monitor's adapter.
+        Microsoft::WRL::ComPtr<IDXGIFactory1> factory;CreateDXGIFactory1(IID_PPV_ARGS(&factory));
+        bool named=!monitors.empty()&&factory;
+        for(const auto& m:monitors){
+            bool listed=false;
+            for(UINT a=0;factory;++a){Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;if(factory->EnumAdapters1(a,&adapter)==DXGI_ERROR_NOT_FOUND)break;
+                DXGI_ADAPTER_DESC1 d{};adapter->GetDesc1(&d);const uint64_t luid=uint64_t(uint32_t(d.AdapterLuid.HighPart))<<32|d.AdapterLuid.LowPart;
+                for(UINT o=0;;++o){Microsoft::WRL::ComPtr<IDXGIOutput> output;if(adapter->EnumOutputs(o,&output)==DXGI_ERROR_NOT_FOUND)break;
+                    DXGI_OUTPUT_DESC od{};if(SUCCEEDED(output->GetDesc(&od))&&uint64_t(od.Monitor)==m.handle&&luid==m.displayAdapter)listed=true;}}
+            std::cout<<"DISPLAY-ADAPTER monitor="<<m.handle<<" luid="<<std::hex<<m.displayAdapter<<std::dec<<" listedByDxgi="<<listed<<std::endl;
+            named=named&&m.displayAdapter&&listed&&m.displayAdapter==source::displayAdapterLuid(reinterpret_cast<void*>(m.handle));
+        }
+        check(named,"monitors name the adapter that drives their display");
+        bool window=false;const auto own=source::displayAdapterLuid(MonitorFromWindow(child.window,MONITOR_DEFAULTTONEAREST));
+        for(const auto& t:source::ScreenCaptureSource::targets(source::ScreenTargetKind::Window))if(t.handle==uint64_t(child.window))window=own&&t.displayAdapter==own;
+        check(window,"window target names its monitor's display adapter");
+        check(!source::displayAdapterLuid(nullptr),"no monitor has no display adapter");
+    }
     if(!monitors.empty())for(auto method:{source::ScreenCaptureMethod::Wgc,source::ScreenCaptureMethod::Duplication}){
         const auto monitor=MonitorFromWindow(child.window,MONITOR_DEFAULTTONEAREST);MONITORINFO mi{sizeof(mi)};GetMonitorInfoW(monitor,&mi);
         RECT client{};GetClientRect(child.window,&client);POINT origin{};ClientToScreen(child.window,&origin);
@@ -140,6 +220,36 @@ int wmain(int argc,wchar_t** argv){
     }
     DestroyWindow(excluded);
     options.left=options.top=options.right=options.bottom=0;
+    // Windows virtual desktops: a window on a desktop that is not shown is cloaked by
+    // the shell, yet must stay listed and keep being captured with real content.
+    // Needs a second desktop (Win+Ctrl+D); without one the case is reported as skipped.
+    if(source::vdesk::desktops().size()<2)std::cout<<"SCREEN virtual desktop cases skipped: create a second desktop with Win+Ctrl+D"<<std::endl;
+    else{
+        SetWindowPos(child.window,HWND_NOTOPMOST,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE);
+        DWORD_PTR moved=0;
+        const bool away=SendMessageTimeoutW(child.window,WM_APP+3,0,0,SMTO_ABORTIFHUNG,5000,&moved)&&moved;
+        check(away,"test window moves to another virtual desktop");
+        if(away){
+            Sleep(300);
+            check(source::vdesk::shellCloaked(child.window),"window on another virtual desktop is cloaked by the shell");
+            bool listed=false;
+            for(const auto& t:source::ScreenCaptureSource::targets(source::ScreenTargetKind::Window))
+                if(t.handle==uint64_t(child.window))listed=t.otherDesktop&&t.desktopNumber>0;
+            check(listed,"window on another virtual desktop stays listed with its desktop number");
+            options.kind=source::ScreenTargetKind::Window;options.target=uint64_t(child.window);options.method=source::ScreenCaptureMethod::Wgc;options.fps=60;options.cursor=false;
+            desc.path=options.uri();const bool ok=source.open(desc)&&next(source,p,&f,5000);
+            check(ok&&content(ctx,ring,source,p,f),"WGC window on another virtual desktop actual RGB content");if(!ok)std::wcerr<<source.status()<<std::endl;
+            const auto before=source.metrics().delivered;end=GetTickCount64()+1000;
+            while(GetTickCount64()<end){source.read(p,&f);pump();Sleep(2);}
+            std::cout<<"VDESK oneSecondFrames="<<source.metrics().delivered-before<<std::endl;
+            check(ok&&source.metrics().delivered>before+20,"window on another virtual desktop keeps delivering frames");
+            source.close();
+            DWORD_PTR back=0;
+            check(SendMessageTimeoutW(child.window,WM_APP+4,0,0,SMTO_ABORTIFHUNG,5000,&back)&&back,"test window returns to the shown desktop");
+            Sleep(300);
+            check(!source::vdesk::shellCloaked(child.window),"window back on the shown desktop is not cloaked");
+        }
+    }
     options.kind=source::ScreenTargetKind::Window;options.target=uint64_t(child.window);options.method=source::ScreenCaptureMethod::Wgc;desc.path=options.uri();check(source.open(desc),"window reopen");PostMessageW(child.window,WM_CLOSE,0,0);WaitForSingleObject(process.hProcess,3000);check(source.read(p,&f)==source::SourceReadStatus::Error,"closed target reports error");source.close();
     std::cout<<"SCREEN failures="<<failures<<std::endl;return failures?1:0;
 }

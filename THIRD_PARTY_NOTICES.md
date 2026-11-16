@@ -784,8 +784,22 @@ NvAPI_Disp_GetVRRInfo and NvAPI_DISP_GetMonitorCapabilities and renamed
 NV_GET_VRR_INFO_V1 and NV_MONITOR_CAPABILITIES_V1 (generic capability bits)
 layouts (checked against the commit above). It only reads the monitor's
 variable-refresh support and state, for diagnostics and to enable the 可变刷新
-switch; the driver setting is never changed. Same loading rules and the same
+switch; this monitor query never changes driver settings. Same loading rules and the same
 license as above.
+
+`src/gfx/NvidiaVrrProfile.cpp` (2026-11-14) adds minimal renamed DRS v1
+application/profile/setting layouts, QueryInterface IDs and G-SYNC scope enums,
+checked against NVIDIA/nvapi commit
+`51e5aae4bc40c3ccd3fb7d4dfd94256e7bfc496e` (`nvapi.h`,
+`nvapi_interface.h`, `NvApiDriverSettings.h`, MIT). The independently authored
+controller exposes explicit check/repair/restore actions for the current
+application's full-path, isolated driver profile. Unlike the monitor query
+above, this user-invoked operation can save the two application scope values.
+It never enables global G-SYNC, edits another application's profile, or copies
+Profile Inspector implementation code. Original local/inherited values are
+saved before mutation; restoration preserves unrelated settings. No complete
+SDK header or driver DLL is committed or distributed. The same NVIDIA MIT
+notice below applies to the minimal ABI reference declarations.
 
 Copyright (c) 2019-2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 
@@ -1100,3 +1114,19 @@ At the inspected commit the ANR core source and a clear integration/redistributi
 ### ANR public release boundary (2026-11-13)
 
 Upstream collaborator selimsandal explicitly states that third-party redistribution is not allowed until a full-release license is issued: https://github.com/apex-compute/ANR/issues/9#issuecomment-6857895225 (2026-11-13T15:49:32Z). Veyra 2.1.6 public packages contain none of ANR's provider DLL, model/program packs, configuration or generated bridge loader. The host adapter remains independently written Veyra source. Existing private local test copies are not public Release assets; no automated download, mirror, repackaged or renamed ANR payload is offered. The previous dated local research/measurements remain historical evidence, not a grant of redistribution rights.
+
+## AMD Advanced Media Framework (AMF) SDK headers
+
+- Source: https://github.com/GPUOpen-LibrariesAndSDKs/AMF, tag v1.5.3 (commit 57ee0cfb0e1a08d9041f77435653794c1b012be0), public headers `amf/public/include` only, used at build time for AMD FRC (frame rate conversion).
+- License: MIT, Copyright (c) Advanced Micro Devices, Inc. (see LICENSE.txt in that tag; each header carries the MIT notice).
+- Nothing from the SDK is redistributed in Veyra packages. The AMF runtime (`amfrt64.dll`) belongs to the user's AMD driver and is loaded from the Windows system directory only.
+
+## Startup music in runnable packages (2026-11-15)
+
+The user supplied BGM.MP3 and confirmed permission to distribute the exact file
+in Veyra runnable packages. The asset is separate from Veyra source code and its
+GPL license; it is excluded from Git and corresponding source archives.
+Runtime path: `media/startup-music.mp3`, 1847011 bytes, SHA256
+`3005aa601f06a97d3968fd9fa171e870fceb4ec47586f1e950c9ed3c7875fb6a`.
+Each runnable package includes its separate notice and manifest. Windows Media
+Foundation provides decoding; no additional codec or audio SDK is bundled.

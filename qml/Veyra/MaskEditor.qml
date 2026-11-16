@@ -45,6 +45,16 @@ ColumnLayout {
             onClicked: veyra.clearMaskRegions(editor.allEffects)
         }
     }
+    VRow {
+        visible: editor.allEffects
+        label: qsTr("显示区域红框")
+        hint: qsTr("选中区域后可拖动位置；红框不会写入录制或导出")
+        VSwitch {
+            objectName: editor.namePrefix+"-show-regions"
+            checked: veyra.exclusionOverlayVisible
+            onToggled: checked => veyra.exclusionOverlayVisible = checked
+        }
+    }
     Repeater {
         model: editor.regions
         delegate: VRow {
@@ -53,10 +63,20 @@ ColumnLayout {
             label: (modelData.ellipse?qsTr("圆形 "):qsTr("矩形 "))+(index+1)
             value: Math.round(modelData.left*100)+","+Math.round(modelData.top*100)+" → "
                    +Math.round(modelData.right*100)+","+Math.round(modelData.bottom*100)+" %"
-            VButton {
-                objectName: editor.namePrefix+"-remove-"+index
-                icon: true; ghost: true; iconName: "x"
-                onClicked: veyra.removeMaskRegion(editor.allEffects,modelData.index)
+            Row {
+                spacing: 6
+                VButton {
+                    visible: editor.allEffects
+                    objectName: editor.namePrefix+"-select-"+index
+                    text: editor.maskState.selected === modelData.index ? qsTr("已选中") : qsTr("选中")
+                    primary: editor.maskState.selected === modelData.index
+                    onClicked: veyra.selectExclusionRegion(modelData.index)
+                }
+                VButton {
+                    objectName: editor.namePrefix+"-remove-"+index
+                    icon: true; ghost: true; iconName: "x"
+                    onClicked: veyra.removeMaskRegion(editor.allEffects,modelData.index)
+                }
             }
         }
     }

@@ -162,6 +162,44 @@ VPage {
                         wrapMode: Text.WordWrap
                     }
                     VGroup {
+                        // 日落 (the default) or the original black-grey 经典 palette.
+                        VRow {
+                            label: qsTr("界面配色")
+                            hint: qsTr("日落：深靛紫底、日落渐变强调色；经典：原来的黑灰配色")
+                            VSeg {
+                                objectName: "set-palette"
+                                options: [{ id: "dusk", label: qsTr("日落") }, { id: "classic", label: qsTr("经典") }]
+                                current: veyra.preferences.palette === "classic" ? "classic" : "dusk"
+                                onPicked: id => veyra.setPreference("palette", id)
+                            }
+                        }
+                        // The dusk palette's intro (DuskIntro.qml); classic has none.
+                        VRow {
+                            visible: Theme.dusk
+                            label: qsTr("启动动画")
+                            hint: qsTr("日落配色下打开软件时播放，单击或按任意键可跳过")
+                            VSwitch {
+                                objectName: "set-intro"
+                                checked: veyra.preferences.introAnimation !== false
+                                onToggled: checked => veyra.setPreference("introAnimation", checked)
+                            }
+                        }
+                        // This saved switch controls future launches. The corner button
+                        // stops only the current launch and leaves this preference intact.
+                        VRow {
+                            label: qsTr("启动音乐")
+                            hint: typeof vyMusic !== "undefined" && vyMusic.available
+                                  ? qsTr("每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次")
+                                  : qsTr("未找到音乐文件：程序目录下的 media/startup-music.mp3")
+                            VSwitch {
+                                objectName: "set-intro-music"
+                                checked: veyra.preferences.introMusic !== false
+                                onToggled: checked => {
+                                    veyra.setPreference("introMusic", checked)
+                                    if (!checked && typeof vyMusic !== "undefined") vyMusic.pause()
+                                }
+                            }
+                        }
                         VRow {
                             label: qsTr("页面切换栏")
                             hint: qsTr("平时隐藏；鼠标碰到窗口顶部时弹下来")
@@ -180,13 +218,24 @@ VPage {
                                 objectName: "set-accent"
                                 spacing: 10
                                 Repeater {
-                                    model: [{ id: "orange", c: "#FF8A3D", tip: qsTr("橙色") }, { id: "white", c: "#F3F3F5", tip: qsTr("白色光晕") }]
+                                    model: [{ id: "orange", c: "#FF8A3D", tip: qsTr("橙色"), duskTip: qsTr("日落渐变") },
+                                            { id: "white", c: "#F3F3F5", tip: qsTr("白色光晕"), duskTip: qsTr("白色光晕") }]
                                     delegate: Rectangle {
+                                        id: swatch
                                         required property var modelData
                                         readonly property bool on: (veyra.preferences.accent || "orange") === modelData.id
                                         objectName: "set-accent-" + modelData.id
                                         width: 24; height: 24; radius: 12
-                                        color: modelData.c
+                                        // The dusk palette shows what each choice paints: the sunset
+                                        // gradient, or the neon white (the ring stays on top).
+                                        color: Theme.dusk ? "#FFF6FB" : modelData.c
+                                        gradient: Theme.dusk && modelData.id === "orange" ? sunset : undefined
+                                        Gradient {
+                                            id: sunset
+                                            orientation: Gradient.Horizontal
+                                            GradientStop { position: 0.0; color: Theme.accentFrom }
+                                            GradientStop { position: 1.0; color: Theme.accentTo }
+                                        }
                                         border.width: 2
                                         border.color: on ? "#FFFFFF" : "transparent"
                                         scale: on ? 1.12 : 1
@@ -194,7 +243,7 @@ VPage {
                                         HoverHandler { id: swHover; cursorShape: Qt.PointingHandCursor }
                                         TapHandler { onTapped: veyra.setPreference("accent", modelData.id) }
                                         ToolTip.visible: swHover.hovered
-                                        ToolTip.text: modelData.tip
+                                        ToolTip.text: Theme.dusk ? modelData.duskTip : modelData.tip
                                     }
                                 }
                             }
@@ -219,7 +268,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("背景渐变强度")
-                            hint: qsTr("深黑底上的极轻渐变与抖动（防色带）")
+                            hint: Theme.dusk ? qsTr("日落天空的渐变强度，带抖动防色带") : qsTr("深黑底上的极轻渐变与抖动（防色带）")
                             VSeg {
                                 objectName: "set-backdrop"
                                 options: [{ id: "0", label: qsTr("无") }, { id: "1", label: qsTr("轻") }, { id: "2", label: qsTr("中") }]
@@ -611,7 +660,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("录制声音")
-                            hint: qsTr("录入播放器正在播放的声音，不受音量和静音影响；采集卡需要开启音频监听")
+                            hint: qsTr("录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入")
                             VSwitch {
                                 objectName: "set-recaudio"
                                 checked: veyra.recordingAudio
@@ -1239,7 +1288,7 @@ VPage {
                     RowLayout {
                         spacing: 18
                         Image {
-                            source: "logo.png"
+                            source: Theme.logoImage
                             sourceSize.width: 88
                             fillMode: Image.PreserveAspectFit
                         }

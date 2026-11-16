@@ -1,7 +1,11 @@
 // QML bridge: Capture responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/source/VirtualDesktop.h"
 #include "veyra/source/WasapiAudioInput.h"
 #include "VirtualCaptureAudioSetup.h"
+#include <dxgi1_6.h>
+#include <wrl/client.h>
+#include <map>
 
 namespace veyra::ui {
 // --- capture dialog ----------------------------------------------------------
@@ -188,7 +192,7 @@ void QmlPlayerBridge::setCapturePixelId(const QString& id) {
 }
 QVariantList QmlPlayerBridge::captureAudioInputs() const {
     // Only what the user picks explicitly is ever opened (1.4.4 rule).
-    QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不监听音频")}}};
+    QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不采集音频")}}};
     if(impl_->captureAudioMissing)out<<QVariantMap{{"id",-4},{"label",tr("上次的音频输入未连接")},{"disabled",true}};
     for (const auto& d : impl_->captureVideo)
         if (d.path == impl_->captureDevice)
@@ -463,7 +467,7 @@ bool QmlPlayerBridge::startCaptureSession() {
     if(device<0){emit notice(tr("请先选择采集设备和格式"),true);return false;}
     if(!format){emit notice(i.captureFormatKey.empty()&&i.capturePrefs.formatKey.empty()?tr("请先选择分辨率和像素格式"):tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"),true);return false;}
     if(!format->supported){emit notice(tr("设备提供此格式，但当前播放器不支持其尺寸或像素布局，请选择其他格式"),true);return false;}
-    if(i.captureAudioMissing){emit notice(tr("上次的音频输入未连接，请插回设备或重新选择音频监听"),true);return false;}
+    if(i.captureAudioMissing){emit notice(tr("上次的音频输入未连接，请插回设备或重新选择音频输入"),true);return false;}
     const int audio = i.captureAudioChoice;
     const source::CaptureDevice* audioDevice = audio >= 0 && size_t(audio) < i.captureAudio.size() ? &i.captureAudio[size_t(audio)] : nullptr;
     if (audioDevice && audioDevice->virtualSpeaker) {
@@ -512,6 +516,7 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
     impl_->biliRetriesLeft = 0;
     impl_->biliRetryPending = false;
     rememberPosition(true);
+    emit mediaOpenRequested();
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
     impl_->sourceLabel = label;
@@ -582,20 +587,57 @@ void QmlPlayerBridge::setCaptureFlipVertical(bool value) {
 }
 
 // --- screen capture ----------------------------------------------------------
+namespace {
+// An adapter's name by LUID (DXGI). Cached: neither changes while the program runs.
+QString adapterName(uint64_t luid) {
+    static std::map<uint64_t, QString> names;
+    if (const auto it = names.find(luid); it != names.end()) return it->second;
+    QString name;
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    DXGI_ADAPTER_DESC1 d{};
+    if (SUCCEEDED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))) &&
+        SUCCEEDED(factory->EnumAdapterByLuid(LUID{DWORD(luid & 0xFFFFFFFFu), LONG(luid >> 32)}, IID_PPV_ARGS(&adapter))) &&
+        SUCCEEDED(adapter->GetDesc1(&d)))
+        name = QString::fromWCharArray(d.Description);
+    return names[luid] = name;
+}
+}
+
 QVariantList QmlPlayerBridge::screenTargets() const {
     // Enumerated from the source for the chosen kind; cached until refreshed so a
     // binding re-evaluation does not walk every window again.
     QVariantList out;
+    // Issue #107: a target whose display another GPU drives is copied between the
+    // GPUs by Windows on every frame; the dialog names both adapters.
+    const auto* engine = engineAdapterDesc();
+    const uint64_t processing = engine ? uint64_t(uint32_t(engine->AdapterLuid.HighPart)) << 32 | engine->AdapterLuid.LowPart : 0;
     for (const auto& target : impl_->screenList) {
         QVariantMap item;
         item["id"] = QString::number(target.handle);
         QString label = QString::fromWCharArray(target.name.c_str());
+        // A window on another virtual desktop (Win+Ctrl+D) is captured without
+        // switching to it; the label names that desktop as Task View shows it.
+        if (target.otherDesktop) {
+            const QString name = QString::fromStdWString(target.desktopName);
+            const QString desktop = !target.desktopNumber ? tr("其他桌面")
+                : name.isEmpty() ? tr("桌面 %1").arg(target.desktopNumber)
+                : tr("桌面 %1 · %2").arg(target.desktopNumber).arg(name);
+            label = QStringLiteral("[%1] %2").arg(desktop, label);
+        }
         if (target.width > 0)
             label += QStringLiteral(" · %1x%2").arg(target.width).arg(target.height);
         if (target.refresh > 0) label += QStringLiteral(" · %1Hz").arg(target.refresh);
         item["label"] = label;
         item["width"] = int(target.width);
         item["height"] = int(target.height);
+        item["otherDesktop"] = target.otherDesktop;
+        item["desktop"] = int(target.desktopNumber);
+        if (processing && target.displayAdapter && target.displayAdapter != processing) {
+            item["otherGpu"] = true;
+            item["displayGpu"] = adapterName(target.displayAdapter);
+            item["processingGpu"] = QString::fromWCharArray(engine->Description);
+        }
         out << item;
     }
     return out;
@@ -644,6 +686,16 @@ bool QmlPlayerBridge::startScreenCapture() {
     // second, late pointer otherwise), the picture must match the screen 1:1 for
     // clicks to land where they are seen (no crop), and the yellow border goes.
     const bool game = o.value("passthrough").toBool();
+    // 游戏模式 hands the foreground to the captured window, and activating a window
+    // on another virtual desktop makes Windows switch to that desktop, away from
+    // the picture. Checked live: the window may have moved since the list was read.
+    if (game && value.kind == source::ScreenTargetKind::Window) {
+        source::vdesk::Placement desktop;
+        if (source::vdesk::Lookup{}.otherDesktop(reinterpret_cast<void*>(value.target), desktop)) {
+            emit notice(tr("游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获"), true);
+            return false;
+        }
+    }
     if (game) {
         value.cursor = false; value.borderless = true;
         value.left = value.top = value.right = value.bottom = 0;
@@ -656,8 +708,10 @@ bool QmlPlayerBridge::startScreenCapture() {
         if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
             emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
     } else impl_->gameModeUri.clear();
-    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={}", int(value.kind), int(value.method),
-        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game));
+    bool otherDesktop = false;
+    for (const auto& t : impl_->screenList) if (t.handle == value.target) otherDesktop = t.otherDesktop;
+    veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={} otherVirtualDesktop={}", int(value.kind), int(value.method),
+        value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game, otherDesktop));
     openSourceUri(value.uri(), wideOf(screenTargetLabel()), o.value("fill").toBool());
     impl_->screenFitClient = impl_->screenFitImage = QSize();
     if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }

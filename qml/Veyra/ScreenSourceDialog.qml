@@ -24,6 +24,21 @@ DialogLayer {
         function onDialogChanged() { if (dialogHost.dialog === "screen") veyra.refreshCaptureTargets() }
     }
     readonly property var o: veyra.screenOptions
+    // The chosen window is on another Windows virtual desktop (Win+Ctrl+D).
+    readonly property bool otherDesktopTarget: {
+        const targets = veyra.screenTargets, id = veyra.screenTargetId
+        for (let i = 0; i < targets.length; ++i)
+            if (targets[i].id === id) return targets[i].otherDesktop === true
+        return false
+    }
+    // The chosen target's display is connected to another GPU than the one Veyra
+    // processes on, so Windows copies every frame between the two (issue #107).
+    readonly property var otherGpuTarget: {
+        const targets = veyra.screenTargets, id = veyra.screenTargetId
+        for (let i = 0; i < targets.length; ++i)
+            if (targets[i].id === id) return targets[i].otherGpu === true ? targets[i] : null
+        return null
+    }
 
     DialogSection { text: qsTr("目标") }
     DialogGroup {
@@ -38,7 +53,14 @@ DialogLayer {
         }
         VRow {
             label: qsTr("捕获目标")
-            hint: veyra.screenTargets.length === 0 ? qsTr("未找到可捕获的窗口或显示器") : ""
+            hint: {
+                if (veyra.screenTargets.length === 0) return qsTr("未找到可捕获的窗口或显示器")
+                const lines = []
+                if (screenDialog.otherDesktopTarget) lines.push(qsTr("这个窗口在其他虚拟桌面上，不用切换桌面即可捕获；部分程序在所在桌面不显示时会暂停绘制"))
+                const gpu = screenDialog.otherGpuTarget
+                if (gpu) lines.push(qsTr("这个目标所在的显示器接在 %1 上，Veyra 在 %2 上处理：每帧画面都要由 Windows 在两块显卡之间复制，延迟更高。双显卡分工时，建议把显示器接到处理用的显卡上（笔记本可开独显直连）").arg(gpu.displayGpu).arg(gpu.processingGpu))
+                return lines.join("\n")
+            }
             RowLayout {
                 spacing: 6
                 VSelect {
@@ -56,7 +78,9 @@ DialogLayer {
     DialogGroup {
         VRow {
             label: qsTr("游戏模式")
-            hint: screenDialog.o.kind === 1
+            hint: screenDialog.o.kind === 0 && screenDialog.otherDesktopTarget && screenDialog.o.passthrough === true
+                  ? qsTr("游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获")
+                  : screenDialog.o.kind === 1
                   ? qsTr("开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
                   : qsTr("贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口").arg(veyra.shortcuts.gamePanel).arg(veyra.shortcuts.gameExit)
             VSwitch {

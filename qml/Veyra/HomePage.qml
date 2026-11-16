@@ -13,6 +13,10 @@ VPage {
     signal requestPage(string page)
     // The coffee line under the title: Main opens 设置 → 赞助作者.
     signal requestSponsor()
+    // Main.qml keeps the dusk wordmark hidden while the startup intro (DuskIntro.qml) flies a
+    // copy of it in, and aims that copy at this item.
+    property bool introHold: false
+    readonly property Item wordmarkItem: wordmark
 
     ColumnLayout {
         anchors.centerIn: parent
@@ -26,6 +30,7 @@ VPage {
         // keep the layout the same as a plain 128px image.
         Item {
             id: mark
+            visible: !Theme.dusk
             Layout.alignment: Qt.AlignHCenter
             Layout.topMargin: -40
             Layout.bottomMargin: -40
@@ -45,7 +50,7 @@ VPage {
             Image {
                 id: logoImg
                 anchors.centerIn: parent
-                source: "logo.png"
+                source: Theme.logoImage
                 sourceSize.width: 128
                 fillMode: Image.PreserveAspectFit
             }
@@ -56,12 +61,51 @@ VPage {
                 source: logoImg
                 anchors.fill: logoImg
                 shadowEnabled: true
-                shadowColor: "#FFFFFF"
+                // The dusk logo carries its own neon glow; the breath adds a pink one to it.
+                shadowColor: Theme.dusk ? "#F396CE" : "#FFFFFF"
                 shadowHorizontalOffset: 0
                 shadowVerticalOffset: 0
                 blurMax: 64
                 shadowBlur: 0.625 + 0.3125 * mark.breath
-                shadowOpacity: 0.35 + 0.2 * mark.breath
+                shadowOpacity: (Theme.dusk ? 0.22 : 0.35) + 0.2 * mark.breath
+            }
+        }
+
+        // 日落: the user's wordmark (tools/qt_probe/make-wordmark-dusk.py) in place of the gamepad
+        // and the title, a baked glow breathing behind it (the software scene graph draws no
+        // MultiEffect). 0.24 of the page height, 130..210 px, so short windows keep the cards.
+        Item {
+            id: duskMark
+            visible: Theme.dusk
+            Layout.alignment: Qt.AlignHCenter
+            implicitWidth: wordmark.width
+            implicitHeight: wordmark.height
+            property real breath: 0
+            // Only while it shows, as the gamepad's breath (see above).
+            SequentialAnimation on breath {
+                running: !Theme.reduced && duskMark.visible && !root.introHold
+                loops: Animation.Infinite
+                NumberAnimation { to: 1; duration: Theme.d(2250); easing.type: Easing.InOutSine }
+                NumberAnimation { to: 0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
+            }
+            Image {
+                // wordmark-dusk-glow.png is the wordmark's box grown by 186/1164 of its width.
+                readonly property real pad: wordmark.width * 186 / 1164
+                x: -pad
+                y: -pad
+                width: wordmark.width + 2 * pad
+                height: wordmark.height + 2 * pad
+                source: "wordmark-dusk-glow.png"
+                opacity: root.introHold ? 0 : 0.16 + 0.14 * duskMark.breath
+            }
+            Image {
+                id: wordmark
+                objectName: "home-wordmark"
+                height: Math.round(Math.max(130, Math.min(210, root.height * 0.24)))
+                width: Math.round(height * 1164 / 969)
+                source: "wordmark-dusk.png"
+                sourceSize: Qt.size(width, height)
+                opacity: root.introHold ? 0 : 1
             }
         }
 
@@ -73,6 +117,7 @@ VPage {
             spacing: 6
             Text {
                 Layout.alignment: Qt.AlignHCenter
+                visible: !Theme.dusk                    // the dusk wordmark says it
                 text: "Veyra NR Video"
                 color: Theme.t1
                 font.family: Theme.fontUi

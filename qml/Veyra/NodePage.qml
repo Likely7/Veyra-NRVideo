@@ -87,7 +87,7 @@ VPage {
         case "nr-stabilizer": return "#5DCCA1"
         case "exclusion": return "#E7B868"
         case "video-hdr": return "#FFB547"
-        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": return "#3DDC84"
+        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": case "amdfrc-fg": return "#3DDC84"
         }
         return "#55555C"
     }
@@ -589,7 +589,7 @@ VPage {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Theme.rCard
-            color: "#0A0A0D"
+            color: Theme.shade(10, 10, 13)
             border.width: 1
             border.color: Theme.stroke
             clip: true
@@ -660,7 +660,7 @@ VPage {
                         const a = root.endpoint(edge.from, true), b = root.endpoint(edge.to, false)
                         if (!a || !b) continue
                         const hot = edge.from === root.hotFrom && edge.to === root.hotTo
-                        ctx.strokeStyle = hot ? "#FF8A3D" : "#8291AA"; ctx.lineWidth = (hot ? 4 : 2) / root.zoom
+                        ctx.strokeStyle = hot ? (Theme.dusk ? Theme.accent : "#FF8A3D") : "#8291AA"; ctx.lineWidth = (hot ? 4 : 2) / root.zoom
                         curve(a, b)
                     }
                     // Rubber band from the chosen output port to the pointer.
@@ -668,7 +668,7 @@ VPage {
                         const a = root.endpoint(root.wireFrom, true)
                         if (a) {
                             ctx.setLineDash([6 / root.zoom, 4 / root.zoom])
-                            ctx.strokeStyle = "#FF8A3D"; ctx.lineWidth = 2 / root.zoom
+                            ctx.strokeStyle = Theme.dusk ? Theme.accent : "#FF8A3D"; ctx.lineWidth = 2 / root.zoom
                             curve(a, root.pointerWorld)
                             ctx.setLineDash([])
                         }
@@ -992,7 +992,7 @@ VPage {
                 width: toolsRow.implicitWidth + 8
                 height: toolsRow.implicitHeight + 8
                 radius: 12
-                color: Qt.rgba(20 / 255, 20 / 255, 24 / 255, 0.94)
+                color: Theme.shade(20, 20, 24, 0.94)
                 border.width: 1
                 border.color: Theme.stroke2
                 RowLayout {
@@ -1043,7 +1043,7 @@ VPage {
                 anchors.margins: 12
                 height: 18
                 radius: 5
-                color: Qt.rgba(10 / 255, 10 / 255, 13 / 255, 0.85)
+                color: Theme.shade(10, 10, 13, 0.85)
                 visible: segments.length > 0
                 readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", aa: "#7FD4FF",
                                                "frame-generation": "#3DDC84", protection: "#E7B868" })
@@ -1155,7 +1155,7 @@ VPage {
         onXChanged: wires.requestPaint()
         onYChanged: wires.requestPaint()
         radius: 10
-        color: "#1D1D22"
+        color: Theme.shade(29, 29, 34)
         border.width: 1
         border.color: Theme.stroke2
         Item {
@@ -1210,7 +1210,7 @@ VPage {
         width: node.type === "color" ? 360 : ["nr", "protection", "exclusion"].indexOf(node.type)>=0 ? 320 : 272
         height: body.implicitHeight
         radius: 10
-        color: "#1D1D22"
+        color: Theme.shade(29, 29, 34)
         opacity: (node.enabled ? 1 : 0.74) * lifeOpacity
         property real lifeScale: 1
         property real lifeOpacity: 1

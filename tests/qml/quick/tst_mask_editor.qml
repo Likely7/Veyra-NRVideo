@@ -10,6 +10,7 @@ Item {
         property var protectionState: ({enabled:true,feather:2,regions:[],drawShape:""})
         property var exclusionState: ({enabled:true,feather:12,regions:[],drawShape:""})
         property var preferences: ({})
+        property bool exclusionOverlayVisible: false
         property var edits: []
         function patch(all, fields) {
             if(all) exclusionState=Object.assign({},exclusionState,fields)
@@ -20,6 +21,7 @@ Item {
             edits=edits.concat([{all:all,shape:shape}])
         }
         function setMaskFeather(all,value) { patch(all,{feather:value}) }
+        function selectExclusionRegion(index) { exclusionOverlayVisible=true;patch(true,{selected:index}) }
         function clearMaskRegions(all) { patch(all,{regions:[]}) }
         function removeMaskRegion(all,index) {
             const state=all?exclusionState:protectionState
@@ -38,6 +40,7 @@ Item {
         when: windowShown
         function init() {
             fixture.width=420;editor.allEffects=false;backend.edits=[]
+            backend.exclusionOverlayVisible=false
             backend.protectionState={enabled:true,feather:2,regions:[],drawShape:""}
             backend.exclusionState={enabled:true,feather:12,regions:[],drawShape:""}
             wait(30)
@@ -84,6 +87,20 @@ Item {
                 const point=button.mapToItem(editor,0,0)
                 verify(point.x>=0&&point.x+button.width<=editor.width+1)
             }
+        }
+        function test_outline_toggle_and_storage_index_selection() {
+            editor.allEffects=true
+            backend.patch(true,{regions:[{index:3,left:.1,top:.2,right:.5,bottom:.6,ellipse:false}]})
+            wait(30)
+            const toggle=findChild(editor,"fixture-mask-show-regions")
+            mouseClick(toggle)
+            compare(backend.exclusionOverlayVisible,true)
+            mouseClick(toggle)
+            compare(backend.exclusionOverlayVisible,false)
+            mouseClick(findChild(editor,"fixture-mask-select-0"))
+            compare(backend.exclusionState.selected,3)
+            compare(backend.exclusionOverlayVisible,true)
+            compare(backend.exclusionState.enabled,true)
         }
     }
 }

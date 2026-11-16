@@ -1,6 +1,7 @@
 // QML bridge: Core responsibilities.
 #include "QmlPlayerBridge_p.h"
 #include "veyra/engine/MicrophoneCapture.h"
+#include "veyra/ui/NvidiaVrrProfileController.h"
 
 namespace veyra::ui {
 namespace {bool prepareStartupPreset(const engine::PresetEntry& entry, engine::ChainSession& session,
@@ -57,6 +58,14 @@ namespace {bool prepareStartupPreset(const engine::PresetEntry& entry, engine::C
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    connect(this,&QmlPlayerBridge::mediaOpenRequested,this,[this]{
+        endExclusionMove(false);impl_->exclusionSelected=-1;beginProtectionDraw(QString{});
+        emit protectionChanged();
+    });
+    auto* vrrProfile = new NvidiaVrrProfileController(impl_->dataDir, this);
+    nvidiaVrrProfile_ = vrrProfile;
+    connect(vrrProfile, &NvidiaVrrProfileController::notice, this, &QmlPlayerBridge::notice);
+    connect(this, &QmlPlayerBridge::preferencesChanged, vrrProfile, &NvidiaVrrProfileController::changed);
     auto* checker = new UpdateChecker(version(), this);
     updates_ = checker;
     connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);
@@ -73,6 +82,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+    impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // The last volume (user 2026-11-08: it came back at 100% every launch).
     // Mute stays per session; profiles without the key keep 100%.
     if (impl_->prefs.contains(QStringLiteral("volume"))) {
@@ -500,6 +510,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             else emit notice(tr("显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。")
                                  .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
         }
+        updateMaskOverlay();
         tickSubtitles();
         tickImageBatch();
         tickBiliList();

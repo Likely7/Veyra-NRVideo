@@ -86,6 +86,7 @@ void QmlPlayerBridge::setupXbox() {
         auto& j = *impl_;
         if (!j.videoWindow) return false;
         rememberPosition(true);
+        emit mediaOpenRequested();
         j.openingSource = true;
         j.openingSessionId = 0;
         j.sourceLabel = L"Xbox · " + launch.label.toStdWString();
@@ -189,6 +190,7 @@ void QmlPlayerBridge::setupMoonlight() {
         auto& j = *impl_;
         if (!j.videoWindow) return false;
         rememberPosition(true);
+        emit mediaOpenRequested();
         j.openingSource = true;
         j.openingSessionId = 0;
         j.sourceLabel = L"PC · " + launch.label.toStdWString();
@@ -441,6 +443,7 @@ bool QmlPlayerBridge::ps5Connect() {
     rememberPosition(true);
     // The session id is cleared with the flag: the previous session's id left over here
     // ended "opening" on the next snapshot while the old source still ran.
+    emit mediaOpenRequested();
     i.openingSource = true; i.openingSessionId = 0; i.sourceLabel = L"PS5 · " + std::wstring(host.begin(), host.end()); i.resumeSession = 0; i.screenFillActive = false;
     auto request = std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
     openAfterCinema(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly] {

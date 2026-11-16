@@ -209,6 +209,8 @@ void QmlPlayerBridge::openPath(const QString& path) {
     // Any open supersedes a mirror retry that is still waiting on its timer.
     ++impl_->biliOpenGen;
     if (path.isEmpty()) return;
+    endExclusionMove(false);
+    impl_->exclusionSelected=-1;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
     // A local file or an unrelated URL must not inherit the last video's DASH audio
     // address or the site's Referer/UA: separateAudio reads audioPath alone, so a
@@ -249,6 +251,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     impl_->exportTrimStartSeconds = 0.0;
     impl_->exportTrimEndSeconds = 0.0;
     emit exportChanged();
+    emit mediaOpenRequested();
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
     const std::wstring wide = wideOf(path);

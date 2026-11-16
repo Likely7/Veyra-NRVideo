@@ -31,6 +31,6 @@ int wmain(int argc,wchar_t** argv){
         ChainSessionStore store(root/(name+L".session"));check(store.save(*session),"ANR dual-mode session saves");
         auto reloaded=std::make_unique<ChainSession>();check(store.load(*reloaded)&&*reloaded==*session,"ANR list and node configuration survive disk restart");
     }
-    EnhancementSettings bad;bad.frameGenerationBackend=FrameGenerationBackend::Anr;bad.multiplier=7;check(!bad.validate().empty(),"ANR rejects multiplier above six");bad.multiplier=2;bad.frameGenerationBackend=static_cast<FrameGenerationBackend>(6);check(!bad.validate().empty(),"unknown backend remains rejected");
+    EnhancementSettings bad;bad.frameGenerationBackend=FrameGenerationBackend::Anr;bad.multiplier=7;check(!bad.validate().empty(),"ANR rejects multiplier above six");bad.multiplier=2;bad.frameGenerationBackend=static_cast<FrameGenerationBackend>(7); // 6 is AMD FRC since 2026-11-14check(!bad.validate().empty(),"unknown backend remains rejected");
     std::cout<<"ANR_SETTINGS checks="<<checks<<" failures="<<failures<<'\n';return failures?1:0;
 }

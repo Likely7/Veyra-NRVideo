@@ -28,6 +28,29 @@ private:
     int64_t start_=0;
     std::deque<int64_t> times_;
 };
+// Cumulative SDK reports can contain many completions at one observation time.
+// Store one weighted observation, never perform O(count) work on an external
+// counter. The history is bounded by observations, independently of the value.
+class CountedFrameRateWindow {
+public:
+    void reset(int64_t now){start_=now;observations_.clear();}
+    void complete(int64_t now,uint64_t count){
+        if(count)observations_.push_back({now,count});
+        while(observations_.size()>8192||(!observations_.empty()&&observations_.front().time<=now-window))observations_.pop_front();
+    }
+    double rate(int64_t now)const{
+        const auto elapsed=(std::min)(window,(std::max<int64_t>)(0,now-start_));
+        if(elapsed<1000000)return 0;
+        double count=0;
+        for(const auto& observation:observations_)if(observation.time>now-window)count+=double(observation.count);
+        return count*10000000.0/double(elapsed);
+    }
+private:
+    struct Observation {int64_t time;uint64_t count;};
+    static constexpr int64_t window=10000000;
+    int64_t start_=0;
+    std::deque<Observation> observations_;
+};
 // The "1% low" a frame-time overlay (RTSS, PresentMon) reports for an
 // application: the 99th-percentile interval between consecutive presents over
 // the last ten seconds, as a frame rate. Like those tools it spaces Present

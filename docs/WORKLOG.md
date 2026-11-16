@@ -1226,3 +1226,73 @@ GPU另抓出ANR生成帧区域平均差57.55/255：Vulkan桥接在列表提交�
 对照v2.1.5至main6cb960b的32条提交，汇总回放/麦克风、全效果剔除/NR节点、美颜删除/PSNTools、自动/半速去重、送帧/Reflex/异步日志、精修光流和默认/界面/社区更新。RELEASE_NOTES/VALIDATION列明本机阶段A/B条件、CPU/真实帧延后及高3X探测代价，不冒充两正式包对照或光学延迟。GitHub连接器已核对最新2.1.5/远端main8332c8a；连接器无Release上传接口，使用已登录gh。
 
 ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发，最新公开包不带任何ANR DLL/模型/配置/程序包/生成loader，保留自写适配源码；原本机包/配置保持。固定其余运行身份、source/binary分离，复用EXEbf27ebed（源f46df7f），不改引擎/运行库。准备NVIDIA/AMD公开ZIP、精确应用/网络源码和摘要，两Release与两固定QR支持块；所有新产物E盘codex-release-2.1.6-20261113。实际结果/失败/命令与最终发布以本次执行记录及reports同任务FINAL为准；不关机、不代发群消息。
+
+
+## 2026-11-13 2.1.6正式发布已核实
+
+用户授权公开，发行7244307/产品f46df7f、EXEbf27ebed/PE2.1.6.0。NVIDIA/AMD公开完整包与应用/网络源码、SHA256SUMS已上传，源码Release先公开，应用v2.1.6随后设Latest；服务端大小/SHA、正文、标签、匿名HTTP200/ZIP前缀、摘要GET、两QR字节/各220及四固定源码链接核验。公开包无ANR资产：作者最新Beta禁止再分发；自写适配保留，当前本机完整ANR包/用户配置不改。两公开包重新解压最小PATH播放213/221帧、无ERROR，实际UI明确ANR不可用、回放/麦克风默认关、顶部开关/HDR折叠存在。旧2.1.5正文/标签/资产与源码SHA保持，29原树指纹保护。脚本/日志/失败边界/包SHA及清理详见RELEASE_2.1.6_EXECUTION_2026-11-13.md与reports/codex-release-2.1.6-20261113/FINAL.json；仅退役本轮验证副本，公开包/对应源码/build/证据保留。最后只追加本验收文档，不改tag/二进制；未群发、未关机。
+
+
+## 2026-11-14 NVIDIA G-SYNC 程序配置入口与提交前审查
+
+全局已允许窗口/全屏但程序专用范围仍为仅全屏时，现有VRR开关不足以解释固定最高刷新的现象。新增专业显示页“检查／修复／恢复原设置”，显式后台操作仅处理当前完整路径的自定义单程序配置及两个范围ID；备份、回读、继承恢复与冲突拒绝保护原设置。原有同步、NR/SR/FG、录制、HDR及优先级逻辑不变；复用VRow/VButton/Theme，窄面板按钮自动换行，增加三语译文。显示器查询处只修正“永不修改驱动”的绝对日志措辞。
+
+提交前审查修正：未完成驱动读取时不将默认结果误判为有效配置；恢复成功但记录删除失败时允许再次清理；驱动接口与互斥量匹配后台任务的进程生命期。新增可独立运行的MSVC2022/Qt6.8.3检查与GitHub工作流，控制器通过链接期模拟驱动验证存储失败、权限失败、恢复重试及独立修改保护，不接触真实配置。
+
+本轮未执行本地编译，按用户要求将后续编译检查交由GitHub环境。当前四语离屏界面各9项、共36项通过，包含初始化无驱动调用及280/360/520宽度；相同宽度的前后界面预览无QML警告，复用原样式。翻译2867项／三语缺失0／占位符0；EngineController、PresentSink、呈现setter、录制桥接与公共样式组件无逻辑改动。前阶段同一策略头文件的62项断言和只读真实配置核对不等同于本轮完整产品构建；新增控制器测试与远端CI结果须在执行后记录。真实驱动写入／恢复与GPU性能尚未验收。
+
+当前分支codex/vrr-profile-button-20261114；实现与操作见NVIDIA_GSYNC_PROFILE_2026-11-14.md，独立验证入口tests/vrr-profile。所有本机日志、界面图、依赖与诊断记录留在任务目录，不随PR提交。提交状态以实际PR链接和后续记录为准。
+
+2026-11-14（Claude）合并PR #104/#108并处理Issue #107：分支claude/merge-pr104-108-20261114（main 20955b5），PR #108 G-SYNC配置按钮8efd5ac、PR #104其他虚拟桌面窗口捕获043615e，去掉PR #104未运行过的分支打包脚本89e75a8，无冲突，词库2874条缺失0。#107本机复现：60fps片源WGC采集关NR，同卡/跨卡（AMD核显运算）均60–61帧/秒，跨卡只增延迟（1440p约13ms），“关NR只有50多”未复现，两块NVIDIA与60Hz显示器未验证。改动：按显示路径找出驱动显示器的显卡，采集日志记gpu path，跨卡时屏幕捕获对话框提示并建议把显示器接到处理卡；不改帧路径和默认值。构建通过，QML 208/0/0，界面合同、G-SYNC策略62项、PR #108独立检查6/6通过；屏幕采集31/6，6项与改动前EXE同环境同像素失败（HDR桌面颜色检查），新增3项通过。详见docs/MERGE_PR104_PR108_ISSUE107_2026-11-14.md与reports同任务FINAL.json；仅本地，未push/未在GitHub合并或回复。
+
+2026-11-14（Claude）FSR 4 ML补帧给RX 9000用户默认启用：用户要求“让9000用户用上”。FSR 4 ML（AMD ML帧生成，SDK 2.3.0 提供方4.0.1）2.0.0起已可在RX 9000手动选择；本轮RX 9000新配置默认FSR 4 ML，不可用的已存后端优先改FSR 4 ML；ML不可用/失败时实时预览改用FSR 3.1保持2X并提示（不再关闭补帧或整套回退），导出仍不替换后端；菜单去“实验”，提示写明不可用时改用3.1且未经实卡验证。修复合同/ANR设置/界面合同、QML、FSR切换与引擎级fsr4-fallback在本机RTX 5070通过（只验证回落，ML本身未实卡运行）。详见docs/FSR4_ML_RX9000_2026-11-14.md与reports同任务FINAL.json；分支claude/fsr4-ml-rx9000-20261114未合main/未push。
+
+2026-11-14（Claude）AMD AMF FRC补帧接入：用户确认A卡视频补帧是AMD AMF FRC并要求接入。下载AMF SDK v1.5.3头文件（MIT，57文件约0.6MB）到deps/amf-sdk-1.5.3-20261114；本机核显（RDNA2 2CU，AMF运行时1.4.37）实测FRC每帧给出前后两帧正中的中间帧。新增AmdFrc后端（2X，只在AMD显卡且System32有AMF运行库时可选）：真实帧复制进AMF输入贴图→AMF自身队列插帧→队列等AMF栅栏后复制回补帧缓冲，无CPU等待；设置/预设/节点/状态/组件页/导出/词库5条同步，不改默认。详见docs/AMD_AMF_FRC_2026-11-14.md与reports同任务FINAL.json；分支claude/amf-frc-20261114叠在FSR4分支上，未合main/push。
+## 2026-11-15 采集录制与本机监听解耦
+
+用户截图反馈2.1.6关闭监听就录不到采集卡音频。对照2.1.5/6，渲染取声和采集PCM链路没改，原“不监听”实际关闭了音频输入；不把未复现的版本回归归咎于麦克风。独立codex/capture-record-audio-20261115基于main2f0e499：输入选择与本机监听拆开，captureAudioMonitor保存/启动/实时/恢复/重连生效，录制/回放仍在增益前取声，不自动选输入；三处共用开关与四语说明同步。
+
+585项构建305.9s、翻译2876/0/0；生产CaptureAudioSession零增益220块：实际输出210240样本全零，取声峰值0.25，双消费者52800/105600帧且时间戳单调。缓冲37/0、UI合同、Quick退出0（未输出项数不伪报）、四语实际开关/保存/重启及三组6个录制/回放MP4独立解码/频谱通过。测试stage先漏QtTest DLL、再漏qml-tests，失败回执保留，补齐后Quick47.17s退出0。真实Elgato/其他GPU/无输出端点未验，合成麦克风不冒充实物。执行命令、详细边界见docs/CAPTURE_RECORD_AUDIO_2026-11-15.md，所有输出E:/项目/Veyra下codex-capture-record-audio-20261115任务；最终包/源码/SHA见reports同任务FINAL。未合main/push/Release/关机。
+
+交付收尾：产品dfa2328/EXEbe83186d，完整NVIDIA ZIP725809972字节/SHA69977c0e…，精确源码ZIP/SHA256SUMS与独立手动入口齐全。1664包文件逐SHA、97原DLL、88着色器与最小PATH新配置冷启动176真实帧/0错误通过。封包首轮保护拦截PR104/108新增QML，按精确源码差异补全NvidiaVrrProfileRow/qmldir后通过，拒绝记录保留；不是忽略保护继续打包。打包与冷启动命令/失败/结果见reports同任务package.py、cold.py、PACKAGE/COLD/FINAL.json及执行文档末节。最终保留当前app/build/完整包/对应源码/必要证据，不改真实配置/主线/已发布包，不关机。
+## 2026-11-14 日落配色与经典切换（Claude，未提交）
+
+分支 claude/dusk-palette-20261114（main 20955b5）。按用户参考 GTA6 封面的要求，新增日落配色（默认）：靛紫底、日落渐变强调色、暮色背景图；设置 → 外观 → 界面配色可切回经典，经典取值与原型完全一致。Theme 令牌、VAccentFill 渐变填充、shade() 着色、make-backdrop-dusk.py 背景图、palette 偏好与 6 条词库。QML 199/0/0、界面合同 3/3、翻译 0 缺失；两套配色真实程序截图（软件与 GPU 绘制）及手动入口冒烟通过。详见 docs/DUSK_PALETTE_2026-11-14.md 与 reports/claude-dusk-palette-20261114。
+
+同日追加：日落配色下 Logo 换成用户提供的霓虹渐变像素手柄（原图存 assets/veyra-logo-dusk.webp，make-logo-dusk.py 生成同画布的 logo-dusk.png），首页/顶部栏/关于三处同位置替换，首页呼吸光改淡粉；经典仍为原白色 Logo；程序文件/任务栏图标未改。QML 199/0/0，两套配色截图核对。
+
+同日追加：用户觉得日落配色饱和度偏高，色相明度不变下调约1/4（底色/卡片/背景图×0.72按亮度保持，强调色与渐变HLS×0.8，shade偏移与首页呼吸光同步）；QML 199/0/0，前后对比图见reports同任务dusk-saturation-before-after.png。
+
+## 2026-11-15 日落首页字标、启动动画与启动音乐（Claude，未提交）
+
+用户要求日落主题下首页换成其"Veyra NR"字标（饱和度稍降），并加入场动画；随后参考其GTA6 Logo出场录屏、要求去塑料光效、拆字做视差、动效更炸，最后要求BGM随启动卡点播放一次、打开任意播放源自动暂停、角落可关声音。同一分支/工作树/build继续：make-wordmark-dusk.py生成色度×0.8字标、柔光与三层视差（尾巴边缘填色抠出、被挡处按纸片调和补画）；新DuskIntro.qml 3.26s卡BGM实测拍；新StartupMusic（Media Foundation媒体引擎纯音频）读程序目录media/startup-music.mp3，动画以音乐位置为时钟；首页右下角静音按钮与设置→外观"启动动画""启动音乐"。BGM来源/授权未知，不进Git/包，仅复制到测试stage。EXE9a27ebb7…；QML199/0/0、合同3、i18n2859、真实程序14场景（静音播放）通过，同步0–1ms。测试中BGM曾意外外放约7秒、测试窗被真实点击一次。记录见DUSK_PALETTE_2026-11-14.md末节与reports/claude-dusk-intro-20261115/FINAL.json；未合main/push/发布。
+## 2026-11-15 GitHub主页与教程入口
+
+用户要求X/YouTube作者主页与英中教程，放README顶部及Release底部。账号从现有Preferences.cpp核对为x.com/likely2002、youtube.com/@Likely7Ai；教程按用户原地址，英文保留t=324s，中文BV1KvsE6bEPw。README英/中/兼容入口三份及RELEASE_SUPPORT模板复用CREATOR_AND_TUTORIAL_LINKS块；当前v2.1.6应用/源码两Release底部同步添加。远端main有独立star-history提交、本地main另有Claude未发布功能，故从nrvideo/main独立docs分支施工，仅推文档，不携带未发布引擎改动。站点抓取受YouTube节流/X403/B站限制，不把HTTP状态冒充账号正确；主账号以用户既有程序常量、教程以本轮明确链接为准。原Release正文/资产/tag和README已归档至E:/项目/Veyra/{archives,reports}/codex-creator-links-20261115，实际远端验证与资产未变结果见FINAL.json。无程序/运行库/标签/包替换，不群发、不关机。
+
+
+## 2026-11-15 英文教程改为从头播放
+
+用户明确纠正英文教程应从零开始。移除英文YouTube链接t=324s与05:24标签，同步三份README顶部、作者/教程标准块、RELEASE_SUPPORT及当前v2.1.6应用/源码Release底部。执行：py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-creator-links-20261115/from-zero.py；git diff --check、远端README内容、两Release正文与原资产/标签/二维码保护检查，实际发布结果见reports/codex-creator-links-20261115/from-zero/FINAL.json。仅文档和Release正文，不携带本地main未发布改动。
+## 2026-11-15 2.1.9整合、区域可视编辑与启动音乐
+
+用户授权本地main整合并跳到2.1.9，BGM仅进运行包。隔离codex/integrate-2.1.9-20261115基于main2f0e499，原工作树HEAD/脏文件SHA与变动快照在reports/archives同任务；Claude日落81498ed、AMF/FSR4 b31d536、录音10e502e、浏览器挂起61c9f9c及nrvideo/main文档均已并入整合分支。WORKLOG冲突保留双方，Preferences保留录音监听、启动动画/音乐全部开关。暂停的四分支不并。
+
+全效果剔除持久红框、选中拖动、仅释放提交、独立显示层；音乐独立片头播放一次，媒体打开意图/手动关闭立即停止，加载前取消也不能复活。原曲SHA3005aa60…1847011字节留deps，不进源码。构建与测试命令：scripts/acceptance/build-recording-handoff.py --task codex-build-2.1.9-20261115 --root E:/项目/Veyra/worktrees/integrate-2.1.9-20261115 --label 2.1.9 --jobs 2 --option VEYRA_AMF_SDK_ROOT=E:/项目/Veyra/deps/amf-sdk-1.5.3-20261114 [本次目标]；reports同任务qa.py stage/cpu/music/mask/resize/amf、fg.py、regress.py、visual.py/verify_visual.py。实际命令参数在这些脚本和构建receipt。测试、日志、临时文件均E盘同任务目录。
+
+209/0/0 Quick、原曲115.826秒自然结束（全程静音）与四种取消、四语实际区域编辑、Windows真实鼠标窗口/全屏各拖一次及截图/14帧录制独立检查通过；XeSS2X/4X各六次WGC resize、FSR4回退/后端切换、AMF核显45/45中间帧/最大误差0.5px/debug0、全效果剔除GPU、静音PCM双消费者/回放缓冲/呈现工作线程通过。失败构建、按钮重叠与修复、运行中stage拒绝和报告解码错误保留，详见BUILD_2.1.9_2026-11-15.md。最终包/源码/main提交/冷启动及清理以reports同任务FINAL.json和收尾记录为准；不push/Release/关机。
+
+2.1.9封包收尾：main已快进08edece，产品EXE5363b83e…/PE2.1.9.0；两ZIP分别730927504与721921977字节，SHA d365cd7d…/940a2715…；源ZIP0b5dd8ac…，不含MP3/DLL/LIB/PDB。两包1687/2311文件、97/90原DLL、88递归shader、ZIP CRC/逐文件SHA通过；BGM原字节及单独manifest均已封入。NVIDIA/AMD各首页和视频四次最小PATH冷启动退出0/无错误，片头完成后音乐继续，视频入口音乐未出声就停止，分别180/183真实提交帧。冷启动首轮断言误用ended（实际finished），改报告后重跑通过；无代码变更。脚本package219.py/cold219.py/merge_main.py/finalize.py及PACKAGE/MAIN/COLD/FAILURES/CLEANUP/FINAL在reports同任务。包对应源码08edece，后续提交仅收尾记录。全程无push/Release/关机。
+## 2026-11-15 2.1.9角落静音误存永久关闭
+
+用户反馈第二次启动无音乐。manual-NVIDIA原日志14:46:18.304停止7.33秒、18.514写introMusic=false、18.515记录stopped(button)，后两次新进程无源且从0秒停止，确定为本次按钮误写长期偏好，并非曲目只允许终身播一次。codex/startup-music-session-stop-20261115基于main d9e7c11：角落按钮仅stopStartupMusicForSession，不写偏好；设置开关保留长期保存，四语提示明确区分。按已证实日志只恢复manual-NVIDIA被按钮误写的false，原文件与证据归档，未全局重置用户偏好。
+
+同一配置8次实际启动（临时停止/重启两轮、设置关/重启关、设置开/重启开）退出0/无错误、偏好true/true/true/true/false/false/true/true；提前静音。命令py -3.11 -X utf8 -B -I E:/项目/Veyra/reports/codex-startup-music-restart-20261115/{prepare.py,restart.py}，记录RESTART.json/PREFERENCE-REPAIR.json；i18n提取检查0缺失/0占位问题。源/包/缓存/日志均E盘，C++算法及运行组件不改，EXE因内嵌翻译资源重链；封包保护拦截未同步的旧QA EXE，更新后复测，不绕过校验。后续本地main、两完整包和原入口原子替换/冷启动结果见该任务FINAL.json。无push/Release/关机。
+
+启动音乐跟进交付：产品b430d98，EXE因内嵌词库资源重链c8a53dc7…，新EXE下8次实际重启与两包四次冷启动通过。NVIDIA/AMD ZIP分别730929571/721924034字节；两包及对应源码/SHA已逐文件核验后原子同步原2.1.9下载路径和app，原测试启动器仍使用已修复的manual-NVIDIA配置。全部DLL和BGM原件不变，源码无MP3/DLL。相关旧Main/词库/manifest及之前摘要/报告归档archives/codex-startup-music-restart-20261115，不覆盖其他任务或用户设置。原日志已明确的按钮false修正true；设置页明确的长期关闭未全局迁移。包校验第一次正确拦截旧QA EXE，按实际资源重链更新并重测后封包。实际部署变更文件见该任务DEPLOY.json与FINAL.json；不push/Release/关机。
+
+## 2026-11-15 公开发布2.1.9《迎接GTA6降临》
+
+用户确认测试正常并明确授权GitHub发布、全量更新公告、最新12群原图和1000字以内群公告。发行分支codex/release-2.1.9-20261115基于main ca614ef，远端main c327d45；已归档2.1.6两Release正文/标签/资产身份、本地最终交付。仅发行文档/README/二维码/包元数据，不重编译已验EXEc8a53dc7，产品b430d98生产源码不变。双语更新、条件/边界、对应源码/固定依赖文档齐全；原图复制12群，11月22日前、两QR各220、作者/英中教程保留且英文零起点；群公告669字符。
+
+脚本reports同任务init.py/docs.py/freeze.py及后续package/upload/verify，全部输出E盘同任务目录。先草稿上传与服务端SHA检查再公开/Latest，音乐不进源码，ANR禁止Beta再分发不扩大。远端验证及清理最终以FINAL.json/发行执行记录为准，不群发、不关机。
