@@ -869,7 +869,9 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     size_t count = 0;
     // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
     // keep the hard ceiling in step with it or encode->decode self-check rejects our file.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,21):21;
+    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
+    // the ceiling must include it or encode->decode self-check rejects our own file.
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,22):22;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -1122,7 +1124,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 16) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 17) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v17 = local auto-multiplier session
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -1137,7 +1139,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
 
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
