@@ -1324,3 +1324,13 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 更新README.md/README_CN.md、docs/RELEASE_SUPPORT.md与2.1.9更新说明；双码各220、赞助原图、透明Logo、作者主页及零起点教程保持。对应同步当前2.1.9应用与源码两个Release正文，群码链接固定到本次提交的新原图；仅更换群码/群号/有效期，保留源码ZIP原含12群图的事实描述，不改标签或已发布下载文件。GitHub连接器负责读取，缺少Release修改接口的部分用gh api PATCH body字段，更新前备份并核对正文，更新后检查完整正文和资产ID/大小/摘要保持。
 
 命令：py -3.11 -X utf8 -B -I reports任务目录/prepare.py、releases.py及verify.py，git diff --check、main快进并push nrvideo main。原正文、具体PATCH JSON、元数据与前后证据/远端README/双码实际可访问性记录在E:/项目/Veyra/reports/codex-community-group13-20261116/及FINAL.json；其他产物不新建、不重打包、不关机。
+
+## 2026-11-16 Elgato 4K X：自动识别 HDR 信号源（Claude，未提交）
+
+用户 4K X + P010 时“自动”保持 SDR，需手动选 HDR·PQ。原因：4K X 不支持厂商属性集（720/721/722），驱动也不声明 PQ。实机核查（USB\VID_0FD9&PID_009B）：只有 UVC 视频与 UAC 音频接口，没有 HID 接口，因此 Elgato 官方 HID 协议不适用；厂商控制在 UVC 扩展单元 {961073C7-49F7-44F2-AB42-E940405940C2}（拓扑节点 3）。
+
+改动：`readElgato4kxHdrPacket`（`src/source/ElgatoHdrControl.cpp`）按 Nitlink f39b909（MIT）的邮箱协议读取信号源 HDR InfoFrame；`configure` 在非 MK.2、厂商属性读不到有效包时改走该路径，之后沿用原有 InfoFrame 校验与自动 PQ/HLG 逻辑。每次连接只查询一次；首个写入被拒即停止。手动选择、MK.2 与其它采集卡路径不变。
+
+验证：本机无项目依赖，未构建应用或 `veyra_capture_color_tests`。用 MSVC 14.50 /W4 单独编译 `ElgatoHdrControl.cpp`+`Log.cpp`+`ElgatoHdrCases.h`：34/34 通过（新增 4 项邮箱用例）。真实 4K X 上 `configure` 返回成功，应答 37 字节 A1/22、校验通过、内容全零（当时信号源为 SDR）→ 保持 SDR。**HDR 信号源下的真实应答未验证**，应用内整体流程未验证。未提交、未 push。
+
+补充（同日，HDR 信号源实测）：用户确认主机输出 HDR 后复测，真实应答为 `A1 22 00 00 87 01 1A 02 00…00 99`：InfoFrame 头后直接是载荷，**没有 InfoFrame 校验字节**（EOTF 在第 3 字节），原严格解析因此判无效、保持 SDR。修正：`readElgato4kxHdrPacket` 复制时补回校验字节恢复标准布局（完整性已由邮箱校验和覆盖）；测试夹具改为真实布局。重编后 34/34，/W4 无警告；真实 4K X：`InfoFrame valid=true eotf=2`，`configure` 得到 PQ、hdrPath=1。该信号源的静态元数据全零（peak/MaxCLL=0），元数据字段偏移与 HLG 未能实测。应用仍未构建，未提交。

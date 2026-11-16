@@ -1,6 +1,9 @@
 #pragma once
 #include "veyra/source/ElgatoHdrControl.h"
+#include <ks.h>
+#include <ksproxy.h>
 #include <cstring>
+#include <vector>
 
 namespace {
 struct ElgatoProperties final:IKsPropertySet {
@@ -34,7 +37,55 @@ struct ElgatoProperties final:IKsPropertySet {
         *flags=KSPROPERTY_SUPPORT_GET|KSPROPERTY_SUPPORT_SET;return queryFails?E_NOTIMPL:S_OK;
     }
 };
+// 4K X extension unit mailbox: selector 2 = length, selector 1 = request/reply.
+struct Elgato4kxMailbox final:IKsControl {
+    std::array<unsigned char,32> packet{};
+    std::vector<unsigned char> reply;
+    unsigned calls=0;bool supported=true,corrupt=false;
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID,void** out)override{*out=nullptr;return E_NOINTERFACE;}
+    ULONG STDMETHODCALLTYPE AddRef()override{return 2;}
+    ULONG STDMETHODCALLTYPE Release()override{return 1;}
+    HRESULT STDMETHODCALLTYPE KsProperty(PKSPROPERTY property,ULONG propertySize,LPVOID data,ULONG size,ULONG* returned)override{
+        ++calls;*returned=0;
+        if(!supported||property->Set.Data1!=0x961073C7||propertySize!=sizeof(KSP_NODE)||reinterpret_cast<KSP_NODE*>(property)->NodeId!=3)return E_FAIL;
+        const bool set=property->Flags&KSPROPERTY_TYPE_SET;const auto* bytes=static_cast<const unsigned char*>(data);
+        if(set&&property->Id==2)return size==2&&bytes[0]==9?S_OK:E_INVALIDARG;
+        if(set&&property->Id==1) {
+            if(size!=9)return E_INVALIDARG;
+            unsigned sum=0;for(unsigned i=0;i<9;++i)sum+=bytes[i];
+            if(sum&255)return E_INVALIDARG;
+            if(bytes[4]==0x67)reply={0xA0,0x06,0,0,0x04,0,0,0,0x56};
+            else {
+                // Real card layout: InfoFrame header then payload, no InfoFrame checksum byte.
+                reply={0xA1,0x22,0,0};reply.insert(reply.end(),packet.begin(),packet.begin()+3);
+                reply.insert(reply.end(),packet.begin()+4,packet.end());reply.push_back(0);
+                sum=0;for(auto b:reply)sum+=b;
+                reply.push_back(static_cast<unsigned char>((corrupt?1:0)-sum));
+            }
+            return S_OK;
+        }
+        if(property->Id==2&&size==2){const auto length=static_cast<unsigned short>(reply.size());std::memcpy(data,&length,2);*returned=2;return S_OK;}
+        if(property->Id==1&&size==reply.size()){std::memcpy(data,reply.data(),size);*returned=size;return S_OK;}
+        return E_INVALIDARG;
+    }
+    HRESULT STDMETHODCALLTYPE KsMethod(PKSMETHOD,ULONG,LPVOID,ULONG,ULONG*)override{return E_NOTIMPL;}
+    HRESULT STDMETHODCALLTYPE KsEvent(PKSEVENT,ULONG,LPVOID,ULONG,ULONG*)override{return E_NOTIMPL;}
+};
+template<class Check> void elgato4kxMailboxCases(Check check) {
+    using namespace veyra;
+    ElgatoProperties source;source.hdr();
+    Elgato4kxMailbox box;box.packet=source.packet;
+    std::array<unsigned char,32> bytes{};
+    check(source::readElgato4kxHdrPacket(&box,3,bytes)&&bytes==source.packet&&source::parseElgatoHdrPacket(bytes).eotf==2,"4K X mailbox returns the source PQ InfoFrame");
+    box.packet={};bytes.fill(1);
+    check(source::readElgato4kxHdrPacket(&box,3,bytes)&&source::parseElgatoHdrPacket(bytes).valid&&!source::parseElgatoHdrPacket(bytes).eotf,"4K X mailbox zero packet is a valid SDR report");
+    box.packet=source.packet;box.corrupt=true;bytes={};
+    check(!source::readElgato4kxHdrPacket(&box,3,bytes)&&bytes==std::array<unsigned char,32>{},"4K X mailbox rejects a reply with a bad checksum");
+    box={};box.supported=false;
+    check(!source::readElgato4kxHdrPacket(&box,3,bytes)&&box.calls==1,"a card without the 4K X unit gets one rejected write and nothing more");
+}
 template<class Check> void elgatoHdrCases(Check check) {
+    elgato4kxMailboxCases(check);
     using namespace veyra;
     constexpr auto name=L"Game Capture 4K60 Pro MK.2";
     const auto defaults=[] {pipeline::ColorDescription c;c.matrixAssumed=c.primariesAssumed=c.transferAssumed=true;c.transfer=pipeline::TransferFunction::SRGB;c.range=pipeline::ColorRange::Limited;return c;};

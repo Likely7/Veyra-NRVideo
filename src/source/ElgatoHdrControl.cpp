@@ -3,8 +3,14 @@
 #include "veyra/source/ElgatoHdrControl.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/Log.h"
+#include <ks.h>
+#include <ksmedia.h>
+#include <ksproxy.h>
+#include <vidcap.h>
 #include <algorithm>
 #include <format>
+#include <numeric>
+#include <vector>
 
 namespace veyra::source {
 namespace {
@@ -46,6 +52,50 @@ ElgatoHdrPacket parseElgatoHdrPacket(const std::array<unsigned char,32>& b) {
     if((sum&255)!=0||(b[4]!=0&&b[4]!=2&&b[4]!=3))return {};
     const auto u16=[&](unsigned i){return float(unsigned(b[i])|(unsigned(b[i+1])<<8));};
     return {true,b[4],u16(22),u16(26),u16(28)};
+}
+bool readElgato4kxHdrPacket(IKsControl* control,ULONG node,std::array<unsigned char,32>& packet) {
+    // Nitlink protocol: selector 2 carries a length, selector 1 the request or
+    // reply; all bytes of a message sum to zero. Writes reach only this unit.
+    constexpr GUID unit{0x961073C7,0x49F7,0x44F2,{0xAB,0x42,0xE9,0x40,0x40,0x59,0x40,0xC2}};
+    const auto io=[&](ULONG selector,ULONG flag,void* data,ULONG size,ULONG* returned) {
+        KSP_NODE p{};p.Property.Set=unit;p.Property.Id=selector;p.Property.Flags=flag|KSPROPERTY_TYPE_TOPOLOGY;p.NodeId=node;
+        return control->KsProperty(&p.Property,sizeof(p),data,size,returned);
+    };
+    const auto round=[&](std::array<unsigned char,9> request,std::vector<unsigned char>& reply) {
+        ULONG n=0;unsigned short length=static_cast<unsigned short>(request.size());
+        // A card without this unit rejects the first write, so nothing else is sent.
+        auto hr=io(2,KSPROPERTY_TYPE_SET,&length,sizeof(length),&n);
+        if(FAILED(hr)){record("4K X XU length Set",2,hr,0);return false;}
+        Sleep(3);
+        hr=io(1,KSPROPERTY_TYPE_SET,request.data(),ULONG(request.size()),&n);
+        if(FAILED(hr)){record("4K X XU request Set",1,hr,0);return false;}
+        Sleep(3);
+        length=0;
+        for(int i=0;i<16&&!length;++i) {
+            n=0;
+            if(FAILED(io(2,KSPROPERTY_TYPE_GET,&length,sizeof(length),&n))||n<sizeof(length))length=0;
+            if(!length)Sleep(4);
+        }
+        if(!length||length>256)return false;
+        reply.assign(length,0);n=0;
+        hr=io(1,KSPROPERTY_TYPE_GET,reply.data(),length,&n);
+        reply.resize(SUCCEEDED(hr)?std::min<ULONG>(n,length):0);
+        return !reply.empty();
+    };
+    std::vector<unsigned char> reply;
+    // Readiness poll first, as the vendor application does; its reply is unused.
+    if(!round({0xA0,0x06,0,0,0x67,0,0,0,0xF3},reply)||!round({0xA1,0x06,0,0,0x65,0,0,0,0xF4},reply))return false;
+    const bool ok=reply.size()>=36&&reply[0]==0xA1&&reply[1]==0x22&&(std::accumulate(reply.begin(),reply.end(),0u)&255)==0;
+    log::info("capture-elgato",std::format("4K X XU HDR reply bytes={} head={:02X}/{:02X} accepted={}",reply.size(),reply[0],reply.size()>1?reply[1]:0,ok));
+    if(ok) {
+        // The 4K X sends header then payload with no InfoFrame checksum byte (seen
+        // on a PQ source: 87 01 1A 02 00...); the mailbox checksum covers it, so
+        // restore the standard layout for parseElgatoHdrPacket.
+        std::copy_n(reply.begin()+4,3,packet.begin());packet[3]=0;
+        std::copy_n(reply.begin()+7,packet.size()-4,packet.begin()+4);
+        packet[3]=static_cast<unsigned char>(0u-std::accumulate(packet.begin(),packet.begin()+30,0u));
+    }
+    return ok;
 }
 bool ElgatoHdrControl::setTonemap(DWORD desired,bool strict) {
     const bool originalKnown=SUCCEEDED(read(properties_.Get(),tonemap,&original_,sizeof(original_)))&&original_<=1;
@@ -102,7 +152,19 @@ bool ElgatoHdrControl::configure(IUnknown* filter,std::wstring_view name,bool p0
     std::array<unsigned char,32> bytes{};
     const auto low=read(properties_.Get(),packetLow,bytes.data(),16);
     const auto high=read(properties_.Get(),packetHigh,bytes.data()+16,16);
-    const auto packet=SUCCEEDED(low)&&SUCCEEDED(high)?parseElgatoHdrPacket(bytes):ElgatoHdrPacket{};
+    auto packet=SUCCEEDED(low)&&SUCCEEDED(high)?parseElgatoHdrPacket(bytes):ElgatoHdrPacket{};
+    if(!packet.valid&&!mk2) {
+        // The 4K X lacks the vendor property set; its extension unit is the
+        // KSNODETYPE_DEV_SPECIFIC topology node of the same filter.
+        Microsoft::WRL::ComPtr<IKsControl> control;Microsoft::WRL::ComPtr<IKsTopologyInfo> topology;DWORD nodes=0;
+        if(SUCCEEDED(filter->QueryInterface(IID_PPV_ARGS(&control)))&&SUCCEEDED(filter->QueryInterface(IID_PPV_ARGS(&topology)))&&SUCCEEDED(topology->get_NumNodes(&nodes)))
+            for(DWORD i=0;i<nodes;++i) {
+                GUID type{};
+                if(FAILED(topology->get_NodeType(i,&type))||type!=KSNODETYPE_DEV_SPECIFIC)continue;
+                if(readElgato4kxHdrPacket(control.Get(),i,bytes))packet=parseElgatoHdrPacket(bytes);
+                break;
+            }
+    }
     log::info("capture-elgato",std::format("HDR InfoFrame valid={} header={:02X}/{:02X}/{:02X} eotf={} peak={} maxCLL={} maxFALL={}",packet.valid,bytes[0],bytes[1],bytes[2],packet.eotf,packet.peak,packet.maxCll,packet.maxFall));
     const bool sourceHdr=packet.valid&&(packet.eotf==2||packet.eotf==3);
     // A bit depth alone never triggers HDR or a hardware write. Explicit space

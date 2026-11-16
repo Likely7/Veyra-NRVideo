@@ -219,7 +219,16 @@ request the card's hardware tonemapper as OBS libdshowcapture
 (`SetVendorTonemapperUsage`, behaviour only, no code copied) does; the
 non-MK.2 P010 chroma rule is a per-source flag (`fullRangeChroma`) honoured by
 `YuvToLinearRgb.hlsl`, applied only when the user leaves range on auto. No
-vendor shader, SDK header or binary is vendored. Full license:
+vendor shader, SDK header or binary is vendored.
+2026-11-16: `readElgato4kxHdrPacket` adapts the Elgato 4K X source-HDR query
+from Nitlink at `f39b909517f95791d97e64463fc65e5be7a17fcc`,
+`src/capture/elgato_hdr_control.cpp` (`ReadXuBlocks`) and
+`elgato_4kx_source.h`: UVC extension unit GUID, selector 2/1 length and
+request/reply mailbox, readiness and HDR InfoFrame requests (Nitlink credits
+13bm/elgato4k-linux for the protocol; no code from that project is used).
+Veyra changes: uses the selected filter, sends one query per connection
+instead of polling, stops after a rejected first write, checks the reply
+framing and checksum, and validates the InfoFrame with the existing parser. Full license:
 `licenses/capture/ELGATO_NITLINK_MIT.txt`.
 
 ## NVENC API declarations
