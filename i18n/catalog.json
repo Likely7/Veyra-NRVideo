@@ -14496,7 +14496,7 @@
    "zh-TW": "正常",
    "en": "Normal",
    "ja": "正常",
-   "ko": "보통"
+   "ko": "정상"
   },
   {
    "zh": "此功能使用 VB-Audio 的 VB-CABLE（捐赠软件），可从内置安装包离线安装。首次安装需管理员确认，完成后按提示重启。\n\n1. 在 Windows“录制”里打开采集卡音频的属性，勾选“侦听此设备”，播放目标选 CABLE Input。如果已改名，请选择改后的名称。",
@@ -17928,7 +17928,7 @@
    "zh-TW": "補幀暫停",
    "en": "Frame generation paused",
    "ja": "フレーム生成一時停止",
-   "ko": "프레임 생성이 일시중지되었습니다."
+   "ko": "프레임 생성 일시중지"
   },
   {
    "zh": "补帧节点固定在输出前，禁用时也不能移到链路中间",
@@ -17937,6 +17937,14 @@
    "en": "The frame generation node is fixed before the output and cannot move into the middle of the chain even when disabled",
    "ja": "フレーム生成ノードは出力の直前に固定されており、無効でもチェーンの途中には移動できません",
    "ko": "프레임 생성 노드는 출력 전에 고정되어 있으며 비활성화된 경우에도 체인 중간으로 이동할 수 없습니다."
+  },
+  {
+   "zh": "补帧调度降档",
+   "src": "apps/veyra/ui/LiveStatusHistory.h",
+   "zh-TW": "補幀調度降檔",
+   "en": "Frame generation stepped down",
+   "ja": "フレーム生成のスケジュールを段階的に下げました",
+   "ko": "프레임 생성 단계 하향"
   },
   {
    "zh": "补帧路径固定 HDR10；需要 Windows HDR 开启",
@@ -18872,7 +18880,7 @@
    "zh-TW": "調度降檔",
    "en": "Scheduling stepped down",
    "ja": "スケジュールを段階的に下げました",
-   "ko": "처리 단계가 낮아졌습니다."
+   "ko": "처리 단계 하향"
   },
   {
    "zh": "调控方式",
@@ -19523,6 +19531,22 @@
    "ko": "입력이 하나의 GPU 텍스처가 허용하는 것보다 큽니다."
   },
   {
+   "zh": "输入帧率不足",
+   "src": "apps/veyra/ui/LiveStatusHistory.h",
+   "zh-TW": "輸入幀率不足",
+   "en": "Input frame rate too low",
+   "ja": "入力フレームレート不足",
+   "ko": "입력 프레임률 부족"
+  },
+  {
+   "zh": "输入时间线异常",
+   "src": "apps/veyra/ui/LiveStatusHistory.h",
+   "zh-TW": "輸入時間線異常",
+   "en": "Input timeline irregular",
+   "ja": "入力タイムラインの異常",
+   "ko": "입력 타임라인 이상"
+  },
+  {
    "zh": "输入空间不匹配",
    "src": "src/pipeline/EnhanceGraph.cpp",
    "zh-TW": "輸入空間不匹配",
@@ -19665,6 +19689,14 @@
    "en": "The output file already exists; choose a new file name",
    "ja": "出力ファイルがすでに存在します。新しいファイル名を選んでください",
    "ko": "출력 파일이 이미 존재합니다. 새 파일 이름을 선택하세요"
+  },
+  {
+   "zh": "输出未达标",
+   "src": "apps/veyra/ui/LiveStatusHistory.h",
+   "zh-TW": "輸出未達標",
+   "en": "Output below target",
+   "ja": "出力が目標未達",
+   "ko": "출력 목표 미달"
   },
   {
    "zh": "输出目录不可用或磁盘空间不足，已停止本批调度",
