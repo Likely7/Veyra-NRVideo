@@ -179,9 +179,12 @@ bool ElgatoHdrControl::configure(IUnknown* filter,std::wstring_view name,bool p0
         applyCaptureColorOverride(color,packet.eotf==2?1:2);
         // InfoFrame declares EOTF, not YUV encoding or quantization. Preserve
         // explicit driver matrix/primaries; only fill their missing defaults.
+        // Only the MK.2 driver follows the source: the 4K X (UVC) declares
+        // BT.709 whatever arrives, which the graph rejects for PQ/HLG, so
+        // other cards take BT.2020 like the manual HDR choice.
         color.matrixAssumed=color.primariesAssumed=true;
-        if(!previous.matrixAssumed&&previous.matrix!=pipeline::YuvMatrix::Unknown){color.matrix=previous.matrix;color.matrixAssumed=false;}
-        if(!previous.primariesAssumed&&previous.primaries!=pipeline::ColorPrimaries::Unknown){color.primaries=previous.primaries;color.primariesAssumed=false;}
+        if(mk2&&!previous.matrixAssumed&&previous.matrix!=pipeline::YuvMatrix::Unknown){color.matrix=previous.matrix;color.matrixAssumed=false;}
+        if(mk2&&!previous.primariesAssumed&&previous.primaries!=pipeline::ColorPrimaries::Unknown){color.primaries=previous.primaries;color.primariesAssumed=false;}
     }
     if(wantHdr&&sourceHdr&&(space==0||(space==1&&packet.eotf==2)||(space==2&&packet.eotf==3))) {
         color.hdrMasteringPeakNits=packet.peak;

@@ -1,7 +1,7 @@
 #pragma once
 #include "veyra/source/ElgatoHdrControl.h"
-#include <ks.h>
-#include <ksproxy.h>
+// Declares IKsControl with the __STREAMS__ setup BlackmagicCaptureCases.h needs for IKsPin.
+#include "veyra/source/DirectShowCaptureSetup.h"
 #include <cstring>
 #include <vector>
 
@@ -112,6 +112,13 @@ template<class Check> void elgatoHdrCases(Check check) {
     {
         source::ElgatoHdrControl control;
         check(control.configure(&ps,name,true,0,color)&&ps.sets==0&&color.range==pipeline::ColorRange::Full&&color.matrix==pipeline::YuvMatrix::BT709&&color.primaries==pipeline::ColorPrimaries::BT709&&!color.matrixAssumed&&!color.primariesAssumed,"vendor EOTF never overwrites explicit driver gamut/range or re-writes native mode");
+    }
+    ps={};ps.hdr();ps.mode=0;color=defaults();
+    color.matrix=pipeline::YuvMatrix::BT709;color.matrixAssumed=false;color.primaries=pipeline::ColorPrimaries::BT709;color.primariesAssumed=false;
+    {
+        // Seen on a real 4K X: the driver declares BT.709 while the source sends PQ.
+        source::ElgatoHdrControl control;
+        check(control.configure(&ps,L"Elgato 4K X",true,0,color)&&color.transfer==pipeline::TransferFunction::PQ&&color.matrix==pipeline::YuvMatrix::BT2020NCL&&color.primaries==pipeline::ColorPrimaries::BT2020,"non-MK.2 auto HDR takes BT.2020 over the driver's static BT.709 label");
     }
     ps={};color=defaults();color.transfer=pipeline::TransferFunction::PQ;color.transferAssumed=false;
     {
