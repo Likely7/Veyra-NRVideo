@@ -2,6 +2,30 @@
 
 本次汇总 **公开版2.1.6之后** 的全部功能、修复和兼容调整。2.1.7/2.1.8未单独发布，直接升级至2.1.9。
 
+### 💜 Community Support / 社区支持
+
+**English**
+
+A huge thank you to the Pump.fun community for supporting Veyra!
+
+I've received creator fees from a community-created Veyra token. These contributions will help support the continued development of Veyra.
+
+**中文**
+
+非常感谢 Pump.fun 社区对 Veyra 的支持！
+
+我已经从社区自行创建的 Veyra 代币中领取了创作者手续费。这些收入将帮助支持 Veyra 的持续开发。
+
+**Token Contract Address (CA) / 代币合约地址：**
+
+`i6Aop7z5qLaY47kseaoUt6kGq4Pi2ySg8j7cxRkpump`
+
+**Disclaimer / 免责声明：** This token was independently created by the community and is not an official Veyra release or investment recommendation. Veyra remains free and open-source.
+
+该代币由社区独立创建，并非 Veyra 官方发行的代币，也不构成投资建议。Veyra 仍然是免费开源软件。
+
+---
+
 ## 日落界面、启动动画与音乐
 
 - 新增默认的**日落配色**、新版霓虹手柄Logo与Veyra NR字标、分层启动动画；设置→外观可切回经典配色，也可单独关闭启动动画。经典配色保留原有取值。
