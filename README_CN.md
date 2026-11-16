@@ -16,7 +16,7 @@
 </p>
 <!-- veyra-creator-and-tutorials:end -->
 
-<p align="center"><img src="assets/veyra-wordmark-dusk.gif" alt="Veyra NR · 日落字标动效" width="480"></p>
+<p align="center"><img src="assets/veyra-wordmark-sun.gif" alt="Veyra NR · 透明字标与太阳动效" width="480"></p>
 
 <p align="center">
   <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/assets/veyra-2.0.0-promo.mp4">

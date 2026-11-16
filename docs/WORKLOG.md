@@ -1308,3 +1308,11 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 直接用已发布2.1.9 EXE（c8a53dc7…）加载原封未改的DuskIntro.qml，通过组件现有ms时钟与Qt grabToImage采集1–2640ms、25fps共67张1280×800帧，未重制动画。仅私有QA副本注入采集器，独立配置/缓存/日志，无media目录且introMusic=false；供体EXE/Main/组件SHA不变，进程退出0、QML错误0。FFmpeg裁剪/轻度空间降噪以压缩颗粒/缩到480×390，保留入场和日落，完整字标停留1秒后0.4秒淡出，循环起点放完整字标；最终GIF 6497964字节、102帧、4.08秒、无限循环，SHA256 db0d89d34a1716e055d29a146a47dee113a78cae27caad9b01da1a227245b0bb。逐帧解码、首帧/过程接触表与循环时长检查通过。额外Pillow无损重编码候选未通过像素一致性检查，未采用，原FFmpeg成品保留。
 
 实际命令：py -3.11 -X utf8 -B -I reports任务目录/capture.py、encode.py及git diff --check；脚本、FFmpeg完整参数、CAPTURE.json、ENCODE.json、画面证据与远端核验FINAL.json统一在E:/项目/Veyra/reports/codex-readme-wordmark-gif-20261115。采集副本tests同名、缓存tmp同名、日志logs同名。本轮只更新文档展示资产，不重编译、不改版本标签或已发布包；按用户README更新授权合main并推送nrvideo main，不关机。
+
+## 2026-11-15 README字标改为仅文字与太阳、透明背景
+
+用户要求去掉GIF背景，只留文字和太阳。分支codex/readme-wordmark-transparent-20261115基于87f3d2c，私有展示QML只保留已发布DuskIntro原动画方程、原字标三层及条纹太阳，去掉天空/海面/倒影/地平线/光晕/颗粒/火星，不改软件中的QML或其原件。仍通过2.1.9 EXE、独立配置且禁用音乐采集67张RGBA帧；供体EXE/Main/DuskIntro SHA不变、退出0、QML错误0。
+
+生成assets/veyra-wordmark-sun.gif替换README.md/README_CN.md顶部引用，480×364、133帧、6.28秒循环、3441610字节，SHA256 7e87d95d4366f6dd319fdee3c2e55b06ce151cc42afda4251bf03e5974cef75d。原入场倒放再正放，首帧完整字标停留1秒；采用全画布透明清除，每帧至少91089个透明像素。初次Pillow delta编码在全透明帧写入重复文件头，被逐帧/时长校验拦截；改用其帧编码器逐张写完整画布并显式disposal=2后，133帧全部像素与时序一致通过，不带底色、不留残影。GIF只有二值透明，边缘按alpha128量化；深浅背景实际解码预览已检查。旧有背景GIF在Git历史中保留，当前树移除；作者/零起点教程/双码各220及远端并发的Trending/下载数改动保持。
+
+执行命令：py -3.11 -X utf8 -B -I reports任务目录/prepare.py、capture.py、encode.py、verify.py；git diff --check及main快进/推送nrvideo main。脚本/命令参数/CAPTURE.json/ENCODE.json/深浅底预览/独立FFmpeg解码与远端逐字节验证FINAL.json统一在E:/项目/Veyra/reports/codex-readme-wordmark-transparent-20261115；私有app/profile在tests同名、缓存tmp同名、日志logs同名。仅文档展示资产，不重编译或改Release包/标签，不关机。

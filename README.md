@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/veyra-wordmark-dusk.gif" alt="Veyra NR · animated dusk logo" width="480">
+<img src="assets/veyra-wordmark-sun.gif" alt="Veyra NR · transparent animated wordmark and sun" width="480">
 
 # Veyra
 
