@@ -1,6 +1,6 @@
 <div align="center">
 
-<img width="300" height="300" alt="40e9b0ec-d341-4375-b5ad-e86344407880" src="https://github.com/user-attachments/assets/30c0253e-6963-447d-a83b-29269d9323e2" />
+<img src="assets/veyra-wordmark-dusk.gif" alt="Veyra NR · animated dusk logo" width="480">
 
 # Veyra
 
