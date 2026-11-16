@@ -30,6 +30,32 @@
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
 
+---
+
+### 💜 Community Support / 社区支持
+
+**English**
+
+A huge thank you to the Pump.fun community for supporting Veyra!
+
+I've received creator fees from a community-created Veyra token. These contributions will help support the continued development of Veyra.
+
+**中文**
+
+非常感谢 Pump.fun 社区对 Veyra 的支持！
+
+我已经从社区自行创建的 Veyra 代币中领取了创作者手续费。这些收入将帮助支持 Veyra 的持续开发。
+
+**Token Contract Address (CA) / 代币合约地址：**
+
+`i6Aop7z5qLaY47kseaoUt6kGq4Pi2ySg8j7cxRkpump`
+
+**Disclaimer / 免责声明：** This token was independently created by the community and is not an official Veyra release or investment recommendation. Veyra remains free and open-source.
+
+该代币由社区独立创建，并非 Veyra 官方发行的代币，也不构成投资建议。Veyra 仍然是免费开源软件。
+
+---
+
 **Veyra Windows 免安装软件包累计下载 7.9 万+ 次**（截至 2026-11-08，79,332 次）；**GitHub Release 全部附件累计下载 10.3 万+ 次**（103,337 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
 
 [下载2.1.9免安装版](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.1.9) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](docs/RELEASE_NOTES_2.1.9.md) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
