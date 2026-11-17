@@ -25,7 +25,6 @@ public:
     ~PlaybackServer() override;
 
     bool listen(quint16 port = 0);
-    quint16 port() const;
 
 private:
     void onNewConnection();

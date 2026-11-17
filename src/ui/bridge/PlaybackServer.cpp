@@ -41,8 +41,6 @@ bool PlaybackServer::listen(quint16 port) {
     return true;
 }
 
-quint16 PlaybackServer::port() const { return server_.serverPort(); }
-
 void PlaybackServer::respond(QTcpSocket* socket, int status, const QByteArray& body) {
     const char* reason = status == 200 ? "OK" : status == 400 ? "Bad Request" : "Not Found";
     QByteArray head = std::format("HTTP/1.1 {} {}\r\n", status, reason).c_str();
