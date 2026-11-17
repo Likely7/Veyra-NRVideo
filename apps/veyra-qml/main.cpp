@@ -60,6 +60,7 @@
 #include "veyra/ui/InterfaceRenderer.h"
 #include "veyra/ui/QmlDataDirectory.h"
 #include "veyra/ui/QmlDiskCache.h"
+#include "veyra/ui/PlaybackServer.h"   // Custom: local HTTP endpoint for the browser extension
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "veyra/ui/StartupMusic.h"
 #include "veyra/ui/ThumbnailProvider.h"
@@ -708,6 +709,12 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     }
     ui::QmlPlayerBridge bridge(controller, dataDirectory);
     bridge.attachVideoWindow(reinterpret_cast<qulonglong>(g_video));
+
+    // Custom (Chrome bridge): local HTTP endpoint the browser extension posts to.
+    // 127.0.0.1 only; port 18765 is fixed so the extension can find it without
+    // reading anything off disk (a browser cannot open local files).
+    ui::PlaybackServer playbackServer(&bridge);
+    playbackServer.listen(18765);
 
     // Qt reports QML failures through its own message handler. Routing them to
     // the log is the difference between "it did not load" and why.

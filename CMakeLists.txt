@@ -1282,6 +1282,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     src/ui/bridge/Recording.cpp
     src/ui/bridge/View.cpp
     src/ui/bridge/Bilibili.cpp
+    # Custom (Chrome bridge): local HTTP endpoint the browser extension posts to.
+    src/ui/bridge/PlaybackServer.cpp
+    include/veyra/ui/PlaybackServer.h
     src/ui/QmlPlayerBridge_p.h)
   target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qrcodegen)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
@@ -1330,7 +1333,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Widgets is needed only for QFileDialog: the native file picker is the one
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
-  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets PRIVATE shell32)
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network PRIVATE shell32)
   add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
   set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)
