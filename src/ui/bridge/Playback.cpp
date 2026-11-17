@@ -309,7 +309,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
-bool QmlPlayerBridge::openNetworkAddress(const QString& address){
+bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality){
     const QString trimmed = address.trimmed();
     // A Bilibili page URL is not a media URL: resolve it to the CDN stream first.
     // 粘贴 B 站页面地址直接播放：解析成 CDN 流，再带上 Referer/UA 与 DASH 音频打开。
@@ -317,7 +317,7 @@ bool QmlPlayerBridge::openNetworkAddress(const QString& address){
     if (media::isBilibiliPageUrl(trimmed.toStdWString())) {
         // Send the stored session so member renditions are available.
         const std::wstring cookie = media::loadBilibiliCookie();
-        const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie);
+        const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie, quality);
         if (!stream.ok) {
             emit notice(QString::fromStdWString(stream.error), true);
             veyra::log::warn("bilibili", QString::fromStdWString(stream.error).toStdString());

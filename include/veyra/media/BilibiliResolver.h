@@ -47,7 +47,8 @@ bool isBilibiliPageUrl(const std::wstring& url);
 // API only serves low renditions - a member's 1080P+/4K streams require the SESSDATA
 // and bili_jct cookies from a signed-in browser.
 BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl,
-                                     const std::wstring& cookie = {});
+                                     const std::wstring& cookie = {},
+                                     int quality = 0);   // qn; 0 = best available
 
 // Where the user's cookie is kept between runs.
 std::wstring bilibiliCookiePath();

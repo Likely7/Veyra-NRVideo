@@ -379,7 +379,7 @@ BilibiliQrPoll pollBilibiliQrLogin(const std::wstring& qrKey) {
     return result;
 }
 
-BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wstring& cookie) {
+BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wstring& cookie, int quality) {
     BilibiliStream result;
     std::wstring error;
 
@@ -440,12 +440,15 @@ BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wst
     result.title = fromUtf8(viewRoot["data"]["title"].asString());
 
     // 2. Ask for the DASH manifest. fnval=16 requests DASH, fourk allows 4K.
+    // quality = 0 keeps the old behaviour (ask for the best rendition); a positive
+    // value is the page's own qn, for "follow the web player's quality".
     std::string playBody;
+    const std::wstring qnText = std::to_wstring(quality > 0 ? quality : 127);
     const std::wstring playPath = bvid.empty()
-        ? std::format(L"/x/player/playurl?aid={}&cid={}&qn=127&fnval=4048&fourk=1",
-                      fromUtf8(aid), fromUtf8(cidText))
-        : std::format(L"/x/player/playurl?bvid={}&cid={}&qn=127&fnval=4048&fourk=1",
-                      fromUtf8(bvid), fromUtf8(cidText));
+        ? std::format(L"/x/player/playurl?aid={}&cid={}&qn={}&fnval=4048&fourk=1",
+                      fromUtf8(aid), fromUtf8(cidText), qnText)
+        : std::format(L"/x/player/playurl?bvid={}&cid={}&qn={}&fnval=4048&fourk=1",
+                      fromUtf8(bvid), fromUtf8(cidText), qnText);
     if (!httpGet(L"api.bilibili.com", playPath, referer, cookie, playBody, error)) {
         result.error = L"查询播放地址失败：" + error;
         return result;
