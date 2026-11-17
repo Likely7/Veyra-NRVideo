@@ -340,16 +340,18 @@ bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality){
         if (!media::bilibiliCookieLooksSignedIn(cookie)) info += QStringLiteral("  ") + tr("（未登录，画质受限）");
         emit notice(tr("正在播放：") + QString::fromStdWString(stream.title) + QStringLiteral("  ") + info, false);
         openPath(QString::fromStdWString(stream.url));
-        // Custom (Chrome bridge): a page URL also carries the comments. Load them
-        // through the same path the built-in Bilibili player uses, so a click in
-        // the browser and the in-app player both show danmaku.
-        if (impl_->prefBool("biliDanmaku", true)) {
-            static const std::regex bvRe(R"((BV[0-9A-Za-z]{10}))");
-            std::smatch m;
-            const std::string utf8 = trimmed.toStdString();
-            if (std::regex_search(utf8, m, bvRe))
-                bilibiliRequestEnableDanmaku(QString::fromStdString(m[1].str()), 0);
-        }
+        // Custom (Chrome bridge): a page URL also carries the comments and subtitles.
+        // Extract bvid once and reuse the built-in paths for both, so a click in the
+        // browser behaves like the in-app player.
+        static const std::regex bvRe(R"((BV[0-9A-Za-z]{10}))");
+        std::smatch bvMatch;
+        const std::string utf8 = trimmed.toStdString();
+        const QString bvid = std::regex_search(utf8, bvMatch, bvRe)
+            ? QString::fromStdString(bvMatch[1].str()) : QString();
+        if (!bvid.isEmpty() && stream.cid > 0)
+            bilibiliRequestSubtitles(bvid, stream.cid);
+        if (!bvid.isEmpty() && impl_->prefBool("biliDanmaku", true))
+            bilibiliRequestEnableDanmaku(bvid, 0);
         return true;
     }
     const QUrl url(trimmed,QUrl::StrictMode);

@@ -29,6 +29,7 @@ struct BilibiliStream {
     // sent twice and the CDN rejects the request.
     std::wstring userAgent;
     std::wstring title;      // page title, for the UI
+    long long cid = 0;       // page id, needed for subtitles/danmaku of this part
     std::wstring error;      // human-readable reason when ok == false
     unsigned width = 0;
     unsigned height = 0;

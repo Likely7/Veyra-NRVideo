@@ -478,7 +478,10 @@ BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wst
     const auto pickRendition = [&](bool avcOnly) -> const json::Value* {
         const json::Value* chosen = nullptr;
         for (const auto* rendition : renditions.elements()) {
-            if (avcOnly && (*rendition)["codecs"].asString().rfind("avc1", 0) != 0) continue;
+            // A specific qn means "this exact rendition, whatever codec": HDR (125)
+            // and Dolby Vision (126) are HEVC-only, so the H.264 preference would
+            // silently drop them and fall back to an SDR rendition.
+            if (quality <= 0 && avcOnly && (*rendition)["codecs"].asString().rfind("avc1", 0) != 0) continue;
             if (baseUrlOf(*rendition).empty()) continue;
             const long long id = (*rendition)["id"].asInt(0);
             if (quality > 0) {
@@ -533,6 +536,7 @@ BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wst
             log::warn("bilibili", "no DASH audio track in the response; playback would be silent");
         }
     }
+    result.cid = cid;
     result.ok = true;
     log::info("bilibili", std::format("resolved {} -> video codec={} quality={} audio={}",
         toUtf8(pageUrl), bestCodec, bestId, result.audioUrl.empty() ? "none" : toUtf8(result.audioCodec)));
