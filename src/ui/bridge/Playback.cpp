@@ -353,7 +353,7 @@ bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality, co
         if (!bvid.isEmpty() && stream.cid > 0)
             bilibiliRequestSubtitles(bvid, stream.cid);
         if (!bvid.isEmpty() && impl_->prefBool("biliDanmaku", true))
-            bilibiliRequestEnableDanmaku(bvid, 0);
+            bilibiliRequestEnableDanmaku(bvid, std::max(0, stream.pageIndex - 1));
         return true;
     }
     const QUrl url(trimmed,QUrl::StrictMode);

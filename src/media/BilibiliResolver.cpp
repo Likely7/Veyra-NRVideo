@@ -550,6 +550,7 @@ BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wst
         }
     }
     result.cid = cid;
+    result.pageIndex = pageIndex;
     result.ok = true;
     log::info("bilibili", std::format("resolved {} -> video codec={} quality={} audio={}",
         toUtf8(pageUrl), bestCodec, bestId, result.audioUrl.empty() ? "none" : toUtf8(result.audioCodec)));

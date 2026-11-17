@@ -30,6 +30,7 @@ struct BilibiliStream {
     std::wstring userAgent;
     std::wstring title;      // page title, for the UI
     long long cid = 0;       // page id, needed for subtitles/danmaku of this part
+    int pageIndex = 1;       // 1-based part number from ?p=
     std::wstring error;      // human-readable reason when ok == false
     unsigned width = 0;
     unsigned height = 0;
