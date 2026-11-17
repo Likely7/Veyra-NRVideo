@@ -11,6 +11,7 @@
 // window to match. That keeps the layout in QML (where it belongs) and the
 // pixels in D3D12 (where the latency budget lives).
 #include <QApplication>
+#include <QUrlQuery>
 #include <QProcess>
 #include <QIcon>
 #include <QImage>
@@ -707,6 +708,18 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         veyra::log::info("app", std::format("2.0.0 data directory ready; copied {} legacy files",
                                              migration.copied));
     }
+    // Custom (Chrome bridge): veyra://play?url=...&quality=N — the URL protocol the
+    // extension falls back to when the player is not running. Parsed here because
+    // the bridge below consumes it; the handler is installed by install-protocol.cmd.
+    QString protocolUrl;
+    int protocolQuality = 0;
+    for (const QString& a : QCoreApplication::arguments()) {
+        if (!a.startsWith(QStringLiteral("veyra://"), Qt::CaseInsensitive)) continue;
+        const QUrlQuery query(QUrl(a).query());
+        protocolUrl = query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
+        protocolQuality = query.queryItemValue(QStringLiteral("quality")).toInt();
+        break;
+    }
     ui::QmlPlayerBridge bridge(controller, dataDirectory);
     bridge.attachVideoWindow(reinterpret_cast<qulonglong>(g_video));
 
@@ -715,6 +728,14 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // reading anything off disk (a browser cannot open local files).
     ui::PlaybackServer playbackServer(&bridge);
     playbackServer.listen(18765);
+    if (!protocolUrl.isEmpty()) {
+        veyra::log::info("playback-server", std::format("protocol url: quality={} url={}",
+                                                         protocolQuality, protocolUrl.toStdString()));
+        QTimer::singleShot(1500, &bridge, [&bridge, url = protocolUrl, q = protocolQuality] {
+            bridge.bringToFront();
+            bridge.openNetworkAddress(url, q);
+        });
+    }
 
     // Qt reports QML failures through its own message handler. Routing them to
     // the log is the difference between "it did not load" and why.

@@ -92,7 +92,7 @@ void PlaybackServer::handleRequest(QTcpSocket* socket, const QByteArray& request
                 bridge->openNetworkAddress(url, quality);
             },
             Qt::QueuedConnection);
-        log::info("playback-server", std::format("play requested: {}", url.toStdString()));
+        log::info("playback-server", std::format("play requested: quality={} url={}", quality, url.toStdString()));
         respond(socket, 200, R"({"ok":true})");
         return;
     }

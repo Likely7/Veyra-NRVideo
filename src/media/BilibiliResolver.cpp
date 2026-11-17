@@ -472,19 +472,27 @@ BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wst
         if (base.empty()) base = rendition["base_url"].asString();
         return base;
     };
-    // Prefer H.264; fall back to any codec rather than showing nothing.
-    const json::Value* best = nullptr;
-    for (const auto* rendition : renditions.elements()) {
-        if ((*rendition)["codecs"].asString().rfind("avc1", 0) != 0) continue;
-        if (baseUrlOf(*rendition).empty()) continue;
-        if (!best || (*rendition)["id"].asInt(0) > (*best)["id"].asInt(0)) best = rendition;
-    }
-    if (!best) {
+    // Prefer H.264; fall back to any codec rather than showing nothing. When the
+    // caller asked for a specific qn (the browser bridge following the web player),
+    // take that rendition, or the closest lower one if the server omits it.
+    const auto pickRendition = [&](bool avcOnly) -> const json::Value* {
+        const json::Value* chosen = nullptr;
         for (const auto* rendition : renditions.elements()) {
+            if (avcOnly && (*rendition)["codecs"].asString().rfind("avc1", 0) != 0) continue;
             if (baseUrlOf(*rendition).empty()) continue;
-            if (!best || (*rendition)["id"].asInt(0) > (*best)["id"].asInt(0)) best = rendition;
+            const long long id = (*rendition)["id"].asInt(0);
+            if (quality > 0) {
+                if (id == quality) return rendition;
+                if (id <= quality && (chosen == nullptr || id > (*chosen)["id"].asInt(0)))
+                    chosen = rendition;
+            } else if (chosen == nullptr || id > (*chosen)["id"].asInt(0)) {
+                chosen = rendition;
+            }
         }
-    }
+        return chosen;
+    };
+    const json::Value* best = pickRendition(true);
+    if (!best) best = pickRendition(false);
     if (!best) {
         result.error = L"没有找到可播放的视频流地址";
         return result;
