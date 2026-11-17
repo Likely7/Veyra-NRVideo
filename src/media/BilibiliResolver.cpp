@@ -432,6 +432,19 @@ BilibiliStream resolveBilibiliStream(const std::wstring& pageUrl, const std::wst
     const auto& pages = viewRoot["data"]["pages"];
     long long cid = viewRoot["data"]["cid"].asInt(0);
     if (pages.size() > 0) cid = pages[0]["cid"].asInt(cid);
+    // 多 P：URL 的 ?p=N 指定第几 P（1 起），每 P 的 cid 在 data.pages 里。
+    // 浏览器插件会把带 ?p= 的页面地址原样传过来，所以这里也要认。
+    int pageIndex = 1;
+    {
+        static const std::regex pRe(R"([?&]p=(\d+))");
+        std::smatch pm;
+        const std::string u8 = toUtf8(resolvedUrl);
+        if (std::regex_search(u8, pm, pRe)) {
+            try { pageIndex = std::stoi(pm[1].str()); } catch (...) { pageIndex = 1; }
+        }
+    }
+    if (pageIndex > 1 && pages.size() >= size_t(pageIndex))
+        cid = pages[size_t(pageIndex - 1)]["cid"].asInt(cid);
     if (cid <= 0) {
         result.error = L"视频信息里没有 cid";
         return result;
