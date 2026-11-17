@@ -348,27 +348,48 @@ bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality){
 }
 
 void QmlPlayerBridge::bringToFront() {
-    // Windows only lets the foreground process (or one that just received input)
-    // call SetForegroundWindow successfully. The click happened in the browser, so
-    // a plain call is refused; attach to the foreground thread for the duration.
+    // Windows 只允许前台进程直接 SetForegroundWindow。点击发生在浏览器里，
+    // Veyra 是后台进程，所以第一次调用会被拒绝（任务栏闪烁）。
+    // 依次尝试：直接调用 -> 挂到前台线程 -> TOPMOST 切换强制改 Z 序。
     for (QWindow* w : QGuiApplication::topLevelWindows()) {
         if (!w->isVisible() || w->flags().testFlag(Qt::Tool)) continue;
+        const auto hwnd = reinterpret_cast<HWND>(w->winId());
+        if (hwnd == nullptr) continue;
+
+        if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
         w->show();
         w->raise();
         w->requestActivate();
-        const auto hwnd = reinterpret_cast<HWND>(w->winId());
-        if (hwnd == nullptr) continue;
-        if (!SetForegroundWindow(hwnd)) {
-            const HWND fg = GetForegroundWindow();
-            const DWORD fgThread = fg ? GetWindowThreadProcessId(fg, nullptr) : 0;
-            const DWORD selfThread = GetCurrentThreadId();
-            if (fgThread != 0 && fgThread != selfThread) {
-                AttachThreadInput(selfThread, fgThread, TRUE);
-                SetForegroundWindow(hwnd);
-                AttachThreadInput(selfThread, fgThread, FALSE);
-            }
+        if (SetForegroundWindow(hwnd)) {
+            log::info("playback-server", "window brought to front");
+            break;
         }
-        log::info("playback-server", "window brought to front");
+
+        const HWND fg = GetForegroundWindow();
+        const DWORD fgThread = fg ? GetWindowThreadProcessId(fg, nullptr) : 0;
+        const DWORD selfThread = GetCurrentThreadId();
+        if (fgThread != 0 && fgThread != selfThread) {
+            AttachThreadInput(selfThread, fgThread, TRUE);
+            SetForegroundWindow(hwnd);
+            AttachThreadInput(selfThread, fgThread, FALSE);
+        }
+        if (GetForegroundWindow() == hwnd) {
+            log::info("playback-server", "window brought to front");
+            break;
+        }
+
+        // 系统仍拒绝：短暂置顶再取消，强制改变 Z 序后再抢一次前台。
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetForegroundWindow(hwnd);
+        if (GetForegroundWindow() == hwnd) {
+            log::info("playback-server", "window brought to front (topmost)");
+        } else {
+            log::warn("playback-server", "window could not be activated; flashing instead");
+            FlashWindow(hwnd, TRUE);
+        }
         break;
     }
 }
