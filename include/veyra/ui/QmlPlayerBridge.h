@@ -1419,7 +1419,10 @@ public:
     // engine.
     Q_INVOKABLE void openFileDialog();
     Q_INVOKABLE void openNetworkDialog();
-    Q_INVOKABLE bool openNetworkAddress(const QString& address, int quality = 0);
+    // cookie: an explicit Cookie header value (the browser extension reads it from
+    // chrome.cookies). Empty means "use the stored Bilibili session".
+    Q_INVOKABLE bool openNetworkAddress(const QString& address, int quality = 0,
+                                        const QString& cookie = {});
     // Custom (Chrome bridge): pull the player window to the foreground. The
     // browser extension calls this before every /play so a click always shows
     // the picture, even when Veyra was behind the browser.

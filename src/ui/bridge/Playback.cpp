@@ -311,14 +311,16 @@ void QmlPlayerBridge::openPath(const QString& path) {
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
 void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"));}
-bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality){
+bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality, const QString& cookieOverride){
     const QString trimmed = address.trimmed();
     // A Bilibili page URL is not a media URL: resolve it to the CDN stream first.
     // 粘贴 B 站页面地址直接播放：解析成 CDN 流，再带上 Referer/UA 与 DASH 音频打开。
     // 这段在 2.1.2 拆桥接层时丢失（isBilibiliPageUrl 变成无人调用的死函数）。
     if (media::isBilibiliPageUrl(trimmed.toStdWString())) {
-        // Send the stored session so member renditions are available.
-        const std::wstring cookie = media::loadBilibiliCookie();
+        // Member renditions need a session. The browser extension supplies its own
+        // cookies through /play, so the user does not have to sign in twice.
+        const std::wstring cookie = cookieOverride.isEmpty()
+            ? media::loadBilibiliCookie() : cookieOverride.toStdWString();
         const auto stream = media::resolveBilibiliStream(trimmed.toStdWString(), cookie, quality);
         if (!stream.ok) {
             emit notice(QString::fromStdWString(stream.error), true);

@@ -146,6 +146,21 @@ $quality.addEventListener('change', () => {
   chrome.storage.local.set({ quality: $quality.value });
 });
 
+// 从浏览器读 B 站会话，随 /play 一起发给 Veyra：这样不必在 Veyra 里再登录一次，
+// 会员画质直接用浏览器里的登录状态。
+async function readBilibiliCookie() {
+  try {
+    const cookies = await chrome.cookies.getAll({ domain: 'bilibili.com' });
+    const wanted = new Set(['SESSDATA', 'bili_jct', 'DedeUserID', 'DedeUserID__ckMd5', 'sid']);
+    return cookies
+      .filter((c) => wanted.has(c.name) || c.name.startsWith('buvid'))
+      .map((c) => `${c.name}=${c.value}`)
+      .join('; ');
+  } catch {
+    return '';
+  }
+}
+
 // 点击时先暂停网页播放，避免两边同时出声。
 async function pausePageVideo(tabId) {
   try {
@@ -212,10 +227,11 @@ $go.addEventListener('click', async () => {
       return;
     }
 
+    const cookie = await readBilibiliCookie();
     const r = await fetch(ENDPOINT + '/play', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: currentUrl, quality: qn })
+      body: JSON.stringify({ url: currentUrl, quality: qn, cookie })
     });
     const data = await r.json();
     if (!data.ok) throw new Error(data.error || 'Veyra 拒绝了请求');

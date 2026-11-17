@@ -80,6 +80,9 @@ void PlaybackServer::handleRequest(QTcpSocket* socket, const QByteArray& request
         // Optional Bilibili quality (qn) from the extension; 0 keeps the default
         // 「best available」 request.
         const int quality = doc.object().value(QStringLiteral("quality")).toInt(0);
+        // Browser-side session: without it Veyra would only see the renditions its
+        // own stored cookie allows.
+        const QString cookie = doc.object().value(QStringLiteral("cookie")).toString();
         if (url.isEmpty()) {
             respond(socket, 400, R"({"ok":false,"error":"missing url"})");
             return;
@@ -87,9 +90,9 @@ void PlaybackServer::handleRequest(QTcpSocket* socket, const QByteArray& request
         // Same path the 「播放地址」 box uses, so Bilibili page URLs, direct media
         // URLs and local files all behave identically.
         QMetaObject::invokeMethod(
-            bridge_, [bridge = bridge_, url, quality] {
+            bridge_, [bridge = bridge_, url, quality, cookie] {
                 bridge->bringToFront();
-                bridge->openNetworkAddress(url, quality);
+                bridge->openNetworkAddress(url, quality, cookie);
             },
             Qt::QueuedConnection);
         log::info("playback-server", std::format("play requested: quality={} url={}", quality, url.toStdString()));
