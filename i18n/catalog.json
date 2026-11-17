@@ -20317,6 +20317,20 @@
    "zh-TW": "每次啟動播放一次，動畫結束後繼續；此開關會儲存，角落按鈕僅停止本次",
    "en": "Plays once per launch, continuing after the intro. This setting is saved; the corner button stops only this launch.",
    "ja": "起動ごとに一度再生し、アニメ終了後も継続。この設定は保存され、隅のボタンは今回のみ停止します。"
+  },
+  {
+   "zh": "软件视频解码",
+   "src": "qml/Veyra/XboxSourceDialog.qml",
+   "zh-TW": "軟體視訊解碼",
+   "en": "Software video decoding",
+   "ja": "ソフトウェア動画デコード"
+  },
+  {
+   "zh": "兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。",
+   "src": "qml/Veyra/XboxSourceDialog.qml",
+   "zh-TW": "相容選項：畫面持續出現破圖時可嘗試開啟，斷線後重新連線生效。可能增加 CPU 使用率與延遲；超解析度和補幀仍使用 GPU。",
+   "en": "Compatibility option: try this if picture corruption persists, then disconnect and reconnect. May increase CPU usage and latency; super resolution and frame generation still use the GPU.",
+   "ja": "互換性オプション：映像の乱れが続く場合に有効にし、切断して再接続してください。CPU 使用率と遅延が増える場合があります。超解像とフレーム生成には引き続き GPU を使用します。"
   }
  ]
 }

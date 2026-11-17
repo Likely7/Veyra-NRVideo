@@ -1,5 +1,18 @@
 # 当前工作日志
 
+## 2026-11-17 Xbox concealed-frame recovery proposal
+
+Related #138: reject stream frames carrying FFmpeg corruption/error flags before
+publication, reuse Xbox history reset/IDR recovery, add an opt-in persisted Xbox
+software decoder workaround, and correct swscale output-height validation.
+Field replay and a locally patched 2.1.9 executable support the diagnosis;
+they are not a complete build of the new UI/source changes. Added a native
+software-scaling regression; native build/test and UI persistence checks remain
+pending. `python -X utf8 -B scripts/i18n/extract.py --check` reports no missing
+translations/placeholder problems; `git diff --check` passes. Details and
+explicit validation limits: [Xbox recovery](XBOX_STREAM_CORRUPTION_RECOVERY.md).
+No binary/runtime/configuration/credential changes are part of the contribution.
+
 ## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
 
 用户veyra-qml(4).log与cache(1).zip表明NVAPI身份修复确实生效（m_gpuArch0x1b0），新失败是12:35之后三次worker管道中断。NGX已进入Small1920×1080网络建立，最后权重heap请求108.6MiB；不能凭末行认定显存不足或具体CUDA错误。当前只更新worker诊断：阶段/请求参数、CRT与Win32 stderr、Rust backtrace、普通未处理SEH独立记录；保持原Windows异常处理、不吞异常。算法/模型/共享GPU同步/主EXE/设置不改，附只读Windows1000/1001事件收集，不包数据库或模型。
