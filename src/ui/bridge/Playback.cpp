@@ -347,6 +347,32 @@ bool QmlPlayerBridge::openNetworkAddress(const QString& address, int quality){
     openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
 }
 
+void QmlPlayerBridge::bringToFront() {
+    // Windows only lets the foreground process (or one that just received input)
+    // call SetForegroundWindow successfully. The click happened in the browser, so
+    // a plain call is refused; attach to the foreground thread for the duration.
+    for (QWindow* w : QGuiApplication::topLevelWindows()) {
+        if (!w->isVisible() || w->flags().testFlag(Qt::Tool)) continue;
+        w->show();
+        w->raise();
+        w->requestActivate();
+        const auto hwnd = reinterpret_cast<HWND>(w->winId());
+        if (hwnd == nullptr) continue;
+        if (!SetForegroundWindow(hwnd)) {
+            const HWND fg = GetForegroundWindow();
+            const DWORD fgThread = fg ? GetWindowThreadProcessId(fg, nullptr) : 0;
+            const DWORD selfThread = GetCurrentThreadId();
+            if (fgThread != 0 && fgThread != selfThread) {
+                AttachThreadInput(selfThread, fgThread, TRUE);
+                SetForegroundWindow(hwnd);
+                AttachThreadInput(selfThread, fgThread, FALSE);
+            }
+        }
+        log::info("playback-server", "window brought to front");
+        break;
+    }
+}
+
 void QmlPlayerBridge::togglePlayPause() {
     // AppShell's Play button: a paused session is still "running" (the worker
     // stays alive), so the decision must come from the transport state.

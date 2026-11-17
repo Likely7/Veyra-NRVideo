@@ -1420,6 +1420,10 @@ public:
     Q_INVOKABLE void openFileDialog();
     Q_INVOKABLE void openNetworkDialog();
     Q_INVOKABLE bool openNetworkAddress(const QString& address, int quality = 0);
+    // Custom (Chrome bridge): pull the player window to the foreground. The
+    // browser extension calls this before every /play so a click always shows
+    // the picture, even when Veyra was behind the browser.
+    Q_INVOKABLE void bringToFront();
     Q_INVOKABLE void openPath(const QString& path);
     Q_INVOKABLE void openCaptureDialog();
     // Reopens the last capture session with the same device and format.

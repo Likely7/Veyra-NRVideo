@@ -87,7 +87,10 @@ void PlaybackServer::handleRequest(QTcpSocket* socket, const QByteArray& request
         // Same path the 「播放地址」 box uses, so Bilibili page URLs, direct media
         // URLs and local files all behave identically.
         QMetaObject::invokeMethod(
-            bridge_, [bridge = bridge_, url, quality] { bridge->openNetworkAddress(url, quality); },
+            bridge_, [bridge = bridge_, url, quality] {
+                bridge->bringToFront();
+                bridge->openNetworkAddress(url, quality);
+            },
             Qt::QueuedConnection);
         log::info("playback-server", std::format("play requested: {}", url.toStdString()));
         respond(socket, 200, R"({"ok":true})");
