@@ -16,6 +16,10 @@
 </p>
 <!-- veyra-creator-and-tutorials:end -->
 
+<!-- veyra-main-pr-integration -->
+当前 main（未发行）：八项社区 PR 已适配整合，包含 B 站/浏览器桥、Dolby Vision、韩语、300% 音量及各项修复。[功能与验证记录](docs/PR_INTEGRATION_2026-11-18.md)。现有 2.1.9 下载包不变。
+
+
 <p align="center"><img src="assets/veyra-wordmark-sun.gif" alt="Veyra NR · 透明字标与太阳动效" width="480"></p>
 
 <p align="center">
@@ -83,7 +87,7 @@ I've received creator fees from a community-created Veyra token. These contribut
 
 **2.0.4 NR 调控：** 每层 NR 的“增强变化量 → 总变化强度”最高为 5。“画面调控”默认关闭，开启可选自动／手动。自动分别适配风格 0／1／2，新增力度滑块（0 保留原始强度，1 完整纠偏）。手动共九项：色相、色度、中性色、原图色彩保留、亮度保持、暗部、高光、局部压缩和时域稳定；“采用当前风格的自动参数”可作为手动起点。切换方式保留手动数值，关闭调控保留原始残差算法。5 是一次推理结果的残差外推，保护会降低对应变化量，不能保证所有素材在完整局部增益 5 下无失真。预设、列表／节点会话、PNG 与视频导出共用这些设置。验收与已知限制见[本轮记录](docs/history/reports/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md)。
 
-- **全新界面**：首页、极简、专业列表、节点、调色、导出和设置重新组织；支持简中、繁中、English、日本語。
+- **全新界面**：首页、极简、专业列表、节点、调色、导出和设置重新组织；支持简中、繁中、English、日本語、한국어。
 - **节点编辑与多层 NR**：连线编排处理顺序，NR/调色独立参数；列表与节点各自保存配置、会话和预设。
 - **PC / Xbox 串流**：Moonlight/Sunshine 协议 PC 串流、非官方实验 Xbox 接入，与 PS5、采集卡、屏幕捕获共用增强。
 - **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。

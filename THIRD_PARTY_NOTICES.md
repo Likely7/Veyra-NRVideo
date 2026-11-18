@@ -1,5 +1,24 @@
 # Third-party dependencies
 
+## Remote Play feedback history backport (2026-11-17)
+
+`scripts/remoteplay/patches/0003-chiaki-feedback-history.patch` backports four
+chiaki-ng changes onto Veyra's unchanged `0e16950165f06e5c3291537c2eeba6e852be7120`
+dependency pin, including the upstream regression tests:
+
+- `4382c1c718271c0e2427196d13863a28d57c2038`: one packet per history event.
+- `bfbb2968a01238c4ee1611ceb79ee0025ca31267`: bounded tail resends and larger history.
+- `c938844a2fa7bbb9052656d83837cf98baff9ba5`: history event count in the Takion header.
+- `bc397a728bb430f28666129ef006f7a8ac0e6081`: count-minus-one header and event
+  sequence numbers; retransmits retain the same sequence.
+
+Source: https://github.com/chiaki-ng/chiaki-ng . License remains
+`LicenseRef-AGPL-3.0-only-OpenSSL`; see `licenses/remoteplay` and the upstream
+`COPYING`. The patch is a consolidated, otherwise unchanged backport. Local
+sender regression tests additionally exercise strike/modifier combinations,
+16-bit sequence wrap and a lost final release packet. Offline test results do
+not establish behavior on a physical PS5.
+
 ## RX 7000 experimental NR provider (2026-10-30, development branch)
 
 RedDukeDev/dlss5-nr-amd-custom, fixed commit `ab455d179922adc11f65675d399e1d553bf423f0`: MIT network layer and NR kernels; ZLUDA at `b135e233bb7a6ff7f8690e49701f87f4944adcee`, MIT OR Apache-2.0. Original notices, exact file selection, modifications and proprietary component boundaries are in [third_party/redduke/VEYRA_ORIGIN.md](third_party/redduke/VEYRA_ORIGIN.md) and its LICENSE. The five external source files are fetched and Git-blob verified by `scripts/amd-nr/prepare-rdna3-source.py`; no SDK, runtime DLL, model or translation cache enters source Git.
@@ -219,7 +238,16 @@ request the card's hardware tonemapper as OBS libdshowcapture
 (`SetVendorTonemapperUsage`, behaviour only, no code copied) does; the
 non-MK.2 P010 chroma rule is a per-source flag (`fullRangeChroma`) honoured by
 `YuvToLinearRgb.hlsl`, applied only when the user leaves range on auto. No
-vendor shader, SDK header or binary is vendored. Full license:
+vendor shader, SDK header or binary is vendored.
+2026-11-16: `readElgato4kxHdrPacket` adapts the Elgato 4K X source-HDR query
+from Nitlink at `f39b909517f95791d97e64463fc65e5be7a17fcc`,
+`src/capture/elgato_hdr_control.cpp` (`ReadXuBlocks`) and
+`elgato_4kx_source.h`: UVC extension unit GUID, selector 2/1 length and
+request/reply mailbox, readiness and HDR InfoFrame requests (Nitlink credits
+13bm/elgato4k-linux for the protocol; no code from that project is used).
+Veyra changes: uses the selected filter, sends one query per connection
+instead of polling, stops after a rejected first write, checks the reply
+framing and checksum, and validates the InfoFrame with the existing parser. Full license:
 `licenses/capture/ELGATO_NITLINK_MIT.txt`.
 
 ## NVENC API declarations
@@ -329,6 +357,14 @@ The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved pr
 
 The sponsor page (2026-10-19) adds Lucide `coffee` and `external-link` (as `external`) from lucide-static 1.51.0 to the same
 `icons.js`, under the same ISC notice.
+
+## QR code generation for Bilibili sign-in (2026-11-07)
+
+Project Nayuki, QR Code generator library (C++): https://github.com/nayuki/QR-Code-generator.
+`third_party/qrcodegen/qrcodegen.cpp` and `third_party/qrcodegen/qrcodegen.hpp` are imported
+verbatim; both files keep their upstream header with the full MIT notice ("Copyright (c) Project
+Nayuki"). Used by `src/media/QrImage.cpp` to encode the Bilibili sign-in URL into the QR image the
+Bilibili page shows. No modification.
 
 ## Simple Icons brand glyphs (sponsor page, 2026-10-19)
 
@@ -1122,3 +1158,34 @@ Runtime path: `media/startup-music.mp3`, 1847011 bytes, SHA256
 `3005aa601f06a97d3968fd9fa171e870fceb4ec47586f1e950c9ed3c7875fb6a`.
 Each runnable package includes its separate notice and manifest. Windows Media
 Foundation provides decoding; no additional codec or audio SDK is bundled.
+
+# Veyra virtual camera / OBS-derived components (2026-11-17)
+
+- OBS Studio: https://github.com/obsproject/obs-studio , pinned `7e3aa99811798255bd1a13a6da7260ada76a4d95`, GPL-2.0-or-later. Adapted `plugins/win-dshow/virtualcam-module/{virtualcam-filter.cpp,virtualcam-filter.hpp,virtualcam-module.cpp,sleepto.c,sleepto.h}`, `shared/obs-shared-memory-queue` and `shared/obs-tiny-nv12-scale` into `third_party/obs_virtualcam`. `libobs/util/threading-windows.h` and `util/windows/WinHandle.hpp` preserve Lain Bailey's ISC notice.
+- libdshowcapture: https://github.com/obsproject/libdshowcapture , pinned `8878638324393815512f802640b0d5ce940161f1`, LGPL-2.1-or-later, copyright Lain Bailey and contributors. The output filter, format/media-type and logging implementation are used; no hardware-vendor SDK is imported. `dshow-error.cpp` is the existing `ConvertHRToEnglish` helper extracted from `dshow-base.cpp` without behavior changes.
+- Original per-file SHA-256 and paths: `third_party/obs_virtualcam/UPSTREAM.json`. Full licenses: `third_party/obs_virtualcam/COPYING.*`, also shipped under `licenses/virtual-camera/`. Veyra's modifications are GPL-3.0-or-later under the application license; original permissions remain.
+- Changes: independent Veyra CLSID and local shared-memory namespace, current-user 32/64-bit registration/uninstall, COM factory interface handling, native/fallback format negotiation and consumer-clock timestamps, idle/stop handling and black placeholder; bounded shared-memory locking, row-stride packing, validated dimensions, multiple readers and producer crash heartbeat. Application GPU capture/SDR conversion/UI are Veyra code and use the existing post-processing capture point. This is not an OBS plugin and does not replace or register under OBS's identity.
+- Protocol-2 adaptation: six-frame ordered transport, sequence/grid/write timestamps, bounded consumer-rate negotiation, stable adaptive delivery delay and optional in-process timing alignment through libobs's exported read-only clock APIs. The application adds its own protected system-component installer and update status. `UPSTREAM.json.veyraAdaptations` lists the seven modified upstream files and the extracted HRESULT helper; original per-file hashes remain unchanged (line-ending normalization alone is not a source modification).
+## libdovi / source-only adoption of PR #136 (2026-11-18)
+
+Dolby Vision parsing uses quietvoid/dovi_tool, MIT, pinned to
+`d1abe0e27ff2c7ab3339614d06db9f8a058af6b2` (dovi_tool 2.3.3 / libdovi 3.4.0).
+Upstream: https://github.com/quietvoid/dovi_tool . Build the `dolby_vision` crate
+with `capi`, generate `libdovi/rpu_parser.h` with cbindgen 0.29.4 and its upstream
+configuration. Keep the upstream MIT LICENSE with the runtime. Dependency
+sources, generated headers and built DLL/import libraries live outside this
+source repository; point `VEYRA_LIBDOVI_ROOT` at that external prefix.
+
+The Bilibili module, browser extension, P5/P7 RPU and EL composition work is
+adopted from georgeg911/Veyra-NRVideo PR #136, head
+`db5a4e53b29be50182988af14ea7d6674a43e798`, under Veyra's GPLv3 license.
+The clean import excludes the contributed DLL/LIB and foreign-machine rules.
+Integration changes remove per-frame absolute-path debug writes, move page
+resolution off the GUI thread, constrain loopback HTTP requests, preserve
+Korean layouts/current audio settings and use the source-built libdovi prefix.
+
+Linux OBS filter work is adopted from andreanjoes PR #96 at
+`719e2d89eaa3ff126d4130a4e3f7c2f48f8021d6`, GPLv3. Integration additionally
+validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
+centres and preserves premultiplied transparency. OBS's public colour-filter
+shader was consulted for the alpha contract; no OBS DLL is bundled here.

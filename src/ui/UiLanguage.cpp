@@ -150,7 +150,7 @@ QString translatePieces(const CatalogTranslator& t, const QString& s, int depth)
             part.replace(trimmed, done);
         }
         // Full-width separators read oddly between Latin sentences.
-        const QString glue = sep == QStringLiteral("；") && currentCode == QStringLiteral("en") ? QStringLiteral("; ") : sep;
+        const QString glue = sep == QStringLiteral("；") && (currentCode == QStringLiteral("en") || currentCode == QStringLiteral("ko")) ? QStringLiteral("; ") : sep;
         return parts.join(glue);
     }
     return s;
@@ -159,7 +159,7 @@ QString translatePieces(const CatalogTranslator& t, const QString& s, int depth)
 } // namespace
 
 QString resolve(const QString& preference) {
-    static const QStringList known{QStringLiteral("zh-CN"), QStringLiteral("zh-TW"), QStringLiteral("en"), QStringLiteral("ja")};
+    static const QStringList known{QStringLiteral("zh-CN"), QStringLiteral("zh-TW"), QStringLiteral("en"), QStringLiteral("ja"), QStringLiteral("ko")};
     if (known.contains(preference)) return preference;
     const QLocale system = QLocale::system();
     if (system.language() == QLocale::Chinese) {
@@ -169,6 +169,7 @@ QString resolve(const QString& preference) {
         return traditional ? QStringLiteral("zh-TW") : QStringLiteral("zh-CN");
     }
     if (system.language() == QLocale::Japanese) return QStringLiteral("ja");
+    if (system.language() == QLocale::Korean) return QStringLiteral("ko");
     return QStringLiteral("en");
 }
 

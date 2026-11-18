@@ -5,6 +5,7 @@
 #include <array>
 #include <string_view>
 
+struct IKsControl;
 namespace veyra::source {
 struct ElgatoHdrPacket {
     bool valid=false;
@@ -15,6 +16,9 @@ bool isElgatoMk2(std::wstring_view name);
 // Any Elgato capture filter: "Elgato ..." names and the "Game Capture ..." family.
 bool isElgatoDevice(std::wstring_view name);
 ElgatoHdrPacket parseElgatoHdrPacket(const std::array<unsigned char,32>& bytes);
+// Elgato 4K X: reads the source HDR InfoFrame from the card's UVC extension
+// unit command mailbox (topology node `node`). False leaves `packet` untouched.
+bool readElgato4kxHdrPacket(IKsControl* control,ULONG node,std::array<unsigned char,32>& packet);
 
 // Session-scoped device control; release it after Stop and before the filter.
 class ElgatoHdrControl {

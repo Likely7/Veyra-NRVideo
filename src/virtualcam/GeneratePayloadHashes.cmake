@@ -1,0 +1,5 @@
+file(SHA256 "${VCAM64}" HASH64)
+file(SHA256 "${VCAM32}" HASH32)
+file(WRITE "${OUTPUT}.new" "#pragma once\nconstexpr wchar_t CameraHash64[]=L\"${HASH64}\";\nconstexpr wchar_t CameraHash32[]=L\"${HASH32}\";\n")
+execute_process(COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${OUTPUT}.new" "${OUTPUT}" COMMAND_ERROR_IS_FATAL ANY)
+file(REMOVE "${OUTPUT}.new")

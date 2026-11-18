@@ -126,7 +126,7 @@ void QmlPlayerBridge::pollReplay() {
     state["failed"] = live.failed;
     state["error"] = live.error.empty() ? QString() : uiText(live.error);
     state["path"] = QString::fromStdWString(live.path);
-    state["encoder"] = QString::fromStdWString(live.encoder);
+    state["encoder"] = uiText(live.encoder);
     state["audio"] = live.audio;
     state["microphone"] = live.microphone;
     state["microphoneError"] = live.microphoneError.empty() ? QString() : uiText(live.microphoneError);

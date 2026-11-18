@@ -1,0 +1,219 @@
+{
+  "obs": "7e3aa99811798255bd1a13a6da7260ada76a4d95",
+  "libdshowcapture": "8878638324393815512f802640b0d5ce940161f1",
+  "files": [
+    {
+      "path": "module/virtualcam-filter.cpp",
+      "upstream": "plugins/win-dshow/virtualcam-module/virtualcam-filter.cpp",
+      "sha256": "9fcb61b4d74233d47876a066049d7488c4ab086d0a51bf2caf149f420f01afb4"
+    },
+    {
+      "path": "module/virtualcam-filter.hpp",
+      "upstream": "plugins/win-dshow/virtualcam-module/virtualcam-filter.hpp",
+      "sha256": "1c083ace2a2336dece5b106d58bcece9410a0b0b87b575e773742ad8c6e22f27"
+    },
+    {
+      "path": "module/virtualcam-module.cpp",
+      "upstream": "plugins/win-dshow/virtualcam-module/virtualcam-module.cpp",
+      "sha256": "42d729fd716926ee72703bbfcdec5edaa57f063a16b9bff51285da507623828f"
+    },
+    {
+      "path": "module/sleepto.c",
+      "upstream": "plugins/win-dshow/virtualcam-module/sleepto.c",
+      "sha256": "7038eecf665643c6762cc06ab05b865c113e338f6e55d3cf7ae01b36f8455098"
+    },
+    {
+      "path": "module/sleepto.h",
+      "upstream": "plugins/win-dshow/virtualcam-module/sleepto.h",
+      "sha256": "b034f59077611a57c283e4c22e2275fe955f739dc47ddaa3525fd5b63022d097"
+    },
+    {
+      "path": "ipc/shared-memory-queue.c",
+      "upstream": "shared/obs-shared-memory-queue/shared-memory-queue.c",
+      "sha256": "a11dc9a6cb1759bf5203f267960e847d8d40d2bb5fa06bba0222729ecfe7a658"
+    },
+    {
+      "path": "ipc/shared-memory-queue.h",
+      "upstream": "shared/obs-shared-memory-queue/shared-memory-queue.h",
+      "sha256": "d41d49be6df8495eec602faa137d1bb8a0abc61009b23b69e4accfdb002581b4"
+    },
+    {
+      "path": "ipc/tiny-nv12-scale.c",
+      "upstream": "shared/obs-tiny-nv12-scale/tiny-nv12-scale.c",
+      "sha256": "1eab6ffcb305f9e13eab01fdeeb9b0a68d22325359ad73d72f23208acc9e062d"
+    },
+    {
+      "path": "ipc/tiny-nv12-scale.h",
+      "upstream": "shared/obs-tiny-nv12-scale/tiny-nv12-scale.h",
+      "sha256": "1e39094a37b64d3fea7077040b658c81bcdc0b09a7850e489cc8195692710511"
+    },
+    {
+      "path": "util/threading-windows.h",
+      "upstream": "libobs/util/threading-windows.h",
+      "sha256": "4d666c2f0013acfca6c4823a773ce9f7c1835cbdc447a0cac0ae3c5be2091dce"
+    },
+    {
+      "path": "util/windows/WinHandle.hpp",
+      "upstream": "libobs/util/windows/WinHandle.hpp",
+      "sha256": "8e55c624eafc6e455575944f5e339fb6f76ef7fbe972dde0d33a432f062f49e5"
+    },
+    {
+      "path": "libdshowcapture/source/capture-filter.hpp",
+      "upstream": "deps/libdshowcapture/src/source/capture-filter.hpp",
+      "sha256": "71c4bcfeab5356aa8dcbf1c1edbfcceeee25b651c4e42bd6035d5551df104f98"
+    },
+    {
+      "path": "libdshowcapture/source/ComPtr.hpp",
+      "upstream": "deps/libdshowcapture/src/source/ComPtr.hpp",
+      "sha256": "906f4a494e40ac83003c972b3b5f91908f03298335d8b8ae7c93b814f062697c"
+    },
+    {
+      "path": "libdshowcapture/source/CoTaskMemPtr.hpp",
+      "upstream": "deps/libdshowcapture/src/source/CoTaskMemPtr.hpp",
+      "sha256": "4cea435ae3ddca21b1fa7daba73209466c1ee861affd31dea0df8ff57ca186ef"
+    },
+    {
+      "path": "libdshowcapture/source/device.hpp",
+      "upstream": "deps/libdshowcapture/src/source/device.hpp",
+      "sha256": "51494309212cf61beb76ce3e5d8378b1fb2a1edf0ec87a5ae55f0efd49bd38c8"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-base.hpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-base.hpp",
+      "sha256": "2af06e0b410c3f82344310c5fde1d010d541c572b7eb488c05ed4669f8094dbb"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-demux.hpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-demux.hpp",
+      "sha256": "11eaa687e6d998c40bbc8f8257489980c5f2edd6e832d0185c88826e51863d96"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-device-defs.hpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-device-defs.hpp",
+      "sha256": "be987805af6bf297a6a07967e9197ea16ce0e5870fb0b21c2211e2b14570215e"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-enum.hpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-enum.hpp",
+      "sha256": "faf4e1b663e0f8131c24261d8d2191a36a470169bdf60cc9180c6332f63f2b9d"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-formats.hpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-formats.hpp",
+      "sha256": "c571f18af7f7f3f786ebda497dbca8aec79e1f21fbfd8a1eac47f439b581bdae"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-media-type.hpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-media-type.hpp",
+      "sha256": "5374bf950645c2a22f00e39bc4fe74c5384343ec916cc073af18c23d12537fc9"
+    },
+    {
+      "path": "libdshowcapture/source/encoder.hpp",
+      "upstream": "deps/libdshowcapture/src/source/encoder.hpp",
+      "sha256": "bfe6f9b89f5306d3345e2e2bd56c1736f6a7b0e47c5d0c4c31f2f948d06a4e8c"
+    },
+    {
+      "path": "libdshowcapture/source/log.hpp",
+      "upstream": "deps/libdshowcapture/src/source/log.hpp",
+      "sha256": "c070ec2e6793e42673da9c8ca37ce1f8a2ee789894389381bf0e4a88c6125420"
+    },
+    {
+      "path": "libdshowcapture/source/output-filter.hpp",
+      "upstream": "deps/libdshowcapture/src/source/output-filter.hpp",
+      "sha256": "6ce02e43bcc17972a3de279ca2173902ffec07455a9c79f19c1e861464701f0c"
+    },
+    {
+      "path": "libdshowcapture/source/output-filter.cpp",
+      "upstream": "deps/libdshowcapture/src/source/output-filter.cpp",
+      "sha256": "1441ee82b63eb89c92a4348b234d30816886f1e3c4f82d3e03d01254de67dc2f"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-base.cpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-base.cpp",
+      "sha256": "e0f5525c35ffbcb72938a87fe3ee145be1bd3f234476d3e404ffd8e9da8848de"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-formats.cpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-formats.cpp",
+      "sha256": "60c638f598f004a5c2ba5f3b7fb648a24d032189d06d5199e71246a50b81cd70"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-media-type.cpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-media-type.cpp",
+      "sha256": "cb3b6470e5249b24910e39005f150ca3ca25837b31cf810d93d766f9a136e590"
+    },
+    {
+      "path": "libdshowcapture/source/log.cpp",
+      "upstream": "deps/libdshowcapture/src/source/log.cpp",
+      "sha256": "7feb5740e0afeeb9a9673509ec6795da32291fba8838ad341ac357b5801d7a50"
+    },
+    {
+      "path": "libdshowcapture/source/dshow-enum.cpp",
+      "upstream": "deps/libdshowcapture/src/source/dshow-enum.cpp",
+      "sha256": "c1fcad8153b35639b355d3cdb9ec1d6b592829f97141be287d18a6ec3efb824b"
+    },
+    {
+      "path": "libdshowcapture/dshowcapture.hpp",
+      "upstream": "deps/libdshowcapture/src/dshowcapture.hpp",
+      "sha256": "96b934b0b4c64ea3d967476af2c6954fb7139bf36b4475e866e157b8e418535a"
+    },
+    {
+      "path": "COPYING.LGPL-2.1",
+      "upstream": "deps/libdshowcapture/src/COPYING",
+      "sha256": "1e7e6bae5a5bde32f1ae5a7c37a082d1ab03cf89354f7f936ac40be9e39a6531"
+    },
+    {
+      "path": "COPYING.GPL-2.0",
+      "upstream": "COPYING",
+      "sha256": "189b1af95d661151e054cea10c91b3d754e4de4d3fecfb074c1fb29476f7167b"
+    }
+  ],
+  "veyraAdaptations": {
+    "date": "2026-11-18",
+    "upstreamHashesDescribeOriginalFiles": true,
+    "modifiedFiles": [
+      {
+        "path": "module/virtualcam-filter.cpp",
+        "upstreamSha256": "9fcb61b4d74233d47876a066049d7488c4ab086d0a51bf2caf149f420f01afb4",
+        "adaptation": "Independent Veyra source and format negotiation; graph-relative samples; ordered protocol-2 delivery; bounded adaptive delay and in-process libobs tick alignment."
+      },
+      {
+        "path": "module/virtualcam-filter.hpp",
+        "upstreamSha256": "1c083ace2a2336dece5b106d58bcece9410a0b0b87b575e773742ad8c6e22f27",
+        "adaptation": "Veyra pacing state, ordered sequence handling and OBS clock function pointers."
+      },
+      {
+        "path": "module/virtualcam-module.cpp",
+        "upstreamSha256": "42d729fd716926ee72703bbfcdec5edaa57f063a16b9bff51285da507623828f",
+        "adaptation": "Independent class/device identity and Veyra registration; correct COM class factory interfaces and lifetime."
+      },
+      {
+        "path": "ipc/shared-memory-queue.c",
+        "upstreamSha256": "a11dc9a6cb1759bf5203f267960e847d8d40d2bb5fa06bba0222729ecfe7a658",
+        "adaptation": "Private protocol-2 namespace; validated six-frame ordered ring; bounded locking; row strides; producer heartbeat; up to eight consumer intervals."
+      },
+      {
+        "path": "ipc/shared-memory-queue.h",
+        "upstreamSha256": "d41d49be6df8495eec602faa137d1bb8a0abc61009b23b69e4accfdb002581b4",
+        "adaptation": "Protocol-2 C API including sequence reads, timestamps and consumer interval negotiation."
+      },
+      {
+        "path": "libdshowcapture/source/output-filter.hpp",
+        "upstreamSha256": "6ce02e43bcc17972a3de279ca2173902ffec07455a9c79f19c1e861464701f0c",
+        "adaptation": "DiscardSampleData declaration for failed bounded reads."
+      },
+      {
+        "path": "libdshowcapture/source/output-filter.cpp",
+        "upstreamSha256": "1441ee82b63eb89c92a4348b234d30816886f1e3c4f82d3e03d01254de67dc2f",
+        "adaptation": "Stop flush/decommit and discarded sample handling to release blocked consumers and reject invalid data."
+      }
+    ],
+    "derivedFiles": [
+      {
+        "path": "libdshowcapture/source/dshow-error.cpp",
+        "fromPath": "libdshowcapture/source/dshow-base.cpp",
+        "change": "Extract ConvertHRToEnglish only; preserve LGPL attribution and behavior."
+      }
+    ]
+  }
+}

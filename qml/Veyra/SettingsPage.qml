@@ -298,7 +298,8 @@ VPage {
                                     { id: "zh-CN", label: qsTr("简体中文") },
                                     { id: "zh-TW", label: qsTr("繁體中文") },
                                     { id: "en", label: "English" },
-                                    { id: "ja", label: qsTr("日本語") }
+                                    { id: "ja", label: qsTr("日本語") },
+                                    { id: "ko", label: "한국어" }
                                 ]
                                 value: (options.find(o => o.id === (veyra.preferences.language || "auto")) || options[0]).label
                                 onPicked: id => veyra.setPreference("language", id)
@@ -595,6 +596,7 @@ VPage {
                                     }
                                 }
                             }
+
                         }
                         VRow {
                             label: qsTr("字幕默认字号")
@@ -701,6 +703,74 @@ VPage {
                             }
                         }
                     }
+                    VGroup {
+                        objectName: "set-virtual-camera-group"
+                        VRow {
+                            label: qsTr("直播软件兼容组件")
+                            hint: {
+                                const c = veyra.virtualCameraState || {}
+                                if(c.installing) return qsTr("正在安装或卸载，请完成 Windows 管理员确认")
+                                if(c.setupError) return c.setupError
+                                if(c.systemOutdated) return qsTr("系统级组件是旧版本，管理员运行的 OBS 等直播软件会看不到画面；请点击“更新组件”")
+                                return c.systemInstalled ? qsTr("已安装系统级组件，支持管理员运行的直播软件")
+                                                         : qsTr("当前仅注册到本用户；管理员运行的 OBS 等直播软件需要安装系统级组件")
+                            }
+                            VButton {
+                                objectName: "set-virtual-camera-install"
+                                primary: !!(veyra.virtualCameraState || {}).systemOutdated
+                                text: (veyra.virtualCameraState || {}).systemOutdated ? qsTr("更新组件")
+                                    : (veyra.virtualCameraState || {}).systemInstalled ? qsTr("修复组件") : qsTr("安装组件")
+                                enabled: !(veyra.virtualCameraState || {}).installing
+                                onClicked: veyra.installVirtualCamera()
+                            }
+                        }
+                        VRow {
+                            label: qsTr("虚拟摄像机")
+                            hint: qsTr("在直播软件的视频采集设备中选择 Veyra Virtual Camera；输出处理后的完整画面，不需要全屏")
+                            VSwitch {
+                                objectName: "set-virtual-camera-toggle"
+                                checked: veyra.virtualCameraEnabled
+                                onToggled: enabled => veyra.setVirtualCameraEnabled(enabled)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("摄像机输出帧率")
+                            hint: qsTr("自动：跟随直播软件为摄像机选的帧率（如 OBS 设 60 或 120），补帧 3X、4X 时按均匀时间挑帧；固定值为上限。SDR 视频输出，声音请单独采集；XeSS 显示端生成的帧不包含在内")
+                            VSeg {
+                                objectName: "set-virtual-camera-fps"
+                                options: [{id: "0", label: qsTr("自动")}, {id: "30", label: "30"}, {id: "60", label: "60"}, {id: "120", label: "120"}]
+                                current: String(veyra.virtualCameraFps)
+                                onPicked: id => veyra.setPreference("virtualCameraFps", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("摄像机状态")
+                            hint: {
+                                const c = veyra.virtualCameraState || {}
+                                if (c.error) return c.error
+                                if (!c.active) return qsTr("已关闭；每次启动软件后需手动启用")
+                                if (!(c.width > 0)) return qsTr("已启用，等待处理后的画面")
+                                const size = qsTr("%1 × %2 · 已输出 %3 帧 · 跳过 %4 帧").arg(c.width).arg(c.height).arg(c.frames).arg(c.dropped)
+                                           + (c.consumerFps > 0 ? qsTr(" · 直播软件请求 %1 帧/秒").arg(c.consumerFps) : "")
+                                return c.processingWidth !== c.width || c.processingHeight !== c.height
+                                     ? size + qsTr("（处理尺寸 %1 × %2）").arg(c.processingWidth).arg(c.processingHeight) : size
+                            }
+                            VButton { objectName: "set-virtual-camera-uninstall"; text: qsTr("卸载摄像机"); ghost: true; enabled: !(veyra.virtualCameraState || {}).installing; onClicked: veyra.uninstallVirtualCamera() }
+                        }
+                        // The consumer takes evenly spaced pictures: from a rate that is not a whole
+                        // multiple of its own (90 against 60: 3X on a 30 fps game) they cannot be even.
+                        VRow {
+                            objectName: "set-virtual-camera-rhythm"
+                            readonly property var cam: veyra.virtualCameraState || {}
+                            readonly property real ratio: cam.presentedFps > 0 && cam.consumerFps > 0
+                                ? Math.max(cam.presentedFps, cam.consumerFps) / Math.min(cam.presentedFps, cam.consumerFps) : 1
+                            visible: !!cam.active && Math.abs(ratio - Math.round(ratio)) > 0.1
+                            label: qsTr("直播画面节奏")
+                            hintColor: Theme.warn
+                            hint: qsTr("画面 %1 帧/秒不是直播软件 %2 帧/秒的整数倍，直播画面会一快一慢交替。请换成整数倍的补帧倍数，例如 30 帧游戏直播 60 帧时用 2X 或 4X")
+                                  .arg(cam.presentedFps).arg(cam.consumerFps)
+                        }
+                    }
                     // Instant replay (#103): the last few seconds or minutes in memory.
                     VGroup {
                         objectName: "set-replay-group"
@@ -758,6 +828,66 @@ VPage {
                             lineHeight: 1.3
                         }
                     }
+                    // Bilibili module. The video pipeline is shared with everything else,
+                    // so only what changes *what gets requested* from the site lives here.
+                    VH2 { text: qsTr("B 站") }
+                    Text {
+                        text: qsTr("打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；"
+                                   + "有 HDR 版本的视频会自动播 HDR。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        VRow {
+                            label: qsTr("默认画质")
+                            hint: qsTr("上限而非精确值：实际取「不高于此档」的最高可用画质；全部高于此档时取最低档")
+                            VSeg {
+                                objectName: "set-bili-quality"
+                                options: [
+                                    { id: "0", label: qsTr("自动") },
+                                    { id: "127", label: "8K" },
+                                    { id: "126", label: qsTr("杜比") },
+                                    { id: "125", label: "HDR" },
+                                    { id: "120", label: "4K" },
+                                    { id: "116", label: "1080P60" },
+                                    { id: "112", label: "1080P+" },
+                                    { id: "80", label: "1080P" },
+                                    { id: "74", label: "720P60" },
+                                    { id: "64", label: "720P" },
+                                    { id: "32", label: "480P" },
+                                    { id: "16", label: "360P" }
+                                ]
+                                current: String(veyra.preferences.biliQuality ?? 0)
+                                onPicked: id => veyra.setPreference("biliQuality", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("视频编码")
+                            hint: qsTr("同画质有多个版本时生效；自动 = 优先 HDR 编码（HEVC），该画质只有一种编码时照常播放")
+                            VSeg {
+                                objectName: "set-bili-codec"
+                                options: [
+                                    { id: "auto", label: qsTr("自动") },
+                                    { id: "avc", label: "H.264" },
+                                    { id: "hevc", label: "HEVC" }
+                                ]
+                                current: veyra.preferences.biliCodec || "auto"
+                                onPicked: id => veyra.setPreference("biliCodec", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("备用 CDN")
+                            hint: qsTr("主地址打不开时自动换一个镜像节点；B 站每个画质通常有多个镜像")
+                            VSwitch {
+                                objectName: "set-bili-autocdn"
+                                checked: veyra.preferences.biliAutoCdn !== false
+                                onToggled: veyra.setPreference("biliAutoCdn", checked)
+                            }
+                        }
+                    }
                 }
 
                 // --- 音频 ---
@@ -803,7 +933,8 @@ VPage {
                             VSlider {
                                 objectName: "settings-volume"
                                 implicitWidth: 150
-                                from: 0; to: 1; value: veyra.volume; inputScale: 100
+                                from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                                valueFromModel: true; defaultValue: 1
                                 onMoved: veyra.volume = value
                             }
                         }

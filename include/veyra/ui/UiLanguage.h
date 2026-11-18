@@ -2,7 +2,7 @@
 // Interface language (设置 → 界面语言). Simplified Chinese is the source language:
 // every user-visible string in QML (qsTr) and C++ (tr) is written in it and is
 // itself the lookup key. i18n/catalog.json, compiled into the executable, maps each
-// source string to zh-TW, en and ja; a missing entry shows the Chinese source.
+// source string to zh-TW, en, ja and ko; a missing entry shows the Chinese source.
 //
 // Logs stay in the source language on purpose: field logs are read by the developers.
 #include <QString>
@@ -10,9 +10,9 @@
 
 namespace veyra::ui::i18n {
 
-// zh-CN (source), zh-TW, en, ja. "auto" (or empty) follows the Windows display
+// zh-CN (source), zh-TW, en, ja, ko. "auto" (or empty) follows the Windows display
 // language: Traditional Chinese for zh-TW / zh-HK / zh-MO, Simplified for other
-// Chinese, Japanese for ja, English for everything else.
+// Chinese, Japanese for ja, Korean for ko, English for everything else.
 QString resolve(const QString& preference);
 // Installs the translator for `code` on the application (zh-CN removes it).
 // Returns false when the catalog has no column for it; the source text then shows.

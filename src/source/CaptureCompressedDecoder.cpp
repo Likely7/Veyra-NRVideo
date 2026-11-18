@@ -203,7 +203,7 @@ struct CaptureCompressedDecoder::Impl {
         sws_setColorspaceDetails(sws, coefficients, sourceFullRange, coefficients, targetFullRange, 0, 1 << 16, 1 << 16);
         uint8_t* destination[4] = { target->data[0], target->data[1], nullptr, nullptr };
         const int destinationStride[4] = { target->linesize[0], target->linesize[1], 0, 0 };
-        if (sws_scale(sws, frame.data, frame.linesize, 0, frame.height, destination, destinationStride) != frame.height) {
+        if (sws_scale(sws, frame.data, frame.linesize, 0, frame.height, destination, destinationStride) != target->height) {
             error = "swscale conversion failed";
             ++failures;
             return false;
@@ -326,6 +326,15 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
             }
         }
         const AVFrame* frame = p.decoder.receiveFrame();
+        // Damaged compressed input can be concealed into a frame without a
+        // fatal avcodec error. Reject it before it reaches the stream mailbox;
+        // XboxSessionSource then flushes references and requests an IDR.
+        if (frame && p.stream &&
+            ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags)) {
+            p.error = "damaged compressed stream frame";
+            ++p.failures;
+            return false;
+        }
         if (frame == nullptr) {
             if (p.decoder.receiveStatus() == media::DecodeReceiveStatus::Error) {
                 p.error = "decoder receive failed";

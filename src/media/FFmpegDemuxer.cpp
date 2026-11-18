@@ -18,6 +18,56 @@ extern "C" {
 namespace veyra::media {
 
 namespace {
+// Custom (P5): count the HEVC layers inside one access unit. Dolby Vision
+// Profile 7 carries the enhancement layer as a second NAL layer inside the same
+// access unit; the hardware decoder drops it, so this is the only proof that the
+// data reaches us at all. Gated by VEYRA_DOVI_EL_TRACE, never on in production.
+struct HevcLayerScan { unsigned nal=0, enhancement=0, maxLayer=0; };
+
+// Matroska stores HEVC length-prefixed (hvcC), not as Annex B start codes: the
+// prefix width lives in byte 21 of the configuration record.
+unsigned hevcLengthSize(const AVCodecParameters* par) {
+    const uint8_t* ext = par ? par->extradata : nullptr;
+    const int size = par ? par->extradata_size : 0;
+    if (ext && size > 21 && ext[0] == 1) return unsigned(ext[21] & 3) + 1u;
+    return 0;
+}
+
+void countOneNal(const uint8_t* nal, unsigned available, HevcLayerScan& out) {
+    if (nal == nullptr || available < 2) return;
+    // HEVC NAL header: forbidden(1) type(6) layer(6) tid+1(3)
+    const unsigned type = (unsigned(nal[0]) >> 1) & 0x3F;
+    const unsigned layer = ((unsigned(nal[0]) & 1u) << 5) | (unsigned(nal[1]) >> 3);
+    if (type < 1 || type > 63) return;
+    ++out.nal;
+    if (layer > 0) ++out.enhancement;
+    if (layer > out.maxLayer) out.maxLayer = layer;
+}
+
+HevcLayerScan scanHevcLayers(const uint8_t* data, int size, unsigned lengthSize) {
+    HevcLayerScan out;
+    if (data == nullptr || size < 6) return out;
+    if (lengthSize >= 1 && lengthSize <= 4) {
+        int pos = 0;
+        while (pos + int(lengthSize) + 2 <= size) {
+            uint32_t length = 0;
+            for (unsigned b = 0; b < lengthSize; ++b) length = (length << 8) | data[pos + b];
+            pos += int(lengthSize);
+            if (length == 0 || pos + int(length) > size) break;
+            countOneNal(data + pos, length, out);
+            pos += int(length);
+        }
+        return out;
+    }
+    // Annex B fallback (raw .hevc input): start-code delimited.
+    for (int i = 0; i + 2 < size; ++i) {
+        if (data[i] != 0 || data[i + 1] != 0 || data[i + 2] != 1) continue;
+        countOneNal(data + i + 3, unsigned(size - i - 3), out);
+        i += 2;
+    }
+    return out;
+}
+
 // Rotation from the "rotate" tag or the display matrix in the stream's side data.
 int rotationFrom(const AVCodecParameters* parameters, const char* rotateTag)
 {
@@ -42,7 +92,7 @@ int rotationFrom(const AVCodecParameters* parameters, const char* rotateTag)
     if (normalized < 0) normalized += 360;
     return normalized;
 }
-}
+} // namespace
 
 FFmpegDemuxer::~FFmpegDemuxer()
 {
@@ -136,6 +186,9 @@ bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cance
 
 void FFmpegDemuxer::close()
 {
+    for (auto*& packet : elPending_) av_packet_free(&packet);
+    elPending_.clear();
+    elStreamIndex_ = -1;
     if (packet_ != nullptr) {
         av_packet_free(&packet_);
     }
@@ -235,6 +288,26 @@ int FFmpegDemuxer::rotationDegrees() const
     const AVStream* stream = context_->streams[videoStreamIndex_];
     const AVDictionaryEntry* rotate = av_dict_get(stream->metadata, "rotate", nullptr, 0);
     return rotationFrom(stream->codecpar, rotate != nullptr ? rotate->value : nullptr);
+}
+
+int64_t FFmpegDemuxer::startTimeUs() const {
+    if (session_) return session_->startTimeUs();
+    if (!context_ || context_->start_time == AV_NOPTS_VALUE) return 0;
+    return av_rescale_q(context_->start_time, AV_TIME_BASE_Q, AVRational{1, 1000000});
+}
+
+int FFmpegDemuxer::streamCount() const {
+    if (session_) return int(session_->streams().size());
+    return context_ ? int(context_->nb_streams) : 0;
+}
+
+const AVCodecParameters* FFmpegDemuxer::streamParameters(int index) const {
+    if (session_) {
+        const auto* info = session_->stream(index);
+        return info ? info->parameters.get() : nullptr;
+    }
+    if (!context_ || index < 0 || index >= int(context_->nb_streams)) return nullptr;
+    return context_->streams[index]->codecpar;
 }
 
 const AVCodecParameters* FFmpegDemuxer::videoCodecParameters() const
@@ -343,12 +416,75 @@ bool FFmpegDemuxer::readVideoPacket(bool& endOfFile)
             return false;
         }
         if (packet_->stream_index != videoStreamIndex_) {
+            if (elStreamIndex_ >= 0 && packet_->stream_index == elStreamIndex_) {
+                // Bounded: when the layer runs ahead of the base stream the queue
+                // must not grow for the whole film.
+                if (elPending_.size() >= 8) {
+                    av_packet_free(&elPending_.front());
+                    elPending_.pop_front();
+                }
+                elPending_.push_back(av_packet_clone(packet_));
+                static unsigned elQ = 0;
+                if (++elQ <= 3) log::info("source-dovi-el", std::format(
+                    "EL packet queued size={} pending={}", packet_->size, elPending_.size()));
+            }
             av_packet_unref(packet_);
             continue;
         }
         notePacket();
+        // Custom (P5): does the enhancement layer reach us inside the packet?
+        if (std::getenv("VEYRA_DOVI_EL_TRACE") != nullptr) {
+            static const unsigned lengthSize = hevcLengthSize(context_->streams[videoStreamIndex_]->codecpar);
+            const auto scan = scanHevcLayers(packet_->data, packet_->size, lengthSize);
+            static unsigned withEl = 0, withoutEl = 0, logged = 0;
+            if (scan.enhancement) ++withEl; else ++withoutEl;
+            if (logged < 4 || stats_.packetsRead % 200 == 0) {
+                ++logged;
+                log::info("dovi-el", std::format(
+                    "packet={} bytes={} lengthSize={} nal={} enhancementNal={} maxLayer={} withEl={} withoutEl={}",
+                    stats_.packetsRead, packet_->size, lengthSize, scan.nal, scan.enhancement, scan.maxLayer, withEl, withoutEl));
+            }
+            // Matroska can carry the dependent layer as a BlockAdditional; FFmpeg
+            // surfaces those as packet side data. Report them so the next step is
+            // decided by evidence instead of guesswork.
+            static unsigned sideReported = 0;
+            if (sideReported < 3) {
+                ++sideReported;
+                log::info("dovi-el", std::format("  packet={} sideDataElems={}", stats_.packetsRead, packet_->side_data_elems));
+                for (int i = 0; i < packet_->side_data_elems; ++i)
+                    log::info("dovi-el", std::format("    side[{}] type={} size={}", i,
+                        static_cast<int>(packet_->side_data[i].type), packet_->side_data[i].size));
+            }
+        }
         return true;
     }
+}
+
+bool FFmpegDemuxer::takeElPacket(AVPacket** out) {
+    if (out == nullptr) return false;
+    *out = nullptr;
+    if (!session_) {
+        // Direct mode (local files): the reader queues the layer's packets.
+        if (elPending_.empty()) return false;
+        *out = elPending_.front();
+        elPending_.pop_front();
+        return true;
+    }
+    AVPacket* packet = av_packet_alloc();
+    if (packet == nullptr) return false;
+    DemuxSession::Meta meta;
+    // A short wait, not zero: in a transport stream the base and enhancement
+    // packets interleave, so the layer's packet for this frame often lands just
+    // after the base one that triggered the call.
+    const auto pop = session_->popEl(packet, meta, 10);
+    if (pop != DemuxSession::Pop::Packet) {
+        static unsigned missDbg = 0;
+        if (++missDbg <= 3) log::info("source-dovi-el", std::format("takeElPacket miss pop={} elIndex={}", int(pop), session_->elIndex()));
+        av_packet_free(&packet);
+        return false;
+    }
+    *out = packet;
+    return true;
 }
 
 FFmpegDemuxer::ReadResult FFmpegDemuxer::readVideoPacketEx(int waitMs, bool honourHold)
@@ -386,10 +522,18 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     if (context_ == nullptr) {
         return false;
     }
-    const int64_t target = av_rescale_q(targetUs, { 1, 1000000 },
-        context_->streams[videoStreamIndex_]->time_base);
+    // Seek every stream, not just the video one: with a separate enhancement
+    // layer (stream 1) seeking only the base stream left the layer reading from
+    // its old position, and the PTS pairing then failed for every frame after
+    // the seek. -1 means "all streams" and takes an AV_TIME_BASE timestamp.
+    // Packets queued before the seek carry the old timeline; keeping them would
+    // make the first frames after a seek pair against stale layer pictures.
+    for (auto*& stale : elPending_) av_packet_free(&stale);
+    elPending_.clear();
+    const int64_t target = av_rescale_q(targetUs + startTimeUs(), { 1, 1000000 },
+        AVRational{1, AV_TIME_BASE});
     interrupt_.arm();
-    const int result = av_seek_frame(context_, videoStreamIndex_, target, AVSEEK_FLAG_BACKWARD);
+    const int result = av_seek_frame(context_, -1, target, AVSEEK_FLAG_BACKWARD);
     interrupt_.disarm();
     if (result < 0) {
         char errorText[AV_ERROR_MAX_STRING_SIZE]{};

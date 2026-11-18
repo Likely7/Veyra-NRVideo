@@ -79,8 +79,7 @@ Item {
     // %LOCALAPPDATA%\Veyra\remoteplay and shared with 1.4.4.
     Ps5SourceDialog {
         id: ps5Dialog
-        dialogHost: host
-    }
+        dialogHost: host    }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
     // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once
@@ -95,8 +94,7 @@ Item {
     // start. The software never sees the password; only a refresh token is kept, encrypted for this user.
     XboxSourceDialog {
         id: xbDialog
-        dialogHost: host
-    }
+        dialogHost: host    }
 
     // --- 屏幕捕获 ---------------------------------------------------------
     ScreenSourceDialog {

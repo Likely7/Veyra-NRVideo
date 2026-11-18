@@ -63,3 +63,11 @@ add_library(veyra_remoteplay_chiaki STATIC
 target_compile_features(veyra_remoteplay_chiaki PUBLIC cxx_std_20)
 target_compile_definitions(veyra_remoteplay_chiaki PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(veyra_remoteplay_chiaki PUBLIC veyra_remoteplay_core PRIVATE chiaki-lib crypt32 iphlpapi shell32 ole32 winhttp)
+
+# Real sender + Takion encryption over loopback only; never contacts a console.
+add_executable(veyra_remoteplay_feedback_wire_tests
+    "${VEYRA_ROOT}/tests/remoteplay/feedback-history/wire.c")
+target_link_libraries(veyra_remoteplay_feedback_wire_tests PRIVATE chiaki-lib ws2_32)
+enable_testing()
+add_test(NAME remoteplay-feedback-wire COMMAND veyra_remoteplay_feedback_wire_tests)
+set_tests_properties(remoteplay-feedback-wire PROPERTIES TIMEOUT 15)

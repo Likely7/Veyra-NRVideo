@@ -10,9 +10,15 @@ Item {
     // Narrow panels with a wide control (导出 输出设置): the hint runs under the
     // whole row instead of being squeezed beside the control.
     property bool hintBelow: false
-    readonly property bool stacked: width > 0 && width - slot.childrenRect.width - (value.length ? 52 : 0) - 12
-        < Math.min(170, labelMetrics.advanceWidth(label))
+    // Width left for the label and hint beside the control.
+    readonly property real textRoom: width - slot.visibleControlWidth - (value.length ? 52 : 0) - 12
+    readonly property bool stacked: width > 0 && textRoom < Math.min(170, labelMetrics.advanceWidth(label))
+    // Longer translations widen the control; a long hint left beside it would be
+    // squeezed into a narrow column, so it also runs under the row then.
+    readonly property bool hintUnder: hint.length > 0 && (hintBelow
+        || (width > 0 && !stacked && textRoom < 160 && hintMetrics.advanceWidth(hint) > textRoom * 2))
     FontMetrics { id: labelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
+    FontMetrics { id: hintMetrics; font.family: Theme.fontUi; font.pixelSize: 11 }
     default property alias control: slot.data
     // The row's slider, when its control is one (typed values beside the number).
     readonly property Item valueSlider: {
@@ -29,7 +35,7 @@ Item {
     // A hint that wraps (narrow panels) grows the row instead of running into
     // the next one.
     implicitHeight: Math.max(Theme.rowMinHeight, mainRow.implicitHeight + 8)
-        + (hintBelow && hint.length > 0 ? belowHint.implicitHeight + 6 : 0)
+        + (hintUnder ? belowHint.implicitHeight + 6 : 0)
     Layout.preferredHeight: implicitHeight
     Layout.fillWidth: true
     GridLayout {
@@ -52,7 +58,7 @@ Item {
             // Grow the row for long labels instead of hiding translated text.
             Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.Wrap }
             Text {
-                visible: row.hint.length > 0 && !row.hintBelow
+                visible: row.hint.length > 0 && !row.hintUnder
                 text: row.hint
                 color: row.hintColor
                 font.family: Theme.fontUi
@@ -63,8 +69,17 @@ Item {
         }
         Item {
             id: slot
+            // Ignore alternative hidden controls and layout-assigned x positions.
+            readonly property real visibleControlWidth: {
+                let w = 0
+                for (let i = 0; i < children.length; ++i) {
+                    const c = children[i]
+                    if (c && c.visible) w = Math.max(w, c.implicitWidth > 0 ? c.implicitWidth : c.width)
+                }
+                return w
+            }
             implicitHeight: childrenRect.height
-            Layout.preferredWidth: childrenRect.width
+            Layout.preferredWidth: visibleControlWidth
             Layout.preferredHeight: childrenRect.height
         }
         // A row whose control is a slider: its number can be clicked and typed.
@@ -77,7 +92,7 @@ Item {
     }
     Text {
         id: belowHint
-        visible: row.hintBelow && row.hint.length > 0
+        visible: row.hintUnder
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: mainRow.bottom

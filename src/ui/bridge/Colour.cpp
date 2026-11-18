@@ -1,4 +1,5 @@
 // QML bridge: Colour responsibilities.
+#include "veyra/engine/EnhancementSettings.h"
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
@@ -372,7 +373,7 @@ bool QmlPlayerBridge::importLut(const QString& path) {
     std::wstring name; std::string error;
     if (!store.importFile(std::filesystem::path(path.toStdWString()), name, error) || name.empty()) {
         veyra::log::warn("ui-colour", std::format("lut import rejected path={} error={}", path.toStdString(), error));
-        emit notice(tr("LUT 导入失败：%1").arg(QString::fromStdString(error)), true);
+        emit notice(tr("LUT 导入失败：%1").arg(uiText(std::string_view(error))), true);
         return false;
     }
     veyra::log::info("ui-colour", std::format("lut imported name={}", QString::fromStdWString(name).toStdString()));
@@ -468,5 +469,45 @@ bool QmlPlayerBridge::exportColourLook(int index, const QString& path) {
     return true;
 }
 
+
+bool QmlPlayerBridge::doviFollow()const{return settings().doviFollow;}
+
+void QmlPlayerBridge::setDoviFollow(bool on){
+    auto s=settings();if(s.doviFollow==on)return;s.doviFollow=on;
+    // The shell preference is the global fallback: it re-applies at the next start
+    // even for a source that has no stored per-film profile yet.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviFollow")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision follow flag not saved");
+    commitHdrTuning(std::move(s));
+}
+
+bool QmlPlayerBridge::doviP7Compose()const{return settings().doviP7Compose;}
+
+void QmlPlayerBridge::setDoviP7Compose(bool on){
+    auto s=settings();if(s.doviP7Compose==on)return;s.doviP7Compose=on;
+    // Lives with the shell preference like the Level 1 follow flag, so it survives
+    // a restart and applies before the next file is opened.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviP7Compose")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision p7 compose flag not saved");
+    commitHdrTuning(std::move(s));
+    // Custom: the enhancement layer is enabled when the source opens (the
+    // descriptor is fixed then), so toggling during playback cannot change the
+    // picture. Say that explicitly instead of leaving the viewer to wonder why
+    // the switch did nothing.
+    if (i.snapshot.running) {
+        emit notice(on ? tr("增强层已开启：重新打开当前文件后生效")
+                       : tr("增强层已关闭：重新打开当前文件后生效"), false);
+    }
+}
+
+bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAverage;}
+
+void QmlPlayerBridge::setDoviFollowAverage(bool on){
+    auto s=settings();if(s.doviFollowAverage==on)return;s.doviFollowAverage=on;
+    commitHdrTuning(std::move(s));}
+// Danmaku rides the same per-frame tick as the subtitle overlay: it reads the
+// engine's own position, so pause, seek and speed changes need no extra wiring.
 
 } // namespace veyra::ui

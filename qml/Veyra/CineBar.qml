@@ -222,6 +222,9 @@ Rectangle {
                     // that moved every tick made it present ~50 times a second, more often than
                     // a film plays, so OBS game capture could lock onto the pill.
                     property real shownProgress: veyra.progress
+                    // Where the last scrub seek was sent, so a release that lands on
+                    // the same spot does not interrupt it with a duplicate.
+                    property real lastSeekTarget: -1
                     Timer {
                         interval: 500; repeat: true; running: bar.visible
                         onTriggered: seekArea.shownProgress = veyra.progress
@@ -236,8 +239,18 @@ Rectangle {
                     }
                     Timer {
                         id: scrubSeek
-                        interval: 120
-                        onTriggered: if (seekArea.scrubbing) veyra.seekTo(seekArea.scrubFrac * veyra.duration)
+                        // Restarted on every pointer move (see the MouseArea below), so it
+                        // fires only once the drag settles. Seeking mid-drag makes two
+                        // seeks overlap and they interrupt each other: a network source
+                        // re-opens its read on each one, which is what made a drag look
+                        // like a freeze. newBV defers the same way (1 s there).
+                        interval: 250
+                        onTriggered: {
+                            if (!seekArea.scrubbing) return
+                            const target = seekArea.scrubFrac * veyra.duration
+                            seekArea.lastSeekTarget = target
+                            veyra.seekTo(target)
+                        }
                     }
                     Timer {
                         id: thumbnailDelay
@@ -353,14 +366,16 @@ Rectangle {
                             seekArea.thumbnailBucket = -1
                         }
                         onPressed: mouse => {
+                            seekArea.lastSeekTarget = -1
                             seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
                             seekArea.scrubbing = true
                         }
                         onPositionChanged: mouse => {
                             if (seekArea.scrubbing) {
                                 seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
-                                // Scrubbing seeks as it goes, 120 ms apart.
-                                if (!scrubSeek.running) scrubSeek.start()
+                                // restart(), not start(): each move pushes the deadline
+                                // back, so the seek waits for the pointer to settle.
+                                scrubSeek.restart()
                             }
                             thumbnailDelay.restart()
                         }
@@ -370,7 +385,14 @@ Rectangle {
                             seekArea.shownProgress = seekArea.fractionAt(mouse.x)
                             seekArea.scrubbing = false
                             veyra.logUi("ui-seek", "targetSeconds=" + target.toFixed(3))
-                            veyra.seekTo(target)
+                            // The timer may have fired on the last move and already
+                            // started a seek to (very nearly) this position. A second
+                            // request would interrupt that one and cost another full
+                            // re-position, so a near-identical target is dropped.
+                            if (Math.abs(target - seekArea.lastSeekTarget) > 0.5) {
+                                seekArea.lastSeekTarget = target
+                                veyra.seekTo(target)
+                            }
                         }
                         onCanceled: {
                             scrubSeek.stop()
@@ -406,9 +428,9 @@ Rectangle {
             }
 
             Item {
-                implicitWidth: 104
+                implicitWidth: 146
                 implicitHeight: 32
-                Layout.minimumWidth: 104
+                Layout.minimumWidth: 146
                 RowLayout {
                     anchors.fill: parent
                     spacing: 6
@@ -419,10 +441,17 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.minimumWidth: 72
-                        from: 0; to: 1; value: veyra.volume; inputScale: 100
+                        from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                        defaultValue: 1
                         valueFromModel: true
                         fullKnobHitArea: true
                         onMoved: moved => veyra.volume = moved
+                    }
+                    VSliderValue {
+                        Layout.preferredWidth: 36
+                        slider: volumeSlider
+                        text: Math.round(veyra.volume * 100) + "%"
+                        color: Theme.t2; pixelSize: 10
                     }
                 }
             }

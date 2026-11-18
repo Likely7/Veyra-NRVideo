@@ -36,7 +36,12 @@ $stageHead = (& git -C $StageDirectory rev-parse HEAD).Trim()
 if ($LASTEXITCODE -ne 0 -or $stageHead -ne $PinnedCommit) { throw "Chiaki staging pin mismatch: $stageHead" }
 # Each reviewed patch can be applied once to an existing verified base stage.
 # Full content verification below rejects unrelated changes even in these files.
-foreach ($name in @("0001-chiaki-msvc-vla-compat.patch", "0002-chiaki-video-metadata.patch")) {
+$patches = @(
+    "0001-chiaki-msvc-vla-compat.patch",
+    "0002-chiaki-video-metadata.patch",
+    "0003-chiaki-feedback-history.patch"
+)
+foreach ($name in $patches) {
     $patch = Join-Path $Root "scripts/remoteplay/patches/$name"
     $savedPreference = $ErrorActionPreference
     try {

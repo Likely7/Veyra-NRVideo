@@ -12,6 +12,9 @@ ColumnLayout {
     spacing: 0
     VRow {
         label: qsTr("显示同步")
+        // The explanation is long; keep it under the row so a short option strip
+        // does not squeeze it into a narrow column beside the control.
+        hintBelow: true
         hint: qsTr("自动（推荐）：不撕裂，也不等待垂直同步，每次刷新显示最新一帧，延迟最低 · 垂直同步：每帧都等到刷新才显示，比自动多等最多一个刷新 · 允许撕裂：可能出现撕裂线")
         VSeg {
             objectName: "presentation-display-sync"

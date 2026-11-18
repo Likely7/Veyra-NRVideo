@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  body{font:13px/1.5 system-ui,"Microsoft YaHei";width:300px;padding:12px;margin:0;background:#1b1b1f;color:#e8e8ee}
+  h3{margin:0 0 8px;font-size:14px}
+  #url{word-break:break-all;color:#9aa0a6;font-size:11px;margin-bottom:10px;max-height:48px;overflow:hidden}
+  .row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  .row label{color:#9aa0a6;white-space:nowrap}
+  select{flex:1;padding:5px 6px;border-radius:6px;border:1px solid #333;background:#26262c;color:#e8e8ee;font-size:12px}
+  button{width:100%;padding:8px;border:0;border-radius:6px;background:#3b82f6;color:#fff;font-size:13px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  #status{margin-top:8px;font-size:12px;min-height:16px}
+  .ok{color:#4ade80}.err{color:#f87171}
+</style>
+</head>
+<body>
+  <h3>在 Veyra 播放</h3>
+  <div id="url"></div>
+  <div class="row">
+    <label for="quality">画质</label>
+    <select id="quality">
+      <option value="-1">当前网页画质</option>
+      <option value="0">最高可用</option>
+      <option value="127">8K</option>
+      <option value="126">杜比视界</option>
+      <option value="125">HDR 真彩</option>
+      <option value="120">4K 超高清</option>
+      <option value="116">1080P 60帧</option>
+      <option value="112">1080P 高码率</option>
+      <option value="80">1080P 高清</option>
+      <option value="74">720P 60帧</option>
+      <option value="64">720P 准高清</option>
+      <option value="32">480P 标清</option>
+      <option value="16">360P 流畅</option>
+    </select>
+  </div>
+  <button id="go">用 Veyra 播放当前页面</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>

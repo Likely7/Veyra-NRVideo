@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / 'i18n/catalog.json'
-LANGS = ('zh-TW', 'en', 'ja')
+LANGS = ('zh-TW', 'en', 'ja', 'ko')
 HAN = re.compile('[一-鿿]')
 ESC = {'n': '\n', 't': '\t', '"': '"', "'": "'", '\\': '\\', '0': '\0'}
 
@@ -123,6 +123,9 @@ def collect():
     # The bridge's private state/default strings moved out of its translation
     # unit. Keep collecting exactly that source alongside its domain modules.
     cpp += [ROOT / 'src/ui/QmlPlayerBridge_p.h']
+    # The live status words (正常 / 输出未达标 / ...) come from this header and
+    # are shown through uiText() in the status bar.
+    cpp += [ROOT / 'apps/veyra/ui/LiveStatusHistory.h']
     for d in ('engine', 'source', 'gfx', 'pipeline', 'moonlight', 'xbox', 'remoteplay', 'sink', 'media', 'ngx', 'base'):
         cpp += list((ROOT / 'src' / d).rglob('*.cpp'))
         # Default member values (a status set in a class body) live in the headers.

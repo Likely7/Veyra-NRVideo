@@ -16,6 +16,10 @@
 </p>
 <!-- veyra-creator-and-tutorials:end -->
 
+<!-- veyra-main-pr-integration -->
+Current main (unreleased): eight community PRs integrated with compatibility fixes; [changes and validation](docs/PR_INTEGRATION_2026-11-18.md). Existing 2.1.9 downloads are unchanged.
+
+
 The English README is now the [repository homepage](README.md).
 
 [English](README.md) | [简体中文](README_CN.md)

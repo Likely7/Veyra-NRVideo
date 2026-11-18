@@ -175,6 +175,77 @@ int main() {
         check(!gate.valid() && gate.update(6, 47000000) && gate.applied() == 6, "reset applies the next decision at once");
     }
 
+    // --- 「自动」倍率：源帧率 × 档位 打满输出上限（2026-10-24 用户定义）
+    {
+        using B = FrameGenerationBackend;
+        // 用户给的原例：上限 120
+        check(displayFgAutoMultiplier(B::Vfg, 24, 120) == 5, "24fps to a 120 cap: VFG picks 5X");
+        check(displayFgAutoMultiplier(B::Vfg, 30, 120) == 4, "30fps to a 120 cap: VFG picks 4X");
+        check(displayFgAutoMultiplier(B::Vfg, 60, 120) == 2, "60fps to a 120 cap: VFG picks 2X");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 60) == 3, "24fps to a 60 cap: VFG picks 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 30, 60) == 2, "30fps to a 60 cap: VFG picks 2X");
+        // DLSS 没有 5X：24fps 向上取 6X（144 帧由输出上限裁回 120）
+        check(displayFgAutoMultiplier(B::Dlss, 24, 120) == 6, "24fps to a 120 cap: DLSS has no 5X, takes 6X");
+        check(displayFgAutoMultiplier(B::Dlss, 30, 120) == 4, "30fps to a 120 cap: DLSS picks 4X");
+        check(displayFgAutoMultiplier(B::Dlss, 24, 60) == 3, "24fps to a 60 cap: DLSS picks 3X");
+        // 23.976/29.97/59.94 靠 2% 容差落在整数档，不跳到上一档
+        check(displayFgAutoMultiplier(B::Vfg, 23.976, 120) == 5, "23.976fps to 120: tolerance keeps 5X (119.88 fits)");
+        check(displayFgAutoMultiplier(B::Vfg, 29.97, 120) == 4, "29.97fps to 120: tolerance keeps 4X");
+        check(displayFgAutoMultiplier(B::Vfg, 59.94, 120) == 2, "59.94fps to 120: tolerance keeps 2X");
+        check(displayFgAutoMultiplier(B::Vfg, 23.976, 60) == 3, "23.976fps to 60: 3X (71.9 > 60, 2X=47.9 too few)");
+        // 跟随显示器：60Hz 屏 + 24fps 片
+        check(displayFgAutoMultiplier(B::Dlss, 24, 59.94) == 3, "24fps on a 59.94Hz panel: DLSS picks 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 119.88) == 5, "24fps on a 119.88Hz panel: VFG picks 5X");
+        // 源帧率高于/等于上限 → 关闭补帧（用户 2026-10-24 新要求）
+        check(displayFgAutoMultiplier(B::Vfg, 120, 120) == 1, "120fps to a 120 cap: frame generation off");
+        check(displayFgAutoMultiplier(B::Dlss, 60, 60) == 1, "60fps on a 60Hz panel: frame generation off");
+        check(displayFgAutoMultiplier(B::Vfg, 144, 120) == 1, "a source above the cap: frame generation off");
+        check(displayFgAutoMultiplier(B::Vfg, 59.94, 60) == 1, "59.94fps on a 60Hz panel: frame generation off");
+        check(displayFgAutoMultiplier(B::Dlss, 120, 120) == 1, "120fps on DLSS: frame generation off");
+        check(displayFgAutoMultiplier(B::Vfg, 120, 60) == 1, "120fps to a 60 cap: frame generation off");
+        // 帧率未知 → 0，调用方保持原档（绝不擅自改）
+        check(displayFgAutoMultiplier(B::Vfg, 0, 120) == 0, "unknown source rate decides nothing");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 0) == 0, "unknown cap decides nothing");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 120, 1) == 0, "a backend ceiling below 2X decides nothing");
+        // 档位够不到 need：取该后端最大可用档，超出部分交给输出上限裁剪
+        check(displayFgAutoMultiplier(B::Dlss, 24, 200) == 6, "24fps to a 200 cap: DLSS tops out at 6X (144)");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 400) == 8, "24fps to a 400 cap: VFG tops out at 8X (192)");
+        check(displayFgAutoMultiplier(B::Fsr, 24, 120) == 2, "FSR only has 2X: take it");
+        check(displayFgAutoMultiplier(B::XeSS, 24, 120, 4) == 4, "XeSS with a 4X ceiling: take 4X");
+        // 显卡能力上限收窄：Ada 报告最大 2X 时不会给出 3X
+        check(displayFgAutoMultiplier(B::Dlss, 24, 120, 2) == 2, "an Ada card capped at 2X never gets 6X");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 120, 4) == 4, "a 4X ceiling caps the 5X request to 4X");
+        // 倍率 × 上限的乘积对 2% 容差边界敏感：need 恰好整除时不跳档
+        check(displayFgAutoMultiplier(B::Vfg, 40, 120) == 3, "40fps to a 120 cap: 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 50, 120) == 3, "50fps to a 120 cap: 3X (2X=100 too few)");
+        check(displayFgAutoMultiplier(B::Vfg, 25, 120) == 5, "25fps to a 120 cap: 5X");
+        // 60Hz 类目标（上限 60 与标称 59.94 统一）：23.976/24/25fps 优先凑满 60 -> 3X
+        check(displayFgAutoMultiplier(B::Vfg, 23.976, 60) == 3, "23.976fps to a 60 cap: 3X (60Hz class keeps the common refresh）");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 60) == 3, "24fps to a 60 cap: 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 25, 60) == 3, "25fps to a 60 cap: 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 23.976, 59.94) == 3, "23.976fps on a 59.94Hz panel: 3X, same as 60");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 59.94) == 3, "24fps on a 59.94Hz panel: 3X, same as 60");
+        check(displayFgAutoMultiplier(B::Vfg, 25, 59.94) == 3, "25fps on a 59.94Hz panel: 3X, same as 60");
+        check(displayFgAutoMultiplier(B::Dlss, 24, 60) == 3, "24fps to a 60 cap: DLSS also 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 30, 59.94) == 2, "30fps on a 59.94Hz panel: 2X (already fills half)");
+        // 源帧率逼近上限时关闭（收益 vs 浪费）：上限120/源100 只差20帧，补了要砍80帧
+        check(displayFgAutoMultiplier(B::Vfg, 100, 120) == 1, "100fps to a 120 cap: off (20fps gain cannot pay for 80 wasted)");
+        check(displayFgAutoMultiplier(B::Vfg, 100, 119.88) == 1, "100fps on a 120Hz panel: off");
+        check(displayFgAutoMultiplier(B::Vfg, 100, 144) == 1, "100fps to a 144 cap: off (same waste ratio as the 120 cap)");
+        check(displayFgAutoMultiplier(B::Vfg, 100, 240) == 3, "100fps to a 240 cap: 3X (formula: need=3)");
+        check(displayFgAutoMultiplier(B::Vfg, 90, 144) == 2, "90fps to a 144 cap: 2X");
+        // 升档要有回报：上限100/源24 的 5X 白生成20帧只多显示4帧，停在 4X
+        check(displayFgAutoMultiplier(B::Vfg, 24, 100) == 5, "24fps to a 100 cap: 5X (formula: need=5)");
+        check(displayFgAutoMultiplier(B::Vfg, 23.976, 100) == 5, "23.976fps to a 100 cap: 5X");
+        check(displayFgAutoMultiplier(B::Vfg, 24, 75) == 4, "24fps to a 75 cap: 4X (formula: need=4)");
+        check(displayFgAutoMultiplier(B::Vfg, 25, 75) == 3, "25fps to a 75 cap: 3X");
+        // 这些格不能被误判成 2X：距离上限还远，升档收益远大于浪费
+        check(displayFgAutoMultiplier(B::Vfg, 48, 120) == 3, "48fps to a 120 cap: 3X (2X at 96 leaves too big a gap)");
+        check(displayFgAutoMultiplier(B::Vfg, 50, 120) == 3, "50fps to a 120 cap: 3X");
+        check(displayFgAutoMultiplier(B::Vfg, 72, 240) == 4, "72fps to a 240 cap: 4X");
+        check(displayFgAutoMultiplier(B::Vfg, 90, 240) == 3, "90fps to a 240 cap: 3X");
+    }
+
     std::cout << "failures=" << failures << '\n';
     return failures ? 1 : 0;
 }

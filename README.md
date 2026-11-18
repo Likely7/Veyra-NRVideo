@@ -20,6 +20,10 @@
 </p>
 <!-- veyra-creator-and-tutorials:end -->
 
+<!-- veyra-main-pr-integration -->
+当前 main（未发行）：八项社区 PR 已适配整合，包含 B 站/浏览器桥、Dolby Vision、韩语、300% 音量及各项修复。[功能与验证记录](docs/PR_INTEGRATION_2026-11-18.md)。现有 2.1.9 下载包不变。
+
+
 ### Real-time GPU Video Enhancement for Windows
 
 **Super Resolution · Denoising · HDR · Frame Generation · Capture · PS5 / Xbox / PC Streaming**
@@ -138,7 +142,7 @@ I've received creator fees from a community-created Veyra token. These contribut
 
 **2.0.4 NR controls:** each NR layer's **Enhancement delta → Total strength** now reaches 5. **Picture control** defaults off; enable it and select Automatic or Manual. Automatic values now adapt separately to styles 0/1/2, with an amount slider (0 retains raw strength, 1 applies full correction). The nine manual controls cover hue, chroma, neutral tint, source color retention, lightness retention, shadows, highlights, local compression and temporal stability. **Use this style’s automatic values** provides a manual starting point. Switching modes keeps manual values; turning control off preserves the original residual algorithm. Five extrapolates one inference's residual, and protection reduces the corresponding changes; it cannot promise full gain five with no artifacts on every video. Presets, List/Node sessions, PNGs and video exports share the settings. [Local validation and known limits](docs/history/reports/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md).
 
-- **Rebuilt interface:** Home, Cinema, Professional List, Nodes, Colour, Export and Settings; Simplified/Traditional Chinese, English and Japanese.
+- **Rebuilt interface:** Home, Cinema, Professional List, Nodes, Colour, Export and Settings; Simplified/Traditional Chinese, English, Japanese and Korean.
 - **Node editing and layered NR:** executable connections, independent NR/colour parameters, separate List/Node configurations, sessions and presets.
 - **PC / Xbox streaming:** Moonlight/Sunshine-compatible PC streaming and unofficial experimental Xbox support, alongside PS5, capture cards and screen capture.
 - **New export workflow:** editable ordered queue, trimming, MP4/MKV, multiple audio/embedded subtitle tracks, cancellation/retry and completion sound.

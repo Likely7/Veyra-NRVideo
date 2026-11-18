@@ -59,6 +59,9 @@ QtObject {
     property var nodeTimings: ({})
     property var preferences: ({exportStopsPlayback:false})
     property real playbackRate: 1
+    property real volume: 1
+    readonly property real maximumVolume: 3
+    property bool muted: false
     property real duration: 100
     property bool hasSource: true
     property bool isCapture: false

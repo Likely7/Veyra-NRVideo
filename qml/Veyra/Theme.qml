@@ -140,7 +140,9 @@ QtObject {
     // axis directly (G1.3, tmp/.../min/Font.qml).
     // Per interface language (Qt.uiLanguage, set by the bridge): Japanese kana and kanji
     // and Traditional characters read best in their own Windows UI fonts.
+    // Korean uses Windows' Hangul UI font instead of Simplified Chinese glyph fallback.
     readonly property string fontUi: Qt.uiLanguage === "ja" ? "Yu Gothic UI"
+                                   : Qt.uiLanguage === "ko" ? "Malgun Gothic"
                                    : Qt.uiLanguage === "zh-TW" ? "Microsoft JhengHei UI" : "Noto Sans SC"
     readonly property var axesDemiBold: ({ "wght": 600 })
     // 500: the design's .seek .peek time strip is `font: 500 11px/1 var(--f-mono)`.
