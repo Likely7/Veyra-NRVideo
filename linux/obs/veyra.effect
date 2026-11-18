@@ -1,0 +1,136 @@
+// Veyra filter effect for OBS.
+//
+// Chain: source -> 3D LUT -> colour grade -> FXAA -> sharpen -> output.
+//
+// AA runs on the graded picture (edge detection must see the final contrast),
+// and the sharpen stage is a 5-tap cross kept deliberately small: at 1080p60
+// every extra tap is real GPU time on the device that is also encoding.
+
+uniform float4x4 ViewProj;
+uniform texture2d image;
+uniform texture3d lut3d;
+
+uniform float4 grade;   // x exposure (stops), y contrast, z saturation, w FXAA on
+uniform float4 texel;   // xy = 1/size, z = sharpen amount (0..1), w unused
+
+uniform bool lutEnabled;
+uniform float lutAmount;
+uniform float3 lutDomainMin;
+uniform float3 lutDomainMax;
+
+sampler_state def_sampler {
+	Filter   = Linear;
+	AddressU = Clamp;
+	AddressV = Clamp;
+	AddressW = Clamp;
+};
+
+struct VertData {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+struct VertOut {
+	float4 pos : POSITION;
+	float2 uv  : TEXCOORD0;
+};
+
+VertOut VSDefault(VertData v_in)
+{
+	VertOut vert_out;
+	vert_out.pos = mul(float4(v_in.pos.xyz, 1.0), ViewProj);
+	vert_out.uv = v_in.uv;
+	return vert_out;
+}
+
+float Luma(float3 c)
+{
+	return dot(c, float3(0.299, 0.587, 0.114));
+}
+
+float3 SampleSource(float2 uv)
+{
+	return image.Sample(def_sampler, uv).rgb;
+}
+
+float3 ApplyLut(float3 c)
+{
+	if (!lutEnabled)
+		return c;
+	float3 range = max(lutDomainMax - lutDomainMin, float3(1.0e-5, 1.0e-5, 1.0e-5));
+	float3 uvw = saturate((c - lutDomainMin) / range);
+	return lerp(c, lut3d.Sample(def_sampler, uvw).rgb, saturate(lutAmount));
+}
+
+float3 ApplyGrade(float3 c)
+{
+	c *= exp2(grade.x);
+	c = (c - 0.5) * grade.y + 0.5;
+	float l = Luma(c);
+	return lerp(float3(l, l, l), c, grade.z);
+}
+
+// Graded colour of one sample. Every other stage builds on this, so the LUT and
+// the grade are applied exactly once per tap and stay independent of the
+// spatial filters.
+float3 Graded(float2 uv)
+{
+	return ApplyGrade(ApplyLut(SampleSource(uv)));
+}
+
+float3 Fxaa(float2 uv)
+{
+	float3 rgbM = Graded(uv);
+	float lM = Luma(rgbM);
+	float lN = Luma(Graded(uv + float2(0.0, -texel.y)));
+	float lS = Luma(Graded(uv + float2(0.0, texel.y)));
+	float lW = Luma(Graded(uv + float2(-texel.x, 0.0)));
+	float lE = Luma(Graded(uv + float2(texel.x, 0.0)));
+
+	float lMin = min(lM, min(min(lN, lS), min(lE, lW)));
+	float lMax = max(lM, max(max(lN, lS), max(lE, lW)));
+	if (lMax - lMin < max(0.04, lMax * 0.125))
+		return rgbM;
+
+	float2 dir = float2(-(lN - lS), lE - lW);
+	float dirReduce = max((lN + lS + lE + lW) * 0.03125, 1.0 / 128.0);
+	float rcpDirMin = 1.0 / (min(abs(dir.x), abs(dir.y)) + dirReduce);
+	dir = clamp(dir * rcpDirMin, float2(-8.0, -8.0), float2(8.0, 8.0)) * texel.xy;
+
+	float3 rgbA = 0.5 * (Graded(uv + dir * (1.0 / 3.0 - 0.5)) +
+			     Graded(uv + dir * (2.0 / 3.0 - 0.5)));
+	float3 rgbB = rgbA * 0.5 + 0.25 * (Graded(uv - dir * 0.5) + Graded(uv + dir * 0.5));
+
+	float lB = Luma(rgbB);
+	return (lB < lMin || lB > lMax) ? rgbA : rgbB;
+}
+
+float3 Sharpen(float2 uv, float3 centre)
+{
+	if (texel.z <= 0.0)
+		return centre;
+	float3 n = Graded(uv + float2(0.0, -texel.y));
+	float3 s = Graded(uv + float2(0.0, texel.y));
+	float3 w = Graded(uv + float2(-texel.x, 0.0));
+	float3 e = Graded(uv + float2(texel.x, 0.0));
+	// Unsharp cross: four-neighbour laplacian scaled by the slider. 0.25 keeps
+	// the full-strength overshoot at roughly +-25% of the local edge amplitude.
+	float3 laplacian = centre * 4.0 - (n + s + w + e);
+	return centre + laplacian * texel.z * 0.25;
+}
+
+float4 PSDraw(VertOut vert_in) : TARGET
+{
+	float3 rgb = grade.w > 0.5 ? Fxaa(vert_in.uv) : Graded(vert_in.uv);
+	rgb = Sharpen(vert_in.uv, rgb);
+	return float4(saturate(rgb), 1.0);
+}
+
+technique Draw
+{
+	pass
+	{
+		vertex_shader = VSDefault(v_in);
+		pixel_shader  = PSDraw(vert_in);
+	}
+}
