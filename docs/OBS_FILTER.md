@@ -51,7 +51,19 @@ Needs `libobs` headers (Arch: `obs-studio`). Install layout:
 `~/.config/obs-studio/logs/` shows `[veyra] filter registered`, `[veyra] LUT
 loaded: 33^3 from …`, or `[veyra] effect load failed: …` on a shader error.
 
-## Verified
+## Integration verification (2026-11-18)
+
+Ubuntu 24.04 CI builds this module against the packaged libobs, runs the 14
+valid/malformed cube-parser cases and checks the installed module/data layout.
+See the Linux OBS filter checks workflow. This is compile/parser/install evidence,
+not a new Linux GPU image-quality measurement. Default effects are off; transparent
+sources retain premultiplied alpha, identity LUTs sample texel centres, and a failed
+LUT selection disables the previous LUT instead of silently leaving it active.
+
+## Contributor measurements before integration
+
+The following results are reported by PR #96's contributor, andreanjoes, at
+`719e2d89eaa3ff126d4130a4e3f7c2f48f8021d6`; they are not new local measurements.
 
 Recorded 1080p30 through OBS 32.2.2 (RTX 3090, EGL/Wayland) and sampled the
 recorded mkv pixels. Source images are synthetic, so every expected value is

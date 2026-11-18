@@ -22,7 +22,9 @@
 //
 // Custom addition; upstream has no profile-5 handling at all.
 #include "veyra/pipeline/FramePacket.h"
+extern "C" {
 #include <libavutil/dovi_meta.h>
+}
 #include <algorithm>
 #include <cmath>
 #include <cstdint>

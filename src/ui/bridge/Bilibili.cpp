@@ -850,6 +850,7 @@ int QmlPlayerBridge::bilibiliLoadList(const QString& kind){
     // came back. A queued request starts only after the current one has been collected,
     // so no result is lost and the GUI thread never waits on the network.
     if (slot.busy) {
+        slot.pending.clear();
         slot.pending.push_back(Impl::PendingListRequest{kind, generation});
         return generation;
     }

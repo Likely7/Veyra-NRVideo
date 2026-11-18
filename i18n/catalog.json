@@ -301,7 +301,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": " · 最亮 %1 nit",
    "en": " · peak %1 nit",
-   "ja": " · 最大 %1 nit"
+   "ja": " · 最大 %1 nit",
+   "ko": " · 최대 밝기 %1 nit"
   },
   {
    "zh": " · 校准中",
@@ -316,7 +317,8 @@
    "src": "qml/SettingsPage.qml",
    "zh-TW": " · 直播軟體要求 %1 影格/秒",
    "en": " · streaming app asks for %1 fps",
-   "ja": " · 配信ソフトの要求 %1 fps"
+   "ja": " · 配信ソフトの要求 %1 fps",
+   "ko": " · 방송 앱 요청 %1 FPS"
   },
   {
    "zh": " · 等待 ",
@@ -377,16 +379,18 @@
   {
    "zh": " → SDR色调映射",
    "src": "src/engine/EngineController.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " → SDR色調映射",
+   "en": " → SDR tone mapping",
+   "ja": " → SDR トーンマッピング",
+   "ko": " → SDR 톤 매핑"
   },
   {
    "zh": " → scRGB / 浮点",
    "src": "src/engine/EngineController.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " → scRGB / 浮點",
+   "en": " → scRGB / floating point",
+   "ja": " → scRGB / 浮動小数点",
+   "ko": " → scRGB / 부동소수점"
   },
   {
    "zh": " → 建议 ",
@@ -407,9 +411,10 @@
   {
    "zh": " 个",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " 個",
+   "en": " items",
+   "ja": " 件",
+   "ko": " 개"
   },
   {
    "zh": " 个节点 · ",
@@ -486,16 +491,18 @@
   {
    "zh": " 播放",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " 播放",
+   "en": " Play",
+   "ja": " 再生",
+   "ko": " 재생"
   },
   {
    "zh": " 播放   ",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " 播放   ",
+   "en": " Play    ",
+   "ja": " 再生    ",
+   "ko": " 재생    "
   },
   {
    "zh": " 次数=",
@@ -508,16 +515,18 @@
   {
    "zh": " 点赞",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " 點贊",
+   "en": " Likes",
+   "ja": " 高評価",
+   "ko": " 좋아요"
   },
   {
    "zh": " 的投稿",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " 的投稿",
+   "en": "'s uploads",
+   "ja": " の投稿",
+   "ko": " 님의 동영상"
   },
   {
    "zh": " 的比例",
@@ -538,16 +547,18 @@
   {
    "zh": " 赞",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": " 贊",
+   "en": " likes",
+   "ja": " 高評価",
+   "ko": " 좋아요"
   },
   {
    "zh": " 输出，增强层/RPU 动态元数据不参与输出）",
    "src": "include/veyra/source/DolbyVision.h",
    "zh-TW": " 輸出，增強層/RPU 動態元資料不參與輸出）",
    "en": " output; the enhancement layer and RPU dynamic metadata are not part of the output)",
-   "ja": " 出力。拡張レイヤーと RPU の動的メタデータは出力に含まれません）"
+   "ja": " 出力。拡張レイヤーと RPU の動的メタデータは出力に含まれません）",
+   "ko": " 출력, 향상 레이어와 RPU 동적 메타데이터는 출력에 포함되지 않음)"
   },
   {
    "zh": " 阶段=",
@@ -618,7 +629,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "%1 × %2 · 已輸出 %3 影格 · 跳過 %4 影格",
    "en": "%1 × %2 · %3 frames published · %4 skipped",
-   "ja": "%1 × %2 · %3 フレーム出力 · %4 フレームスキップ"
+   "ja": "%1 × %2 · %3 フレーム出力 · %4 フレームスキップ",
+   "ko": "%1 × %2 · %3 프레임 출력 · %4 프레임 건너뜀"
   },
   {
    "zh": "%1 关闭",
@@ -1031,23 +1043,26 @@
   {
    "zh": "B 站",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "B 站",
+   "en": "Bilibili",
+   "ja": "Bilibili",
+   "ko": "Bilibili"
   },
   {
    "zh": "B 站播放设置",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "B 站播放設置",
+   "en": "Bilibili playback settings",
+   "ja": "Bilibili 再生設定",
+   "ko": "Bilibili 재생 설정"
   },
   {
    "zh": "B 站登录已清除",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "B 站登錄已清除",
+   "en": "Bilibili sign-in cleared",
+   "ja": "Bilibili のログイン情報を削除しました",
+   "ko": "Bilibili 로그인 정보를 삭제했습니다"
   },
   {
    "zh": "BMD HDR 帧的 EOTF 不受支持；仅接受 SDR、PQ 或 HLG，拒绝猜测颜色传递",
@@ -1390,21 +1405,24 @@
    "src": "include/veyra/source/DolbyVision.h",
    "zh-TW": "Dolby Vision P5 · IPT-PQ-C2 基礎層按 RPU 轉換（",
    "en": "Dolby Vision P5 · IPT-PQ-C2 base layer converted from the RPU (",
-   "ja": "Dolby Vision P5 · IPT-PQ-C2 ベースレイヤーを RPU で変換（"
+   "ja": "Dolby Vision P5 · IPT-PQ-C2 ベースレイヤーを RPU で変換（",
+   "ko": "Dolby Vision P5 · RPU에 따라 IPT-PQ-C2 기본 레이어 변환 ("
   },
   {
    "zh": "Dolby Vision P5：还没有可用的 RPU 转换参数，无法正确转换（不会退回普通 YUV 解码）",
    "src": "include/veyra/source/DolbyVision.h",
    "zh-TW": "Dolby Vision P5：還沒有可用的 RPU 轉換參數，無法正確轉換（不會退回一般 YUV 解碼）",
    "en": "Dolby Vision P5: no usable RPU conversion parameters yet, so the frame cannot be converted correctly (it does not fall back to plain YUV decoding)",
-   "ja": "Dolby Vision P5：使用できる RPU 変換パラメーターがまだないため、正しく変換できません（通常の YUV デコードには戻りません）"
+   "ja": "Dolby Vision P5：使用できる RPU 変換パラメーターがまだないため、正しく変換できません（通常の YUV デコードには戻りません）",
+   "ko": "Dolby Vision P5: 사용 가능한 RPU 변환 매개변수가 없어 올바르게 변환할 수 없습니다. 일반 YUV 디코딩으로 전환하지 않습니다"
   },
   {
    "zh": "Dolby Vision P5：这一帧没有可用的 RPU 转换参数（缺少 RPU、颜色块为空或整形方式不受支持），无法正确转换，已停止以避免错误颜色",
    "src": "src/source/MediaFileSource.cpp",
    "zh-TW": "Dolby Vision P5：這一幀沒有可用的 RPU 轉換參數（缺少 RPU、顏色區塊為空或整形方式不受支援），無法正確轉換，已停止以避免錯誤顏色",
    "en": "Dolby Vision P5: this frame has no usable RPU conversion parameters (missing RPU, empty colour block, or an unsupported reshaping method), so it cannot be converted correctly; playback stopped to avoid wrong colours",
-   "ja": "Dolby Vision P5：このフレームには使用できる RPU 変換パラメーターがありません（RPU 欠落、カラーブロックが空、または整形方式が未対応）。正しく変換できないため、誤った色を避けるために停止しました"
+   "ja": "Dolby Vision P5：このフレームには使用できる RPU 変換パラメーターがありません（RPU 欠落、カラーブロックが空、または整形方式が未対応）。正しく変換できないため、誤った色を避けるために停止しました",
+   "ko": "Dolby Vision P5: 이 프레임의 RPU가 없거나 색상 블록이 비어 있거나 지원하지 않는 리셰이핑 방식입니다. 잘못된 색상을 방지하기 위해 재생을 중지했습니다"
   },
   {
    "zh": "Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色",
@@ -1729,9 +1747,10 @@
   {
    "zh": "HDR10+ 片源（逐帧跟随可用）",
    "src": "qml/ProPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "HDR10+ 片源（逐幀跟隨可用）",
+   "en": "HDR10+ source (per-frame following available)",
+   "ja": "HDR10+ ソース（フレームごとの追従が可能）",
+   "ko": "HDR10+ 소스 (프레임별 추적 가능)"
   },
   {
    "zh": "HDR截图保存失败，请查看日志",
@@ -1776,9 +1795,10 @@
   {
    "zh": "Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "Hi-Res 與杜比全景聲需要大會員，且視頻本身要有對應音軌；",
+   "en": "Hi-Res and Dolby Atmos require Premium and a matching audio track;",
+   "ja": "Hi-Res と Dolby Atmos はプレミアム会員と対応音声トラックが必要です。",
+   "ko": "Hi-Res 및 Dolby Atmos는 프리미엄 회원 자격과 해당 오디오 트랙이 필요합니다."
   },
   {
    "zh": "IP 或主机名，端口不是 47989 时写成 192.168.1.20:47989",
@@ -2673,7 +2693,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "SDR 片源沒有 HDR 亮度中繼資料，可手動選檔",
    "en": "SDR sources carry no HDR brightness metadata; pick a preset manually",
-   "ja": "SDR 映像には HDR 輝度メタデータがないため、手動で選択してください"
+   "ja": "SDR 映像には HDR 輝度メタデータがないため、手動で選択してください",
+   "ko": "SDR 소스에는 HDR 밝기 메타데이터가 없습니다. 프리셋을 직접 선택하세요"
   },
   {
    "zh": "SDR 片源没有 HDR 亮度元数据；可手动选档，HDR 输出时生效。",
@@ -2934,23 +2955,26 @@
   {
    "zh": "WinHttpConnect 失败",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "WinHttpConnect 失敗",
+   "en": "WinHttpConnect failed",
+   "ja": "WinHttpConnect に失敗しました",
+   "ko": "WinHttpConnect 실패"
   },
   {
    "zh": "WinHttpOpen 失败",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "WinHttpOpen 失敗",
+   "en": "WinHttpOpen failed",
+   "ja": "WinHttpOpen に失敗しました",
+   "ko": "WinHttpOpen 실패"
   },
   {
    "zh": "WinHttpOpenRequest 失败",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "WinHttpOpenRequest 失敗",
+   "en": "WinHttpOpenRequest failed",
+   "ja": "WinHttpOpenRequest に失敗しました",
+   "ko": "WinHttpOpenRequest 실패"
   },
   {
    "zh": "Windows GPU 引擎占用率（",
@@ -3251,9 +3275,10 @@
   {
    "zh": "{}失败（code={}）",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "{}失敗（code={}）",
+   "en": "{} failed (code={})",
+   "ja": "{} に失敗しました（code={}）",
+   "ko": "{} 실패 (code={})"
   },
   {
    "zh": "{}失败（错误 {}）",
@@ -3266,9 +3291,10 @@
   {
    "zh": "{}失败：B 站的风控拒绝了这次操作，请到网页端完成；同一账号的点赞、收藏不受影响",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "{}失敗：B 站的風控拒絕了這次操作，請到網頁端完成；同一賬號的點贊、收藏不受影響",
+   "en": "{} failed: Bilibili rejected this action. Complete it on the website; likes and favorites for this account are unaffected",
+   "ja": "{} に失敗しました。Bilibili に拒否されたため、ウェブ版で操作してください。同じアカウントの高評価やお気に入りには影響しません",
+   "ko": "{} 실패: Bilibili가 이 작업을 거부했습니다. 웹사이트에서 완료하세요. 같은 계정의 좋아요와 즐겨찾기에는 영향이 없습니다"
   },
   {
    "zh": "{}显卡重置 {} 次，已分 {} 段导出并无损拼接",
@@ -3281,16 +3307,18 @@
   {
    "zh": "{}需要登录",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "{}需要登錄",
+   "en": "{} requires sign-in",
+   "ja": "{} にはログインが必要です",
+   "ko": "{} 로그인 필요"
   },
   {
    "zh": "← 返回",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "← 返回",
+   "en": "← Back",
+   "ja": "← 戻る",
+   "ko": "← 뒤로"
   },
   {
    "zh": "☕ 请作者喝杯咖啡 · US$5",
@@ -3305,14 +3333,16 @@
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "。RTX Video HDR 未能啟動：可在設定裡關閉該效果，或更新 NVIDIA 驅動",
    "en": ". RTX Video HDR could not start: turn the effect off in settings, or update the NVIDIA driver",
-   "ja": "。RTX Video HDR を開始できませんでした。設定でこの効果をオフにするか、NVIDIA ドライバーを更新してください"
+   "ja": "。RTX Video HDR を開始できませんでした。設定でこの効果をオフにするか、NVIDIA ドライバーを更新してください",
+   "ko": ". RTX Video HDR을 시작하지 못했습니다. 설정에서 효과를 끄거나 NVIDIA 드라이버를 업데이트하세요"
   },
   {
    "zh": "。光流后端不可用：可在设置里改用 AMD FidelityFX 或关闭相关效果",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "。光流後端不可用：可在設定裡改用 AMD FidelityFX 或關閉相關效果",
    "en": ". The optical-flow backend is unavailable: switch to AMD FidelityFX in settings, or disable the dependent effects",
-   "ja": "。オプティカルフローのバックエンドを利用できません。設定で AMD FidelityFX に切り替えるか、関連する効果をオフにしてください"
+   "ja": "。オプティカルフローのバックエンドを利用できません。設定で AMD FidelityFX に切り替えるか、関連する効果をオフにしてください",
+   "ko": ". 광학 흐름 백엔드를 사용할 수 없습니다. 설정에서 AMD FidelityFX로 변경하거나 관련 효과를 끄세요"
   },
   {
    "zh": "一键推荐",
@@ -3349,9 +3379,10 @@
   {
    "zh": "万",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "萬",
+   "en": " ×10K",
+   "ja": " 万",
+   "ko": " 만"
   },
   {
    "zh": "上一任务仍在回收，请等待取消完成",
@@ -3484,9 +3515,10 @@
   {
    "zh": "上限而非精确值：实际取「不高于此档」的最高可用画质；全部高于此档时取最低档",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "上限而非精確值：實際取「不高于此檔」的最高可用畫質；全部高于此檔時取最低檔",
+   "en": "A ceiling, not an exact selection: use the highest available quality at or below this level; if all are higher, use the lowest",
+   "ja": "指定値は上限です。この画質以下で最も高い画質を選び、すべて上回る場合は最低画質を使います",
+   "ko": "정확한 값이 아닌 상한입니다. 이 수준 이하에서 가장 높은 화질을 사용하며, 모두 상한보다 높으면 가장 낮은 화질을 사용합니다"
   },
   {
    "zh": "上限覆盖片源标注峰值；处理后的画面以抽样读数为准",
@@ -3515,9 +3547,10 @@
   {
    "zh": "下拉刷新",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "下拉刷新",
+   "en": "Pull to refresh",
+   "ja": "下に引いて更新",
+   "ko": "아래로 당겨 새로고침"
   },
   {
    "zh": "下次启动生效；超过屏幕时按屏幕缩小并居中",
@@ -3682,9 +3715,10 @@
   {
    "zh": "不透明度",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "不透明度",
+   "en": "Opacity",
+   "ja": "不透明度",
+   "ko": "불투명도"
   },
   {
    "zh": "不采集音频",
@@ -3945,16 +3979,18 @@
   {
    "zh": "主地址打不开时换用镜像节点",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "主地址打不開時換用鏡像節點",
+   "en": "Use a mirror if the primary address fails",
+   "ja": "主アドレスを開けない場合にミラーを使用",
+   "ko": "기본 주소를 열 수 없으면 미러 사용"
   },
   {
    "zh": "主地址打不开时自动换一个镜像节点；B 站每个画质通常有多个镜像",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "主地址打不開時自動換一個鏡像節點；B 站每個畫質通常有多個鏡像",
+   "en": "Automatically try a mirror if the primary address fails; each Bilibili quality usually has several mirrors",
+   "ja": "主アドレスを開けない場合は自動でミラーに切り替えます。通常、各画質には複数のミラーがあります",
+   "ko": "기본 주소를 열 수 없으면 자동으로 미러를 시도합니다. Bilibili의 각 화질에는 보통 여러 미러가 있습니다"
   },
   {
    "zh": "主字幕",
@@ -4271,30 +4307,34 @@
   {
    "zh": "二维码已过期",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "二維碼已過期",
+   "en": "QR code expired",
+   "ja": "QR コードの有効期限が切れました",
+   "ko": "QR 코드 만료"
   },
   {
    "zh": "二维码已过期，请重新点击扫码登录",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "二維碼已過期，請重新點擊掃碼登錄",
+   "en": "QR code expired. Start QR sign-in again",
+   "ja": "QR コードの有効期限が切れました。QR ログインをやり直してください",
+   "ko": "QR 코드가 만료되었습니다. QR 로그인을 다시 시작하세요"
   },
   {
    "zh": "二维码接口返回错误码 {}",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "二維碼接口返回錯誤碼 {}",
+   "en": "QR API returned error code {}",
+   "ja": "QR API のエラーコード {}",
+   "ko": "QR API 오류 코드 {}"
   },
   {
    "zh": "二维码数据不完整",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "二維碼數據不完整",
+   "en": "Incomplete QR data",
+   "ja": "QR データが不完全です",
+   "ko": "QR 데이터가 불완전합니다"
   },
   {
    "zh": "交流群",
@@ -4475,9 +4515,10 @@
   {
    "zh": "仅能看 480P",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "僅能看 480P",
+   "en": "Limited to 480P",
+   "ja": "480P まで再生可能",
+   "ko": "480P까지만 재생 가능"
   },
   {
    "zh": "仅观看",
@@ -4506,16 +4547,18 @@
   {
    "zh": "从头播放",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "從頭播放",
+   "en": "Play from beginning",
+   "ja": "最初から再生",
+   "ko": "처음부터 재생"
   },
   {
    "zh": "从稍后再看移除",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "從稍后再看移除",
+   "en": "Remove from Watch Later",
+   "ja": "後で見るから削除",
+   "ko": "나중에 볼 동영상에서 제거"
   },
   {
    "zh": "以下轨道当前封装无法保留，导出时跳过",
@@ -4664,9 +4707,10 @@
   {
    "zh": "作者视频",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "作者視頻",
+   "en": "Author's videos",
+   "ja": "投稿者の動画",
+   "ko": "작성자의 동영상"
   },
   {
    "zh": "使用说明",
@@ -4905,7 +4949,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "修復元件",
    "en": "Repair components",
-   "ja": "コンポーネントを修復"
+   "ja": "コンポーネントを修復",
+   "ko": "구성 요소 복구"
   },
   {
    "zh": "修改时间：新 → 旧",
@@ -4944,7 +4989,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "偏暗且超出螢幕能力",
    "en": "dim, and brighter than the screen can show",
-   "ja": "暗く、かつ画面の能力を超えている"
+   "ja": "暗く、かつ画面の能力を超えている",
+   "ko": "어둡고 화면 성능을 초과함"
   },
   {
    "zh": "偏移",
@@ -5269,9 +5315,10 @@
   {
    "zh": "关注动态",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "關注動態",
+   "en": "Following feed",
+   "ja": "フォロー中の新着",
+   "ko": "팔로잉 피드"
   },
   {
    "zh": "关闭",
@@ -5349,9 +5396,10 @@
   {
    "zh": "关闭时按手动选的倍率 · 默认关闭",
    "src": "qml/NodePage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "關閉時按手動選的倍率 · 默認關閉",
+   "en": "Off uses the manually selected multiplier. Off by default",
+   "ja": "オフの場合は手動で選んだ倍率を使います。既定はオフ",
+   "ko": "끄면 직접 선택한 배율을 사용합니다. 기본값 꺼짐"
   },
   {
    "zh": "关闭时这条链路不存在，零开销",
@@ -5382,7 +5430,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "其他",
    "en": "Other",
-   "ja": "その他"
+   "ja": "その他",
+   "ko": "기타"
   },
   {
    "zh": "其他桌面",
@@ -5405,7 +5454,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "相容層",
    "en": "Compatible layer",
-   "ja": "互換レイヤー"
+   "ja": "互換レイヤー",
+   "ko": "호환 레이어"
   },
   {
    "zh": "兼容方式要求显示器连接在处理显卡上；请选择 Windows 采集",
@@ -5436,7 +5486,8 @@
    "src": "qml/Veyra/XboxSourceDialog.qml",
    "zh-TW": "相容選項：畫面持續出現破圖時可嘗試開啟，斷線後重新連線生效。可能增加 CPU 使用率與延遲；超解析度和補幀仍使用 GPU。",
    "en": "Compatibility option: try this if picture corruption persists, then disconnect and reconnect. May increase CPU usage and latency; super resolution and frame generation still use the GPU.",
-   "ja": "互換性オプション：映像の乱れが続く場合に有効にし、切断して再接続してください。CPU 使用率と遅延が増える場合があります。超解像とフレーム生成には引き続き GPU を使用します。"
+   "ja": "互換性オプション：映像の乱れが続く場合に有効にし、切断して再接続してください。CPU 使用率と遅延が増える場合があります。超解像とフレーム生成には引き続き GPU を使用します。",
+   "ko": "호환성 옵션: 화면 깨짐이 지속되면 켠 후 연결을 끊었다가 다시 연결하세요. CPU 사용량과 지연이 증가할 수 있습니다. 초해상도와 프레임 생성은 계속 GPU를 사용합니다"
   },
   {
    "zh": "内存上限只够保留 %1 秒（约 %2 MB），可降低录制码率",
@@ -5649,9 +5700,10 @@
   {
    "zh": "写字幕文件失败",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "寫字幕文件失敗",
+   "en": "Could not write subtitle file",
+   "ja": "字幕ファイルを書き込めません",
+   "ko": "자막 파일을 쓸 수 없습니다"
   },
   {
    "zh": "减少 NR 明暗改动；1 为保留原图亮度",
@@ -5704,16 +5756,18 @@
   {
    "zh": "分P",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "分P",
+   "en": "Part",
+   "ja": "パート",
+   "ko": "파트"
   },
   {
    "zh": "分P序号无效",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "分P序號無效",
+   "en": "Invalid part index",
+   "ja": "パート番号が無効です",
+   "ko": "잘못된 파트 번호"
   },
   {
    "zh": "分屏",
@@ -6022,16 +6076,18 @@
   {
    "zh": "删除评论",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "刪除評論",
+   "en": "Delete comment",
+   "ja": "コメントを削除",
+   "ko": "댓글 삭제"
   },
   {
    "zh": "删除评论需要登录",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "刪除評論需要登錄",
+   "en": "Sign in to delete comments",
+   "ja": "コメントの削除にはログインが必要です",
+   "ko": "댓글을 삭제하려면 로그인하세요"
   },
   {
    "zh": "删除这一层",
@@ -6172,9 +6228,10 @@
   {
    "zh": "加入稍后再看",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "加入稍后再看",
+   "en": "Add to Watch Later",
+   "ja": "後で見るに追加",
+   "ko": "나중에 볼 동영상에 추가"
   },
   {
    "zh": "加载中",
@@ -6187,9 +6244,10 @@
   {
    "zh": "加载中…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "加載中…",
+   "en": "Loading…",
+   "ja": "読み込み中…",
+   "ko": "불러오는 중…"
   },
   {
    "zh": "加载外部字幕",
@@ -6210,9 +6268,10 @@
   {
    "zh": "加载字幕",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "加載字幕",
+   "en": "Load subtitles",
+   "ja": "字幕を読み込む",
+   "ko": "자막 불러오기"
   },
   {
    "zh": "加载文件…",
@@ -6227,7 +6286,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "勾選後，高光起點同時參考每幀的平均亮度：暗場多的片子壓得更積極，亮場多的保留更多高光；取消則只看峰值",
    "en": "When on, the highlight start also considers each frame’s average brightness: dark films compress earlier, bright ones keep more highlights. Off uses the peak only.",
-   "ja": "オンにすると、ハイライト開始点が各フレームの平均輝度も参照します。暗い作品はより積極的に圧縮し、明るい作品はハイライトを多く残します。オフではピークのみを使用します。"
+   "ja": "オンにすると、ハイライト開始点が各フレームの平均輝度も参照します。暗い作品はより積極的に圧縮し、明るい作品はハイライトを多く残します。オフではピークのみを使用します。",
+   "ko": "켜면 프레임 평균 밝기도 하이라이트 시작점에 반영됩니다. 어두운 장면이 많으면 더 일찍 압축하고 밝은 장면이 많으면 하이라이트를 더 보존합니다. 끄면 최대 밝기만 사용합니다"
   },
   {
    "zh": "包含",
@@ -6394,7 +6454,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "解除安裝攝影機",
    "en": "Remove camera",
-   "ja": "カメラを削除"
+   "ja": "カメラを削除",
+   "ko": "카메라 제거"
   },
   {
    "zh": "历史拒绝",
@@ -6415,9 +6476,10 @@
   {
    "zh": "历史记录",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "歷史記錄",
+   "en": "History",
+   "ja": "履歴",
+   "ko": "기록"
   },
   {
    "zh": "压住高光",
@@ -6688,14 +6750,16 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "參考平均亮度",
    "en": "Use average brightness",
-   "ja": "平均輝度を参照"
+   "ja": "平均輝度を参照",
+   "ko": "평균 밝기 반영"
   },
   {
    "zh": "双层",
    "src": "qml/ProPage.qml",
    "zh-TW": "雙層",
    "en": "Dual layer",
-   "ja": "デュアルレイヤー"
+   "ja": "デュアルレイヤー",
+   "ko": "이중 레이어"
   },
   {
    "zh": "双行不自动缩小；更多样式在字幕设置里",
@@ -6708,9 +6772,10 @@
   {
    "zh": "双语字幕",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "雙語字幕",
+   "en": "Bilingual subtitles",
+   "ja": "二言語字幕",
+   "ko": "이중 언어 자막"
   },
   {
    "zh": "双重超分",
@@ -6739,9 +6804,10 @@
   {
    "zh": "发一条评论…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "發一條評論…",
+   "en": "Write a comment…",
+   "ja": "コメントを入力…",
+   "ko": "댓글 작성…"
   },
   {
    "zh": "发现 {} 台 PS5。",
@@ -6794,30 +6860,34 @@
   {
    "zh": "发评论",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "發評論",
+   "en": "Post comment",
+   "ja": "コメントを投稿",
+   "ko": "댓글 게시"
   },
   {
    "zh": "发评论需要登录",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "發評論需要登錄",
+   "en": "Sign in to post comments",
+   "ja": "コメントの投稿にはログインが必要です",
+   "ko": "댓글을 게시하려면 로그인하세요"
   },
   {
    "zh": "发送",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "發送",
+   "en": "Send",
+   "ja": "送信",
+   "ko": "보내기"
   },
   {
    "zh": "发送中",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "發送中",
+   "en": "Sending",
+   "ja": "送信中",
+   "ko": "보내는 중"
   },
   {
    "zh": "取消",
@@ -6862,23 +6932,26 @@
   {
    "zh": "取消收藏失败",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "取消收藏失敗",
+   "en": "Could not remove favorite",
+   "ja": "お気に入りを解除できません",
+   "ko": "즐겨찾기를 해제하지 못했습니다"
   },
   {
    "zh": "取消登录",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "取消登錄",
+   "en": "Cancel sign-in",
+   "ja": "ログインをキャンセル",
+   "ko": "로그인 취소"
   },
   {
    "zh": "取色",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "取色",
+   "en": "Pick color",
+   "ja": "色を選択",
+   "ko": "색상 선택"
   },
   {
    "zh": "变化容差",
@@ -6893,7 +6966,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "另一個Veyra執行個體已啟用虛擬攝影機",
    "en": "Another Veyra instance is using the virtual camera.",
-   "ja": "別の Veyra インスタンスが仮想カメラを使用しています。"
+   "ja": "別の Veyra インスタンスが仮想カメラを使用しています。",
+   "ko": "다른 Veyra 인스턴스가 가상 카메라를 사용 중입니다"
   },
   {
    "zh": "另一个软件实例正在处理驱动配置，请稍后重试。",
@@ -6996,7 +7070,8 @@
    "src": "qml/HomePage.qml",
    "zh-TW": "只清空這個列表，不會刪除檔案。",
    "en": "Only clears this list; no file is deleted.",
-   "ja": "このリストだけを消去します。ファイルは削除されません。"
+   "ja": "このリストだけを消去します。ファイルは削除されません。",
+   "ko": "목록만 비우며 파일은 삭제하지 않습니다."
   },
   {
    "zh": "只用 DLSS / XeSS 补帧时：到 NVIDIA App 关闭 Smooth Motion。",
@@ -7131,7 +7206,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "合併增強層（實驗性）",
    "en": "Merge enhancement layer (experimental)",
-   "ja": "エンハンスメントレイヤーを合成（実験的）"
+   "ja": "エンハンスメントレイヤーを合成（実験的）",
+   "ko": "향상 레이어 합성 (실험적)"
   },
   {
    "zh": "同名的色彩预设已存在",
@@ -7176,9 +7252,10 @@
   {
    "zh": "同画质有多个版本时生效；自动 = 优先 HDR 编码（HEVC），该画质只有一种编码时照常播放",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "同畫質有多個版本時生效；自動 = 優先 HDR 編碼（HEVC），該畫質只有一種編碼時照常播放",
+   "en": "Used when a quality has multiple encodings. Auto prioritizes HDR (HEVC); a single available encoding plays normally",
+   "ja": "同じ画質に複数のエンコードがある場合に適用します。自動では HDR（HEVC）を優先し、1 種類のみの場合はそのまま再生します",
+   "ko": "동일 화질에 여러 인코딩이 있을 때 적용됩니다. 자동은 HDR(HEVC)을 우선하며, 하나만 있으면 그대로 재생합니다"
   },
   {
    "zh": "名称 A → Z",
@@ -7721,7 +7798,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "在直播軟體的視訊擷取裝置中選擇 Veyra Virtual Camera；輸出處理後的完整畫面，無需全螢幕",
    "en": "Select Veyra Virtual Camera as a video capture device in your streaming app. Outputs the full processed picture without fullscreen.",
-   "ja": "配信ソフトの映像キャプチャデバイスで Veyra Virtual Camera を選択します。全画面表示なしで処理後の映像全体を出力します。"
+   "ja": "配信ソフトの映像キャプチャデバイスで Veyra Virtual Camera を選択します。全画面表示なしで処理後の映像全体を出力します。",
+   "ko": "방송 앱의 비디오 캡처 장치에서 Veyra Virtual Camera를 선택하세요. 전체 화면 없이 처리된 전체 영상을 출력합니다"
   },
   {
    "zh": "在线",
@@ -8086,9 +8164,10 @@
   {
    "zh": "备用 CDN",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "備用 CDN",
+   "en": "Backup CDN",
+   "ja": "予備 CDN",
+   "ko": "예비 CDN"
   },
   {
    "zh": "复制",
@@ -8333,9 +8412,10 @@
   {
    "zh": "大小",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "大小",
+   "en": "Size",
+   "ja": "サイズ",
+   "ko": "크기"
   },
   {
    "zh": "失败 · 点击重试",
@@ -8428,16 +8508,18 @@
   {
    "zh": "字幕内容为空",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "字幕內容為空",
+   "en": "Subtitles are empty",
+   "ja": "字幕が空です",
+   "ko": "자막이 비어 있습니다"
   },
   {
    "zh": "字幕列表",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "字幕列表",
+   "en": "Subtitle list",
+   "ja": "字幕一覧",
+   "ko": "자막 목록"
   },
   {
    "zh": "字幕原字体",
@@ -8450,9 +8532,10 @@
   {
    "zh": "字幕地址不是 https",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "字幕地址不是 https",
+   "en": "Subtitle URL must use HTTPS",
+   "ja": "字幕 URL は HTTPS が必要です",
+   "ko": "자막 URL은 HTTPS여야 합니다"
   },
   {
    "zh": "字幕将在视频缓冲好后读取",
@@ -8465,9 +8548,10 @@
   {
    "zh": "字幕底色",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "字幕底色",
+   "en": "Subtitle background",
+   "ja": "字幕の背景色",
+   "ko": "자막 배경색"
   },
   {
    "zh": "字幕延时 %1 ms",
@@ -8576,9 +8660,10 @@
   {
    "zh": "字幕需要登录",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "字幕需要登錄",
+   "en": "Sign in to use subtitles",
+   "ja": "字幕にはログインが必要です",
+   "ko": "자막을 사용하려면 로그인하세요"
   },
   {
    "zh": "字幕默认字号",
@@ -8641,7 +8726,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "安裝元件",
    "en": "Install components",
-   "ja": "コンポーネントをインストール"
+   "ja": "コンポーネントをインストール",
+   "ko": "구성 요소 설치"
   },
   {
    "zh": "宋体",
@@ -8784,7 +8870,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "實驗性：只對 Profile 7 雙層片源生效，且多數影格因增強層解碼失敗會退回基礎層；關閉則強制只用基礎層（重新開啟檔案後套用）",
    "en": "Experimental: applies to Profile 7 dual-layer sources only, and most frames fall back to the base layer because the enhancement layer fails to decode. Turning it off forces base-layer-only playback (applies after reopening the file).",
-   "ja": "実験的：Profile 7 のデュアルレイヤー映像のみ対象で、エンハンスメントレイヤーのデコード失敗によりほとんどのフレームはベースレイヤーに戻ります。オフにするとベースレイヤーのみの再生になります（ファイルを開き直すと反映されます）。"
+   "ja": "実験的：Profile 7 のデュアルレイヤー映像のみ対象で、エンハンスメントレイヤーのデコード失敗によりほとんどのフレームはベースレイヤーに戻ります。オフにするとベースレイヤーのみの再生になります（ファイルを開き直すと反映されます）。",
+   "ko": "실험적: Profile 7 이중 레이어 소스에만 적용됩니다. 향상 레이어 디코딩 실패로 대부분의 프레임은 기본 레이어로 대체됩니다. 끄면 기본 레이어만 사용하며 파일을 다시 열면 적용됩니다"
   },
   {
    "zh": "实验：采集画面无法抖动，这是 SMAA T2x / 4x 的不抖动近似；静止画面更稳，运动处可能拖影",
@@ -9543,9 +9630,10 @@
   {
    "zh": "已从稍后再看移除",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已從稍后再看移除",
+   "en": "Removed from Watch Later",
+   "ja": "後で見るから削除しました",
+   "ko": "나중에 볼 동영상에서 제거했습니다"
   },
   {
    "zh": "已保存",
@@ -9656,7 +9744,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "已關閉；每次啟動軟體後需手動啟用",
    "en": "Off. Enable manually after each app launch.",
-   "ja": "オフ。アプリを起動するたびに手動で有効にしてください。"
+   "ja": "オフ。アプリを起動するたびに手動で有効にしてください。",
+   "ko": "꺼짐. 앱을 시작할 때마다 직접 켜세요."
   },
   {
    "zh": "已切换播放内容，录制已保存",
@@ -9685,9 +9774,10 @@
   {
    "zh": "已加入稍后再看",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已加入稍后再看",
+   "en": "Added to Watch Later",
+   "ja": "後で見るに追加しました",
+   "ko": "나중에 볼 동영상에 추가했습니다"
   },
   {
    "zh": "已加载",
@@ -9718,7 +9808,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "已解除安裝目前使用者的 Veyra 虛擬攝影機",
    "en": "Veyra virtual camera removed for the current user.",
-   "ja": "現在のユーザーの Veyra 仮想カメラを削除しました。"
+   "ja": "現在のユーザーの Veyra 仮想カメラを削除しました。",
+   "ko": "현재 사용자의 Veyra 가상 카메라를 제거했습니다"
   },
   {
    "zh": "已发送唤醒请求，等待 PS5 开机后再连接。",
@@ -9773,14 +9864,16 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "已取消攝影機元件的系統管理員授權",
    "en": "Camera component administrator approval was cancelled.",
-   "ja": "カメラコンポーネントの管理者承認をキャンセルしました。"
+   "ja": "カメラコンポーネントの管理者承認をキャンセルしました。",
+   "ko": "카메라 구성 요소의 관리자 승인이 취소되었습니다"
   },
   {
    "zh": "已取消收藏",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已取消收藏",
+   "en": "Removed favorite",
+   "ja": "お気に入りを解除しました",
+   "ko": "즐겨찾기를 해제했습니다"
   },
   {
    "zh": "已取消查找",
@@ -9793,9 +9886,10 @@
   {
    "zh": "已取消点赞",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已取消點贊",
+   "en": "Like removed",
+   "ja": "高評価を取り消しました",
+   "ko": "좋아요를 취소했습니다"
   },
   {
    "zh": "已取消登录。",
@@ -9858,7 +9952,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "已啟用，等待處理後的畫面",
    "en": "Enabled, waiting for the processed picture.",
-   "ja": "有効。処理後の映像を待機しています。"
+   "ja": "有効。処理後の映像を待機しています。",
+   "ko": "켜짐. 처리된 영상을 기다리는 중입니다"
   },
   {
    "zh": "已和主机配对",
@@ -9929,7 +10024,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "已安裝系統層級元件，支援以系統管理員執行的直播軟體",
    "en": "System components installed, including support for streaming apps run as administrator.",
-   "ja": "システムコンポーネントをインストール済み。管理者として実行する配信ソフトにも対応します。"
+   "ja": "システムコンポーネントをインストール済み。管理者として実行する配信ソフトにも対応します。",
+   "ko": "시스템 구성 요소가 설치되어 관리자 권한으로 실행하는 방송 앱도 지원합니다"
   },
   {
    "zh": "已完成",
@@ -10022,16 +10118,18 @@
   {
    "zh": "已扫码，请在手机上确认",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已掃碼，請在手機上確認",
+   "en": "Scanned; confirm on your phone",
+   "ja": "スキャン済み。スマートフォンで確認してください",
+   "ko": "스캔 완료. 휴대폰에서 확인하세요"
   },
   {
    "zh": "已投币",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已投幣",
+   "en": "Coins sent",
+   "ja": "コインを送りました",
+   "ko": "코인을 보냈습니다"
   },
   {
    "zh": "已按片源自动选档：%1",
@@ -10060,9 +10158,10 @@
   {
    "zh": "已收藏",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已收藏",
+   "en": "Added to favorites",
+   "ja": "お気に入りに追加しました",
+   "ko": "즐겨찾기에 추가했습니다"
   },
   {
    "zh": "已暂停",
@@ -10147,9 +10246,10 @@
   {
    "zh": "已点赞",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "已點贊",
+   "en": "Liked",
+   "ja": "高評価しました",
+   "ko": "좋아요를 눌렀습니다"
   },
   {
    "zh": "已生效：%1",
@@ -10492,7 +10592,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "套用推薦",
    "en": "Apply recommendation",
-   "ja": "推奨を適用"
+   "ja": "推奨を適用",
+   "ko": "추천 적용"
   },
   {
    "zh": "应用设置并重连",
@@ -10777,37 +10878,42 @@
   {
    "zh": "弹幕",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "彈幕",
+   "en": "Danmaku",
+   "ja": "弾幕",
+   "ko": "탄막"
   },
   {
    "zh": "弹幕为空",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "彈幕為空",
+   "en": "Danmaku is empty",
+   "ja": "弾幕が空です",
+   "ko": "탄막이 비어 있습니다"
   },
   {
    "zh": "弹幕关",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "彈幕關",
+   "en": "Danmaku off",
+   "ja": "弾幕オフ",
+   "ko": "탄막 꺼짐"
   },
   {
    "zh": "弹幕开（%1 条）",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "彈幕開（%1 條）",
+   "en": "Danmaku on (%1 comments)",
+   "ja": "弾幕オン（%1 件）",
+   "ko": "탄막 켜짐 (%1개)"
   },
   {
    "zh": "弹幕数据格式异常",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "彈幕數據格式異常",
+   "en": "Invalid danmaku data format",
+   "ja": "弾幕データの形式が不正です",
+   "ko": "잘못된 탄막 데이터 형식"
   },
   {
    "zh": "强",
@@ -10958,7 +11064,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "目前僅註冊至本使用者；以系統管理員執行的 OBS 等直播軟體需要安裝系統層級元件",
    "en": "Registered for the current user. OBS and other streaming apps run as administrator need system components.",
-   "ja": "現在のユーザーに登録済み。管理者として実行する OBS などにはシステムコンポーネントが必要です。"
+   "ja": "現在のユーザーに登録済み。管理者として実行する OBS などにはシステムコンポーネントが必要です。",
+   "ko": "현재 사용자에게만 등록되었습니다. OBS 등 방송 앱을 관리자 권한으로 실행하려면 시스템 구성 요소를 설치하세요"
   },
   {
    "zh": "当前修改尚未保存：",
@@ -11093,7 +11200,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "目前片源不是杜比視界，推薦請用上方「一鍵選檔」裡的按鈕",
    "en": "this source is not Dolby Vision; use the recommendation button under the curve settings",
-   "ja": "この映像は Dolby Vision ではありません。カーブ設定の推奨ボタンをお使いください"
+   "ja": "この映像は Dolby Vision ではありません。カーブ設定の推奨ボタンをお使いください",
+   "ko": "현재 소스는 Dolby Vision이 아닙니다. 위 곡선 설정의 추천 버튼을 사용하세요"
   },
   {
    "zh": "当前片源没有字幕",
@@ -11108,7 +11216,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "目前片源的推薦",
    "en": "Recommendation for this source",
-   "ja": "この映像への推奨"
+   "ja": "この映像への推奨",
+   "ko": "현재 소스 추천"
   },
   {
    "zh": "当前生效：整档预设「%1」",
@@ -11153,9 +11262,10 @@
   {
    "zh": "当前节点打不开，正在换用备用节点…",
    "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "當前節點打不開，正在換用備用節點…",
+   "en": "Current CDN failed; trying a backup…",
+   "ja": "現在の CDN を開けません。予備に切り替え中…",
+   "ko": "현재 CDN을 열 수 없습니다. 예비 CDN을 시도하는 중…"
   },
   {
    "zh": "当前设备不能执行所选 NR，请选择此显卡可用的 NR 运行库",
@@ -11520,9 +11630,10 @@
   {
    "zh": "我",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "我",
+   "en": "Me",
+   "ja": "自分",
+   "ko": "나"
   },
   {
    "zh": "我的屏能到多少 nit；0 = 自动",
@@ -11535,9 +11646,10 @@
   {
    "zh": "我的收藏",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "我的收藏",
+   "en": "My favorites",
+   "ja": "お気に入り",
+   "ko": "내 즐겨찾기"
   },
   {
    "zh": "截图",
@@ -11782,9 +11894,10 @@
   {
    "zh": "打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "打開 B 站視頻時的默認畫質與編碼。畫質選「自動」時取賬號能用的最高檔；",
+   "en": "Default quality and encoding for Bilibili. Auto quality uses the highest level your account allows;",
+   "ja": "Bilibili の既定画質とエンコードです。自動画質ではアカウントで使える最高画質を選びます。",
+   "ko": "Bilibili 기본 화질 및 인코딩입니다. 자동 화질은 계정에서 허용하는 최고 수준을 사용합니다."
   },
   {
    "zh": "打开 GitHub Issues，诊断信息已自动复制",
@@ -11909,9 +12022,10 @@
   {
    "zh": "打开视频即加载弹幕；关闭后新视频不带弹幕，详情页也可以单独开关",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "打開視頻即加載彈幕；關閉后新視頻不帶彈幕，詳情頁也可以單獨開關",
+   "en": "Load danmaku when opening a video. Off disables it for new videos; toggle it separately on the details page",
+   "ja": "動画を開くと弾幕を読み込みます。オフの場合は新しい動画では無効になり、詳細ページで個別に切り替えられます",
+   "ko": "동영상을 열 때 탄막을 불러옵니다. 끄면 새 동영상에서 비활성화되며 상세 페이지에서 개별 설정할 수 있습니다"
   },
   {
    "zh": "打开视频后显示可用字幕",
@@ -11940,9 +12054,10 @@
   {
    "zh": "打开视频时自动装入站方字幕（需登录）。视频本身没有字幕时不会有任何提示。",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "打開視頻時自動裝入站方字幕（需登錄）。視頻本身沒有字幕時不會有任何提示。",
+   "en": "Load official subtitles automatically (sign-in required). No notice is shown if the video has no subtitles",
+   "ja": "公式字幕を自動で読み込みます（ログインが必要）。字幕がない動画では通知しません",
+   "ko": "공식 자막을 자동으로 불러옵니다(로그인 필요). 자막이 없으면 알림을 표시하지 않습니다"
   },
   {
    "zh": "打开超时",
@@ -11965,7 +12080,8 @@
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "執行失敗",
    "en": " failed",
-   "ja": "の実行に失敗しました"
+   "ja": "の実行に失敗しました",
+   "ko": "실패"
   },
   {
    "zh": "执行失败；请查看日志",
@@ -11986,16 +12102,18 @@
   {
    "zh": "扫码后画质上限提升到账号等级允许的档位",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "掃碼后畫質上限提升到賬號等級允許的檔位",
+   "en": "QR sign-in raises the quality ceiling to your account's allowance",
+   "ja": "QR ログインでアカウントに応じた上限画質まで利用できます",
+   "ko": "QR 로그인하면 계정에서 허용하는 화질까지 사용할 수 있습니다"
   },
   {
    "zh": "扫码登录",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "掃碼登錄",
+   "en": "QR sign-in",
+   "ja": "QR ログイン",
+   "ko": "QR 로그인"
   },
   {
    "zh": "批量处理图片…",
@@ -12096,16 +12214,18 @@
   {
    "zh": "投币",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "投幣",
+   "en": "Send coins",
+   "ja": "コインを送る",
+   "ko": "코인 보내기"
   },
   {
    "zh": "投币数只能是 1 或 2",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "投幣數只能是 1 或 2",
+   "en": "Coin count must be 1 or 2",
+   "ja": "コイン数は 1 または 2 にしてください",
+   "ko": "코인 수는 1 또는 2여야 합니다"
   },
   {
    "zh": "抖音",
@@ -12254,9 +12374,10 @@
   {
    "zh": "按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧",
    "src": "qml/NodePage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "按源幀率和輸出上限自動選檔；源幀率超過上限時關閉補幀",
+   "en": "Choose a multiplier from source FPS and the output limit; disable frame generation when source FPS exceeds the limit",
+   "ja": "ソース FPS と出力上限から倍率を選び、ソース FPS が上限を超える場合はフレーム生成を無効にします",
+   "ko": "소스 FPS와 출력 상한에 따라 배율을 선택합니다. 소스 FPS가 상한을 초과하면 프레임 생성을 끕니다"
   },
   {
    "zh": "按片源自动选档",
@@ -12325,16 +12446,18 @@
   {
    "zh": "推荐",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "推薦",
+   "en": "Recommended",
+   "ja": "おすすめ",
+   "ko": "추천"
   },
   {
    "zh": "推荐列表为空，请先扫码登录",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "推薦列表為空，請先掃碼登錄",
+   "en": "Recommendations are empty; sign in with QR first",
+   "ja": "おすすめがありません。先に QR ログインしてください",
+   "ko": "추천 목록이 비어 있습니다. 먼저 QR 로그인하세요"
   },
   {
    "zh": "描边",
@@ -12411,23 +12534,26 @@
   {
    "zh": "搜索",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "搜索",
+   "en": "Search",
+   "ja": "検索",
+   "ko": "검색"
   },
   {
    "zh": "搜索 B 站视频",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "搜索 B 站視頻",
+   "en": "Search Bilibili videos",
+   "ja": "Bilibili 動画を検索",
+   "ko": "Bilibili 동영상 검색"
   },
   {
    "zh": "搜索中…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "搜索中…",
+   "en": "Searching…",
+   "ja": "検索中…",
+   "ko": "검색 중…"
   },
   {
    "zh": "搜索完成，未发现 PS5；确认同一局域网，或手动填写 IP。",
@@ -12440,9 +12566,10 @@
   {
    "zh": "搜索结果",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "搜索結果",
+   "en": "Search results",
+   "ja": "検索結果",
+   "ko": "검색 결과"
   },
   {
    "zh": "搜索，例如：1920 60 NV12",
@@ -12457,28 +12584,32 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "攝影機狀態",
    "en": "Camera status",
-   "ja": "カメラの状態"
+   "ja": "カメラの状態",
+   "ko": "카메라 상태"
   },
   {
    "zh": "摄像机组件安装或卸载失败，请查看日志",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "攝影機元件安裝或解除安裝失敗，請查看記錄",
    "en": "Camera component installation or removal failed. See the log.",
-   "ja": "カメラコンポーネントのインストールまたは削除に失敗しました。ログを確認してください。"
+   "ja": "カメラコンポーネントのインストールまたは削除に失敗しました。ログを確認してください。",
+   "ko": "카메라 구성 요소 설치 또는 제거에 실패했습니다. 로그를 확인하세요"
   },
   {
    "zh": "摄像机组件已安装，请刷新或重新打开直播软件",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "攝影機元件已安裝，請重新整理或重新開啟直播軟體",
    "en": "Camera components installed. Refresh or reopen your streaming app.",
-   "ja": "カメラコンポーネントをインストールしました。配信ソフトを更新または再起動してください。"
+   "ja": "カメラコンポーネントをインストールしました。配信ソフトを更新または再起動してください。",
+   "ko": "카메라 구성 요소가 설치되었습니다. 방송 앱을 새로고침하거나 다시 실행하세요"
   },
   {
    "zh": "摄像机输出帧率",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "攝影機輸出影格率",
    "en": "Camera frame rate",
-   "ja": "カメラ出力フレームレート"
+   "ja": "カメラ出力フレームレート",
+   "ko": "카메라 프레임 속도"
   },
   {
    "zh": "撤销",
@@ -12604,9 +12735,10 @@
   {
    "zh": "播放地址接口返回错误码 {}（可能需要登录或大会员）",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "播放地址接口返回錯誤碼 {}（可能需要登錄或大會員）",
+   "en": "Playback API returned error code {} (sign-in or Premium may be required)",
+   "ja": "再生 API のエラーコード {}（ログインまたはプレミアム会員が必要な場合があります）",
+   "ko": "재생 API 오류 코드 {} (로그인 또는 프리미엄 회원 자격이 필요할 수 있음)"
   },
   {
    "zh": "播放失败",
@@ -12619,9 +12751,10 @@
   {
    "zh": "播放完成后回到视频详情",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "播放完成后回到視頻詳情",
+   "en": "Return to video details after playback ends",
+   "ja": "再生終了後に動画の詳細に戻る",
+   "ko": "재생 종료 후 동영상 상세 화면으로 돌아가기"
   },
   {
    "zh": "播放已停止，录制已保存",
@@ -12738,30 +12871,34 @@
   {
    "zh": "收藏",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "收藏",
+   "en": "Favorite",
+   "ja": "お気に入り",
+   "ko": "즐겨찾기"
   },
   {
    "zh": "收藏到哪个收藏夹？",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "收藏到哪個收藏夾？",
+   "en": "Choose a favorites folder",
+   "ja": "保存するお気に入りフォルダーを選択",
+   "ko": "저장할 즐겨찾기 폴더 선택"
   },
   {
    "zh": "收藏夹列表",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "收藏夾列表",
+   "en": "Favorites folders",
+   "ja": "お気に入りフォルダー一覧",
+   "ko": "즐겨찾기 폴더 목록"
   },
   {
    "zh": "收藏需要登录",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "收藏需要登錄",
+   "en": "Sign in to add favorites",
+   "ja": "お気に入りにはログインが必要です",
+   "ko": "즐겨찾기에 추가하려면 로그인하세요"
   },
   {
    "zh": "收起",
@@ -12774,9 +12911,10 @@
   {
    "zh": "收起评论",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "收起評論",
+   "en": "Hide comments",
+   "ja": "コメントを閉じる",
+   "ko": "댓글 접기"
   },
   {
    "zh": "改动会实时显示在这里。",
@@ -12919,7 +13057,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "整片偏暗",
    "en": "the film is mostly dark",
-   "ja": "全体的に暗い"
+   "ja": "全体的に暗い",
+   "ko": "영상이 전반적으로 어두움"
   },
   {
    "zh": "整片偏暗、只有少量亮点",
@@ -13102,7 +13241,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "無增強層",
    "en": "No enhancement layer",
-   "ja": "エンハンスメントレイヤーなし"
+   "ja": "エンハンスメントレイヤーなし",
+   "ko": "향상 레이어 없음"
   },
   {
    "zh": "无效的按键",
@@ -13131,9 +13271,10 @@
   {
    "zh": "无法从网址中识别视频编号（需要 BV 号）",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法從網址中識別視頻編號（需要 BV 號）",
+   "en": "Cannot identify video ID in URL (BV ID required)",
+   "ja": "URL から動画 ID を識別できません（BV ID が必要）",
+   "ko": "URL에서 동영상 ID를 찾을 수 없습니다(BV ID 필요)"
   },
   {
    "zh": "无法保存或清理恢复记录",
@@ -13146,9 +13287,10 @@
   {
    "zh": "无法保存登录信息",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法保存登錄信息",
+   "en": "Could not save sign-in information",
+   "ja": "ログイン情報を保存できません",
+   "ko": "로그인 정보를 저장하지 못했습니다"
   },
   {
    "zh": "无法保存虚拟扬声器安装包",
@@ -13289,9 +13431,10 @@
   {
    "zh": "无法创建弹幕叠加层",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法創建彈幕疊加層",
+   "en": "Could not create danmaku overlay",
+   "ja": "弾幕のオーバーレイを作成できません",
+   "ko": "탄막 오버레이를 만들지 못했습니다"
   },
   {
    "zh": "无法创建录制封装器",
@@ -13402,7 +13545,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "無法啟動攝影機安裝程式，請查看記錄",
    "en": "Could not start camera component setup. See the log.",
-   "ja": "カメラコンポーネントのセットアップを開始できません。ログを確認してください。"
+   "ja": "カメラコンポーネントのセットアップを開始できません。ログを確認してください。",
+   "ko": "카메라 설치 프로그램을 시작하지 못했습니다. 로그를 확인하세요"
   },
   {
    "zh": "无法启动采集，请查看诊断",
@@ -13543,9 +13687,10 @@
   {
    "zh": "无法打开该视频",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法打開該視頻",
+   "en": "Could not open this video",
+   "ja": "この動画を開けません",
+   "ko": "이 동영상을 열지 못했습니다"
   },
   {
    "zh": "无法打开驱动设置；请先断开采集并关闭占用设备的应用。",
@@ -13606,9 +13751,10 @@
   {
    "zh": "无法获取二维码：",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法獲取二維碼：",
+   "en": "Could not get QR code:",
+   "ja": "QR コードを取得できません：",
+   "ko": "QR 코드를 가져오지 못했습니다:"
   },
   {
    "zh": "无法获取当前显卡",
@@ -13621,23 +13767,26 @@
   {
    "zh": "无法获取画质列表",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法獲取畫質列表",
+   "en": "Could not get quality list",
+   "ja": "画質一覧を取得できません",
+   "ko": "화질 목록을 가져오지 못했습니다"
   },
   {
    "zh": "无法获取画质列表，可能未登录",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法獲取畫質列表，可能未登錄",
+   "en": "Could not get quality list; you may need to sign in",
+   "ja": "画質一覧を取得できません。ログインが必要な場合があります",
+   "ko": "화질 목록을 가져오지 못했습니다. 로그인이 필요할 수 있습니다"
   },
   {
    "zh": "无法获取登录二维码",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無法獲取登錄二維碼",
+   "en": "Could not get sign-in QR code",
+   "ja": "ログイン用 QR コードを取得できません",
+   "ko": "로그인 QR 코드를 가져오지 못했습니다"
   },
   {
    "zh": "无法解码PNG/JPEG",
@@ -13722,9 +13871,10 @@
   {
    "zh": "无音频",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "無音頻",
+   "en": "No audio",
+   "ja": "音声なし",
+   "ko": "오디오 없음"
   },
   {
    "zh": "日志",
@@ -13857,9 +14007,10 @@
   {
    "zh": "明度",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "明度",
+   "en": "Brightness",
+   "ja": "明度",
+   "ko": "밝기"
   },
   {
    "zh": "明度变化",
@@ -13992,16 +14143,18 @@
   {
    "zh": "显示区域",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "顯示區域",
+   "en": "Display area",
+   "ja": "表示領域",
+   "ko": "표시 영역"
   },
   {
    "zh": "显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "顯示區域 = 彈幕最多占用畫面上方多高的比例，100% 會蓋住整個畫面。",
+   "en": "Display area limits how much of the top of the picture danmaku can cover. 100% allows the whole picture",
+   "ja": "表示領域は弾幕が画面上部を覆う高さの割合です。100% では画面全体を使います",
+   "ko": "표시 영역은 탄막이 화면 위쪽에서 차지할 수 있는 높이 비율입니다. 100%는 전체 화면을 사용합니다"
   },
   {
    "zh": "显示区域红框",
@@ -14117,9 +14270,10 @@
   {
    "zh": "显示站方提供的译文行（多数中文字幕第二行是英文）。关掉后只显示中文。",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "顯示站方提供的譯文行（多數中文字幕第二行是英文）。關掉后只顯示中文。",
+   "en": "Show translation lines provided by the site (often English below Chinese). Off shows Chinese only",
+   "ja": "サイト提供の翻訳行を表示します（通常は中国語の下に英語）。オフでは中国語のみ表示します",
+   "ko": "사이트에서 제공하는 번역 줄을 표시합니다(보통 중국어 아래 영어). 끄면 중국어만 표시합니다"
   },
   {
    "zh": "显示设备峰值 (nit)",
@@ -14342,7 +14496,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "曲線目前是關閉的，跟隨暫時不會改變畫面。",
    "en": "The curve is off, so following does not change the picture yet.",
-   "ja": "カーブがオフのため、追従してもまだ画面は変わりません。"
+   "ja": "カーブがオフのため、追従してもまだ画面は変わりません。",
+   "ko": "곡선이 꺼져 있어 추적을 켜도 아직 영상이 바뀌지 않습니다"
   },
   {
    "zh": "曲线未开启",
@@ -14389,7 +14544,8 @@
    "src": "qml/SettingsPage.qml",
    "zh-TW": "更新元件",
    "en": "Update components",
-   "ja": "コンポーネントを更新"
+   "ja": "コンポーネントを更新",
+   "ko": "구성 요소 업데이트"
   },
   {
    "zh": "最多 4 个保护区域，请先删除一个",
@@ -14458,16 +14614,18 @@
   {
    "zh": "最新",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "最新",
+   "en": "Newest",
+   "ja": "新着順",
+   "ko": "최신순"
   },
   {
    "zh": "最热",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "最熱",
+   "en": "Most liked",
+   "ja": "人気順",
+   "ko": "인기순"
   },
   {
    "zh": "最近",
@@ -14664,9 +14822,10 @@
   {
    "zh": "未检测到动态元数据片源",
    "src": "qml/ProPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "未檢測到動態元數據片源",
+   "en": "No source with dynamic metadata detected",
+   "ja": "動的メタデータを持つソースが見つかりません",
+   "ko": "동적 메타데이터가 있는 소스가 없습니다"
   },
   {
    "zh": "未检测到已安装的 VB-CABLE",
@@ -14783,9 +14942,10 @@
   {
    "zh": "未知状态 {}",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "未知狀態 {}",
+   "en": "Unknown status {}",
+   "ja": "不明な状態 {}",
+   "ko": "알 수 없는 상태 {}"
   },
   {
    "zh": "未知的效果: %1",
@@ -14982,37 +15142,42 @@
   {
    "zh": "杜比",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "杜比",
+   "en": "Dolby",
+   "ja": "Dolby",
+   "ko": "Dolby"
   },
   {
    "zh": "杜比全景声",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "杜比全景聲",
+   "en": "Dolby Atmos",
+   "ja": "Dolby Atmos",
+   "ko": "Dolby Atmos"
   },
   {
    "zh": "杜比视界",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "杜比視界",
+   "en": "Dolby Vision",
+   "ja": "Dolby Vision",
+   "ko": "Dolby Vision"
   },
   {
    "zh": "杜比视界 / HDR10+ 设置",
    "src": "qml/ProPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "杜比視界 / HDR10+ 設置",
+   "en": "Dolby Vision / HDR10+ settings",
+   "ja": "Dolby Vision / HDR10+ 設定",
+   "ko": "Dolby Vision / HDR10+ 설정"
   },
   {
    "zh": "杜比视界（L1）和 HDR10+ 的逐场景元数据都走这里：只按每帧亮度压低高光，暗部和中间调保持你设定的样子",
    "src": "qml/ProPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "杜比視界（L1）和 HDR10+ 的逐場景元數據都走這里：只按每幀亮度壓低高光，暗部和中間調保持你設定的樣子",
+   "en": "Dolby Vision L1 and HDR10+ scene metadata both use this path: highlights follow each frame's brightness; shadows and midtones retain your settings",
+   "ja": "Dolby Vision L1 と HDR10+ のシーン別メタデータに対応します。各フレームの輝度に応じてハイライトを抑え、暗部と中間調は設定を維持します",
+   "ko": "Dolby Vision L1 및 HDR10+ 장면 메타데이터에 적용됩니다. 각 프레임 밝기에 따라 하이라이트만 낮추며 암부와 중간톤은 설정을 유지합니다"
   },
   {
    "zh": "松开以追加到播放列表",
@@ -15025,9 +15190,10 @@
   {
    "zh": "松开刷新",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "松開刷新",
+   "en": "Release to refresh",
+   "ja": "離して更新",
+   "ko": "놓아서 새로고침"
   },
   {
    "zh": "松开后应用 · 宽高同比例",
@@ -15104,23 +15270,26 @@
   {
    "zh": "查看评论",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "查看評論",
+   "en": "Show comments",
+   "ja": "コメントを表示",
+   "ko": "댓글 보기"
   },
   {
    "zh": "查询播放地址失败：",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "查詢播放地址失敗：",
+   "en": "Playback URL request failed:",
+   "ja": "再生 URL の取得に失敗：",
+   "ko": "재생 URL 요청 실패:"
   },
   {
    "zh": "查询视频信息失败：",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "查詢視頻信息失敗：",
+   "en": "Video information request failed:",
+   "ja": "動画情報の取得に失敗：",
+   "ko": "동영상 정보 요청 실패:"
   },
   {
    "zh": "标准",
@@ -15391,7 +15560,8 @@
    "src": "src/engine/PresetLibrary.cpp",
    "zh-TW": "模式工作階段目錄無法建立: {} ({}）",
    "en": "Cannot create the mode session directory: {} ({})",
-   "ja": "モードセッションのディレクトリを作成できません: {} ({})"
+   "ja": "モードセッションのディレクトリを作成できません: {} ({})",
+   "ko": "모드 세션 디렉터리를 만들 수 없습니다: {} ({})"
   },
   {
    "zh": "模式会话编码校验失败，未保存",
@@ -15484,9 +15654,10 @@
   {
    "zh": "正在加载…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "正在加載…",
+   "en": "Loading…",
+   "ja": "読み込み中…",
+   "ko": "불러오는 중…"
   },
   {
    "zh": "正在加载外部字幕：%1",
@@ -15499,16 +15670,18 @@
   {
    "zh": "正在加载更多评论…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "正在加載更多評論…",
+   "en": "Loading more comments…",
+   "ja": "コメントを追加読み込み中…",
+   "ko": "댓글을 더 불러오는 중…"
   },
   {
    "zh": "正在加载表情…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "正在加載表情…",
+   "en": "Loading emojis…",
+   "ja": "絵文字を読み込み中…",
+   "ko": "이모티콘을 불러오는 중…"
   },
   {
    "zh": "正在取消…",
@@ -15595,14 +15768,16 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "正在安裝或解除安裝，請完成 Windows 系統管理員確認",
    "en": "Installing or removing. Complete the Windows administrator prompt.",
-   "ja": "インストールまたは削除中です。Windows の管理者確認を完了してください。"
+   "ja": "インストールまたは削除中です。Windows の管理者確認を完了してください。",
+   "ko": "설치 또는 제거 중입니다. Windows 관리자 승인 창을 확인하세요"
   },
   {
    "zh": "正在安装摄像机组件，请等待",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "正在安裝攝影機元件，請稍候",
    "en": "Camera component setup is already running. Please wait.",
-   "ja": "カメラコンポーネントのセットアップ中です。お待ちください。"
+   "ja": "カメラコンポーネントのセットアップ中です。お待ちください。",
+   "ko": "카메라 구성 요소를 설치 중입니다. 잠시 기다리세요"
   },
   {
    "zh": "正在导出：{}张源帧 / {}张编码帧（{}）",
@@ -15711,9 +15886,10 @@
   {
    "zh": "正在播放：",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "正在播放：",
+   "en": "Now playing:",
+   "ja": "再生中：",
+   "ko": "재생 중:"
   },
   {
    "zh": "正在收尾：写入封装索引",
@@ -15830,9 +16006,10 @@
   {
    "zh": "正在获取登录二维码…",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "正在獲取登錄二維碼…",
+   "en": "Getting sign-in QR code…",
+   "ja": "ログイン用 QR コードを取得中…",
+   "ko": "로그인 QR 코드를 가져오는 중…"
   },
   {
    "zh": "正在读取主机列表…",
@@ -16079,7 +16256,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "母版峰值偏低（老片）",
    "en": "low mastering peak (older transfer)",
-   "ja": "マスターのピークが低い（旧作）"
+   "ja": "マスターのピークが低い（旧作）",
+   "ko": "마스터링 최대 밝기가 낮음 (오래된 영상)"
   },
   {
    "zh": "每 %1 帧复用 1 帧",
@@ -16132,9 +16310,10 @@
   {
    "zh": "没有内容",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "沒有內容",
+   "en": "No content",
+   "ja": "コンテンツがありません",
+   "ko": "콘텐츠 없음"
   },
   {
    "zh": "没有匹配的格式",
@@ -16195,16 +16374,18 @@
   {
    "zh": "没有可用的视频流",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "沒有可用的視頻流",
+   "en": "No available video stream",
+   "ja": "利用できる映像ストリームがありません",
+   "ko": "사용 가능한 비디오 스트림 없음"
   },
   {
    "zh": "没有可用的视频流（该视频可能需要登录）",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "沒有可用的視頻流（該視頻可能需要登錄）",
+   "en": "No available video stream (sign-in may be required)",
+   "ja": "利用できる映像ストリームがありません（ログインが必要な場合があります）",
+   "ko": "사용 가능한 비디오 스트림이 없습니다(로그인이 필요할 수 있음)"
   },
   {
    "zh": "没有可用的视频编码器",
@@ -16217,9 +16398,10 @@
   {
    "zh": "没有弹幕",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "沒有彈幕",
+   "en": "No danmaku",
+   "ja": "弾幕なし",
+   "ko": "탄막 없음"
   },
   {
    "zh": "没有录到画面，未保存文件",
@@ -16240,9 +16422,10 @@
   {
    "zh": "没有找到可播放的视频流地址",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "沒有找到可播放的視頻流地址",
+   "en": "No playable video stream URL found",
+   "ja": "再生可能な映像ストリーム URL が見つかりません",
+   "ko": "재생 가능한 비디오 스트림 URL을 찾지 못했습니다"
   },
   {
    "zh": "没有收到视频数据。通常是防火墙或端口转发没有放行 UDP 47998–48010。",
@@ -16473,7 +16656,8 @@
    "src": "qml/HomePage.qml",
    "zh-TW": "清空最近播放記錄？",
    "en": "Clear the recent list?",
-   "ja": "最近再生した記録を消去しますか？"
+   "ja": "最近再生した記録を消去しますか？",
+   "ko": "최근 재생 목록을 비우시겠습니까?"
   },
   {
    "zh": "清空等待",
@@ -16750,16 +16934,18 @@
   {
    "zh": "点赞",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "點贊",
+   "en": "Like",
+   "ja": "高評価",
+   "ko": "좋아요"
   },
   {
    "zh": "热门",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "熱門",
+   "en": "Trending",
+   "ja": "人気",
+   "ko": "인기 동영상"
   },
   {
    "zh": "片源",
@@ -16790,7 +16976,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "片源未攜帶亮度資訊，無法自動選檔",
    "en": "no brightness metadata in this source; cannot pick automatically",
-   "ja": "映像に輝度情報がないため自動選択できません"
+   "ja": "映像に輝度情報がないため自動選択できません",
+   "ko": "소스에 밝기 정보가 없어 자동으로 프리셋을 선택할 수 없습니다"
   },
   {
    "zh": "片源没有携带亮度信息",
@@ -16965,7 +17152,8 @@
    "src": "qml/SettingsPage.qml",
    "zh-TW": "畫面 %1 影格/秒不是直播軟體 %2 影格/秒的整數倍，直播畫面會一快一慢交替。請改用整數倍的補幀倍數，例如 30 幀遊戲直播 60 幀時用 2X 或 4X",
    "en": "The picture runs at %1 fps, not a whole multiple of the %2 fps the streaming app takes, so the stream alternates between longer and shorter steps. Choose a frame generation multiple that gives a whole multiple, such as 2X or 4X for a 30 fps game streamed at 60.",
-   "ja": "映像の %1 fps は配信ソフトの %2 fps の整数倍ではないため、配信映像は速い・遅いが交互になります。整数倍になるフレーム生成倍率を選んでください（例：30 fps のゲームを 60 fps で配信するなら 2X か 4X）。"
+   "ja": "映像の %1 fps は配信ソフトの %2 fps の整数倍ではないため、配信映像は速い・遅いが交互になります。整数倍になるフレーム生成倍率を選んでください（例：30 fps のゲームを 60 fps で配信するなら 2X か 4X）。",
+   "ko": "영상이 %1 FPS로, 방송 앱의 %2 FPS의 정수배가 아니므로 움직임 간격이 번갈아 달라집니다. 30 FPS 게임을 60 FPS로 방송할 때 2X 또는 4X처럼 정수배가 되는 프레임 생성 배율을 선택하세요"
   },
   {
    "zh": "画面上下翻转",
@@ -17242,9 +17430,10 @@
   {
    "zh": "登录信息缺少 csrf 令牌",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "登錄信息缺少 csrf 令牌",
+   "en": "Sign-in information is missing a CSRF token",
+   "ja": "ログイン情報に CSRF トークンがありません",
+   "ko": "로그인 정보에 CSRF 토큰이 없습니다"
   },
   {
    "zh": "登录失败（%1）。",
@@ -17257,16 +17446,18 @@
   {
    "zh": "登录失败，请重试",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "登錄失敗，請重試",
+   "en": "Sign-in failed; try again",
+   "ja": "ログインに失敗しました。再試行してください",
+   "ko": "로그인에 실패했습니다. 다시 시도하세요"
   },
   {
    "zh": "登录成功",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "登錄成功",
+   "en": "Signed in",
+   "ja": "ログインしました",
+   "ko": "로그인 완료"
   },
   {
    "zh": "登录码已过期，请重新点“登录”。",
@@ -17287,9 +17478,10 @@
   {
    "zh": "登录返回的 Cookie 不完整",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "登錄返回的 Cookie 不完整",
+   "en": "Sign-in returned incomplete cookies",
+   "ja": "ログインで返された Cookie が不完全です",
+   "ko": "로그인 응답의 Cookie가 불완전합니다"
   },
   {
    "zh": "白天或亮环境看片：整体提亮一些。",
@@ -17424,14 +17616,16 @@
    "src": "qml/SettingsPage.qml",
    "zh-TW": "直播畫面節奏",
    "en": "Stream rhythm",
-   "ja": "配信映像のリズム"
+   "ja": "配信映像のリズム",
+   "ko": "방송 영상 리듬"
   },
   {
    "zh": "直播软件兼容组件",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "直播軟體相容元件",
    "en": "Streaming app compatibility",
-   "ja": "配信ソフト互換コンポーネント"
+   "ja": "配信ソフト互換コンポーネント",
+   "ko": "방송 앱 호환 구성 요소"
   },
   {
    "zh": "相关性 {:.2f}，建议偏移 {} ms",
@@ -17452,9 +17646,10 @@
   {
    "zh": "相关推荐",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "相關推薦",
+   "en": "Related videos",
+   "ja": "関連動画",
+   "ko": "관련 동영상"
   },
   {
    "zh": "相对人脸大小；负值向内收",
@@ -17483,23 +17678,26 @@
   {
    "zh": "短链格式无效",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "短鏈格式無效",
+   "en": "Invalid short link",
+   "ja": "短縮 URL の形式が無効です",
+   "ko": "잘못된 단축 링크"
   },
   {
    "zh": "短链没有返回跳转地址",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "短鏈沒有返回跳轉地址",
+   "en": "Short link did not return a redirect",
+   "ja": "短縮 URL から転送先が返されませんでした",
+   "ko": "단축 링크가 리디렉션 주소를 반환하지 않았습니다"
   },
   {
    "zh": "短链解析失败：",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "短鏈解析失敗：",
+   "en": "Short link resolution failed:",
+   "ja": "短縮 URL の解決に失敗：",
+   "ko": "단축 링크 해석 실패:"
   },
   {
    "zh": "码率",
@@ -17824,9 +18022,10 @@
   {
    "zh": "等待扫码",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "等待掃碼",
+   "en": "Waiting for scan",
+   "ja": "スキャン待ち",
+   "ko": "스캔 대기 중"
   },
   {
    "zh": "等待样本",
@@ -18033,7 +18232,8 @@
    "src": "qml/SettingsPage.qml",
    "zh-TW": "系統層級元件是舊版本，以系統管理員執行的 OBS 等直播軟體會看不到畫面；請點擊「更新元件」",
    "en": "The system components are an older version: OBS and other streaming apps run as administrator will show no picture. Click “Update components”.",
-   "ja": "システムコンポーネントが古いバージョンです。管理者として実行する OBS などでは映像が表示されません。「コンポーネントを更新」を押してください。"
+   "ja": "システムコンポーネントが古いバージョンです。管理者として実行する OBS などでは映像が表示されません。「コンポーネントを更新」を押してください。",
+   "ko": "시스템 구성 요소가 이전 버전입니다. 관리자 권한 OBS 등에서는 영상이 나오지 않습니다. '구성 요소 업데이트'를 누르세요"
   },
   {
    "zh": "系统编码器初始化失败：{}",
@@ -18190,16 +18390,18 @@
   {
    "zh": "继续上次播放（%1）",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "繼續上次播放（%1）",
+   "en": "Resume (%1)",
+   "ja": "続きから再生（%1）",
+   "ko": "이어서 재생 (%1)"
   },
   {
    "zh": "继续下滑加载更多评论",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "繼續下滑加載更多評論",
+   "en": "Scroll down to load more comments",
+   "ja": "下にスクロールしてコメントを追加読み込み",
+   "ko": "아래로 스크롤하여 댓글 더 불러오기"
   },
   {
    "zh": "继续导出",
@@ -18284,16 +18486,18 @@
   {
    "zh": "缺少 cid",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "缺少 cid",
+   "en": "Missing cid",
+   "ja": "cid がありません",
+   "ko": "cid 없음"
   },
   {
    "zh": "缺少作者标识",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "缺少作者標識",
+   "en": "Missing author ID",
+   "ja": "投稿者 ID がありません",
+   "ko": "작성자 ID 없음"
   },
   {
    "zh": "缺少此字幕格式的解码器",
@@ -18706,9 +18910,10 @@
   {
    "zh": "自动倍率只支持 DLSS 帧生成和 NVIDIA VFG",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "自動倍率只支持 DLSS 幀生成和 NVIDIA VFG",
+   "en": "Automatic multiplier supports DLSS Frame Generation and NVIDIA VFG only",
+   "ja": "自動倍率は DLSS フレーム生成と NVIDIA VFG のみ対応します",
+   "ko": "자동 배율은 DLSS 프레임 생성과 NVIDIA VFG만 지원합니다"
   },
   {
    "zh": "自动去除",
@@ -18809,9 +19014,10 @@
   {
    "zh": "自动选择倍率",
    "src": "qml/NodePage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "自動選擇倍率",
+   "en": "Automatic multiplier",
+   "ja": "倍率を自動選択",
+   "ko": "자동 배율 선택"
   },
   {
    "zh": "自动选择像素格式",
@@ -18872,9 +19078,10 @@
   {
    "zh": "自动（最高画质）",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "自動（最高畫質）",
+   "en": "Auto (highest quality)",
+   "ja": "自動（最高画質）",
+   "ko": "자동 (최고 화질)"
   },
   {
    "zh": "自动（独立显卡）",
@@ -18913,7 +19120,8 @@
    "src": "qml/SettingsPage.qml",
    "zh-TW": "自動：跟隨直播軟體為攝影機選擇的影格率（如 OBS 設為 60 或 120），補幀 3X、4X 時按均勻時間挑選影格；固定值為上限。輸出SDR視訊，聲音請另外擷取；不含XeSS顯示端產生的影格",
    "en": "Auto: follows the frame rate the streaming app chose for the camera (such as 60 or 120 in OBS); with 3X or 4X frame generation, frames are taken at even times. A fixed value is a cap. SDR video; capture audio separately. Frames generated by the XeSS presentation backend are not included.",
-   "ja": "自動：配信ソフトがカメラに選んだフレームレート（OBS の 60 や 120 など）に合わせ、フレーム生成 3X・4X では均等な間隔でフレームを選びます。固定値は上限です。SDR 映像を出力します。音声は別途取り込んでください。XeSS の表示側で生成されたフレームは含まれません。"
+   "ja": "自動：配信ソフトがカメラに選んだフレームレート（OBS の 60 や 120 など）に合わせ、フレーム生成 3X・4X では均等な間隔でフレームを選びます。固定値は上限です。SDR 映像を出力します。音声は別途取り込んでください。XeSS の表示側で生成されたフレームは含まれません。",
+   "ko": "자동: 방송 앱이 카메라에 설정한 FPS(예: OBS 60 또는 120)를 따릅니다. 3X·4X 프레임 생성 시 균등한 시간 간격의 프레임을 선택합니다. 고정값은 상한입니다. SDR 영상만 출력하며 오디오는 별도로 캡처하세요. XeSS 표시 백엔드에서 생성된 프레임은 포함되지 않습니다"
   },
   {
    "zh": "自定义",
@@ -19512,91 +19720,104 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機",
    "en": "Virtual camera",
-   "ja": "仮想カメラ"
+   "ja": "仮想カメラ",
+   "ko": "가상 카메라"
   },
   {
    "zh": "虚拟摄像机GPU提交栅栏无效",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機GPU提交柵欄無效",
    "en": "Virtual camera received an invalid GPU submission fence.",
-   "ja": "仮想カメラの GPU 送信フェンスが無効です。"
+   "ja": "仮想カメラの GPU 送信フェンスが無効です。",
+   "ko": "가상 카메라의 GPU 제출 펜스가 잘못되었습니다"
   },
   {
    "zh": "虚拟摄像机GPU输出初始化失败",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機GPU輸出初始化失敗",
    "en": "Virtual camera GPU output could not initialize.",
-   "ja": "仮想カメラの GPU 出力を初期化できませんでした。"
+   "ja": "仮想カメラの GPU 出力を初期化できませんでした。",
+   "ko": "가상 카메라 GPU 출력을 초기화하지 못했습니다"
   },
   {
    "zh": "虚拟摄像机卸载失败，请查看日志",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機解除安裝失敗，請查看記錄",
    "en": "Could not remove the virtual camera. See the log.",
-   "ja": "仮想カメラを削除できませんでした。ログを確認してください。"
+   "ja": "仮想カメラを削除できませんでした。ログを確認してください。",
+   "ko": "가상 카메라 제거에 실패했습니다. 로그를 확인하세요"
   },
   {
    "zh": "虚拟摄像机工作线程初始化失败",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機工作執行緒初始化失敗",
    "en": "Virtual camera worker could not start.",
-   "ja": "仮想カメラのワーカーを開始できませんでした。"
+   "ja": "仮想カメラのワーカーを開始できませんでした。",
+   "ko": "가상 카메라 작업 스레드를 시작하지 못했습니다"
   },
   {
    "zh": "虚拟摄像机已启用，在直播软件中选择 Veyra Virtual Camera",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機已啟用，請在直播軟體中選擇 Veyra Virtual Camera",
    "en": "Virtual camera enabled. Select Veyra Virtual Camera in your streaming app.",
-   "ja": "仮想カメラを有効にしました。配信ソフトで Veyra Virtual Camera を選択してください。"
+   "ja": "仮想カメラを有効にしました。配信ソフトで Veyra Virtual Camera を選択してください。",
+   "ko": "가상 카메라가 켜졌습니다. 방송 앱에서 Veyra Virtual Camera를 선택하세요"
   },
   {
    "zh": "虚拟摄像机无法访问显卡",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機無法存取顯示卡",
    "en": "Virtual camera could not access the graphics device.",
-   "ja": "仮想カメラが GPU にアクセスできません。"
+   "ja": "仮想カメラが GPU にアクセスできません。",
+   "ko": "가상 카메라가 그래픽 장치에 접근하지 못했습니다"
   },
   {
    "zh": "虚拟摄像机注册失败，请查看日志",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機註冊失敗，請查看記錄",
    "en": "Virtual camera registration failed. See the log.",
-   "ja": "仮想カメラの登録に失敗しました。ログを確認してください。"
+   "ja": "仮想カメラの登録に失敗しました。ログを確認してください。",
+   "ko": "가상 카메라 등록에 실패했습니다. 로그를 확인하세요"
   },
   {
    "zh": "虚拟摄像机组件不完整，请完整解压Veyra软件包",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機元件不完整，請完整解壓縮Veyra軟體套件",
    "en": "Virtual camera components are missing. Extract the complete Veyra package.",
-   "ja": "仮想カメラのコンポーネントが不足しています。Veyra パッケージをすべて展開してください。"
+   "ja": "仮想カメラのコンポーネントが不足しています。Veyra パッケージをすべて展開してください。",
+   "ko": "가상 카메라 구성 요소가 없습니다. Veyra 패키지 전체를 압축 해제하세요"
   },
   {
    "zh": "虚拟摄像机设备已卸载",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機裝置已解除安裝",
    "en": "Virtual camera device removed.",
-   "ja": "仮想カメラデバイスを削除しました。"
+   "ja": "仮想カメラデバイスを削除しました。",
+   "ko": "가상 카메라 장치를 제거했습니다"
   },
   {
    "zh": "虚拟摄像机输出尺寸超出范围（最大8192边长、约3355万像素）",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機輸出尺寸超出範圍（最長邊8192、約3355萬像素）",
    "en": "Virtual camera output exceeds the size limit (8192 per side, about 33.55 million pixels).",
-   "ja": "仮想カメラの出力サイズが上限を超えています（各辺8192、約3355万画素）。"
+   "ja": "仮想カメラの出力サイズが上限を超えています（各辺8192、約3355万画素）。",
+   "ko": "가상 카메라 출력 크기가 제한을 초과했습니다(한 변 최대 8192, 약 3355만 픽셀)"
   },
   {
    "zh": "虚拟摄像机：无法读取输出画面",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機：無法讀取輸出畫面",
    "en": "Virtual camera: could not read the output frame.",
-   "ja": "仮想カメラ：出力フレームを読み取れませんでした。"
+   "ja": "仮想カメラ：出力フレームを読み取れませんでした。",
+   "ko": "가상 카메라: 출력 프레임을 읽지 못했습니다"
   },
   {
    "zh": "虚拟摄像机：显卡已断开，请重新打开播放内容",
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "虛擬攝影機：顯示卡已中斷，請重新開啟播放內容",
    "en": "Virtual camera: graphics device disconnected. Reopen the media.",
-   "ja": "仮想カメラ：GPU が切断されました。メディアを開き直してください。"
+   "ja": "仮想カメラ：GPU が切断されました。メディアを開き直してください。",
+   "ko": "가상 카메라: 그래픽 장치 연결이 끊겼습니다. 미디어를 다시 여세요"
   },
   {
    "zh": "补帧",
@@ -19753,9 +19974,10 @@
   {
    "zh": "表情",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "表情",
+   "en": "Emojis",
+   "ja": "絵文字",
+   "ko": "이모티콘"
   },
   {
    "zh": "裁剪范围超出画面",
@@ -19792,30 +20014,34 @@
   {
    "zh": "视频信息",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "視頻信息",
+   "en": "Video information",
+   "ja": "動画情報",
+   "ko": "동영상 정보"
   },
   {
    "zh": "视频信息接口返回错误码 {}",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "視頻信息接口返回錯誤碼 {}",
+   "en": "Video information API returned error code {}",
+   "ja": "動画情報 API のエラーコード {}",
+   "ko": "동영상 정보 API 오류 코드 {}"
   },
   {
    "zh": "视频信息里没有 aid",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "視頻信息里沒有 aid",
+   "en": "Video information has no aid",
+   "ja": "動画情報に aid がありません",
+   "ko": "동영상 정보에 aid가 없습니다"
   },
   {
    "zh": "视频信息里没有 cid",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "視頻信息里沒有 cid",
+   "en": "Video information has no cid",
+   "ja": "動画情報に cid がありません",
+   "ko": "동영상 정보에 cid가 없습니다"
   },
   {
    "zh": "视频初始化失败，请查看对应组件的诊断日志",
@@ -19908,9 +20134,10 @@
   {
    "zh": "视频流地址为空",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "視頻流地址為空",
+   "en": "Video stream URL is empty",
+   "ja": "映像ストリーム URL が空です",
+   "ko": "비디오 스트림 URL이 비어 있습니다"
   },
   {
    "zh": "视频编码",
@@ -19995,9 +20222,10 @@
   {
    "zh": "视频默认样式",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "視頻默認樣式",
+   "en": "Default video style",
+   "ja": "動画の既定スタイル",
+   "ko": "동영상 기본 스타일"
   },
   {
    "zh": "解码",
@@ -20026,9 +20254,10 @@
   {
    "zh": "触发风控，请稍后再试",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "觸發風控，請稍后再試",
+   "en": "Request rejected; try again later",
+   "ja": "リクエストが制限されました。後で再試行してください",
+   "ko": "요청이 제한되었습니다. 나중에 다시 시도하세요"
   },
   {
    "zh": "让主机切换到串流分辨率",
@@ -20233,44 +20462,50 @@
   {
    "zh": "评论",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "評論",
+   "en": "Comments",
+   "ja": "コメント",
+   "ko": "댓글"
   },
   {
    "zh": "评论内容为空",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "評論內容為空",
+   "en": "Comment is empty",
+   "ja": "コメントが空です",
+   "ko": "댓글 내용이 비어 있습니다"
   },
   {
    "zh": "评论太长（上限 1000 字）",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "評論太長（上限 1000 字）",
+   "en": "Comment is too long (1000 characters maximum)",
+   "ja": "コメントが長すぎます（上限 1000 文字）",
+   "ko": "댓글이 너무 깁니다(최대 1000자)"
   },
   {
    "zh": "评论已删除",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "評論已刪除",
+   "en": "Comment deleted",
+   "ja": "コメントを削除しました",
+   "ko": "댓글을 삭제했습니다"
   },
   {
    "zh": "评论已发送",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "評論已發送",
+   "en": "Comment posted",
+   "ja": "コメントを投稿しました",
+   "ko": "댓글을 게시했습니다"
   },
   {
    "zh": "评论标识无效",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "評論標識無效",
+   "en": "Invalid comment ID",
+   "ja": "コメント ID が無効です",
+   "ko": "잘못된 댓글 ID"
   },
   {
    "zh": "识别 %1 fps 内容",
@@ -20391,9 +20626,10 @@
   {
    "zh": "该视频没有可播放的分P",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "該視頻沒有可播放的分P",
+   "en": "This video has no playable parts",
+   "ja": "この動画には再生可能なパートがありません",
+   "ko": "이 동영상에는 재생 가능한 파트가 없습니다"
   },
   {
    "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
@@ -20552,7 +20788,8 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "請在 Windows 彈出視窗確認系統管理員安裝",
    "en": "Approve the administrator installation in the Windows prompt.",
-   "ja": "Windows の確認画面で管理者インストールを許可してください。"
+   "ja": "Windows の確認画面で管理者インストールを許可してください。",
+   "ko": "Windows 승인 창에서 관리자 설치를 허용하세요"
   },
   {
    "zh": "请在视频输入设备列表选择这张 BMD 卡对应的 HDMI/SDI 输入口，再选择自动检测或匹配信号的手动制式。Driver 条目保留驱动当前输入。",
@@ -20605,9 +20842,10 @@
   {
    "zh": "请求失败",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "請求失敗",
+   "en": "Request failed",
+   "ja": "リクエストに失敗しました",
+   "ko": "요청 실패"
   },
   {
    "zh": "请求码率",
@@ -20620,9 +20858,10 @@
   {
    "zh": "请用 B 站手机客户端扫码",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "請用 B 站手機客戶端掃碼",
+   "en": "Scan with the Bilibili mobile app",
+   "ja": "Bilibili のスマートフォンアプリでスキャンしてください",
+   "ko": "Bilibili 모바일 앱으로 스캔하세요"
   },
   {
    "zh": "请等待当前图片导出完成",
@@ -20931,9 +21170,10 @@
   {
    "zh": "账号下没有收藏夹",
    "src": "src/media/BilibiliApi.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "賬號下沒有收藏夾",
+   "en": "No favorites folders in this account",
+   "ja": "このアカウントにはお気に入りフォルダーがありません",
+   "ko": "이 계정에 즐겨찾기 폴더가 없습니다"
   },
   {
    "zh": "账号数字 ID 或 8 字节 Base64，不是昵称；登录 PSN 后自动填入",
@@ -21211,7 +21451,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "跟隨動態元資料",
    "en": "Follow dynamic metadata",
-   "ja": "動的メタデータに追従"
+   "ja": "動的メタデータに追従",
+   "ko": "동적 메타데이터 추적"
   },
   {
    "zh": "跟随增强预设",
@@ -21360,16 +21601,18 @@
   {
    "zh": "轮询失败：",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "輪詢失敗：",
+   "en": "Polling failed:",
+   "ja": "ポーリングに失敗：",
+   "ko": "폴링 실패:"
   },
   {
    "zh": "轮询接口返回错误码 {}",
    "src": "src/media/BilibiliResolver.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "輪詢接口返回錯誤碼 {}",
+   "en": "Polling API returned error code {}",
+   "ja": "ポーリング API のエラーコード {}",
+   "ko": "폴링 API 오류 코드 {}"
   },
   {
    "zh": "软件",
@@ -21416,7 +21659,8 @@
    "src": "qml/Veyra/XboxSourceDialog.qml",
    "zh-TW": "軟體視訊解碼",
    "en": "Software video decoding",
-   "ja": "ソフトウェア動画デコード"
+   "ja": "ソフトウェア動画デコード",
+   "ko": "소프트웨어 비디오 디코딩"
   },
   {
    "zh": "软件解码",
@@ -21983,7 +22227,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "這個數值是顯示器的上限宣告，不是實測，因此曲線未依它縮放。",
    "en": "This figure is the display's ceiling declaration, not a measurement, so the curve is not scaled by it.",
-   "ja": "この値はディスプレイの上限宣言であり実測値ではないため、カーブのスケーリングには使用していません。"
+   "ja": "この値はディスプレイの上限宣言であり実測値ではないため、カーブのスケーリングには使用していません。",
+   "ko": "이 수치는 디스플레이가 보고한 상한이며 측정값이 아니므로 곡선 크기 조정에 사용하지 않습니다"
   },
   {
    "zh": "这个模式还没有预设。",
@@ -22294,7 +22539,8 @@
    "src": "qml/BilibiliPage.qml",
    "zh-TW": "退出",
    "en": "Quit",
-   "ja": "終了"
+   "ja": "終了",
+   "ko": "종료"
   },
   {
    "zh": "退出全屏，恢复普通窗口操作",
@@ -22443,9 +22689,10 @@
   {
    "zh": "速度",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "速度",
+   "en": "Speed",
+   "ja": "速度",
+   "ko": "속도"
   },
   {
    "zh": "部分轨道当前封装装不下，未保留（详见队列说明）",
@@ -23340,7 +23587,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "需要先開啟上面的 HDR 曲線，否則沒有可移動的滾降",
    "en": "Turn the HDR curve on first; without it there is no roll-off to move",
-   "ja": "先に上の HDR カーブをオンにしてください（オフではロールオフがありません）"
+   "ja": "先に上の HDR カーブをオンにしてください（オフではロールオフがありません）",
+   "ko": "먼저 위 HDR 곡선을 켜세요. 꺼져 있으면 이동할 롤오프가 없습니다"
   },
   {
    "zh": "需要先配对才能唤醒。",
@@ -23536,9 +23784,10 @@
   {
    "zh": "音频已中断超过 5 秒，已暂停播放，请重新打开该视频",
    "src": "src/engine/EngineController.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "音頻已中斷超過 5 秒，已暫停播放，請重新打開該視頻",
+   "en": "Audio stalled for over 5 seconds. Playback paused; reopen the video",
+   "ja": "音声が 5 秒以上途切れたため再生を一時停止しました。動画を開き直してください",
+   "ko": "오디오가 5초 이상 중단되어 재생을 일시 정지했습니다. 동영상을 다시 여세요"
   },
   {
    "zh": "音频恢复等待采集驱动停止；稍后重试",
@@ -23583,9 +23832,10 @@
   {
    "zh": "音频编码",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "音頻編碼",
+   "en": "Audio encoding",
+   "ja": "音声エンコード",
+   "ko": "오디오 인코딩"
   },
   {
    "zh": "音频补偿初始化失败",
@@ -24078,9 +24328,10 @@
   {
    "zh": "预设库自动倍率字段损坏",
    "src": "src/engine/PresetLibrary.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "預設庫自動倍率字段損壞",
+   "en": "Invalid automatic multiplier field in preset library",
+   "ja": "プリセットライブラリの自動倍率フィールドが破損しています",
+   "ko": "프리셋 라이브러리의 자동 배율 필드가 손상되었습니다"
   },
   {
    "zh": "预设库节点取值超出范围",
@@ -24437,9 +24688,10 @@
   {
    "zh": "首页推荐",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "首頁推薦",
+   "en": "Home recommendations",
+   "ja": "ホームのおすすめ",
+   "ko": "홈 추천"
   },
   {
    "zh": "驱动拒绝所选采集格式（0x{:08X}），请重新选择。",
@@ -24804,9 +25056,10 @@
   {
    "zh": "默认关闭：播放结束停在播放画面，点播放按钮从头重播",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "默認關閉：播放結束停在播放畫面，點播放按鈕從頭重播",
+   "en": "Off by default: stay on the playback screen when finished; press Play to restart",
+   "ja": "既定はオフです。再生終了後も再生画面に残り、再生ボタンで最初から再生します",
+   "ko": "기본값 꺼짐: 재생이 끝나도 재생 화면을 유지합니다. 재생 버튼을 누르면 처음부터 시작합니다"
   },
   {
    "zh": "默认只列常用帧率：24、25、30、50、60、100、120、144、165、240（含 59.94 这类非整数帧率）。这张卡另外上报了 %1 个帧率",
@@ -24835,16 +25088,18 @@
   {
    "zh": "默认画质",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "默認畫質",
+   "en": "Default quality",
+   "ja": "既定画質",
+   "ko": "기본 화질"
   },
   {
    "zh": "默认画质是「上限」：实际取不高于此档的最高可用画质。",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "默認畫質是「上限」：實際取不高于此檔的最高可用畫質。",
+   "en": "Default quality is a ceiling: select the highest available quality at or below it",
+   "ja": "既定画質は上限です。それ以下で最も高い画質を選びます",
+   "ko": "기본 화질은 상한입니다. 이 수준 이하에서 사용 가능한 최고 화질을 선택합니다"
   },
   {
    "zh": "默认预设保存失败：",
@@ -24913,16 +25168,18 @@
   {
    "zh": "（从头开始）",
    "src": "src/ui/bridge/Bilibili.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "（從頭開始）",
+   "en": " (from beginning)",
+   "ja": "（最初から）",
+   "ko": " (처음부터)"
   },
   {
    "zh": "（会员）",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "（會員）",
+   "en": " (member)",
+   "ja": "（会員）",
+   "ko": " (회원)"
   },
   {
    "zh": "（加在 NR ",
@@ -24937,14 +25194,16 @@
    "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
    "zh-TW": "（處理尺寸 %1 × %2）",
    "en": " (processing size %1 × %2)",
-   "ja": "（処理サイズ %1 × %2）"
+   "ja": "（処理サイズ %1 × %2）",
+   "ko": " (처리 크기 %1 × %2)"
   },
   {
    "zh": "（大会员）",
    "src": "qml/BilibiliPage.qml",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "（大會員）",
+   "en": " (Premium)",
+   "ja": "（プレミアム会員）",
+   "ko": " (프리미엄 회원)"
   },
   {
    "zh": "（已修复 {} 帧缺失或倒退的时间戳）",
@@ -24997,9 +25256,10 @@
   {
    "zh": "（未登录，画质受限）",
    "src": "src/ui/bridge/Playback.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": ""
+   "zh-TW": "（未登錄，畫質受限）",
+   "en": " (not signed in; quality limited)",
+   "ja": "（未ログインのため画質制限あり）",
+   "ko": " (로그인하지 않아 화질 제한됨)"
   },
   {
    "zh": "（片源最亮 %1 nit、最亮帧平均 %2 nit）",
@@ -25014,7 +25274,8 @@
    "src": "qml/ProPage.qml",
    "zh-TW": "（片源最亮 %1 nit）",
    "en": "(source peak %1 nit)",
-   "ja": "（映像の最大 %1 nit）"
+   "ja": "（映像の最大 %1 nit）",
+   "ko": "(소스 최대 밝기 %1 nit)"
   },
   {
    "zh": "（终止码 {} / 错误 {}）",
@@ -25125,7 +25386,8 @@
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "；詳細原因見日誌",
    "en": "; see the log for details",
-   "ja": "。詳細はログを参照してください"
+   "ja": "。詳細はログを参照してください",
+   "ko": "; 자세한 내용은 로그를 확인하세요"
   },
   {
    "zh": "；默认“高”，同时运行游戏或其他重负载程序变慢时可改为“普通”",
@@ -25134,6 +25396,102 @@
    "en": "; High by default. If a game or other heavy program running alongside slows down, choose Normal",
    "ja": "；既定は「高」。同時に動かすゲームや重い処理が遅くなる場合は「通常」に変更してください",
    "ko": "; 기본값은 높음입니다. 함께 실행하는 게임이나 무거운 작업이 느려지면 보통으로 바꾸세요."
+  },
+  {
+   "zh": "B 站登录成功，可以播放会员画质",
+   "src": "src/ui/bridge/Bilibili.cpp",
+   "zh-TW": "B 站登錄成功，可以播放會員畫質",
+   "en": "Signed in to Bilibili; member quality is available",
+   "ja": "Bilibili にログインしました。会員向け画質を再生できます",
+   "ko": "Bilibili 로그인 완료. 회원 화질을 사용할 수 있습니다"
+  },
+  {
+   "zh": "Profile 5 的亮度信息在 RPU 里（不是 HDR10 元数据），推荐无法自动选档；下面的「跟随动态元数据」仍然可用",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "Profile 5 的亮度信息在 RPU 里（不是 HDR10 元數據），推薦無法自動選檔；下面的「跟隨動態元數據」仍然可用",
+   "en": "Profile 5 brightness is in the RPU, not HDR10 metadata; automatic preset recommendations are unavailable. Dynamic metadata following below still works",
+   "ja": "Profile 5 の輝度情報は HDR10 メタデータではなく RPU にあるため、自動プリセット推奨は使えません。下の動的メタデータ追従は使用できます",
+   "ko": "Profile 5 밝기 정보는 HDR10 메타데이터 대신 RPU에 있어 자동 프리셋 추천을 사용할 수 없습니다. 아래 동적 메타데이터 추적은 사용할 수 있습니다"
+  },
+  {
+   "zh": "。常见原因是硬件解码器分配内存失败（4K 片源居多）：关闭后重开播放器可恢复；若反复出现，可在 设置→播放 把解码改成「软件」",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "。常見原因是硬件解碼器分配內存失敗（4K 片源居多）：關閉后重開播放器可恢復；若反復出現，可在 設置→播放 把解碼改成「軟件」",
+   "en": ". Hardware decoding may have failed to allocate memory, especially for 4K. Restart the player; if it recurs, choose Software decoding in Settings → Playback",
+   "ja": "。特に 4K でハードウェアデコーダーのメモリ確保に失敗する場合があります。プレイヤーを再起動し、再発する場合は設定→再生でソフトウェアデコードを選んでください",
+   "ko": ". 특히 4K에서 하드웨어 디코더의 메모리 할당 실패가 원인일 수 있습니다. 플레이어를 다시 시작하고, 반복되면 설정→재생에서 소프트웨어 디코딩을 선택하세요"
+  },
+  {
+   "zh": "其它",
+   "src": "qml/BilibiliPage.qml",
+   "zh-TW": "其它",
+   "en": "Other",
+   "ja": "その他",
+   "ko": "기타"
+  },
+  {
+   "zh": "内容亮度超出屏幕能力",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "內容亮度超出屏幕能力",
+   "en": "Source brightness exceeds display capability",
+   "ja": "コンテンツの輝度が画面の能力を超えています",
+   "ko": "콘텐츠 밝기가 화면 성능을 초과합니다"
+  },
+  {
+   "zh": "单层",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "單層",
+   "en": "Single layer",
+   "ja": "単層",
+   "ko": "단일 레이어"
+  },
+  {
+   "zh": "增强层已关闭：重新打开当前文件后生效",
+   "src": "src/ui/bridge/Colour.cpp",
+   "zh-TW": "增強層已關閉：重新打開當前文件后生效",
+   "en": "Enhancement layer disabled; reopen the current file to apply",
+   "ja": "拡張レイヤーを無効にしました。現在のファイルを開き直すと適用されます",
+   "ko": "향상 레이어를 껐습니다. 현재 파일을 다시 열면 적용됩니다"
+  },
+  {
+   "zh": "增强层已开启：重新打开当前文件后生效",
+   "src": "src/ui/bridge/Colour.cpp",
+   "zh-TW": "增強層已開啟：重新打開當前文件后生效",
+   "en": "Enhancement layer enabled; reopen the current file to apply",
+   "ja": "拡張レイヤーを有効にしました。現在のファイルを開き直すと適用されます",
+   "ko": "향상 레이어를 켰습니다. 현재 파일을 다시 열면 적용됩니다"
+  },
+  {
+   "zh": "最近 10 秒内呈现提交间隔估算；只统计提交，不代表屏幕扫描",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "最近 10 秒內呈現提交間隔估算；只統計提交，不代表屏幕掃描",
+   "en": "Estimated from presentation submission intervals over the last 10 seconds; submissions only, not screen scanout",
+   "ja": "直近 10 秒の表示送信間隔による推定です。送信のみで、画面の走査を表すものではありません",
+   "ko": "최근 10초의 표시 제출 간격으로 추정합니다. 제출만 측정하며 화면 스캔을 나타내지 않습니다"
+  },
+  {
+   "zh": "稍后再看",
+   "src": "qml/BilibiliPage.qml",
+   "zh-TW": "稍后再看",
+   "en": "Watch Later",
+   "ja": "後で見る",
+   "ko": "나중에 볼 동영상"
+  },
+  {
+   "zh": "获取播放地址",
+   "src": "src/media/BilibiliApi.cpp",
+   "zh-TW": "獲取播放地址",
+   "en": "Get playback URL",
+   "ja": "再生 URL を取得",
+   "ko": "재생 URL 가져오기"
+  },
+  {
+   "zh": "这个视频没有弹幕",
+   "src": "qml/BilibiliPage.qml",
+   "zh-TW": "這個視頻沒有彈幕",
+   "en": "This video has no danmaku",
+   "ja": "この動画には弾幕がありません",
+   "ko": "이 동영상에는 탄막이 없습니다"
   }
  ]
 }

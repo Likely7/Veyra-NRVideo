@@ -18,6 +18,14 @@ VPage {
     signal requestPage(string page)
 
     // "home" | "popular" | "follow" | "history" | "fav" | "watchlater" | "search" | "detail"
+    FontMetrics { id: navMetrics; font.family: Theme.fontUi; font.pixelSize: 17 }
+    readonly property real railWidth: {
+        const labels = [qsTr("首页推荐"), qsTr("热门"), qsTr("关注动态"), qsTr("历史记录"),
+                        qsTr("我的收藏"), qsTr("稍后再看"), qsTr("搜索结果"), qsTr("设置")]
+        let widest = 0
+        for (let i = 0; i < labels.length; ++i) widest = Math.max(widest, navMetrics.advanceWidth(labels[i]))
+        return Math.max(100, Math.min(200, Math.ceil(widest) + 32))
+    }
     property string view: "home"
     property var cards: []
     // The grid iterates this ListModel instead of the array. Appending to a ListModel
@@ -1315,7 +1323,7 @@ VPage {
         // which is why each one fills instead of a spacer absorbing the remainder. A
         // taller window gives taller cards and the type grows with them.
         Layout.fillHeight: true
-        Layout.minimumHeight: 26
+        Layout.minimumHeight: 34
         // 卡片本身：默认比栏底稍深，悬停再亮一档，选中用强调色的柔和版。
         // The card: slightly darker than the rail by default, one step brighter on hover,
         // and the soft accent for the selected one.
@@ -1344,6 +1352,9 @@ VPage {
             width: parent.width - 10
             horizontalAlignment: Text.AlignHCenter
             text: navItem.label
+            wrapMode: Text.WordWrap
+            fontSizeMode: Text.Fit
+            minimumPixelSize: 11
             color: navItem.isActive ? Theme.accent : Theme.t2
             font.family: Theme.fontUi
             // 字号跟着卡片高度走，并夹住上下限：窗口很矮也不会小到看不清，
@@ -1372,7 +1383,8 @@ VPage {
 
         // ---- left rail ----
         Rectangle {
-            Layout.preferredWidth: 100
+            Layout.preferredWidth: root.railWidth
+            Layout.maximumWidth: root.railWidth
             Layout.fillHeight: true
             radius: 12
             color: Theme.card2
@@ -1655,12 +1667,12 @@ VPage {
                     boundsBehavior: Flickable.StopAtBounds
                     contentWidth: width
                     contentHeight: settingsColumn.implicitHeight
-                
+
                     ColumnLayout {
                         id: settingsColumn
                         width: parent.width
                         spacing: 16
-    
+
                         RowLayout {
                             Layout.fillWidth: true
                             Text {
@@ -1671,7 +1683,7 @@ VPage {
                             }
                             Item { Layout.fillWidth: true }
                         }
-    
+
                         Text {
                             Layout.fillWidth: true
                             wrapMode: Text.Wrap
@@ -1681,7 +1693,7 @@ VPage {
                             text: qsTr("默认画质是「上限」：实际取不高于此档的最高可用画质。"
                                        + "全部可用画质都高于此档时，取最低档。")
                         }
-    
+
                         Text { text: qsTr("默认画质"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
                         Flow {
                             Layout.fillWidth: true
@@ -1726,7 +1738,7 @@ VPage {
                                 }
                             }
                         }
-    
+
                         Text { text: qsTr("视频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
                         RowLayout {
                             spacing: 6
@@ -1762,7 +1774,7 @@ VPage {
                             }
                             Item { Layout.fillWidth: true }
                         }
-    
+
                         Text { text: qsTr("音频编码"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
                         RowLayout {
                             spacing: 6
@@ -1810,7 +1822,7 @@ VPage {
                             text: qsTr("Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；"
                                        + "选中的音轨不存在时自动回退到最高码率 AAC。")
                         }
-    
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 10
@@ -1837,7 +1849,7 @@ VPage {
                                 }
                             }
                         }
-    
+
                         // ---- danmaku appearance ----
                         // The engine already takes these four; they were hardcoded until now.
                         // Title and switch on one line, the note under it. The switch is the
@@ -1847,7 +1859,7 @@ VPage {
                             Layout.fillWidth: true
                             Layout.topMargin: 8
                             spacing: 4
-    
+
                             RowLayout {
                                 spacing: 8
                                 Text {
@@ -1872,7 +1884,7 @@ VPage {
                                     }
                                 }
                             }
-    
+
                             Text {
                                 Layout.fillWidth: true
                                 text: qsTr("打开视频即加载弹幕；关闭后新视频不带弹幕，详情页也可以单独开关")
@@ -1882,7 +1894,7 @@ VPage {
                                 font.pixelSize: 11
                             }
                         }
-    
+
                         // ---- 播放完毕后的行为 ----
                         // 默认关闭：播完停在播放画面上，按钮图标变回「播放」，再点即从头
                         // 重播。打开后播完自动回到视频详情。
@@ -1893,7 +1905,7 @@ VPage {
                             Layout.fillWidth: true
                             Layout.topMargin: 8
                             spacing: 4
-    
+
                             RowLayout {
                                 spacing: 8
                                 Text {
@@ -1910,7 +1922,7 @@ VPage {
                                     }
                                 }
                             }
-    
+
                             Text {
                                 Layout.fillWidth: true
                                 text: qsTr("默认关闭：播放结束停在播放画面，点播放按钮从头重播")
@@ -1943,7 +1955,7 @@ VPage {
                             font.family: Theme.fontUi
                             font.pixelSize: 12
                             }
-    
+
                             RowLayout {
                             spacing: 8
                             Text {
@@ -1967,7 +1979,7 @@ VPage {
                             font.pixelSize: 12
                             }
                         }
-    
+
 // 标题行：名称、当前色块、两个按钮。
 // Header row: label, current swatch, and the two buttons.
 RowLayout {
@@ -2100,7 +2112,7 @@ RowLayout {
 
 
 
-    
+
                         // A compact stepper: the value is shown between two buttons, which
                         // keeps a 50..250 range usable without a full-width slider.
                         component StepRow: RowLayout {
@@ -2112,7 +2124,7 @@ RowLayout {
                             property int lowest
                             property int highest
                             property string suffix
-    
+
                             spacing: 8
                             Text {
                                 Layout.preferredWidth: 84
@@ -2150,7 +2162,7 @@ RowLayout {
                             }
                             Item { Layout.fillWidth: true }
                         }
-    
+
                         StepRow {
                             label: qsTr("大小")
                             prefKey: "danmakuScale"
@@ -2175,7 +2187,7 @@ RowLayout {
                             current: veyra.preferences.danmakuArea ?? 50
                             step: 10; lowest: 10; highest: 100; suffix: "%"
                         }
-    
+
                         Text {
                             Layout.fillWidth: true
                             wrapMode: Text.Wrap
@@ -2185,7 +2197,7 @@ RowLayout {
                             text: qsTr("显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。"
                                        + "防遮挡需要 B 站的额外蒙版数据，目前未支持。")
                         }
-    
+
                         Item { Layout.fillHeight: true }
                     }
                 }

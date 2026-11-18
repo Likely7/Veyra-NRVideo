@@ -17,11 +17,6 @@
 #include <cstdint>
 #include <cstring>
 
-// NOTE: <libavutil/dovi_meta.h> must already be visible through an
-// `extern "C"` include (FFmpeg marks its entry points with C linkage only when
-// the caller wraps the header). Including it here would not add C linkage when
-// another translation-unit header pulled it in first, and av_dovi_metadata_alloc
-// would then fail to link under its C++ mangled name.
 extern "C" {
 #include <libavutil/dovi_meta.h>
 #include <libavutil/mem.h>
@@ -30,26 +25,8 @@ extern "C" {
 
 namespace veyra::source {
 
-// Equivalent of av_dovi_metadata_alloc() without its exported symbol (the header
-// reaches this translation unit through a dependency that does not wrap it in
-// extern "C", so the import name would be C++-mangled). Layout follows
-// libavutil/dovi_meta.h: the struct is a header holding offsets, the payload
-// lives behind it.
-inline AVDOVIMetadata* allocDoviMetadata() {
-    const size_t headerBytes = sizeof(AVDOVIRpuDataHeader);
-    const size_t mappingBytes = sizeof(AVDOVIDataMapping);
-    const size_t colorBytes = sizeof(AVDOVIColorMetadata);
-    const size_t total = sizeof(AVDOVIMetadata) + headerBytes + mappingBytes + colorBytes;
-    auto* meta = static_cast<AVDOVIMetadata*>(av_mallocz(total));
-    if (meta == nullptr) return nullptr;
-    meta->header_offset = sizeof(AVDOVIMetadata);
-    meta->mapping_offset = meta->header_offset + headerBytes;
-    meta->color_offset = meta->mapping_offset + mappingBytes;
-    meta->ext_block_offset = meta->color_offset + colorBytes;
-    meta->ext_block_size = 0;
-    meta->num_ext_blocks = 0;
-    return meta;
-}
+// Allocate through FFmpeg so alignment and extension-block layout track its ABI.
+inline AVDOVIMetadata* allocDoviMetadata() { return av_dovi_metadata_alloc(nullptr); }
 
 // Copies libdovi's parsed fields into `out` (allocated with
 // av_dovi_metadata_alloc by the caller). Returns false when the payload is not a
@@ -163,7 +140,9 @@ inline bool decodeRpuWithLibDovi(const uint8_t* data, size_t size, AVDOVIMetadat
                 if (order < 1 || order > 3) break;
                 curve->mmr_order[i] = uint8_t(order);
                 if (size_t(i) < mmr->mmr_constant.len)
-                    curve->mmr_constant[i] = int64_t(mmr->mmr_constant.data[i]);
+                    curve->mmr_constant[i] =
+                        ((size_t(i) < mmr->mmr_constant_int.len ? mmr->mmr_constant_int.data[i] : 0) * (int64_t(1) << coefLog2Denom))
+                        + int64_t(mmr->mmr_constant.data[i]);
                 // mmr_coef is a 3D buffer: per piece, an array of per-order weight
                 // arrays (seven weights each).
                 // Same split as the polynomial coefficients: mmr_coef holds the

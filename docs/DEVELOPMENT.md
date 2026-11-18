@@ -1,13 +1,13 @@
 # 开发与验证入口
 
-更新：2026-11-18。[当前状态](CURRENT_STATUS.md) · [本轮整合](MAIN_INTEGRATION_2026-11-18.md) · [执行规则](../AGENTS.md)。
+更新：2026-11-18。[当前状态](CURRENT_STATUS.md) · [本轮整合](PR_INTEGRATION_2026-11-18.md) · [执行规则](../AGENTS.md)。
 
 | 用途 | 当前入口 |
 |---|---|
 | main源码 | `E:/项目/Veyra/worktrees/main-claude-anr-20261113` |
-| 当前构建 | `E:/项目/Veyra/build/codex-main-integration-20261118` |
-| 当前私有运行/配置 | `E:/项目/Veyra/tests/codex-main-integration-20261118` |
-| 本轮日志与报告 | `E:/项目/Veyra/logs/codex-main-integration-20261118`、`reports/codex-main-integration-20261118` |
+| 当前构建 | `E:/项目/Veyra/build/codex-pr-integration-20261118/app` |
+| 当前私有运行/配置 | `E:/项目/Veyra/tests/codex-pr-integration-20261118` |
+| 本轮日志与报告 | `E:/项目/Veyra/logs/codex-pr-integration-20261118`、`reports/codex-pr-integration-20261118` |
 | 共用Git | `C:/Users/123/Desktop/Veyra DLSS Video Player/.git`，保留 |
 | 正式2.1.9原包 | `E:/项目/Veyra/releases/codex-release-2.1.9-20261115` |
 | 既有虚拟摄像机附加包 | `E:/项目/Veyra/releases/claude-release-2.1.9-virtual-camera-20261117` |
@@ -18,7 +18,7 @@
 ## 构建
 
 ```powershell
-py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-main-integration-20261118 --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --label 2.1.9-main-integration-test --jobs 2 veyra_qml_ui
+py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-pr-integration-20261118 --build-dir E:/项目/Veyra/build/codex-pr-integration-20261118/app --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --label 2.1.9-pr-integration-test --jobs 2 --option VEYRA_LIBDOVI_ROOT=E:/项目/Veyra/deps/codex-pr-integration-20261118/libdovi --option VEYRA_RP_CHIAKI_SOURCE_DIR=E:/项目/Veyra/deps/codex-pr-integration-20261118/chiaki-stage --option VEYRA_RP_CHIAKI_VERIFY_DIR=E:/项目/Veyra/deps/core/chiaki-source veyra_qml_ui
 ```
 
 首次/变更CMake选项或显示版本传`--reconfigure`。保持构建并发≤2、单次≤900秒。脚本读取`logs/pr64-avermedia-20261019/build-20261019-094942/receipt.json`固定依赖参数，该小回执不能按旧日志删除。保留patched FFmpeg与实际对应源码/许可。
@@ -37,4 +37,12 @@ py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task code
 
 已合main且无在用进程/本地文件的干净工作树可在tip映射和verify过的bundle后关闭，恢复见[分支归档](BRANCH_ARCHIVE.md)。保留脏树、暂停研究、依赖与正式资产；不把路径字节相加冒充实际磁盘回收。
 
-当前main构建仍是本地整合测试版，版本2.1.9。本轮没有新push/Release或改写已发布下载资产授权。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
+当前main构建仍是本地整合测试版，版本2.1.9。本轮已授权源码整合到 GitHub main；没有新 Release 或改写已发布下载资产授权。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
+
+## 新增外部依赖（#136 / #133）
+
+完整 Windows 构建默认启用 libdovi，必须提供 `VEYRA_LIBDOVI_ROOT`（include/libdovi、lib、bin、MIT LICENSE）；不得把贡献 PR 的 DLL/LIB 合进源码。固定来源 quietvoid/dovi_tool `d1abe0e27ff2c7ab3339614d06db9f8a058af6b2`，libdovi 3.4.0，Rust 1.88+；用其 cbindgen.toml 生成匹配头，`cargo rustc --manifest-path dolby_vision/Cargo.toml --lib --release --locked --features capi --crate-type cdylib -- -Cpanic=abort`。DLL 与 MIT LICENSE 跟随用户包，SDK/导入库不打包。仅精简开发构建可显式关闭 VEYRA_ENABLE_LIBDOVI，不能把关闭版当完整交付。
+
+PS5 使用新的独立 Chiaki stage，按 `scripts/remoteplay/patches/0001..0003` 顺序打补丁并运行 verify-chiaki-stage.py；保留原 stage。nanopb 生成器需把依赖包的 protobuf/tools/protoc 放入**子进程** PATH。不得改全局 PATH 或复用未核验的生成缓存。
+
+Linux 独立 OBS 模块与验证见 [OBS_FILTER.md](OBS_FILTER.md)。

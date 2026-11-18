@@ -10,6 +10,7 @@
 #include "veyra/media/FFmpegVideoDecoder.h"
 
 #include <iostream>
+#include <filesystem>
 #include <algorithm>
 #include <map>
 #include <string>
@@ -362,9 +363,11 @@ bool softwareScalingTest(const ElementaryStream& stream)
     return ok && frames > 0;
 }
 
-int main(int argc, char** argv)
+int wmain(int argc, wchar_t** argv)
 {
-    const char* path = argc > 1 ? argv[1] : "loop/local/fixed_clips/test_h264_1080p.mp4";
+    const auto utf8Path = std::filesystem::path(argc > 1 ? argv[1] : L"loop/local/fixed_clips/test_h264_1080p.mp4").u8string();
+    const std::string pathStorage(utf8Path.begin(),utf8Path.end());
+    const char* path = pathStorage.c_str();
     ElementaryStream stream;
     std::string error;
     if (!loadAnnexB(path, stream, error)) {

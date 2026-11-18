@@ -1460,11 +1460,32 @@ __declspec(noinline) void testDedupModeMigration() {
               "dedup migration: an unknown mode is refused without overwriting the valid preset");
     }
 }
+__declspec(noinline) void testAutomaticMultiplierCompatibility() {
+    auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
+    check(session->select(ChainMode::Node), "auto FG: initialize editor mode");
+    auto editor=std::make_shared<NodeEditorDocument>();
+    editor->nodes=session->configurations[1].chain;
+    check(editor->layout.initialize(editor->nodes).accepted,"auto FG: initialize editor layout");
+    editor->globals=static_cast<const ChainGlobalSettings&>(session->configurations[1]);
+    editor->nodes.fgAutoMultiplier=true;
+    session->configurations[1].editor=editor;
+    session->configurations[0].chain.fgAutoMultiplier=true;
+    const auto path=scratch(L"auto-fg-session.v1");
+    ChainSessionStore writer(path);
+    check(writer.save(*session),"auto FG: session v17 with independent editor serializes");
+    auto restored=std::make_unique<ChainSession>();ChainSessionStore reader(path);
+    check(reader.load(*restored)&&*restored==*session,"auto FG: list and editor flags survive restart");
+    PresetLibrary library(scratch(L"auto-fg-library.v1"));library.setIncludeBuiltins(false);library.load();
+    PresetEntry entry;entry.name=L"auto FG";entry.kind=ChainMode::Node;
+    entry.chain=session->configurations[1].chain;entry.nodeConfiguration=session->configurations[1];
+    check(library.put(entry),"auto FG: preset with editor v17 serializes");
+}
 int main(int argc,char** argv) {
     if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
         testDedupModeMigration();testFlowStorage();testFlowApplication();return failures?1:0;
     }
     testDedupModeMigration();
+    testAutomaticMultiplierCompatibility();
     testOutputControlStorage();
     testEffectNodeStorage();
     testDlaaStorage();

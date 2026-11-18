@@ -1439,3 +1439,13 @@ libdovi is staged externally. Candidate is not yet accepted: full build and
 regressions are ongoing, with exact logs under
 `E:/项目/Veyra/logs/codex-pr-integration-20261118` and reports in the matching
 `reports` directory. Linux CI is being added to validate the separate OBS module.
+
+### 2026-11-18 八项社区 PR 完成兼容验证，准备更新 GitHub main
+
+用户授权 #140/#136/#133/#127/#115/#99/#96/#75 全部整合并做好兼容。隔离分支 codex/pr-integration-20261118；七个原 PR head 是合并祖先，#136 从 db5a4e5 纯源码采用，外部 libdovi 3.4.0 从 quietvoid/dovi_tool d1abe0e 自建，DLL/LIB 不进入新源码历史。完整说明见 PR_INTEGRATION_2026-11-18.md。
+
+本轮真实结果：Windows 产品构建；预设634/0、Quick220/0/0、RPU256/0、HTTP20/0、修复合同370/0、bridge音量16/0、音频DSP51/0、replay37/0、GPU摄像机523/debug0、截图/压缩软硬解/颜色合同/PS5加密回环均通过；4X->60/120实际消费者0重复0倒序，录制+回放+摄像机同时运行且监听静音仍录得AAC RMS约0.0882。Linux Ubuntu24 CI run44283832801构建/14 LUT输入/安装布局通过。命令与旧失败/修复均保留 E:/项目/Veyra/{reports,logs}/codex-pr-integration-20261118；ACCEPTANCE.json 明确最终结果替代来源。所有测试配置、音视频、SDK/生成头和运行库在E盘任务目录，不改用户配置、系统摄像机或正式ZIP。
+
+发现并修复：预设v16-21误读自动倍率字段、节点编辑器v17嵌套上限、重复旧显示面板/HDR观察失效、跨拖动seek抑制、MMR常量漏整数、GUI线程网络解析/过期结果、回环HTTP边界、韩语侧栏宽度、Linux透明度/LUT失败残留。初次测试stage缺Qt测试/offscreen组件已补齐，保留原失败；没有拿跳过当通过。B站真实账号写操作、实Elgato/Xbox/PS5、其他GPU、完整P7双层片库与Linux GPU视觉本轮未验，详见记录。
+
+当前 GitHub main 仍 bf596e1，八个原head未变化；#96已从draft转ready。下一步推送已测兼容提交，通过整合PR更新main，并核对原PR状态。未授权新Release或关机。

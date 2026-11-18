@@ -28,7 +28,7 @@ QJsonObject readPrefs(const QString& directory) {
 int main(int argc, char** argv) {
     QApplication app(argc, argv);
     if (argc != 2) return 2;
-    const QString root = QString::fromLocal8Bit(argv[1]);
+    const QString root = app.arguments().at(1);
     // Only a new, explicitly supplied fixture directory; no real player profile.
     if (!QDir::isAbsolutePath(root) || QFile::exists(root) || !QDir().mkpath(root)) return 2;
     auto engine = std::make_unique<veyra::engine::EngineController>();

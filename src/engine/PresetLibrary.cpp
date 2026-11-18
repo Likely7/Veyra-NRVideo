@@ -799,7 +799,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
           << e.fg.multiplier << ' ' << int(e.fg.backend) << ' ' << int(e.audioSync) << ' ' << e.audioOffsetMs << ' '
           << e.chain.nodeCount << ' ' << int(e.chain.mode) << ' ' << e.chain.fgMultiplier << ' '
           << (e.chain.fgStrictAdmission ? 1 : 0) << ' ';
-        if(version>=16)o<<(e.chain.fgAutoMultiplier ? 1 : 0)<<' ';
+        if(version>=22)o<<(e.chain.fgAutoMultiplier ? 1 : 0)<<' ';
         if(version>=7)o<<e.fg.vfgQuality<<' ';
         for (uint32_t i = 0; i < e.chain.nodeCount; ++i) {
             const auto& n = e.chain.nodes[i];
@@ -884,7 +884,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
         if (kind < 0 || kind > 1 || chainMode < 0 || chainMode > 1 || strict < 0 || strict > 1 ||
             (e.contents & ~(version>=10?kPresetAllContent:kPresetLegacyContent)) ||
             nodeCount > kMaxChainNodes || e.fg.multiplier < 1 || e.fg.multiplier > (version>=7?8u:6u)) { error = L"预设库字段超出范围"; return false; }
-        if(version>=16){
+        if(version>=22){
             int autoFg=0;
             if(!(in>>autoFg)||autoFg<0||autoFg>1){error=L"预设库自动倍率字段损坏";return false;}
             e.chain.fgAutoMultiplier=autoFg!=0;
@@ -1171,7 +1171,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
 
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);

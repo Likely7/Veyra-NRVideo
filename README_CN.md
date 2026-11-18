@@ -16,6 +16,10 @@
 </p>
 <!-- veyra-creator-and-tutorials:end -->
 
+<!-- veyra-main-pr-integration -->
+当前 main（未发行）：八项社区 PR 已适配整合，包含 B 站/浏览器桥、Dolby Vision、韩语、300% 音量及各项修复。[功能与验证记录](docs/PR_INTEGRATION_2026-11-18.md)。现有 2.1.9 下载包不变。
+
+
 <p align="center"><img src="assets/veyra-wordmark-sun.gif" alt="Veyra NR · 透明字标与太阳动效" width="480"></p>
 
 <p align="center">

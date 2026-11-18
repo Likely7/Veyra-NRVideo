@@ -542,6 +542,7 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
 }
 
 void QmlPlayerBridge::openAfterCinema(const QString& pending, std::function<void()> open) {
+    ++impl_->biliOpenGen;
     const int gen = ++impl_->liveOpenGen;
     const bool fromHome = impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home");
     if (!fromHome || !impl_->gameModeUri.empty()) {

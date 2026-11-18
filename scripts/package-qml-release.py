@@ -240,6 +240,21 @@ def main():
 
     # Only compiled production assets come from the current build.
     copy(args.build / 'veyra_qml_ui.exe', 'veyra_qml_ui.exe')
+    # Open-source libdovi is built externally, never imported from contributor Git history.
+    if re.search(r'^VEYRA_ENABLE_LIBDOVI:BOOL=ON$', cache, re.M):
+        root_match = re.search(r'^VEYRA_LIBDOVI_ROOT:[^=]+=(.+)$', cache, re.M)
+        dll_match = re.search(r'^VEYRA_LIBDOVI_RUNTIME:[^=]+=(.+)$', cache, re.M)
+        if not root_match or not dll_match:
+            raise ValueError('libdovi enabled without an external runtime prefix')
+        dovi_root, dovi_dll = Path(root_match.group(1)), Path(dll_match.group(1))
+        if dovi_dll.name not in {'dolby_vision.dll', 'dovi.dll', 'libdovi.dll'}:
+            raise ValueError('Unexpected libdovi runtime name')
+        built_dll = args.build / dovi_dll.name
+        if not built_dll.is_file() or digest(built_dll) != digest(dovi_dll):
+            raise ValueError('libdovi runtime differs from the linked build deployment')
+        copy(built_dll, built_dll.name)
+        copy(dovi_root / 'LICENSE', 'licenses/libdovi/LICENSE.txt')
+
     tree(args.build / 'qml/Veyra', 'qml/Veyra')
     # Own DirectShow camera servers (both consumer architectures), not proprietary runtimes.
     for bits in (64, 32):

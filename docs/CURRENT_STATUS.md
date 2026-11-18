@@ -1,6 +1,6 @@
 # 当前项目状态
 
-更新：2026-11-18。主线版本2.1.9；本轮用户授权本地合并各分支并整理项目，未要求新发布。
+更新：2026-11-18。主线版本2.1.9；本轮用户授权兼容整合八项社区 PR 并更新 GitHub main，未要求新发布。
 
 ## 主线
 
@@ -9,6 +9,10 @@
 虚拟摄像机Codex处理后全分辨率输出与Claude协议2/有序送帧/消费者帧率/OBS节拍修复已合main，产品提交`740534e`。此前NR/SR/补帧、AMD AMF FRC、RX9000 FSR4回退、即时回放/F9/麦克风、采集监听与录音解耦、浏览器全屏XeSS卡死、全效果剔除编辑、日落主题和启动音乐修复均已在main；未把旧分支重复合并。
 
 本轮构建和回归结果见[主线整合记录](MAIN_INTEGRATION_2026-11-18.md)，计划见[本轮方案](MAIN_INTEGRATION_PLAN_2026-11-18.md)，产物位于`E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-main-integration-20261118`。旧状态全文在[历史归档](history/reports/CURRENT_STATUS_before_main_2026-11-18.md)，其中“最新/未合main/未发布”只描述当时。
+
+## 八项社区 PR
+
+#140/#133/#127/#115/#99/#96/#75 保留原 head 合并，#136 纯源码采用（原 DLL/LIB 历史不进入主线）。B站/浏览器桥、Dolby Vision、韩语、300%音量、Xbox/PS5/Elgato/截图与 Linux OBS 滤镜的适配及证据见[本轮记录](PR_INTEGRATION_2026-11-18.md)。当前构建 `E:/项目/Veyra/build/codex-pr-integration-20261118/app`，私有测试程序位于同任务 tests/app；GitHub 整合结果记在 WORKLOG/FINAL.json。旧主线整合回执仍保留作前序证据。
 
 ## 虚拟摄像机
 
@@ -20,7 +24,7 @@
 
 ## 发布与保留项
 
-既有公开2.1.9发行记录见[发行执行](RELEASE_2.1.9_EXECUTION_2026-11-15.md)；11月17日两份虚拟摄像机附加包/对应源码的发布记录在[WORKLOG](WORKLOG.md)。本轮main提交与构建不自动替换这些下载文件或推送GitHub。
+既有公开2.1.9发行记录见[发行执行](RELEASE_2.1.9_EXECUTION_2026-11-15.md)；11月17日两份虚拟摄像机附加包/对应源码的发布记录在[WORKLOG](WORKLOG.md)。本轮源码整合更新 GitHub main，不替换这些既有下载文件。
 
 Lecram两线继续暂停；AverMedia未完成诊断、Veyra原生音频驱动原型仍隔离保留。已完成分支的恢复方式见[分支归档](BRANCH_ARCHIVE.md)。脏工作树、依赖、用户配置、正式ZIP及许可对应源码保护。
 

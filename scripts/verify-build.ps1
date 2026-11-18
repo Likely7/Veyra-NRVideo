@@ -12,10 +12,10 @@
   任何一项失败，退出码为 1，并打印失败项。
 
 .PARAMETER BuildDir
-  构建目录，默认 D:\Program\Veyra\build。
+  构建目录，必须显式指定。
 
 .PARAMETER DeployDir
-  已部署的运行目录（含 runtime_local 与 logs）。默认 2.1.4 部署目录。
+  已部署的运行目录，必须显式指定。验证只写任务证据目录。
 
 .PARAMETER SkipBuild
   跳过构建，只跑测试与运行时检查。
@@ -31,10 +31,12 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$BuildDir  = 'D:\Program\Veyra\build',
-    [string]$DeployDir = 'D:\Program\Veyra-2.1.5-NVIDIA-win64-portable',
+    [Parameter(Mandatory=$true)][string]$BuildDir,
+    [Parameter(Mandatory=$true)][string]$DeployDir,
+    [string]$EvidenceDir = 'E:/项目/Veyra/tests/verify-build',
+    [string]$VcVars = '',
     [switch]$SkipBuild,
-    [int]$RunSeconds = 8
+    [ValidateRange(1,240)][int]$RunSeconds = 8
 )
 
 $ErrorActionPreference = 'Stop'
@@ -55,10 +57,17 @@ Write-Host '=== 1/4 构建 ===' -ForegroundColor Cyan
 if ($SkipBuild) {
     Info '跳过（-SkipBuild）'
 } else {
-    $vcvars = 'C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat'
+    $vcvars = $VcVars
+    if (-not $vcvars) {
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+        if (Test-Path -LiteralPath $vswhere) {
+            $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+            if ($vs) { $vcvars = Join-Path $vs 'VC/Auxiliary/Build/vcvars64.bat' }
+        }
+    }
     if (-not (Test-Path $vcvars)) { Fail "找不到 vcvars64.bat: $vcvars" }
     $targets = 'veyra_qml_ui veyra_preset_library_tests veyra_effect_chain_tests veyra_repair_contract_tests veyra_live_timing_tests'
-    $cmd = "call `"$vcvars`" >nul && cmake --build `"$BuildDir`" --target $targets -j 8"
+    $cmd = "call `"$vcvars`" >nul && cmake --build `"$BuildDir`" --target $targets -j 2"
     cmd /c $cmd
     if ($LASTEXITCODE -ne 0) { Fail "构建失败（exit $LASTEXITCODE）" } else { Ok '构建通过' }
 }
@@ -129,15 +138,20 @@ Write-Host '=== 4/4 运行时日志 ===' -ForegroundColor Cyan
 if (-not $runtimeOk) {
     Info '跳过（部署不一致或缺失）'
 } else {
-    $logsDir = Join-Path $DeployDir 'logs'
+    $logsDir = Join-Path $EvidenceDir ('run-' + [guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
     $log = Join-Path $logsDir 'veyra-qml.log'
     $before = 0
     if (Test-Path $log) { $before = (Get-Item $log).Length }
-    $dataDir = Join-Path $DeployDir 'runtime_local\user-data-2.0.0-verify'
+    $dataDir = Join-Path $logsDir 'profile'
+    New-Item -ItemType Directory -Force -Path $dataDir | Out-Null
+    '{"introMusic":false,"introAnimation":false,"prewarmEnhancement":false}' | Set-Content -LiteralPath (Join-Path $dataDir 'qml-preferences.v1.json') -Encoding utf8
+    $previousLog = $env:VEYRA_LOG_FILE
+    $env:VEYRA_LOG_FILE = $log
     $proc = Start-Process -FilePath $deployed `
-        -ArgumentList @('--data-dir', $dataDir, '--exit-after', "$RunSeconds") `
-        -WorkingDirectory $DeployDir -PassThru -Wait
+        -ArgumentList @('--data-dir', ('"' + $dataDir + '"'), '--exit-after', "$($RunSeconds * 1000)") `
+        -WorkingDirectory $DeployDir -WindowStyle Hidden -PassThru -Wait
+    $env:VEYRA_LOG_FILE = $previousLog
     if ($proc.ExitCode -ne 0) {
         Fail "运行时启动退出码 $($proc.ExitCode)"
     } else {

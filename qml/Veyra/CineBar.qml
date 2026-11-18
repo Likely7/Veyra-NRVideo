@@ -366,6 +366,7 @@ Rectangle {
                             seekArea.thumbnailBucket = -1
                         }
                         onPressed: mouse => {
+                            seekArea.lastSeekTarget = -1
                             seekArea.scrubFrac = seekArea.fractionAt(mouse.x)
                             seekArea.scrubbing = true
                         }
