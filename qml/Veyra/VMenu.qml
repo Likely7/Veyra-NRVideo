@@ -43,6 +43,9 @@ Popup {
     function positionAtAnchor() {
         if (!anchorItem) return
         const win = anchorItem.Window.contentItem
+        // The window can be gone while a queued placement still runs; without this
+        // the next line throws "Cannot read property 'width' of null".
+        if (!win) return
         const r = anchorItem.mapToItem(win, 0, 0)
         const ph = height
         const pw = width

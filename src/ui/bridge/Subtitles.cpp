@@ -39,6 +39,22 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
 }
 void QmlPlayerBridge::tickSubtitles() {
     auto& i = *impl_;
+    // The only place that sees playback while it happens: remember where the Bilibili
+    // video got to, so the report at flush time describes what was actually watched.
+    // 这里是唯一逐帧看到播放进度的地方：记下 B 站视频播到哪，切走或播完时才能把
+    // 真实位置写回历史。2.1.2→2.1.3 拆桥接层时这段丢过，续播因此失效。
+    if (!i.biliWatchBvid.empty() && i.biliWatchCid > 0) {
+        const auto& cur = i.snapshot;
+        using Tr = engine::TransportState;
+        const bool playing = cur.running && !cur.failed &&
+                             (cur.transport == Tr::Playing || cur.transport == Tr::Paused);
+        if (playing && cur.position > 0.0) {
+            i.biliWatchLastPos = cur.position;
+            if (cur.duration > 0.0) i.biliWatchDuration = cur.duration;
+        } else if (cur.transport == Tr::Ended && !cur.failed) {
+            reportBiliWatchProgressAsync();
+        }
+    }
     bool changed = false;
     if (i.subScanGate) {
         // Opens once playback holds a few seconds ahead (or has read the whole file), closes when
@@ -202,6 +218,7 @@ void QmlPlayerBridge::tickSubtitles() {
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
         emit subtitleTextChanged();
     }
+    tickDanmaku();
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {
     QVariantList out;

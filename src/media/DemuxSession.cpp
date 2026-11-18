@@ -348,6 +348,9 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
     std::string name = utf8(path_);
     if (network_) {
         networkMediaOptions(&options);
+        // Site headers and UA go through the shared helper, so the demuxer and the
+        // audio pipeline cannot drift apart on how they are spelled.
+        networkMediaHeaders(&options, settings_.requestHeaders, settings_.userAgent);
         // Short drops are retried inside FFmpeg's HTTP layer first; this session's
         // reconnect (recover()) only takes over when they run out.
         av_dict_set(&options, "reconnect", "1", 0);
@@ -405,6 +408,8 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
         if (error) *error = irq_->cancelled() ? L"已取消" : probeTimedOut ? L"读取媒体信息超时（30 秒），服务器太慢或不是视频流" : L"无法读取媒体信息，地址可能不是视频";
         return false;
     }
+    startTimeUs_ = context->start_time != AV_NOPTS_VALUE
+        ? av_rescale_q(context->start_time, AV_TIME_BASE_Q, AVRational{1, 1000000}) : 0;
     context_ = context;
     ++connections_;
     return true;
@@ -451,6 +456,15 @@ std::shared_ptr<DemuxSession> DemuxSession::open(const OpenParams& params, std::
     if (audio == -2) audio = av_find_best_stream(context, AVMEDIA_TYPE_AUDIO, -1, video, nullptr, 0);
     if (audio < 0 || unsigned(audio) >= context->nb_streams || context->streams[audio]->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) audio = -1;
     s.videoIndex_ = video;
+    // A second HEVC video stream is an enhancement layer (Dolby test material).
+    for (unsigned i = 0; i < context->nb_streams; ++i) {
+        if (int(i) == video) continue;
+        const auto* p = context->streams[i]->codecpar;
+        if (p->codec_type == AVMEDIA_TYPE_VIDEO && p->codec_id == AV_CODEC_ID_HEVC) {
+            s.elIndex_ = int(i);
+            break;
+        }
+    }
     s.audioIndex_.store(audio);
     s.streams_.resize(context->nb_streams);
     for (unsigned i = 0; i < context->nb_streams; ++i) {
@@ -583,7 +597,15 @@ double DemuxSession::resumeTargetLocked() const {
     target = std::min(target, std::max(cap, plan_.startSeconds));
     // A live stream that has just come back restarts with half a second: the jitter buffer refills while it plays.
     if (liveBackCap_ > 0) target = std::min(target, liveBackCap_);
-    return std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
+    target = std::min(target, std::max(1.0, aheadSecondsLocked() - 0.5));
+    // 服务器供不上时，上面算出的目标要等几十秒才攒得到，而攒够之后只够播十几秒又耗尽
+    // —— 观感是画面长期死等（现场 2026-10-24：server 0.81 MB/s 对 bitrate 1.75 MB/s，
+    // 目标 20 秒、实际只到 10.91 秒，一直停在「缓冲中」）。
+    // 这种情形改成「够一小段就继续播」：把等待压回 startSeconds 的量级，让画面和声音
+    // 都往前走，代价是停顿更频繁。反复短暂停顿比长期冻结更诚实，也更容易让用户想降画质。
+    if (bandwidthLow_ && target > plan_.startSeconds * 2.0)
+        target = std::max(plan_.startSeconds, std::min(target, plan_.startSeconds * 2.0));
+    return target;
 }
 
 void DemuxSession::enterPhaseLocked(Phase phase, const char* why) {
@@ -738,11 +760,44 @@ void DemuxSession::setPlaybackPositionUs(int64_t us) {
     producerCv_.notify_one();
 }
 
+DemuxSession::Pop DemuxSession::popEl(AVPacket* dst, Meta& meta, int waitMs) {
+    std::unique_lock lock(m_);
+    const auto deadline = Clock::now() + std::chrono::milliseconds(std::max(waitMs, 0));
+    for (;;) {
+        if (stop_.load() || (cancelled_ && cancelled_->load())) return Pop::Cancelled;
+        if (!el_.items.empty()) {
+            Item item = std::move(el_.items.front());
+            el_.items.pop_front();
+            el_.bytes -= item.bytes;
+            av_packet_move_ref(dst, item.packet);
+            av_packet_free(&item.packet);
+            meta.discontinuity = item.discontinuity;
+            meta.generation = item.generation;
+            return Pop::Packet;
+        }
+        if (el_.items.empty() && endedLocked()) return failed_ ? Pop::Failed : Pop::Eof;
+        if (consumerCv_.wait_until(lock, deadline) == std::cv_status::timeout) return Pop::Empty;
+    }
+}
+
 bool DemuxSession::seek(int64_t targetUs) {
     if (live_) return false;
     std::unique_lock lock(m_);
     if (failed_ && !settings_.autoReconnect) return false;
     seekTargetUs_ = std::max<int64_t>(0, targetUs);
+    // A seek that is already running is retargeted rather than interrupted: raising
+    // command again would abort its av_seek_frame with AVERROR_EXIT, and dragging the
+    // scrubber produces exactly that burst of requests. seekDone_ is false from the
+    // request until the demux thread finishes, which is what marks one as running.
+    if (!seekDone_) {
+        seekPending_ = true;
+        producerCv_.notify_all();
+        while (!seekDone_) {
+            if (stop_.load() || (cancelled_ && cancelled_->load())) return false;
+            seekCv_.wait_for(lock, std::chrono::milliseconds(50));
+        }
+        return seekOk_;
+    }
     seekPending_ = true;
     seekDone_ = false;
     seekOk_ = false;
@@ -766,8 +821,12 @@ void DemuxSession::requestReconnect(const char* reason) {
 }
 
 bool DemuxSession::holding() const {
+    // 只读当前阶段，不重算。phase_ 由解码线程在 updatePhaseLocked() 里维护，而这里
+    // 会被音频线程每 2–10 ms 调一次（WasapiAudioSink 的 runOnAudioThread 循环）：
+    // 原来每次调用都执行 updatePhaseLocked()，等于让音频线程反复替解码线程判阶段，
+    // 既和白天的读循环抢锁，也会把刚刚判定的 Buffering 又算回 Playing —— 音频于是
+    // 在 pause / resume 之间抖动，表现成「时钟在走、画面不动」（现场 2026-10-24）。
     std::lock_guard lock(m_);
-    const_cast<DemuxSession*>(this)->updatePhaseLocked();
     return phase_ != Phase::Playing;
 }
 
@@ -989,6 +1048,7 @@ void DemuxSession::threadMain() {
             eof_ = true;
             video_.ended = true;
             audio_.ended = true;
+            el_.ended = true;
             log::info("net-session", std::format("end of stream: video queued {} audio queued {}", video_.items.size(), audio_.items.size()));
             updatePhaseLocked();
             consumerCv_.notify_all();
@@ -1039,8 +1099,13 @@ void DemuxSession::onPacket(AVPacket* pkt) {
     const int index = pkt->stream_index;
     const bool isVideo = index == videoIndex_;
     const bool isAudio = index == audioIndex_.load();
+    const bool isEl = index == elIndex_;
+    if (isEl) {
+        static unsigned elSeen = 0;
+        if (++elSeen <= 3) log::info("net-session", std::format("EL packet seen index={} size={} elIndex={}", index, pkt->size, elIndex_));
+    }
     const SessionStreamInfo* info = stream(index);
-    if (!info || (!isVideo && !isAudio)) {
+    if (!info || (!isVideo && !isAudio && !isEl)) {
         av_packet_unref(pkt);
         return;
     }
@@ -1060,7 +1125,7 @@ void DemuxSession::onPacket(AVPacket* pkt) {
             durationUs = params && params->frame_size > 0 && params->sample_rate > 0 ? int64_t(1e6 * params->frame_size / params->sample_rate) : 21333;
         }
     }
-    Queue& queue = isVideo ? video_ : audio_;
+    Queue& queue = isVideo ? video_ : (isEl ? el_ : audio_);
     // ---- a timeline that leaps: a restarted stream, damaged stamps ----
     // Live streams are re-anchored like a reconnect: the next video keyframe continues the old timeline, so the
     // consumers (picture clock, audio) never see time run backwards or jump ahead; before this a restarted stream
@@ -1180,11 +1245,11 @@ void DemuxSession::onPacket(AVPacket* pkt) {
     }
     item.dtsUs = dtsUs;
     std::lock_guard lock(m_);
-    pushLocked(std::move(item), isVideo);
+    pushLocked(std::move(item), isVideo, isEl);
 }
 
-bool DemuxSession::pushLocked(Item&& item, bool video) {
-    Queue& queue = video ? video_ : audio_;
+bool DemuxSession::pushLocked(Item&& item, bool video, bool el) {
+    Queue& queue = el ? el_ : (video ? video_ : audio_);
     if (item.packet->flags & AV_PKT_FLAG_CORRUPT) {
         if (video) ++corruptPackets_;
     }
@@ -1223,6 +1288,7 @@ void DemuxSession::doSeek() {
         std::lock_guard lock(m_);
         video_.clear();
         audio_.clear();
+        el_.clear();
         for (auto& item : pendingAudio_) av_packet_free(&item.packet);
         pendingAudio_.clear();
         pendingAudioBytes_ = 0;
@@ -1233,7 +1299,13 @@ void DemuxSession::doSeek() {
         rateSamples_.clear();
         contentBytes_ = 0;
         afterSeek_ = true;
-        targetSeconds_ = plan_.holds ? std::min(plan_.startSeconds, 5.0) : 0.0;
+        // After a seek the decoder has to walk from the keyframe up to the target, and
+        // that walk stalls whenever the download falls behind. Waiting a little longer
+        // before the first frame is cheaper than decoding in fits and starts: measured
+        // 1.1-2.1 s of "after demux" time with the old 3 s gate, most of it waiting on
+        // the network rather than decoding. Bounded by the level's own start value so a
+        // deliberately small buffer setting still behaves.
+        targetSeconds_ = plan_.holds ? std::min(std::max(plan_.startSeconds, 6.0), 10.0) : 0.0;
         phase_ = targetSeconds_ > 0 ? Phase::Prebuffering : Phase::Playing;
         phaseSinceNs_ = nowNs();
     }
@@ -1248,10 +1320,14 @@ void DemuxSession::doSeek() {
                 break;
             }
         }
-        const auto& v = streams_[size_t(videoIndex_)];
-        const int64_t ts = av_rescale_q(target, AV_TIME_BASE_Q, AVRational{v.timeBaseNum, v.timeBaseDen});
+        // -1 below means "all streams", so the timestamp must be in AV_TIME_BASE
+        // (microseconds), not the video stream's time base.
+        const int64_t ts = target + startTimeUs_;
         irq_->arm(kConnectTimeoutMs + kReadTimeoutVodMs);
-        const int result = av_seek_frame(context_, videoIndex_, ts, AVSEEK_FLAG_BACKWARD);
+        // All streams: the enhancement layer (a second video stream) has to move
+        // with the base stream or the PTS pairing breaks after every seek.
+        (void)videoIndex_;
+        const int result = av_seek_frame(context_, -1, ts, AVSEEK_FLAG_BACKWARD);
         irq_->disarm();
         ok = result >= 0;
         if (!ok) {
@@ -1263,6 +1339,14 @@ void DemuxSession::doSeek() {
     {
         std::lock_guard lock(m_);
         seekOk_ = ok;
+        // A successful seek reopened the source if it had been closed (the loop above
+        // calls openContext), so a session that had been marked dead is usable again.
+        // Clearing the latch here is what lets a failed session be rescued by seeking
+        // instead of forcing the user to reopen the file.
+        if (ok) {
+            failed_ = false;
+            failure_.clear();
+        }
         seekDone_ = true;
         seekCv_.notify_all();
         updatePhaseLocked();
@@ -1342,6 +1426,11 @@ bool DemuxSession::recover(int code, const char* why) {
             reconnectAttempt_ = 0;
             ++reconnects_;
             eof_ = false;
+            // The session is alive again: fail() had marked it dead, and without this the
+            // latch stayed set forever, so popVideo/popAudio kept returning Pop::Failed
+            // and the only way out was reopening the file.
+            failed_ = false;
+            failure_.clear();
             liveBackCap_ = live_ && plan_.holds ? 0.5 : 0.0;
             log::info("net-session", std::format("reconnected after {} attempt(s), {} ms; reconnects={} live={}", attempt,
                 std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - begin).count(), reconnects_, live_));

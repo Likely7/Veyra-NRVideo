@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "在 Veyra 播放",
+  "version": "1.0",
+  "description": "把当前页面地址（B 站等）交给 Veyra 播放",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "tabs",
+    "storage",
+    "cookies"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1:18765/*",
+    "*://*.bilibili.com/*",
+    "*://*.b23.tv/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "在 Veyra 播放",
+    "default_icon": {
+      "16": "icon16.png",
+      "48": "icon48.png",
+      "128": "icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icon16.png",
+    "48": "icon48.png",
+    "128": "icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.bilibili.com/*",
+        "*://*.b23.tv/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

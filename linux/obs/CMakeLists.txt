@@ -22,3 +22,11 @@ install(FILES veyra.effect
   DESTINATION share/obs/obs-plugins/veyra-filter)
 install(DIRECTORY locale/
   DESTINATION share/obs/obs-plugins/veyra-filter/locale)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(veyra_cube_tests ../../tests/obs-filter/cube-tests.c)
+  target_link_libraries(veyra_cube_tests PRIVATE m)
+  add_test(NAME obs_cube_parser COMMAND veyra_cube_tests "${CMAKE_CURRENT_BINARY_DIR}/test.cube")
+  set_tests_properties(obs_cube_parser PROPERTIES TIMEOUT 30)
+endif()

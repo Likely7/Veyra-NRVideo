@@ -1,0 +1,31 @@
+name: Linux OBS filter checks
+on:
+  push:
+    branches: [main, 'codex/pr-integration-*']
+    paths: ['linux/obs/**', 'tests/obs-filter/**', 'CMakeLists.txt', '.github/workflows/obs-filter-checks.yml']
+  pull_request:
+    paths: ['linux/obs/**', 'tests/obs-filter/**', 'CMakeLists.txt', '.github/workflows/obs-filter-checks.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  linux-obs:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+      - name: Install OBS development package
+        run: sudo apt-get update && sudo apt-get install -y libobs-dev ninja-build
+      - name: Configure portable OBS module
+        run: cmake -S . -B out/obs -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+      - name: Compile module and parser tests
+        run: cmake --build out/obs --parallel 2
+      - name: Reject malformed LUT files
+        run: ctest --test-dir out/obs --output-on-failure --timeout 30
+      - name: Verify install layout
+        run: |
+          DESTDIR="$PWD/out/stage" cmake --install out/obs --prefix /usr
+          test -f out/stage/usr/lib/obs-plugins/veyra-filter.so
+          test -f out/stage/usr/share/obs/obs-plugins/veyra-filter/veyra.effect

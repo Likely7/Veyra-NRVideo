@@ -358,6 +358,14 @@ The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved pr
 The sponsor page (2026-10-19) adds Lucide `coffee` and `external-link` (as `external`) from lucide-static 1.51.0 to the same
 `icons.js`, under the same ISC notice.
 
+## QR code generation for Bilibili sign-in (2026-11-07)
+
+Project Nayuki, QR Code generator library (C++): https://github.com/nayuki/QR-Code-generator.
+`third_party/qrcodegen/qrcodegen.cpp` and `third_party/qrcodegen/qrcodegen.hpp` are imported
+verbatim; both files keep their upstream header with the full MIT notice ("Copyright (c) Project
+Nayuki"). Used by `src/media/QrImage.cpp` to encode the Bilibili sign-in URL into the QR image the
+Bilibili page shows. No modification.
+
 ## Simple Icons brand glyphs (sponsor page, 2026-10-19)
 
 设置 → 赞助作者 draws the Bilibili, TikTok (Douyin uses the same mark), X, GitHub, YouTube, Ko-fi, WeChat and Alipay
@@ -1158,3 +1166,26 @@ Foundation provides decoding; no additional codec or audio SDK is bundled.
 - Original per-file SHA-256 and paths: `third_party/obs_virtualcam/UPSTREAM.json`. Full licenses: `third_party/obs_virtualcam/COPYING.*`, also shipped under `licenses/virtual-camera/`. Veyra's modifications are GPL-3.0-or-later under the application license; original permissions remain.
 - Changes: independent Veyra CLSID and local shared-memory namespace, current-user 32/64-bit registration/uninstall, COM factory interface handling, native/fallback format negotiation and consumer-clock timestamps, idle/stop handling and black placeholder; bounded shared-memory locking, row-stride packing, validated dimensions, multiple readers and producer crash heartbeat. Application GPU capture/SDR conversion/UI are Veyra code and use the existing post-processing capture point. This is not an OBS plugin and does not replace or register under OBS's identity.
 - Protocol-2 adaptation: six-frame ordered transport, sequence/grid/write timestamps, bounded consumer-rate negotiation, stable adaptive delivery delay and optional in-process timing alignment through libobs's exported read-only clock APIs. The application adds its own protected system-component installer and update status. `UPSTREAM.json.veyraAdaptations` lists the seven modified upstream files and the extracted HRESULT helper; original per-file hashes remain unchanged (line-ending normalization alone is not a source modification).
+## libdovi / source-only adoption of PR #136 (2026-11-18)
+
+Dolby Vision parsing uses quietvoid/dovi_tool, MIT, pinned to
+`d1abe0e27ff2c7ab3339614d06db9f8a058af6b2` (dovi_tool 2.3.3 / libdovi 3.4.0).
+Upstream: https://github.com/quietvoid/dovi_tool . Build the `dolby_vision` crate
+with `capi`, generate `libdovi/rpu_parser.h` with cbindgen 0.29.4 and its upstream
+configuration. Keep the upstream MIT LICENSE with the runtime. Dependency
+sources, generated headers and built DLL/import libraries live outside this
+source repository; point `VEYRA_LIBDOVI_ROOT` at that external prefix.
+
+The Bilibili module, browser extension, P5/P7 RPU and EL composition work is
+adopted from georgeg911/Veyra-NRVideo PR #136, head
+`db5a4e53b29be50182988af14ea7d6674a43e798`, under Veyra's GPLv3 license.
+The clean import excludes the contributed DLL/LIB and foreign-machine rules.
+Integration changes remove per-frame absolute-path debug writes, move page
+resolution off the GUI thread, constrain loopback HTTP requests, preserve
+Korean layouts/current audio settings and use the source-built libdovi prefix.
+
+Linux OBS filter work is adopted from andreanjoes PR #96 at
+`719e2d89eaa3ff126d4130a4e3f7c2f48f8021d6`, GPLv3. Integration additionally
+validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
+centres and preserves premultiplied transparency. OBS's public colour-filter
+shader was consulted for the alpha contract; no OBS DLL is bundled here.

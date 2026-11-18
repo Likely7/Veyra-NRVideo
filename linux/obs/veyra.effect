@@ -15,6 +15,7 @@ uniform float4 texel;   // xy = 1/size, z = sharpen amount (0..1), w unused
 
 uniform bool lutEnabled;
 uniform float lutAmount;
+uniform float lutSize;
 uniform float3 lutDomainMin;
 uniform float3 lutDomainMax;
 
@@ -50,7 +51,8 @@ float Luma(float3 c)
 
 float3 SampleSource(float2 uv)
 {
-	return image.Sample(def_sampler, uv).rgb;
+	float4 c = image.Sample(def_sampler, uv);
+	return c.a > 0.0 ? c.rgb / c.a : float3(0.0, 0.0, 0.0);
 }
 
 float3 ApplyLut(float3 c)
@@ -58,7 +60,7 @@ float3 ApplyLut(float3 c)
 	if (!lutEnabled)
 		return c;
 	float3 range = max(lutDomainMax - lutDomainMin, float3(1.0e-5, 1.0e-5, 1.0e-5));
-	float3 uvw = saturate((c - lutDomainMin) / range);
+	float3 uvw = (saturate((c - lutDomainMin) / range) * (lutSize - 1.0) + 0.5) / lutSize;
 	return lerp(c, lut3d.Sample(def_sampler, uvw).rgb, saturate(lutAmount));
 }
 
@@ -123,7 +125,8 @@ float4 PSDraw(VertOut vert_in) : TARGET
 {
 	float3 rgb = grade.w > 0.5 ? Fxaa(vert_in.uv) : Graded(vert_in.uv);
 	rgb = Sharpen(vert_in.uv, rgb);
-	return float4(saturate(rgb), 1.0);
+	float alpha = image.Sample(def_sampler, vert_in.uv).a;
+	return float4(saturate(rgb) * alpha, alpha);
 }
 
 technique Draw

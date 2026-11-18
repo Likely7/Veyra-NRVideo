@@ -79,6 +79,7 @@ DialogLayer {
             VButton { text: qsTr("删除"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Forget() }
         }
     }
+
     DialogSection { text: qsTr("串流（重连生效）") }
     DialogGroup {
         VRow {

@@ -3,7 +3,7 @@
 // OBS owns capture, decode, composition and encode, so this module contributes
 // only the per-frame GPU enhancement chain that is portable to Linux:
 //
-//   source frame -> 3D LUT -> colour grade -> sharpen -> FXAA -> output
+//   source frame -> 3D LUT -> colour grade -> FXAA -> sharpen -> output
 //
 // The Windows product's headline features are NGX-bound (DLSS SR/FG, RTX Video
 // SR/HDR, DeepDVC) and have no public Linux SDK; they are deliberately absent
@@ -21,7 +21,7 @@ OBS_DECLARE_MODULE()
 OBS_MODULE_USE_DEFAULT_LOCALE("veyra-filter", "en-US")
 
 #define VEYRA_FILTER_ID "veyra_filter"
-#define VEYRA_MAX_LUT_SIZE 64
+
 
 struct veyra_filter {
 	obs_source_t *context;
@@ -34,10 +34,12 @@ struct veyra_filter {
 	gs_eparam_t *param_lut_domain_min;
 	gs_eparam_t *param_lut_domain_max;
 	gs_eparam_t *param_lut_texture;
+	gs_eparam_t *param_lut_size;
 
 	gs_texture_t *lut;          // volume texture, owned
 	char *lut_path;             // as configured
 	char *lut_loaded_path;      // last file that produced `lut`
+	int lut_size;
 	float lut_domain_min[3];
 	float lut_domain_max[3];
 
@@ -53,82 +55,9 @@ struct veyra_filter {
 /* .cube parsing                                                             */
 /* ------------------------------------------------------------------------- */
 
-struct cube_lut {
-	int size;
-	float domain_min[3];
-	float domain_max[3];
-	uint8_t *rgba; // size^3 * 4
-};
+#include "cube-parser.h"
 
-// Parses a 3D .cube LUT. Red varies fastest, then green, then blue, matching
-// the format used by Resolve/Premiere and every other .cube consumer.
-static bool cube_parse(const char *path, struct cube_lut *out)
-{
-	FILE *file = fopen(path, "rb");
-	if (!file) {
-		blog(LOG_ERROR, "[veyra] cannot open LUT '%s'", path);
-		return false;
-	}
-
-	memset(out, 0, sizeof(*out));
-	out->domain_max[0] = out->domain_max[1] = out->domain_max[2] = 1.0f;
-
-	int entries = 0;
-	char line[512];
-	bool ok = false;
-
-	while (fgets(line, sizeof(line), file)) {
-		float r, g, b;
-
-		if (line[0] == '#' || line[0] == '\n' || line[0] == '\r')
-			continue;
-		if (sscanf(line, "LUT_3D_SIZE %d", &out->size) == 1) {
-			if (out->size < 2 || out->size > VEYRA_MAX_LUT_SIZE) {
-				blog(LOG_ERROR, "[veyra] LUT size %d out of range (2..%d)", out->size,
-				     VEYRA_MAX_LUT_SIZE);
-				goto done;
-			}
-			size_t cells = (size_t)out->size * out->size * out->size * 4;
-			out->rgba = bmalloc(cells);
-			continue;
-		}
-		if (sscanf(line, "DOMAIN_MIN %f %f %f", &r, &g, &b) == 3) {
-			out->domain_min[0] = r;
-			out->domain_min[1] = g;
-			out->domain_min[2] = b;
-			continue;
-		}
-		if (sscanf(line, "DOMAIN_MAX %f %f %f", &r, &g, &b) == 3) {
-			out->domain_max[0] = r;
-			out->domain_max[1] = g;
-			out->domain_max[2] = b;
-			continue;
-		}
-		if (sscanf(line, "%f %f %f", &r, &g, &b) != 3)
-			continue;
-		if (!out->rgba || entries >= out->size * out->size * out->size)
-			continue;
-
-		out->rgba[entries * 4 + 0] = (uint8_t)(fminf(fmaxf(r, 0.0f), 1.0f) * 255.0f + 0.5f);
-		out->rgba[entries * 4 + 1] = (uint8_t)(fminf(fmaxf(g, 0.0f), 1.0f) * 255.0f + 0.5f);
-		out->rgba[entries * 4 + 2] = (uint8_t)(fminf(fmaxf(b, 0.0f), 1.0f) * 255.0f + 0.5f);
-		out->rgba[entries * 4 + 3] = 255;
-		entries++;
-	}
-
-	ok = entries == out->size * out->size * out->size;
-	if (!ok)
-		blog(LOG_ERROR, "[veyra] LUT '%s' has %d of %d entries", path, entries,
-		     out->size * out->size * out->size);
-
-done:
-	fclose(file);
-	if (!ok) {
-		bfree(out->rgba);
-		out->rgba = NULL;
-	}
-	return ok;
-}
+static void free_lut(struct veyra_filter *filter);
 
 static void load_lut(struct veyra_filter *filter)
 {
@@ -147,8 +76,11 @@ static void load_lut(struct veyra_filter *filter)
 		return;
 
 	struct cube_lut cube;
-	if (!cube_parse(filter->lut_path, &cube))
-		return;
+	if (!cube_parse(filter->lut_path, &cube)) {
+        blog(LOG_WARNING, "[veyra] invalid LUT; disabling previous LUT");
+        free_lut(filter);
+        return;
+    }
 
 	obs_enter_graphics();
 	if (filter->lut)
@@ -157,13 +89,14 @@ static void load_lut(struct veyra_filter *filter)
 	filter->lut = gs_voltexture_create((uint32_t)cube.size, (uint32_t)cube.size,
 					  (uint32_t)cube.size, GS_RGBA, 1, &data, 0);
 	obs_leave_graphics();
-	bfree(cube.rgba);
+	free(cube.rgba);
 
 	if (!filter->lut) {
 		blog(LOG_ERROR, "[veyra] volume texture creation failed for '%s'", filter->lut_path);
 		return;
 	}
 
+	filter->lut_size = cube.size;
 	memcpy(filter->lut_domain_min, cube.domain_min, sizeof(cube.domain_min));
 	memcpy(filter->lut_domain_max, cube.domain_max, sizeof(cube.domain_max));
 	bfree(filter->lut_loaded_path);
@@ -231,6 +164,7 @@ static void *veyra_filter_create(obs_data_t *settings, obs_source_t *context)
 	if (filter->effect) {
 		filter->param_grade = gs_effect_get_param_by_name(filter->effect, "grade");
 		filter->param_texel = gs_effect_get_param_by_name(filter->effect, "texel");
+		filter->param_lut_size = gs_effect_get_param_by_name(filter->effect, "lutSize");
 		filter->param_lut_enabled = gs_effect_get_param_by_name(filter->effect, "lutEnabled");
 		filter->param_lut_amount = gs_effect_get_param_by_name(filter->effect, "lutAmount");
 		filter->param_lut_domain_min =
@@ -292,6 +226,7 @@ static void veyra_filter_render(void *data, gs_effect_t *unused)
 	gs_effect_set_bool(filter->param_lut_enabled, lut_on);
 	gs_effect_set_float(filter->param_lut_amount, (float)filter->lut_strength / 100.0f);
 	if (lut_on) {
+        gs_effect_set_float(filter->param_lut_size, (float)filter->lut_size);
 		gs_effect_set_texture(filter->param_lut_texture, filter->lut);
 		struct vec3 domain_min, domain_max;
 		vec3_set(&domain_min, filter->lut_domain_min[0], filter->lut_domain_min[1],
@@ -307,7 +242,7 @@ static void veyra_filter_render(void *data, gs_effect_t *unused)
 
 static void veyra_filter_defaults(obs_data_t *settings)
 {
-	obs_data_set_default_bool(settings, "fxaa", true);
+	obs_data_set_default_bool(settings, "fxaa", false);
 	obs_data_set_default_double(settings, "exposure", 0.0);
 	obs_data_set_default_double(settings, "contrast", 1.0);
 	obs_data_set_default_double(settings, "saturation", 1.0);

@@ -9,6 +9,7 @@
 // audio pipeline (network sources and files on a server, #48).
 
 #include <cstdint>
+#include <deque>
 #include <memory>
 #include <string>
 #include "veyra/media/DemuxSession.h"
@@ -50,6 +51,14 @@ public:
     int nominalRateNum() const;
     int nominalRateDen() const;
     const AVCodecParameters* videoCodecParameters() const;
+    // All streams, for probing. Dolby Vision profile-7 detection needs to know
+    // whether a second HEVC video stream (the enhancement layer) exists, which
+    // only shows up at container level.
+    int streamCount() const;
+    const AVCodecParameters* streamParameters(int index) const;
+    // Container start time in microseconds (0 when unset); packet PTS values are
+    // absolute, so seeking adds this and frame timestamps subtract it.
+    int64_t startTimeUs() const;
     int videoTimeBaseNum() const; // stream time_base for frame PTS conversion
     int videoTimeBaseDen() const;
     std::string formatName() const;
@@ -64,6 +73,12 @@ public:
     // and remains valid until the next call. In shared mode this waits for data
     // (and never pauses for buffering); false with endOfFile=false is a failure.
     bool readVideoPacket(bool& endOfFile);
+    // Enhancement-layer stream packet (second HEVC video stream), when the
+    // container carries one. Returns false when this source has none.
+    bool takeElPacket(AVPacket** out);
+    // Tell the direct reader which stream is the enhancement layer so its packets
+    // are queued instead of dropped (the shared session detects it on its own).
+    void setElStreamIndex(int index) { elStreamIndex_ = index; }
 
     // Playback read. Direct mode behaves like readVideoPacket. Shared mode waits at
     // most waitMs and, with honourHold, reports Waiting while playback is paused
@@ -86,6 +101,8 @@ private:
     AVFormatContext* context_ = nullptr;
     std::shared_ptr<DemuxSession> session_;
     AVPacket* packet_ = nullptr;
+    int elStreamIndex_ = -1;
+    std::deque<AVPacket*> elPending_;   // direct mode: queued enhancement-layer packets
     int videoStreamIndex_ = -1;
     DemuxerStats stats_{};
     bool havePendingPacket_ = false;
