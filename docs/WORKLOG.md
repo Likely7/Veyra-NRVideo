@@ -1460,3 +1460,7 @@ GitHub #146 merge 成功：bd35431a6fe42ff4757fba4dec887e72a066e545，输入 hea
 ### 2026-11-18 main 合并后 CI 的依赖源超时
 
 main run44346915750 在 us-east-2.ec2.archive.ubuntu.com 的 HTTP 包下载阶段耗尽10分钟，被取消；配置、编译、测试未执行，不记录为通过。此前5d9a2aee的Windows和两次Linux CI成功保留。CI改用官方Ubuntu HTTPS端点、仅必要依赖和20秒网络超时/2次重试，保留原Ubuntu仓库和签名验证，不换第三方包。YAML、内嵌Python及镜像替换范围本地检查通过；实际重跑结果追加到外部FINAL.json。此次只改CI，不改已验播放器代码。
+
+补充：run44349210234 同样在依赖安装超时。完整日志确认runner用 file:/etc/apt/apt-mirrors.txt 的 mirror+file 间接源，上一条直连URL替换未覆盖，仍访问旧HTTP镜像。已适配 mirror+file、传统.list 与deb822.sources，并以5个源文件夹具执行实际内嵌CI代码，Ubuntu源/安全源/签名keyring/第三方源保留全部通过；本次失败仍保留不算通过。
+
+测试清理纠错：cleanup-qa.py调用复用write函数，曾经由硬链接误写本地正式NVIDIA目录的package-manifest.json；从已发布SHA256=4225ecb1…的原ZIP原子恢复清单fb19ef3c…，正式目录1695文件逐SHA全部一致，ZIP未变。当前QA清单已断链；本任务及前序main任务的cadence_app.py写JSON改为原子替换，并用真实硬链接夹具验证原文件不变。记录reports/codex-pr-integration-20261118/MANIFEST-REPAIR.json；旧错误内容保留作证据。

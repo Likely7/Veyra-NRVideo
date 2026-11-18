@@ -23,15 +23,25 @@ jobs:
           sudo python3 - <<'PY'
           from pathlib import Path
           import re
-          paths = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources')]
+          paths = [Path('/etc/apt/sources.list'),
+                   *Path('/etc/apt/sources.list.d').glob('*.sources'),
+                   *Path('/etc/apt/sources.list.d').glob('*.list')]
           for path in paths:
               if not path.is_file():
                   continue
               text = path.read_text()
+              # Hosted runners may resolve Ubuntu through mirror+file, so changing
+              # only literal HTTP URLs leaves the slow regional mirror active.
+              text = text.replace('mirror+file:/etc/apt/apt-mirrors-security.txt',
+                                  'https://security.ubuntu.com/ubuntu')
+              text = text.replace('mirror+file:/etc/apt/apt-mirrors.txt',
+                                  'https://archive.ubuntu.com/ubuntu')
               text = re.sub(r'https?://(?:[^/\s]+\.)?archive\.ubuntu\.com/ubuntu',
                             'https://archive.ubuntu.com/ubuntu', text)
               text = text.replace('http://security.ubuntu.com/ubuntu',
                                   'https://security.ubuntu.com/ubuntu')
+              if 'mirror+file:/etc/apt/apt-mirrors' in text:
+                  raise RuntimeError('Unrecognized Ubuntu mirror indirection')
               path.write_text(text)
           PY
           sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
