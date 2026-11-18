@@ -17,7 +17,25 @@ jobs:
         with:
           persist-credentials: false
       - name: Install OBS development package
-        run: sudo apt-get update && sudo apt-get install -y libobs-dev ninja-build
+        run: |
+          # Regional HTTP mirrors can stall for the entire job timeout. Keep the
+          # Ubuntu repositories, use their canonical HTTPS endpoints and bound retries.
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          import re
+          paths = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources')]
+          for path in paths:
+              if not path.is_file():
+                  continue
+              text = path.read_text()
+              text = re.sub(r'https?://(?:[^/\s]+\.)?archive\.ubuntu\.com/ubuntu',
+                            'https://archive.ubuntu.com/ubuntu', text)
+              text = text.replace('http://security.ubuntu.com/ubuntu',
+                                  'https://security.ubuntu.com/ubuntu')
+              path.write_text(text)
+          PY
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 install -y --no-install-recommends libobs-dev ninja-build
       - name: Configure portable OBS module
         run: cmake -S . -B out/obs -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
       - name: Compile module and parser tests

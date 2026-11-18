@@ -1456,3 +1456,7 @@ regressions are ongoing, with exact logs under
 GitHub #146 merge 成功：bd35431a6fe42ff4757fba4dec887e72a066e545，输入 head 5d9a2aee 已通过 Windows run44288445771、Linux runs44288361404/44288445800；七个原 PR (#140/#133/#127/#115/#99/#96/#75) 远端 merged=true。#136 的所有源功能已按纯源码导入，原 PR 已关闭为 adopted 并附 #146/合并提交/排除 DLL/LIB 历史原因，merged=false 的事实保留。
 
 本地 main-claude-anr-20261113 干净树已 ff-only 同步。摄像机传输32/64位各73项通过；临时HKCU注册仅指向本任务stage的两项已撤销，HKLM/用户配置/既有Release不改，QML测试探针撤下。收尾补 source-root cache guard，拒绝把隔离树的旧构建冒报为main；开发示例改用新的 main-app 输出目录。完整远端/源码/产物 SHA 与 CI 摘要存 reports/codex-pr-integration-20261118/FINAL.json。
+
+### 2026-11-18 main 合并后 CI 的依赖源超时
+
+main run44346915750 在 us-east-2.ec2.archive.ubuntu.com 的 HTTP 包下载阶段耗尽10分钟，被取消；配置、编译、测试未执行，不记录为通过。此前5d9a2aee的Windows和两次Linux CI成功保留。CI改用官方Ubuntu HTTPS端点、仅必要依赖和20秒网络超时/2次重试，保留原Ubuntu仓库和签名验证，不换第三方包。YAML、内嵌Python及镜像替换范围本地检查通过；实际重跑结果追加到外部FINAL.json。此次只改CI，不改已验播放器代码。
