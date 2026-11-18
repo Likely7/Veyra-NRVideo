@@ -65,3 +65,5 @@ B站会员、扫码登录和互动写操作未使用真实账号测试；未代�
 整合 [PR #146](https://github.com/Likely7/Veyra-NRVideo/pull/146) 已于 2026-11-18 合入 main，合并提交 `bd35431a6fe42ff4757fba4dec887e72a066e545`。最终提交 5d9a2aee 的 [Windows CI](https://github.com/Likely7/Veyra-NRVideo/actions/runs/44288445771) 与两次 Linux CI 均成功。#140/#133/#127/#115/#99/#96/#75 已核对为 merged；#136 已关闭为 adopted，保留原正文并说明纯源码导入与 #146 的对应关系，merged 标志为 false，不冒充原 head 合入。
 
 本地唯一 main 工作树已 fast-forward 到上述合并提交。QA 的 32/64 位临时 HKCU 摄像机注册已移除（仅删除指向本任务 QA 目录的注册），系统级组件与用户配置未改；私有探针已撤下，单份可复用 stage 留在 tests 目录。后续 main 构建使用独立输出目录，构建脚本拒绝复用其他 source-root 的 CMake cache。
+
+main 合并后重复 CI 曾两次在依赖下载阶段超时，实际 runner 的 mirror+file 间接源已适配；[最终 main CI](https://github.com/Likely7/Veyra-NRVideo/actions/runs/44351556868) 全步骤成功。期间测试清单误写已从原发布 ZIP 原子恢复，正式 NVIDIA 目录 1695 个文件逐 SHA 一致，ZIP 未变；测试写入函数已修复并完成硬链接夹具回归。完整失败与恢复回执均保留在本轮报告目录。
