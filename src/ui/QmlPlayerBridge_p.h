@@ -369,6 +369,7 @@ struct QmlPlayerBridge::Impl {
     QVariantMap prefs;
     // Live recording state published by the engine (see LiveRecorder.h).
     QVariantMap recordingState;
+    QVariantMap virtualCameraState;
     uint64_t recordingSaved = 0;   // LiveRecorder's finished-file counter already announced
     QVariantMap replayState;       // the instant replay buffer (#103)
     uint64_t replaySaved = 0;      // its saved-clip counter already announced

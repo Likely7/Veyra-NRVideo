@@ -701,6 +701,74 @@ VPage {
                             }
                         }
                     }
+                    VGroup {
+                        objectName: "set-virtual-camera-group"
+                        VRow {
+                            label: qsTr("直播软件兼容组件")
+                            hint: {
+                                const c = veyra.virtualCameraState || {}
+                                if(c.installing) return qsTr("正在安装或卸载，请完成 Windows 管理员确认")
+                                if(c.setupError) return c.setupError
+                                if(c.systemOutdated) return qsTr("系统级组件是旧版本，管理员运行的 OBS 等直播软件会看不到画面；请点击“更新组件”")
+                                return c.systemInstalled ? qsTr("已安装系统级组件，支持管理员运行的直播软件")
+                                                         : qsTr("当前仅注册到本用户；管理员运行的 OBS 等直播软件需要安装系统级组件")
+                            }
+                            VButton {
+                                objectName: "set-virtual-camera-install"
+                                primary: !!(veyra.virtualCameraState || {}).systemOutdated
+                                text: (veyra.virtualCameraState || {}).systemOutdated ? qsTr("更新组件")
+                                    : (veyra.virtualCameraState || {}).systemInstalled ? qsTr("修复组件") : qsTr("安装组件")
+                                enabled: !(veyra.virtualCameraState || {}).installing
+                                onClicked: veyra.installVirtualCamera()
+                            }
+                        }
+                        VRow {
+                            label: qsTr("虚拟摄像机")
+                            hint: qsTr("在直播软件的视频采集设备中选择 Veyra Virtual Camera；输出处理后的完整画面，不需要全屏")
+                            VSwitch {
+                                objectName: "set-virtual-camera-toggle"
+                                checked: veyra.virtualCameraEnabled
+                                onToggled: enabled => veyra.setVirtualCameraEnabled(enabled)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("摄像机输出帧率")
+                            hint: qsTr("自动：跟随直播软件为摄像机选的帧率（如 OBS 设 60 或 120），补帧 3X、4X 时按均匀时间挑帧；固定值为上限。SDR 视频输出，声音请单独采集；XeSS 显示端生成的帧不包含在内")
+                            VSeg {
+                                objectName: "set-virtual-camera-fps"
+                                options: [{id: "0", label: qsTr("自动")}, {id: "30", label: "30"}, {id: "60", label: "60"}, {id: "120", label: "120"}]
+                                current: String(veyra.virtualCameraFps)
+                                onPicked: id => veyra.setPreference("virtualCameraFps", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("摄像机状态")
+                            hint: {
+                                const c = veyra.virtualCameraState || {}
+                                if (c.error) return c.error
+                                if (!c.active) return qsTr("已关闭；每次启动软件后需手动启用")
+                                if (!(c.width > 0)) return qsTr("已启用，等待处理后的画面")
+                                const size = qsTr("%1 × %2 · 已输出 %3 帧 · 跳过 %4 帧").arg(c.width).arg(c.height).arg(c.frames).arg(c.dropped)
+                                           + (c.consumerFps > 0 ? qsTr(" · 直播软件请求 %1 帧/秒").arg(c.consumerFps) : "")
+                                return c.processingWidth !== c.width || c.processingHeight !== c.height
+                                     ? size + qsTr("（处理尺寸 %1 × %2）").arg(c.processingWidth).arg(c.processingHeight) : size
+                            }
+                            VButton { objectName: "set-virtual-camera-uninstall"; text: qsTr("卸载摄像机"); ghost: true; enabled: !(veyra.virtualCameraState || {}).installing; onClicked: veyra.uninstallVirtualCamera() }
+                        }
+                        // The consumer takes evenly spaced pictures: from a rate that is not a whole
+                        // multiple of its own (90 against 60: 3X on a 30 fps game) they cannot be even.
+                        VRow {
+                            objectName: "set-virtual-camera-rhythm"
+                            readonly property var cam: veyra.virtualCameraState || {}
+                            readonly property real ratio: cam.presentedFps > 0 && cam.consumerFps > 0
+                                ? Math.max(cam.presentedFps, cam.consumerFps) / Math.min(cam.presentedFps, cam.consumerFps) : 1
+                            visible: !!cam.active && Math.abs(ratio - Math.round(ratio)) > 0.1
+                            label: qsTr("直播画面节奏")
+                            hintColor: Theme.warn
+                            hint: qsTr("画面 %1 帧/秒不是直播软件 %2 帧/秒的整数倍，直播画面会一快一慢交替。请换成整数倍的补帧倍数，例如 30 帧游戏直播 60 帧时用 2X 或 4X")
+                                  .arg(cam.presentedFps).arg(cam.consumerFps)
+                        }
+                    }
                     // Instant replay (#103): the last few seconds or minutes in memory.
                     VGroup {
                         objectName: "set-replay-group"

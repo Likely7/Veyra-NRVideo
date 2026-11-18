@@ -243,7 +243,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // Pausing keeps the last flip-model buffer visible. Re-submit only when
     // its producer fence, view, comparison, visibility, monitor or size changes.
     // Deferred resize must keep polling until the actual buffers match.
-    if(retainUnchanged&&retained.producer&&retained.fence&&retainedFrame_&&*retainedFrame_==retained&&
+    if(retainUnchanged&&(!capture_||!capture_->needsFrame())&&retained.producer&&retained.fence&&retainedFrame_&&*retainedFrame_==retained&&
         !windowChanging&&targetWidth==sink_.width()&&targetHeight==sink_.height()&&
         SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0))return true;
@@ -371,7 +371,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     struct CaptureGuard{PresentCapture* capture;bool& recorded;~CaptureGuard(){if(recorded&&capture)capture->discarded();}} captureGuard{capture_,captureRecorded};
     if(capture_){
         const uint32_t hdrMode=graph.hdrOutput()?(graph.hdr10Output()?2u:1u):0u;
-        captureRecorded=capture_->record(list,{source,graph.outputFormat(),graph.workWidth(),graph.workHeight(),hdrMode,graph.outputDitherStep(),generated});
+        captureRecorded=capture_->record(list,{source,graph.outputFormat(),graph.workWidth(),graph.workHeight(),hdrMode,graph.outputDitherStep(),generated,graph.sourceWidth(),graph.sourceHeight(),graph.highQualityPresentation()});
     }
     // Interpolation region for the XeSS present-sink FG backend.
     // It must follow the PresentBlit view mapping (contain * zoom, view

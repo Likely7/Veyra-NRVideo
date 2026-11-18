@@ -27,6 +27,7 @@
 #include "veyra/sink/VideoEncoder.h"
 #include "veyra/engine/ExportOptions.h"
 #include "veyra/engine/LiveRecorder.h"
+#include "veyra/engine/VirtualCamera.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
@@ -272,6 +273,10 @@ public:
     bool requestRecording(const RecordingSettings& options,std::wstring& error);
     void stopRecording();
     RecordingStatus recordingSnapshot()const;
+    bool setVirtualCamera(bool enabled,uint32_t fps,std::wstring& error);
+    bool uninstallVirtualCamera(std::wstring& error);
+    bool installVirtualCamera(std::wstring& error);
+    VirtualCameraStatus virtualCameraSnapshot()const;
     // Instant replay (#103): while enabled, the last options.replaySeconds of
     // whatever is presented stay in memory, across sessions; saveReplay()
     // writes them to a new file in the background. Any thread.
@@ -319,7 +324,9 @@ private:
     // The instant replay buffer, a second recorder; both take the presented
     // frame through captures_.
     std::unique_ptr<LiveRecorder> replay_=std::make_unique<LiveRecorder>(true);
-    PresentCaptureFanout captures_{*recorder_,*replay_};
+    PresentCaptureFanout recordingCaptures_{*recorder_,*replay_};
+    std::unique_ptr<VirtualCamera> virtualCamera_=std::make_unique<VirtualCamera>();
+    PresentCaptureFanout captures_{recordingCaptures_,*virtualCamera_};
     // Declared before worker_: it outlives the engine thread's presenters.
     DisplayStateService displayStates_;
     std::thread worker_;

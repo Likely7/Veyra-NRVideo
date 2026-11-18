@@ -58,7 +58,7 @@ def validate_payload(name):
         raise ValueError('Forbidden candidate payload: ' + name)
     if any(part.startswith(('user-data', 'qml-preferences', 'last-applied', 'presets.v1')) for part in parts):
         raise ValueError('User data in candidate: ' + name)
-    if p.suffix.lower() == '.exe' and name != 'veyra_qml_ui.exe':
+    if p.suffix.lower() == '.exe' and name not in {'veyra_qml_ui.exe', 'virtualcam/veyra-camera-setup.exe'}:
         raise ValueError('Unexpected executable: ' + name)
     if any(token in name.lower() for token in ('qt6test', 'qt6quicktest', 'qml/qttest', 'qmltooling/')):
         raise ValueError('Test/development Qt dependency: ' + name)
@@ -241,6 +241,13 @@ def main():
     # Only compiled production assets come from the current build.
     copy(args.build / 'veyra_qml_ui.exe', 'veyra_qml_ui.exe')
     tree(args.build / 'qml/Veyra', 'qml/Veyra')
+    # Own DirectShow camera servers (both consumer architectures), not proprietary runtimes.
+    for bits in (64, 32):
+        component = args.build / 'virtualcam' / f'veyra-virtualcam{bits}.dll'
+        if not component.is_file():
+            raise RuntimeError(f'Missing virtual camera component: {component}')
+        copy(component, 'virtualcam/' + component.name)
+    copy(args.build / 'virtualcam/veyra-camera-setup.exe', 'virtualcam/veyra-camera-setup.exe')
     for f in sorted((args.build / 'shaders').rglob('*.dxil')):
         copy(f, 'shaders/' + f.relative_to(args.build / 'shaders').as_posix())
     with (args.output / ('windeployqt-' + args.label + '.log')).open('xb') as log:

@@ -227,6 +227,9 @@ class QmlPlayerBridge : public QObject {
     // Live recording of the processed picture: the engine owns the encoder and
     // the file, the interface shows the state and starts or stops it.
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool virtualCameraEnabled READ virtualCameraEnabled NOTIFY virtualCameraChanged)
+    Q_PROPERTY(QVariantMap virtualCameraState READ virtualCameraState NOTIFY virtualCameraChanged)
+    Q_PROPERTY(int virtualCameraFps READ virtualCameraFps NOTIFY preferencesChanged)
     Q_PROPERTY(QVariantMap recordingState READ recordingState NOTIFY recordingChanged)
     Q_PROPERTY(QString recordingDirectory READ recordingDirectory NOTIFY preferencesChanged)
     Q_PROPERTY(int recordingBitrateMbps READ recordingBitrateMbps NOTIFY preferencesChanged)
@@ -1374,6 +1377,13 @@ public:
     // only opens the file when the request reaches it.
     // source names the trigger in the log ("shortcut", "pro-button", "game-hotkey").
     Q_INVOKABLE void startRecording(const QString& source = QString());
+    Q_INVOKABLE void setVirtualCameraEnabled(bool enabled);
+    Q_INVOKABLE void uninstallVirtualCamera();
+    Q_INVOKABLE void installVirtualCamera();
+    bool virtualCameraEnabled()const;
+    QVariantMap virtualCameraState()const;
+    int virtualCameraFps()const;
+    void pollVirtualCamera();
     Q_INVOKABLE void stopRecording(const QString& source = QString());
     Q_INVOKABLE void toggleRecording(const QString& source = QString());
     Q_INVOKABLE void chooseRecordingDirectory();
@@ -1467,6 +1477,7 @@ signals:
     void subtitleTextChanged();
     void preferencesChanged();
     void recordingChanged();
+    void virtualCameraChanged();
     void replayChanged();
     void microphoneDevicesChanged();
     void colourLibraryChanged();

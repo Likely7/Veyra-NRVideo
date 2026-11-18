@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.24)
 
 project(veyra VERSION 2.1.9 LANGUAGES C CXX RC)
+add_subdirectory(src/virtualcam)
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
@@ -342,6 +343,7 @@ veyra_add_compute_shader(veyra_shader_flow_claim FlowClaim)
 # VfgShotChange: per-pair shot-change test for VFG (replaces the SDK's automatic one).
 veyra_add_compute_shader(veyra_shader_vfg_shot_change VfgShotChange)
 veyra_add_compute_shader(veyra_shader_rgb_nv12 RgbToNv12)
+veyra_add_compute_shader(veyra_shader_virtual_camera_nv12 VirtualCameraNv12)
 
 # ---------------------------------------------------------------------------
 # veyra_parity: RenoDX-equivalent codec reference (CPU golden + shaders later).
@@ -1202,6 +1204,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     src/ui/bridge/Enhancement.cpp
     src/ui/bridge/Chain.cpp
     src/ui/bridge/Recording.cpp
+    src/ui/bridge/VirtualCamera.cpp
     src/ui/bridge/View.cpp
     src/ui/QmlPlayerBridge_p.h)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
@@ -1299,6 +1302,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # around, which is not what a player should look like. Diagnostics still reach
   # the log file through the logger.
   add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp src/ui/QmlDiskCache.cpp)
+  add_dependencies(veyra_qml_ui veyra_virtualcam_components)
   # The QML copy is its own always-run step rather than a POST_BUILD of the link:
   # its two long E:/项目 paths on the link statement pushed that command past
   # CMake's response-file threshold, and link.exe reads response files in the
@@ -1547,6 +1551,9 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
       "${VEYRA_FIDELITYFX_ROOT}/bin/ffx_sdk/ffx_backend_dx12_x64.lib")
   endif()
   target_compile_features(veyra_engine PUBLIC cxx_std_20)
+  target_sources(veyra_engine PRIVATE src/engine/VirtualCamera.cpp src/virtualcam/CameraRegistration.cpp)
+  target_link_libraries(veyra_engine PUBLIC veyra_virtualcam_transport advapi32)
+  add_dependencies(veyra_engine veyra_shader_virtual_camera_nv12)
   target_compile_options(veyra_engine PRIVATE /utf-8)
   target_compile_definitions(veyra_engine PUBLIC VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}" VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
   target_link_libraries(veyra_engine PUBLIC veyra_pipeline veyra_sources veyra_sinks veyra_ngx veyra_nvof)
@@ -1656,6 +1663,11 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_definitions(veyra_repair_preset_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_repair_preset_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   add_executable(veyra_replay_buffer_tests tests/unit/ReplayBufferTests.cpp src/engine/ReplayBuffer.cpp src/sink/RecordingAudioTap.cpp)
+  add_executable(veyra_virtualcam_gpu_tests tests/integration/VirtualCameraGpuTests.cpp)
+  target_compile_features(veyra_virtualcam_gpu_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_virtualcam_gpu_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_virtualcam_gpu_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_link_libraries(veyra_virtualcam_gpu_tests PRIVATE veyra_engine)
   target_compile_features(veyra_replay_buffer_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_replay_buffer_tests PRIVATE /utf-8)
   target_compile_definitions(veyra_replay_buffer_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)

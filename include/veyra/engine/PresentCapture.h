@@ -19,8 +19,11 @@ public:
         uint32_t hdrMode=0;              // 0 SDR, 1 scRGB (linear BT.709), 2 HDR10 (PQ BT.2020)
         float ditherStep=0;              // graph output dither step (RgbToNv12 reserved.y)
         bool generated=false;
+        uint32_t nativeWidth=0,nativeHeight=0; // Source extent, independent of real-time internal resolution.
+        bool highQuality=false;
     };
     virtual ~PresentCapture()=default;
+    virtual bool needsFrame() const {return false;}
     // true: commands were recorded into `list`; submitted() or discarded() follows.
     virtual bool record(ID3D12GraphicsCommandList* list,const Frame& frame)=0;
     // The list was submitted; this fence point covers the recorded commands.
@@ -34,6 +37,7 @@ public:
 class PresentCaptureFanout final : public PresentCapture {
 public:
     PresentCaptureFanout(PresentCapture& first,PresentCapture& second):first_(first),second_(second){}
+    bool needsFrame()const override{return first_.needsFrame()||second_.needsFrame();}
     bool record(ID3D12GraphicsCommandList* list,const Frame& frame) override {
         const bool a=first_.record(list,frame);
         const bool b=second_.record(list,frame);

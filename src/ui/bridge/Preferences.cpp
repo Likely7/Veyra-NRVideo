@@ -199,6 +199,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // cap (0 keeps the presented rate).
         {"recordBitrateMbps", {0, 400}},
         {"recordFps", {0, 240}},
+        {"virtualCameraFps", {0, 120}},
         // Instant replay (#103): seconds the buffer keeps.
         {"replaySeconds", {15, 600}}};
     static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
@@ -319,6 +320,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if(key==QLatin1String("virtualCameraFps")&&virtualCameraEnabled())setVirtualCameraEnabled(true);
     if(key==QLatin1String("captureAudioMonitor"))
         impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // The replay buffer re-arms with what a recording would use.

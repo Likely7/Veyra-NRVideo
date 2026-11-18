@@ -383,6 +383,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if(wasSession!=impl_->snapshot.sessionId||oldSourceAspect!=sourceAspect())emit compareChanged();
         // Live recording state: the recorder owns the files, this side shows them.
         {
+            pollVirtualCamera();
             const auto live=impl_->engine.recordingSnapshot();
             QVariantMap state;
             state["active"]=live.active;

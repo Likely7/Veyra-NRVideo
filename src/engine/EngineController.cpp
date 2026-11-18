@@ -376,6 +376,12 @@ void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(
 bool EngineController::requestRecording(const RecordingSettings& options,std::wstring& error){return recorder_->start(options,error);}
 void EngineController::stopRecording(){recorder_->stop();}
 RecordingStatus EngineController::recordingSnapshot()const{return recorder_->status();}
+bool EngineController::setVirtualCamera(bool enabled,uint32_t fps,std::wstring& error){
+    if(!enabled){virtualCamera_->stop();return true;}return virtualCamera_->start(fps,error);
+}
+bool EngineController::uninstallVirtualCamera(std::wstring& error){return virtualCamera_->uninstall(error);}
+bool EngineController::installVirtualCamera(std::wstring& error){return virtualCamera_->installForAllUsers(error);}
+VirtualCameraStatus EngineController::virtualCameraSnapshot()const{return virtualCamera_->status();}
 bool EngineController::setReplay(bool enabled,const RecordingSettings& options,std::wstring& error){
     error.clear();
     if(!enabled){replay_->stop();return true;}
@@ -482,6 +488,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // A recording belongs to the session (and device) it started in.
     if(recorder_->active())recorder_->sessionEnded(L"已切换播放内容，录制已保存");
     replay_->sessionEnded({});
+    virtualCamera_->sessionEnded();
     auto extension=std::filesystem::path(path).extension().wstring();for(auto& c:extension)c=towlower(c);
     const bool ordinaryFile=!remoteRequest&&!moonlightRequest&&!xboxRequest&&
         !path.starts_with(L"capture:")&&!path.starts_with(L"capture2:")&&!path.starts_with(L"screen:")&&
@@ -1267,7 +1274,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             OnExit resetExit{[&]{finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);
                 // The recording ends with the session; its file is finished in the background.
                 recorder_->sessionEnded(stop_?L"播放已停止，录制已保存":L"播放已结束，录制已保存");
-                replay_->sessionEnded({});}};
+                replay_->sessionEnded({});virtualCamera_->sessionEnded();}};
             auto collectTimings=[&]{
                 auto record=[&](const diagnostics::GpuFrameTiming& sample){
                     const auto& fgCost=sample.gpu[size_t(diagnostics::GpuStage::FgBatch)];

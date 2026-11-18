@@ -422,6 +422,22 @@ VPage {
                 }
             }
             RowLayout {
+                objectName: "pro-virtual-camera-control"
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 6
+                Text {
+                    text: qsTr("虚拟摄像机")
+                    color: veyra.virtualCameraEnabled ? Theme.accent : Theme.t2
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsBody
+                }
+                VSwitch {
+                    objectName: "pro-virtual-camera-toggle"
+                    checked: veyra.virtualCameraEnabled
+                    onToggled: enabled => veyra.setVirtualCameraEnabled(enabled)
+                }
+            }
+            RowLayout {
                 objectName: "pro-replay-control"
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 6
