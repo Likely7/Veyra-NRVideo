@@ -390,7 +390,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             state["path"]=QString::fromStdWString(live.path);
             state["error"]=live.error.empty()?QString():uiText(live.error);
             state["note"]=live.note.empty()?QString():uiText(live.note);
-            state["encoder"]=QString::fromStdWString(live.encoder);
+            state["encoder"]=uiText(live.encoder);
             state["frames"]=QVariant::fromValue(qulonglong(live.frames));
             state["dropped"]=QVariant::fromValue(qulonglong(live.dropped));
             state["seconds"]=live.seconds;

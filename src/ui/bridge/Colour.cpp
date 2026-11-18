@@ -372,7 +372,7 @@ bool QmlPlayerBridge::importLut(const QString& path) {
     std::wstring name; std::string error;
     if (!store.importFile(std::filesystem::path(path.toStdWString()), name, error) || name.empty()) {
         veyra::log::warn("ui-colour", std::format("lut import rejected path={} error={}", path.toStdString(), error));
-        emit notice(tr("LUT 导入失败：%1").arg(QString::fromStdString(error)), true);
+        emit notice(tr("LUT 导入失败：%1").arg(uiText(std::string_view(error))), true);
         return false;
     }
     veyra::log::info("ui-colour", std::format("lut imported name={}", QString::fromStdWString(name).toStdString()));

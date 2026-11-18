@@ -60,7 +60,7 @@ QString QmlPlayerBridge::flowBackend() const {
     // name; report the fact we do have and let it read as unmeasured otherwise.
     const auto& s = impl_->snapshot;
     if (s.flowPerf == 0) return {};
-    return QStringLiteral("GPU 光流");
+    return tr("GPU 光流");
 }
 
 int QmlPlayerBridge::opticalFlowChoice() const { return int(settings().opticalFlowBackend); }
