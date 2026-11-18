@@ -1406,3 +1406,14 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 archive-branches.py先tip映射/bundle verify/逐ref校验，再移除23干净E盘树与45已合分支引用，9脏树/4隔离/摄像机对照树保持；无强制删除、无远端或标签删除，依赖/用户配置/原包保持。bundle94032300字节、源路径减少2100030553字节（均非实际净磁盘回收）。收拢AGENTS/CURRENT_STATUS/DEVELOPMENT当前入口，全文归档历史；更新E盘根入口，补齐第三方修改清单。旧发行NVIDIA package-manifest从原ZIP原子恢复，qa.py防写穿硬链接；恢复脚本编码名错误与收尾注册核对夹具GUID/输出编码错误已纠正，未删系统模块，实际移除本任务x64/x86当前用户注册。所有失败证据/脚本/恢复清单在reports/archives同任务。
 
 当前源码main-claude-anr-20261113，build/tests/logs/reports/tmp统一codex-main-integration-20261118，独立启动tests同任务/启动main整合测试.cmd，保留原HDMI配置。详细结果docs/MAIN_INTEGRATION_2026-11-18.md及FINAL.json；不push、不新Release、不关机。本轮单Agent自审，不宣称独立Reviewer或全硬件验收。
+## 2026-11-16 Elgato 4K X：自动识别 HDR 信号源（Claude，未提交）
+
+用户 4K X + P010 时“自动”保持 SDR，需手动选 HDR·PQ。原因：4K X 不支持厂商属性集（720/721/722），驱动也不声明 PQ。实机核查（USB\VID_0FD9&PID_009B）：只有 UVC 视频与 UAC 音频接口，没有 HID 接口，因此 Elgato 官方 HID 协议不适用；厂商控制在 UVC 扩展单元 {961073C7-49F7-44F2-AB42-E940405940C2}（拓扑节点 3）。
+
+改动：`readElgato4kxHdrPacket`（`src/source/ElgatoHdrControl.cpp`）按 Nitlink f39b909（MIT）的邮箱协议读取信号源 HDR InfoFrame；`configure` 在非 MK.2、厂商属性读不到有效包时改走该路径，之后沿用原有 InfoFrame 校验与自动 PQ/HLG 逻辑。每次连接只查询一次；首个写入被拒即停止。手动选择、MK.2 与其它采集卡路径不变。
+
+验证：本机无项目依赖，未构建应用或 `veyra_capture_color_tests`。用 MSVC 14.50 /W4 单独编译 `ElgatoHdrControl.cpp`+`Log.cpp`+`ElgatoHdrCases.h`：34/34 通过（新增 4 项邮箱用例）。真实 4K X 上 `configure` 返回成功，应答 37 字节 A1/22、校验通过、内容全零（当时信号源为 SDR）→ 保持 SDR。**HDR 信号源下的真实应答未验证**，应用内整体流程未验证。未提交、未 push。
+
+补充（同日，HDR 信号源实测）：用户确认主机输出 HDR 后复测，真实应答为 `A1 22 00 00 87 01 1A 02 00…00 99`：InfoFrame 头后直接是载荷，**没有 InfoFrame 校验字节**（EOTF 在第 3 字节），原严格解析因此判无效、保持 SDR。修正：`readElgato4kxHdrPacket` 复制时补回校验字节恢复标准布局（完整性已由邮箱校验和覆盖）；测试夹具改为真实布局。重编后 34/34，/W4 无警告；真实 4K X：`InfoFrame valid=true eotf=2`，`configure` 得到 PQ、hdrPath=1。该信号源的静态元数据全零（peak/MaxCLL=0），元数据字段偏移与 HLG 未能实测。应用仍未构建，未提交。
+
+补充（同日，应用内实测，两处修正）：用户授权后在本机搭建最小构建（Qt 6.8.3、FFmpeg n9.0.1 头文件＋由已安装 2.1.9 DLL 生成的导入库、DLSS SDK 310.7、NVOF 头文件、nv-codec-headers n13.0.19.0；FSR/XeSS/AMF/串流/libass 未编入），产物在 D:\veyra-build，用已安装 2.1.9 的副本和独立 data-dir 运行。发现并修正：(1) `tests/unit/ElgatoHdrCases.h` 直接包含 `<ksproxy.h>` 抢在 `__STREAMS__` 设置之前，导致 `veyra_capture_color_tests` 中 IKsPin 未声明、无法编译；改为包含 `DirectShowCaptureSetup.h`。(2) 应用内自动识别到 PQ 后图形链报“Unsupported PQ/HLG colorimetry”：4K X（UVC）驱动无论信号源如何都显式声明 BT.709，自动路径原先保留驱动显式色域。现仅 MK.2 保留驱动显式矩阵/原色，其它 Elgato 卡在信号源为 HDR 时采用 BT.2020（与手动 HDR 一致），并新增对应用例。`veyra_capture_color_tests` failures=0；用户在真实 4K X + PS5 上确认“自动”已进入 HDR。NVIDIA 功能、MK.2 实卡、HLG、元数据偏移仍未验。
