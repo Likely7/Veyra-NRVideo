@@ -46,10 +46,10 @@
 | HTTP | 20/0，含分段请求、跨域/Host、重复长度、超长、非 HTTP、Cookie 注入等；PlaybackServerTests。 |
 | 截图 / 采集颜色 / 压缩解码 | 全通过；截图 GPU debug 无错误，真实 H.264 软/硬解、尺寸变化、恢复/PTS 与旧帧生命周期通过。 |
 | PS5 反馈 | patched stage 精确校验；两个原生 sender/upstream 回归程序通过；实际 Takion 加密和回环 UDP 的 8 个历史包通过。未连接主机。 |
-| 摄像机 | GPU 523/0、debugErrors=0；64 位传输 73 项；实际 4X→60/120 FPS 的短测均 0 重复、0 倒序；APP-CADENCE.json。 |
+| 摄像机 | GPU 523/0、debugErrors=0；32/64 位传输各 73 项；实际 4X→60/120 FPS 的短测均 0 重复、0 倒序；APP-CADENCE.json。 |
 | 产品联动 | 摄像机+录制+回放同时启用；监听静音且增益 300% 时，两份录像分别 267/296 帧，AAC RMS 0.08822/0.08821，均非静音；PARALLEL-AUDIO.json。 |
 | 浏览器/界面 | HTTP 交接后停止/换片及 GUI 心跳正常；实际 B 站推荐列表与韩语显示设置截图人工查看，侧栏/折叠正常。使用私有配置及假测试 Cookie。 |
-| Linux | [Ubuntu 24.04 CI](https://github.com/Likely7/Veyra-NRVideo/actions/runs/44283832801) 编译 libobs 模块、14 个 LUT 输入检查和安装布局通过。 |
+| Linux | [最终提交 Ubuntu 24.04 CI](https://github.com/Likely7/Veyra-NRVideo/actions/runs/44288445800) 编译 libobs 模块、14 个 LUT 输入检查和安装布局通过。 |
 | 打包入口 | 新开源 DLL 与 MIT LICENSE 跟随已构建前缀打包；PACKAGING-TEST.json 验证复制及缺失构建运行时拒绝。没有制作/上传新 Release。 |
 
 初轮 Quick 失败定位到共享控件布局、重复显示面板和跨拖动 seek 状态，已经修复；offscreen 与真实 Windows 控件的日志均保留。新截图中的黑色视频区域是 Qt grab 不包含原生 D3D 子窗口，不是摄像机或录制黑屏证明；后者用实际输出文件/消费者验证。
@@ -59,3 +59,9 @@
 B站会员、扫码登录和互动写操作未使用真实账号测试；未代用户发送评论/点赞/投币。本轮没有 Elgato 4K X、真实 Xbox/PS5 或其他型号显卡的现场验收；不把回环反馈和 H.264 夹具说成主机端通过。P7 EL 合成保持实验性，缺失/失败的 EL 按既有合同回退基础层；本轮 RPU/数学验证不等于完整双层片库画质验收。Linux 新验证是编译、解析器和安装布局，贡献者的历史 RTX3090 图像测量另行注明来源。虚拟摄像机仍只含 SDR 视频，声音需直播软件单独采集；未改系统摄像机注册、驱动或用户配置。
 
 发布 ZIP、历史标签、BGM 分发规则、暂停研究分支和脏工作树保持原先保全规则。合并远端的实际提交、原 PR 状态以 WORKLOG 和外部 FINAL.json 的远端核验为准。
+
+## 远端合并结果
+
+整合 [PR #146](https://github.com/Likely7/Veyra-NRVideo/pull/146) 已于 2026-11-18 合入 main，合并提交 `bd35431a6fe42ff4757fba4dec887e72a066e545`。最终提交 5d9a2aee 的 [Windows CI](https://github.com/Likely7/Veyra-NRVideo/actions/runs/44288445771) 与两次 Linux CI 均成功。#140/#133/#127/#115/#99/#96/#75 已核对为 merged；#136 已关闭为 adopted，保留原正文并说明纯源码导入与 #146 的对应关系，merged 标志为 false，不冒充原 head 合入。
+
+本地唯一 main 工作树已 fast-forward 到上述合并提交。QA 的 32/64 位临时 HKCU 摄像机注册已移除（仅删除指向本任务 QA 目录的注册），系统级组件与用户配置未改；私有探针已撤下，单份可复用 stage 留在 tests 目录。后续 main 构建使用独立输出目录，构建脚本拒绝复用其他 source-root 的 CMake cache。

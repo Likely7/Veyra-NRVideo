@@ -31,6 +31,12 @@ ROOT = Path(args.root)
 assert (ROOT / 'CMakeLists.txt').is_file(), ROOT
 BUILD = Path(args.build_dir) if args.build_dir else BASE / 'build' / args.task
 assert BUILD.resolve().is_relative_to((BASE/'build').resolve()), BUILD
+cache_path = BUILD / 'CMakeCache.txt'
+if cache_path.is_file():
+    cached_root = re.search(r'^CMAKE_HOME_DIRECTORY:INTERNAL=(.+)$', cache_path.read_text('utf8'), re.M)
+    if not cached_root or Path(cached_root.group(1).strip()).resolve() != ROOT.resolve():
+        raise SystemExit('Build directory belongs to a different source worktree. '
+                         'Choose a new --build-dir; refusing to report a stale-tree build as this root.')
 TMP = BASE / 'tmp' / args.task / 'build'
 LOGS = BASE / 'logs' / args.task / ('build-' + time.strftime('%Y%m%d-%H%M%S'))
 for p in (BUILD, TMP, LOGS):

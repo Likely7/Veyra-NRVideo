@@ -18,8 +18,10 @@
 ## 构建
 
 ```powershell
-py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-pr-integration-20261118 --build-dir E:/项目/Veyra/build/codex-pr-integration-20261118/app --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --label 2.1.9-pr-integration-test --jobs 2 --option VEYRA_LIBDOVI_ROOT=E:/项目/Veyra/deps/codex-pr-integration-20261118/libdovi --option VEYRA_RP_CHIAKI_SOURCE_DIR=E:/项目/Veyra/deps/codex-pr-integration-20261118/chiaki-stage --option VEYRA_RP_CHIAKI_VERIFY_DIR=E:/项目/Veyra/deps/core/chiaki-source veyra_qml_ui
+py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-pr-integration-20261118 --build-dir E:/项目/Veyra/build/codex-pr-integration-20261118/main-app --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --label 2.1.9-pr-integration-test --jobs 2 --option VEYRA_LIBDOVI_ROOT=E:/项目/Veyra/deps/codex-pr-integration-20261118/libdovi --option VEYRA_RP_CHIAKI_SOURCE_DIR=E:/项目/Veyra/deps/codex-pr-integration-20261118/chiaki-stage --option VEYRA_RP_CHIAKI_VERIFY_DIR=E:/项目/Veyra/deps/core/chiaki-source veyra_qml_ui
 ```
+
+本轮已验证的 `build/.../app` 来自保留的隔离树 `worktrees/pr-integration-20261118`，源码已随 #146 合入 main。上面的 main 重建示例使用独立 `main-app` 输出，避免复用不同源码树的 CMake cache；构建脚本会拒绝 source-root 不匹配。
 
 首次/变更CMake选项或显示版本传`--reconfigure`。保持构建并发≤2、单次≤900秒。脚本读取`logs/pr64-avermedia-20261019/build-20261019-094942/receipt.json`固定依赖参数，该小回执不能按旧日志删除。保留patched FFmpeg与实际对应源码/许可。
 

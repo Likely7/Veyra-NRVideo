@@ -1449,3 +1449,10 @@ regressions are ongoing, with exact logs under
 发现并修复：预设v16-21误读自动倍率字段、节点编辑器v17嵌套上限、重复旧显示面板/HDR观察失效、跨拖动seek抑制、MMR常量漏整数、GUI线程网络解析/过期结果、回环HTTP边界、韩语侧栏宽度、Linux透明度/LUT失败残留。初次测试stage缺Qt测试/offscreen组件已补齐，保留原失败；没有拿跳过当通过。B站真实账号写操作、实Elgato/Xbox/PS5、其他GPU、完整P7双层片库与Linux GPU视觉本轮未验，详见记录。
 
 当前 GitHub main 仍 bf596e1，八个原head未变化；#96已从draft转ready。下一步推送已测兼容提交，通过整合PR更新main，并核对原PR状态。未授权新Release或关机。
+
+
+### 2026-11-18 八项 PR 已更新 GitHub main
+
+GitHub #146 merge 成功：bd35431a6fe42ff4757fba4dec887e72a066e545，输入 head 5d9a2aee 已通过 Windows run44288445771、Linux runs44288361404/44288445800；七个原 PR (#140/#133/#127/#115/#99/#96/#75) 远端 merged=true。#136 的所有源功能已按纯源码导入，原 PR 已关闭为 adopted 并附 #146/合并提交/排除 DLL/LIB 历史原因，merged=false 的事实保留。
+
+本地 main-claude-anr-20261113 干净树已 ff-only 同步。摄像机传输32/64位各73项通过；临时HKCU注册仅指向本任务stage的两项已撤销，HKLM/用户配置/既有Release不改，QML测试探针撤下。收尾补 source-root cache guard，拒绝把隔离树的旧构建冒报为main；开发示例改用新的 main-app 输出目录。完整远端/源码/产物 SHA 与 CI 摘要存 reports/codex-pr-integration-20261118/FINAL.json。
