@@ -1,4 +1,5 @@
 #include "BrandIcon.h"
+#include "veyra/sink/AudioGain.h"
 #include "../resource.h"
 #include "TransportLayout.h"
 #include <windows.h>
@@ -601,7 +602,7 @@ control(L"BUTTON",L"视频",ProRailVideo,BS_PUSHBUTTON,0,0,64,44);control(L"BUTT
 control(L"BUTTON",L"屏幕采集",ScreenCapture,BS_PUSHBUTTON,0,0,44,44);veyra::ui::icon(GetDlgItem(hwnd,ScreenCapture),veyra::ui::Icon::ScreenCapture);veyra::ui::ghost(GetDlgItem(hwnd,ScreenCapture));SetPropW(GetDlgItem(hwnd,ScreenCapture),L"veyra.tip",HANDLE(L"屏幕采集 · 窗口 / 显示器"));
 control(L"BUTTON",L"音频",TabAudio,BS_PUSHBUTTON,0,0,60,36);
 const wchar_t* tabs[]={L"增强",L"运动",L"色彩",L"导出"};for(int i=0;i<4;++i)control(L"BUTTON",tabs[i],TabEnhance+i,BS_PUSHBUTTON,0,0,76,36);
-control(L"BUTTON",L"音量",Mute,BS_PUSHBUTTON,0,0,54,36);auto vol=control(TRACKBAR_CLASSW,L"音量",Volume,TBS_HORZ|TBS_NOTICKS,0,0,80,26);SendMessageW(vol,TBM_SETRANGE,TRUE,MAKELPARAM(0,100));SendMessageW(vol,TBM_SETPOS,TRUE,100);
+control(L"BUTTON",L"音量",Mute,BS_PUSHBUTTON,0,0,54,36);auto vol=control(TRACKBAR_CLASSW,L"音量",Volume,TBS_HORZ|TBS_NOTICKS,0,0,80,26);SendMessageW(vol,TBM_SETRANGE,TRUE,MAKELPARAM(0,int(veyra::sink::kMaxAudioGain*100)));SendMessageW(vol,TBM_SETPOS,TRUE,100);
 control(L"BUTTON",L"字幕",Subtitle,BS_PUSHBUTTON,0,0,62,36);control(L"STATIC",L"尚未打开媒体",MediaTitle,SS_LEFT|SS_ENDELLIPSIS,0,0,250,26);control(L"STATIC",L"00:00 / 00:00",TimeLabel,SS_LEFT,0,0,200,20);
 control(L"STATIC",L"处理 0.0 fps",FpsLabel,SS_RIGHT,0,0,154,20);
 control(L"STATIC",L"",ColourStatus,SS_RIGHT|SS_ENDELLIPSIS,0,0,440,20);
@@ -627,7 +628,7 @@ for(auto [id,help]:std::initializer_list<std::pair<int,const wchar_t*>>{
  {Multiplier,L"选择补帧倍率。帧数不是越多越好，跟不上时会跳过过期机会。"},
  {Save,L"保存处理后的完整画面到系统图片文件夹的 Veyra Screenshots。SDR为PNG，HDR为保留高亮的JXR；只拍画面，不拍工具栏或驱动补帧。"},
  {Master,L"总增强开关。关闭后保留设置，重新开启不用重调配方。"},
- {Volume,L"播放音量，不改变音画同步偏移。"},{Mute,L"静音或恢复声音，让耳朵休息一下。"},
+ {Volume,L"播放音量 0–300%，100% 为原始音量。增益过高可能产生失真；不改变音画同步偏移。"},{Mute,L"静音或恢复声音，让耳朵休息一下。"},
  {Subtitle,L"显示或隐藏字幕。字幕在增强后叠加，不让算法给字加戏。"},{SubtitleLoad,L"加载本地字幕文件。对白太快，给眼睛加个帮手。"},{SubtitleSize,L"调整字幕字号，不改变导出视频尺寸。"},
  {OriginalHold,L"查看原始画面对照，松开回到增强效果。眼见为实。"},{Reference,L"选择对照底图。低延迟NR先行时，NR前底图为原图缩放，不是独立超分对照。"},{CompareToggle,L"切换画面对比，方便看清到底改了哪里。"},{Split,L"拖动对比边界，两边当面对质。"},
  {Seek,L"拖动跳转；松手后等待解码和增强预热。跳转中保持目标位置，不会故意弹回。"}})SetPropW(GetDlgItem(hwnd,id),L"veyra.tip",HANDLE(help));
@@ -1335,7 +1336,7 @@ auto hwnd=CreateWindowExW(0,wc.lpszClassName,L"Veyra — 本地实验版",ShellS
 wchar_t focusedClass[32]{};GetClassNameW(GetFocus(),focusedClass,32);const bool editing=_wcsicmp(focusedClass,L"Edit")==0||_wcsicmp(focusedClass,L"ComboBox")==0;
 const bool adjustingSlider=_wcsicmp(focusedClass,TRACKBAR_CLASSW)==0&&GetFocus()!=seekBar;
 if(!editing&&!adjustingSlider&&_wcsicmp(focusedClass,L"ListBox")!=0&&!veyra::ui::popupSelectorOpen()&&msg.message==WM_KEYDOWN&&(msg.wParam==VK_UP||msg.wParam==VK_DOWN)&&!(GetKeyState(VK_CONTROL)&0x8000)&&!(GetKeyState(VK_MENU)&0x8000)){
-    const auto state=engine.snapshot();engine.setVolume(std::clamp(state.volume+(msg.wParam==VK_UP?.05f:-.05f),0.0f,1.0f),false);continue;
+    const auto state=engine.snapshot();engine.setVolume(veyra::sink::clampAudioGain(state.volume+(msg.wParam==VK_UP?.05f:-.05f)),false);continue;
 }
 if(!editing&&!veyra::ui::popupSelectorOpen()&&msg.message==WM_KEYDOWN&&!(GetKeyState(VK_CONTROL)&0x8000)&&!(GetKeyState(VK_MENU)&0x8000)){
     const bool shift=(GetKeyState(VK_SHIFT)&0x8000)!=0;
@@ -1368,7 +1369,7 @@ if(msg.message==WM_MOUSEWHEEL&&GetAncestor(msg.hwnd,GA_ROOT)==hwnd&&!veyra::ui::
     if(hovered==video&&uiState.mode==veyra::ui::Mode::Professional){SendMessageW(video,msg.message,msg.wParam,msg.lParam);continue;}
     if(hovered==video||hovered==GetDlgItem(hwnd,Volume)){
         static int wheelRemainder=0;wheelRemainder+=GET_WHEEL_DELTA_WPARAM(msg.wParam);const int steps=wheelRemainder/WHEEL_DELTA;wheelRemainder%=WHEEL_DELTA;
-        if(steps){const auto state=engine.snapshot();engine.setVolume(std::clamp(state.volume+steps*.05f,0.0f,1.0f),false);}continue;
+        if(steps){const auto state=engine.snapshot();engine.setVolume(veyra::sink::clampAudioGain(state.volume+steps*.05f),false);}continue;
     }
 }
 if(veyra::ui::subtitleSettingsDialogMessage(msg)||veyra::ui::screenCaptureDialogMessage(msg)||IsDialogMessageW(hwnd,&msg))continue;TranslateMessage(&msg);DispatchMessageW(&msg);}

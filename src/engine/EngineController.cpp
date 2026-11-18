@@ -1,4 +1,5 @@
 #include "veyra/engine/EngineController.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/engine/PlaybackRate.h"
 #include "veyra/engine/PreviewFrameReadiness.h"
 #include "veyra/engine/FgCompatibilityProbe.h"
@@ -317,7 +318,7 @@ void EngineController::stop(){
     wake_.notify_one();
 }
 void EngineController::pause(bool p){paused_=p;std::lock_guard lock(mutex_);if(snapshot_.running)snapshot_.transport=p?TransportState::Paused:TransportState::Playing;}
-void EngineController::setVolume(float gain,bool mute){if(!std::isfinite(gain))return;volume_=std::clamp(gain,0.0f,1.0f);muted_=mute;}
+void EngineController::setVolume(float gain,bool mute){if(!std::isfinite(gain))return;volume_=sink::clampAudioGain(gain);muted_=mute;}
 void EngineController::setCaptureAudioMonitoring(bool enabled){
     if(captureAudioMonitoring_.exchange(enabled)!=enabled)
         log::info("capture-audio-monitor",std::format("enabled={} recordingBeforeGain=1 inputUnchanged=1",enabled));

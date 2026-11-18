@@ -1,5 +1,6 @@
 // QML bridge: Core responsibilities.
 #include "QmlPlayerBridge_p.h"
+#include "veyra/sink/AudioGain.h"
 #include "veyra/engine/MicrophoneCapture.h"
 #include "veyra/ui/NvidiaVrrProfileController.h"
 
@@ -84,17 +85,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
     impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
-    // The last volume (user 2026-11-08: it came back at 100% every launch).
-    // Mute stays per session; profiles without the key keep 100%.
-    if (impl_->prefs.contains(QStringLiteral("volume"))) {
-        bool ok = false;
-        const double saved = impl_->prefs.value(QStringLiteral("volume")).toDouble(&ok);
-        if (ok && std::isfinite(saved) && saved >= 0.0 && saved <= 1.0) {
-            impl_->engine.setVolume(float(saved), false);
-            impl_->snapshot.volume = float(saved);
-            veyra::log::info("ui-prefs", std::format("volume restored={:.3f}", saved));
-        }
-    }
+    // Keep main's established key; also read the PR's key for users of its build.
+    // Missing/invalid settings stay at unity, never an automatic boost.
+    bool volumeOk=false;
+    const auto saved=impl_->prefs.value(impl_->prefs.contains(QStringLiteral("volume"))?QStringLiteral("volume"):QStringLiteral("audioVolume")).toDouble(&volumeOk);
+    const float gain=volumeOk&&std::isfinite(saved)&&saved>=0&&saved<=sink::kMaxAudioGain?float(saved):1.0f;
+    const bool mute=impl_->prefBool("audioMuted",false);
+    impl_->engine.setVolume(gain,mute);impl_->snapshot.volume=gain;impl_->snapshot.muted=mute;
+    veyra::log::info("ui-prefs",std::format("volume restored={:.3f} muted={}",gain,mute));
     applyGameHotkeys();
     syncReplay();
     impl_->enumerateGpuAdapters();

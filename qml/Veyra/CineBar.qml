@@ -406,9 +406,9 @@ Rectangle {
             }
 
             Item {
-                implicitWidth: 104
+                implicitWidth: 146
                 implicitHeight: 32
-                Layout.minimumWidth: 104
+                Layout.minimumWidth: 146
                 RowLayout {
                     anchors.fill: parent
                     spacing: 6
@@ -419,10 +419,17 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         Layout.minimumWidth: 72
-                        from: 0; to: 1; value: veyra.volume; inputScale: 100
+                        from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                        defaultValue: 1
                         valueFromModel: true
                         fullKnobHitArea: true
                         onMoved: moved => veyra.volume = moved
+                    }
+                    VSliderValue {
+                        Layout.preferredWidth: 36
+                        slider: volumeSlider
+                        text: Math.round(veyra.volume * 100) + "%"
+                        color: Theme.t2; pixelSize: 10
                     }
                 }
             }

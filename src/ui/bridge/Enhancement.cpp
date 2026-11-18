@@ -1,5 +1,6 @@
 // QML bridge: Enhancement responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/sink/AudioGain.h"
 #include <optional>
 
 namespace veyra::ui {
@@ -1275,10 +1276,13 @@ bool QmlPlayerBridge::applying() const { return impl_->facade.applying(); }
 // straight to the engine and come back through the snapshot: the UI shows what
 // the engine did, not what it asked for.
 double QmlPlayerBridge::volume() const { return double(impl_->snapshot.volume); }
+double QmlPlayerBridge::maximumVolume() const { return sink::kMaxAudioGain; }
 void QmlPlayerBridge::setVolume(double value) {
     if (!std::isfinite(value)) return;
-    const double volume = std::clamp(value, 0.0, 1.0);
+    const double volume = std::clamp(value, 0.0, double(sink::kMaxAudioGain));
     impl_->engine.setVolume(float(volume), impl_->snapshot.muted);
+    impl_->snapshot.volume=float(volume);
+    emit snapshotChanged();
     // Kept for the next launch (user 2026-11-08). A slider drag calls this for
     // every move, so the file is written 0.5 s after the last change and on exit.
     const QString key = QStringLiteral("volume");
@@ -1288,7 +1292,12 @@ void QmlPlayerBridge::setVolume(double value) {
 }
 bool QmlPlayerBridge::muted() const { return impl_->snapshot.muted; }
 void QmlPlayerBridge::setMuted(bool value) {
+    if(value==impl_->snapshot.muted)return;
     impl_->engine.setVolume(impl_->snapshot.volume, value);
+    impl_->snapshot.muted=value;
+    impl_->prefs[QStringLiteral("audioMuted")]=value;
+    if(impl_->volumeSaveTimer)impl_->volumeSaveTimer->start();
+    emit snapshotChanged();
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }
 double QmlPlayerBridge::playbackRate() const { return impl_->snapshot.playbackRate; }
