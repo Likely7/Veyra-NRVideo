@@ -107,7 +107,7 @@ bool loadImage(const std::wstring& path,RgbaImage& img) {
     img.pixels.resize(size_t(img.width)*img.height*4);
     return SUCCEEDED(oriented->CopyPixels(nullptr,img.width*4,static_cast<UINT>(img.pixels.size()),img.pixels.data()));
 }
-bool saveImage(const std::wstring& path,const RgbaImage& img,bool jpeg) {
+bool saveImage(const std::wstring& path,const RgbaImage& img,bool jpeg,ImageAlpha alpha) {
     const uint64_t pixelCount=uint64_t(img.width)*img.height;
     if(!img.width||!img.height||pixelCount>SIZE_MAX/4||img.pixels.size()!=pixelCount*4||std::filesystem::exists(path))return false;
     const auto temp=path+L".partial";
@@ -123,12 +123,13 @@ bool saveImage(const std::wstring& path,const RgbaImage& img,bool jpeg) {
        FAILED(fac->CreateEncoder(jpeg?GUID_ContainerFormatJpeg:GUID_ContainerFormatPng,nullptr,&enc))||
        FAILED(enc->Initialize(stream.Get(),WICBitmapEncoderNoCache))||FAILED(enc->CreateNewFrame(&frame,&opts))||
        FAILED(frame->Initialize(opts.Get()))||FAILED(frame->SetSize(img.width,img.height)))return false;
-    auto format=jpeg?GUID_WICPixelFormat24bppBGR:GUID_WICPixelFormat32bppBGRA;
+    const bool bgrOnly=jpeg||alpha==ImageAlpha::Opaque;
+    auto format=bgrOnly?GUID_WICPixelFormat24bppBGR:GUID_WICPixelFormat32bppBGRA;
     if(FAILED(frame->SetPixelFormat(&format)))return false;
-    if(format!=(jpeg?GUID_WICPixelFormat24bppBGR:GUID_WICPixelFormat32bppBGRA)){
+    if(format!=(bgrOnly?GUID_WICPixelFormat24bppBGR:GUID_WICPixelFormat32bppBGRA)){
         log::error("image","encoder negotiated an unsupported pixel format");return false;
     }
-    const UINT channels=jpeg?3:4;
+    const UINT channels=bgrOnly?3:4;
     if(!img.width||!img.height||img.width>UINT_MAX/channels)return false;
     const UINT stride=img.width*channels;
     const UINT bandHeight=std::min(img.height,std::max(1u,(8u*1024*1024)/stride));
@@ -136,7 +137,7 @@ bool saveImage(const std::wstring& path,const RgbaImage& img,bool jpeg) {
     for(UINT row=0;row<img.height;){
         const UINT rows=std::min(bandHeight,img.height-row);
         const auto* pixels=img.pixels.data()+size_t(row)*img.width*4;
-        for(size_t i=0;i<size_t(rows)*img.width;++i){bgr[i*channels]=pixels[i*4+2];bgr[i*channels+1]=pixels[i*4+1];bgr[i*channels+2]=pixels[i*4];if(!jpeg)bgr[i*4+3]=pixels[i*4+3];}
+        for(size_t i=0;i<size_t(rows)*img.width;++i){bgr[i*channels]=pixels[i*4+2];bgr[i*channels+1]=pixels[i*4+1];bgr[i*channels+2]=pixels[i*4];if(!bgrOnly)bgr[i*4+3]=pixels[i*4+3];}
         if(FAILED(frame->WritePixels(rows,stride,stride*rows,bgr.data())))return false;
         static LONG saveFaultInjected=0;
         if(GetEnvironmentVariableW(L"VEYRA_TEST_LARGE_IMAGE_SAVE_THROW",nullptr,0)&&InterlockedCompareExchange(&saveFaultInjected,1,0)==0)throw std::bad_alloc();
