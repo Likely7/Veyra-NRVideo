@@ -477,6 +477,13 @@
    "ja": "%1 · 現在約 %2 fps"
   },
   {
+   "zh": "%1 × %2 · 已输出 %3 帧 · 跳过 %4 帧",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "%1 × %2 · 已輸出 %3 影格 · 跳過 %4 影格",
+   "en": "%1 × %2 · %3 frames published · %4 skipped",
+   "ja": "%1 × %2 · %3 フレーム出力 · %4 フレームスキップ"
+  },
+  {
    "zh": "%1 关闭",
    "src": "qml/NodePage.qml",
    "zh-TW": "%1 關閉",
@@ -652,6 +659,13 @@
    "ja": "2 項目"
   },
   {
+   "zh": "2. 回到 Veyra，在“音频输入”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "2. 回到 Veyra，在「音訊輸入」選「Veyra 虛擬揚聲器」，再連接擷取。音訊輸出選擇實際耳機或喇叭，即可使用音畫同步。\n\n可選改名：在 Windows 聲音的「播放」頁開啟 CABLE Input 的內容，在「一般」中改成「Veyra 擷取音訊」。",
+   "en": "2. In Veyra, select Veyra virtual speaker under Audio input, then connect capture. Select real headphones or speakers as the audio output to use A/V sync.\n\nOptional: rename CABLE Input to Veyra capture audio in Windows Sound → Playback → Properties → General.",
+   "ja": "2. Veyraの「音声入力」で「Veyra仮想スピーカー」を選択して接続します。出力に実際のヘッドホンやスピーカーを選ぶと、音声と映像の同期を利用できます。\n\n必要に応じて、Windowsのサウンド → 再生 → CABLE Inputのプロパティ → 全般で名前を変更できます。"
+  },
+  {
    "zh": "203 = 中性；调高整体变亮，峰值不变",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "203 = 中性；調高整體變亮，峰值不變",
@@ -715,6 +729,27 @@
    "ja": "8 桁のペアリングコード"
   },
   {
+   "zh": "AMD FRC · 视频补帧 · 2X",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "AMD FRC · 影片補幀 · 2X",
+   "en": "AMD FRC · video frame interpolation · 2X",
+   "ja": "AMD FRC · 映像フレーム補間 · 2X"
+  },
+  {
+   "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已關閉補幀；原因見日誌",
+   "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); frame generation turned off. See the log",
+   "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。フレーム生成をオフにしました。理由はログを参照してください"
+  },
+  {
+   "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已恢复上一套参数",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已恢復上一套參數",
+   "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); the previous settings were restored",
+   "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。前の設定に戻しました"
+  },
+  {
    "zh": "AMD FSR 帧生成上限为 2X；请求未应用",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "AMD FSR 幀生成上限為 2X；請求未應用",
@@ -769,6 +804,13 @@
    "zh-TW": "AMD 性能檔（寬高減半）",
    "en": "AMD performance (half width and height)",
    "ja": "AMD パフォーマンス（縦横半分）"
+  },
+  {
+   "zh": "AMD 驱动自带的视频补帧（AMF FRC），只用前后两帧画面估算运动，固定 2X",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "AMD 驅動內建的影片補幀（AMF FRC），只用前後兩格畫面估算動態，固定 2X",
+   "en": "Video frame interpolation built into the AMD driver (AMF FRC); it estimates motion from the two pictures only, fixed at 2X",
+   "ja": "AMD ドライバー内蔵の映像フレーム補間（AMF FRC）。前後 2 枚の映像だけから動きを推定し、2X 固定です"
   },
   {
    "zh": "ANR FG（极差质量） · 本地实验",
@@ -1072,6 +1114,13 @@
    "ja": "DLSS モデル"
   },
   {
+   "zh": "DLSS、FSR、ANR 补帧，及运动来源选“光流”的 XeSS 生效：修人物边缘果冻，背景不再被人物拖着晃",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "DLSS、FSR、ANR 補幀，及運動來源選「光流」的 XeSS 生效：修人物邊緣果凍，背景不再被人物拖著晃",
+   "en": "For DLSS, FSR and ANR frame generation, and XeSS with the optical-flow motion source: stops the jelly at character edges, so the background no longer drags along",
+   "ja": "DLSS・FSR・ANR のフレーム生成と、動きの推定を「オプティカルフロー」にした XeSS で有効：人物の輪郭のゼリー状の揺れを抑え、背景が人物に引きずられなくなります"
+  },
+  {
    "zh": "DXGI 为显示器兼容方式，无鼠标指针；捕获显示器时不显示黄色边框，Veyra 自己也不会出现在截图和录屏里",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "DXGI 為顯示器相容方式，無滑鼠指標；擷取顯示器時不顯示黃色邊框，Veyra 自己也不會出現在截圖和錄影裡",
@@ -1142,90 +1191,6 @@
    "ja": "FSR 4 ML が使用できません（対応する RX 9000 とドライバーが必要）。FSR 3.1 に切り替えました。理由はログを参照してください"
   },
   {
-   "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已關閉補幀；原因見日誌",
-   "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); frame generation turned off. See the log",
-   "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。フレーム生成をオフにしました。理由はログを参照してください"
-  },
-  {
-   "zh": "AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已恢复上一套参数",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "AMD FRC 未能啟用（需要 AMD 顯示卡和驅動內建的 AMF 執行庫），已恢復上一套參數",
-   "en": "AMD FRC could not start (needs an AMD GPU and the AMF runtime from its driver); the previous settings were restored",
-   "ja": "AMD FRC を開始できませんでした（AMD GPU とドライバー付属の AMF ランタイムが必要）。前の設定に戻しました"
-  },
-  {
-   "zh": "AMD FRC · 视频补帧 · 2X",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "AMD FRC · 影片補幀 · 2X",
-   "en": "AMD FRC · video frame interpolation · 2X",
-   "ja": "AMD FRC · 映像フレーム補間 · 2X"
-  },
-  {
-   "zh": "AMD 驱动自带的视频补帧（AMF FRC），只用前后两帧画面估算运动，固定 2X",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "AMD 驅動內建的影片補幀（AMF FRC），只用前後兩格畫面估算動態，固定 2X",
-   "en": "Video frame interpolation built into the AMD driver (AMF FRC); it estimates motion from the two pictures only, fixed at 2X",
-   "ja": "AMD ドライバー内蔵の映像フレーム補間（AMF FRC）。前後 2 枚の映像だけから動きを推定し、2X 固定です"
-  },
-  {
-   "zh": "摄像机输出帧率",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "攝影機輸出影格率",
-   "en": "Camera frame rate",
-   "ja": "カメラ出力フレームレート"
-  },
-  {
-   "zh": "更新组件",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "更新元件",
-   "en": "Update components",
-   "ja": "コンポーネントを更新"
-  },
-  {
-   "zh": "画面 %1 帧/秒不是直播软件 %2 帧/秒的整数倍，直播画面会一快一慢交替。请换成整数倍的补帧倍数，例如 30 帧游戏直播 60 帧时用 2X 或 4X",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "畫面 %1 影格/秒不是直播軟體 %2 影格/秒的整數倍，直播畫面會一快一慢交替。請改用整數倍的補幀倍數，例如 30 幀遊戲直播 60 幀時用 2X 或 4X",
-   "en": "The picture runs at %1 fps, not a whole multiple of the %2 fps the streaming app takes, so the stream alternates between longer and shorter steps. Choose a frame generation multiple that gives a whole multiple, such as 2X or 4X for a 30 fps game streamed at 60.",
-   "ja": "映像の %1 fps は配信ソフトの %2 fps の整数倍ではないため、配信映像は速い・遅いが交互になります。整数倍になるフレーム生成倍率を選んでください（例：30 fps のゲームを 60 fps で配信するなら 2X か 4X）。"
-  },
-  {
-   "zh": "直播画面节奏",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "直播畫面節奏",
-   "en": "Stream rhythm",
-   "ja": "配信映像のリズム"
-  },
-  {
-   "zh": "系统级组件是旧版本，管理员运行的 OBS 等直播软件会看不到画面；请点击“更新组件”",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "系統層級元件是舊版本，以系統管理員執行的 OBS 等直播軟體會看不到畫面；請點擊「更新元件」",
-   "en": "The system components are an older version: OBS and other streaming apps run as administrator will show no picture. Click “Update components”.",
-   "ja": "システムコンポーネントが古いバージョンです。管理者として実行する OBS などでは映像が表示されません。「コンポーネントを更新」を押してください。"
-  },
-  {
-   "zh": "自动：跟随直播软件为摄像机选的帧率（如 OBS 设 60 或 120），补帧 3X、4X 时按均匀时间挑帧；固定值为上限。SDR 视频输出，声音请单独采集；XeSS 显示端生成的帧不包含在内",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "自動：跟隨直播軟體為攝影機選擇的影格率（如 OBS 設為 60 或 120），補幀 3X、4X 時按均勻時間挑選影格；固定值為上限。輸出SDR視訊，聲音請另外擷取；不含XeSS顯示端產生的影格",
-   "en": "Auto: follows the frame rate the streaming app chose for the camera (such as 60 or 120 in OBS); with 3X or 4X frame generation, frames are taken at even times. A fixed value is a cap. SDR video; capture audio separately. Frames generated by the XeSS presentation backend are not included.",
-   "ja": "自動：配信ソフトがカメラに選んだフレームレート（OBS の 60 や 120 など）に合わせ、フレーム生成 3X・4X では均等な間隔でフレームを選びます。固定値は上限です。SDR 映像を出力します。音声は別途取り込んでください。XeSS の表示側で生成されたフレームは含まれません。"
-  },
-  {
-   "zh": "需要 AMD 显卡（驱动自带 AMF 运行库）",
-   "src": "src/ui/bridge/Hardware.cpp",
-   "zh-TW": "需要 AMD 顯示卡（驅動內建 AMF 執行庫）",
-   "en": "Requires an AMD GPU (AMF runtime from the AMD driver)",
-   "ja": "AMD GPU が必要です（ドライバー付属の AMF ランタイム）"
-  },
-  {
-   "zh": "FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "FSR 4 ML 執行失敗，已改用 FSR 3.1；錯誤碼見日誌",
-   "en": "FSR 4 ML failed while running; switched to FSR 3.1. Error codes are in the log",
-   "ja": "FSR 4 ML の実行に失敗したため、FSR 3.1 に切り替えました。エラーコードはログを参照してください"
-  },
-  {
    "zh": "FSR 4 ML 未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "FSR 4 ML 未能啟用（需要支援的 RX 9000 和驅動），已恢復上一套參數",
@@ -1238,6 +1203,13 @@
    "zh-TW": "FSR 4 ML 補幀只支援 AMD RX 9000 顯示卡，當前顯示卡不能使用，已保持原來的補幀方式",
    "en": "FSR 4 ML frame generation only supports AMD RX 9000 GPUs; this GPU cannot use it, so the current frame generation is kept",
    "ja": "FSR 4 ML のフレーム生成は AMD RX 9000 のみ対応です。この GPU では使えないため、現在のフレーム生成方式のままにしました"
+  },
+  {
+   "zh": "FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "FSR 4 ML 執行失敗，已改用 FSR 3.1；錯誤碼見日誌",
+   "en": "FSR 4 ML failed while running; switched to FSR 3.1. Error codes are in the log",
+   "ja": "FSR 4 ML の実行に失敗したため、FSR 3.1 に切り替えました。エラーコードはログを参照してください"
   },
   {
    "zh": "FSR 4 ML 需要支持的 RX 9000 和驱动，不可用时自动改用 FSR 3.1；尚未在 RX 9000 实卡上验证",
@@ -1772,6 +1744,13 @@
    "ja": "NVENC エンコードに失敗しました："
   },
   {
+   "zh": "NVIDIA G-SYNC 配置",
+   "src": "qml/NvidiaVrrProfileRow.qml",
+   "zh-TW": "NVIDIA G-SYNC 設定",
+   "en": "NVIDIA G-SYNC setup",
+   "ja": "NVIDIA G-SYNC 設定"
+  },
+  {
    "zh": "NVIDIA RTX 补帧；倍率以运行库实际能力为准",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "NVIDIA RTX 補幀；倍率以執行庫實際能力為準",
@@ -1779,18 +1758,18 @@
    "ja": "NVIDIA RTX のフレーム生成。倍率はランタイムの実際の対応範囲によります"
   },
   {
-   "zh": "NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "NVIDIA VFG 👑（頂級補幀品質） · RTX 30（實驗）/ 40 / 50",
-   "en": "NVIDIA VFG 👑 (Top-tier frame generation quality) · RTX 30 (experimental) / 40 / 50",
-   "ja": "NVIDIA VFG 👑（最高級のフレーム生成品質） · RTX 30（実験）/ 40 / 50"
-  },
-  {
    "zh": "NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "NVIDIA VFG 未能啟用（需要 Ada / Blackwell 顯示卡、VFG 執行組件和支援的輸出格式），已關閉補幀；原因見日誌",
    "en": "NVIDIA VFG could not start (requires an Ada / Blackwell GPU, VFG runtime and a supported output format). Frame generation is off; see the log.",
    "ja": "NVIDIA VFG を有効にできませんでした（Ada / Blackwell GPU、VFG ランタイム、対応する出力形式が必要）。フレーム生成はオフです。ログをご確認ください。"
+  },
+  {
+   "zh": "NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "NVIDIA VFG 👑（頂級補幀品質） · RTX 30（實驗）/ 40 / 50",
+   "en": "NVIDIA VFG 👑 (Top-tier frame generation quality) · RTX 30 (experimental) / 40 / 50",
+   "ja": "NVIDIA VFG 👑（最高級のフレーム生成品質） · RTX 30（実験）/ 40 / 50"
   },
   {
    "zh": "NVIDIA 信息浮窗",
@@ -1931,6 +1910,13 @@
    "zh-TW": "PS5 主機",
    "en": "PS5 console",
    "ja": "PS5 本体"
+  },
+  {
+   "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "PS5 仍會傳送一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同時只允許一個遠端遊玩連線。再次串流時記得選擇上方的「音訊輸入」。",
+   "en": "PS5 still sends a 720p 30fps keep-alive video at about 5 Mbps, discarded on arrival. PS5 allows only one Remote Play connection at a time. Select an Audio input above when streaming again.",
+   "ja": "PS5は接続維持用に720p 30fps、約5Mbpsの映像を送信しますが、このPCでは受信後すぐに破棄します。PS5のリモートプレイは同時に1接続のみです。再配信時は上の「音声入力」を選択してください。"
   },
   {
    "zh": "PS5 仍被串流会话占用，请结束其他串流或稍后重试；无需重新配对。",
@@ -2654,13 +2640,6 @@
    "ja": "XeSS を有効にできませんでした。以前の設定に戻しました"
   },
   {
-   "zh": "DLSS、FSR、ANR 补帧，及运动来源选“光流”的 XeSS 生效：修人物边缘果冻，背景不再被人物拖着晃",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "DLSS、FSR、ANR 補幀，及運動來源選「光流」的 XeSS 生效：修人物邊緣果凍，背景不再被人物拖著晃",
-   "en": "For DLSS, FSR and ANR frame generation, and XeSS with the optical-flow motion source: stops the jelly at character edges, so the background no longer drags along",
-   "ja": "DLSS・FSR・ANR のフレーム生成と、動きの推定を「オプティカルフロー」にした XeSS で有効：人物の輪郭のゼリー状の揺れを抑え、背景が人物に引きずられなくなります"
-  },
-  {
    "zh": "XeSS 默认零运动；FSR 仍有自身的光流计算",
    "src": "qml/NodePage.qml",
    "zh-TW": "XeSS 預設零運動；FSR 仍有自身的光流計算",
@@ -2857,6 +2836,13 @@
    "ja": "前回の音声入力が接続されていません"
   },
   {
+   "zh": "上次的音频输入未连接，请插回设备或重新选择音频输入",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "上次的音訊輸入未連接，請重新連接裝置或選擇音訊輸入",
+   "en": "The previous audio input is disconnected. Reconnect it or select another audio input.",
+   "ja": "前回の音声入力が接続されていません。再接続するか、音声入力を選び直してください。"
+  },
+  {
    "zh": "上次采集时显卡设备丢失",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "上次擷取時顯示卡裝置遺失",
@@ -3044,6 +3030,13 @@
    "zh-TW": "不計時",
    "en": "Not timed",
    "ja": "計測なし"
+  },
+  {
+   "zh": "不采集音频",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "不擷取音訊",
+   "en": "No audio input",
+   "ja": "音声を取り込まない"
   },
   {
    "zh": "不重投影、不用光流，所以运动区域不会拖影。放在最后一层 NR 之后、超分与补帧之前。",
@@ -3627,6 +3620,13 @@
    "ja": "顔検出 · すべての美顔ノードで共有"
   },
   {
+   "zh": "仅为当前软件路径配置窗口和全屏 G-SYNC，可恢复原设置；显示器和驱动的 G-SYNC 总开关仍需开启。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "僅為目前軟體路徑設定視窗和全螢幕 G-SYNC，可還原原設定；顯示器和驅動程式的 G-SYNC 總開關仍需開啟。",
+   "en": "Configure windowed and fullscreen G-SYNC for this application path, with an option to restore the original settings. G-SYNC must also be enabled on the monitor and in the driver.",
+   "ja": "現在のアプリのパスに対してウィンドウと全画面の G-SYNC を設定します。元の設定に戻せます。モニターとドライバー側でも G-SYNC を有効にする必要があります。"
+  },
+  {
    "zh": "仅人脸",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "僅人臉",
@@ -4026,6 +4026,20 @@
    "ja": "信号"
   },
   {
+   "zh": "修复",
+   "src": "qml/NvidiaVrrProfileRow.qml",
+   "zh-TW": "修復",
+   "en": "Repair",
+   "ja": "修復"
+  },
+  {
+   "zh": "修复组件",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "修復元件",
+   "en": "Repair components",
+   "ja": "コンポーネントを修復"
+  },
+  {
    "zh": "修改时间：新 → 旧",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "修改時間：新 → 舊",
@@ -4080,6 +4094,13 @@
    "zh-TW": "停止 %1",
    "en": "Stop %1",
    "ja": "停止 %1"
+  },
+  {
+   "zh": "停止本次启动音乐",
+   "src": "qml/Veyra/Main.qml",
+   "zh-TW": "停止本次啟動音樂",
+   "en": "Stop music for this launch",
+   "ja": "今回の起動音楽を停止"
   },
   {
    "zh": "像素格式",
@@ -4349,6 +4370,13 @@
    "ja": "同じキャプチャーカードを使っている他のソフトを閉じてください"
   },
   {
+   "zh": "关闭后仍可录制和保存回放；本机不播放采集声音",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "關閉後仍可錄製和儲存重播；本機不播放擷取聲音",
+   "en": "When off, recording and replay still receive audio; capture sound is not played locally.",
+   "ja": "オフでも録画とリプレイに音声は保存されます。取り込んだ音声はこのPCでは再生されません。"
+  },
+  {
    "zh": "关闭启动音乐",
    "src": "qml/Main.qml",
    "zh-TW": "關閉啟動音樂",
@@ -4438,6 +4466,13 @@
    "zh-TW": "相容軟解",
    "en": "software compatibility",
    "ja": "互換ソフトウェア"
+  },
+  {
+   "zh": "兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。",
+   "src": "qml/Veyra/XboxSourceDialog.qml",
+   "zh-TW": "相容選項：畫面持續出現破圖時可嘗試開啟，斷線後重新連線生效。可能增加 CPU 使用率與延遲；超解析度和補幀仍使用 GPU。",
+   "en": "Compatibility option: try this if picture corruption persists, then disconnect and reconnect. May increase CPU usage and latency; super resolution and frame generation still use the GPU.",
+   "ja": "互換性オプション：映像の乱れが続く場合に有効にし、切断して再接続してください。CPU 使用率と遅延が増える場合があります。超解像とフレーム生成には引き続き GPU を使用します。"
   },
   {
    "zh": "内存上限只够保留 %1 秒（约 %2 MB），可降低录制码率",
@@ -5217,6 +5252,13 @@
    "ja": "アンインストール…"
   },
   {
+   "zh": "卸载摄像机",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "解除安裝攝影機",
+   "en": "Remove camera",
+   "ja": "カメラを削除"
+  },
+  {
    "zh": "历史拒绝",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "歷史拒絕",
@@ -5572,6 +5614,20 @@
    "zh-TW": "變化容差",
    "en": "Change tolerance",
    "ja": "変化の許容幅"
+  },
+  {
+   "zh": "另一个Veyra实例已启用虚拟摄像机",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "另一個Veyra執行個體已啟用虛擬攝影機",
+   "en": "Another Veyra instance is using the virtual camera.",
+   "ja": "別の Veyra インスタンスが仮想カメラを使用しています。"
+  },
+  {
+   "zh": "另一个软件实例正在处理驱动配置，请稍后重试。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "另一個軟體執行個體正在處理驅動程式設定，請稍後重試。",
+   "en": "Another application instance is updating the driver profile. Try again shortly.",
+   "ja": "別のアプリのインスタンスがドライバー設定を処理中です。しばらくしてから再試行してください。"
   },
   {
    "zh": "另存为",
@@ -6265,6 +6321,13 @@
    "zh-TW": "在畫面上按住左鍵拖曳分割線：左邊原畫、右邊增強。",
    "en": "Hold the left button on the picture and drag the divider: original on the left, enhanced on the right.",
    "ja": "映像上で左ボタンを押したまま分割線をドラッグ：左がオリジナル、右が補正後です。"
+  },
+  {
+   "zh": "在直播软件的视频采集设备中选择 Veyra Virtual Camera；输出处理后的完整画面，不需要全屏",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "在直播軟體的視訊擷取裝置中選擇 Veyra Virtual Camera；輸出處理後的完整畫面，無需全螢幕",
+   "en": "Select Veyra Virtual Camera as a video capture device in your streaming app. Outputs the full processed picture without fullscreen.",
+   "ja": "配信ソフトの映像キャプチャデバイスで Veyra Virtual Camera を選択します。全画面表示なしで処理後の映像全体を出力します。"
   },
   {
    "zh": "在线",
@@ -7023,6 +7086,13 @@
    "ja": "セットアップが終了しました。インストールまたは削除が完了した場合は、VB-Audio の指示に従って Windows を再起動してください。"
   },
   {
+   "zh": "安装组件",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "安裝元件",
+   "en": "Install components",
+   "ja": "コンポーネントをインストール"
+  },
+  {
    "zh": "宋体",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "宋體",
@@ -7597,6 +7667,20 @@
    "ja": "音声出力はまだ開いていません"
   },
   {
+   "zh": "尚未检查",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "尚未檢查",
+   "en": "Not checked",
+   "ja": "未確認"
+  },
+  {
+   "zh": "尚未配置窗口和全屏",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "尚未設定視窗和全螢幕",
+   "en": "Windowed and fullscreen not configured",
+   "ja": "ウィンドウと全画面は未設定"
+  },
+  {
    "zh": "尝试视频设备内置音频",
    "src": "src/ui/bridge/Capture.cpp",
    "zh-TW": "嘗試影片裝置內建音訊",
@@ -7730,6 +7814,15 @@
    "ja": "画面キャプチャーのエラー 0x{:08X}：{}"
   },
   {
+   "zh": "展开",
+   "src": [
+    "qml/Veyra/SettingsPage.qml"
+   ],
+   "zh-TW": "展開",
+   "en": "Expand",
+   "ja": "展開"
+  },
+  {
    "zh": "展开本卡片并播放 HDR 输出时测量，每秒最多 4 次",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "展開本卡片並播放 HDR 輸出時測量，每秒最多 4 次",
@@ -7835,6 +7928,13 @@
    "ja": "無効"
   },
   {
+   "zh": "已允许窗口和全屏",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "已允許視窗和全螢幕",
+   "en": "Windowed and fullscreen allowed",
+   "ja": "ウィンドウと全画面を許可済み"
+  },
+  {
    "zh": "已关闭",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "已關閉",
@@ -7861,6 +7961,13 @@
    "zh-TW": "已關閉正在播放的內容，顯示卡全部留給匯出",
    "en": "Closed what was playing; the whole GPU goes to the export",
    "ja": "再生中のコンテンツを閉じ、GPU をすべて書き出しに回しました"
+  },
+  {
+   "zh": "已关闭；每次启动软件后需手动启用",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "已關閉；每次啟動軟體後需手動啟用",
+   "en": "Off. Enable manually after each app launch.",
+   "ja": "オフ。アプリを起動するたびに手動で有効にしてください。"
   },
   {
    "zh": "已切换播放内容，录制已保存",
@@ -7905,6 +8012,13 @@
    "ja": "外部字幕を読み込みました：%1"
   },
   {
+   "zh": "已卸载当前用户的 Veyra 虚拟摄像机",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "已解除安裝目前使用者的 Veyra 虛擬攝影機",
+   "en": "Veyra virtual camera removed for the current user.",
+   "ja": "現在のユーザーの Veyra 仮想カメラを削除しました。"
+  },
+  {
    "zh": "已发送唤醒请求，等待 PS5 开机后再连接。",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "已發送喚醒請求，等待 PS5 開機後再連接。",
@@ -7945,6 +8059,13 @@
    "zh-TW": "已取消喚醒",
    "en": "Wake cancelled",
    "ja": "起動をキャンセルしました"
+  },
+  {
+   "zh": "已取消摄像机组件的管理员授权",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "已取消攝影機元件的系統管理員授權",
+   "en": "Camera component administrator approval was cancelled.",
+   "ja": "カメラコンポーネントの管理者承認をキャンセルしました。"
   },
   {
    "zh": "已取消查找",
@@ -8003,6 +8124,13 @@
    "ja": "有効（HDR10）"
   },
   {
+   "zh": "已启用，等待处理后的画面",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "已啟用，等待處理後的畫面",
+   "en": "Enabled, waiting for the processed picture.",
+   "ja": "有効。処理後の映像を待機しています。"
+  },
+  {
    "zh": "已和主机配对",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "已和主機配對",
@@ -8057,6 +8185,13 @@
    "zh-TW": "已安裝",
    "en": "Installed",
    "ja": "インストール済み"
+  },
+  {
+   "zh": "已安装系统级组件，支持管理员运行的直播软件",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "已安裝系統層級元件，支援以系統管理員執行的直播軟體",
+   "en": "System components installed, including support for streaming apps run as administrator.",
+   "ja": "システムコンポーネントをインストール済み。管理者として実行する配信ソフトにも対応します。"
   },
   {
    "zh": "已完成",
@@ -8393,6 +8528,13 @@
    "zh-TW": "已登出，本機儲存的登入資訊已刪除。",
    "en": "Signed out; the sign-in data saved on this PC was deleted.",
    "ja": "サインアウトしました。この PC に保存されたサインイン情報は削除しました。"
+  },
+  {
+   "zh": "已选中",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "已選中",
+   "en": "Selected",
+   "ja": "選択中"
   },
   {
    "zh": "已选设备（未连接）",
@@ -8885,6 +9027,13 @@
    "ja": "現在は SDR プレビューで、HDR 変換は動作していません"
   },
   {
+   "zh": "当前仅注册到本用户；管理员运行的 OBS 等直播软件需要安装系统级组件",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "目前僅註冊至本使用者；以系統管理員執行的 OBS 等直播軟體需要安裝系統層級元件",
+   "en": "Registered for the current user. OBS and other streaming apps run as administrator need system components.",
+   "ja": "現在のユーザーに登録済み。管理者として実行する OBS などにはシステムコンポーネントが必要です。"
+  },
+  {
    "zh": "当前修改尚未保存：",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "當前修改尚未儲存：",
@@ -9053,6 +9202,13 @@
    "ja": "このパッケージにはインターレース解除モジュールが含まれていません"
   },
   {
+   "zh": "当前配置无法单独修改",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "目前設定無法單獨修改",
+   "en": "This profile cannot be changed independently",
+   "ja": "このプロファイルは個別に変更できません"
+  },
+  {
    "zh": "当前配置未启用自动 NR，保留固定 1080p 档",
    "src": "src/ui/bridge/Playback.cpp",
    "zh-TW": "目前設定未啟用自動 NR，保留固定 1080p 檔",
@@ -9072,6 +9228,13 @@
    "zh-TW": "當前非 NVIDIA 適配器：NR、NVIDIA 超解析與 DLSS 已停用；可使用 XeSS 預覽和 AMD 光流",
    "en": "Not an NVIDIA adapter: NR, NVIDIA super resolution and DLSS are disabled; XeSS preview and AMD optical flow are available",
    "ja": "NVIDIA 以外のアダプターです：NR、NVIDIA 超解像、DLSS は無効です。XeSS のプレビューと AMD オプティカルフローは使えます"
+  },
+  {
+   "zh": "录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄入所選音訊輸入，不受音量、靜音和本機音訊監聽開關影響；擷取卡需選擇音訊輸入",
+   "en": "Records the selected audio input regardless of volume, mute or local monitoring. Select an audio input for capture cards.",
+   "ja": "選択した音声入力を音量、ミュート、ローカルモニター設定に関係なく録音します。キャプチャーカードでは音声入力を選択してください。"
   },
   {
    "zh": "录制",
@@ -9214,6 +9377,13 @@
    "ja": "録画変換シェーダーを読み込めません"
   },
   {
+   "zh": "录制采集卡声音需选择输入；本机监听可独立关闭",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "錄製擷取卡聲音需選擇輸入；本機監聽可獨立關閉",
+   "en": "Select an audio input to record capture-card sound. Local monitoring can be turned off independently.",
+   "ja": "キャプチャーカードの音声を録音するには入力を選択してください。ローカルモニターは個別にオフにできます。"
+  },
+  {
    "zh": "录制麦克风",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "錄製麥克風",
@@ -9310,6 +9480,20 @@
    "zh-TW": "恢復中",
    "en": "Recovering",
    "ja": "復旧中"
+  },
+  {
+   "zh": "恢复原设置",
+   "src": "qml/NvidiaVrrProfileRow.qml",
+   "zh-TW": "還原原設定",
+   "en": "Restore original",
+   "ja": "元の設定に戻す"
+  },
+  {
+   "zh": "恢复记录与当前配置不一致",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "還原記錄與目前設定不一致",
+   "en": "Backup does not match the current profile",
+   "ja": "復元記録と現在の設定が一致しません"
   },
   {
    "zh": "恢复默认",
@@ -9669,6 +9853,13 @@
    "ja": "開くのがタイムアウトしました"
   },
   {
+   "zh": "打开软件播放一次，动画结束后继续；打开媒体或关闭声音立即停止",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "開啟軟體播放一次，動畫結束後繼續；開啟媒體或關閉聲音立即停止",
+   "en": "Plays once on launch, continuing after the intro. Opening media or turning sound off stops it immediately.",
+   "ja": "起動時に一度再生し、アニメ終了後も継続。メディアを開くか音声をオフにすると即停止します。"
+  },
+  {
    "zh": "执行失败；请查看日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "執行失敗；請查看日誌",
@@ -10026,6 +10217,34 @@
    "ja": "検索例：1920 60 NV12"
   },
   {
+   "zh": "摄像机状态",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "攝影機狀態",
+   "en": "Camera status",
+   "ja": "カメラの状態"
+  },
+  {
+   "zh": "摄像机组件安装或卸载失败，请查看日志",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "攝影機元件安裝或解除安裝失敗，請查看記錄",
+   "en": "Camera component installation or removal failed. See the log.",
+   "ja": "カメラコンポーネントのインストールまたは削除に失敗しました。ログを確認してください。"
+  },
+  {
+   "zh": "摄像机组件已安装，请刷新或重新打开直播软件",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "攝影機元件已安裝，請重新整理或重新開啟直播軟體",
+   "en": "Camera components installed. Refresh or reopen your streaming app.",
+   "ja": "カメラコンポーネントをインストールしました。配信ソフトを更新または再起動してください。"
+  },
+  {
+   "zh": "摄像机输出帧率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "攝影機輸出影格率",
+   "en": "Camera frame rate",
+   "ja": "カメラ出力フレームレート"
+  },
+  {
    "zh": "撤销",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "撤銷",
@@ -10200,6 +10419,13 @@
    "zh-TW": "操作失敗；請檢查網路、輸入和可用磁盤空間。",
    "en": "The operation failed; check the network, input and free disk space.",
    "ja": "操作に失敗しました。ネットワーク、入力、ディスクの空き容量を確認してください。"
+  },
+  {
+   "zh": "操作结果尚未确认，请重新检查。已有恢复记录会保留，不会自动重试写入。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "操作結果尚未確認，請重新檢查。既有還原記錄會保留，不會自動重試寫入。",
+   "en": "The result has not been confirmed. Check again. The backup is retained; writes will not be retried automatically.",
+   "ja": "操作結果を確認できませんでした。再確認してください。復元記録は保持され、書き込みが自動で再試行されることはありません。"
   },
   {
    "zh": "支付宝扫码",
@@ -10531,6 +10757,13 @@
    "ja": "今回の書き出し用の一時ファイルを確保できませんでした"
   },
   {
+   "zh": "无法保存或清理恢复记录",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "無法儲存或清理還原記錄",
+   "en": "Cannot save or remove the backup",
+   "ja": "復元記録を保存または削除できません"
+  },
+  {
    "zh": "无法保存虚拟扬声器安装包",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "無法儲存虛擬揚聲器安裝包",
@@ -10741,6 +10974,13 @@
    "ja": "書き出しプロセスを起動できませんでした"
   },
   {
+   "zh": "无法启动摄像机安装程序，请查看日志",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "無法啟動攝影機安裝程式，請查看記錄",
+   "en": "Could not start camera component setup. See the log.",
+   "ja": "カメラコンポーネントのセットアップを開始できません。ログを確認してください。"
+  },
+  {
    "zh": "无法启动采集，请查看诊断",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "無法啟動擷取，請查看診斷",
@@ -10921,6 +11161,13 @@
    "zh-TW": "無法解碼PNG/JPEG",
    "en": "Could not decode the PNG/JPEG",
    "ja": "PNG/JPEG をデコードできません"
+  },
+  {
+   "zh": "无法读取 NVIDIA 驱动配置；请检查显卡和驱动是否支持此功能。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "無法讀取 NVIDIA 驅動程式設定；請檢查顯示卡與驅動程式是否支援此功能。",
+   "en": "Cannot read NVIDIA driver profiles. Check whether the GPU and driver support this feature.",
+   "ja": "NVIDIA ドライバーの設定を読み取れません。GPU とドライバーがこの機能に対応しているか確認してください。"
   },
   {
    "zh": "无法读取媒体信息",
@@ -11201,6 +11448,13 @@
    "zh-TW": "顯示切換排空失敗",
    "en": "Could not drain while switching the display",
    "ja": "表示の切り替え時に排出できませんでした"
+  },
+  {
+   "zh": "显示区域红框",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "顯示區域紅框",
+   "en": "Show region outlines",
+   "ja": "領域の赤枠を表示"
   },
   {
    "zh": "显示同步",
@@ -11509,6 +11763,13 @@
    "zh-TW": "更改…",
    "en": "Change…",
    "ja": "変更…"
+  },
+  {
+   "zh": "更新组件",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "更新元件",
+   "en": "Update components",
+   "ja": "コンポーネントを更新"
   },
   {
    "zh": "最多 4 个保护区域，请先删除一个",
@@ -11861,6 +12122,13 @@
    "ja": "不明なチェーンモード"
   },
   {
+   "zh": "未能确认驱动配置",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "未能確認驅動程式設定",
+   "en": "Driver profile not confirmed",
+   "ja": "ドライバー設定を確認できません"
+  },
+  {
    "zh": "未补帧",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "未補幀",
@@ -11957,6 +12225,13 @@
    "zh-TW": "本機螢幕解析度",
    "en": "This PC's screen resolution",
    "ja": "この PC の画面解像度"
+  },
+  {
+   "zh": "本机音频监听",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "本機音訊監聽",
+   "en": "Local audio monitoring",
+   "ja": "ローカル音声モニター"
   },
   {
    "zh": "本次导出使用 AMD FSR 超分",
@@ -12435,6 +12710,27 @@
    "ja": "前の操作を処理中です。しばらく待つか、先にキャンセルしてください。"
   },
   {
+   "zh": "正在处理驱动配置…",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "正在處理驅動程式設定…",
+   "en": "Processing driver profile…",
+   "ja": "ドライバー設定を処理中…"
+  },
+  {
+   "zh": "正在安装或卸载，请完成 Windows 管理员确认",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "正在安裝或解除安裝，請完成 Windows 系統管理員確認",
+   "en": "Installing or removing. Complete the Windows administrator prompt.",
+   "ja": "インストールまたは削除中です。Windows の管理者確認を完了してください。"
+  },
+  {
+   "zh": "正在安装摄像机组件，请等待",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "正在安裝攝影機元件，請稍候",
+   "en": "Camera component setup is already running. Please wait.",
+   "ja": "カメラコンポーネントのセットアップ中です。お待ちください。"
+  },
+  {
    "zh": "正在导出：{}张源帧 / {}张编码帧（{}）",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "正在匯出：{}張源幀 / {}張編碼幀（{}）",
@@ -12860,6 +13156,13 @@
    "zh-TW": "每幀識別 · 640 像素，小臉也能識別",
    "en": "Every frame · 640 px, finds small faces too",
    "ja": "毎フレーム検出 · 640 px、小さな顔も検出"
+  },
+  {
+   "zh": "每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "每次啟動播放一次，動畫結束後繼續；此開關會儲存，角落按鈕僅停止本次",
+   "en": "Plays once per launch, continuing after the intro. This setting is saved; the corner button stops only this launch.",
+   "ja": "起動ごとに一度再生し、アニメ終了後も継続。この設定は保存され、隅のボタンは今回のみ停止します。"
   },
   {
    "zh": "比较源画面与上一帧：没有明显变化的像素沿用上一帧输出，明显变化的位置直接用新结果。",
@@ -13541,6 +13844,13 @@
    "ja": "映像"
   },
   {
+   "zh": "画面 %1 帧/秒不是直播软件 %2 帧/秒的整数倍，直播画面会一快一慢交替。请换成整数倍的补帧倍数，例如 30 帧游戏直播 60 帧时用 2X 或 4X",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "畫面 %1 影格/秒不是直播軟體 %2 影格/秒的整數倍，直播畫面會一快一慢交替。請改用整數倍的補幀倍數，例如 30 幀遊戲直播 60 幀時用 2X 或 4X",
+   "en": "The picture runs at %1 fps, not a whole multiple of the %2 fps the streaming app takes, so the stream alternates between longer and shorter steps. Choose a frame generation multiple that gives a whole multiple, such as 2X or 4X for a 30 fps game streamed at 60.",
+   "ja": "映像の %1 fps は配信ソフトの %2 fps の整数倍ではないため、配信映像は速い・遅いが交互になります。整数倍になるフレーム生成倍率を選んでください（例：30 fps のゲームを 60 fps で配信するなら 2X か 4X）。"
+  },
+  {
    "zh": "画面上下翻转",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "畫面上下翻轉",
@@ -13910,6 +14220,20 @@
    "zh-TW": "直播相容模式未能啟用，已恢復",
    "en": "Could not enable live-streaming compatibility mode; restored",
    "ja": "配信互換モードを有効にできなかったため、元に戻しました"
+  },
+  {
+   "zh": "直播画面节奏",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "直播畫面節奏",
+   "en": "Stream rhythm",
+   "ja": "配信映像のリズム"
+  },
+  {
+   "zh": "直播软件兼容组件",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "直播軟體相容元件",
+   "en": "Streaming app compatibility",
+   "ja": "配信ソフト互換コンポーネント"
   },
   {
    "zh": "相关性 {:.2f}，建议偏移 {} ms",
@@ -14400,6 +14724,13 @@
    "zh-TW": "系統硬體編碼失敗：",
    "en": "System hardware encoding failed: ",
    "ja": "システムのハードウェアエンコードに失敗しました："
+  },
+  {
+   "zh": "系统级组件是旧版本，管理员运行的 OBS 等直播软件会看不到画面；请点击“更新组件”",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "系統層級元件是舊版本，以系統管理員執行的 OBS 等直播軟體會看不到畫面；請點擊「更新元件」",
+   "en": "The system components are an older version: OBS and other streaming apps run as administrator will show no picture. Click “Update components”.",
+   "ja": "システムコンポーネントが古いバージョンです。管理者として実行する OBS などでは映像が表示されません。「コンポーネントを更新」を押してください。"
   },
   {
    "zh": "系统编码器初始化失败：{}",
@@ -15123,6 +15454,13 @@
    "ja": "自動：処理が追いつかないときだけ再利用し、最大で 2 フレームに 1 回。手動：固定の割合"
   },
   {
+   "zh": "自动：跟随直播软件为摄像机选的帧率（如 OBS 设 60 或 120），补帧 3X、4X 时按均匀时间挑帧；固定值为上限。SDR 视频输出，声音请单独采集；XeSS 显示端生成的帧不包含在内",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動：跟隨直播軟體為攝影機選擇的影格率（如 OBS 設為 60 或 120），補幀 3X、4X 時按均勻時間挑選影格；固定值為上限。輸出SDR視訊，聲音請另外擷取；不含XeSS顯示端產生的影格",
+   "en": "Auto: follows the frame rate the streaming app chose for the camera (such as 60 or 120 in OBS); with 3X or 4X frame generation, frames are taken at even times. A fixed value is a cap. SDR video; capture audio separately. Frames generated by the XeSS presentation backend are not included.",
+   "ja": "自動：配信ソフトがカメラに選んだフレームレート（OBS の 60 や 120 など）に合わせ、フレーム生成 3X・4X では均等な間隔でフレームを選びます。固定値は上限です。SDR 映像を出力します。音声は別途取り込んでください。XeSS の表示側で生成されたフレームは含まれません。"
+  },
+  {
    "zh": "自定义",
    "src": "qml/NodePage.qml",
    "zh-TW": "自定義",
@@ -15639,6 +15977,97 @@
    "zh-TW": "虛擬揚聲器安裝包解壓失敗",
    "en": "Could not extract the virtual speaker package",
    "ja": "仮想スピーカーのパッケージを展開できません"
+  },
+  {
+   "zh": "虚拟摄像机",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機",
+   "en": "Virtual camera",
+   "ja": "仮想カメラ"
+  },
+  {
+   "zh": "虚拟摄像机GPU提交栅栏无效",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機GPU提交柵欄無效",
+   "en": "Virtual camera received an invalid GPU submission fence.",
+   "ja": "仮想カメラの GPU 送信フェンスが無効です。"
+  },
+  {
+   "zh": "虚拟摄像机GPU输出初始化失败",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機GPU輸出初始化失敗",
+   "en": "Virtual camera GPU output could not initialize.",
+   "ja": "仮想カメラの GPU 出力を初期化できませんでした。"
+  },
+  {
+   "zh": "虚拟摄像机卸载失败，请查看日志",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機解除安裝失敗，請查看記錄",
+   "en": "Could not remove the virtual camera. See the log.",
+   "ja": "仮想カメラを削除できませんでした。ログを確認してください。"
+  },
+  {
+   "zh": "虚拟摄像机工作线程初始化失败",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機工作執行緒初始化失敗",
+   "en": "Virtual camera worker could not start.",
+   "ja": "仮想カメラのワーカーを開始できませんでした。"
+  },
+  {
+   "zh": "虚拟摄像机已启用，在直播软件中选择 Veyra Virtual Camera",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機已啟用，請在直播軟體中選擇 Veyra Virtual Camera",
+   "en": "Virtual camera enabled. Select Veyra Virtual Camera in your streaming app.",
+   "ja": "仮想カメラを有効にしました。配信ソフトで Veyra Virtual Camera を選択してください。"
+  },
+  {
+   "zh": "虚拟摄像机无法访问显卡",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機無法存取顯示卡",
+   "en": "Virtual camera could not access the graphics device.",
+   "ja": "仮想カメラが GPU にアクセスできません。"
+  },
+  {
+   "zh": "虚拟摄像机注册失败，请查看日志",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機註冊失敗，請查看記錄",
+   "en": "Virtual camera registration failed. See the log.",
+   "ja": "仮想カメラの登録に失敗しました。ログを確認してください。"
+  },
+  {
+   "zh": "虚拟摄像机组件不完整，请完整解压Veyra软件包",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機元件不完整，請完整解壓縮Veyra軟體套件",
+   "en": "Virtual camera components are missing. Extract the complete Veyra package.",
+   "ja": "仮想カメラのコンポーネントが不足しています。Veyra パッケージをすべて展開してください。"
+  },
+  {
+   "zh": "虚拟摄像机设备已卸载",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機裝置已解除安裝",
+   "en": "Virtual camera device removed.",
+   "ja": "仮想カメラデバイスを削除しました。"
+  },
+  {
+   "zh": "虚拟摄像机输出尺寸超出范围（最大8192边长、约3355万像素）",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機輸出尺寸超出範圍（最長邊8192、約3355萬像素）",
+   "en": "Virtual camera output exceeds the size limit (8192 per side, about 33.55 million pixels).",
+   "ja": "仮想カメラの出力サイズが上限を超えています（各辺8192、約3355万画素）。"
+  },
+  {
+   "zh": "虚拟摄像机：无法读取输出画面",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機：無法讀取輸出畫面",
+   "en": "Virtual camera: could not read the output frame.",
+   "ja": "仮想カメラ：出力フレームを読み取れませんでした。"
+  },
+  {
+   "zh": "虚拟摄像机：显卡已断开，请重新打开播放内容",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "虛擬攝影機：顯示卡已中斷，請重新開啟播放內容",
+   "en": "Virtual camera: graphics device disconnected. Reopen the media.",
+   "ja": "仮想カメラ：GPU が切断されました。メディアを開き直してください。"
   },
   {
    "zh": "补帧",
@@ -16215,6 +16644,13 @@
    "ja": "この種類のノードは上限に達しています（無効・未接続のノードを含む）"
   },
   {
+   "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "請以系統管理員身分啟動本軟體後重試；完成設定後可恢復一般方式啟動。",
+   "en": "Run this application as administrator and try again. After setup, you can start it normally.",
+   "ja": "このアプリを管理者として起動して再試行してください。設定後は通常の方法で起動できます。"
+  },
+  {
    "zh": "请作者喝杯咖啡",
    "src": "qml/HomePage.qml",
    "zh-TW": "請作者喝杯咖啡",
@@ -16341,6 +16777,13 @@
    "ja": "先にキャプチャーデバイスとフォーマットを選んでください"
   },
   {
+   "zh": "请在 Windows 弹窗中确认管理员安装",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "請在 Windows 彈出視窗確認系統管理員安裝",
+   "en": "Approve the administrator installation in the Windows prompt.",
+   "ja": "Windows の確認画面で管理者インストールを許可してください。"
+  },
+  {
    "zh": "请在视频输入设备列表选择这张 BMD 卡对应的 HDMI/SDI 输入口，再选择自动检测或匹配信号的手动制式。Driver 条目保留驱动当前输入。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "請在視訊輸入裝置清單選擇這張 BMD 卡對應的 HDMI/SDI 輸入埠，再選擇自動偵測或符合訊號的手動制式。Driver 項目保留驅動程式目前輸入。",
@@ -16374,6 +16817,13 @@
    "zh-TW": "請開啟影片或圖片",
    "en": "Open a video or image",
    "ja": "動画または画像を開いてください"
+  },
+  {
+   "zh": "请检查软件数据目录是否可写。恢复记录保留在该目录的 driver-profiles 文件夹中。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "請檢查軟體資料目錄是否可寫入。還原記錄保留在該目錄的 driver-profiles 資料夾中。",
+   "en": "Check that the application data directory is writable. Backups are kept in its driver-profiles folder.",
+   "ja": "アプリのデータフォルダーに書き込めるか確認してください。復元記録はその中の driver-profiles フォルダーに保存されます。"
   },
   {
    "zh": "请求码率",
@@ -17041,6 +17491,13 @@
    "ja": "ソフトウェア描画：互換性が最も高く、VRAM を使わず、映像と GPU を取り合いません。一部の影・ぼかしは簡略化されます"
   },
   {
+   "zh": "软件视频解码",
+   "src": "qml/Veyra/XboxSourceDialog.qml",
+   "zh-TW": "軟體視訊解碼",
+   "en": "Software video decoding",
+   "ja": "ソフトウェア動画デコード"
+  },
+  {
    "zh": "软件解码",
    "src": "qml/StreamHud.qml",
    "zh-TW": "軟體解碼",
@@ -17517,18 +17974,18 @@
    "ja": "このモードにはまだプリセットがありません。"
   },
   {
-   "zh": "这个窗口在其他虚拟桌面上，不用切换桌面即可捕获；部分程序在所在桌面不显示时会暂停绘制",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "這個視窗在其他虛擬桌面上，不用切換桌面即可擷取；部分程式在所在桌面不顯示時會暫停繪製",
-   "en": "This window is on another virtual desktop and can be captured without switching to it; some programs stop drawing while their desktop is not shown",
-   "ja": "このウィンドウは別の仮想デスクトップにあり、切り替えずにキャプチャーできます。一部のプログラムは、そのデスクトップが表示されていない間は描画を止めます"
-  },
-  {
    "zh": "这个目标所在的显示器接在 %1 上，Veyra 在 %2 上处理：每帧画面都要由 Windows 在两块显卡之间复制，延迟更高。双显卡分工时，建议把显示器接到处理用的显卡上（笔记本可开独显直连）",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "這個目標所在的顯示器接在 %1 上，Veyra 在 %2 上處理：每格畫面都要由 Windows 在兩張顯示卡之間複製，延遲更高。雙顯示卡分工時，建議把顯示器接到處理用的顯示卡上（筆電可開啟獨顯直連）",
    "en": "The display this target is on is connected to %1, while Veyra processes on %2: Windows copies every frame between the two GPUs, which adds latency. When two GPUs share the work, connect the display to the processing GPU (on a laptop, turn on the discrete-GPU-only (MUX) mode)",
    "ja": "この対象が映っているディスプレイは %1 に接続され、Veyra は %2 で処理しています。毎フレーム Windows が 2 つの GPU の間でコピーするため、遅延が増えます。2 つの GPU で分担する場合は、ディスプレイを処理用の GPU に接続してください（ノート PC では dGPU 直結モードをオンに）"
+  },
+  {
+   "zh": "这个窗口在其他虚拟桌面上，不用切换桌面即可捕获；部分程序在所在桌面不显示时会暂停绘制",
+   "src": "qml/ScreenSourceDialog.qml",
+   "zh-TW": "這個視窗在其他虛擬桌面上，不用切換桌面即可擷取；部分程式在所在桌面不顯示時會暫停繪製",
+   "en": "This window is on another virtual desktop and can be captured without switching to it; some programs stop drawing while their desktop is not shown",
+   "ja": "このウィンドウは別の仮想デスクトップにあり、切り替えずにキャプチャーできます。一部のプログラムは、そのデスクトップが表示されていない間は描画を止めます"
   },
   {
    "zh": "这个语言的翻译没有找到，界面保持简体中文",
@@ -17811,6 +18268,20 @@
    "ja": "ウィンドウに合わせる"
   },
   {
+   "zh": "选中",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "選中",
+   "en": "Select",
+   "ja": "選択"
+  },
+  {
+   "zh": "选中区域后可拖动位置；红框不会写入录制或导出",
+   "src": "qml/Veyra/MaskEditor.qml",
+   "zh-TW": "選中區域後可拖曳位置；紅框不會寫入錄製或匯出",
+   "en": "Select a region to move it. Outlines are excluded from recordings and exports.",
+   "ja": "領域を選択して移動できます。赤枠は録画や書き出しに含まれません。"
+  },
+  {
    "zh": "选择…",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "選擇…",
@@ -17984,6 +18455,20 @@
    "zh-TW": "配對（首次）",
    "en": "Pair (first time)",
    "ja": "ペアリング（初回）"
+  },
+  {
+   "zh": "配置或恢复记录发生变化，已停止本次操作。请重新检查，必要时使用 Profile Inspector 手动处理。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "設定或還原記錄發生變化，已停止本次操作。請重新檢查，必要時使用 Profile Inspector 手動處理。",
+   "en": "The profile or backup changed, so this operation was stopped. Check again, or use Profile Inspector to handle it manually.",
+   "ja": "設定または復元記録が変更されたため、今回の操作を停止しました。再確認し、必要に応じて Profile Inspector で手動設定してください。"
+  },
+  {
+   "zh": "配置未独立绑定当前程序路径，可能由其他程序共用。请使用 Profile Inspector 单独配置本软件。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "設定未獨立繫結目前程式路徑，可能與其他程式共用。請使用 Profile Inspector 單獨設定本軟體。",
+   "en": "The profile is not exclusive to this application path and may be shared. Use Profile Inspector to configure this application separately.",
+   "ja": "プロファイルが現在のアプリのパス専用ではなく、他のアプリと共有されている可能性があります。Profile Inspector でこのアプリを個別に設定してください。"
   },
   {
    "zh": "配置驱动公开的输入与视频属性；其他采集应用占用设备时请先关闭",
@@ -18588,6 +19073,13 @@
    "ja": "AMD RX 9000 が必要です"
   },
   {
+   "zh": "需要 AMD 显卡（驱动自带 AMF 运行库）",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 AMD 顯示卡（驅動內建 AMF 執行庫）",
+   "en": "Requires an AMD GPU (AMF runtime from the AMD driver)",
+   "ja": "AMD GPU が必要です（ドライバー付属の AMF ランタイム）"
+  },
+  {
    "zh": "需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）",
    "src": "src/ui/bridge/Hardware.cpp",
    "zh-TW": "需要 NVIDIA RTX 30 / 40 / 50（30 系為實驗相容）",
@@ -18677,6 +19169,13 @@
    "zh-TW": "需要直接媒體位址，一般網頁或需要網頁登入的頁面無法直接播放。直播串流通常無法拖曳進度。",
    "en": "Use a direct media URL. Ordinary web pages and pages requiring browser sign-in cannot be played directly. Live streams usually do not support seeking.",
    "ja": "メディアの直接 URL が必要です。通常の Web ページやブラウザーでのログインが必要なページは直接再生できません。ライブ配信では通常シークできません。"
+  },
+  {
+   "zh": "需要管理员权限",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "需要系統管理員權限",
+   "en": "Administrator rights required",
+   "ja": "管理者権限が必要です"
   },
   {
    "zh": "需要重启软件",
@@ -18866,6 +19365,13 @@
    "zh-TW": "音訊轉換失敗",
    "en": "Audio conversion failed",
    "ja": "音声の変換に失敗しました"
+  },
+  {
+   "zh": "音频输入",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "音訊輸入",
+   "en": "Audio input",
+   "ja": "音声入力"
   },
   {
    "zh": "音频输出断开，正在重连（",
@@ -19617,6 +20123,20 @@
    "ja": "ドライバーが返した解像度、レート、ピクセル形式、または走査方式が選択と異なります。選び直してください。"
   },
   {
+   "zh": "驱动配置已保存，请手动重启本软件。是否实际生效仍以驱动和显示器报告为准。",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "驅動程式設定已儲存，請手動重新啟動本軟體。是否實際生效仍以驅動程式和顯示器回報為準。",
+   "en": "The driver profile was saved. Restart this application manually. Actual activation still depends on the driver and monitor reports.",
+   "ja": "ドライバー設定を保存しました。このアプリを手動で再起動してください。実際の有効状態はドライバーとモニターの報告で確認してください。"
+  },
+  {
+   "zh": "驱动配置正在被占用",
+   "src": "src/ui/NvidiaVrrProfileController.cpp",
+   "zh-TW": "驅動程式設定正在被使用",
+   "en": "Driver profile is in use",
+   "ja": "ドライバー設定が使用中です"
+  },
+  {
    "zh": "驱动默认",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "驅動預設",
@@ -19946,6 +20466,13 @@
    "ja": "（NR "
   },
   {
+   "zh": "（处理尺寸 %1 × %2）",
+   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
+   "zh-TW": "（處理尺寸 %1 × %2）",
+   "en": " (processing size %1 × %2)",
+   "ja": "（処理サイズ %1 × %2）"
+  },
+  {
    "zh": "（已修复 {} 帧缺失或倒退的时间戳）",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "（已修復 {} 幀缺失或倒退的時間戳）",
@@ -20091,519 +20618,6 @@
    "zh-TW": "；預設“高”，同時執行遊戲或其他重負載程式變慢時可改為“普通”",
    "en": "; High by default. If a game or other heavy program running alongside slows down, choose Normal",
    "ja": "；既定は「高」。同時に動かすゲームや重い処理が遅くなる場合は「通常」に変更してください"
-  },
-  {
-   "zh": "展开",
-   "src": [
-    "qml/Veyra/SettingsPage.qml"
-   ],
-   "zh-TW": "展開",
-   "en": "Expand",
-   "ja": "展開"
-  },
-  {
-   "zh": "NVIDIA G-SYNC 配置",
-   "src": "qml/NvidiaVrrProfileRow.qml",
-   "zh-TW": "NVIDIA G-SYNC 設定",
-   "en": "NVIDIA G-SYNC setup",
-   "ja": "NVIDIA G-SYNC 設定"
-  },
-  {
-   "zh": "仅为当前软件路径配置窗口和全屏 G-SYNC，可恢复原设置；显示器和驱动的 G-SYNC 总开关仍需开启。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "僅為目前軟體路徑設定視窗和全螢幕 G-SYNC，可還原原設定；顯示器和驅動程式的 G-SYNC 總開關仍需開啟。",
-   "en": "Configure windowed and fullscreen G-SYNC for this application path, with an option to restore the original settings. G-SYNC must also be enabled on the monitor and in the driver.",
-   "ja": "現在のアプリのパスに対してウィンドウと全画面の G-SYNC を設定します。元の設定に戻せます。モニターとドライバー側でも G-SYNC を有効にする必要があります。"
-  },
-  {
-   "zh": "修复",
-   "src": "qml/NvidiaVrrProfileRow.qml",
-   "zh-TW": "修復",
-   "en": "Repair",
-   "ja": "修復"
-  },
-  {
-   "zh": "另一个软件实例正在处理驱动配置，请稍后重试。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "另一個軟體執行個體正在處理驅動程式設定，請稍後重試。",
-   "en": "Another application instance is updating the driver profile. Try again shortly.",
-   "ja": "別のアプリのインスタンスがドライバー設定を処理中です。しばらくしてから再試行してください。"
-  },
-  {
-   "zh": "尚未检查",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "尚未檢查",
-   "en": "Not checked",
-   "ja": "未確認"
-  },
-  {
-   "zh": "尚未配置窗口和全屏",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "尚未設定視窗和全螢幕",
-   "en": "Windowed and fullscreen not configured",
-   "ja": "ウィンドウと全画面は未設定"
-  },
-  {
-   "zh": "已允许窗口和全屏",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "已允許視窗和全螢幕",
-   "en": "Windowed and fullscreen allowed",
-   "ja": "ウィンドウと全画面を許可済み"
-  },
-  {
-   "zh": "当前配置无法单独修改",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "目前設定無法單獨修改",
-   "en": "This profile cannot be changed independently",
-   "ja": "このプロファイルは個別に変更できません"
-  },
-  {
-   "zh": "恢复原设置",
-   "src": "qml/NvidiaVrrProfileRow.qml",
-   "zh-TW": "還原原設定",
-   "en": "Restore original",
-   "ja": "元の設定に戻す"
-  },
-  {
-   "zh": "恢复记录与当前配置不一致",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "還原記錄與目前設定不一致",
-   "en": "Backup does not match the current profile",
-   "ja": "復元記録と現在の設定が一致しません"
-  },
-  {
-   "zh": "操作结果尚未确认，请重新检查。已有恢复记录会保留，不会自动重试写入。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "操作結果尚未確認，請重新檢查。既有還原記錄會保留，不會自動重試寫入。",
-   "en": "The result has not been confirmed. Check again. The backup is retained; writes will not be retried automatically.",
-   "ja": "操作結果を確認できませんでした。再確認してください。復元記録は保持され、書き込みが自動で再試行されることはありません。"
-  },
-  {
-   "zh": "无法保存或清理恢复记录",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "無法儲存或清理還原記錄",
-   "en": "Cannot save or remove the backup",
-   "ja": "復元記録を保存または削除できません"
-  },
-  {
-   "zh": "无法读取 NVIDIA 驱动配置；请检查显卡和驱动是否支持此功能。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "無法讀取 NVIDIA 驅動程式設定；請檢查顯示卡與驅動程式是否支援此功能。",
-   "en": "Cannot read NVIDIA driver profiles. Check whether the GPU and driver support this feature.",
-   "ja": "NVIDIA ドライバーの設定を読み取れません。GPU とドライバーがこの機能に対応しているか確認してください。"
-  },
-  {
-   "zh": "未能确认驱动配置",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "未能確認驅動程式設定",
-   "en": "Driver profile not confirmed",
-   "ja": "ドライバー設定を確認できません"
-  },
-  {
-   "zh": "正在处理驱动配置…",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "正在處理驅動程式設定…",
-   "en": "Processing driver profile…",
-   "ja": "ドライバー設定を処理中…"
-  },
-  {
-   "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "請以系統管理員身分啟動本軟體後重試；完成設定後可恢復一般方式啟動。",
-   "en": "Run this application as administrator and try again. After setup, you can start it normally.",
-   "ja": "このアプリを管理者として起動して再試行してください。設定後は通常の方法で起動できます。"
-  },
-  {
-   "zh": "请检查软件数据目录是否可写。恢复记录保留在该目录的 driver-profiles 文件夹中。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "請檢查軟體資料目錄是否可寫入。還原記錄保留在該目錄的 driver-profiles 資料夾中。",
-   "en": "Check that the application data directory is writable. Backups are kept in its driver-profiles folder.",
-   "ja": "アプリのデータフォルダーに書き込めるか確認してください。復元記録はその中の driver-profiles フォルダーに保存されます。"
-  },
-  {
-   "zh": "配置或恢复记录发生变化，已停止本次操作。请重新检查，必要时使用 Profile Inspector 手动处理。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "設定或還原記錄發生變化，已停止本次操作。請重新檢查，必要時使用 Profile Inspector 手動處理。",
-   "en": "The profile or backup changed, so this operation was stopped. Check again, or use Profile Inspector to handle it manually.",
-   "ja": "設定または復元記録が変更されたため、今回の操作を停止しました。再確認し、必要に応じて Profile Inspector で手動設定してください。"
-  },
-  {
-   "zh": "配置未独立绑定当前程序路径，可能由其他程序共用。请使用 Profile Inspector 单独配置本软件。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "設定未獨立繫結目前程式路徑，可能與其他程式共用。請使用 Profile Inspector 單獨設定本軟體。",
-   "en": "The profile is not exclusive to this application path and may be shared. Use Profile Inspector to configure this application separately.",
-   "ja": "プロファイルが現在のアプリのパス専用ではなく、他のアプリと共有されている可能性があります。Profile Inspector でこのアプリを個別に設定してください。"
-  },
-  {
-   "zh": "需要管理员权限",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "需要系統管理員權限",
-   "en": "Administrator rights required",
-   "ja": "管理者権限が必要です"
-  },
-  {
-   "zh": "驱动配置已保存，请手动重启本软件。是否实际生效仍以驱动和显示器报告为准。",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "驅動程式設定已儲存，請手動重新啟動本軟體。是否實際生效仍以驅動程式和顯示器回報為準。",
-   "en": "The driver profile was saved. Restart this application manually. Actual activation still depends on the driver and monitor reports.",
-   "ja": "ドライバー設定を保存しました。このアプリを手動で再起動してください。実際の有効状態はドライバーとモニターの報告で確認してください。"
-  },
-  {
-   "zh": "驱动配置正在被占用",
-   "src": "src/ui/NvidiaVrrProfileController.cpp",
-   "zh-TW": "驅動程式設定正在被使用",
-   "en": "Driver profile is in use",
-   "ja": "ドライバー設定が使用中です"
-  },
-  {
-   "zh": "2. 回到 Veyra，在“音频输入”选“Veyra 虚拟扬声器”，再连接采集。音频输出选真实耳机或音箱，即可使用音画同步。\n\n可选改名：在 Windows 声音的“播放”页打开 CABLE Input 的属性，在“常规”里改成“Veyra 采集音频”。",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "2. 回到 Veyra，在「音訊輸入」選「Veyra 虛擬揚聲器」，再連接擷取。音訊輸出選擇實際耳機或喇叭，即可使用音畫同步。\n\n可選改名：在 Windows 聲音的「播放」頁開啟 CABLE Input 的內容，在「一般」中改成「Veyra 擷取音訊」。",
-   "en": "2. In Veyra, select Veyra virtual speaker under Audio input, then connect capture. Select real headphones or speakers as the audio output to use A/V sync.\n\nOptional: rename CABLE Input to Veyra capture audio in Windows Sound → Playback → Properties → General.",
-   "ja": "2. Veyraの「音声入力」で「Veyra仮想スピーカー」を選択して接続します。出力に実際のヘッドホンやスピーカーを選ぶと、音声と映像の同期を利用できます。\n\n必要に応じて、Windowsのサウンド → 再生 → CABLE Inputのプロパティ → 全般で名前を変更できます。"
-  },
-  {
-   "zh": "PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "PS5 仍會傳送一路 720p 30fps、約 5 Mbps 的保活畫面，本機收到即丟棄；PS5 同時只允許一個遠端遊玩連線。再次串流時記得選擇上方的「音訊輸入」。",
-   "en": "PS5 still sends a 720p 30fps keep-alive video at about 5 Mbps, discarded on arrival. PS5 allows only one Remote Play connection at a time. Select an Audio input above when streaming again.",
-   "ja": "PS5は接続維持用に720p 30fps、約5Mbpsの映像を送信しますが、このPCでは受信後すぐに破棄します。PS5のリモートプレイは同時に1接続のみです。再配信時は上の「音声入力」を選択してください。"
-  },
-  {
-   "zh": "上次的音频输入未连接，请插回设备或重新选择音频输入",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "上次的音訊輸入未連接，請重新連接裝置或選擇音訊輸入",
-   "en": "The previous audio input is disconnected. Reconnect it or select another audio input.",
-   "ja": "前回の音声入力が接続されていません。再接続するか、音声入力を選び直してください。"
-  },
-  {
-   "zh": "不采集音频",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "不擷取音訊",
-   "en": "No audio input",
-   "ja": "音声を取り込まない"
-  },
-  {
-   "zh": "关闭后仍可录制和保存回放；本机不播放采集声音",
-   "src": "qml/AudioSettingsDialog.qml",
-   "zh-TW": "關閉後仍可錄製和儲存重播；本機不播放擷取聲音",
-   "en": "When off, recording and replay still receive audio; capture sound is not played locally.",
-   "ja": "オフでも録画とリプレイに音声は保存されます。取り込んだ音声はこのPCでは再生されません。"
-  },
-  {
-   "zh": "录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "錄入所選音訊輸入，不受音量、靜音和本機音訊監聽開關影響；擷取卡需選擇音訊輸入",
-   "en": "Records the selected audio input regardless of volume, mute or local monitoring. Select an audio input for capture cards.",
-   "ja": "選択した音声入力を音量、ミュート、ローカルモニター設定に関係なく録音します。キャプチャーカードでは音声入力を選択してください。"
-  },
-  {
-   "zh": "录制采集卡声音需选择输入；本机监听可独立关闭",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "錄製擷取卡聲音需選擇輸入；本機監聽可獨立關閉",
-   "en": "Select an audio input to record capture-card sound. Local monitoring can be turned off independently.",
-   "ja": "キャプチャーカードの音声を録音するには入力を選択してください。ローカルモニターは個別にオフにできます。"
-  },
-  {
-   "zh": "本机音频监听",
-   "src": "qml/AudioSettingsDialog.qml",
-   "zh-TW": "本機音訊監聽",
-   "en": "Local audio monitoring",
-   "ja": "ローカル音声モニター"
-  },
-  {
-   "zh": "音频输入",
-   "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "音訊輸入",
-   "en": "Audio input",
-   "ja": "音声入力"
-  },
-  {
-   "zh": "显示区域红框",
-   "src": "qml/Veyra/MaskEditor.qml",
-   "zh-TW": "顯示區域紅框",
-   "en": "Show region outlines",
-   "ja": "領域の赤枠を表示"
-  },
-  {
-   "zh": "选中区域后可拖动位置；红框不会写入录制或导出",
-   "src": "qml/Veyra/MaskEditor.qml",
-   "zh-TW": "選中區域後可拖曳位置；紅框不會寫入錄製或匯出",
-   "en": "Select a region to move it. Outlines are excluded from recordings and exports.",
-   "ja": "領域を選択して移動できます。赤枠は録画や書き出しに含まれません。"
-  },
-  {
-   "zh": "已选中",
-   "src": "qml/Veyra/MaskEditor.qml",
-   "zh-TW": "已選中",
-   "en": "Selected",
-   "ja": "選択中"
-  },
-  {
-   "zh": "选中",
-   "src": "qml/Veyra/MaskEditor.qml",
-   "zh-TW": "選中",
-   "en": "Select",
-   "ja": "選択"
-  },
-  {
-   "zh": "打开软件播放一次，动画结束后继续；打开媒体或关闭声音立即停止",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "開啟軟體播放一次，動畫結束後繼續；開啟媒體或關閉聲音立即停止",
-   "en": "Plays once on launch, continuing after the intro. Opening media or turning sound off stops it immediately.",
-   "ja": "起動時に一度再生し、アニメ終了後も継続。メディアを開くか音声をオフにすると即停止します。"
-  },
-  {
-   "zh": "停止本次启动音乐",
-   "src": "qml/Veyra/Main.qml",
-   "zh-TW": "停止本次啟動音樂",
-   "en": "Stop music for this launch",
-   "ja": "今回の起動音楽を停止"
-  },
-  {
-   "zh": "每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "每次啟動播放一次，動畫結束後繼續；此開關會儲存，角落按鈕僅停止本次",
-   "en": "Plays once per launch, continuing after the intro. This setting is saved; the corner button stops only this launch.",
-   "ja": "起動ごとに一度再生し、アニメ終了後も継続。この設定は保存され、隅のボタンは今回のみ停止します。"
-  },
-  {
-   "zh": "虚拟摄像机",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機",
-   "en": "Virtual camera",
-   "ja": "仮想カメラ"
-  },
-  {
-   "zh": "虚拟摄像机已启用，在直播软件中选择 Veyra Virtual Camera",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機已啟用，請在直播軟體中選擇 Veyra Virtual Camera",
-   "en": "Virtual camera enabled. Select Veyra Virtual Camera in your streaming app.",
-   "ja": "仮想カメラを有効にしました。配信ソフトで Veyra Virtual Camera を選択してください。"
-  },
-  {
-   "zh": "已卸载当前用户的 Veyra 虚拟摄像机",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "已解除安裝目前使用者的 Veyra 虛擬攝影機",
-   "en": "Veyra virtual camera removed for the current user.",
-   "ja": "現在のユーザーの Veyra 仮想カメラを削除しました。"
-  },
-  {
-   "zh": "在直播软件的视频采集设备中选择 Veyra Virtual Camera；输出处理后的完整画面，不需要全屏",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "在直播軟體的視訊擷取裝置中選擇 Veyra Virtual Camera；輸出處理後的完整畫面，無需全螢幕",
-   "en": "Select Veyra Virtual Camera as a video capture device in your streaming app. Outputs the full processed picture without fullscreen.",
-   "ja": "配信ソフトの映像キャプチャデバイスで Veyra Virtual Camera を選択します。全画面表示なしで処理後の映像全体を出力します。"
-  },
-  {
-   "zh": "摄像机状态",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "攝影機狀態",
-   "en": "Camera status",
-   "ja": "カメラの状態"
-  },
-  {
-   "zh": "已关闭；每次启动软件后需手动启用",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "已關閉；每次啟動軟體後需手動啟用",
-   "en": "Off. Enable manually after each app launch.",
-   "ja": "オフ。アプリを起動するたびに手動で有効にしてください。"
-  },
-  {
-   "zh": "已启用，等待处理后的画面",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "已啟用，等待處理後的畫面",
-   "en": "Enabled, waiting for the processed picture.",
-   "ja": "有効。処理後の映像を待機しています。"
-  },
-  {
-   "zh": "%1 × %2 · 已输出 %3 帧 · 跳过 %4 帧",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "%1 × %2 · 已輸出 %3 影格 · 跳過 %4 影格",
-   "en": "%1 × %2 · %3 frames published · %4 skipped",
-   "ja": "%1 × %2 · %3 フレーム出力 · %4 フレームスキップ"
-  },
-  {
-   "zh": "卸载摄像机",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "解除安裝攝影機",
-   "en": "Remove camera",
-   "ja": "カメラを削除"
-  },
-  {
-   "zh": "虚拟摄像机：显卡已断开，请重新打开播放内容",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機：顯示卡已中斷，請重新開啟播放內容",
-   "en": "Virtual camera: graphics device disconnected. Reopen the media.",
-   "ja": "仮想カメラ：GPU が切断されました。メディアを開き直してください。"
-  },
-  {
-   "zh": "虚拟摄像机：无法读取输出画面",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機：無法讀取輸出畫面",
-   "en": "Virtual camera: could not read the output frame.",
-   "ja": "仮想カメラ：出力フレームを読み取れませんでした。"
-  },
-  {
-   "zh": "虚拟摄像机组件不完整，请完整解压Veyra软件包",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機元件不完整，請完整解壓縮Veyra軟體套件",
-   "en": "Virtual camera components are missing. Extract the complete Veyra package.",
-   "ja": "仮想カメラのコンポーネントが不足しています。Veyra パッケージをすべて展開してください。"
-  },
-  {
-   "zh": "另一个Veyra实例已启用虚拟摄像机",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "另一個Veyra執行個體已啟用虛擬攝影機",
-   "en": "Another Veyra instance is using the virtual camera.",
-   "ja": "別の Veyra インスタンスが仮想カメラを使用しています。"
-  },
-  {
-   "zh": "虚拟摄像机注册失败，请查看日志",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機註冊失敗，請查看記錄",
-   "en": "Virtual camera registration failed. See the log.",
-   "ja": "仮想カメラの登録に失敗しました。ログを確認してください。"
-  },
-  {
-   "zh": "虚拟摄像机工作线程初始化失败",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機工作執行緒初始化失敗",
-   "en": "Virtual camera worker could not start.",
-   "ja": "仮想カメラのワーカーを開始できませんでした。"
-  },
-  {
-   "zh": "虚拟摄像机卸载失败，请查看日志",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機解除安裝失敗，請查看記錄",
-   "en": "Could not remove the virtual camera. See the log.",
-   "ja": "仮想カメラを削除できませんでした。ログを確認してください。"
-  },
-  {
-   "zh": "虚拟摄像机输出尺寸超出范围（最大8192边长、约3355万像素）",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機輸出尺寸超出範圍（最長邊8192、約3355萬像素）",
-   "en": "Virtual camera output exceeds the size limit (8192 per side, about 33.55 million pixels).",
-   "ja": "仮想カメラの出力サイズが上限を超えています（各辺8192、約3355万画素）。"
-  },
-  {
-   "zh": "虚拟摄像机无法访问显卡",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機無法存取顯示卡",
-   "en": "Virtual camera could not access the graphics device.",
-   "ja": "仮想カメラが GPU にアクセスできません。"
-  },
-  {
-   "zh": "虚拟摄像机GPU输出初始化失败",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機GPU輸出初始化失敗",
-   "en": "Virtual camera GPU output could not initialize.",
-   "ja": "仮想カメラの GPU 出力を初期化できませんでした。"
-  },
-  {
-   "zh": "（处理尺寸 %1 × %2）",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "（處理尺寸 %1 × %2）",
-   "en": " (processing size %1 × %2)",
-   "ja": "（処理サイズ %1 × %2）"
-  },
-  {
-   "zh": "虚拟摄像机GPU提交栅栏无效",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機GPU提交柵欄無效",
-   "en": "Virtual camera received an invalid GPU submission fence.",
-   "ja": "仮想カメラの GPU 送信フェンスが無効です。"
-  },
-  {
-   "zh": "直播软件兼容组件",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "直播軟體相容元件",
-   "en": "Streaming app compatibility",
-   "ja": "配信ソフト互換コンポーネント"
-  },
-  {
-   "zh": "正在安装或卸载，请完成 Windows 管理员确认",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "正在安裝或解除安裝，請完成 Windows 系統管理員確認",
-   "en": "Installing or removing. Complete the Windows administrator prompt.",
-   "ja": "インストールまたは削除中です。Windows の管理者確認を完了してください。"
-  },
-  {
-   "zh": "已安装系统级组件，支持管理员运行的直播软件",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "已安裝系統層級元件，支援以系統管理員執行的直播軟體",
-   "en": "System components installed, including support for streaming apps run as administrator.",
-   "ja": "システムコンポーネントをインストール済み。管理者として実行する配信ソフトにも対応します。"
-  },
-  {
-   "zh": "当前仅注册到本用户；管理员运行的 OBS 等直播软件需要安装系统级组件",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "目前僅註冊至本使用者；以系統管理員執行的 OBS 等直播軟體需要安裝系統層級元件",
-   "en": "Registered for the current user. OBS and other streaming apps run as administrator need system components.",
-   "ja": "現在のユーザーに登録済み。管理者として実行する OBS などにはシステムコンポーネントが必要です。"
-  },
-  {
-   "zh": "修复组件",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "修復元件",
-   "en": "Repair components",
-   "ja": "コンポーネントを修復"
-  },
-  {
-   "zh": "安装组件",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "安裝元件",
-   "en": "Install components",
-   "ja": "コンポーネントをインストール"
-  },
-  {
-   "zh": "请在 Windows 弹窗中确认管理员安装",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "請在 Windows 彈出視窗確認系統管理員安裝",
-   "en": "Approve the administrator installation in the Windows prompt.",
-   "ja": "Windows の確認画面で管理者インストールを許可してください。"
-  },
-  {
-   "zh": "摄像机组件已安装，请刷新或重新打开直播软件",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "攝影機元件已安裝，請重新整理或重新開啟直播軟體",
-   "en": "Camera components installed. Refresh or reopen your streaming app.",
-   "ja": "カメラコンポーネントをインストールしました。配信ソフトを更新または再起動してください。"
-  },
-  {
-   "zh": "虚拟摄像机设备已卸载",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "虛擬攝影機裝置已解除安裝",
-   "en": "Virtual camera device removed.",
-   "ja": "仮想カメラデバイスを削除しました。"
-  },
-  {
-   "zh": "摄像机组件安装或卸载失败，请查看日志",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "攝影機元件安裝或解除安裝失敗，請查看記錄",
-   "en": "Camera component installation or removal failed. See the log.",
-   "ja": "カメラコンポーネントのインストールまたは削除に失敗しました。ログを確認してください。"
-  },
-  {
-   "zh": "正在安装摄像机组件，请等待",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "正在安裝攝影機元件，請稍候",
-   "en": "Camera component setup is already running. Please wait.",
-   "ja": "カメラコンポーネントのセットアップ中です。お待ちください。"
-  },
-  {
-   "zh": "已取消摄像机组件的管理员授权",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "已取消攝影機元件的系統管理員授權",
-   "en": "Camera component administrator approval was cancelled.",
-   "ja": "カメラコンポーネントの管理者承認をキャンセルしました。"
-  },
-  {
-   "zh": "无法启动摄像机安装程序，请查看日志",
-   "src": "src/ui/bridge/VirtualCamera.cpp; qml/Veyra/SettingsPage.qml",
-   "zh-TW": "無法啟動攝影機安裝程式，請查看記錄",
-   "en": "Could not start camera component setup. See the log.",
-   "ja": "カメラコンポーネントのセットアップを開始できません。ログを確認してください。"
   }
  ]
 }

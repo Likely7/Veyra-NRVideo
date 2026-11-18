@@ -7,6 +7,18 @@
 独立及完整工程入口均构建实际 sink/device/ring/ScaleBlit，RX9070XT上21项通过、0失败；旧保存路径4项不透明截图断言失败。完整QML播放器构建通过；ASUS 4KPRO采集、FSR 4.1.2及AMD NR实际F7输出3840×2160不透明PNG，反馈显示正常，WIC消费者往返RGB完全一致。最终复查通过截图8组、HDR合成GPU、文件图处理与正常/过载EOS；HDR display state/tuning在新临时目录通过。复现和验证边界见 `@tests/screenshot-alpha/README.md`。实际HDR采集截图、录制集成与可选串流未复测，不称全部功能已验。
 
 额外 ImageDimension --tiled-color 六例在本分支与未修改的同一上游基线均于图初始化报 invalid staged SR extent，逐例结果完全一致；尚未进入图片保存，本次不扩改该既有问题。仅公开经授权且无元数据的游戏裁剪对比图，使用Fork独立证据分支，截图、配置与日志原件不随代码提交。
+## 2026-11-17 Xbox concealed-frame recovery proposal
+
+Related #138: reject stream frames carrying FFmpeg corruption/error flags before
+publication, reuse Xbox history reset/IDR recovery, add an opt-in persisted Xbox
+software decoder workaround, and correct swscale output-height validation.
+Field replay and a locally patched 2.1.9 executable support the diagnosis;
+they are not a complete build of the new UI/source changes. Added a native
+software-scaling regression; native build/test and UI persistence checks remain
+pending. `python -X utf8 -B scripts/i18n/extract.py --check` reports no missing
+translations/placeholder problems; `git diff --check` passes. Details and
+explicit validation limits: [Xbox recovery](XBOX_STREAM_CORRUPTION_RECOVERY.md).
+No binary/runtime/configuration/credential changes are part of the contribution.
 
 ## 2026-11-03 RX7000补丁后worker退出：新日志与诊断更新
 

@@ -435,7 +435,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 
 void XboxSessionSource::decodeLoop() {
     auto& p = *p_;
-    bool seenKeyframe = false, recovering = false, forceSoftware = false;
+    bool seenKeyframe = false, recovering = false, forceSoftware = p.desc.softwareDecode;
     xbox::VideoDecodeRecovery recovery;
     int64_t lastPts = -1;
     uint32_t lastRtp = 0;
