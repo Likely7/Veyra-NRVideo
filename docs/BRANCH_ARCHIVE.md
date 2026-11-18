@@ -1,5 +1,21 @@
 # 分支与工作树归档
 
+## 2026-11-18追加归档
+
+本轮23个已合main、干净且无本地专用文件/reparse/在用进程的E盘工作树退出，连同22个无工作树的已合分支，共45个分支引用归档。脏树原样保留，虚拟摄像机原树暂留对照；Lecram两线、AverMedia诊断和原生音频驱动原型仍隔离。没有删除远端分支、标签、构建、用户配置、依赖或发布ZIP。
+
+原tip映射：`E:/项目/Veyra/archives/codex-main-integration-20261118/branch-tips.json`；恢复包：同目录`completed-branches.bundle`（已bundle verify并逐ref核对）；逐工作树路径/保全检查与执行结果：`E:/项目/Veyra/reports/codex-main-integration-20261118/ARCHIVE-PLAN.json`、`ARCHIVE-RESULT.json`。
+
+恢复示例（把具名分支替换为映射中的真实名称）：
+
+```powershell
+git bundle verify 'E:/项目/Veyra/archives/codex-main-integration-20261118/completed-branches.bundle'
+git fetch 'E:/项目/Veyra/archives/codex-main-integration-20261118/completed-branches.bundle' refs/heads/claude/amf-frc-20261114:refs/heads/claude/amf-frc-20261114
+git worktree add 'E:/项目/Veyra/worktrees/restore-amf-frc' claude/amf-frc-20261114
+```
+
+以下为2026-10-27既有归档，不与本轮数量相加冒充新增回收。
+
 122个旧分支的完整tip保存在下表及已verify的bundle中，89个干净工作树已经退休。远端分支和发行标签没有删除。
 
 恢复原件：E:/项目/Veyra/archives/project-maintenance-execution-20261027/source-before.bundle。完整索引、脏树保全与产物恢复映射在E:/项目/Veyra/reports/project-maintenance-execution-20261027及同任务archives。

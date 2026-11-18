@@ -1,5 +1,7 @@
 # 历史资料索引
 
+2026-11-18入口收拢：[旧AGENTS全文](rules/AGENTS_before_main_2026-11-18.md)、[旧当前状态](reports/CURRENT_STATUS_before_main_2026-11-18.md)、[旧开发入口](reports/DEVELOPMENT_before_main_2026-11-18.md)。归档原文中的相对路径按归档前项目根理解；本轮结果见[main整合](../MAIN_INTEGRATION_2026-11-18.md)。
+
 这些文件描述其标题或日期对应的历史状态，不是当前任务或授权。当前入口：[项目状态](../CURRENT_STATUS.md)、[开发指南](../DEVELOPMENT.md)。
 
 旧路径对照见 [PATH_MAP.json](PATH_MAP.json)。已退休构建/工作树的恢复见 [分支归档](../BRANCH_ARCHIVE.md)。历史 guard/start 未被改写；需要重跑旧诊断时，应先按对应清单恢复历史环境。

@@ -1388,3 +1388,13 @@ ANR协作者于2026-11-13T15:49:32Z在Issue9明确禁止Beta第三方再分发�
 ## 2026-11-17 两个（虚拟摄像头）包追加到GitHub v2.1.9（Claude，用户授权）
 
 用户要求紧急把带虚拟摄像机的两个包发布到GitHub 2.1.9 Release并加说明；原两个包不删，新增两个在名字后括号“虚拟摄像头”。发布前从已测包重封发布版（releases/claude-release-2.1.9-virtual-camera-20261117）：除RELEASE_NOTES.md、GPU-PACKAGE.txt、package-manifest.json与两份release-runtime-manifest.json改写为“已作为v2.1.9附加下载发布”外，其余文件均为已测包硬链接并逐一核对哈希；两包解压逐文件核对与最小PATH冷启动通过（视频NVIDIA181/AMD188帧，0错误）。Likely7/Veyra-NRVideo的v2.1.9新增Veyra-2.1.9-virtual-camera-NVIDIA/AMD-win64-portable.zip与校验文件，显示名“Veyra-2.1.9-NVIDIA/AMD-win64-portable（虚拟摄像头）.zip”“SHA256SUMS（虚拟摄像头）.txt”，SHA256 NVIDIA 4e00e26197da82053d359dc0edec25c56876eae17a5a54789919b07ee445999a、AMD 6e962bc4c7298f04bfffea33edfd4fc4e4373a1435612d38b4cf7ec37c9eeb40；v2.1.9-sources新增Veyra-2.1.9-virtual-camera-source.zip（显示“Veyra-2.1.9-source（虚拟摄像头）.zip”，7034a892…）。两Release说明在最前加追加段落，原文保留（备份reports同任务github/）。服务端摘要/大小与本地一致、匿名下载可用；原两包、SHA256SUMS与Latest不变。首次上传v2.1.9时读取Release即EOF失败、未产生半截资产，重试成功。代码仍未提交、未合main、未push分支或标签；群公告未发。
+
+## 2026-11-18 全分支整合与项目整理（本地main）
+
+用户授权把Claude最新虚拟摄像机及各分支功能/修复并main并整理项目。inventory.py核对40个工作树/60个分支；main54aa357落后远端跟踪bf596e1三条已有文档提交，虚拟摄像机同树72文件未提交。原样提交740534e（Codex完整接入+Claude协议2/OBS节拍修复）后快进main，无代码冲突；checkpoint/pre-main-integration-20261118及checkpoint/virtual-camera-claude-snapshot-20261118留档。旧产品分支内容已入main，脏树产品文件另核对历史blob并查回放按钮、DLSS模型、精修光流等现实现，未将旧文件倒合；4条暂停/诊断/原型继续隔离。
+
+从唯一main源码全新构建10目标641步325.3秒，build-recording-handoff.py --task codex-main-integration-20261118 --root E:/项目/Veyra/worktrees/main-claude-anr-20261113 --label 2.1.9-main-integration-test --jobs 2，日志logs同任务build-20261118-003913，附加Win32测试目标通过。EXE6c1a1fc1…、89着色器逐SHA；回放37/0、修复合同328/0、时序/UI合同退出0、GPU摄像机523/调试0、x64/x86传输各73、QtQuick209/0/0，i18n缺失/占位符0。实际新程序DLSS4X→60/120分别420/839稳态样本，0重复/倒退；摄像机+录制+回放同时开启，两份1080p文件267/275帧完整解码无错，30FPS静音夹具，不冒充60源帧或采集音频。actual OBS/管理员新系统组件、其他GPU/实卡/长期直播本轮未重验，Claude前轮证据单独保留。
+
+archive-branches.py先tip映射/bundle verify/逐ref校验，再移除23干净E盘树与45已合分支引用，9脏树/4隔离/摄像机对照树保持；无强制删除、无远端或标签删除，依赖/用户配置/原包保持。bundle94032300字节、源路径减少2100030553字节（均非实际净磁盘回收）。收拢AGENTS/CURRENT_STATUS/DEVELOPMENT当前入口，全文归档历史；更新E盘根入口，补齐第三方修改清单。旧发行NVIDIA package-manifest从原ZIP原子恢复，qa.py防写穿硬链接；恢复脚本编码名错误与收尾注册核对夹具GUID/输出编码错误已纠正，未删系统模块，实际移除本任务x64/x86当前用户注册。所有失败证据/脚本/恢复清单在reports/archives同任务。
+
+当前源码main-claude-anr-20261113，build/tests/logs/reports/tmp统一codex-main-integration-20261118，独立启动tests同任务/启动main整合测试.cmd，保留原HDMI配置。详细结果docs/MAIN_INTEGRATION_2026-11-18.md及FINAL.json；不push、不新Release、不关机。本轮单Agent自审，不宣称独立Reviewer或全硬件验收。

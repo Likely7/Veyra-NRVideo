@@ -167,5 +167,53 @@
       "upstream": "COPYING",
       "sha256": "189b1af95d661151e054cea10c91b3d754e4de4d3fecfb074c1fb29476f7167b"
     }
-  ]
+  ],
+  "veyraAdaptations": {
+    "date": "2026-11-18",
+    "upstreamHashesDescribeOriginalFiles": true,
+    "modifiedFiles": [
+      {
+        "path": "module/virtualcam-filter.cpp",
+        "upstreamSha256": "9fcb61b4d74233d47876a066049d7488c4ab086d0a51bf2caf149f420f01afb4",
+        "adaptation": "Independent Veyra source and format negotiation; graph-relative samples; ordered protocol-2 delivery; bounded adaptive delay and in-process libobs tick alignment."
+      },
+      {
+        "path": "module/virtualcam-filter.hpp",
+        "upstreamSha256": "1c083ace2a2336dece5b106d58bcece9410a0b0b87b575e773742ad8c6e22f27",
+        "adaptation": "Veyra pacing state, ordered sequence handling and OBS clock function pointers."
+      },
+      {
+        "path": "module/virtualcam-module.cpp",
+        "upstreamSha256": "42d729fd716926ee72703bbfcdec5edaa57f063a16b9bff51285da507623828f",
+        "adaptation": "Independent class/device identity and Veyra registration; correct COM class factory interfaces and lifetime."
+      },
+      {
+        "path": "ipc/shared-memory-queue.c",
+        "upstreamSha256": "a11dc9a6cb1759bf5203f267960e847d8d40d2bb5fa06bba0222729ecfe7a658",
+        "adaptation": "Private protocol-2 namespace; validated six-frame ordered ring; bounded locking; row strides; producer heartbeat; up to eight consumer intervals."
+      },
+      {
+        "path": "ipc/shared-memory-queue.h",
+        "upstreamSha256": "d41d49be6df8495eec602faa137d1bb8a0abc61009b23b69e4accfdb002581b4",
+        "adaptation": "Protocol-2 C API including sequence reads, timestamps and consumer interval negotiation."
+      },
+      {
+        "path": "libdshowcapture/source/output-filter.hpp",
+        "upstreamSha256": "6ce02e43bcc17972a3de279ca2173902ffec07455a9c79f19c1e861464701f0c",
+        "adaptation": "DiscardSampleData declaration for failed bounded reads."
+      },
+      {
+        "path": "libdshowcapture/source/output-filter.cpp",
+        "upstreamSha256": "1441ee82b63eb89c92a4348b234d30816886f1e3c4f82d3e03d01254de67dc2f",
+        "adaptation": "Stop flush/decommit and discarded sample handling to release blocked consumers and reject invalid data."
+      }
+    ],
+    "derivedFiles": [
+      {
+        "path": "libdshowcapture/source/dshow-error.cpp",
+        "fromPath": "libdshowcapture/source/dshow-base.cpp",
+        "change": "Extract ConvertHRToEnglish only; preserve LGPL attribution and behavior."
+      }
+    ]
+  }
 }
