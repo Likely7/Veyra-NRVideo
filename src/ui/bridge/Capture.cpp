@@ -506,15 +506,6 @@ bool QmlPlayerBridge::startCaptureSession() {
     return true;
 }
 void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
-    // A capture or stream open supersedes a waiting Bilibili mirror retry just as a
-    // file open does; this path does not go through openPath, so it bumps the
-    // generation itself and drops the retry state that belonged to the old source.
-    // 采集/串流打开同样要顶掉还没触发的 B 站镜像重试；这段在 2.1.2 拆桥接层时丢过。
-    ++impl_->biliOpenGen;
-    impl_->biliMirrors.clear();
-    impl_->biliMirrorIndex = 0;
-    impl_->biliRetriesLeft = 0;
-    impl_->biliRetryPending = false;
     rememberPosition(true);
     emit mediaOpenRequested();
     impl_->openingSource = true;
@@ -542,7 +533,6 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
 }
 
 void QmlPlayerBridge::openAfterCinema(const QString& pending, std::function<void()> open) {
-    ++impl_->biliOpenGen;
     const int gen = ++impl_->liveOpenGen;
     const bool fromHome = impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home");
     if (!fromHome || !impl_->gameModeUri.empty()) {

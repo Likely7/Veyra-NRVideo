@@ -639,10 +639,6 @@ endif()
 if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avformat.h")
   add_library(veyra_media STATIC
     src/media/FFmpegDemuxer.cpp
-    # Bilibili: page URL -> CDN stream, plus the module's API client.
-    src/media/BilibiliResolver.cpp
-    src/media/BilibiliApi.cpp
-    src/media/BiliJson.cpp
     src/media/DemuxSession.cpp
     src/media/FFmpegVideoDecoder.cpp
     src/media/FFmpegDeinterlacer.cpp
@@ -1266,14 +1262,6 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
     src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
-    # The sign-in QR. QrImage.cpp is the only unit that sees the encoder's headers:
-    # qrcodegen throws, and compiling it alongside Qt's moc units aborted the process
-    # at startup (0xC0000409).
-    src/media/QrImage.cpp
-    third_party/qrcodegen/qrcodegen.cpp
-    # Danmaku overlay: the engine is Qt-free, the window wraps it for the player.
-    src/media/DanmakuOverlay.cpp
-    src/media/DanmakuWindow.cpp
     # Custom: the start-up format badge, same layered-window construction.
     src/media/FormatBadgeWindow.cpp
     # P4-c: the existing subtitle renderer, reused as-is (no second renderer).
@@ -1302,12 +1290,10 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     src/ui/bridge/Recording.cpp
     src/ui/bridge/VirtualCamera.cpp
     src/ui/bridge/View.cpp
-    src/ui/bridge/Bilibili.cpp
     # Custom (Chrome bridge): local HTTP endpoint the browser extension posts to.
     src/ui/bridge/PlaybackServer.cpp
     include/veyra/ui/PlaybackServer.h
     src/ui/QmlPlayerBridge_p.h)
-  target_include_directories(veyra_qml_bridge PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/third_party/qrcodegen)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
   # Interface language (UiLanguage.h): its own small library so the streaming models,
   # which are tested without the player, translate their messages too.
