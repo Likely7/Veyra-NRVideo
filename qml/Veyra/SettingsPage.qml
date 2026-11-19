@@ -832,8 +832,8 @@ VPage {
                     // so only what changes *what gets requested* from the site lives here.
                     VH2 { text: qsTr("B 站") }
                     Text {
-                        text: qsTr("打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；"
-                                   + "有 HDR 版本的视频会自动播 HDR。")
+                        // One literal: qsTr("a" + "b") left the catalog with only "a", so every language showed Chinese.
+                        text: qsTr("打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；有 HDR 版本的视频会自动播 HDR。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
