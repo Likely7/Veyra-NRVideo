@@ -30,18 +30,25 @@ if not config or not picture:
 (args.output / 'single-au.bin').write_bytes(picture)
 print('Generated synthetic H.264 configuration, first AU and reordered stream')
 
-subprocess.run([args.ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
-                '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=60',
-                '-c:v', 'libx265', '-preset', 'ultrafast', '-tune', 'zerolatency', '-frames:v', '1',
-                '-x265-params', 'log-level=error:pools=1:frame-threads=1',
-                '-f', 'hevc', str(args.output / 'hevc.h265')], check=True, timeout=60)
-data = (args.output / 'hevc.h265').read_bytes()
-starts = list(re.finditer(b'\x00\x00(?:\x00)?\x01', data))
-config, picture = bytearray(), bytearray()
-for i, match in enumerate(starts):
-    end = starts[i + 1].start() if i + 1 < len(starts) else len(data)
-    chunk = data[match.start():end]
-    (config if (data[match.end()] >> 1) & 63 in (32, 33, 34) else picture).extend(chunk)
-(args.output / 'hevc-config.bin').write_bytes(config)
-(args.output / 'hevc-au.bin').write_bytes(picture)
-print('Generated synthetic H.265 VPS/SPS/PPS and first AU')
+for name, depth, primaries, transfer, matrix in [
+    ('hevc', 'yuv420p', 'bt709', 'bt709', 'bt709'),
+    ('hdr10', 'yuv420p10le', 'bt2020', 'smpte2084', 'bt2020nc'),
+]:
+    subprocess.run([args.ffmpeg, '-hide_banner', '-loglevel', 'error', '-y',
+                    '-f', 'lavfi', '-i', 'testsrc2=size=1280x720:rate=60',
+                    '-c:v', 'libx265', '-preset', 'ultrafast', '-tune', 'zerolatency', '-frames:v', '1',
+                    '-pix_fmt', depth, '-color_primaries', primaries, '-color_trc', transfer,
+                    '-colorspace', matrix, '-x265-params', 'log-level=error:pools=1:frame-threads=1',
+                    '-f', 'hevc', str(args.output / (name + '.h265'))], check=True, timeout=60)
+    data = (args.output / (name + '.h265')).read_bytes()
+    starts = list(re.finditer(b'\x00\x00(?:\x00)?\x01', data))
+    config, picture = bytearray(), bytearray()
+    for i, match in enumerate(starts):
+        end = starts[i + 1].start() if i + 1 < len(starts) else len(data)
+        chunk = data[match.start():end]
+        (config if (data[match.end()] >> 1) & 63 in (32, 33, 34) else picture).extend(chunk)
+    if not config or not picture:
+        raise RuntimeError('Missing HEVC configuration or picture NALs')
+    (args.output / (name + '-config.bin')).write_bytes(config)
+    (args.output / (name + '-au.bin')).write_bytes(picture)
+    print('Generated synthetic', name, depth, transfer, 'VPS/SPS/PPS and first AU')

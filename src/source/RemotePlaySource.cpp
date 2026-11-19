@@ -73,6 +73,27 @@ bool RemotePlaySource::open(const SourceOpenDesc&)
     return false;
 }
 
+void RemotePlaySource::initializeColorContract(remoteplay::Codec codec, bool highQualitySampling)
+{
+    info_.color = {};
+    info_.color.pixelFormat = pipeline::SourcePixelFormat::Yuv420P;
+    info_.color.range = pipeline::ColorRange::Limited;
+    info_.color.rangeAssumed = true;
+    info_.color.matrix = pipeline::YuvMatrix::BT709;
+    info_.color.matrixAssumed = true;
+    // The SDR sink encodes sRGB: decode the same curve to retain RGB code values.
+    info_.color.preserveSdrCodeValues = true;
+    info_.color.reconstructChroma = highQualitySampling;
+    info_.color.transfer = pipeline::TransferFunction::BT709;
+    info_.color.transferAssumed = true;
+    info_.color.primaries = pipeline::ColorPrimaries::BT709;
+    info_.color.primariesAssumed = true;
+    if(codec==remoteplay::Codec::H265Hdr){
+        info_.color.pixelFormat=pipeline::SourcePixelFormat::P010;info_.color.matrix=pipeline::YuvMatrix::BT2020NCL;
+        info_.color.transfer=pipeline::TransferFunction::PQ;info_.color.primaries=pipeline::ColorPrimaries::BT2020;info_.color.displayReferred709=true;info_.color.preserveSdrCodeValues=false;
+    }
+}
+
 bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
 {
     close();
@@ -123,21 +144,7 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     info_.timestampQuantum = 1.0 / info_.averageFps;
     info_.duration = pipeline::Rational::unknown();
     info_.hardwareDecodeActive = false;
-    info_.color.pixelFormat = pipeline::SourcePixelFormat::Yuv420P;
-    info_.color.range = pipeline::ColorRange::Limited;
-    info_.color.rangeAssumed = true;
-    info_.color.matrix = pipeline::YuvMatrix::BT709;
-    info_.color.matrixAssumed = true;
-    info_.color.displayReferred709 = true;
-    info_.color.reconstructChroma = desc.highQualitySampling;
-    info_.color.transfer = pipeline::TransferFunction::BT709;
-    info_.color.transferAssumed = true;
-    info_.color.primaries = pipeline::ColorPrimaries::BT709;
-    info_.color.primariesAssumed = true;
-    if(request_.video.codec==remoteplay::Codec::H265Hdr){
-        info_.color.pixelFormat=pipeline::SourcePixelFormat::P010;info_.color.matrix=pipeline::YuvMatrix::BT2020NCL;
-        info_.color.transfer=pipeline::TransferFunction::PQ;info_.color.primaries=pipeline::ColorPrimaries::BT2020;info_.color.displayReferred709=true;
-    }
+    initializeColorContract(request_.video.codec, desc.highQualitySampling);
     clock_.reset(static_cast<remoteplay::HostTime>(origin100ns_), request_.video.fps);
     sequence_ = 0;
     fallbackSourceIndex_ = 0;
@@ -295,10 +302,13 @@ bool RemotePlaySource::drainDecoder(std::uint64_t sourceIndex, const pipeline::F
         if(request_.video.codec==remoteplay::Codec::H265Hdr&&pixelFormatFromFrame(*decoderFrame_)!=pipeline::SourcePixelFormat::P010){
             // A negotiated 8-bit fallback is not automatically a PQ signal.
             fallback.transfer=pipeline::TransferFunction::BT709;fallback.transferAssumed=true;
+            fallback.preserveSdrCodeValues=true;
             fallback.matrix=pipeline::YuvMatrix::BT709;fallback.matrixAssumed=true;
             fallback.primaries=pipeline::ColorPrimaries::BT709;fallback.primariesAssumed=true;
         }
         packet.colorInfo = pipeline::resolveFrameColor(*decoderFrame_, fallback);
+        // Actual frame transfer wins over the requested profile, including SDR fallback.
+        packet.colorInfo.preserveSdrCodeValues = !packet.colorInfo.isHdrPath();
         if(sequence_==1)veyra::log::info("remoteplay-sampling",std::format("fine={} chromaLocation={} assumedLeft={}",packet.colorInfo.reconstructChroma,int(packet.colorInfo.chromaLocation),packet.colorInfo.chromaLocation==pipeline::ChromaLocation::Unknown));
         packet.colorInfo.pixelFormat = pixelFormatFromFrame(*decoderFrame_);
         if (decoderFrame_->width <= 0 || decoderFrame_->height <= 0 ||
@@ -412,7 +422,7 @@ SourceReadStatus RemotePlaySource::read(pipeline::FramePacket& out, const AVFram
         ++decoderEpoch_;
         if(request_.video.codec==remoteplay::Codec::H265Hdr){
         info_.color.pixelFormat=pipeline::SourcePixelFormat::P010;info_.color.matrix=pipeline::YuvMatrix::BT2020NCL;
-        info_.color.transfer=pipeline::TransferFunction::PQ;info_.color.primaries=pipeline::ColorPrimaries::BT2020;info_.color.displayReferred709=true;
+        info_.color.transfer=pipeline::TransferFunction::PQ;info_.color.primaries=pipeline::ColorPrimaries::BT2020;info_.color.displayReferred709=true;info_.color.preserveSdrCodeValues=false;
     }
     clock_.reset(static_cast<remoteplay::HostTime>(origin100ns_), request_.video.fps);
         pendingOpenFlag_ = true;

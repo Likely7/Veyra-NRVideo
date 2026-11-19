@@ -1,6 +1,10 @@
 # 当前项目状态
 
-更新：2026-11-18。主线版本2.1.9；本轮用户授权兼容整合八项社区 PR 并更新 GitHub main，未要求新发布。
+更新：2026-11-19。主线版本2.1.9；当前为PS5 SDR码值本地修复，未请求新推送或发布。
+
+## PS5 SDR亮度修复
+
+源端 BT.1886 解码/sRGB编码不匹配已修正：SDR保留RGB码值，8位回退与PQ/HDR分开处理。完整构建、实际软硬解与GPU颜色/文件/采集/HDR回归通过；旧策略四组GPU误差13/255，新策略不超过1/255，图到呈现误差0。当前私有程序 `E:/项目/Veyra/tests/codex-ps5-sdr-code-values-20261119/app/veyra_qml_ui.exe`。[验证与边界](PS5_SDR_CODE_VALUES_2026-11-19.md)；真实PS5同场景尚未复测。本轮本地main领先远端，不把源码修复冒充既有下载包已更新。
 
 ## 主线
 
@@ -12,7 +16,7 @@
 
 ## 八项社区 PR
 
-#140/#133/#127/#115/#99/#96/#75 保留原 head 合并，#136 纯源码采用（原 DLL/LIB 历史不进入主线）。B站/浏览器桥、Dolby Vision、韩语、300%音量、Xbox/PS5/Elgato/截图与 Linux OBS 滤镜的适配及证据见[本轮记录](PR_INTEGRATION_2026-11-18.md)。当前构建 `E:/项目/Veyra/build/codex-pr-integration-20261118/app`，私有测试程序位于同任务 tests/app；GitHub 整合结果记在 WORKLOG/FINAL.json。旧主线整合回执仍保留作前序证据。
+#140/#133/#127/#115/#99/#96/#75 保留原 head 合并，#136 纯源码采用（原 DLL/LIB 历史不进入主线）。B站/浏览器桥、Dolby Vision、韩语、300%音量、Xbox/PS5/Elgato/截图与 Linux OBS 滤镜的适配及证据见[本轮记录](PR_INTEGRATION_2026-11-18.md)。该轮构建 `E:/项目/Veyra/build/codex-pr-integration-20261118/app`，私有测试程序位于同任务 tests/app；GitHub 整合结果记在 WORKLOG/FINAL.json。旧主线整合回执仍保留作前序证据。
 
 ## 虚拟摄像机
 

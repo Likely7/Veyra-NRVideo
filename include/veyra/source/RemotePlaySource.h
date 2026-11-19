@@ -75,6 +75,7 @@ private:
         pipeline::FramePacket packet;
     };
 
+    void initializeColorContract(remoteplay::Codec codec, bool highQualitySampling);
     bool openDecoder(remoteplay::Codec codec, std::uint32_t width, std::uint32_t height);
     bool submitPacket(std::span<const std::uint8_t> bytes, std::uint64_t sourceIndex,
         const pipeline::FramePacket& sourcePacket);

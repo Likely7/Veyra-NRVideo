@@ -12,8 +12,11 @@ extern "C" {
 }
 using namespace veyra;
 int wmain(int argc,wchar_t**argv){
+    bool legacyRemote=false;
     bool remoteYuv=false,nr=false,rgb=false,native4k=false,temporal=false,realtime=false;
     for(int i=1;i<argc;++i){remoteYuv|=wcscmp(argv[i],L"--remote-yuv")==0;nr|=wcscmp(argv[i],L"--nr")==0;rgb|=wcscmp(argv[i],L"--rgb")==0;native4k|=wcscmp(argv[i],L"--4k")==0;temporal|=wcscmp(argv[i],L"--temporal")==0;realtime|=wcscmp(argv[i],L"--realtime")==0;}
+    for(int i=1;i<argc;++i)legacyRemote|=wcscmp(argv[i],L"--legacy-remote-transfer")==0;
+    if(legacyRemote&&!remoteYuv)return 4;
     nr|=temporal;
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;
@@ -46,7 +49,7 @@ int wmain(int argc,wchar_t**argv){
         }
         if(rgb)for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){auto* p=f->data[0]+ptrdiff_t(y)*f->linesize[0]+x*4;p[0]=uint8_t(x%256);p[1]=uint8_t((x+37)%256);p[2]=uint8_t((x+129)%256);p[3]=255;}
         pipeline::ColorDescription color;color.pixelFormat=pipeline::SourcePixelFormat::Yuy2;color.range=full?pipeline::ColorRange::Full:pipeline::ColorRange::Limited;color.matrix=hd?pipeline::YuvMatrix::BT709:pipeline::YuvMatrix::BT601;color.transfer=pipeline::TransferFunction::SRGB;
-        if(remoteYuv){color.pixelFormat=pipeline::SourcePixelFormat::Yuv420P;color.transfer=pipeline::TransferFunction::BT709;color.displayReferred709=true;}
+        if(remoteYuv){color.pixelFormat=pipeline::SourcePixelFormat::Yuv420P;color.transfer=pipeline::TransferFunction::BT709;color.preserveSdrCodeValues=!legacyRemote;color.displayReferred709=legacyRemote;}
         pipeline::EnhanceGraph::FrameOutputs out;sink::RgbaImage image,display;
         if(rgb)color.pixelFormat=pipeline::SourcePixelFormat::Bgra8;
         const double ptsMs=frameId*100.0;++frameId;
@@ -56,7 +59,8 @@ int wmain(int argc,wchar_t**argv){
                 if(remoteYuv){const double luma=(double(x%256)-(full?0:16))/(full?255:219);
                     const double u=(double(f->data[1][ptrdiff_t(y/2)*f->linesize[1]+x/2])-128)/(full?255:224),v=(double(f->data[2][ptrdiff_t(y/2)*f->linesize[2]+x/2])-128)/(full?255:224);
                     const double normalized=std::clamp(luma,0.0,1.0);expected[0]=normalized+2*(1-kr)*v;expected[2]=normalized+2*(1-kb)*u;expected[1]=(normalized-kr*expected[0]-kb*expected[2])/(1-kr-kb);
-                    for(auto& value:expected){const double linear=std::pow(std::clamp(value,0.0,1.0),2.4);value=linear<=0.0031308?12.92*linear:1.055*std::pow(linear,1.0/2.4)-0.055;}}
+                    // No-effects SDR output must preserve post-matrix RGB code values.
+                }
                 if(rgb){const auto* bgra=f->data[0]+ptrdiff_t(y)*f->linesize[0]+x*4;for(unsigned c=0;c<3;++c)expected[c]=(double(bgra[2-c])-(full?0:16))/(full?255:219);}
                 for(unsigned c=0;c<3;++c){const int actual=image.pixels[(size_t(y)*w+x)*4+c];sum+=actual;error=std::max(error,std::abs(actual-int(std::lround(std::clamp(expected[c],0.0,1.0)*255))));}}
             ok=sum>0&&(nr?graph.metrics().nrEvaluateCount==frameId:error<=1);

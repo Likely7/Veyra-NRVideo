@@ -1466,3 +1466,16 @@ main run44346915750 在 us-east-2.ec2.archive.ubuntu.com 的 HTTP 包下载阶�
 测试清理纠错：cleanup-qa.py调用复用write函数，曾经由硬链接误写本地正式NVIDIA目录的package-manifest.json；从已发布SHA256=4225ecb1…的原ZIP原子恢复清单fb19ef3c…，正式目录1695文件逐SHA全部一致，ZIP未变。当前QA清单已断链；本任务及前序main任务的cadence_app.py写JSON改为原子替换，并用真实硬链接夹具验证原文件不变。记录reports/codex-pr-integration-20261118/MANIFEST-REPAIR.json；旧错误内容保留作证据。
 
 最终结果：main run44351556868（b4015dd4）已成功，依赖安装、模块配置/编译、14项LUT输入与安装布局全部通过；mirror+file真实适配解决了旧源残留。与此前Windows/整合分支Linux结果分别保留，两次超时没有改写成通过。正式NVIDIA目录1695文件与原始发布ZIP清单逐项一致，ZIP SHA256仍4225ecb1…，测试清单误写已恢复并修正复用写入函数。至此八项PR功能、兼容修复、GitHub/local main同步、测试、依赖与清理记录完成；未发布新运行包、未改系统组件或关机。
+
+### 2026-11-19 PS5 SDR 码值修复开工
+
+用户图片反馈的 BT.1886 解码/sRGB输出不匹配已在当前main33dfdf71源码核对。隔离 codex/ps5-sdr-code-values-20261119，计划 PS5_SDR_CODE_VALUES_PLAN_2026-11-19.md。只改PS5颜色合同，保留通用shader/HDR矩阵与增强；加入实际源初始化/软硬解/8位回退/10位PQ与GPU输出对照。产物 E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-ps5-sdr-code-values-20261119；复用已核验的外部SDK/Chiaki/libdovi/patchedFFmpeg。无主机连接、用户设置、远端发布操作。结果待本轮执行后记录。
+
+
+### 2026-11-19 PS5 SDR暗部修复完成本地验证
+
+原因确认：RemotePlaySource在SDR置displayReferred709，BT.1886解码后由SDR sink以sRGB编码，压暗灰阶。现在初始化合同与实际帧级都设置SDR preserveSdrCodeValues，HDR/10位PQ与decoder reset关闭该策略，8位回退恢复；不改全局shader/范围矩阵/主机/增强算法。测试目标更新旧remote-yuv错误参考并增加旧策略负对照，真实SourceTests接入CMake、共用生产初始化且增加HDR10/8位回退，生成夹具同时适配Unicode路径。
+
+构建命令：scripts/acceptance/build-recording-handoff.py --task codex-ps5-sdr-code-values-20261119 --root E:/项目/Veyra/worktrees/ps5-sdr-code-values-20261119 --label 2.1.9-ps5-sdr-test --jobs 2，libdovi/Chiaki三项option沿用开发入口，目标qml_ui/remoteplay_source_tests/yuy2_color_tests/hdr_color_tests/capture_color_tests/source_fidelity_tests。首编译测试参考删代码时漏花括号失败，已修正，原build-20261119-024957日志保留；build-20261119-025700六目标通过。
+
+prepare-qa.py生成H264/HEVC8/PQ10；run-qa.py完成9/9预期结果（8正向+1旧策略负对照）。GPU四组旧策略误差13，新策略1，呈现回读误差0；实际软硬解SDR/HDR/8位回退、文件/采集/HDR、冷启动通过；89shader独立核验一致。日志及SHA在 E:/项目/Veyra/{logs,reports}/codex-ps5-sdr-code-values-20261119；私有app和media在tests同任务，临时目录在tmp同任务。stage独立复制，没有硬链接，不改正式包、真实配置/凭据或系统组件。真实PS5/Chiaki/显示器同场景未复测，不宣称现场画质验收。记录 PS5_SDR_CODE_VALUES_2026-11-19.md / FINAL.json。本轮本地提交/合main，不推送或发布。
