@@ -30,9 +30,18 @@ if(NOT WIN32)
 endif()
 add_subdirectory(src/virtualcam)
 
-# Match the compiler's actual bytes, including on localized Windows installs.
-# CMake's cached, decoded prefix can leave Ninja with zero header dependencies.
-if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja")
+# Localized MSVC prints a translated /showIncludes prefix ("注意: 包含文件:  "), and
+# CMake's cached default then matches nothing, leaving Ninja with zero header
+# dependencies. Probe the real prefix once and report it.
+#
+# CMAKE_CL_SHOWINCLUDES_PREFIX is read while project() enables each language, so
+# assigning it here (after project()) has no effect on that build AND stops the
+# Ninja generator from writing CMakeFiles/rules.ninja, which breaks the build
+# with "unknown build rule". Hence: report, never assign. Pass the value on the
+# configure command line when it differs:
+#   -DCMAKE_CL_SHOWINCLUDES_PREFIX=<prefix>
+option(VEYRA_ENABLE_INCLUDE_PROBE "Detect the MSVC /showIncludes prefix (report only)" ON)
+if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja" AND VEYRA_ENABLE_INCLUDE_PROBE)
   set(VEYRA_INCLUDE_PROBE "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/veyra-include-probe")
   file(WRITE "${VEYRA_INCLUDE_PROBE}.h" "// Dependency parser probe\n")
   file(WRITE "${VEYRA_INCLUDE_PROBE}.cpp" "#include \"veyra-include-probe.h\"\n")
@@ -42,7 +51,11 @@ if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja")
   if(NOT VEYRA_INCLUDE_RESULT EQUAL 0 OR NOT VEYRA_INCLUDE_OUTPUT MATCHES "(^|[\r\n])([^\r\n]*: )[ ]*[A-Za-z]:[^\r\n]*veyra-include-probe.h")
     message(FATAL_ERROR "Unable to verify MSVC/Ninja header dependency prefix")
   endif()
-  set(CMAKE_CL_SHOWINCLUDES_PREFIX "${CMAKE_MATCH_2}")
+  set(VEYRA_INCLUDE_PREFIX "${CMAKE_MATCH_2}")
+  file(WRITE "${CMAKE_BINARY_DIR}/cl-showincludes-prefix.txt" "${VEYRA_INCLUDE_PREFIX}\n")
+  if(NOT CMAKE_CL_SHOWINCLUDES_PREFIX STREQUAL VEYRA_INCLUDE_PREFIX)
+    message(STATUS "MSVC /showIncludes prefix is [${VEYRA_INCLUDE_PREFIX}]; CMake uses [${CMAKE_CL_SHOWINCLUDES_PREFIX}]. Incremental header dependencies need -DCMAKE_CL_SHOWINCLUDES_PREFIX=<prefix> at configure time.")
+  endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -1990,14 +2003,19 @@ if(TARGET veyra_qml_ui)
 endif()
 configure_file(apps/veyra/resource.h ${CMAKE_CURRENT_BINARY_DIR}/veyra-resource.h COPYONLY)
 configure_file(assets/veyra.ico ${CMAKE_CURRENT_BINARY_DIR}/veyra.ico COPYONLY)
-target_sources(veyra PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc)
-set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc PROPERTIES
-  OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
+# 无本地定制：veyra（旧 GUI）只在 VEYRA_BUILD_QT_PROBE 下构建，未启用时跳过。
+if(TARGET veyra)
+  target_sources(veyra PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc)
+  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc PROPERTIES
+    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
+endif()
 if(TARGET veyra_qml_ui)
   set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
 endif()
-target_link_options(veyra PRIVATE "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/veyra.manifest")
+if(TARGET veyra)
+  target_link_options(veyra PRIVATE "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/veyra.manifest")
+endif()
 # P4-c: the QML front end hosts the same layered child subtitle window.
 if(TARGET veyra_qml_ui)
   # Copied next to the link step and named relatively: a short link line keeps
