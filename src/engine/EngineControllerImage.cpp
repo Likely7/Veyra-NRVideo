@@ -20,6 +20,8 @@ void EngineController::runLargeImage(HWND window,const sink::RgbaImage& original
     const uint32_t width=uint32_t(std::clamp(initialClient.right,1L,2048L)),height=uint32_t(std::clamp(initialClient.bottom,1L,2048L));
     pipeline::EnhanceGraphDesc previewDesc;previewDesc.sourceWidth=previewDesc.workWidth=width;previewDesc.sourceHeight=previewDesc.workHeight=height;
     previewDesc.rgbInput=true;previewDesc.stillImage=true;previewDesc.noFeatures=true;previewDesc.enableNr=false;previewDesc.enableFg=false;
+    // Same high-quality screen resampling as video (EngineController::run).
+    previewDesc.highQualityPresentation=GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_BILINEAR",nullptr,0)==0;
     pipeline::EnhanceGraph preview(ctx,ring);VideoPresenter presenter;
     struct Cleanup {
         gfx::CommandSlotRing& ring;VideoPresenter& presenter;pipeline::EnhanceGraph& graph;

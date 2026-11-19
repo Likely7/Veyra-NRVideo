@@ -793,7 +793,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
       snapshot_.sourceDoviRpu=dvinfo.present&&dvinfo.rpuDeclared;
       snapshot_.sourceDoviEnhancement=dvinfo.present&&dvinfo.enhancementLayer;
       snapshot_.sourceHdr10Plus=activeSource->info().hdr10Plus.present;}
-            gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
+            // Every source is resampled to the screen with the high-quality present
+            // path (bounded Catmull-Rom up, Catmull-Rom widened by the shrink factor
+            // down; PresentBlit.hlsl).
+            // Until 2026-11-18 only PS5 Remote Play was: fullscreen captures and files
+            // were magnified bilinearly (soft) and shrunk without filtering (jagged).
+            // VEYRA_TEST_PRESENT_BILINEAR=1 restores the old sampling for comparison.
+            static const bool bilinearPresent=GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_BILINEAR",nullptr,0)>0;
+            gd.highQualityPresentation=!bilinearPresent;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
             auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
             gd.captureBitDepth=ingressBitDepth(activeSource->info().color.pixelFormat);

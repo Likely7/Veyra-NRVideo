@@ -124,7 +124,7 @@ struct EnhanceGraphDesc {
     // being tone-mapped down first.
     bool hdrWorking() const {return hdrInput&&hdrOutput;}
     bool convertVideoHdr() const {return videoHdr.enabled&&hdrOutput&&!hdrInput;}
-    bool highQualityPresentation = false; // PS5 ordinary scaling, no AI SR
+    bool highQualityPresentation = false; // high-quality screen resampling (the app sets it for every source)
     bool rgbInput = false;       // allocate direct RGBA ingestion before NGX creation
     bool yuy2Input = false;      // packed Y0 U Y1 V -> linear FP16; never subsample to NV12
     // N1: packed capture ingress (1 BGR24, 2 RGB555, 3 RGB565, 4 UYVY, 5 YVYU).
