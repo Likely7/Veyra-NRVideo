@@ -129,8 +129,11 @@ int virtualInput(){
     SDL_VirtualJoystickTouchpadDesc touch{};touch.nfingers=2;desc.ntouchpads=1;desc.touchpads=&touch;
     SDL_VirtualJoystickSensorDesc sensors[2]={{SDL_SENSOR_GYRO,120},{SDL_SENSOR_ACCEL,120}};desc.nsensors=2;desc.sensors=sensors;
     desc.SetSensorsEnabled=[](void*,bool){return true;};
-    unsigned rumbleCalls=0;desc.userdata=&rumbleCalls;
-    desc.Rumble=[](void* p,Uint16,Uint16){++*static_cast<unsigned*>(p);return true;};
+    struct Fixture {unsigned rumble=0,led=0;Uint8 rgb[3]{};int player=-1;} fixture;desc.userdata=&fixture;
+    unsigned& rumbleCalls=fixture.rumble;
+    desc.Rumble=[](void* p,Uint16,Uint16){++static_cast<Fixture*>(p)->rumble;return true;};
+    desc.SetLED=[](void* p,Uint8 r,Uint8 g,Uint8 b){auto& f=*static_cast<Fixture*>(p);++f.led;f.rgb[0]=r;f.rgb[1]=g;f.rgb[2]=b;return true;};
+    desc.SetPlayerIndex=[](void* p,int index){static_cast<Fixture*>(p)->player=index;};
     desc.SendEffect=[](void*,const void*,int){return true;};
     const auto id=SDL_AttachVirtualJoystick(&desc);if(!id)return 21;
     auto* joystick=SDL_OpenJoystick(id);ControllerInput input;
@@ -157,6 +160,15 @@ int virtualInput(){
     auto calibrated=input.poll(true);ok&=std::abs(calibrated.gyro[0])<1e-5&&std::abs(calibrated.gyro[2])<1e-5;
     ControllerFeedback f;f.rumble=true;f.left=5;input.feedback(f,true);ok&=rumbleCalls>0;
     const auto before=rumbleCalls;ok&=input.poll(false)==ControllerState{};ok&=rumbleCalls>before;
+    // Console light bar / player indicator: applied when focused; a change while unfocused
+    // is kept and applied when focus returns.
+    ControllerFeedback lights;lights.led=true;lights.ledColor={255,64,0};lights.playerIndex=true;lights.player=2;
+    input.feedback(lights,true);
+    ok&=fixture.led>0&&fixture.rgb[0]==255&&fixture.rgb[1]==64&&fixture.rgb[2]==0&&fixture.player==2;
+    ControllerFeedback later;later.led=true;later.ledColor={0,0,255};input.feedback(later,false);
+    ok&=fixture.rgb[2]==0;
+    input.feedback(ControllerFeedback{},true);ok&=fixture.rgb[0]==0&&fixture.rgb[2]==255;
+    ControllerFeedback merged;merged.merge(lights);merged.merge(later);ok&=merged.led&&merged.ledColor[2]==255&&merged.playerIndex&&merged.player==2;
     // Held RT must never pulse neutral or become LT; focus loss releases it,
     // and returning focus must resume the held physical state without reconnect.
     SDL_SetJoystickVirtualAxis(joystick,SDL_GAMEPAD_AXIS_LEFT_TRIGGER,-32768);

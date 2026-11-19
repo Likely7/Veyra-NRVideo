@@ -37,7 +37,7 @@ bool ControllerInput::opened(uint32_t id)const{
     return std::any_of(others_.begin(),others_.end(),[id](SDL_Gamepad* pad){return SDL_GetGamepadID(pad)==id;});
 }
 void ControllerInput::activate(SDL_Gamepad* pad){
-    gamepad_=pad;
+    gamepad_=pad;lightsDirty_=haveLed_||havePlayer_;
     touchQueue_.clear();touchState_={};sensorStamp_=0;haveGyro_=haveAccel_=false;gyroBias_={};calibrating_=false;touchIds_={-1,-1};gyro_=SDL_GamepadHasSensor(gamepad_,SDL_SENSOR_GYRO)&&SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,true);
     accel_=SDL_GamepadHasSensor(gamepad_,SDL_SENSOR_ACCEL)&&SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,true);
     std::string line=std::string("device opened gyro=")+(gyro_?"1":"0")+" accel="+(accel_?"1":"0")+" touchpads="+std::to_string(SDL_GetNumGamepadTouchpads(gamepad_));
@@ -157,8 +157,23 @@ void ControllerInput::releaseEffects(){
     if(hapticStream_)SDL_ClearAudioStream(hapticStream_);
     effectsActive_=false;
 }
+void ControllerInput::applyLights(){
+    lightsDirty_=false;
+    if(!gamepad_)return;
+    const auto props=SDL_GetGamepadProperties(gamepad_);
+    if(haveLed_&&SDL_GetBooleanProperty(props,SDL_PROP_GAMEPAD_CAP_RGB_LED_BOOLEAN,false)&&!SDL_SetGamepadLED(gamepad_,ledColor_[0],ledColor_[1],ledColor_[2]))
+        veyra::log::warn("remoteplay-feedback",SDL_GetError());
+    // SDL maps the index to the DualSense player LEDs, as chiaki-ng relies on.
+    if(havePlayer_&&!SDL_SetGamepadPlayerIndex(gamepad_,int(player_)))
+        veyra::log::warn("remoteplay-feedback",SDL_GetError());
+}
 void ControllerInput::feedback(ControllerFeedback f,bool focused){
+    // Light bar and player indicator are console state rather than effects: the latest
+    // values are kept while unfocused and applied once the pad is read again.
+    if(f.led){ledColor_=f.ledColor;haveLed_=true;lightsDirty_=true;}
+    if(f.playerIndex){player_=f.player;havePlayer_=true;lightsDirty_=true;}
     if(!focused||!gamepad_){releaseEffects();return;}
+    if(lightsDirty_)applyLights();
     if(f.rumble){effectsActive_=true;if(!SDL_RumbleGamepad(gamepad_,uint16_t(f.left)*257,uint16_t(f.right)*257,5000))veyra::log::warn("remoteplay-feedback",SDL_GetError());}
     if(f.triggers&&SDL_GetGamepadType(gamepad_)==SDL_GAMEPAD_TYPE_PS5){
         // SDL DualSense effects report payload (47 bytes): right at10, left at21.
