@@ -6,6 +6,7 @@
 struct SDL_Gamepad;
 struct SDL_AudioStream;
 namespace veyra::remoteplay {
+class DualSenseBtHaptics; // haptic audio as Bluetooth HID reports (ControllerInput.cpp)
 // SDL calls stay on the Win32 UI owner, independently of GPU processing.
 class ControllerInput {
 public:
@@ -26,6 +27,7 @@ public:
 private:
     void activate(SDL_Gamepad*);
     void deactivate();
+    void closeHaptics();
     bool opened(uint32_t id)const;
     SDL_Gamepad* gamepad_=nullptr;
     std::vector<SDL_Gamepad*> others_; // follow mode: open, not read
@@ -35,6 +37,7 @@ private:
     std::array<int8_t,2> touchIds_{-1,-1};uint8_t nextTouchId_=0;
     bool gyro_=false,accel_=false,effectsActive_=false,audioInitialized_=false,hapticAttempted_=false;
     SDL_AudioStream* hapticStream_=nullptr;
+    DualSenseBtHaptics* bt_=nullptr; // DualSense on Bluetooth: no audio endpoint to play into
     std::array<ControllerState::Touch,2> touchState_{};
     std::deque<std::array<ControllerState::Touch,2>> touchQueue_;
     std::array<float,3> gyroBias_{},biasSum_{},sensorGyro_{},sensorAccel_{0,1,0};

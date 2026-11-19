@@ -7,10 +7,15 @@
 #include "veyra/remoteplay/InputGate.h"
 #include "veyra/remoteplay/SessionInbox.h"
 #include "veyra/remoteplay/StreamRecovery.h"
+#include "veyra/remoteplay/DualSenseHapticsReport.h"
+#include "veyra/remoteplay/HapticsBlockPacer.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/FgRecoveryBudget.h"
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <deque>
 #include <functional>
 #include <iostream>
 #include <limits>
@@ -189,6 +194,227 @@ TEST(recovery_intermittent_frames_do_not_renew_budget){
     StreamRecovery r;using A=StreamRecovery::Action;r.beginAttempt(0);r.frame(100);CHECK(r.poll(6100,false,false)==A::Reconnect);r.beginAttempt(7000);
     for(int64_t t=7100;t<150000;t+=1000)CHECK(!r.frame(t));
     CHECK(r.episodeRetries()==1);CHECK(r.reconnects()==1);
+}
+// --- DualSense haptics over Bluetooth: report bytes and pacing. No device is opened. ---
+namespace {
+struct HapticsRandom {
+    std::uint64_t state=0x9E3779B97F4A7C15ull;
+    std::int64_t range(std::int64_t lo,std::int64_t hi){state=state*6364136223846793005ull+1442695040888963407ull;return lo+static_cast<std::int64_t>((state>>33)%static_cast<std::uint64_t>(hi-lo+1));}
+};
+// A sender without reserve control, for comparison: starts 20 ms after the first chunk and
+// always takes 32 frames.
+struct FixedBlockPacer {
+    bool flowing_=false;
+    void reset(){flowing_=false;}
+    HapticsBlockPacer::Step next(unsigned queued,unsigned sinceLastPushMs,unsigned waitedMs){
+        HapticsBlockPacer::Step step;
+        if(!flowing_){if(!queued||(queued<96&&waitedMs<20))return step;flowing_=true;}
+        if(queued<32){if(sinceLastPushMs<40){step.starved=true;return step;}if(!queued){flowing_=false;return step;}}
+        step.send=true;step.take=std::min(queued,32u);return step;
+    }
+};
+struct HapticsScenario {
+    double seconds=120;
+    double driftPpm=0;            // console clock against the PC clock
+    double stallEverySeconds=0;   // UI stalls of 25..45 ms about this often (0 = never)
+    double onMs=0,offMs=0;        // effect pattern; 0/0 = continuous
+    bool silenceBetween=false;    // between effects the console sends silence (true) or nothing
+};
+struct HapticsOutcome {
+    std::uint64_t reports=0;      // every report written, with audio or with silence
+    std::uint64_t audioReports=0; // reports that carried queued audio
+    std::uint64_t late=0;         // audio reports written more than 1.5 ms behind their schedule
+    std::uint64_t waits=0;        // times a report had to wait for audio (the sender counts the same)
+    std::uint64_t loudProduced=0,loudSent=0,loudDropped=0,loudDiscarded=0; // audible frames
+    std::uint64_t stretched=0,squeezed=0,stalls=0,effects=0;
+    unsigned levelMax=0,takeMax=0,loudRemaining=0;
+};
+// The sender loop of DualSenseBtHaptics (ControllerInput.cpp) with the audio delivered as in
+// the product: 10 ms chunks from the console with network jitter, handed over in one batch
+// per tick by a UI timer that ticks every 8 ms and now and then stalls, and a report due
+// every 10.667 ms. Time in microseconds, 0.1 ms steps.
+template<class Pacer> HapticsOutcome simulateHaptics(const HapticsScenario& s,std::uint64_t seed){
+    struct Run{unsigned frames;bool loud;};   // queued audio, oldest first
+    struct Chunk{std::int64_t at;bool loud;}; // on the way from the console
+    HapticsRandom random;random.state^=seed*0x2545F4914F6CDD1Dull;
+    HapticsOutcome r;Pacer pacer;
+    const std::int64_t period=10667,end=static_cast<std::int64_t>(s.seconds*1e6),cycle=static_cast<std::int64_t>((s.onMs+s.offMs)*1000);
+    const double chunkUs=10000.0*(1.0-s.driftPpm*1e-6);
+    std::deque<Chunk> onTheWay;std::deque<Run> fifo;
+    double nextChunkAt=0;
+    std::int64_t effectClock=0,nextTick=0,lastPush=-1000000,lastLoudPush=-1000000,fifoSince=0,senderAt=0,next=0,lastLoud=0;
+    unsigned queued=0;bool streaming=false,wasStarved=false,wasOn=false;
+    const auto sinceMs=[](std::int64_t from,std::int64_t to){return static_cast<unsigned>(std::min<std::int64_t>((to-from)/1000,100000));};
+    const auto loudQueued=[&]{unsigned frames=0;for(const auto& run:fifo)if(run.loud)frames+=run.frames;return frames;};
+    for(std::int64_t now=0;now<end;now+=100){
+        while(nextChunkAt<=static_cast<double>(now)){
+            const bool on=cycle<=0||static_cast<double>(effectClock%cycle)<s.onMs*1000;
+            if(on&&!wasOn)++r.effects;
+            wasOn=on;
+            if(on||s.silenceBetween){onTheWay.push_back({static_cast<std::int64_t>(nextChunkAt)+random.range(0,2000),on});if(on)r.loudProduced+=30;}
+            nextChunkAt+=chunkUs;effectClock+=10000;
+        }
+        if(now>=nextTick){
+            // push(): one batch per tick. Silence is not queued while nothing plays.
+            std::size_t chunks=0;bool loud=false;
+            while(chunks<onTheWay.size()&&onTheWay[chunks].at<=now){loud=loud||onTheWay[chunks].loud;++chunks;}
+            if(chunks&&(loud||streaming||queued)){
+                if(!queued)fifoSince=now;
+                for(std::size_t i=0;i<chunks;++i){fifo.push_back({30u,onTheWay[i].loud});queued+=30;}
+                lastPush=now;if(loud)lastLoudPush=now;
+                while(queued>384){ // the sender fell far behind: the oldest audio goes
+                    auto& oldest=fifo.front();const unsigned drop=std::min(queued-384,oldest.frames);
+                    if(oldest.loud)r.loudDropped+=drop;
+                    oldest.frames-=drop;queued-=drop;if(!oldest.frames)fifo.pop_front();
+                }
+            }
+            onTheWay.erase(onTheWay.begin(),onTheWay.begin()+static_cast<std::ptrdiff_t>(chunks));
+            nextTick=now+8000+random.range(-500,500);
+            if(s.stallEverySeconds>0&&random.range(0,static_cast<std::int64_t>(s.stallEverySeconds*125)-1)==0){nextTick+=random.range(25000,45000);++r.stalls;}
+        }
+        if(now<senderAt)continue;
+        // run(): one pass of the sender loop.
+        const auto step=pacer.next(queued,sinceMs(lastPush,now),sinceMs(fifoSince,now));
+        r.takeMax=std::max(r.takeMax,step.take);
+        if(lastLoudPush>lastLoud)lastLoud=lastLoudPush;
+        if(!streaming){
+            if(!step.send){senderAt=now+(queued?4000:1000);continue;}
+            streaming=true;wasStarved=false;next=now;if(lastLoud<now)lastLoud=now;
+        }
+        if(step.starved){
+            if(!wasStarved){wasStarved=true;++r.waits;}
+            if(now-next>60000){next=now;wasStarved=false;}
+            senderAt=now+2000;continue;
+        }
+        wasStarved=false;
+        bool loudBlock=false;
+        if(step.send){
+            r.levelMax=std::max(r.levelMax,queued);
+            for(unsigned left=std::min(step.take,queued);left;){
+                auto& run=fifo.front();const unsigned frames=std::min(left,run.frames);
+                if(run.loud){loudBlock=true;r.loudSent+=frames;}
+                run.frames-=frames;left-=frames;queued-=frames;if(!run.frames)fifo.pop_front();
+            }
+            ++r.audioReports;
+            if(step.take==31)++r.stretched;else if(step.take==33)++r.squeezed;
+            if(now-next>1500)++r.late;
+        }
+        ++r.reports; // without audio the report carries silence and keeps the cadence
+        if(loudBlock)lastLoud=now;
+        if(now-lastLoud>250000){
+            // 250 ms after the last audible audio the stream stops and the queue is cleared.
+            if(lastLoudPush>lastLoud)lastLoud=lastLoudPush;
+            else{streaming=false;pacer.reset();r.loudDiscarded+=loudQueued();fifo.clear();queued=0;senderAt=now+1000;continue;}
+        }
+        next+=period;
+        if(now-next>period*3)next=now;
+        senderAt=std::max(now+100,next);
+    }
+    r.loudRemaining=loudQueued();
+    for(const auto& chunk:onTheWay)if(chunk.loud)r.loudRemaining+=30;
+    return r;
+}
+// Every audible frame the console produced was sent or is still on its way.
+bool hapticsNothingLost(const HapticsOutcome& r){return r.loudDropped==0&&r.loudDiscarded==0&&r.loudSent+r.loudRemaining==r.loudProduced&&r.takeMax<=HapticsBlockPacer::kBlock+1;}
+}
+TEST(haptics_report_layout_and_crc){
+    const std::uint8_t seed=0xa2;
+    CHECK(~dualSenseCrc32(0xffffffffu,&seed,1)==0xEADA2D49u);
+    // Left = 1000*i - 16000, right = -left; sequence 3, counter 7, buffer depth 0x20. The
+    // expected bytes were computed apart from this code (Python, zlib.crc32).
+    std::array<std::int16_t,kDualSenseHapticsFrames*2> pcm{};
+    for(std::size_t i=0;i<kDualSenseHapticsFrames;++i){pcm[i*2]=static_cast<std::int16_t>(1000*static_cast<int>(i)-16000);pcm[i*2+1]=static_cast<std::int16_t>(16000-1000*static_cast<int>(i));}
+    std::array<std::uint8_t,kDualSenseHapticsReportSize> report{};
+    CHECK(buildDualSenseHapticsReport(report,pcm.data(),3,7,0x20));
+    const std::array<std::uint8_t,16> head{0x32,0x30,0x91,0x07,0xfe,0x00,0x00,0x00,0x00,0x20,0x07,0x92,0x40,0xc1,0x3f,0xc5};
+    CHECK(std::equal(head.begin(),head.end(),report.begin()));
+    const std::array<std::uint8_t,4> crc{0x6f,0x94,0x5c,0x01};
+    CHECK(std::equal(crc.begin(),crc.end(),report.begin()+138));
+    for(std::size_t i=77;i<138;++i)CHECK(report[i]==0);
+    CHECK(buildDualSenseHapticsReport(report,pcm.data(),0,0));CHECK(report[9]==kDualSenseHapticsBufferDepth);
+}
+TEST(haptics_report_rounding_and_silence){
+    // Values one step from zero are not "loud": the console sends such noise between effects.
+    std::array<std::int16_t,kDualSenseHapticsFrames*2> quiet{};quiet[5]=300;quiet[9]=-300;quiet[11]=127;quiet[12]=128;
+    std::array<std::uint8_t,kDualSenseHapticsReportSize> report{};
+    CHECK(!buildDualSenseHapticsReport(report,quiet.data(),0,0));
+    CHECK(report[13+5]==0x01&&report[13+9]==0xff&&report[13+11]==0x00&&report[13+12]==0x01);
+    CHECK(dualSenseNarrowSample(32767)==127&&dualSenseNarrowSample(-32768)==-128&&dualSenseNarrowSample(-128)==-1&&dualSenseNarrowSample(-127)==0);
+    CHECK(!dualSenseAudible(383)&&dualSenseAudible(384)&&!dualSenseAudible(-383)&&dualSenseAudible(-384));
+    quiet[20]=600;CHECK(buildDualSenseHapticsReport(report,quiet.data(),0,0));
+}
+TEST(haptics_fit_block){
+    // A ramp of 310 per frame on the left, its mirror on the right.
+    std::array<std::int16_t,33*2> ramp{};
+    for(std::size_t i=0;i<33;++i){ramp[i*2]=static_cast<std::int16_t>(static_cast<int>(i)*310);ramp[i*2+1]=static_cast<std::int16_t>(-static_cast<int>(i)*310);}
+    std::array<std::int16_t,32*2> out{};
+    hapticsFitBlock(ramp.data(),32,out.data());CHECK(std::equal(out.begin(),out.end(),ramp.begin()));
+    for(const int count:{31,33}){
+        hapticsFitBlock(ramp.data(),static_cast<unsigned>(count),out.data());
+        // Linear interpolation of a ramp is the ramp itself over the new length: output frame
+        // i sits at source position i*(count-1)/31. First and last frame are kept, so
+        // consecutive blocks join without a step.
+        for(int i=0;i<32;++i){
+            const int expected=(310*i*(count-1)+15)/31;
+            CHECK(out[static_cast<std::size_t>(i)*2]==expected&&out[static_cast<std::size_t>(i)*2+1]==-expected);
+        }
+        CHECK(out[62]==ramp[static_cast<std::size_t>(count-1)*2]);
+    }
+    hapticsFitBlock(ramp.data(),10,out.data());
+    CHECK(std::equal(out.begin(),out.begin()+20,ramp.begin()));for(std::size_t i=20;i<64;++i)CHECK(out[i]==0);
+}
+TEST(haptics_pacer_continuous_stream){
+    for(std::uint64_t seed=1;seed<=2;++seed){
+        const auto r=simulateHaptics<HapticsBlockPacer>({120,0,0,0,0,false},seed);
+        // Nothing waits and the queue stays near its starting reserve.
+        CHECK(hapticsNothingLost(r));CHECK(r.late==0&&r.waits==0&&r.levelMax<=200);
+    }
+}
+TEST(haptics_pacer_follows_clock_drift){
+    for(const double ppm:{300.0,-300.0}){
+        const auto r=simulateHaptics<HapticsBlockPacer>({240,ppm,0,0,0,false},1);
+        CHECK(hapticsNothingLost(r));CHECK(r.late==0&&r.waits==0&&r.levelMax<=330);CHECK(ppm>0?r.squeezed>0:r.stretched>0);
+    }
+    // Without reserve control a console clock that runs slow drains the queue to its edge,
+    // and from then on most reports wait for audio; a fast one overflows the queue (after
+    // about six minutes at 300 ppm). This is the failure the simulation has to be able to show.
+    const auto slow=simulateHaptics<FixedBlockPacer>({240,-300,0,0,0,false},1),fast=simulateHaptics<FixedBlockPacer>({480,300,0,0,0,false},1);
+    CHECK(slow.late*2>slow.audioReports);CHECK(fast.loudDropped>0);
+}
+TEST(haptics_pacer_ui_stalls){
+    for(std::uint64_t seed=1;seed<=2;++seed){
+        const auto r=simulateHaptics<HapticsBlockPacer>({120,0,3,0,0,false},seed);
+        // A stall costs a wait once. After it the queue holds enough to ride out the next
+        // ones, and it stays bounded.
+        CHECK(hapticsNothingLost(r));CHECK(r.stalls>10&&r.waits*5<=r.stalls);CHECK(r.levelMax<=330);
+    }
+}
+TEST(haptics_pacer_effects_and_clicks){
+    for(std::uint64_t seed=1;seed<=2;++seed){
+        // 700 ms effects with 400 ms pauses. When nothing arrives between them, at most the
+        // last partial block of each effect waits; with silence in between nothing waits.
+        const auto effects=simulateHaptics<HapticsBlockPacer>({120,0,0,700,400,false},seed);
+        CHECK(hapticsNothingLost(effects));CHECK(effects.waits<=effects.effects+4);
+        const auto joined=simulateHaptics<HapticsBlockPacer>({120,0,0,700,400,true},seed);
+        CHECK(hapticsNothingLost(joined));CHECK(joined.waits==0&&joined.late==0);
+        // 20 ms clicks: sent whole and without waiting, whether the console goes quiet or
+        // keeps sending silence after them.
+        for(const bool silence:{false,true}){
+            const auto clicks=simulateHaptics<HapticsBlockPacer>({60,0,0,20,480,silence},seed);
+            CHECK(hapticsNothingLost(clicks));CHECK(clicks.waits==0&&clicks.late==0);
+        }
+    }
+}
+TEST(haptics_idle_pad_gets_no_reports){
+    // Silence only: nothing is queued and no report is written.
+    const auto silent=simulateHaptics<HapticsBlockPacer>({30,0,0,0,1000,true},1);
+    CHECK(silent.reports==0&&silent.loudProduced==0);
+    // A 20 ms click every two seconds with silence in between: each click costs its own
+    // reports plus 250 ms of silence, then the link rests. Without the stop the same minute
+    // would take about 5600 reports.
+    const auto clicks=simulateHaptics<HapticsBlockPacer>({60,0,0,20,1980,true},1);
+    CHECK(hapticsNothingLost(clicks));CHECK(clicks.effects==30);
+    CHECK(clicks.reports>=clicks.effects*23&&clicks.reports<=clicks.effects*34);
 }
 int main(int argc,char**argv){
     std::string filter;

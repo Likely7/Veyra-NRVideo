@@ -10,7 +10,189 @@
 #include <SDL3/SDL_audio.h>
 #include <cstring>
 #include "veyra/Log.h"
+#include "veyra/remoteplay/DualSenseHapticsReport.h"
+#include "veyra/remoteplay/HapticsBlockPacer.h"
+#include <SDL3/SDL_hidapi.h>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <format>
+#include <mutex>
+#include <thread>
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
 namespace veyra::remoteplay {
+// ---------------------------------------------------------------------------------------
+// DualSense haptics over Bluetooth.
+//
+// Over USB the pad exposes a four-channel audio endpoint and the haptic audio is played into
+// channels 3/4 (feedback() below). Over Bluetooth there is no audio endpoint; the same audio
+// is sent as HID output report 0x32 (DualSenseHapticsReport.h).
+//
+// SDL keeps the pad open through its own HIDAPI driver; Windows lets a second handle be
+// opened on the same device, and that handle is only written to (SDL never sends report
+// 0x32). The writes are paced by a dedicated thread with a high-resolution timer: Windows
+// takes a report long before the pad plays it (in about 0.1 ms in the measurement of AnyPS5
+// issue 2056), so the write call gives no back-pressure to pace by, and the UI timer that
+// delivers the audio is far too uneven for a 10.667 ms cadence (HapticsBlockPacer.h keeps
+// the reserve between the two).
+//
+// SDL's hid_write waits up to a second for a write and leaves it in flight when that time
+// runs out. After a failed write the handle is therefore not written to again: the route
+// closes and is opened anew when the pad is activated again. Closing joins the sender, so a
+// write that is stalled at that moment holds the caller for up to that second.
+// ---------------------------------------------------------------------------------------
+class DualSenseBtHaptics {
+public:
+    // waits: reports that had to wait for audio, counted once per wait.
+    struct Totals {uint64_t reports=0,writeErrors=0,waits=0,framesDropped=0;};
+    // nullptr unless `pad` is a DualSense connected over Bluetooth; `why` says what happened.
+    static DualSenseBtHaptics* open(SDL_Gamepad* pad,std::string& why){
+        if(GetEnvironmentVariableW(L"VEYRA_DISABLE_BT_HAPTICS",nullptr,0)>0){why="switched off by VEYRA_DISABLE_BT_HAPTICS";return nullptr;}
+        const char* path=SDL_GetGamepadPath(pad);
+        if(!path){why="the pad has no device path";return nullptr;}
+        // SDL's HID calls do not set an error text on every failure: start from none.
+        SDL_ClearError();
+        const auto failure=[](const char* what){const char* text=SDL_GetError();return text&&*text?std::string(what)+": "+text:std::string(what);};
+        if(SDL_hid_init()!=0){why=failure("SDL_hid_init failed");return nullptr;}
+        auto* device=SDL_hid_open_path(path);
+        if(!device){why=failure("a second HID handle could not be opened");SDL_hid_exit();return nullptr;}
+        const auto* info=SDL_hid_get_device_info(device);
+        // 054C:0CE6 only: the report has not been tried on the DualSense Edge (0DF2).
+        const bool dualSense=info&&info->vendor_id==0x054c&&info->product_id==0x0ce6;
+        if(!dualSense||info->bus_type!=SDL_HID_API_BUS_BLUETOOTH){
+            why=!info?"no device info":!dualSense?"not a DualSense (054C:0CE6)":"not connected over Bluetooth";
+            SDL_hid_close(device);SDL_hid_exit();return nullptr;
+        }
+        return new DualSenseBtHaptics(device);
+    }
+    ~DualSenseBtHaptics(){
+        // The sender ends before the handle is closed. Windows cancels the I/O a thread has
+        // started when that thread exits, so no write is in flight at the close.
+        thread_.request_stop();if(thread_.joinable())thread_.join();
+        SDL_hid_close(device_);SDL_hid_exit();
+    }
+    // Interleaved L,R at 3 kHz. Any thread.
+    void push(const int16_t* stereo,size_t frames){
+        if(!frames||failed_)return;
+        // The console may send haptic audio that is pure silence. While nothing is playing,
+        // silence is not queued: the reports start with the first audible block and stop
+        // 250 ms after the last one, so an idle pad gets no report traffic at all.
+        bool loud=false;
+        for(size_t i=0;i<frames*2&&!loud;++i)loud=dualSenseAudible(stereo[i]);
+        std::lock_guard lock(mutex_);
+        if(!loud&&!streaming_&&fifo_.empty())return;
+        lastPush_=Clock::now();
+        // Audible audio that is queued keeps the stream alive like audio that was sent: the
+        // start of a new effect waits in the queue for its reserve and must not be cleared
+        // when the 250 ms after the previous effect run out.
+        if(loud)lastLoudPush_=lastPush_;
+        if(fifo_.empty()){fifoSince_=lastPush_;wake_.notify_one();}
+        fifo_.insert(fifo_.end(),stereo,stereo+frames*2);
+        // More than 128 ms queued means the sender fell far behind: keep the newest part.
+        if(fifo_.size()>kMaxFrames*2){const auto drop=fifo_.size()-kMaxFrames*2;fifo_.erase(fifo_.begin(),fifo_.begin()+ptrdiff_t(drop));framesDropped_+=drop/2;}
+    }
+    void clear(){std::lock_guard lock(mutex_);fifo_.clear();}
+    bool failed()const{return failed_;}
+    Totals totals()const{return {reports_,writeErrors_,waits_,framesDropped_};}
+private:
+    using Clock=std::chrono::steady_clock;
+    static constexpr size_t kBlock=kDualSenseHapticsFrames,kMaxFrames=384;
+    explicit DualSenseBtHaptics(SDL_hid_device* device):device_(device){
+        thread_=std::jthread([this](std::stop_token stop){run(stop);});
+    }
+    // Returns false when the write failed.
+    bool send(const int16_t* frames,bool& loud){
+        std::array<uint8_t,kDualSenseHapticsReportSize> out;
+        loud=buildDualSenseHapticsReport(out,frames,sequence_++,counter_++);
+        ++reports_;
+        if(SDL_hid_write(device_,out.data(),out.size())>=0)return true;
+        ++writeErrors_;return false;
+    }
+    void run(std::stop_token stop){
+        SetThreadPriority(GetCurrentThread(),THREAD_PRIORITY_ABOVE_NORMAL); // an even cadence matters more than throughput here
+        const HANDLE timer=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS);
+        const auto waitUntil=[&](Clock::time_point until){
+            const auto now=Clock::now();if(until<=now)return;
+            LARGE_INTEGER due;due.QuadPart=-std::chrono::duration_cast<std::chrono::nanoseconds>(until-now).count()/100;
+            if(timer&&due.QuadPart<0&&SetWaitableTimer(timer,&due,0,nullptr,nullptr,FALSE)){WaitForSingleObject(timer,100);return;}
+            std::this_thread::sleep_for(until-now);
+        };
+        constexpr auto period=std::chrono::nanoseconds(10'666'667); // 32 frames at 3 kHz
+        // When a stream starts and how many source frames go into each block: see
+        // HapticsBlockPacer.h (it keeps a reserve of queued audio and rebuilds it).
+        HapticsBlockPacer pacer;
+        bool streaming=false,wasStarved=false;auto next=Clock::now();Clock::time_point lastLoud{};
+        const auto stopStream=[&]{streaming=false;pacer.reset();std::lock_guard lock(mutex_);streaming_=false;fifo_.clear();};
+        while(!stop.stop_requested()){
+            std::array<int16_t,(kBlock+1)*2> source{};std::array<int16_t,kBlock*2> frames{};
+            HapticsBlockPacer::Step step;auto now=Clock::now();
+            {std::lock_guard lock(mutex_);
+                const auto queued=unsigned(fifo_.size()/2);
+                const auto since=[&](Clock::time_point from){return unsigned(std::clamp<long long>(std::chrono::duration_cast<std::chrono::milliseconds>(now-from).count(),0,100000));};
+                step=pacer.next(queued,since(lastPush_),since(fifoSince_));
+                step.take=std::min({step.take,queued,unsigned(kBlock+1)}); // `source` holds 33 frames
+                if(step.send){
+                    std::copy_n(fifo_.begin(),size_t(step.take)*2,source.begin());
+                    fifo_.erase(fifo_.begin(),fifo_.begin()+ptrdiff_t(step.take)*2);
+                    streaming_=true;
+                }
+                if(lastLoudPush_>lastLoud)lastLoud=lastLoudPush_;
+            }
+            if(!streaming){
+                if(!step.send){
+                    // Nothing queued: sleep until audio arrives. Something queued but its
+                    // reserve is not there yet: look again shortly.
+                    std::unique_lock lock(mutex_);
+                    if(fifo_.empty())wake_.wait_for(lock,stop,std::chrono::milliseconds(250),[&]{return !fifo_.empty();});
+                    else{lock.unlock();waitUntil(now+std::chrono::milliseconds(4));}
+                    continue;
+                }
+                streaming=true;wasStarved=false;next=now;if(lastLoud<now)lastLoud=now;counter_=0;
+            }
+            if(step.starved){
+                // The block is not full although audio still arrives: the report waits.
+                // `next` is left alone, so the following reports go out early until the
+                // schedule is caught up; the pacer then rebuilds the reserve.
+                if(!wasStarved){wasStarved=true;++waits_;} // counted once per wait
+                if(now-next>std::chrono::milliseconds(60)){next=now;wasStarved=false;} // far beyond the pad's buffer: start over
+                waitUntil(now+std::chrono::milliseconds(2));continue;
+            }
+            wasStarved=false;
+            // No audio for this report (between effects, or a new effect still gathering its
+            // reserve): the pad gets silence, so the cadence of the stream is kept.
+            if(step.send)hapticsFitBlock(source.data(),step.take,frames.data());
+            bool loud=false;
+            // A failed write ends the route (see above); feedback() closes it.
+            if(!send(frames.data(),loud)){failed_=true;stopStream();continue;}
+            if(loud)lastLoud=now;
+            // The pad keeps getting silence for 250 ms after the last audible audio, then
+            // the link rests (whatever is still queued by then is silence).
+            if(now-lastLoud>std::chrono::milliseconds(250)){
+                std::unique_lock lock(mutex_);
+                // Audible audio that arrived while this report was written keeps the stream.
+                if(lastLoudPush_>lastLoud)lastLoud=lastLoudPush_;
+                else{streaming=false;pacer.reset();streaming_=false;fifo_.clear();continue;}
+            }
+            next+=period;now=Clock::now();
+            if(now-next>period*3)next=now; // stalled: resynchronise rather than burst
+            waitUntil(next);
+        }
+        if(timer)CloseHandle(timer);
+    }
+    SDL_hid_device* device_;
+    mutable std::mutex mutex_;std::condition_variable_any wake_;std::vector<int16_t> fifo_;Clock::time_point fifoSince_{},lastPush_{},lastLoudPush_{};
+    std::atomic<bool> failed_{false};
+    bool streaming_=false; // under mutex_: the sender thread is sending reports
+    std::atomic<uint64_t> reports_{0},writeErrors_{0},waits_{0},framesDropped_{0};
+    uint8_t sequence_=0,counter_=0;
+    std::jthread thread_;
+};
 bool ControllerInput::start(uint32_t preferredDevice){
     preferredDevice_=preferredDevice;
     if(initialized_)return true;
@@ -21,8 +203,8 @@ bool ControllerInput::start(uint32_t preferredDevice){
 void ControllerInput::stop(){
     for(auto* pad:others_)SDL_CloseGamepad(pad);
     others_.clear();follow_=false;
-    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}
-    if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}hapticAttempted_=false;
+    releaseEffects();closeHaptics();
+    if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}
     touchQueue_.clear();touchState_={};haveGyro_=haveAccel_=false;calibrating_=false;gyroBias_={};enumerateAt_=0;
     if(gamepad_){SDL_CloseGamepad(gamepad_);gamepad_=nullptr;}
     if(initialized_){SDL_QuitSubSystem(SDL_INIT_GAMEPAD);initialized_=false;}
@@ -46,7 +228,7 @@ void ControllerInput::activate(SDL_Gamepad* pad){
 }
 // The pad stops being read: its rumble/trigger effects and haptic stream end.
 void ControllerInput::deactivate(){
-    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}hapticAttempted_=false;
+    releaseEffects();closeHaptics();
     if(gamepad_&&SDL_GamepadConnected(gamepad_)){
         if(gyro_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,false);
         if(accel_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,false);
@@ -155,7 +337,17 @@ void ControllerInput::releaseEffects(){
         }
     }
     if(hapticStream_)SDL_ClearAudioStream(hapticStream_);
+    if(bt_)bt_->clear();
     effectsActive_=false;
+}
+// The haptic route (audio endpoint or Bluetooth reports) is chosen again for the next pad.
+void ControllerInput::closeHaptics(){
+    if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}
+    if(bt_){
+        const auto totals=bt_->totals();delete bt_;bt_=nullptr;
+        veyra::log::info("remoteplay-haptics",std::format("Bluetooth haptics closed: reports={} writeErrors={} waits={} droppedFrames={}",totals.reports,totals.writeErrors,totals.waits,totals.framesDropped));
+    }
+    hapticAttempted_=false;
 }
 void ControllerInput::feedback(ControllerFeedback f,bool focused){
     if(!focused||!gamepad_){releaseEffects();return;}
@@ -169,6 +361,26 @@ void ControllerInput::feedback(ControllerFeedback f,bool focused){
         if(!SDL_SendGamepadEffect(gamepad_,effect.data(),int(effect.size())))veyra::log::warn("remoteplay-feedback",SDL_GetError());
     }
     if(f.haptics.empty()||SDL_GetGamepadType(gamepad_)!=SDL_GAMEPAD_TYPE_PS5)return;
+    if(!hapticAttempted_&&SDL_GetGamepadConnectionState(gamepad_)!=SDL_JOYSTICK_CONNECTION_WIRED){
+        // A pad on Bluetooth has no audio endpoint of its own. Its haptic audio goes out as
+        // HID reports through a second handle on the pad itself, so neither SDL audio nor
+        // the other connected pads and endpoints matter for it. open() looks at the bus of
+        // the HID device; a pad that SDL reports as wired is not asked.
+        std::string why;
+        bt_=DualSenseBtHaptics::open(gamepad_,why);
+        if(bt_){
+            hapticAttempted_=true;
+            // The pad keeps what the previous host set. Make sure nothing mutes or weakens
+            // the actuators: mute control section all clear (haptics neither muted nor in
+            // power save), no motor power reduction, haptic low-pass filter on. Offsets as in
+            // SDL's DS5EffectsState_t: [1] valid flags, [9] mute control, [36] motor power,
+            // [39] filter. The same flags as in AnyPS5 issue 2056, where a pad that did not
+            // get this report played at 12.5% of the level sent.
+            std::array<uint8_t,47> setup{};setup[1]=0x02|0x20|0x40;setup[39]=0x01;
+            if(!SDL_SendGamepadEffect(gamepad_,setup.data(),int(setup.size())))veyra::log::warn("remoteplay-haptics",SDL_GetError());
+            veyra::log::info("remoteplay-haptics","DualSense over Bluetooth: haptic audio is sent as HID report 0x32, one every 10.7 ms");
+        }else veyra::log::warn("remoteplay-haptics","Bluetooth haptics route not opened ("+why+"); trying the audio endpoint");
+    }
     if(!hapticAttempted_){
         hapticAttempted_=true;
         if(!audioInitialized_)audioInitialized_=SDL_InitSubSystem(SDL_INIT_AUDIO);
@@ -186,6 +398,14 @@ void ControllerInput::feedback(ControllerFeedback f,bool focused){
         if(!hapticStream_||!SDL_ResumeAudioStreamDevice(hapticStream_)){veyra::log::error("remoteplay-haptics",SDL_GetError());if(hapticStream_)SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;return;}
         veyra::log::info("remoteplay-haptics","Dedicated four-channel endpoint opened; speaker channels silent");
     }
+    if(bt_){
+        if(bt_->failed()){
+            veyra::log::warn("remoteplay-haptics","A Bluetooth haptics report could not be written; the route stays closed until the pad is activated again");
+            closeHaptics();hapticAttempted_=true;return;
+        }
+        effectsActive_=true;bt_->push(f.haptics.data(),f.haptics.size()/2);
+        return;
+    }
     if(!hapticStream_)return;
     std::vector<int16_t> quad;quad.reserve(f.haptics.size()*2);
     for(size_t i=0;i+1<f.haptics.size();i+=2){quad.push_back(0);quad.push_back(0);quad.push_back(f.haptics[i]);quad.push_back(f.haptics[i+1]);}
@@ -202,7 +422,7 @@ ControllerInput::Capabilities ControllerInput::capabilities()const{
     if(!gamepad_)return {};
     const char* name=SDL_GetGamepadName(gamepad_);
     return {true,gyro_,accel_,SDL_GetNumGamepadTouchpads(gamepad_)>0,
-        SDL_GetGamepadType(gamepad_)==SDL_GAMEPAD_TYPE_PS5,hapticStream_!=nullptr,calibrating_,name?name:""};
+        SDL_GetGamepadType(gamepad_)==SDL_GAMEPAD_TYPE_PS5,hapticStream_!=nullptr||(bt_&&!bt_->failed()),calibrating_,name?name:""};
 }
 
 }
