@@ -957,7 +957,12 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
             auto& c=info_.color;
             const auto routed=dv.route()==DolbyBaseLayer::Hlg
                 ?pipeline::TransferFunction::HLG:pipeline::TransferFunction::PQ;
-            if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
+            // Profile 8.4 with a PQ-flagged base layer: some encoders (Bilibili
+            // among them) leave the SPS VUI at PQ even though the 8.4 signalling
+            // and the L6 (HLG reference) extension block say the base is HLG.
+            // Trust the RPU: reading HLG as PQ crushes the highlights.
+            const bool forceHlg = dv.compatibility == 4;
+            if(forceHlg || c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
                 c.transfer=routed;c.transferAssumed=true;}
             if(c.matrix==pipeline::YuvMatrix::Unknown||c.matrixAssumed){
                 c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}
@@ -1295,6 +1300,13 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
     }
     out.sourceKind = pipeline::SourceKind::File;
     out.colorInfo = pipeline::resolveFrameColor(*frame,info_.color);
+    // Custom (P8.4): resolveFrameColor lets the frame's VUI win, and some encoders
+    // (Bilibili among them) tag the HLG base layer as PQ. The 8.4 signalling and
+    // the RPU's L6 block both say HLG, so force it here after resolution.
+    if(info_.dolbyVision.present && info_.dolbyVision.compatibility==4){
+        out.colorInfo.transfer=pipeline::TransferFunction::HLG;
+        out.colorInfo.transferAssumed=true;
+    }
     auto& dv=info_.dolbyVision;
     // Level 1 (per-frame brightness). Read for every Dolby Vision profile and
     // logged under VEYRA_DOVI_TRACE so the wiring is provable.
