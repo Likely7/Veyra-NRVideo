@@ -586,7 +586,7 @@
   },
   {
    "zh": "%1 关闭",
-   "src": "qml/NodePage.qml",
+   "src": "qml/FullscreenTimingPanel.qml",
    "zh-TW": "%1 關閉",
    "en": "%1 to close",
    "ja": "%1 で閉じる",
@@ -730,7 +730,7 @@
   },
   {
    "zh": "1 分钟",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/NetworkSourceDialog.qml",
    "zh-TW": "1 分鐘",
    "en": "1 min",
    "ja": "1 分",
@@ -770,7 +770,7 @@
   },
   {
    "zh": "2 分钟",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/NetworkSourceDialog.qml",
    "zh-TW": "2 分鐘",
    "en": "2 min",
    "ja": "2 分",
@@ -826,7 +826,7 @@
   },
   {
    "zh": "5 分钟",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/NetworkSourceDialog.qml",
    "zh-TW": "5 分鐘",
    "en": "5 min",
    "ja": "5 分",
@@ -1481,6 +1481,14 @@
    "ko": "GPU DIS는 제거된 방식입니다. 다른 방식을 선택하세요."
   },
   {
+   "zh": "GPU · 平均 / P95",
+   "src": "qml/FullscreenTimingPanel.qml",
+   "zh-TW": "GPU · 平均 / P95",
+   "en": "GPU · Mean / P95",
+   "ja": "GPU · 平均 / P95",
+   "ko": "GPU · 평균 / P95"
+  },
+  {
    "zh": "GPU 优先级",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "GPU 優先級",
@@ -1511,6 +1519,14 @@
    "en": "GPU usage monitor",
    "ja": "GPU 使用率の監視対象",
    "ko": "GPU 사용률 모니터"
+  },
+  {
+   "zh": "GPU 就绪等待",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "GPU 就緒等待",
+   "en": "GPU ready wait",
+   "ja": "GPU 完了待ち",
+   "ko": "GPU 완료 대기"
   },
   {
    "zh": "GPU 已重置，正在自动重新连接采集卡",
@@ -4673,6 +4689,14 @@
    "ko": "원본 색조를 유지합니다. 이미 색조가 일치하면 변화가 거의 없습니다."
   },
   {
+   "zh": "保留最近的直播内容。最多使用 256 MiB 内存，高码率时可回看时间会缩短。",
+   "src": "qml/NetworkSourceDialog.qml",
+   "zh-TW": "保留最近的直播內容。最多使用 256 MiB 記憶體，高位元率時可回看時間會縮短。",
+   "en": "Keep recent live content in up to 256 MiB of memory. Higher bitrates shorten the available window.",
+   "ja": "直近のライブ映像を最大 256 MiB のメモリに保存します。ビットレートが高いほど視聴可能時間が短くなります。",
+   "ko": "최근 라이브 콘텐츠를 최대 256 MiB 메모리에 보관합니다. 비트레이트가 높으면 되감기 구간이 짧아집니다."
+  },
+  {
    "zh": "信号",
    "src": "qml/ProPage.qml",
    "zh-TW": "信號",
@@ -6770,6 +6794,14 @@
    "ko": "사용 가능"
   },
   {
+   "zh": "可视化裁剪",
+   "src": "qml/ScreenSourceDialog.qml",
+   "zh-TW": "視覺化裁剪",
+   "en": "Visual crop",
+   "ja": "プレビューでクロップ",
+   "ko": "미리보기 자르기"
+  },
+  {
    "zh": "可选 · 采集卡直采无声时使用",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "可選 · 擷取卡直采無聲時使用",
@@ -7042,6 +7074,14 @@
    "ko": "현재 CPU P95: %1 ms"
   },
   {
+   "zh": "命令槽等待",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "命令槽等待",
+   "en": "Command slot wait",
+   "ja": "コマンドスロット待ち",
+   "ko": "명령 슬롯 대기"
+  },
+  {
    "zh": "和「PS5 串流」共用配对",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "和「PS5 串流」共用配對",
@@ -7072,6 +7112,14 @@
    "en": "Back to list mode, restoring the list's previous settings and presets.",
    "ja": "リストモードに戻り、リストの以前の設定とプリセットを復元します。",
    "ko": "목록 모드의 이전 설정과 프리셋을 복원합니다."
+  },
+  {
+   "zh": "回到直播",
+   "src": "qml/CineBar.qml",
+   "zh-TW": "回到直播",
+   "en": "Go live",
+   "ja": "ライブに戻る",
+   "ko": "라이브로 이동"
   },
   {
    "zh": "回放 %1",
@@ -10074,6 +10122,14 @@
    "ko": "추천 적용"
   },
   {
+   "zh": "应用裁剪",
+   "src": "qml/ScreenCropEditor.qml",
+   "zh-TW": "套用裁剪",
+   "en": "Apply crop",
+   "ja": "クロップを適用",
+   "ko": "자르기 적용"
+  },
+  {
    "zh": "应用设置并重连",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "應用設定並重連",
@@ -10778,6 +10834,14 @@
    "ko": "녹화 폴더"
   },
   {
+   "zh": "录制分段",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製分段",
+   "en": "Recording split",
+   "ja": "録画の分割",
+   "ko": "녹화 분할"
+  },
+  {
    "zh": "录制回读缓冲分配失败",
    "src": "src/engine/LiveRecorder.cpp",
    "zh-TW": "錄製回讀緩衝區分配失敗",
@@ -11000,6 +11064,14 @@
    "en": "Performance",
    "ja": "パフォーマンス",
    "ko": "성능"
+  },
+  {
+   "zh": "性能与耗时",
+   "src": "qml/FullscreenTimingPanel.qml",
+   "zh-TW": "效能與耗時",
+   "en": "Performance and timing",
+   "ja": "パフォーマンスと処理時間",
+   "ko": "성능 및 처리 시간"
   },
   {
    "zh": "总体强度",
@@ -11656,6 +11728,14 @@
    "en": "Drag to resize the settings panel · double-click to reset",
    "ja": "ドラッグで設定パネルの幅を変更 · ダブルクリックで元に戻す",
    "ko": "드래그해 설정 패널 너비를 조절합니다. 더블클릭하면 기본 너비로 되돌립니다."
+  },
+  {
+   "zh": "拖动边缘或移动裁剪框 · %1 × %2",
+   "src": "qml/ScreenCropEditor.qml",
+   "zh-TW": "拖曳邊緣或移動裁剪框 · %1 × %2",
+   "en": "Drag the edges or move the crop · %1 × %2",
+   "ja": "縁をドラッグするか、切り抜き枠を移動 · %1 × %2",
+   "ko": "가장자리를 끌거나 영역 이동 · %1 × %2"
   },
   {
    "zh": "按下新按键…",
@@ -15747,6 +15827,22 @@
    "ko": "소스 크기"
   },
   {
+   "zh": "源帧预算 %1 ms",
+   "src": "qml/FullscreenTimingPanel.qml",
+   "zh-TW": "來源影格預算 %1 ms",
+   "en": "Source frame budget %1 ms",
+   "ja": "入力フレーム予算 %1 ms",
+   "ko": "원본 프레임 예산 %1 ms"
+  },
+  {
+   "zh": "源帧预算 —",
+   "src": "qml/FullscreenTimingPanel.qml",
+   "zh-TW": "來源影格預算 —",
+   "en": "Source frame budget —",
+   "ja": "入力フレーム予算 —",
+   "ko": "원본 프레임 예산 —"
+  },
+  {
    "zh": "源文件不存在",
    "src": "src/engine/ColorLut.cpp",
    "zh-TW": "源檔案不存在",
@@ -16483,12 +16579,12 @@
    "ko": "기준 줄 수"
   },
   {
-   "zh": "直接打开 HTTP、HTTPS 或 RTSP 视频流，例如 IPTV 或摄像机地址",
+   "zh": "直接打开 HTTP、HTTPS、RTSP、RTP 或 UDP 视频流",
    "src": "qml/NetworkSourceDialog.qml",
-   "zh-TW": "直接開啟 HTTP、HTTPS 或 RTSP 影片串流，例如 IPTV 或攝影機位址",
-   "en": "Open an HTTP, HTTPS or RTSP media stream, such as IPTV or a camera feed.",
-   "ja": "IPTV やカメラなどの HTTP、HTTPS、RTSP メディアストリームを開きます。",
-   "ko": "IPTV 또는 카메라 피드와 같은 HTTP, HTTPS 또는 RTSP 미디어 스트림을 엽니다."
+   "zh-TW": "直接開啟 HTTP、HTTPS、RTSP、RTP 或 UDP 影片串流",
+   "en": "Open a video stream over HTTP, HTTPS, RTSP, RTP, or UDP.",
+   "ja": "HTTP、HTTPS、RTSP、RTP、UDP の動画ストリームを開きます。",
+   "ko": "HTTP, HTTPS, RTSP, RTP 또는 UDP 영상 스트림을 엽니다."
   },
   {
    "zh": "直接查看完整格式列表，包含被常用帧率筛选隐藏的模式",
@@ -16499,12 +16595,28 @@
    "ko": "공통 프레임 속도 필터로 숨겨진 모드를 포함한 전체 목록 보기"
   },
   {
+   "zh": "直播",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "直播",
+   "en": "Live",
+   "ja": "ライブ",
+   "ko": "라이브"
+  },
+  {
    "zh": "直播兼容模式未能启用，已恢复",
    "src": "src/engine/EngineControllerImage.cpp",
    "zh-TW": "直播相容模式未能啟用，已恢復",
    "en": "Could not enable live-streaming compatibility mode; restored",
    "ja": "配信互換モードを有効にできなかったため、元に戻しました",
    "ko": "실시간 스트리밍 호환 모드를 적용하지 못해 이전 설정으로 되돌렸습니다."
+  },
+  {
+   "zh": "直播时移",
+   "src": "qml/NetworkSourceDialog.qml",
+   "zh-TW": "直播時移",
+   "en": "Live timeshift",
+   "ja": "ライブタイムシフト",
+   "ko": "라이브 타임시프트"
   },
   {
    "zh": "直播画面节奏",
@@ -16673,6 +16785,14 @@
    "en": "Offline",
    "ja": "オフライン",
    "ko": "오프라인"
+  },
+  {
+   "zh": "秒",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "秒",
+   "en": "s",
+   "ja": "秒",
+   "ko": "초"
   },
   {
    "zh": "程序启动时的页面、窗口和恢复行为。",
@@ -19315,6 +19435,14 @@
    "ko": "개발자에게 커피 후원"
   },
   {
+   "zh": "请使用直接媒体地址。RTP 和 UDP 的 MPEG-TS 地址需要包含端口。",
+   "src": "qml/NetworkSourceDialog.qml",
+   "zh-TW": "請使用直接媒體網址。RTP 和 UDP 的 MPEG-TS 網址需要包含連接埠。",
+   "en": "Use a direct media URL. Include a port in RTP and UDP MPEG-TS URLs.",
+   "ja": "メディアの直接 URL を入力してください。RTP と UDP の MPEG-TS URL にはポートが必要です。",
+   "ko": "직접 미디어 URL을 입력하세요. RTP 및 UDP MPEG-TS URL에는 포트가 필요합니다."
+  },
+  {
    "zh": "请先切换到要保存的编辑模式",
    "src": "src/ui/bridge/Chain.cpp",
    "zh-TW": "請先切換到要儲存的編輯模式",
@@ -19547,12 +19675,12 @@
    "ko": "0.25~4.00 사이의 재생 배속을 입력하세요."
   },
   {
-   "zh": "请输入有效的 HTTP、HTTPS 或 RTSP 视频地址",
+   "zh": "请输入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 视频地址",
    "src": "src/ui/bridge/Playback.cpp",
-   "zh-TW": "請輸入有效的 HTTP、HTTPS 或 RTSP 影片位址",
-   "en": "Enter a valid HTTP, HTTPS or RTSP media URL.",
-   "ja": "有効な HTTP、HTTPS、RTSP メディア URL を入力してください。",
-   "ko": "유효한 HTTP, HTTPS 또는 RTSP 미디어 URL을 입력하세요."
+   "zh-TW": "請輸入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 影片網址",
+   "en": "Enter a valid HTTP, HTTPS, RTSP, RTP, or UDP video URL.",
+   "ja": "有効な HTTP、HTTPS、RTSP、RTP または UDP の動画 URL を入力してください。",
+   "ko": "유효한 HTTP, HTTPS, RTSP, RTP 또는 UDP 영상 URL을 입력하세요."
   },
   {
    "zh": "请选择",
@@ -19697,6 +19825,14 @@
    "en": "Whichever controller pressed a button last is used: a controller on this PC or a virtual one made by streaming software",
    "ja": "最後にボタンを押したコントローラーを使います：この PC のコントローラーでも、ストリーミングソフトが作る仮想コントローラーでも可",
    "ko": "마지막으로 버튼을 누른 컨트롤러를 사용합니다. 이 PC에 연결한 컨트롤러나 스트리밍 프로그램의 가상 컨트롤러 모두 가능합니다."
+  },
+  {
+   "zh": "调度等待",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "排程等待",
+   "en": "Scheduling wait",
+   "ja": "スケジューリング待ち",
+   "ko": "스케줄링 대기"
   },
   {
    "zh": "调度等待 P95",
@@ -20681,6 +20817,14 @@
    "en": "Edge threshold",
    "ja": "エッジのしきい値",
    "ko": "가장자리 임계값"
+  },
+  {
+   "zh": "达到任一限制后，在下一关键帧分段。0 表示关闭，设置在下次录制时生效。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "達到任一限制後，在下一個關鍵影格分段。0 表示關閉，設定於下次錄製時生效。",
+   "en": "Split at the next keyframe after either limit is reached. Enter 0 to disable a limit. Settings apply to the next recording.",
+   "ja": "どちらかの上限に達すると、次のキーフレームで分割します。0 は無効です。設定は次回録画から適用されます。",
+   "ko": "하나의 한도에 도달하면 다음 키프레임에서 분할합니다. 0은 끄기이며 다음 녹화부터 적용됩니다."
   },
   {
    "zh": "运动估算质量",
@@ -21819,6 +21963,14 @@
    "ko": "동일한 파일을 다시 열면 마지막 위치부터 계속"
   },
   {
+   "zh": "重置",
+   "src": "qml/ScreenCropEditor.qml",
+   "zh-TW": "重設",
+   "en": "Reset",
+   "ja": "リセット",
+   "ko": "초기화"
+  },
+  {
    "zh": "重置本页",
    "src": "qml/ProPage.qml",
    "zh-TW": "重置本頁",
@@ -22219,14 +22371,6 @@
    "ko": "DirectX 12를 지원하는 하드웨어 GPU가 필요합니다."
   },
   {
-   "zh": "需要直接媒体地址，普通网页或需要网页登录的页面不能直接播放。直播流通常无法拖动进度。",
-   "src": "qml/NetworkSourceDialog.qml",
-   "zh-TW": "需要直接媒體位址，一般網頁或需要網頁登入的頁面無法直接播放。直播串流通常無法拖曳進度。",
-   "en": "Use a direct media URL. Ordinary web pages and pages requiring browser sign-in cannot be played directly. Live streams usually do not support seeking.",
-   "ja": "メディアの直接 URL が必要です。通常の Web ページやブラウザーでのログインが必要なページは直接再生できません。ライブ配信では通常シークできません。",
-   "ko": "미디어의 직접 URL을 입력하세요. 일반 웹페이지나 브라우저 로그인이 필요한 주소는 바로 재생할 수 없습니다. 실시간 방송은 보통 구간 탐색을 지원하지 않습니다."
-  },
-  {
    "zh": "需要管理员权限",
    "src": "src/ui/NvidiaVrrProfileController.cpp",
    "zh-TW": "需要系統管理員權限",
@@ -22553,6 +22697,14 @@
    "en": "Preview and video export both process NR at the selected internal resolution, keeping the aspect ratio without upscaling small inputs; the output size is unchanged. Image export is still fully processed.",
    "ja": "プレビューと動画の書き出しは選択した内部解像度で処理し、縦横比を保ち小さい入力は拡大しません。出力サイズは変わりません。画像の書き出しは完全に処理します。",
    "ko": "미리보기와 영상 내보내기는 선택한 내부 해상도로 NR을 처리합니다. 비율을 유지하고 작은 입력은 확대하지 않으며 출력 크기는 바꾸지 않습니다. 이미지 내보내기는 원래 크기로 모두 처리합니다."
+  },
+  {
+   "zh": "预览并拖拽",
+   "src": "qml/ScreenSourceDialog.qml",
+   "zh-TW": "預覽並拖曳",
+   "en": "Preview and drag",
+   "ja": "プレビューして調整",
+   "ko": "미리보기에서 끌기"
   },
   {
    "zh": "预览：SDR 转 HDR 已运行",

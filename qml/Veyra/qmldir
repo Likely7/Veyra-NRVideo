@@ -1,5 +1,7 @@
 module Veyra
 CaptureLegacyPicker 1.0 CaptureLegacyPicker.qml
+ScreenCropEditor 1.0 ScreenCropEditor.qml
+FullscreenTimingPanel 1.0 FullscreenTimingPanel.qml
 UpdateBanner 1.0 UpdateBanner.qml
 PlaylistWindow 1.0 PlaylistWindow.qml
 PlaybackRateButton 1.0 PlaybackRateButton.qml

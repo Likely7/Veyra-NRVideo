@@ -125,4 +125,12 @@ inline double liveSmoothedCapacityWaitMs(double outputIntervalMs,double callback
     const double base=std::clamp(2-(outputIntervalMs-5)/12,1.0,2.0);
     return outputIntervalMs<kLiveJitterWaitMinIntervalMs?base:std::clamp(1+3.125*callbackJitterMs,base,kLiveJitterWaitMaxMs);
 }
+// On a faster fixed-refresh display a half-rate 2X pair can wait briefly for
+// a flip slot while retaining one whole refresh for its following real frame.
+inline double liveHalfRateCapacityWaitMs(double baseMs,double outputIntervalMs,double refreshMs,double untilRealMs){
+    const double usual=std::min(baseMs,outputIntervalMs/2);
+    if(refreshMs<=0||outputIntervalMs<1.8*refreshMs)return usual;
+    const double slack=std::clamp(untilRealMs-refreshMs-0.5,0.0,refreshMs);
+    return std::min(std::max(baseMs,slack),outputIntervalMs/2);
+}
 }

@@ -22,14 +22,13 @@ VPage {
     signal requestDialog(string key)
     signal requestFullscreen()
     // Fullscreen quick-adjust (Home, Main.qml): only the inspector is shown, moved
-    // to the left of the picture, with the performance orbs beside it. Both are cut
-    // out of the native video window like any other cover.
+    // to the left of the picture, cut out of the native video window.
     property bool overlay: false
     readonly property bool hdrMeterObserved: visible && tab === "display" && displayCol.hdrMeterObserved
     onHdrMeterObservedChanged: veyra.observeHdrCoverage(hdrMeterObserved)
     function overlayContains(x, y) {
         const hit = item => x >= item.x && x <= item.x + item.width && y >= item.y && y <= item.y + item.height
-        return overlay && (hit(insp) || hit(quickOrbs))
+        return overlay && hit(insp)
     }
     // Leaving the page (or switching to the node editor) disarms region drawing;
     // showing it replays the GPU bars' staggered entrance (M27).
@@ -649,13 +648,13 @@ VPage {
                         // Restarted on every move, so it fires only once the drag settles
                         // (see CineBar.qml for why overlapping seeks break playback).
                         interval: 250
-                        onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(proSeekArea.scrubFrac * veyra.duration)
+                        onTriggered: if (proSeekArea.scrubbing) veyra.seekTo(veyra.timelineSeconds(proSeekArea.scrubFrac))
                     }
                     MouseArea {
                         id: proSeekMouse
                         anchors.fill: parent
                         hoverEnabled: true
-                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        enabled: veyra.timelineSeekable
                         cursorShape: Qt.PointingHandCursor
                         preventStealing: true
                         function fracAt(x) { return Math.max(0, Math.min(1, x / Math.max(1, proSeekArea.width))) }
@@ -667,7 +666,7 @@ VPage {
                         }
                         onReleased: mouse => {
                             proScrubSeek.stop()
-                            const target = fracAt(mouse.x) * veyra.duration
+                            const target = veyra.timelineSeconds(fracAt(mouse.x))
                             proSeekArea.scrubbing = false
                             veyra.seekTo(target)
                         }
@@ -676,9 +675,17 @@ VPage {
                 }
                 Text {
                     text: veyra.durationText
+                    visible: !veyra.liveTimeshift.available
                     color: Theme.t2
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsSmall
+                }
+                VButton {
+                    objectName: "pro-return-live"
+                    visible: veyra.liveTimeshift.available
+                    ghost: true
+                    text: qsTr("回到直播")
+                    onClicked: veyra.returnToLive()
                 }
             }
             RowLayout {
@@ -1148,35 +1155,6 @@ VPage {
             text: qsTr("拖动调整参数面板宽度 · 双击还原")
         }
     }
-    // Performance orbs beside the quick-adjust panel (fullscreen only).
-    Rectangle {
-        id: quickOrbs
-        objectName: "pro-quick-orbs"
-        readonly property bool videoCover: root.overlay
-        property real coverRadius: radius
-        visible: root.overlay
-        x: insp.x + insp.width + 10
-        y: insp.y
-        width: quickOrbRow.implicitWidth + 24
-        height: quickOrbRow.implicitHeight + 16
-        radius: 18
-        color: Theme.shade(22, 22, 26, 0.94)
-        border.width: 1
-        border.color: Theme.stroke2
-        RowLayout {
-            id: quickOrbRow
-            anchors.centerIn: parent
-            spacing: 12
-            PerfOrbs { size: 46; spacing: 10 }
-            Text {
-                text: qsTr("%1 关闭").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
-                color: Theme.t3
-                font.family: Theme.fontUi
-                font.pixelSize: 11
-            }
-        }
-    }
-
     Rectangle {
         id: insp
         objectName: "pro-inspector"

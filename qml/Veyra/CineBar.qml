@@ -247,7 +247,7 @@ Rectangle {
                         interval: 250
                         onTriggered: {
                             if (!seekArea.scrubbing) return
-                            const target = seekArea.scrubFrac * veyra.duration
+                            const target = veyra.timelineSeconds(seekArea.scrubFrac)
                             seekArea.lastSeekTarget = target
                             veyra.seekTo(target)
                         }
@@ -255,7 +255,7 @@ Rectangle {
                     Timer {
                         id: thumbnailDelay
                         interval: 120
-                        onTriggered: seekArea.thumbnailBucket = Math.floor(seekArea.hoverFrac * veyra.duration / 2)
+                        onTriggered: if (!veyra.liveTimeshift.enabled) seekArea.thumbnailBucket = Math.floor(seekArea.hoverFrac * veyra.duration / 2)
                     }
                     Rectangle {
                         id: rail
@@ -295,8 +295,8 @@ Rectangle {
                     // over .4s --spring from its bottom centre.
                     Rectangle {
                         visible: opacity > 0.01
-                        width: 144
-                        height: 104
+                        width: veyra.liveTimeshift.available ? 84 : 144
+                        height: veyra.liveTimeshift.available ? 26 : 104
                         radius: 8
                         color: "#000000"
                         border.width: 1
@@ -318,7 +318,8 @@ Rectangle {
                             asynchronous: true
                             cache: true
                             fillMode: Image.PreserveAspectFit
-                            source: (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
+                            source: !veyra.liveTimeshift.enabled &&
+                                    (seekMouse.containsMouse || seekArea.scrubbing) && seekArea.thumbnailBucket >= 0
                                     ? "image://veyra-thumb/" + veyra.thumbnailGeneration + "/" + (seekArea.thumbnailBucket * 2000)
                                     : ""
                         }
@@ -337,7 +338,9 @@ Rectangle {
                             height: 23
                             horizontalAlignment: Text.AlignHCenter
                             verticalAlignment: Text.AlignVCenter
-                            text: veyra.formatTime(seekArea.hoverFrac * veyra.duration)
+                            text: veyra.liveTimeshift.enabled
+                                  ? "−" + veyra.formatTime(veyra.liveTimeshift.end - veyra.timelineSeconds(seekArea.hoverFrac))
+                                  : veyra.formatTime(veyra.timelineSeconds(seekArea.hoverFrac))
                             color: Theme.t1
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -354,7 +357,7 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         preventStealing: true
-                        enabled: veyra.duration > 0 && !veyra.isCapture
+                        enabled: veyra.timelineSeekable
                         onEnabledChanged: if (!enabled && seekArea.scrubbing) {
                             scrubSeek.stop()
                             seekArea.scrubbing = false
@@ -380,7 +383,7 @@ Rectangle {
                             thumbnailDelay.restart()
                         }
                         onReleased: mouse => {
-                            const target = seekArea.fractionAt(mouse.x) * veyra.duration
+                            const target = veyra.timelineSeconds(seekArea.fractionAt(mouse.x))
                             scrubSeek.stop()
                             seekArea.shownProgress = seekArea.fractionAt(mouse.x)
                             seekArea.scrubbing = false
@@ -402,9 +405,17 @@ Rectangle {
                 }
                 Text {
                     text: veyra.durationText
+                    visible: !veyra.liveTimeshift.available
                     color: Theme.t3
                     font.family: Theme.fontMono
                     font.pixelSize: 10
+                }
+                VButton {
+                    objectName: "cine-return-live"
+                    visible: veyra.liveTimeshift.available
+                    ghost: true
+                    text: qsTr("回到直播")
+                    onClicked: veyra.returnToLive()
                 }
             }
         }

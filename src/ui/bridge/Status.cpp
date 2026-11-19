@@ -147,6 +147,19 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     return out;
 }
 
+QVariantList QmlPlayerBridge::cpuTimings() const {
+    const auto& flow=impl_->snapshot.metrics.flow;
+    using Stage=diagnostics::CpuStage;
+    const auto row=[&](const QString& label,Stage stage) {
+        const auto& sample=flow.cpuTiming[size_t(stage)];
+        const bool measured=queuedFramesKnown()&&sample.samples&&sample.p95.has_value();
+        return QVariantMap{{"label",label},{"measured",measured},{"p95",measured?*sample.p95:0.0}};
+    };
+    return {row(tr("解码"),Stage::Decode),row(tr("提交"),Stage::Submit),
+        row(tr("命令槽等待"),Stage::SlotWait),row(tr("GPU 就绪等待"),Stage::ReadyWait),
+        row(tr("调度等待"),Stage::DeadlineWait),row(tr("呈现"),Stage::Present)};
+}
+
 QVariantMap QmlPlayerBridge::nodeTimings() const {
     // Per-node GPU timestamp P95, keyed by the card id chain() publishes. An
     // editor node borrows a number only when the wired path it sits on is the

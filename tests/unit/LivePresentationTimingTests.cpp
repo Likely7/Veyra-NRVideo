@@ -397,6 +397,12 @@ int main(){
         check(std::abs(liveSmoothedCapacityWaitMs(16.68,.48)-2.5)<.01,"sd 0.6 ms (mean distance 0.48 ms) waits 2.5 ms");
         check(liveSmoothedCapacityWaitMs(16.68,1.5)==3&&liveSmoothedCapacityWaitMs(33.4,20)==3,"and nothing waits more than 3 ms");
         check(liveSmoothedCapacityWaitMs(4.17,5)==2&&liveSmoothedCapacityWaitMs(8.33,5)==liveSmoothedCapacityWaitMs(8.33)&&liveSmoothedCapacityWaitMs(12.4,5)==liveSmoothedCapacityWaitMs(12.4),"above 80 fps the wait ignores the jitter");
+        using veyra::engine::liveHalfRateCapacityWaitMs;
+        check(std::abs(liveHalfRateCapacityWaitMs(2,16.68,8.33,16.68)-7.85)<.01,"59.94 on 120 Hz can wait with a refresh left for the real frame");
+        check(liveHalfRateCapacityWaitMs(2,16.68,8.33,8.7)==2,"a late pair gets only the regular wait");
+        check(liveHalfRateCapacityWaitMs(2,16.68,16.67,16.68)==2,"60 Hz keeps the existing wait");
+        check(liveHalfRateCapacityWaitMs(2,16.68,0,16.68)==2,"unknown refresh keeps the existing wait");
+        check(liveHalfRateCapacityWaitMs(2,16.68,3.125,16.68)==3.125,"fast refresh waits at most one refresh");
         const auto measuredJitter=[&](double sdMs){
             LiveArrivalSmoother smoother;uint32_t seed=7;
             for(unsigned n=0;n<2000;++n)smoother.anchor(int64_t(n*333643.0*(1-800e-6)),int64_t(n*333643.0+40000+gaussian(seed,sdMs*10000)),interval);

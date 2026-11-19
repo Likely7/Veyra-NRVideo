@@ -40,6 +40,8 @@ engine::RecordingSettings QmlPlayerBridge::recordingOptions() const {
     options.microphone = recordingMicrophone();
     options.microphoneId = recordingMicrophoneId().toStdWString();
     options.microphoneTrack = recordingMicrophoneTrack();
+    options.splitSeconds = uint32_t(std::clamp(impl_->prefInt("recordSplitSeconds", 0), 0, 86400));
+    options.splitBytes = uint64_t(std::clamp(impl_->prefInt("recordSplitMiB", 0), 0, 1048576)) << 20;
     options.replaySeconds = uint32_t(replaySeconds());
     // Tests only: a small memory cap shows what the cap does.
     if (const int mb = qEnvironmentVariableIntValue("VEYRA_TEST_REPLAY_MEMORY_MB"); mb > 0) options.replayMemoryBytes = uint64_t(mb) << 20;

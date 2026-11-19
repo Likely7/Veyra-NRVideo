@@ -76,6 +76,8 @@ public:
     int audioStream() const { return audioIndex_.load(); }
     bool live() const { return live_; }
     bool seekable() const { return !live_; }
+    bool timeshiftEnabled() const { return timeshiftUs_ > 0; }
+    bool takeTimeshiftOverrun();
     int64_t durationUs() const { return durationUs_; }
     int64_t containerBitRate() const { return containerBitRate_; }
     const std::string& formatName() const { return formatName_; }
@@ -126,6 +128,7 @@ private:
         int64_t startUs = 0, endUs = 0;
         int64_t dtsUs = INT64_MIN;       // AV_NOPTS_VALUE when the container gave none
         size_t bytes = 0;
+        size_t retained = 0;
     };
     struct Queue {
         std::deque<Item> items;
@@ -136,7 +139,14 @@ private:
         int64_t lastDtsUs = INT64_MIN;   // decode time of the last packet queued (resume de-duplication)
         bool ended = false;
         bool dedupe = false;             // after a VOD reconnect: drop packets at or before lastDtsUs
+        size_t next = 0, retainedBytes = 0;
+        bool empty() const { return next == items.size(); }
+        size_t pending() const { return items.size() - next; }
+        const Item& front() const { return items[next]; }
         void clear();
+        bool take(AVPacket* packet, Meta& meta, bool retain);
+        bool evict();
+        void rewind(size_t cursor);
     };
     struct Interrupt;
     struct FileAvio;
@@ -153,6 +163,8 @@ private:
     bool recover(int code, const char* why);
     void doSeek();
     bool flowBlockedLocked() const;
+    void trimTimeshiftLocked();
+    bool seekTimeshiftLocked(int64_t targetUs);
     void fail(const std::wstring& message);
     void flushPendingAudio(int64_t anchorUs);
 
@@ -189,7 +201,9 @@ private:
     std::unique_ptr<FileAvio> file_;
     AVFormatContext* context_ = nullptr;   // demux thread only
     int64_t startTimeUs_ = 0;
-    bool network_ = false;                 // http/https/rtsp (otherwise a file)
+    bool network_ = false;
+    int64_t timeshiftUs_ = 0, timelineStartUs_ = 0;
+    bool timeshiftOverrun_ = false;
 
     Queue video_, audio_, el_;
     int elIndex_ = -1;

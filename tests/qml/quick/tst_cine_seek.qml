@@ -17,6 +17,7 @@ Item {
         property real duration: 100
         property real progress: .3
         property real volume: .5
+        readonly property real maximumVolume: 3
         property real playbackRate: 1
         property int previewRotation: 0
         property int thumbnailGeneration: 0
@@ -31,6 +32,13 @@ Item {
         property var subtitleTracks: []
         property var audioTracks: []
         property var seeks: []
+        property var liveTimeshift: ({enabled: false, available: false, start: 0, end: 0})
+        readonly property bool timelineSeekable: !isCapture && (duration > 0 || liveTimeshift.available)
+        function timelineSeconds(fraction) {
+            return liveTimeshift.available ? liveTimeshift.start + fraction * (liveTimeshift.end - liveTimeshift.start)
+                                           : duration * fraction
+        }
+        function returnToLive() { seekTo(liveTimeshift.end) }
         function seekTo(seconds) { seeks = seeks.concat([seconds]) }
         function formatTime(seconds) { return String(Math.floor(seconds)) }
         function logUi(category, text) {}
@@ -46,6 +54,7 @@ Item {
             root.Window.window.height = 650
             root.Window.window.requestActivate()
             veyra.seeks = []; veyra.duration = 100; veyra.isCapture = false
+            veyra.liveTimeshift = {enabled: false, available: false, start: 0, end: 0}
             bar.fullscreen = true
             moveSpy.clear()
         }
@@ -87,6 +96,17 @@ Item {
             mouseClick(rail, rail.width * .6, 7)
             fuzzyCompare(veyra.seeks[veyra.seeks.length-1], 60, 1)
             compare(bar.interacting, false)
+        }
+        function test_live_seek_and_return() {
+            veyra.duration = 0
+            veyra.liveTimeshift = {enabled: true, available: true, start: 10, end: 70}
+            const rail = findChild(bar, "cine-seek")
+            mouseClick(rail, rail.width * .5, 7)
+            fuzzyCompare(veyra.seeks[0], 40, 0.5)
+            const live = findChild(bar, "cine-return-live")
+            verify(live && live.visible)
+            mouseClick(live)
+            compare(veyra.seeks[1], 70)
         }
         function test_cancel_stops_pending_seek() {
             const rail = findChild(bar, "cine-seek")

@@ -17,11 +17,45 @@ bool QmlPlayerBridge::openingSource() const { return impl_->openingSource; }
 double QmlPlayerBridge::position() const { return impl_->snapshot.position; }
 double QmlPlayerBridge::duration() const { return impl_->snapshot.duration; }
 double QmlPlayerBridge::progress() const {
+    const auto& n=impl_->snapshot.network;
+    if (n.timeshiftEnabled&&n.timeshiftEndSeconds>n.timeshiftStartSeconds) {
+        const double span=n.timeshiftEndSeconds-n.timeshiftStartSeconds;
+        return std::clamp((position()-n.timeshiftStartSeconds)/span,0.0,1.0);
+    }
     const double d = impl_->snapshot.duration;
     return d > 0.01 ? std::clamp(impl_->snapshot.position / d, 0.0, 1.0) : 0.0;
 }
-QString QmlPlayerBridge::positionText() const { return mmss(impl_->snapshot.position); }
-QString QmlPlayerBridge::durationText() const { return mmss(impl_->snapshot.duration); }
+QString QmlPlayerBridge::positionText() const {
+    const auto& n=impl_->snapshot.network;
+    if(n.timeshiftEnabled&&n.timeshiftEndSeconds>n.timeshiftStartSeconds) {
+        const double behind=std::max(0.0,n.timeshiftEndSeconds-position());
+        return behind<1 ? tr("直播") : QStringLiteral("−")+mmss(behind);
+    }
+    return mmss(impl_->snapshot.position);
+}
+QString QmlPlayerBridge::durationText() const {
+    return impl_->snapshot.network.live ? tr("直播") : mmss(impl_->snapshot.duration);
+}
+bool QmlPlayerBridge::timelineSeekable() const {
+    const auto& n=impl_->snapshot.network;
+    return n.live ? n.timeshiftEnabled&&n.timeshiftEndSeconds>n.timeshiftStartSeconds : duration()>0&&!isCapture();
+}
+QVariantMap QmlPlayerBridge::liveTimeshift() const {
+    const auto& n=impl_->snapshot.network;
+    return {{"enabled",n.timeshiftEnabled},{"available",n.live&&timelineSeekable()},
+            {"start",n.timeshiftStartSeconds},{"end",n.timeshiftEndSeconds}};
+}
+double QmlPlayerBridge::timelineSeconds(double fraction) const {
+    const auto& n=impl_->snapshot.network;
+    fraction=std::clamp(fraction,0.0,1.0);
+    if(n.timeshiftEnabled)return n.timeshiftStartSeconds+fraction*(n.timeshiftEndSeconds-n.timeshiftStartSeconds);
+    return fraction*duration();
+}
+void QmlPlayerBridge::returnToLive() {
+    if(!impl_->snapshot.network.timeshiftEnabled||!timelineSeekable()) return;
+    seekTo(impl_->snapshot.network.timeshiftEndSeconds);
+    if(paused())togglePlayPause();
+}
 
 // --- source -----------------------------------------------------------------
 QString QmlPlayerBridge::sourceName() const {
@@ -42,7 +76,7 @@ double QmlPlayerBridge::sourceFps() const { return impl_->snapshot.nominalSource
 int QmlPlayerBridge::sourceRotation() const { return impl_->snapshot.sourceRotationDegrees; }
 int QmlPlayerBridge::previewRotation() const { return int(impl_->engine.previewView().userQuarterTurns)*90; }
 void QmlPlayerBridge::rotatePictureClockwise() {
-    if(!hasSource()||!impl_->engine.rotatePreviewClockwise(impl_->snapshot.sessionId))return;
+    if(impl_->screenCropPreview||!hasSource()||!impl_->engine.rotatePreviewClockwise(impl_->snapshot.sessionId))return;
     // An in-progress protection selection uses the previous coordinate system.
     beginProtectionDraw(QString());
     tickSubtitles();
@@ -200,6 +234,7 @@ void QmlPlayerBridge::tickPlaylist() {
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    impl_->screenCropPreview = false;
     endExclusionMove(false);
     impl_->exclusionSelected=-1;
     flushHdrMemory();impl_->hdrTitleApplied.clear();
@@ -245,6 +280,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.network.level=media::networkBufferLevelFromId(impl_->prefString("networkBuffer").toStdString());
     options.network.startupPrebufferSeconds=impl_->prefs.value(QStringLiteral("networkPrebuffer"),-1).toInt();
     options.network.autoReconnect=impl_->prefBool("networkAutoReconnect",true);
+    options.network.timeshiftSeconds=impl_->prefInt("networkTimeshift",0);
     options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
@@ -262,8 +298,10 @@ void QmlPlayerBridge::openNetworkDialog(){emit navigate(QStringLiteral("network"
 bool QmlPlayerBridge::openNetworkAddress(const QString& address){
     const QString trimmed = address.trimmed();
     const QUrl url(trimmed,QUrl::StrictMode);
-    if(!url.isValid()||url.host().isEmpty()||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
-        emit notice(tr("请输入有效的 HTTP、HTTPS 或 RTSP 视频地址"),true);return false;
+    const bool datagram = url.scheme()==QLatin1String("rtp") || url.scheme()==QLatin1String("udp");
+    if(!url.isValid()||url.host().isEmpty()||(datagram&&url.port()<=0)
+       ||!media::networkMediaInput(wideOf(url.scheme()+QStringLiteral(":")))){
+        emit notice(tr("请输入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 视频地址"),true);return false;
     }
     openPath(url.adjusted(QUrl::RemoveFragment).toString(QUrl::FullyEncoded));return true;
 }
@@ -321,7 +359,8 @@ void QmlPlayerBridge::togglePlayPause() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (s.image || s.transport == T::Opening || s.transport == T::Stopping) return;
-    if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||(s.transport==T::Paused&&s.duration<=0))){
+    if(impl_->liveKind==QLatin1String("url")&&(s.transport==T::Ended||
+       (s.transport==T::Paused&&s.duration<=0&&!s.network.timeshiftEnabled))){
         openNetworkAddress(QString::fromStdWString(impl_->sourceLabel));return;
     }
     // Capture cards and streams pause too (field request 2026-10-02): the engine stops
@@ -345,6 +384,7 @@ void QmlPlayerBridge::togglePlayPause() {
     veyra::log::info("ui-transport", pause ? "pause" : "resume");
 }
 void QmlPlayerBridge::stopPlayback() {
+    impl_->screenCropPreview = false;
     flushHdrMemory();
     impl_->playlistSession = 0;
     impl_->playlist->setPlayback(impl_->playlistPath, QStringLiteral("stopped"));
@@ -355,9 +395,12 @@ void QmlPlayerBridge::stopPlayback() {
     impl_->engine.stop();
     stopPs5Control();
 }
-void QmlPlayerBridge::seekTo(double seconds) { impl_->engine.seek(seconds); }
+void QmlPlayerBridge::seekTo(double seconds) {
+    if(!timelineSeekable())return;
+    impl_->engine.seek(seconds);
+}
 void QmlPlayerBridge::seekBy(double seconds) {
-    impl_->engine.seek(std::max(0.0, impl_->snapshot.position + seconds));
+    seekTo(std::max(0.0, impl_->snapshot.position + seconds));
 }
 void QmlPlayerBridge::openUrl(const QUrl& url) {
     if(!url.isLocalFile()){openNetworkAddress(url.toString(QUrl::FullyEncoded));return;}

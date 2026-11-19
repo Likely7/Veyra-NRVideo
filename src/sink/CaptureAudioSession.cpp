@@ -108,6 +108,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
         CaptureRateCorrection rateCorrection;
         int64_t nextCorrection=0;
         int64_t lastReset=0;
+        int64_t largeSkewSince=0;
+        int largeSkewDirection=0;
         int64_t nextSyncLog=0;
         int64_t nextPeakLog=0;
         // Sample findings since the last report (see the report below).
@@ -124,6 +126,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
         bool endpointEventReady=false;
         auto clearCorrection=[&]{
             filteredError=correctionPpm=0;nextCorrection=hostTime()+2500000;
+            largeSkewSince=0;
+            largeSkewDirection=0;
             const int result=rateCorrection.set(swr,0);
             if(result<0){log::error("capture-audio",std::format("clear compensation failed code={}",result));return false;}
             std::lock_guard lock(mutex);state.driftCorrectionPpm=0;return true;
@@ -166,7 +170,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             // Wait before collecting callbacks, so PCM arriving during the
             // endpoint wait is available for this fill instead of padded silence.
             if(renderer.started()&&!endpointEventReady){if(!renderer.waitForEvent()){if(!recoverEndpoint())break;continue;}endpointEventReady=true;}
-            Chunk chunk;bool reset=false,syncChanged=false;double vPts=0,vHost=0,ingress=0;bool video=false;int64_t arrival=0;
+            Chunk chunk;bool reset=false,syncChanged=false;double vPts=0,vHost=0,ingress=0,blockMs=0;bool video=false;int64_t arrival=0;
             std::optional<int64_t> vArrival;uint64_t observation=0;
             {
                 std::unique_lock lock(mutex);
@@ -176,6 +180,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 vArrival=videoArrival;observation=videoObservation;
                 ingress=ingressMapping;
                 arrival=lastArrival;
+                blockMs=state.inputBlockMs;
             }
             if(mode!=appliedMode||offset!=appliedOffset){
                 syncChanged=true;reset=true;appliedMode=mode;appliedOffset=offset;
@@ -309,15 +314,15 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             // The capture callback is negotiated at 10ms, while shared-mode
             // WASAPI commonly returns a ~22ms endpoint buffer. Starting with
             // only one callback leaves half of that endpoint exposed to
-            // scheduler jitter. Keep one full 20ms safety window for capture;
-            // this is startup/re-anchor buffering, not a claimed end-to-end
-            // latency measurement.
-            const double startupPrefillMs=std::min(renderer.capacityMs(),20.0);
-            if(!renderer.started()&&haveHead&&1000.0*(pcm.size()/layout.channels)/kAudioRate>=startupPrefillMs&&(appliedMode!=0||fresh)){
+            // scheduler jitter. Retain one callback of reserve past the
+            // endpoint capacity when starting or re-anchoring.
+            const double startupPrefillMs=capturePrefillMs(renderer.capacityMs(),blockMs);
+            const size_t prefill=size_t(std::ceil(startupPrefillMs*kAudioRate/1000));
+            const size_t queuedFrames=pcm.size()/layout.channels;
+            if(!renderer.started()&&haveHead&&queuedFrames>=prefill&&(appliedMode!=0||fresh)){
                 // Live recovery discards expired sound rather than replaying
                 // an obsolete half-second after a GPU stall or graph reset.
-                const size_t prefill=size_t(std::ceil(startupPrefillMs*kAudioRate/1000));
-                const size_t expired=std::min(pcm.size()/layout.channels-prefill,size_t(std::max(0.0,(now-mapping-headPts-5)*kAudioRate/1000)));
+                const size_t expired=std::min(queuedFrames-prefill,size_t(std::max(0.0,(now-mapping-headPts-5)*kAudioRate/1000)));
                 {std::lock_guard lock(mutex);discardPcm(expired);state.recoveryDiscardedFrames+=expired;}
                 if(expired)log::info("capture-audio-reanchor",std::format("expiredFrames={} expiredMs={:.3f} targetMs={:.3f} reason=startup-or-recovery",expired,1000.0*expired/kAudioRate,target));
                 const bool due=now>=mapping+headPts;
@@ -366,10 +371,13 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 // Large video-delay changes need a bounded re-anchor. Never
                 // chase every jitter sample by stopping the audio endpoint.
                 const auto observed=hostTime();const double audioPts=renderer.mediaTimeMs();
+                if(!fresh||!std::isfinite(audioPts)){largeSkewSince=0;largeSkewDirection=0;}
                 if(appliedMode==0&&fresh&&std::isfinite(audioPts)&&observed>=nextCorrection){
                     const double error=audioPts-(double(observed)/10000-mapping);
                     filteredError=.75*filteredError+.25*error;nextCorrection=observed+2500000;
-                    if(observed-lastReset>10000000&&std::abs(error)>60){
+                    const int direction=error>60?1:error< -60?-1:0;
+                    if(direction!=largeSkewDirection){largeSkewSince=direction?observed:0;largeSkewDirection=direction;}
+                    if(largeSkewSince&&observed-largeSkewSince>=5000000&&observed-lastReset>10000000){
                         renderer.fadeAndReset(*this,stop);lastReset=hostTime();filteredError=correctionPpm=0;
                         if(!clearCorrection()){fail(L"音频漂移校正重置失败");break;}
                         std::lock_guard lock(mutex);++state.resets;

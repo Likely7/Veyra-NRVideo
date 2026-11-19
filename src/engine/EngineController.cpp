@@ -1657,7 +1657,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!demuxSession)return;
                 const bool videoHolding=demuxSession->holding();
                 long long gateNowMs=0;
-                if(audioStarted){
+                // A shared demux session already gates both tracks. Its audio has
+                // no independent read-ahead queue, so queuedMs() is always zero.
+                if(audioStarted&&separateAudio){
                     const double pcmMs=audioPipe.bufferedMs();
                     const double queuedMs=audioPipe.queuedMs();
                     // 流已经读到结尾时水位自然会掉到 0 —— 那不是断流。当成断流会做一次毫无
@@ -2126,11 +2128,30 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     playbackSpeedLastWall={};cadence.reset();
                 }
                 double seek;{std::lock_guard lock(mutex_);seek=seekSeconds_.exchange(-1);if(seek>=0)activeSeekId=snapshot_.seekRequested;}
+                if (const auto session=source.sharedSession();session&&session->timeshiftEnabled()) {
+                    const bool evicted=!paused_&&session->takeTimeshiftOverrun();
+                    if (seek>=0||evicted) {
+                        const auto window=session->stats();
+                        if (window.timeshiftEndSeconds>window.timeshiftStartSeconds) {
+                            const double edge=std::max(window.timeshiftStartSeconds,
+                                window.timeshiftEndSeconds-std::max(0.25,session->plan().startSeconds));
+                            seek=evicted&&seek<0?window.timeshiftStartSeconds:std::clamp(seek,window.timeshiftStartSeconds,edge);
+                        } else seek=-1;
+                    }
+                }
                 if(seek>=0&&!isImage&&!isCapture){
                     seekStarted=Clock::now();seekDecoded=0;
                     holdFileAudio();fileAudioAlignPending=true;
                     drainLivePresentation();
-                    if(!ring.drainQueue()||!activeSource->seek({static_cast<int64_t>(seek*1000000),1000000})){status(L"跳转失败",true);break;}
+                    if(!ring.drainQueue()){status(L"跳转失败",true);break;}
+                    if(!activeSource->seek({static_cast<int64_t>(seek*1000000),1000000})){
+                        const auto session=source.sharedSession();
+                        if(!session||!session->timeshiftEnabled()){status(L"跳转失败",true);break;}
+                        // The live window can lose its last keyframe at the memory cap.
+                        // Keep the receiver alive and let the next keyframe recover it.
+                        audioRebuffering=false;
+                        continue;
+                    }
                     seekDemuxDone=Clock::now();
                     veyra::log::info("seek-latency",std::format("request={} targetSeconds={:.3f} drainAndDemuxMs={:.3f}",activeSeekId,seek,elapsedMs(seekStarted)));
                     initialFileFramePending=false;av_frame_free(&cachedFrame);out={};hasOutput=false;
@@ -3055,9 +3076,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto presentAnchor=fgHeld?liveInputReady:smoothedAnchor;
                         liveGeneratedGrace=liveGeneratedGrace100ns(liveInputReady,presentAnchor);
                         liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,presentAnchor,options.fg&&!fgHeld?pairDelay:0,paceSourcePts);
-                        if((smoothTransportAnchor||smoothContentAnchor)&&host100ns()>=nextLiveAnchorLog){
+                        const bool smoothedCapacity=smoothTransportAnchor||smoothContentAnchor;
+                        if(smoothedCapacity&&host100ns()>=nextLiveAnchorLog){
                             nextLiveAnchorLog=host100ns()+10000000;
-                            veyra::log::info("live-anchor",std::format("revision={} contentClock={} callbackJitterMs={:.3f} clockDriftPpm={:.0f} snaps={} callbackMinusAnchorMs={:.3f} phaseMs={:.3f} deadlineExtraMs={:.3f} fgPhaseAllowanceMs={:.3f} fgHeld={} capacityWaitMs={:.2f} (presentation anchor: source or deduplicated content PTS on the tracked capture clock; fgHeld: real frame shown when ready, phase unused; capacity wait applies under explicit VSync)",options.settings.revision,smoothContentAnchor,liveArrival.jitterMs(),liveArrival.driftPpm(smoothContentAnchor?transportInterval:liveInterval),liveArrival.snaps(),double(liveInputReady-presentAnchor)/10000,double(pairDelay)/10000,double(pairExtra)/10000,double(fgPhaseAllowance)/10000,fgHeld,smoothTransportAnchor?liveSmoothedCapacityWaitMs(double(liveInterval)/10000/std::max(1u,previewFgMultiplier),fixedCapacityWait?0:liveArrival.jitterMs()):2.0));
+                            veyra::log::info("live-anchor",std::format("revision={} contentClock={} callbackJitterMs={:.3f} clockDriftPpm={:.0f} snaps={} callbackMinusAnchorMs={:.3f} phaseMs={:.3f} deadlineExtraMs={:.3f} fgPhaseAllowanceMs={:.3f} fgHeld={} capacityWaitMs={:.2f} (presentation anchor: source or deduplicated content PTS on the tracked capture clock; fgHeld: real frame shown when ready, phase unused; capacity wait applies under explicit VSync)",options.settings.revision,smoothContentAnchor,liveArrival.jitterMs(),liveArrival.driftPpm(smoothContentAnchor?transportInterval:liveInterval),liveArrival.snaps(),double(liveInputReady-presentAnchor)/10000,double(pairDelay)/10000,double(pairExtra)/10000,double(fgPhaseAllowance)/10000,fgHeld,liveSmoothedCapacityWaitMs(double(liveInterval)/10000/std::max(1u,previewFgMultiplier),fixedCapacityWait?0:liveArrival.jitterMs())));
                         }
                     }
                     else if(!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts))liveTimeline.reset(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,options.fg?duration100ns:0,paceSourcePts);
@@ -3085,6 +3107,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // when the fence completes (the loop waits on it), not when we look.
                         std::array<bool,pipeline::FrameBatch::Capacity> seenUnfinished{};
                         Clock::time_point readyStart=Clock::now();std::optional<Clock::time_point> deadlineStart,capacityStart;
+                        double capacityWaitMs=0;
                         double readyMs=0,waitMs=0,presentMs=0,ageMs=0;uint64_t count=0,dropped=0;
                         diagnostics::GpuSample blit;
                     };
@@ -3113,7 +3136,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&seekDemuxDone,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&processingGraph,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothTransportAnchor,captureClockCorrected,driverPts100ns,flow=frameFlow,&deadlineMargin,marginPair,pairExtra](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&seekDemuxDone,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&processingGraph,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&traceFrame,&traceSubframes,watch,step,timeline,captureArrival,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothedCapacity=smoothTransportAnchor||smoothContentAnchor,halfRate,captureClockCorrected,driverPts100ns,flow=frameFlow,&deadlineMargin,marginPair,pairExtra](int64_t now)->LiveGpuScheduler::Step{
 
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
@@ -3195,16 +3218,24 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             }
                             // Explicit VSync: one present of display capacity per present, so a
                             // frame never waits in DXGI's queue (true when not paced). A generated
-                            // frame waits at most half its interval (<= 2 ms, and see
-                            // liveSmoothedCapacityWaitMs) and is otherwise
-                            // replaced by the next one: waiting longer only moved the queue into
-                            // this scheduler and held the real frame behind it (DLSS 6X replay
-                            // on 320 Hz: callback->present P95 18.4 -> 34.2 ms). The real frame waits.
+                            // frame waits for a bounded interval chosen at the first miss.
+                            // A 60->30 / 2X pair can use spare refresh slots if one
+                            // full refresh remains for its real frame.
                             if((!legacyVsyncQueue||presentationEffective.enabled||presentationEffective.outputRate==OutputRateMode::Custom)&&!presenter.presentationReady()){
                                 if(generated&&!legacyVsyncQueue){
-                                    if(!s.capacityStart)s.capacityStart=Clock::now();
-                                    const double outputIntervalMs=sourceIntervalMs/std::max(1u,batch.batch.count);
-                                    if(elapsedMs(*s.capacityStart)>std::min(smoothTransportAnchor?liveSmoothedCapacityWaitMs(outputIntervalMs,fixedCapacityWait?0:liveArrival.jitterMs()):2.0,outputIntervalMs/2)){++generatedDropCapacity;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
+                                    if(!s.capacityStart){
+                                        s.capacityStart=Clock::now();
+                                        const double interval=sourceIntervalMs/std::max(1u,batch.batch.count);
+                                        const double base=smoothedCapacity?liveSmoothedCapacityWaitMs(interval,fixedCapacityWait?0:liveArrival.jitterMs()):2.0;
+                                        s.capacityWaitMs=std::min(base,interval/2);
+                                        if(halfRate&&batch.batch.count==2&&presentationEffective.display==DisplaySync::Vsync&&
+                                           !presenter.vrrSync()&&!capInterval&&!fixedCapacityWait){
+                                            const auto grid=presenter.refreshGrid();
+                                            const double untilReal=double(timeline.deadline(batch.batch.b100ns)-optionalNow)/10000;
+                                            s.capacityWaitMs=liveHalfRateCapacityWaitMs(base,interval,grid.period100ns/10000,untilReal);
+                                        }
+                                    }
+                                    if(elapsedMs(*s.capacityStart)>s.capacityWaitMs){++generatedDropCapacity;++s.dropped;++s.handled;++s.next;s.deadlineStart.reset();s.capacityStart.reset();continue;}
                                 }
                                 return {State::Pending,optionalNow+2000};
                             }

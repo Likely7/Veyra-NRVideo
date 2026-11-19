@@ -329,6 +329,7 @@ struct QmlPlayerBridge::Impl {
     QString currentPage;
     std::wstring captureDevice;
     QString screenTarget;
+    bool screenCropPreview = false;
     QString remotePlayHost, remotePlayPin;
 
     QTimer* timer = nullptr;

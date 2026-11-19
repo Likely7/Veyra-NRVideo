@@ -650,6 +650,28 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("录制分段")
+                            hint: qsTr("达到任一限制后，在下一关键帧分段。0 表示关闭，设置在下次录制时生效。")
+                            RowLayout {
+                                DialogHost.VTextField {
+                                    objectName: "record-split-seconds"
+                                    implicitWidth: 74
+                                    text: String(veyra.preferences.recordSplitSeconds || 0)
+                                    validator: IntValidator { bottom: 0; top: 86400 }
+                                    onEdited: veyra.setPreference("recordSplitSeconds", Number(text))
+                                }
+                                Text { text: qsTr("秒"); color: Theme.t3; font.pixelSize: Theme.fsSmall }
+                                DialogHost.VTextField {
+                                    objectName: "record-split-mib"
+                                    implicitWidth: 88
+                                    text: String(veyra.preferences.recordSplitMiB || 0)
+                                    validator: IntValidator { bottom: 0; top: 1048576 }
+                                    onEdited: veyra.setPreference("recordSplitMiB", Number(text))
+                                }
+                                Text { text: "MiB"; color: Theme.t3; font.pixelSize: Theme.fsSmall }
+                            }
+                        }
+                        VRow {
                             label: qsTr("录制编码")
                             hint: qsTr("HDR 画面固定使用 HEVC 10bit；宽或高超过 4096 时自动使用 HEVC")
                             VSeg {

@@ -279,9 +279,19 @@ bool XessPresenter::tag(ID3D12GraphicsCommandList* list,ID3D12Resource* color,ID
         if(regionColor){data.resourceBase={uint32_t(region.left),uint32_t(region.top)};data.resourceSize={uint32_t(region.right-region.left),uint32_t(region.bottom-region.top)};}
         return p.check(p.xefgSwapChainD3D12TagFrameResourceFn(p.fg,nullptr,p.id,&data),"Tag resource");
     };
-    if(!resource(XEFG_SWAPCHAIN_RES_BACKBUFFER,color,true)||
-       !(ui?resource(XEFG_SWAPCHAIN_RES_UI,ui,true):resource(XEFG_SWAPCHAIN_RES_HUDLESS_COLOR,color,true))||
-       (ui&&hudless&&!resource(XEFG_SWAPCHAIN_RES_HUDLESS_COLOR,hudless,true))||
+    const auto backbuffer=color->GetDesc();
+    const auto mv=motion->GetDesc(),z=depth->GetDesc();
+    if(mv.Width!=z.Width||mv.Height!=z.Height||region.left<0||region.top<0||
+       uint64_t(region.right)>backbuffer.Width||uint32_t(region.bottom)>backbuffer.Height){
+        log::error("xess-fg","tagged guidance extents or backbuffer region are invalid");
+        return false;
+    }
+    const bool letterboxed=region.left||region.top||uint64_t(region.right)!=backbuffer.Width||uint32_t(region.bottom)!=backbuffer.Height;
+    // The proxy owns its backbuffer. Tag it only to override the valid
+    // rectangle. HUD-less and UI are distinct textures only when composited.
+    if((letterboxed&&!resource(XEFG_SWAPCHAIN_RES_BACKBUFFER,color,true))||
+       (ui&&!resource(XEFG_SWAPCHAIN_RES_UI,ui,true))||
+       (hudless&&!resource(XEFG_SWAPCHAIN_RES_HUDLESS_COLOR,hudless,true))||
        !resource(XEFG_SWAPCHAIN_RES_MOTION_VECTOR,motion,false)||!resource(XEFG_SWAPCHAIN_RES_DEPTH,depth,false))return false;
     xefg_swapchain_frame_constant_data_t constants{};
     for(unsigned i=0;i<4;++i){constants.viewMatrix[i*5]=1;constants.projectionMatrix[i*5]=1;}

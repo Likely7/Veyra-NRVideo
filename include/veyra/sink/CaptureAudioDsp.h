@@ -25,6 +25,11 @@ inline double captureSafeCorrectionPpm(double requested,double current,double qu
     // Safety overrides the downward slew immediately; keep the FIR history.
     return std::clamp(std::max(slewed,reservoirLimit),-5000.0,5000.0);
 }
+// One callback's worth of reserve covers the phase difference between the
+// capture and render devices, including 44.1 -> 48 kHz resampling blocks.
+inline double capturePrefillMs(double endpointMs,double inputBlockMs){
+    return std::clamp(endpointMs+std::clamp(inputBlockMs,4.0,12.0),20.0,40.0);
+}
 // Float PCM can legitimately exceed unity before final user gain/downmix.
 // Do not introduce block AGC or clamp finite samples in the conversion stage.
 inline CaptureSampleStats inspectCapturePcm(float* samples,size_t count){

@@ -66,6 +66,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString flowBackend READ flowBackend NOTIFY snapshotChanged)
     Q_PROPERTY(int opticalFlowChoice READ opticalFlowChoice NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList stageTimings READ stageTimings NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantList cpuTimings READ cpuTimings NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantMap nodeTimings READ nodeTimings NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantMap nodeAnchors READ nodeAnchors NOTIFY nodeAnchorsChanged)
     Q_PROPERTY(double stageBudgetMs READ stageBudgetMs NOTIFY snapshotChanged)
@@ -289,6 +290,9 @@ class QmlPlayerBridge : public QObject {
     // --- playback ----------------------------------------------------------
     Q_PROPERTY(bool deinterlaceAvailable READ deinterlaceAvailable CONSTANT)
     Q_PROPERTY(QString statusText READ statusText NOTIFY snapshotChanged)
+    Q_PROPERTY(bool timelineSeekable READ timelineSeekable NOTIFY snapshotChanged)
+    Q_PROPERTY(QVariantMap liveTimeshift READ liveTimeshift NOTIFY snapshotChanged)
+    Q_PROPERTY(bool openingSource READ openingSource NOTIFY snapshotChanged)
     Q_PROPERTY(bool running READ running NOTIFY snapshotChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY snapshotChanged)
     Q_PROPERTY(bool failed READ failed NOTIFY snapshotChanged)
@@ -684,6 +688,7 @@ public:
     int opticalFlowChoice() const;
     Q_INVOKABLE bool setOpticalFlowChoice(int backend);
     QVariantList stageTimings() const;
+    QVariantList cpuTimings() const;
     QVariantMap nodeTimings() const;
     QVariantMap nodeAnchors() const;
     Q_INVOKABLE bool setNodeAnchor(const QString& key, double x, double y);
@@ -791,7 +796,8 @@ public:
     Q_INVOKABLE bool openCaptureDriverSettings(bool inputSelector = false);
     Q_INVOKABLE bool startCaptureSession();
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
-    Q_INVOKABLE bool startScreenCapture();
+    Q_INVOKABLE bool startScreenCapture(bool cropPreview = false);
+    Q_INVOKABLE bool applyScreenCrop(int left, int top, int right, int bottom);
     bool gameMode() const;
     bool passthroughActive() const;
     bool gameInputActive() const;
@@ -915,6 +921,10 @@ public:
     // which values the UI can command and which it can only display.
     bool deinterlaceAvailable() const;
     QString statusText() const;
+    bool timelineSeekable() const;
+    QVariantMap liveTimeshift() const;
+    Q_INVOKABLE double timelineSeconds(double fraction) const;
+    Q_INVOKABLE void returnToLive();
     bool running() const;
     bool paused() const;
     bool failed() const;

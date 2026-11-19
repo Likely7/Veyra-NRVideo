@@ -506,6 +506,7 @@ bool QmlPlayerBridge::startCaptureSession() {
     return true;
 }
 void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
+    impl_->screenCropPreview = false;
     rememberPosition(true);
     emit mediaOpenRequested();
     impl_->openingSource = true;
@@ -660,7 +661,7 @@ bool QmlPlayerBridge::setScreenOption(const QString& key, const QVariant& value)
     emit captureChanged();
     return true;
 }
-bool QmlPlayerBridge::startScreenCapture() {
+bool QmlPlayerBridge::startScreenCapture(bool cropPreview) {
     const auto o = screenOptions();
     source::ScreenCaptureOptions value;
     bool found = false;
@@ -677,6 +678,7 @@ bool QmlPlayerBridge::startScreenCapture() {
     // second, late pointer otherwise), the picture must match the screen 1:1 for
     // clicks to land where they are seen (no crop), and the yellow border goes.
     const bool game = o.value("passthrough").toBool();
+    if (cropPreview && game) return false;
     // 游戏模式 hands the foreground to the captured window, and activating a window
     // on another virtual desktop makes Windows switch to that desktop, away from
     // the picture. Checked live: the window may have moved since the list was read.
@@ -699,15 +701,36 @@ bool QmlPlayerBridge::startScreenCapture() {
         if (SUCCEEDED(SHQueryUserNotificationState(&state)) && state == QUNS_RUNNING_D3D_FULL_SCREEN)
             emit notice(tr("检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化"), true);
     } else impl_->gameModeUri.clear();
+    if (cropPreview) value.left = value.top = value.right = value.bottom = 0;
     bool otherDesktop = false;
     for (const auto& t : impl_->screenList) if (t.handle == value.target) otherDesktop = t.otherDesktop;
     veyra::log::info("screen-ui", std::format("start kind={} method={} fps={} cursor={} crop={},{},{},{} fill={} gameMode={} otherVirtualDesktop={}", int(value.kind), int(value.method),
         value.fps, value.cursor, value.left, value.top, value.right, value.bottom, o.value("fill").toBool(), game, otherDesktop));
-    openSourceUri(value.uri(), wideOf(screenTargetLabel()), o.value("fill").toBool());
+    openSourceUri(value.uri(), wideOf(screenTargetLabel()), !cropPreview && o.value("fill").toBool());
+    impl_->screenCropPreview = cropPreview;
+    impl_->liveKind = QStringLiteral("screen");
+    impl_->liveLabel = screenTargetLabel();
     impl_->screenFitClient = impl_->screenFitImage = QSize();
+    if(cropPreview) applyAspect(true);
     if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }
     emit compareChanged();
-    rememberSource(QStringLiteral("screen"), screenTargetLabel());
+    if(!cropPreview) rememberSource(QStringLiteral("screen"), screenTargetLabel());
+    return true;
+}
+bool QmlPlayerBridge::applyScreenCrop(int left,int top,int right,int bottom) {
+    if (!impl_->screenCropPreview || impl_->openingSource || sourceKind() != QLatin1String("screen") ||
+        std::min({left,top,right,bottom}) < 0 ||
+        int64_t(left)+right+16 > sourceWidth() || int64_t(top)+bottom+16 > sourceHeight()) {
+        emit notice(tr("裁剪范围超出画面"),true);
+        return false;
+    }
+    const auto previous=impl_->prefs.value("screen");
+    auto crop=previous.toMap();
+    crop["left"]=left; crop["top"]=top; crop["right"]=right; crop["bottom"]=bottom;
+    impl_->prefs["screen"]=crop;
+    if (!startScreenCapture()) { impl_->prefs["screen"]=previous; return false; }
+    impl_->savePrefs();
+    emit captureChanged();
     return true;
 }
 bool QmlPlayerBridge::gameMode() const { return impl_->gameModeSessionId != 0; }

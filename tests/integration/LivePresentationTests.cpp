@@ -1,5 +1,6 @@
 #include "veyra/engine/EngineController.h"
 #include "veyra/engine/EffectChain.h"
+#include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/Log.h"
 #include <chrono>
 #include <iostream>
@@ -15,6 +16,108 @@
 using namespace veyra;
 using namespace std::chrono_literals;
 namespace {
+__declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* output,std::wstring_view mode){
+    if(FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
+    std::filesystem::create_directories(output);
+    Logger::instance().openFile((std::filesystem::path(output)/L"engine.log").wstring());
+    Logger::instance().setConsoleEnabled(false);
+    const bool vfg=mode==L"--vfg-provider-recovery";
+    const bool xess=mode==L"--amd-xess-capture";
+    if(!vfg){
+        gfx::ComPtr<IDXGIFactory1> factory;
+        if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return 2;
+        uint64_t amd=0;
+        for(UINT i=0;;++i){
+            gfx::ComPtr<IDXGIAdapter1> adapter;
+            if(factory->EnumAdapters1(i,&adapter)!=S_OK)break;
+            DXGI_ADAPTER_DESC1 desc{};
+            if(SUCCEEDED(adapter->GetDesc1(&desc))&&desc.VendorId==0x1002&&!(desc.Flags&DXGI_ADAPTER_FLAG_SOFTWARE)){
+                amd=(uint64_t(uint32_t(desc.AdapterLuid.HighPart))<<32)|desc.AdapterLuid.LowPart;
+                break;
+            }
+        }
+        if(!amd){std::cout<<"AMD adapter unavailable\n";CoUninitialize();return 2;}
+        gfx::setPreferredAdapterLuid(amd);
+    }
+    HWND window=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"Veyra provider regression",WS_OVERLAPPEDWINDOW,
+        40,40,1000,620,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!window)return 2;
+    ShowWindow(window,SW_SHOWNOACTIVATE);
+    bool ok=true;
+    {
+        engine::EngineController engine;engine.setVolume(0,true);
+        engine::EnhancementSettings initial;
+        initial.opticalFlowBackend=engine::OpticalFlowBackend::GpuDis;
+        initial.frameGenerationBackend=vfg?engine::FrameGenerationBackend::Vfg:engine::FrameGenerationBackend::XeSS;
+        initial.vfgQuality=1;
+        initial.multiplier=vfg||xess?2:1;
+        initial.videoSrQuality=engine::kVideoSrFsr;
+        if(!vfg){
+            initial.fgMotion=engine::MotionSource::Zero;
+            initial.srMotion=engine::MotionSource::Zero;
+        }
+        auto options=engine::PlayerOptions::from(initial);
+        options.captureReplayForTest=true;
+        const auto until=[&](auto predicate,int seconds){
+            const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);
+            while(std::chrono::steady_clock::now()<deadline){
+                MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
+                auto s=std::make_unique<engine::PlayerSnapshot>(engine.snapshot());
+                if(s->failed){std::wcerr<<s->status<<L" / "<<s->backendWarning<<L'\n';return false;}
+                if(predicate(*s))return true;
+                std::this_thread::sleep_for(10ms);
+            }
+            return false;
+        };
+        const auto stop=[&]{engine.stop();return until([&](const auto&){return engine.idle();},10);};
+        if(vfg){
+            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_PRIVATE_CONTEXT",L"1");
+            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",L"55");
+        }
+        engine.open(window,input,options);
+        if(vfg){
+            ok=until([](const auto& s){return s.fgActive&&s.generated>8;},25);
+            ok=ok&&until([](const auto& s){return s.running&&!s.fgActive&&s.frames>70;},25);
+            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",nullptr);
+            ok=stop()&&ok;
+            if(ok){
+                engine.open(window,input,options);
+                ok=until([](const auto& s){return s.fgActive&&s.applied.vfgQuality==1&&s.generated>100;},30);
+            }
+            std::cout<<"VFG_RECOVERY reconstructedPrivateContext="<<ok<<'\n';
+        }else if(xess){
+            ok=until([](const auto& s){return s.fgActive&&s.metrics.flow.counters.xessSdkGenerated>=450;},90);
+            const auto s=engine.snapshot();
+            std::cout<<"AMD_XESS frames="<<s.frames<<" sdkGenerated="<<s.metrics.flow.counters.xessSdkGenerated
+                     <<" sourceWidth="<<s.sourceWidth<<" sourceHeight="<<s.sourceHeight<<" active="<<s.fgActive<<'\n';
+        }else{
+            ok=until([](const auto& s){return s.frames>12&&!s.srActive;},25);
+            for(unsigned i=0;i<4&&ok;++i){
+                auto s=engine.snapshot().desired;
+                s.sr=true;
+                s.srTarget=i%2?pipeline::SrTarget::Uhd4K:pipeline::SrTarget::Qhd;
+                ok=engine.requestSettings(s);
+                const auto revision=engine.snapshot().desired.revision;
+                ok=ok&&until([&](const auto& now){return now.applied.revision==revision&&now.srActive&&
+                    now.metrics.flow.counters.realPresented>12;},30);
+                std::cout<<"AMD_SR_SWITCH step="<<i<<" revision="<<revision<<" ok="<<ok<<'\n';
+            }
+            ok=stop()&&ok;
+            if(ok){
+                initial.sr=true;initial.srTarget=pipeline::SrTarget::Uhd4K;
+                options=engine::PlayerOptions::from(initial);options.captureReplayForTest=true;
+                engine.open(window,input,options);
+                ok=until([](const auto& s){return s.srActive&&s.frames>12;},30);
+            }
+            std::cout<<"AMD_SR_REOPEN ok="<<ok<<'\n';
+        }
+        ok=stop()&&ok;
+    }
+    DestroyWindow(window);
+    CoUninitialize();
+    return ok?0:1;
+}
+
 int inactiveEffectsTest(const wchar_t* input,const wchar_t* output,bool nodeMode){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     std::filesystem::create_directories(output);
@@ -129,7 +232,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
     std::cout<<" frames="<<end->frames-start->frames<<" skipped="<<end->captureRateSkipped-start->captureRateSkipped<<" generated="<<end->generated-start->generated
              <<" contentFps="<<end->contentFps<<" realPresented="<<end->metrics.flow.counters.realPresented-start->metrics.flow.counters.realPresented
              <<" generatedPresented="<<end->metrics.flow.counters.generatedPresented-start->metrics.flow.counters.generatedPresented
-             <<" fgInvalid="<<end->metrics.flow.counters.fgInvalid-start->metrics.flow.counters.fgInvalid<<std::endl;
+             <<" fgInvalid="<<end->metrics.flow.counters.fgInvalid-start->metrics.flow.counters.fgInvalid
+             <<" submit1PercentLow="<<end->submissionLow1Fps.value_or(0)<<std::endl;
     const bool ran=started&&!end->failed&&end->frames>start->frames+300;
     std::cout<<(ran?"PASS ":"FAIL ")<<"content-cadence replay runs"<<std::endl;
     engine.stop();const bool drained=pumpUntil([&]{return engine.idle();},8s);
@@ -139,6 +243,11 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
     return started&&ran&&drained?0:1;
 }
 int wmain(int argc,wchar_t**argv){
+    if(argc==4){
+        const std::wstring_view mode=argv[3];
+        if(mode==L"--vfg-provider-recovery"||mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch")
+            return providerRecovery(argv[1],argv[2],mode);
+    }
     if(argc==4&&(wcscmp(argv[3],L"--inactive-effects")==0||wcscmp(argv[3],L"--inactive-effects-node")==0))return inactiveEffectsTest(argv[1],argv[2],wcscmp(argv[3],L"--inactive-effects-node")==0);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     // Explicit opt-in; uses existing local pairing without changing it. Runs
@@ -263,6 +372,13 @@ int wmain(int argc,wchar_t**argv){
     const bool dedupNoFg=dedupMode.ends_with(L"-nofg");if(dedupNoFg)dedupMode.resize(dedupMode.size()-5);
     if(dedupRun){
         options.softwareDecode=true;options.fg=!dedupNoFg;options.fgMultiplier=2;
+        if(dedupMode.ends_with(L"-vsync")){
+            dedupMode.resize(dedupMode.size()-6);
+            options.settings.fgStrictAdmission=true;
+            engine::PresentationSettings display;
+            display.display=engine::DisplaySync::Vsync;
+            engine.requestPresentation(display);
+        }
         if(dedupMode.starts_with(L"nr-")){options.nr=true;dedupMode.erase(0,3);}
         if(dedupMode.starts_with(L"sr-")){options.sr=true;options.settings.videoSrQuality=2;dedupMode.erase(0,3);}
         options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;

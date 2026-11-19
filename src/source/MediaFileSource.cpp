@@ -1775,7 +1775,8 @@ bool MediaFileSource::keepDamagedPicture(const AVFrame* frame)
 bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
 {
     if (!info_.opened) { return false; }
-    if((media::networkMediaInput(path_)||demuxer_.shared())&&!demuxer_.seekable())return false;
+    if((media::networkMediaInput(path_)||demuxer_.shared())&&!demuxer_.seekable()&&
+       !(demuxer_.session()&&demuxer_.session()->timeshiftEnabled()))return false;
     if (targetSeconds.isUnknown() || targetSeconds.den == 0 || targetSeconds.isNegative()) {
         veyra::log::error("source-file", "seek target must be a known non-negative rational");
         return false;

@@ -318,6 +318,10 @@ Window {
             if (root.page === "home") root.goPage("min")
             if (veyra.screenOptions.passthrough === true) root.enterGameFullscreen()
         }
+        onStartScreenCrop: {
+            root.goPage("min")
+            screenCrop.begin(veyra.screenOptions)
+        }
     }
 
     // The dock floats above every page and retracts on its own.
@@ -426,6 +430,16 @@ Window {
     onQuickPanelShownChanged: {
         veyra.logUi("ui-fullscreen", "quick panel shown=" + quickPanelShown)
         veyra.setGamePanelOpen(quickPanelShown)
+    }
+    FullscreenTimingPanel {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 16
+        width: Math.min(330, Math.max(180, parent.width - 424))
+        maximumHeight: Math.max(120, root.height - (root.page === "node" ? Math.min(root.height * 0.6, 460) : 90))
+        visible: root.quickPanelShown && veyra.hasSource
+        onCloseRequested: root.closeQuickPanel()
+        z: 75
     }
     // 游戏模式 (屏幕捕获 → 游戏模式): fullscreen on the captured monitor (or the
     // monitor of the captured window); the bridge then makes the picture click-through
@@ -551,6 +565,19 @@ Window {
         }
     }
     // Shared mask input follows the exact native host across list/node/cinema/fullscreen.
+    ScreenCropEditor {
+        id: screenCrop
+        z: 94
+        hostRect: Qt.rect(videoHost.x, videoHost.y, videoHost.width, videoHost.height)
+        onCancelled: {
+            veyra.stopPlayback()
+            dialogs.open("screen")
+        }
+    }
+    Connections {
+        target: veyra
+        function onMediaOpenRequested() { screenCrop.editing = false }
+    }
     MouseArea {
         id: maskInput
         objectName: "mask-edit-input"
@@ -558,7 +585,7 @@ Window {
         z: 80
         visible: veyra.hasSource && videoHost.width > 0 && videoHost.height > 0
                  && (veyra.protectionDrawShape.length > 0 || veyra.exclusionOverlayVisible)
-        enabled: visible && !veyra.gameInputActive && dialogs.dialog === ""
+        enabled: visible && !screenCrop.editing && !veyra.gameInputActive && dialogs.dialog === ""
         preventStealing: true
         cursorShape: veyra.protectionDrawShape.length > 0 ? Qt.CrossCursor : pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         property point start
@@ -621,7 +648,7 @@ Window {
         id: pictureTap
         // Scaled game input deliberately catches mouse events instead of
         // forwarding wrong coordinates; they must not control the player either.
-        enabled: !root.fullLocked && !veyra.gameInputActive
+        enabled: !root.fullLocked && !screenCrop.editing && !veyra.gameInputActive
         // Judged where the press landed: by the release the page may already have changed.
         property bool pressOnCover: false
         property bool pressOnPicture: false
@@ -718,7 +745,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: veyra.hasSource && !screenCrop.editing && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -750,7 +777,7 @@ Window {
     Binding { target: veyra; property: "subtitleBottomInset"; value: fullBar.shown ? (root.fullscreen ? 84 : 56) : 0 }
     // Rebindable (设置 → 快捷键); the hold-to-compare key is handled by the bridge's
     // application event filter because it needs the key release too.
-    Shortcut { sequence: veyra.shortcuts.playPause; onActivated: veyra.togglePlayPause() }
+    Shortcut { sequence: veyra.shortcuts.playPause; enabled: !screenCrop.editing; onActivated: veyra.togglePlayPause() }
     Shortcut { sequence: veyra.shortcuts.fullscreen; onActivated: root.toggleFullscreen() }
     Shortcut { sequence: veyra.shortcuts.screenshot; onActivated: veyra.takeScreenshot() }
     Shortcut { sequence: veyra.shortcuts.record; autoRepeat: false; onActivated: veyra.toggleRecording("shortcut") } // a held key must not toggle at the repeat rate
@@ -764,7 +791,7 @@ Window {
     // In 游戏模式 Esc closes the adjust panel and gives the input back to the game.
     Shortcut {
         sequence: "Esc"
-        enabled: root.fullscreen && !maskInput.moving
+        enabled: root.fullscreen && !screenCrop.editing && !maskInput.moving
         onActivated: {
             // Visible editing operations own the first Escape. Hidden pages and
             // the hidden playlist must never compete with fullscreen's shortcut.

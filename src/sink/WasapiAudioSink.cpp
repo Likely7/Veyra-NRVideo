@@ -1062,6 +1062,7 @@ bool AudioRenderer::pumpOnce(AudioPcmSource& pipeline, double* firstWrittenPtsMs
     if(started_&&!padding&&!pipeline.padUnderruns()){
         UINT64 pos=0,qpc=0;
         if(!checked(clock_->GetPosition(&pos,&qpc),"Live write GetPosition"))return false;
+        if(pos<anchorPos_)return checked(AUDCLNT_E_DEVICE_INVALIDATED,"Live audio clock moved backwards");
         const auto consumed=static_cast<uint64_t>(double(pos-anchorPos_)*sampleRate_/clockFrequency_);
         const auto gap=liveGap_.observe(padding,consumed,timelineWriteFrame_.load());
         if(gap.frames){
@@ -1088,7 +1089,7 @@ bool AudioRenderer::pumpOnce(AudioPcmSource& pipeline, double* firstWrittenPtsMs
             const int64_t queuedUs=recordingClockUs()+int64_t(padding)*1000000/int64_t(sampleRate_);
             int64_t playoutUs=queuedUs+tapLatencyUs_;
             UINT64 pos=0,qpc=0;
-            if(started_&&clockFrequency_&&SUCCEEDED(clock_->GetPosition(&pos,&qpc))&&qpc){
+            if(started_&&clockFrequency_&&SUCCEEDED(clock_->GetPosition(&pos,&qpc))&&qpc&&pos>=anchorPos_){
                 const double played=double(pos-anchorPos_)*sampleRate_/double(clockFrequency_);
                 playoutUs=int64_t(qpc/10)+int64_t((double(timelineWriteFrame_.load())-played)*1e6/sampleRate_);
                 tapLatencyUs_=std::clamp<int64_t>((tapLatencyUs_*7+(playoutUs-queuedUs))/8,0,250000);
@@ -1162,6 +1163,7 @@ double AudioRenderer::mediaTimeMs() const
     if (!checked(clock_->GetPosition(&pos, &qpc),"Clock GetPosition") || clockFrequency_ == 0) {
         return std::numeric_limits<double>::quiet_NaN();
     }
+    if(pos<anchorPos_)return std::numeric_limits<double>::quiet_NaN();
     const double consumedMs = 1000.0 * static_cast<double>(pos - anchorPos_) /
         static_cast<double>(clockFrequency_);
     {std::lock_guard lock(timelineMutex_);if(timedPcm_){

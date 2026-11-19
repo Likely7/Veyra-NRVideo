@@ -30,6 +30,7 @@ Item {
     signal startMoonlight()
     signal startXbox()
     signal startScreen()
+    signal startScreenCrop()
 
     CaptureLegacyPicker {
         id: legacyCapturePicker

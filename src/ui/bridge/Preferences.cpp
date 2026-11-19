@@ -195,10 +195,13 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
         {"networkPrebuffer", {-1, 60}},
+        {"networkTimeshift", {0, 600}},
         // Live recording: the target bitrate for the file, and the frame rate
         // cap (0 keeps the presented rate).
         {"recordBitrateMbps", {0, 400}},
         {"recordFps", {0, 240}},
+        {"recordSplitSeconds", {0, 86400}},
+        {"recordSplitMiB", {0, 1048576}},
         {"virtualCameraFps", {0, 120}},
         // Instant replay (#103): seconds the buffer keeps.
         {"replaySeconds", {15, 600}}};
