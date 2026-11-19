@@ -303,6 +303,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("vfgAutoRegulate")).toBool();
             if (s.vfgAutoRegulate != on) { s.vfgAutoRegulate = on; changed = true; }
         }
+        // Adaptive multiplier, frame pacing repair and Live HUD Lock (from PushFPS).
+        if (p.contains(QStringLiteral("fgAdaptive"))) {
+            const bool on = p.value(QStringLiteral("fgAdaptive")).toBool();
+            if (s.fgAdaptive != on) { s.fgAdaptive = on; changed = true; }
+        }
+        if (p.contains(QStringLiteral("pacingRepair"))) {
+            const bool on = p.value(QStringLiteral("pacingRepair")).toBool();
+            if (s.pacingRepair != on) { s.pacingRepair = on; changed = true; }
+        }
+        if (p.contains(QStringLiteral("hudLock"))) {
+            const bool on = p.value(QStringLiteral("hudLock")).toBool();
+            if (s.hudLock != on) { s.hudLock = on; changed = true; }
+        }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){

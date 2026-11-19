@@ -25492,6 +25492,166 @@
    "en": "This video has no danmaku",
    "ja": "この動画には弾幕がありません",
    "ko": "이 동영상에는 탄막이 없습니다"
+  },
+  {
+   "zh": "HUD 自动锁定",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "HUD 自動鎖定",
+   "en": "Auto HUD lock",
+   "ja": "HUD 自動ロック",
+   "ko": "HUD 자동 고정"
+  },
+  {
+   "zh": "HUD 自动锁定 · 当前补帧方式不支持",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "HUD 自動鎖定 · 目前補幀方式不支援",
+   "en": "Auto HUD lock · not available with this frame generation",
+   "ja": "HUD 自動ロック · 現在のフレーム生成方式では使えません",
+   "ko": "HUD 자동 고정 · 현재 프레임 생성 방식에서 지원 안 됨"
+  },
+  {
+   "zh": "HUD 自动锁定 · 无法启用",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "HUD 自動鎖定 · 無法啟用",
+   "en": "Auto HUD lock · could not start",
+   "ja": "HUD 自動ロック · 有効にできません",
+   "ko": "HUD 자동 고정 · 켤 수 없음"
+  },
+  {
+   "zh": "二次编码",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "二次編碼",
+   "en": "Two-pass encoding",
+   "ja": "2 パスエンコード",
+   "ko": "2패스 인코딩"
+  },
+  {
+   "zh": "四分之一",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "四分之一",
+   "en": "Quarter",
+   "ja": "1/4",
+   "ko": "1/4"
+  },
+  {
+   "zh": "完整",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "完整",
+   "en": "Full",
+   "ja": "フル",
+   "ko": "전체"
+  },
+  {
+   "zh": "帧节奏修复",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "幀節奏修復",
+   "en": "Frame pacing repair",
+   "ja": "フレームペーシング補正",
+   "ko": "프레임 페이싱 보정"
+  },
+  {
+   "zh": "帧节奏修复 · 已重排 %1%",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "幀節奏修復 · 已重排 %1%",
+   "en": "Frame pacing repair · %1% re-timed",
+   "ja": "フレームペーシング補正 · %1% を再配置",
+   "ko": "프레임 페이싱 보정 · %1% 재정렬"
+  },
+  {
+   "zh": "帧节奏修复 · 等待去重测出帧率",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "幀節奏修復 · 等待去重測出幀率",
+   "en": "Frame pacing repair · waiting for duplicate removal to measure the frame rate",
+   "ja": "フレームペーシング補正 · 重複除去がフレームレートを測るのを待っています",
+   "ko": "프레임 페이싱 보정 · 중복 제거가 프레임 속도를 측정하기를 기다리는 중"
+  },
+  {
+   "zh": "引擎未接受 HUD 自动锁定，原设置保留",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "引擎未接受 HUD 自動鎖定，原設定保留",
+   "en": "The engine did not accept auto HUD lock; the previous setting is kept",
+   "ja": "エンジンが HUD 自動ロックを受け付けなかったため、元の設定のままです",
+   "ko": "엔진이 HUD 자동 고정을 받아들이지 않아 이전 설정을 유지합니다"
+  },
+  {
+   "zh": "引擎未接受帧节奏修复，原设置保留",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "引擎未接受幀節奏修復，原設定保留",
+   "en": "The engine did not accept frame pacing repair; the previous setting is kept",
+   "ja": "エンジンがフレームペーシング補正を受け付けなかったため、元の設定のままです",
+   "ko": "엔진이 프레임 페이싱 보정을 받아들이지 않아 이전 설정을 유지합니다"
+  },
+  {
+   "zh": "引擎未接受自适应倍率，原设置保留",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "引擎未接受自適應倍率，原設定保留",
+   "en": "The engine did not accept the adaptive multiplier; the previous setting is kept",
+   "ja": "エンジンが適応倍率を受け付けなかったため、元の設定のままです",
+   "ko": "엔진이 적응형 배율을 받아들이지 않아 이전 설정을 유지합니다"
+  },
+  {
+   "zh": "心理视觉调优",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "心理視覺調校",
+   "en": "Psycho-visual tuning",
+   "ja": "視覚心理チューニング",
+   "ko": "심리시각 튜닝"
+  },
+  {
+   "zh": "把所选倍率当上限，按游戏实时帧率逐对选用最接近目标帧率（输出上限或屏幕刷新率）的倍率，游戏掉帧时输出仍保持平稳；不重建补帧 · 默认关闭",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "把所選倍率當上限，按遊戲即時幀率逐對選用最接近目標幀率（輸出上限或螢幕更新率）的倍率，遊戲掉幀時輸出仍保持平穩；不重建補幀 · 預設關閉",
+   "en": "Treats the chosen multiplier as a ceiling and, for each pair of frames, uses the one that lands closest to the target (the output cap or the screen refresh rate) at the game's live frame rate, so the output stays even when the game dips; frame generation is not rebuilt · off by default",
+   "ja": "選んだ倍率を上限とし、ゲームの実際のフレームレートに合わせて、目標（出力上限または画面のリフレッシュレート）に最も近い倍率をフレームの組ごとに選びます。ゲームのフレームが落ちても出力は安定し、フレーム生成は再構築しません · 既定はオフ",
+   "ko": "선택한 배율을 상한으로 삼아 게임의 실시간 프레임 속도에 맞춰 목표(출력 상한 또는 화면 주사율)에 가장 가까운 배율을 프레임 쌍마다 고릅니다. 게임 프레임이 떨어져도 출력이 고르게 유지되며 프레임 생성은 다시 만들지 않습니다 · 기본값 끔"
+  },
+  {
+   "zh": "编码器先快速分析一遍画面再分配码率，同样码率下快速运动和复杂画面更清晰；仅 NVIDIA（NVENC），四分之一分辨率首遍更轻，完整分辨率最好但更重 · 默认关闭",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "編碼器先快速分析一遍畫面再分配碼率，同樣碼率下快速運動和複雜畫面更清晰；僅 NVIDIA（NVENC），四分之一解析度首遍更輕，完整解析度最好但更重 · 預設關閉",
+   "en": "The encoder looks at each frame once before spending its bits, so fast motion and busy scenes look sharper at the same bitrate; NVIDIA (NVENC) only. A quarter-resolution first pass is lighter, full resolution is best but heavier · off by default",
+   "ja": "エンコーダーが先に画面をすばやく解析してからビットレートを配分するため、同じビットレートで速い動きや複雑な画面がより鮮明になります。NVIDIA（NVENC）のみ。1/4 解像度の 1 パス目は軽く、フル解像度は最も高画質ですが重くなります · 既定はオフ",
+   "ko": "인코더가 먼저 화면을 빠르게 분석한 뒤 비트레이트를 배분하므로 같은 비트레이트에서 빠른 움직임과 복잡한 장면이 더 선명합니다. NVIDIA(NVENC) 전용. 1/4 해상도 첫 패스는 가볍고, 전체 해상도는 가장 좋지만 더 무겁습니다 · 기본값 끔"
+  },
+  {
+   "zh": "自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "自動找出持續靜止且有邊緣的像素（文字、準星、血條、小地圖），生成幀直接用真實幀的這些像素，減少 HUD 拖影和抖動，不需要畫框 · 預設關閉",
+   "en": "Finds pixels that stay still and have an edge (text, crosshairs, health bars, minimaps) and takes them from the real frame in generated frames, so the HUD smears and wobbles less; no boxes needed · off by default",
+   "ja": "静止し続けていて輪郭のあるピクセル（文字、照準、体力バー、ミニマップ）を自動で見つけ、生成フレームでは実フレームのピクセルをそのまま使います。HUD のにじみや揺れが減り、枠を描く必要はありません · 既定はオフ",
+   "ko": "계속 정지해 있고 윤곽이 있는 픽셀(글자, 조준점, 체력 바, 미니맵)을 자동으로 찾아 생성 프레임에서 실제 프레임의 픽셀을 그대로 씁니다. HUD 번짐과 흔들림이 줄고 상자를 그릴 필요가 없습니다 · 기본값 끔"
+  },
+  {
+   "zh": "自适应 · 现在 %1X",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "自適應 · 目前 %1X",
+   "en": "Adaptive · now %1X",
+   "ja": "適応 · 現在 %1X",
+   "ko": "적응형 · 현재 %1X"
+  },
+  {
+   "zh": "自适应倍率",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "自適應倍率",
+   "en": "Adaptive multiplier",
+   "ja": "適応倍率",
+   "ko": "적응형 배율"
+  },
+  {
+   "zh": "自适应量化：把码率挪到眼睛更敏感的地方（平坦天空、暗部、静止细节），减少色块；仅 NVIDIA（NVENC），显卡支持时再加时间自适应量化 · 默认关闭",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自適應量化：把碼率挪到眼睛更敏感的地方（平坦天空、暗部、靜止細節），減少色塊；僅 NVIDIA（NVENC），顯示卡支援時再加時間自適應量化 · 預設關閉",
+   "en": "Adaptive quantization moves bits to where the eye notices (flat skies, shadows, still detail) and reduces blocking; NVIDIA (NVENC) only, with temporal adaptive quantization added where the card supports it · off by default",
+   "ja": "適応量子化：目が敏感な部分（平坦な空、暗部、静止したディテール）にビットレートを回してブロックノイズを減らします。NVIDIA（NVENC）のみ。対応する GPU では時間方向の適応量子化も加えます · 既定はオフ",
+   "ko": "적응형 양자화: 눈이 더 민감한 곳(평평한 하늘, 어두운 부분, 정지된 디테일)으로 비트레이트를 옮겨 블록 노이즈를 줄입니다. NVIDIA(NVENC) 전용이며 그래픽 카드가 지원하면 시간적 적응형 양자화도 더합니다 · 기본값 끔"
+  },
+  {
+   "zh": "锁 30 帧但送帧不均（17/50 ms 交替）的主机游戏，补帧前把真实帧排回均匀间隔；只处理能确认是不均匀送帧的情况，最多晚一个采集刷新 · 需自动去重 · 默认关闭",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "鎖 30 幀但送幀不均（17/50 ms 交替）的主機遊戲，補幀前把真實幀排回均勻間隔；只處理能確認是不均勻送幀的情況，最多晚一個擷取更新 · 需自動去重 · 預設關閉",
+   "en": "For console games locked to 30 FPS whose frames arrive unevenly (17/50 ms in turn), puts the real frames back on an even spacing before frames are generated; it only acts on what it can confirm as uneven delivery and shows a frame at most one capture refresh later · needs automatic duplicate removal · off by default",
+   "ja": "30 FPS 固定なのにフレームの届き方が不均一（17/50 ms の交互）なゲーム機のゲームで、フレーム生成の前に実フレームを均等な間隔へ並べ直します。不均一な送出と確認できる場合だけ働き、遅れは最大でキャプチャ 1 回のリフレッシュ分です · 自動重複除去が必要 · 既定はオフ",
+   "ko": "30 FPS로 고정됐지만 프레임이 고르지 않게 들어오는(17/50 ms 교대) 콘솔 게임에서 프레임 생성 전에 실제 프레임을 고른 간격으로 다시 배치합니다. 고르지 않은 전송으로 확인되는 경우에만 작동하며 최대 캡처 주사 한 번만큼 늦어집니다 · 자동 중복 제거 필요 · 기본값 끔"
   }
  ]
 }

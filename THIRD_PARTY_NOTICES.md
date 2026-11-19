@@ -1,5 +1,24 @@
 # Third-party dependencies
 
+## PushFPS frame generation and recording features (2026-11-19)
+
+Ported from PushFPS (https://github.com/DosukaSOL/PushFPS), a modified version of
+Veyra, at commit `3be641ca70f8179838cef4a8ff6cc3117664d185`. Copyright (C) 2026
+DosukaSOL and the PushFPS contributors. License: `GPL-3.0-or-later`, used here
+under GPL-3.0. Each ported file keeps their copyright line and says what was
+changed (renamed, wired into Veyra's settings, engine and interface):
+
+- Live HUD Lock: `include/veyra/pipeline/HudLock.h`, `src/pipeline/HudLock.cpp`,
+  `shaders/HudLockUpdate.hlsl`, `shaders/HudLockCompose.hlsl` (from `PushHudLock*`, a0b76239).
+- Frame pacing repair: `include/veyra/engine/FramePacingRepair.h` and its unit test
+  (from `PushPacingRepair`, a0b76239 and ebbde37d).
+- Adaptive multiplier: `include/veyra/engine/AdaptiveFgMultiplier.h` and its unit test
+  (from `PushAdaptiveFg`, 9d4e61a2).
+- Fixes and smaller pieces re-implemented in existing Veyra files: the output-cap
+  multiplier uses the de-duplicated content rate (9d4e61a2); the CUDA compute cache is
+  raised to 4 GiB for VFG kernels (9e9a4340); NVENC two-pass and adaptive
+  quantization for recordings (e6d3e5c8).
+
 ## Remote Play feedback history backport (2026-11-17)
 
 `scripts/remoteplay/patches/0003-chiaki-feedback-history.patch` backports four

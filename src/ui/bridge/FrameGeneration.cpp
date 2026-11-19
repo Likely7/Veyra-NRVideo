@@ -246,6 +246,39 @@ void QmlPlayerBridge::setVfgAutoRegulate(bool value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "VFG auto regulation not saved");
     emit settingsChanged();
 }
+// Ported from PushFPS (GPL-3.0-or-later): adaptive multiplier, frame pacing repair and Live
+// HUD Lock. The first two only change what the engine loop reads per pair; HUD Lock
+// rebuilds the graph (EffectChain.cpp) because its passes exist only when it is on.
+bool QmlPlayerBridge::fgAdaptive() const { return settings().fgAdaptive; }
+void QmlPlayerBridge::setFgAdaptive(bool value) {
+    auto s = settings();
+    if (s.fgAdaptive == value) return;
+    s.fgAdaptive = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受自适应倍率，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("fgAdaptive")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "adaptive multiplier not saved");
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::pacingRepair() const { return settings().pacingRepair; }
+void QmlPlayerBridge::setPacingRepair(bool value) {
+    auto s = settings();
+    if (s.pacingRepair == value) return;
+    s.pacingRepair = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受帧节奏修复，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("pacingRepair")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "frame pacing repair not saved");
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::hudLock() const { return settings().hudLock; }
+void QmlPlayerBridge::setHudLock(bool value) {
+    auto s = settings();
+    if (s.hudLock == value) return;
+    s.hudLock = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("引擎未接受 HUD 自动锁定，原设置保留"), true); return; }
+    impl_->prefs[QStringLiteral("hudLock")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "HUD lock not saved");
+    emit settingsChanged();
+}
 bool QmlPlayerBridge::dlssgLiteAvailable() const {
     static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
     return present;

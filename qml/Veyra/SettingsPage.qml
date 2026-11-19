@@ -660,6 +660,25 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("二次编码")
+                            hint: qsTr("编码器先快速分析一遍画面再分配码率，同样码率下快速运动和复杂画面更清晰；仅 NVIDIA（NVENC），四分之一分辨率首遍更轻，完整分辨率最好但更重 · 默认关闭")
+                            VSeg {
+                                objectName: "set-recmultipass"
+                                options: [{ id: "0", label: qsTr("关闭") }, { id: "1", label: qsTr("四分之一") }, { id: "2", label: qsTr("完整") }]
+                                current: String(veyra.preferences.recordMultipass !== undefined ? veyra.preferences.recordMultipass : 0)
+                                onPicked: id => veyra.setPreference("recordMultipass", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("心理视觉调优")
+                            hint: qsTr("自适应量化：把码率挪到眼睛更敏感的地方（平坦天空、暗部、静止细节），减少色块；仅 NVIDIA（NVENC），显卡支持时再加时间自适应量化 · 默认关闭")
+                            VSwitch {
+                                objectName: "set-recpsychoaq"
+                                checked: veyra.preferences.recordPsychoAq === true
+                                onToggled: v => veyra.setPreference("recordPsychoAq", v)
+                            }
+                        }
+                        VRow {
                             label: qsTr("录制声音")
                             hint: qsTr("录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入")
                             VSwitch {

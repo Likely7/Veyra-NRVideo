@@ -1849,6 +1849,39 @@ VPage {
                                     onToggled: checked => veyra.fgAutoMultiplierEnabled = checked
                                 }
                             }
+                            VRow {
+                                objectName: "list-fg-adaptive"
+                                label: qsTr("自适应倍率")
+                                visible: veyra.fgMultiplier > 2 && (veyra.fgBackendName === "dlss" || veyra.fgBackendName === "anr" || veyra.fgBackendName === "vfg")
+                                hint: qsTr("把所选倍率当上限，按游戏实时帧率逐对选用最接近目标帧率（输出上限或屏幕刷新率）的倍率，游戏掉帧时输出仍保持平稳；不重建补帧 · 默认关闭")
+                                VSwitch {
+                                    objectName: "list-fg-adaptive-switch"
+                                    checked: veyra.fgAdaptive
+                                    onToggled: checked => veyra.fgAdaptive = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-pacing-repair"
+                                label: qsTr("帧节奏修复")
+                                visible: veyra.fgBackendName !== "xess"
+                                hint: qsTr("锁 30 帧但送帧不均（17/50 ms 交替）的主机游戏，补帧前把真实帧排回均匀间隔；只处理能确认是不均匀送帧的情况，最多晚一个采集刷新 · 需自动去重 · 默认关闭")
+                                VSwitch {
+                                    objectName: "list-pacing-repair-switch"
+                                    checked: veyra.pacingRepair
+                                    onToggled: checked => veyra.pacingRepair = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-hud-lock"
+                                label: qsTr("HUD 自动锁定")
+                                visible: veyra.fgBackendName !== "xess"
+                                hint: qsTr("自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭")
+                                VSwitch {
+                                    objectName: "list-hud-lock-switch"
+                                    checked: veyra.hudLock
+                                    onToggled: checked => veyra.hudLock = checked
+                                }
+                            }
                             VSubGroup {
                                 objectName: "list-fg-flow-group"
                                 Layout.fillWidth: true
