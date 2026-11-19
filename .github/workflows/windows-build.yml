@@ -167,10 +167,10 @@ jobs:
             New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
             Copy-Item $_.FullName $dst
           }
-          if (Test-Path C:\b\virtualcam) {
-            New-Item -ItemType Directory -Force "$stage\virtualcam" | Out-Null
-            Get-ChildItem C:\b\virtualcam -Recurse -Include 'veyra-virtualcam*.dll', 'veyra-camera-setup.exe' |
-              ForEach-Object { Copy-Item $_.FullName "$stage\virtualcam" }
+          # 64-bit module + setup in C:\b\virtualcam, 32-bit module from the x86 ExternalProject.
+          New-Item -ItemType Directory -Force "$stage\virtualcam" | Out-Null
+          foreach ($f in 'virtualcam\veyra-virtualcam64.dll', 'virtualcam\veyra-camera-setup.exe', 'virtualcam-x86\virtualcam\veyra-virtualcam32.dll') {
+            Copy-Item (Join-Path C:\b $f) "$stage\virtualcam"
           }
           Copy-Item C:\v\installed\x64-windows\bin\*.dll $stage
           Copy-Item C:\dovi\bin\*.dll $stage
