@@ -17,7 +17,6 @@ ColumnLayout {
 
     readonly property real dpr: Screen.devicePixelRatio > 0 ? Screen.devicePixelRatio : 1
     readonly property var socials: [
-        { id: "bilibili", name: qsTr("哔哩哔哩") },
         { id: "douyin", name: qsTr("抖音") },
         { id: "x", name: "X" },
         { id: "github", name: "GitHub" },

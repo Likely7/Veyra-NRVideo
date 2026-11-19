@@ -1,6 +1,6 @@
 # 当前项目状态
 
-更新：2026-11-19。主线版本2.1.9；当前为PS5 SDR码值本地修复，未请求新推送或发布。
+更新：2026-11-19。主线版本 2.1.9。用户授权整合确认的社区 PR 并移除软件内 B 站功能。
 
 ## PS5 SDR亮度修复
 
@@ -16,7 +16,9 @@
 
 ## 八项社区 PR
 
-#140/#133/#127/#115/#99/#96/#75 保留原 head 合并，#136 纯源码采用（原 DLL/LIB 历史不进入主线）。B站/浏览器桥、Dolby Vision、韩语、300%音量、Xbox/PS5/Elgato/截图与 Linux OBS 滤镜的适配及证据见[本轮记录](PR_INTEGRATION_2026-11-18.md)。该轮构建 `E:/项目/Veyra/build/codex-pr-integration-20261118/app`，私有测试程序位于同任务 tests/app；GitHub 整合结果记在 WORKLOG/FINAL.json。旧主线整合回执仍保留作前序证据。
+11 月 18 日的整合记录保留作历史。11 月 19 日的[社区 PR 整合](COMMUNITY_PRS_2026-11-19.md)移除了 B 站专属播放、账号与扩展逻辑，保留通用直链和 Dolby Vision。
+
+#140/#133/#127/#115/#99/#96/#75 保留原 head 合并，#136 纯源码采用（原 DLL/LIB 历史不进入主线）。B站/浏览器桥、Dolby Vision、韩语、300%音量、Xbox/PS5/Elgato/截图与 Linux OBS 滤镜的适配及证据见[本轮记录](PR_INTEGRATION_2026-11-18.md)。当前构建 `E:/项目/Veyra/build/codex-pr-integration-20261118/app`，私有测试程序位于同任务 tests/app；GitHub 整合结果记在 WORKLOG/FINAL.json。旧主线整合回执仍保留作前序证据。
 
 ## 虚拟摄像机
 

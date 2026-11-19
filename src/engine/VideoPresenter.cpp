@@ -228,6 +228,17 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto& metadataBaseline=graph.hdrMetadata();
     const bool needsDisplayPeak=hdrBaseline.enabled||(metadataBaseline.enabled&&
         (metadataBaseline.masteringPeakNits||metadataBaseline.maxCllNits||metadataBaseline.maxFallNits));
+    if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
+        const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
+        gfx::PresentSink::DisplayPeakInfo peak{};
+        if(displayStates_)if(const auto known=displayStates_->state(monitor))
+            peak={known->color.peakNits,known->color.fullFrameNits,known->color.minNits,
+                  known->color.peakValid,known->color.peakPlausible};
+        hdrBaseline.displayPeakNits=resolveHdrDisplayPeakNits(0,peak.peakNits,peak.plausible);
+        if(hdrBaseline.displayPeakNits!=resolveHdrDisplayPeakNits(0,hdrPeakInfo_.peakNits,hdrPeakInfo_.plausible))
+            retainedFrame_.reset();
+        hdrPeakInfo_=peak;
+    }
     {
         // Custom: one-shot record of what the display reports and whether it was
         // trusted, so the curve's effective target is never a guess.
@@ -240,24 +251,6 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
                 hdrPeakInfo_.peakNits, hdrPeakInfo_.minNits,
                 needsDisplayPeak ? 1 : 0, hdrBaseline.displayPeakNits));
         }
-    }
-    if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
-        // The panel's own peak from the shared display state: no driver call here
-        // (this thread used to build a DXGI factory for it every 2 s).
-        const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
-        gfx::PresentSink::DisplayPeakInfo peak{};
-        if(displayStates_)if(const auto known=displayStates_->state(monitor))
-            peak={known->color.peakNits,known->color.fullFrameNits,known->color.minNits,known->color.peakValid};
-        if(peak.valid!=hdrPeakInfo_.valid||peak.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
-        hdrPeakInfo_=peak;
-        if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
-        // Only a plausible report may scale the curve; a ceiling value would push the
-        // highlight start past anything the content contains. Kept from the custom
-        // branch: upstream switched to the event-driven DisplayStateService.
-        if(hdrPeakInfo_.valid&&hdrPeakInfo_.plausible)
-            hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
-        else if(hdrPeakInfo_.valid)
-            hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);
@@ -330,7 +323,10 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     if(retainUnchanged&&(!capture_||!capture_->needsFrame())&&retained.producer&&retained.fence&&retainedFrame_&&*retainedFrame_==retained&&
         !windowChanging&&targetWidth==sink_.width()&&targetHeight==sink_.height()&&
         SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&
-        !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0))return true;
+        !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_PRESENT_REUSE",nullptr,0)){
+        applyHdrMetadata(graph,hdrMetadata,effective,identity);
+        return true;
+    }
     retainedFrame_.reset(); // A failed present never seeds an idle cache.
     if(!windowChanging&&(targetWidth!=sink_.width()||targetHeight!=sink_.height())&&GetTickCount64()>=deferUntil&&now-lastResize_>=std::chrono::milliseconds(100)&&sink_.resizeDue()) {
         resized=true;
@@ -339,7 +335,9 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         // valid buffers and let DXGI scale them until a later resize succeeds.
         if(!sink_.currentBackBuffer()||FAILED(ctx.device()->GetDeviceRemovedReason()))return false;
         if(!refresh(ctx.device()))return false;lastResize_=now;xessWasEnabled_=false;
+        metadataDirty_=true;
     }
+    applyHdrMetadata(graph,hdrMetadata,effective,identity);
     const auto resizeEnd=std::chrono::steady_clock::now();
     if(auto* xess=sink_.xess()){
         uint32_t preparedId=0;
@@ -863,4 +861,48 @@ Microsoft::WRL::ComPtr<ID3D12Resource> VideoPresenter::presentedResourceForTest(
 
 // Optional HDR10 metadata hint. Windows/monitors may ignore it; the curve itself
 // is applied to pixels independently. Cache only accepted swapchain state.
+void VideoPresenter::applyHdrMetadata(pipeline::EnhanceGraph& graph,const HdrMetadataSettings& m,const HdrCurveSettings& resolvedCurve,pipeline::FrameIdentity identity) {
+    const auto& src=graph.sourceColor();
+    sourceMetadata_.observe(identity.epoch,src.isHdrPath(),src.hdrMasteringPeakNits,src.hdrMaxCllNits,src.hdrMaxFallNits);
+    // An SDR clip carries no HDR metadata, so resolving it would report the generic
+    // HDR10 fallback (1000 nit) as if it were measured. Treat that as "no hint" and
+    // clear instead - unless the user forced values, which stays their explicit call.
+    const bool forced=m.masteringPeakNits||m.maxCllNits||m.maxFallNits;
+    const bool hint=m.enabled&&graph.hdr10Output()&&(src.isHdrPath()||forced);
+    if(!hint&&!metadataSent_)return;
+    auto* chain=sink_.swapChain4();
+    if(!chain)return;
+    const auto now=std::chrono::steady_clock::now();
+    if(!hint){
+        if(metadataSent_&&now-metadataAttempt_>=std::chrono::seconds(2)){
+            metadataAttempt_=now;
+            const HRESULT hr=chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_NONE,0,nullptr);
+            log::info("hdr-metadata",std::format("clear swapchain metadata hr=0x{:08X}",unsigned(hr)));
+            if(SUCCEEDED(hr)){metadataSent_=false;metadataDirty_=false;metadataAttempt_={};}
+        }
+        return;
+    }
+    DXGI_HDR_METADATA_HDR10 md{};
+    // BT.2020 primaries and D65 in DXGI's 1/50000 units.
+    md.RedPrimary[0]=35400;md.RedPrimary[1]=14600;
+    md.GreenPrimary[0]=8500;md.GreenPrimary[1]=39850;
+    md.BluePrimary[0]=6550;md.BluePrimary[1]=2300;
+    md.WhitePoint[0]=15635;md.WhitePoint[1]=16450;
+    // ① Output-aware: describe what the curve actually produces, not the source.
+    auto light=resolveHdrMetadataLuminance(m,sourceMetadata_);
+    if(resolvedCurve.enabled&&resolvedCurve.peakCapNits){light.cll=std::min(light.cll,resolvedCurve.peakCapNits);light.fall=std::min(light.fall,light.cll);}
+    md.MaxMasteringLuminance=light.peak;md.MinMasteringLuminance=light.minX10000;
+    md.MaxContentLightLevel=uint16_t(light.cll);md.MaxFrameAverageLightLevel=uint16_t(light.fall);
+    if(metadataSent_&&!metadataDirty_&&std::memcmp(&lastMetadata_,&md,sizeof(md))==0)return;
+    if(now-metadataAttempt_<std::chrono::seconds(2))return;
+    const HRESULT hr=chain->SetHDRMetaData(DXGI_HDR_METADATA_TYPE_HDR10,sizeof(md),&md);
+    log::info("hdr-metadata",std::format("SetHDRMetaData hr=0x{:08X} masteringPeak={} minX10000={} maxCLL={} maxFALL={} epoch={} (swapchain hint; monitor delivery unverified)",
+        unsigned(hr),md.MaxMasteringLuminance,md.MinMasteringLuminance,md.MaxContentLightLevel,md.MaxFrameAverageLightLevel,identity.epoch));
+    if(SUCCEEDED(hr)){
+        lastMetadata_=md;metadataSent_=true;metadataDirty_=false;metadataAttempt_={};
+    }else{
+        metadataAttempt_=now;
+    }
+}
+
 }

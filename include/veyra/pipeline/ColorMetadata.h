@@ -65,7 +65,12 @@ inline ColorDescription resolveFrameColor(const AVFrame& frame,ColorDescription 
         c.primariesAssumed=true;
     }
     switch(frame.color_trc){
-    case AVCOL_TRC_SMPTE2084:c.transfer=TransferFunction::PQ;c.transferAssumed=false;break;
+    case AVCOL_TRC_SMPTE2084:
+        // Profile 8.4 declares an HLG base layer even when its VUI was tagged PQ.
+        // Keep the same transfer when a downstream GPU upload resolves this frame again.
+        c.transfer=c.dolbyVisionP84?TransferFunction::HLG:TransferFunction::PQ;
+        c.transferAssumed=false;
+        break;
     case AVCOL_TRC_ARIB_STD_B67:c.transfer=TransferFunction::HLG;c.transferAssumed=false;break;
     case AVCOL_TRC_BT709:case AVCOL_TRC_SMPTE170M:c.transfer=TransferFunction::BT709;c.transferAssumed=false;break;
     case AVCOL_TRC_IEC61966_2_1:c.transfer=TransferFunction::SRGB;c.transferAssumed=false;break;

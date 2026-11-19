@@ -404,12 +404,6 @@ void QmlPlayerBridge::maybeApplyFgAutoMultiplier() {
     if (!s.running || s.sessionId == 0) return;
     // 本会话已经决定过：不再动。会话号变化才重新算。
     if (impl_->fgAutoSession == s.sessionId) return;
-    // 打开前已按元数据定档：本会话不必再算，否则会把刚建好的管线拆了重建。
-    if (impl_->fgAutoPlanned) {
-        impl_->fgAutoSession = s.sessionId;
-        impl_->fgAutoPlanned = false;
-        return;
-    }
     if (!impl_->chain.fgAutoMultiplier) { impl_->fgAutoSession = s.sessionId; return; }
     const auto backend = settings().frameGenerationBackend;
     if (!fgAutoMultiplierAvailable()) { impl_->fgAutoSession = s.sessionId; return; }
@@ -470,55 +464,6 @@ void QmlPlayerBridge::maybeApplyFgAutoMultiplier() {
         veyra::log::info("fg-auto", std::format("applying {}X session={}", target, session));
         applyFgMultiplier(target);
     });
-}
-
-bool QmlPlayerBridge::planFgAutoMultiplierBeforeOpen(double sourceFps) {
-    if (!(sourceFps > 0.01)) {
-        veyra::log::info("fg-auto", std::format("pre-open skipped: no source rate ({:.3f})", sourceFps));
-        return false;
-    }
-    if (!impl_->chain.fgAutoMultiplier) {
-        veyra::log::info("fg-auto", "pre-open skipped: automatic selection is off");
-        return false;
-    }
-    if (!fgAutoMultiplierAvailable()) return false;
-    const auto* node = impl_->chain.firstOf(engine::EffectType::FrameGeneration);
-    if (!node) return false;
-
-    const double targetFps = fgAutoTargetRate(impl_->snapshot.presentationEffective,
-                                              impl_->presentation,
-                                              impl_->snapshot.displayFgRefreshHz);
-    if (!(targetFps > 0.01)) {
-        veyra::log::info("fg-auto", std::format("pre-open skipped: no target rate (eff={} req={} refresh={:.3f})",
-            int(impl_->snapshot.presentationEffective.outputRate), int(impl_->presentation.outputRate),
-            impl_->snapshot.displayFgRefreshHz));
-        return false;
-    }
-
-    const auto backend = settings().frameGenerationBackend;
-    const int before = fgMultiplier();
-    // 源帧率已达上限：关闭补帧（与首帧后决策同一条规则）。
-    int target = 1;
-    if (sourceFps < targetFps / engine::kDisplayFgFitTolerance) {
-        const unsigned ceiling = unsigned(std::clamp(fgMaxMultiplier(), 2, 8));
-        const unsigned wanted = engine::displayFgAutoMultiplier(backend, sourceFps, targetFps, ceiling);
-        if (wanted == 0) return false;      // 无可用档：交给首帧后决策
-        target = int(wanted);
-    }
-    if (before == target && node->enabled == (target > 1)) {
-        // 已经是这个档：什么都不用改。
-        veyra::log::info("fg-auto", std::format("pre-open: already {}X source={:.3f} target={:.3f}",
-            target, sourceFps, targetFps));
-        return true;
-    }
-    // 先把 chain 改成目标档，openPath 之后构建管线即用它，不产生二次重建。
-    applyFgMultiplier(target);
-    // 标记"本会话已按预决策定档"，否则首帧后的决策会再走一遍、把刚建好的管线又拆掉
-    // （实测 2026-10-24：pre-open 关掉补帧后，首帧后又关一次，卡 614ms）。
-    impl_->fgAutoPlanned = true;
-    veyra::log::info("fg-auto", std::format("pre-open: backend={} source={:.3f} target={:.3f} chosen={} previous={} (decided before the graph is built)",
-        engine::frameGenerationBackendName(backend), sourceFps, targetFps, target, before));
-    return true;
 }
 
 // 自动选择倍率 的运行时决策（用户 2026-10-24 定稿）。
