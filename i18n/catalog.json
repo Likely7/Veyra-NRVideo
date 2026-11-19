@@ -30229,6 +30229,58 @@
    "ru": "Режим низкой задержки Magewell"
   },
   {
+   "zh": "美乐威采集启动失败",
+   "src": "src/source/MagewellCapture.cpp",
+   "zh-TW": "美樂威擷取啟動失敗",
+   "en": "Magewell capture could not start",
+   "ja": "Magewell のキャプチャーを開始できませんでした",
+   "ko": "Magewell 캡처를 시작하지 못했습니다",
+   "es": "No se pudo iniciar la captura Magewell",
+   "fr": "Impossible de démarrer la capture Magewell",
+   "de": "Magewell-Aufnahme konnte nicht starten",
+   "pt-BR": "Não foi possível iniciar a captura Magewell",
+   "ru": "Не удалось запустить захват Magewell"
+  },
+  {
+   "zh": "美乐威低延迟采集超时，已回到普通采集",
+   "src": "src/source/MagewellCapture.cpp",
+   "zh-TW": "美樂威低延遲擷取逾時，已回到一般擷取",
+   "en": "Magewell low-latency capture timed out. Normal capture resumed.",
+   "ja": "Magewell の低遅延キャプチャーがタイムアウトし、通常キャプチャーに戻りました。",
+   "ko": "Magewell 저지연 캡처 시간이 초과되어 일반 캡처로 돌아갔습니다.",
+   "es": "La captura de baja latencia Magewell agotó el tiempo de espera. Se reanudó la captura normal.",
+   "fr": "La capture à faible latence Magewell a expiré. La capture normale a repris.",
+   "de": "Zeitüberschreitung bei der Magewell-Aufnahme mit niedriger Latenz. Die normale Aufnahme wurde fortgesetzt.",
+   "pt-BR": "A captura Magewell de baixa latência excedeu o tempo de espera. A captura normal foi retomada.",
+   "ru": "Истекло время ожидания захвата Magewell с низкой задержкой. Обычный захват возобновлён."
+  },
+  {
+   "zh": "美乐威低延迟采集失败，已回到普通采集",
+   "src": "src/source/MagewellCapture.cpp",
+   "zh-TW": "美樂威低延遲擷取失敗，已回到一般擷取",
+   "en": "Magewell low-latency capture failed. Normal capture resumed.",
+   "ja": "Magewell の低遅延キャプチャーが失敗し、通常キャプチャーに戻りました。",
+   "ko": "Magewell 저지연 캡처에 실패하여 일반 캡처로 돌아갔습니다.",
+   "es": "Falló la captura de baja latencia Magewell. Se reanudó la captura normal.",
+   "fr": "La capture à faible latence Magewell a échoué. La capture normale a repris.",
+   "de": "Die Magewell-Aufnahme mit niedriger Latenz ist fehlgeschlagen. Die normale Aufnahme wurde fortgesetzt.",
+   "pt-BR": "A captura Magewell de baixa latência falhou. A captura normal foi retomada.",
+   "ru": "Сбой захвата Magewell с низкой задержкой. Обычный захват возобновлён."
+  },
+  {
+   "zh": "美乐威低延迟模式持续丢帧，已回到普通采集",
+   "src": "src/source/MagewellCapture.cpp",
+   "zh-TW": "美樂威低延遲模式持續掉幀，已回到一般擷取",
+   "en": "Magewell low-latency capture kept dropping frames. Normal capture resumed.",
+   "ja": "Magewell の低遅延モードでフレーム落ちが続いたため、通常キャプチャーに戻りました。",
+   "ko": "Magewell 저지연 모드에서 프레임 누락이 지속되어 일반 캡처로 돌아갔습니다.",
+   "es": "La captura de baja latencia Magewell siguió perdiendo fotogramas. Se reanudó la captura normal.",
+   "fr": "La capture à faible latence Magewell perdait des images. La capture normale a repris.",
+   "de": "Anhaltende Bildverluste im Magewell-Modus mit niedriger Latenz. Die normale Aufnahme wurde fortgesetzt.",
+   "pt-BR": "A captura Magewell de baixa latência continuou perdendo quadros. A captura normal foi retomada.",
+   "ru": "В режиме Magewell с низкой задержкой продолжались пропуски кадров. Обычный захват возобновлён."
+  },
+  {
    "zh": "美乐威采集启动失败，已回到普通采集（详见日志 magewell）",
    "src": "src/source/MagewellCapture.cpp",
    "zh-TW": "美樂威擷取啟動失敗，已回到普通擷取（詳見日誌 magewell）",
@@ -37257,17 +37309,17 @@
    "ru": "Захват карты вверх по течению входного соединения не удался (0x {:08X}). Проверьте драйвера и выбранный вход."
   },
   {
-   "zh": "采集卡收到 64 行就开始传，整帧更早到达（官方：1080p60 约省 5 ms，4K60 约省 15 ms）。开关后点「连接」重新连接生效",
+   "zh": "画面未收齐即可开始传输。持续丢帧时按原格式切回普通采集。重新连接后生效。",
    "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "擷取卡收到 64 行就開始傳，整幀更早到達（官方：1080p60 約省 5 ms，4K60 約省 15 ms）。開關後點「連接」重新連接生效",
-   "en": "The card starts sending after 64 lines, so a whole frame arrives earlier (official: about 5 ms saved at 1080p60, about 15 ms at 4K60). After switching, click Connect to reconnect",
-   "ja": "カードは 64 ライン受信した時点で転送を始めるため、1 フレームが早く届きます（公式値：1080p60 で約 5 ms、4K60 で約 15 ms 短縮）。切り替え後は「接続」で再接続すると反映されます",
-   "ko": "캡처 카드가 64줄을 받으면 바로 전송을 시작해 전체 프레임이 더 일찍 도착합니다. 제조사 기준 단축 시간은 1080p60 약 5ms, 4K60 약 15ms입니다. 변경 후 연결을 눌러 다시 연결하세요.",
-   "es": "La tarjeta comienza a enviar después de 64 líneas, por lo que todo un marco llega antes (oficial: unos 5 ms guardados a 1080p60, alrededor de 15 ms a 4K60). Después de cambiar, haga clic en Conectar para reconectar",
-   "fr": "La carte commence à envoyer après 64 lignes, donc une image entier arrive plus tôt (officiel: environ 5 ms sauvegardé à 1080p60, environ 15 ms à 4K60). Après avoir commuté, cliquez sur Se connecter pour se reconnecter",
-   "de": "Die Karte beginnt nach 64 Zeilen zu senden, so dass ein ganzer Frame früher ankommt (offiziell: ca. 5 ms bei 1080p60 gespeichert, ca. 15 ms bei 4K60).",
-   "pt-BR": "O cartão começa a enviar depois de 64 linhas, então um quadro inteiro chega mais cedo (oficial: cerca de 5 ms salvos em 1080p60, cerca de 15 ms em 4K60). Após a mudança, clique em Conectar para reconectar",
-   "ru": "Карта начинает отправлять после 64 строк, поэтому целый кадр поступает раньше (официально: около 5 мс сохранено при 1080p60, около 15 мс при 4K60)."
+   "zh-TW": "畫面未收齊即可開始傳輸。持續掉幀時按原格式切回一般擷取。重新連接後生效。",
+   "en": "Transfer starts before the full frame arrives. Sustained drops switch back to normal capture in the same format. Reconnect to apply.",
+   "ja": "フレーム全体が届く前に転送を開始します。フレーム落ちが続く場合は同じ形式の通常キャプチャーに戻ります。再接続すると適用されます。",
+   "ko": "프레임이 모두 들어오기 전에 전송을 시작합니다. 프레임 누락이 계속되면 같은 형식의 일반 캡처로 돌아갑니다. 다시 연결하면 적용됩니다.",
+   "es": "La transferencia empieza antes de recibir todo el fotograma. Si persisten las pérdidas, se vuelve a la captura normal con el mismo formato. Vuelve a conectar para aplicar.",
+   "fr": "Le transfert commence avant la réception de l’image entière. Si les pertes persistent, la capture normale reprend dans le même format. Reconnectez la source pour appliquer le réglage.",
+   "de": "Die Übertragung beginnt, bevor das ganze Bild vorliegt. Bei anhaltenden Bildverlusten übernimmt die normale Aufnahme im selben Format. Zum Anwenden neu verbinden.",
+   "pt-BR": "A transferência começa antes de chegar o quadro completo. Se a perda de quadros persistir, a captura normal volta no mesmo formato. Reconecte para aplicar.",
+   "ru": "Передача начинается до получения полного кадра. При постоянных пропусках включается обычный захват в том же формате. Для применения подключите источник заново."
   },
   {
    "zh": "采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",

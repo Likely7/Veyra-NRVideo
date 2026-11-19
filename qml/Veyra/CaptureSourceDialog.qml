@@ -266,7 +266,7 @@ DialogLayer {
             hint: !veyra.captureMagewellDevice
                   ? qsTr("仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持")
                   : (veyra.captureMagewellStatus.length > 0 ? veyra.captureMagewellStatus + " · " : "")
-                    + qsTr("采集卡收到 64 行就开始传，整帧更早到达（官方：1080p60 约省 5 ms，4K60 约省 15 ms）。开关后点「连接」重新连接生效")
+                    + qsTr("画面未收齐即可开始传输。持续丢帧时按原格式切回普通采集。重新连接后生效。")
             VSwitch {
                 objectName: "capture-magewell"
                 enabled: veyra.captureMagewellDevice

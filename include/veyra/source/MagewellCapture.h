@@ -43,11 +43,11 @@ struct VideoRequest {
     unsigned stride = 0;             // bytes per luma/packed row, as the capture layout expects
     size_t frameBytes = 0;           // whole frame in that layout
     bool bottomUp = false;           // RGB DIB orientation of the layout
-    int partialLines = 64;           // DMA starts after this many lines (64/128/256)
 };
 
 struct VideoStats {
     uint64_t frames = 0, timeouts = 0, signalChanges = 0;
+    uint64_t missedInputFrames = 0, earlySubmissions = 0;
     double frameStartToHostMs = 0;   // average: frame started arriving -> whole frame in host memory
 };
 
