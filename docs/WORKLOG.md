@@ -1484,3 +1484,7 @@ prepare-qa.py生成H264/HEVC8/PQ10；run-qa.py完成9/9预期结果（8正向+1�
 ### 2026-11-19 项目页更新至15群
 
 用户授权把新交流群二维码更新到GitHub项目页。隔离分支codex/community-group-15-20261119从远端main创建，仅更新README.md、README_CN.md及RELEASE_SUPPORT模板；README_EN.md继续链接首页。原图无修改复制为docs/images/community/group-15-20261119.png，标注15群与2026-11-26前有效，双图width220及赞助图保留。准备脚本和图像/源码校验记录位于E:/项目/Veyra/reports/codex-community-group-15-20261119；执行git diff --check及原图逐字节核验。本次仅授权项目页公开更新，不发布软件包，也不将前轮未推送的PS5产品改动附带推送。远端更新后核对README和图片原始字节。
+
+### 2026-11-19 全屏发糊/像素化：送显缩放改为高质量（Claude，未提交）
+
+原因：PresentBlit 精细采样此前只给 PS5 远程游玩，其他来源全屏放大用双线性（软）、缩小时双线性跳过源像素（锯齿闪烁）。现在所有来源与大图预览默认精细采样，VEYRA_TEST_PRESENT_BILINEAR=1 可恢复旧算法对比；1:1 原样拷贝、放大有界 Catmull-Rom 不变，新增缩小：Catmull-Rom 按倍数加宽，≤2:1 16 次、2–4:1 64 次配对取样（与逐像素卷积一致），>4:1 封顶 2:1 宽度；取样值>1.0（scRGB 线性 HDR）时限制在正瓣样本范围防暗圈。虚拟摄像机非 1:1 跟随为有界三次插值。新 veyra_present_scaling_tests（真实着色器对 CPU 模型、HDR 亮块、波带片、耗时）全部通过，波带片误差降为 1/2.1–1/2.5，GTA 1080p→1440p PSNR 44.62→46.91dB；RTX5070 送显 4K→1440p 0.044→0.295ms、1080p→1440p 0.060→0.095ms。preview_geometry 旧/--fine 各 23/23，虚拟摄像机 GPU 523/0。真实程序窗口 A/B 因用户正运行 2.1.9 与 OBS 未执行；实卡全屏和其他显卡未测。分支 claude/present-scaling-20261118（main 20a75845），记录 docs/PRESENT_SCALING_2026-11-18.md 与 reports/claude-present-scaling-20261118/FINAL.json。

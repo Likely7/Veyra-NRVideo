@@ -256,6 +256,17 @@ target_compile_definitions(veyra_descriptor_present_probe PRIVATE
   VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
 target_link_libraries(veyra_descriptor_present_probe PRIVATE d3d12 dxgi)
 add_dependencies(veyra_descriptor_present_probe veyra_shader_present_blit)
+
+# Presentation scaler check (2026-11-18): drives PresentBlit offscreen and
+# compares the fine path with a CPU model, the old bilinear blit and a
+# Lanczos-3 reference, and times each blit. D3D12 only.
+add_executable(veyra_present_scaling_tests tests/integration/PresentScalingGpuTests.cpp)
+veyra_apply_warnings(veyra_present_scaling_tests)
+target_compile_features(veyra_present_scaling_tests PRIVATE cxx_std_20)
+target_compile_options(veyra_present_scaling_tests PRIVATE /utf-8)
+target_compile_definitions(veyra_present_scaling_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(veyra_present_scaling_tests PRIVATE d3d12 dxgi)
+add_dependencies(veyra_present_scaling_tests veyra_shader_present_blit)
 veyra_apply_warnings(veyra_runtime_probe)
 target_compile_features(veyra_runtime_probe PRIVATE cxx_std_20)
 target_compile_definitions(veyra_runtime_probe PRIVATE
