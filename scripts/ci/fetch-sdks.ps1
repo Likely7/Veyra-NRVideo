@@ -31,7 +31,8 @@ function Get-Pinned([string]$Repo, [string]$Commit, [string]$Dir) {
     git init -q $Dir
     git -C $Dir remote add origin "https://github.com/$Repo.git"
     git -C $Dir fetch -q --depth 1 origin $Commit
-    git -C $Dir -c advice.detachedHead=false checkout -q FETCH_HEAD
+    # Byte-exact checkout: no CRLF conversion, so the pinned file hashes hold on Windows.
+    git -C $Dir -c advice.detachedHead=false -c core.autocrlf=false -c core.eol=lf checkout -q FETCH_HEAD
     $head = (git -C $Dir rev-parse HEAD).Trim()
     if ($head -ne $Commit) { throw "$Repo resolved to $head, expected $Commit" }
 }
