@@ -39,7 +39,8 @@ if ($LASTEXITCODE -ne 0 -or $stageHead -ne $PinnedCommit) { throw "Chiaki stagin
 $patches = @(
     "0001-chiaki-msvc-vla-compat.patch",
     "0002-chiaki-video-metadata.patch",
-    "0003-chiaki-feedback-history.patch"
+    "0003-chiaki-feedback-history.patch",
+    "0004-chiaki-pad-proc-no.patch"
 )
 foreach ($name in $patches) {
     $patch = Join-Path $Root "scripts/remoteplay/patches/$name"

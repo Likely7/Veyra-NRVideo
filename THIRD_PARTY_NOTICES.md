@@ -24,6 +24,19 @@ changed (renamed, wired into Veyra's settings, engine and interface):
   raised to 4 GiB for VFG kernels (9e9a4340); NVENC two-pass and adaptive
   quantization for recordings (e6d3e5c8).
 
+## Remote Play adaptive trigger request (2026-11-19)
+
+`scripts/remoteplay/patches/0004-chiaki-pad-proc-no.patch` backports chiaki-ng
+`27ab96fd000bd0904f8ea3953c81f3ddb75b188b` ("Ask a PS5 for trigger effects the
+controller can apply", chiaki-ng issue #759) onto the unchanged
+`0e16950165f06e5c3291537c2eeba6e852be7120` pin after patches 0001-0003. The PS5 ctrl
+request now carries `RP-PadProcNo: 3`; without it the console sends some adaptive
+trigger effects in a form the DualSense does not apply, so L2/R2 have no resistance.
+
+Source: https://github.com/chiaki-ng/chiaki-ng . License remains
+`LicenseRef-AGPL-3.0-only-OpenSSL`; see `licenses/remoteplay` and the upstream
+`COPYING`. The patch is an otherwise unchanged backport of the upstream change.
+
 ## Remote Play feedback history backport (2026-11-17)
 
 `scripts/remoteplay/patches/0003-chiaki-feedback-history.patch` backports four

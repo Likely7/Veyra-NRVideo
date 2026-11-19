@@ -38,5 +38,7 @@
     "bfbb2968a01238c4ee1611ceb79ee0025ca31267",
     "c938844a2fa7bbb9052656d83837cf98baff9ba5",
     "bc397a728bb430f28666129ef006f7a8ac0e6081"
-  ]
+  ],
+  "trigger_effects_patch": "patches/0004-chiaki-pad-proc-no.patch",
+  "trigger_effects_upstream_commit": "27ab96fd000bd0904f8ea3953c81f3ddb75b188b"
 }
