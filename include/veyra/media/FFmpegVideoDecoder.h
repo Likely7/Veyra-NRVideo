@@ -181,7 +181,10 @@ private:
     int frameTimeBaseDen_ = 0;
     DecoderStats stats_{};
     bool hwAccelActive_ = false;
-    bool preferNativeAv1_ = false;
+    // FFmpeg's libdav1d decoder has no D3D12VA hwaccel path, so the software
+    // decoder was always chosen for P10 and every hardware attempt fell back:
+    // the native "av1" decoder is the one that honours hw_device_ctx/get_format.
+    bool preferNativeAv1_ = true;
     HardwareDecodeKind hwAccelKind_ = HardwareDecodeKind::None;
     int lastFrameFormat_ = -1;
     uint64_t gpuQueueWaitCount_ = 0;
