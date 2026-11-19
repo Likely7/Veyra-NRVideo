@@ -156,7 +156,15 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                 auto feedback=source.takeFeedback();
                 const auto snapshot=source.sessionSnapshot();
                 if(now>=nextNativeLog||result==SourceReadStatus::Error){native=source.nativeSnapshot();nextNativeLog=now+std::chrono::seconds(1);
-                    log::info("remoteplay-transport",std::format("attempt={} connected={} videoCallbacks={} audioCallbacks={} callbackRejected={} packetWindowReceived={} packetWindowLost={} upstreamWarnings={} upstreamErrors={} transportErrors={} assemblyErrors={} quitReason={} apiError={} (upstream resetting packet window; not cumulative UDP)",recovery.reconnects(),native.connected,native.videoCallbacks,native.audioCallbacks,native.callbackRejected,native.packetReceived,native.packetLost,native.warnings,native.errors,native.transportErrors,native.assemblyErrors,native.lastQuitReason,native.lastApiError));}
+                    log::info("remoteplay-transport",std::format(
+                        "attempt={} connected={} videoCallbacks={} audioCallbacks={} callbackRejected={} "
+                        "packetWindowReceived={} packetWindowLost={} upstreamWarnings={} upstreamErrors={} "
+                        "transportErrors={} assemblyErrors={} quitReason={} apiError={} "
+                        "queueRecoveries={} queueHighWater={} queueDropped={} waitingIdr={} (upstream resetting packet window; not cumulative UDP)",
+                        recovery.reconnects(),native.connected,native.videoCallbacks,native.audioCallbacks,native.callbackRejected,
+                        native.packetReceived,native.packetLost,native.warnings,native.errors,native.transportErrors,
+                        native.assemblyErrors,native.lastQuitReason,native.lastApiError,
+                        snapshot.video.recoveries,snapshot.video.highWaterDepth,snapshot.video.dropped,snapshot.video.waitingForIdr));}
                 {std::lock_guard lock(mutex_);snapshot_=snapshot;feedback_.merge(std::move(feedback));
                     rates_.received=receivedBase+snapshot.video.accessUnits;rates_.ingressDropped=droppedBase+snapshot.video.dropped;
                     const double elapsed=std::chrono::duration<double>(now-rateStart).count();
