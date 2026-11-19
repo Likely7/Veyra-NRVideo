@@ -93,6 +93,25 @@ TEST(queue_starts_at_keyframe){VideoIngress q;q.begin(1);q.push(config(),0);CHEC
 TEST(queue_fifo_not_latest_compressed){VideoIngress q;start(q);q.push(frame(1,false),0);q.push(frame(2,false),0);for(std::uint16_t i=0;i<3;++i){auto s=q.tryPop(0);CHECK(s&&s->sample.wireFrameIndex==i);CHECK(static_cast<bool>(s->configBefore)==(i==0));}}
 TEST(queue_overflow_requires_idr){QueueLimits l;l.maxFrames=2;VideoIngress q(l);start(q);q.push(frame(1,false),0);CHECK(q.push(frame(2,false),0)==PushStatus::WaitingForIdr);CHECK(q.stats().depth==0);CHECK(q.stats().waitingForIdr);CHECK(q.push(frame(3,false),0)==PushStatus::WaitingForIdr);CHECK(q.push(frame(4,true),0)==PushStatus::Accepted);auto s=q.tryPop(0);CHECK(s&&s->resetDecoder&&s->configBefore);CHECK(s->epoch==2);}
 TEST(queue_overflow_incoming_idr){QueueLimits l;l.maxFrames=1;VideoIngress q(l);start(q);CHECK(q.push(frame(1,true),0)==PushStatus::Accepted);auto s=q.tryPop(0);CHECK(s&&s->sample.wireFrameIndex==1&&s->resetDecoder);}
+TEST(queue_session_limits_absorb_owner_pause){
+    // Frames keep arriving every 16.7 ms while the owner loop does not pop for about 120 ms.
+    VideoIngress narrow;start(narrow);VideoIngress wide(kSessionQueueLimits);start(wide);
+    auto last=PushStatus::Accepted;
+    for(std::uint16_t i=1;i<=7;++i){const auto t=static_cast<HostTime>(i)*166667;last=narrow.push(frame(i,false,t),t);CHECK(wide.push(frame(i,false,t),t)==PushStatus::Accepted);}
+    // Development ceiling: the fifth frame drops the queue, the stream waits for a keyframe.
+    CHECK(last==PushStatus::WaitingForIdr&&narrow.stats().waitingForIdr&&narrow.stats().recoveries==1&&narrow.stats().depth==0);
+    // Session limits: nothing is refused and the decoder gets every frame in order.
+    CHECK(!wide.stats().waitingForIdr&&wide.stats().recoveries==0&&wide.stats().depth==8);
+    for(std::uint16_t i=0;i<=7;++i){auto s=wide.tryPop(7*166667+10000);CHECK(s&&s->sample.wireFrameIndex==i);}
+    CHECK(wide.stats().dropped==0&&wide.stats().consumed==8);
+}
+TEST(queue_session_limits_stay_bounded){
+    // A pause beyond the session limits still ends in the keyframe recovery.
+    VideoIngress q(kSessionQueueLimits);start(q);
+    for(std::uint16_t i=1;i<=11;++i){const auto t=static_cast<HostTime>(i)*166667;CHECK(q.push(frame(i,false,t),t)==PushStatus::Accepted);}
+    CHECK(q.push(frame(12,false,12*166667),12*166667)==PushStatus::WaitingForIdr);CHECK(q.stats().waitingForIdr&&q.stats().depth==0);
+    VideoIngress aged(kSessionQueueLimits);start(aged);CHECK(!aged.tryPop(2500001));CHECK(aged.stats().waitingForIdr);
+}
 TEST(queue_age_recovery){VideoIngress q;start(q);CHECK(!q.tryPop(1000001));CHECK(q.stats().waitingForIdr&&q.stats().depth==0);}
 TEST(queue_idr_coalescing){VideoIngress q;q.begin(1);q.push(config(),0);q.push(frame(0,false),0);CHECK(q.takeIdrRequest(0));q.push(frame(1,false),0);CHECK(!q.takeIdrRequest(100000));CHECK(q.takeIdrRequest(5000000));CHECK(!q.takeIdrRequest(10000000));}
 TEST(queue_config_change_clears_history){VideoIngress q;start(q);auto c=config();c.width=1280;c.height=720;q.push(std::move(c),0);CHECK(q.stats().depth==0&&q.stats().epoch==2);auto f=frame(1,true);f.width=1280;f.height=720;CHECK(q.push(std::move(f),0)==PushStatus::Accepted);CHECK(q.tryPop(0)->configBefore->width==1280);}

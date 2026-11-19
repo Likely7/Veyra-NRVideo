@@ -132,6 +132,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             {std::lock_guard lock(mutex_);previousDecoded=rates_.decoded;}
             auto nextNativeLog=lastFrame;
             remoteplay::NativeSnapshot native;
+            uint64_t queueResets=0;
             bool firstFrame=true;
             wchar_t disconnectAfter[24]{};uint64_t testDisconnectFrames=0;bool testDisconnected=false;
             if(!recovery.reconnects()&&GetEnvironmentVariableW(L"VEYRA_TEST_REMOTEPLAY_DISCONNECT_AFTER_FRAMES",disconnectAfter,24))testDisconnectFrames=std::clamp<uint64_t>(_wtoi64(disconnectAfter),60,3600);
@@ -154,6 +155,11 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                 const auto result=source.read(packet,&frame);
                 auto feedback=source.takeFeedback();
                 const auto snapshot=source.sessionSnapshot();
+                // The queue in front of the decoder was dropped: every frame is refused until
+                // a keyframe arrives. Without this line the event only shows as a jump of the
+                // upstream warning count.
+                if(snapshot.video.recoveries>queueResets){queueResets=snapshot.video.recoveries;
+                    log::warn("remoteplay-recovery",std::format("video queue reset #{}; waiting for a keyframe. queueHighWater={} dropped={} framesLost={} referenceRecoveries={}",queueResets,snapshot.video.highWaterDepth,snapshot.video.dropped,snapshot.framesLost,snapshot.referenceRecoveryEvents));}
                 if(now>=nextNativeLog||result==SourceReadStatus::Error){native=source.nativeSnapshot();nextNativeLog=now+std::chrono::seconds(1);
                     log::info("remoteplay-transport",std::format("attempt={} connected={} videoCallbacks={} audioCallbacks={} callbackRejected={} packetWindowReceived={} packetWindowLost={} upstreamWarnings={} upstreamErrors={} transportErrors={} assemblyErrors={} quitReason={} apiError={} (upstream resetting packet window; not cumulative UDP)",recovery.reconnects(),native.connected,native.videoCallbacks,native.audioCallbacks,native.callbackRejected,native.packetReceived,native.packetLost,native.warnings,native.errors,native.transportErrors,native.assemblyErrors,native.lastQuitReason,native.lastApiError));}
                 {std::lock_guard lock(mutex_);snapshot_=snapshot;feedback_.merge(std::move(feedback));

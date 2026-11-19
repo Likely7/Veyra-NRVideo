@@ -24,7 +24,7 @@ namespace veyra::source {
 
 struct RemotePlayConnectDesc {
     remoteplay::NativeConnectRequest request;
-    remoteplay::QueueLimits queueLimits{};
+    remoteplay::QueueLimits queueLimits=remoteplay::kSessionQueueLimits;
     enum class DecodeMode { Automatic, Software, Hardware };
     DecodeMode decodeMode=DecodeMode::Automatic;
     bool highQualitySampling=true; // local reconstruction, never a server quality promise

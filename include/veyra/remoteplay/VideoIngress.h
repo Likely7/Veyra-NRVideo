@@ -13,6 +13,15 @@ struct QueueLimits {
     HostTime maxAge100ns=1000000; // 100 ms development safety ceiling, not target latency.
     void validate() const;
 };
+// Limits of a product session. The queue is empty in normal running: the owner loop decodes
+// a frame as it arrives. The limit only matters while that loop does not run. With the
+// development ceiling above, a pause of about 70 ms (four frames at 60 fps) dropped the
+// queue and refused every frame until a requested keyframe arrived, although nothing was
+// lost on the network: the picture froze for another 150 ms and the processing history was
+// reset (field log 2026-11-19, PS5 over wired LAN: three times in 98 minutes, 0 packets
+// lost). Twelve frames / 250 ms let the decoder catch up instead; a longer pause still
+// ends in the keyframe recovery.
+inline constexpr QueueLimits kSessionQueueLimits{12,8u*1024u*1024u,64u*1024u,2500000};
 enum class PushStatus {Accepted,ConfigStored,WaitingForIdr,Malformed,WrongGeneration,Closed};
 struct VideoQueueStats {
     std::uint64_t accessUnits=0,configMessages=0,accepted=0,consumed=0,dropped=0,
