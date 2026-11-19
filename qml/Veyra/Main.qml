@@ -25,7 +25,7 @@ Window {
     // about 330px wide).
     minimumWidth: cinema ? 360 : 720
     minimumHeight: 260
-    visible: true
+    visible: !test.portableUpdateProbe
     // The software scene graph cannot draw the Shape background. Keep the native
     // window opaque as well, including while its first frame is being produced.
     color: typeof vySoftwareUi !== "undefined" && vySoftwareUi ? (cinema ? Theme.videoBlack : Theme.bgOuter) : "transparent"
@@ -832,7 +832,10 @@ Window {
         anchors.topMargin: 12
         anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(500, root.width - 32)
-        onOpenRequested: veyra.updates.openRelease()
+        onOpenRequested: {
+            settingsPage.section = "about"
+            root.goPage("set")
+        }
     }
     Connections {
         target: veyra.updates

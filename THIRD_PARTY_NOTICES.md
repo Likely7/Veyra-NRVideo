@@ -887,6 +887,10 @@ License texts: `licenses/moonlight/ENET_MIT.txt`, `licenses/moonlight/NANORS_MIT
 The streamed machine runs **Sunshine** (GPL-3.0, https://github.com/LizardByte/Sunshine), which users install
 themselves; Veyra neither ships nor downloads it.
 
+## Portable ZIP updates
+
+The updater verifies the Ed25519 release manifest using OpenSSL Crypto (Apache-2.0), from the same vcpkg build used by the streaming clients. Downloads use Qt Network. The updater uses the host Windows installation's Attachment Services and `tar.exe` to check and unpack the verified ZIP.
+
 ## Xbox home streaming (unofficial, 2026-10-01)
 
 The optional `VEYRA_ENABLE_XBOX` build streams from the user's own Xbox console. It is **not affiliated with or

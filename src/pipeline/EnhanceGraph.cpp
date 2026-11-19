@@ -355,7 +355,7 @@ bool EnhanceGraph::createAdditionalColorResources(){
             // SDR -> RTX Video HDR also grades SDR before that later conversion.
             const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
             engine::ColorLutData lut;
-            const engine::ColorLutStore store(runtime::localDataDirectory());
+            const engine::ColorLutStore store(runtime::userDataDirectory());
             if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
                 colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",i+2,mismatch?L"输入空间不匹配":L"资源不可用");
                 veyra::log::warn("color-grade",std::format("instance={} lut rejected mismatch={} name={}",i+1,mismatch,utf8Of(settings.lutNameString())));
@@ -414,7 +414,7 @@ bool EnhanceGraph::createNodeColorResources(){
             if(settings.hasLut()){
                 const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
                 engine::ColorLutData lut;
-                const engine::ColorLutStore store(runtime::localDataDirectory());
+                const engine::ColorLutStore store(runtime::userDataDirectory());
                 if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
                     colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",parameter+1,mismatch?L"输入空间不匹配":L"资源不可用");
                     veyra::log::warn("color-grade",std::format("node instance={} lut rejected mismatch={} name={}",parameter,mismatch,utf8Of(settings.lutNameString())));
@@ -1067,7 +1067,7 @@ bool EnhanceGraph::createResources()
             }else{
                 colorLutNotice_.clear();
                 engine::ColorLutData lut;
-                const engine::ColorLutStore store(runtime::localDataDirectory());
+                const engine::ColorLutStore store(runtime::userDataDirectory());
                 if(store.resolve(desc_.color.lutNameString(),lut)&&lut.valid()&&setColorLut(lut.rgb.data(),unsigned(lut.size))){
                     // The name must be converted once: building the log argument
                     // from lutNameString().begin() and .end() created two

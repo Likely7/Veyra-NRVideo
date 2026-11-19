@@ -27,6 +27,7 @@ VPage {
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
     readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
+    readonly property var portableUpdate: veyra.updates.portable
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
         if (Theme.reduced || !col) return
@@ -1379,15 +1380,34 @@ VPage {
                             hint: veyra.updates.latestVersion.length > 0
                                   ? qsTr("发现新版本 %1").arg(veyra.updates.latestVersion)
                                   : qsTr("启动时自动检查，有更新时提示")
-                            VButton {
-                                text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
-                                enabled: !veyra.updates.checking
-                                onClicked: veyra.updates.check(true)
+                            Row {
+                                spacing: 6
+                                VButton {
+                                    text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
+                                    enabled: !veyra.updates.checking
+                                    onClicked: veyra.updates.check(true)
+                                }
+                                VButton {
+                                    visible: veyra.updates.latestVersion.length > 0
+                                    text: qsTr("查看更新")
+                                    onClicked: veyra.updates.openRelease()
+                                }
                             }
+                        }
+                        VRow {
+                            visible: root.portableUpdate.available || root.portableUpdate.downloading || root.portableUpdate.scheduled
+                            label: root.portableUpdate.scheduled ? qsTr("更新已就绪，将在退出后安装")
+                                  : root.portableUpdate.downloading ? qsTr("正在下载更新 %1%").arg(root.portableUpdate.progress)
+                                  : qsTr("便携版更新 · %1").arg(root.portableUpdate.sizeText)
+                            hint: root.portableUpdate.available ? root.portableUpdate.releaseNotes : ""
+                            hintBelow: true
                             VButton {
-                                visible: veyra.updates.latestVersion.length > 0
-                                text: qsTr("查看更新")
-                                onClicked: veyra.updates.openRelease()
+                                objectName: "portable-download"
+                                text: root.portableUpdate.available ? qsTr("下载并在退出后更新") : qsTr("取消更新")
+                                onClicked: {
+                                    if (root.portableUpdate.available) root.portableUpdate.downloadAndSchedule()
+                                    else root.portableUpdate.cancel()
+                                }
                             }
                         }
                         VRow {

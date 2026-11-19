@@ -347,7 +347,7 @@ bool QmlPlayerBridge::resetColourGroup(int group){
 // (runtime_local/luts); looks are user data beside the presets.
 QVariantList QmlPlayerBridge::lutLibrary() const {
     QVariantList out;
-    const engine::ColorLutStore store(runtime::localDataDirectory());
+    const engine::ColorLutStore store(runtime::userDataDirectory());
     for (const auto& name : store.list()) out << QString::fromStdWString(name);
     return out;
 }
@@ -369,7 +369,7 @@ void QmlPlayerBridge::importLutDialog() {
 }
 bool QmlPlayerBridge::importLut(const QString& path) {
     if (impl_->colourIndex() < 0) { emit notice(tr("处理链中没有调色节点，无法使用 LUT"), true); return false; }
-    const engine::ColorLutStore store(runtime::localDataDirectory());
+    const engine::ColorLutStore store(runtime::userDataDirectory());
     std::wstring name; std::string error;
     if (!store.importFile(std::filesystem::path(path.toStdWString()), name, error) || name.empty()) {
         veyra::log::warn("ui-colour", std::format("lut import rejected path={} error={}", path.toStdString(), error));
@@ -385,7 +385,7 @@ bool QmlPlayerBridge::importLut(const QString& path) {
 bool QmlPlayerBridge::setColourLut(const QString& name) {
     auto c = selectedColourSettings();
     if (name.isEmpty()) { c.clearLut(); return commitColour(c); }
-    const engine::ColorLutStore store(runtime::localDataDirectory());
+    const engine::ColorLutStore store(runtime::userDataDirectory());
     engine::ColorLutData data;
     if (!store.validName(name.toStdWString()) || !store.resolve(name.toStdWString(), data) || !data.valid()) {
         emit notice(tr("LUT 不可用：%1").arg(name), true);
@@ -421,7 +421,7 @@ bool QmlPlayerBridge::applyColourLook(int index) {
     }
     auto colour = store.entries()[size_t(index)].color; colour.enabled = true;
     if (colour.hasLut()) {
-        const engine::ColorLutStore luts(runtime::localDataDirectory());
+        const engine::ColorLutStore luts(runtime::userDataDirectory());
         engine::ColorLutData data;
         if (!luts.resolve(colour.lutNameString(), data)) {
             emit notice(tr("预设引用的 LUT 不存在：%1，未应用").arg(QString::fromStdWString(colour.lutNameString())), true);
