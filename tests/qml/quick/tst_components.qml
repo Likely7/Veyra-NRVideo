@@ -511,6 +511,7 @@ Item {
             const enabled=findChild(card,"nr-correctionEnabled")
             compare(enabled.checked,false);mouseClick(enabled)
             compare(fixture.rows[0].correctionEnabled,true)
+            verify(waitForPolish(root.Window.window));wait(550)
             const mode=findChild(card,"nr-correctionAuto")
             compare(mode.current,"1")
             const amount=findChild(card,"nr-correctionAmount")

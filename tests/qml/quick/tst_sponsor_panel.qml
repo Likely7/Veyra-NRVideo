@@ -32,8 +32,8 @@ Item {
         }
         function test_assetsLoad() {
             const all = images(panel, [])
-            // Five tiles, two payment marks, two codes and the two Patreon marks.
-            compare(all.length, 11)
+            // Four platform tiles, two payment marks, two codes and two Patreon marks.
+            compare(all.length, 10)
             for (const image of all) {
                 tryCompare(image, "status", Image.Ready, 3000, image.source)
                 verify(image.paintedWidth > 0, image.source)

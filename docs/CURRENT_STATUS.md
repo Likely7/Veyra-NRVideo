@@ -1,6 +1,6 @@
 # 当前项目状态
 
-更新：2026-11-18。主线版本2.1.9；本轮用户授权兼容整合八项社区 PR 并更新 GitHub main，未要求新发布。
+更新：2026-11-19。主线版本 2.1.9。用户授权整合确认的社区 PR 并移除软件内 B 站功能。
 
 ## 主线
 
@@ -11,6 +11,8 @@
 本轮构建和回归结果见[主线整合记录](MAIN_INTEGRATION_2026-11-18.md)，计划见[本轮方案](MAIN_INTEGRATION_PLAN_2026-11-18.md)，产物位于`E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-main-integration-20261118`。旧状态全文在[历史归档](history/reports/CURRENT_STATUS_before_main_2026-11-18.md)，其中“最新/未合main/未发布”只描述当时。
 
 ## 八项社区 PR
+
+11 月 18 日的整合记录保留作历史。11 月 19 日的[社区 PR 整合](COMMUNITY_PRS_2026-11-19.md)移除了 B 站专属播放、账号与扩展逻辑，保留通用直链和 Dolby Vision。
 
 #140/#133/#127/#115/#99/#96/#75 保留原 head 合并，#136 纯源码采用（原 DLL/LIB 历史不进入主线）。B站/浏览器桥、Dolby Vision、韩语、300%音量、Xbox/PS5/Elgato/截图与 Linux OBS 滤镜的适配及证据见[本轮记录](PR_INTEGRATION_2026-11-18.md)。当前构建 `E:/项目/Veyra/build/codex-pr-integration-20261118/app`，私有测试程序位于同任务 tests/app；GitHub 整合结果记在 WORKLOG/FINAL.json。旧主线整合回执仍保留作前序证据。
 

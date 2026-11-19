@@ -1479,3 +1479,9 @@ main run44346915750 在 us-east-2.ec2.archive.ubuntu.com 的 HTTP 包下载阶�
 ### 2026-11-19 项目页更新至15群
 
 用户授权把新交流群二维码更新到GitHub项目页。隔离分支codex/community-group-15-20261119从远端main创建，仅更新README.md、README_CN.md及RELEASE_SUPPORT模板；README_EN.md继续链接首页。原图无修改复制为docs/images/community/group-15-20261119.png，标注15群与2026-11-26前有效，双图width220及赞助图保留。准备脚本和图像/源码校验记录位于E:/项目/Veyra/reports/codex-community-group-15-20261119；执行git diff --check及原图逐字节核验。本次仅授权项目页公开更新，不发布软件包，也不将前轮未推送的PS5产品改动附带推送。远端更新后核对README和图片原始字节。
+
+### 2026-11-19 社区 PR 整合与 B 站功能移除
+
+用户授权按审查结果适配 #168、#156、#59、#166、#167、#161，评估 #158、#165、#62 并关闭未采用项。隔离分支 `codex/community-prs-20261119` 从远端 main `0dac67a0` 建立。已移除应用内 B 站站点模块和扩展 Cookie 转交。沿用通用播放、字幕和 Dolby Vision，旧预设继续读取。详细改动和验收在 [社区 PR 整合](COMMUNITY_PRS_2026-11-19.md)。
+
+Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-community-prs-20261119 --jobs 2` 构建。首次 MSVC 响应文件中的非 ASCII Qt 路径导致 LNK1181，核验既有 ASCII Qt 入口指向相同实体后完成链接。真实 MCS-T911 1080p60 NV12 验证经过重连。HDR10 DXGI 元数据发送与清除、P8.4 色彩、libdovi、AV1 硬软解、PS5 队列和虚拟手柄回归均已执行，未触发真实主机连接。日志、测试夹具、构建及回执存于 `E:/项目/Veyra/{logs,tests,build,reports}/codex-community-prs-20261119`。
