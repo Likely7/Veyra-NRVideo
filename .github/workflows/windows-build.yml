@@ -12,6 +12,9 @@ name: Windows build (reproducible)
 on:
   workflow_dispatch:
   push:
+    # Branch pushes run only when the CI files change; version tags always run
+    # (GitHub does not apply path filters to tag pushes).
+    branches: ['**']
     tags: ['v*']
     paths:
       - '.github/workflows/windows-build.yml'
