@@ -1466,3 +1466,8 @@ main run44346915750 在 us-east-2.ec2.archive.ubuntu.com 的 HTTP 包下载阶�
 测试清理纠错：cleanup-qa.py调用复用write函数，曾经由硬链接误写本地正式NVIDIA目录的package-manifest.json；从已发布SHA256=4225ecb1…的原ZIP原子恢复清单fb19ef3c…，正式目录1695文件逐SHA全部一致，ZIP未变。当前QA清单已断链；本任务及前序main任务的cadence_app.py写JSON改为原子替换，并用真实硬链接夹具验证原文件不变。记录reports/codex-pr-integration-20261118/MANIFEST-REPAIR.json；旧错误内容保留作证据。
 
 最终结果：main run44351556868（b4015dd4）已成功，依赖安装、模块配置/编译、14项LUT输入与安装布局全部通过；mirror+file真实适配解决了旧源残留。与此前Windows/整合分支Linux结果分别保留，两次超时没有改写成通过。正式NVIDIA目录1695文件与原始发布ZIP清单逐项一致，ZIP SHA256仍4225ecb1…，测试清单误写已恢复并修正复用写入函数。至此八项PR功能、兼容修复、GitHub/local main同步、测试、依赖与清理记录完成；未发布新运行包、未改系统组件或关机。
+
+
+### 2026-11-19 项目页更新至15群
+
+用户授权把新交流群二维码更新到GitHub项目页。隔离分支codex/community-group-15-20261119从远端main创建，仅更新README.md、README_CN.md及RELEASE_SUPPORT模板；README_EN.md继续链接首页。原图无修改复制为docs/images/community/group-15-20261119.png，标注15群与2026-11-26前有效，双图width220及赞助图保留。准备脚本和图像/源码校验记录位于E:/项目/Veyra/reports/codex-community-group-15-20261119；执行git diff --check及原图逐字节核验。本次仅授权项目页公开更新，不发布软件包，也不将前轮未推送的PS5产品改动附带推送。远端更新后核对README和图片原始字节。
