@@ -15,7 +15,7 @@ Item {
     property int waitUntil: 0
     property int linkIndex: 0
     property bool saving: false
-    readonly property var links: ["bilibili", "douyin", "x", "github", "youtube", "patreon", "patreonCoffee"]
+    readonly property var links: ["douyin", "x", "github", "youtube", "patreon", "patreonCoffee"]
     function require(ok, message) {
         if (!ok) throw new Error(message)
         console.log("SPONSOR_UI_CHECK", message)

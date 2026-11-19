@@ -10,11 +10,8 @@
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     int delivered=0, failed=0, checks=0;
-    QString last; int quality=0;
-    veyra::ui::PlaybackServer server([&](const QString& url,int q,const QString& cookie){
-        ++delivered;last=url;quality=q;
-        if(cookie.contains('\n'))++failed;
-    });
+    QString last;
+    veyra::ui::PlaybackServer server([&](const QString& url){++delivered;last=url;});
     if(!server.listen(0)) return 1;
     const QByteArray host="127.0.0.1:"+QByteArray::number(server.serverPort());
     const QByteArray origin="chrome-extension://"+QByteArray(32,'a');
@@ -35,12 +32,12 @@ int main(int argc, char** argv) {
         return QByteArray("POST /play HTTP/1.1\r\nHost: ")+host+"\r\nContent-Type: application/json; charset=utf-8\r\nContent-Length: "+QByteArray::number(body.size())+"\r\n"+extra+"\r\n"+body;
     };
     check(request("GET /ping HTTP/1.1\r\nHost: "+host+"\r\n\r\n").startsWith("HTTP/1.1 200"),"ping");
-    auto body=QJsonDocument(QJsonObject{{"url","https://www.bilibili.com/video/BV1test00000"},{"quality",80},{"cookie","SESSDATA=test"}}).toJson(QJsonDocument::Compact);
+    auto body=QJsonDocument(QJsonObject{{"url","https://example.com/movie.mp4?a=1"}}).toJson(QJsonDocument::Compact);
     auto reply=request(post(body,"Origin: "+origin+"\r\n"),true);
     check(reply.startsWith("HTTP/1.1 200"),"fragmented extension request");
     check(reply.contains("Access-Control-Allow-Origin: "+origin),"scoped CORS");
     check(!reply.contains("Allow-Origin: *"),"no wildcard CORS");
-    check(delivered==1&&quality==80&&last.startsWith("https://"),"dispatch exactly once");
+    check(delivered==1&&last=="https://example.com/movie.mp4?a=1","dispatch exactly once");
     check(request(post(body,"Origin: https://evil.example\r\n")).startsWith("HTTP/1.1 403"),"web origin denied");
     check(request(post(body,"Origin: null\r\n")).startsWith("HTTP/1.1 403"),"null origin denied");
     check(request("GET /ping HTTP/1.1\r\nHost: evil.example\r\n\r\n").startsWith("HTTP/1.1 403"),"DNS rebinding denied");
@@ -54,7 +51,9 @@ int main(int argc, char** argv) {
     check(request(post(R"({"url":"file:///C:/Windows/win.ini"})")).startsWith("HTTP/1.1 400"),"file URL denied");
     check(request(post(R"({"url":"https://name:secret@example.com"})")).startsWith("HTTP/1.1 400"),"URL credentials denied");
     check(request(post(R"({"url":"https://example.com","cookie":"bad\r\nInjected: yes"})")).startsWith("HTTP/1.1 400"),"cookie injection denied");
-    check(request(post(R"({"url":"https://example.com","quality":-1})")).startsWith("HTTP/1.1 400"),"quality range");
+    check(request(post(R"({"url":"https://example.com","cookie":"session=test"})")).startsWith("HTTP/1.1 400"),"credential transfer denied");
     check(delivered==1,"rejections never dispatch");
+    check(request(post(R"({"url":"https://example.com/live.m3u8","quality":80,"cookie":""})")).startsWith("HTTP/1.1 200"),"legacy direct URL without credentials");
+    check(delivered==2&&last=="https://example.com/live.m3u8","legacy direct URL delivered");
     std::cout<<checks<<" checks, "<<failed<<" failures\n";return failed?1:0;
 }

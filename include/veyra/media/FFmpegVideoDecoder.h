@@ -181,7 +181,9 @@ private:
     int frameTimeBaseDen_ = 0;
     DecoderStats stats_{};
     bool hwAccelActive_ = false;
-    bool preferNativeAv1_ = false;
+    // FFmpeg's native AV1 decoder exposes D3D12VA and D3D11VA.
+    // The separate software open still prefers libdav1d.
+    bool preferNativeAv1_ = true;
     HardwareDecodeKind hwAccelKind_ = HardwareDecodeKind::None;
     int lastFrameFormat_ = -1;
     uint64_t gpuQueueWaitCount_ = 0;

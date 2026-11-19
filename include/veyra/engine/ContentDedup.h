@@ -13,7 +13,7 @@ namespace veyra::engine {
 // generation then interpolates across a still pair, or across a doubled step
 // where a blind sampler dropped a real picture. The content modes (auto /
 // 30 / 50 / 60 fps) drop a sample here when its picture repeats the last kept
-// one; "60->30" is the plain every-second-sample CaptureHalfRate, not this.
+// one; "60->30" is CaptureHalfRate (every second sample), not this.
 //
 // A repeat is a sample with the same picture number as the last kept one: the
 // capture callback (or the engine, for CPU frames) compares every component of

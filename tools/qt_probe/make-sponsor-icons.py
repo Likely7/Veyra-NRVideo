@@ -99,10 +99,9 @@ def write(name, body, view=48):
     print("wrote", name)
 
 
-bilibili, tiktok, x, github, youtube, kofi = (glyph(s) for s in ("bilibili", "tiktok", "x", "github", "youtube", "kofi"))
+tiktok, x, github, youtube, kofi = (glyph(s) for s in ("tiktok", "x", "github", "youtube", "kofi"))
 wechat, alipay = glyph("wechat"), glyph("alipay")
 
-write("bilibili", tile("#00A1D6", placed(28, f'<path fill="#FFFFFF" d="{bilibili}"/>')))
 # Douyin uses the same note as TikTok: white, with cyan up-left and red down-right.
 write("douyin", tile("#111111", placed(26,
       f'<path fill="#25F4EE" transform="translate(-0.7 -0.7)" d="{tiktok}"/>'

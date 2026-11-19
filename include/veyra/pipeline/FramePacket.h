@@ -171,6 +171,7 @@ struct ColorDescription {
     // 4K60 Pro MK.2 encode HDR P010 this way (Nitlink, measured against the
     // console on the TV). Decoding that chroma as limited over-saturates it.
     bool fullRangeChroma = false;
+    bool dolbyVisionP84 = false; // Declared HLG-compatible HEVC base layer.
 
     bool isHdrPath() const {
         return scRgb || transfer == TransferFunction::PQ || transfer == TransferFunction::HLG;

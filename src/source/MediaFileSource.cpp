@@ -27,6 +27,7 @@ extern "C" {
 #include <libavutil/hdr_dynamic_vivid_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext_d3d12va.h>
+#include <libavutil/hwcontext.h>
 }
 #if VEYRA_HAVE_LIBDOVI
 // After the extern "C" block so <libavutil/dovi_meta.h> has C linkage here.
@@ -950,14 +951,15 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // keeps the real color in the RPU, which compatibility playback does
         // not apply. Pin the base layer to the routed HDR container instead of
         // letting it fall back to BT.709 SDR (which then mismatches / washes
-        // out). Explicit, non-assumed tags from P7/P8/P10 are left untouched.
-        // Profile 8.4 routes to HLG, not PQ: its base layer is an HLG encoding and
-        // pinning it to PQ would invert the transfer and wash the picture out.
+        // out). A declared Profile 8.4 HLG layer can also carry a stale PQ VUI.
         if(dv.route()==DolbyBaseLayer::Hdr10||dv.route()==DolbyBaseLayer::Hlg){
             auto& c=info_.color;
+            c.dolbyVisionP84=params->codec_id==AV_CODEC_ID_HEVC&&dv.isProfile84();
             const auto routed=dv.route()==DolbyBaseLayer::Hlg
                 ?pipeline::TransferFunction::HLG:pipeline::TransferFunction::PQ;
-            if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
+            if(c.dolbyVisionP84&&c.transfer==pipeline::TransferFunction::PQ){
+                c.transfer=routed;c.transferAssumed=false;
+            }else if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
                 c.transfer=routed;c.transferAssumed=true;}
             if(c.matrix==pipeline::YuvMatrix::Unknown||c.matrixAssumed){
                 c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}
@@ -1521,13 +1523,21 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         errorMessage_=L"Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色";
         return SourceReadStatus::Error;
     }
-    // D3D12VA frames expose the underlying surface through AV_PIX_FMT_D3D12,
-    // so resolveFrameColor cannot infer NV12/P010 from frame->format. HDR
-    // hardware surfaces are P010 by contract; SDR surfaces are NV12. Software
-    // AV1/ProRes paths retain the exact planar format mapping above.
-    if (frame->format == AV_PIX_FMT_D3D12 && out.colorInfo.pixelFormat == pipeline::SourcePixelFormat::Unknown) {
-        out.colorInfo.pixelFormat = out.colorInfo.isHdrPath()
-            ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::NV12;
+    // The hardware frame format does not encode bit depth. In particular,
+    // 10-bit SDR AV1 can use a P010 surface just like HDR.
+    if (frame->format == AV_PIX_FMT_D3D12) {
+        const auto* frames=frame->hw_frames_ctx
+            ? reinterpret_cast<const AVHWFramesContext*>(frame->hw_frames_ctx->data) : nullptr;
+        switch(frames?frames->sw_format:AV_PIX_FMT_NONE){
+        case AV_PIX_FMT_NV12:out.colorInfo.pixelFormat=pipeline::SourcePixelFormat::NV12;break;
+        case AV_PIX_FMT_P010:out.colorInfo.pixelFormat=pipeline::SourcePixelFormat::P010;break;
+        case AV_PIX_FMT_P016:out.colorInfo.pixelFormat=pipeline::SourcePixelFormat::P016;break;
+        default:
+            if(out.colorInfo.pixelFormat==pipeline::SourcePixelFormat::Unknown)
+                out.colorInfo.pixelFormat=out.colorInfo.isHdrPath()
+                    ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::NV12;
+            break;
+        }
     }
     info_.color = out.colorInfo;
     // Custom (HDR Vivid): the HEVC parser attaches the CUVA 005.1 dynamic metadata

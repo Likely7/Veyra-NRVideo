@@ -20,7 +20,7 @@ Item {
             return out
         }
         function test_cardsOpenTheirPage() {
-            const ids = ["bilibili", "douyin", "x", "github", "youtube", "patreon", "patreonCoffee"]
+            const ids = ["douyin", "x", "github", "youtube", "patreon", "patreonCoffee"]
             for (let i = 0; i < ids.length; ++i) {
                 const card = findChild(panel, "sponsor-link-" + ids[i])
                 verify(card, ids[i])
@@ -32,8 +32,8 @@ Item {
         }
         function test_assetsLoad() {
             const all = images(panel, [])
-            // Five tiles, two payment marks, two codes and the two Patreon marks.
-            compare(all.length, 11)
+            // Four platform tiles, two payment marks, two codes and two Patreon marks.
+            compare(all.length, 10)
             for (const image of all) {
                 tryCompare(image, "status", Image.Ready, 3000, image.source)
                 verify(image.paintedWidth > 0, image.source)
@@ -57,7 +57,7 @@ Item {
         function test_narrowWraps() {
             panel.width = 410
             wait(50)
-            const first = findChild(panel, "sponsor-link-bilibili"), last = findChild(panel, "sponsor-link-youtube")
+            const first = findChild(panel, "sponsor-link-douyin"), last = findChild(panel, "sponsor-link-youtube")
             verify(last.mapToItem(panel, 0, 0).y > first.mapToItem(panel, 0, 0).y, "cards wrap onto a second row")
             const wechat = findChild(panel, "sponsor-code-wechat"), alipay = findChild(panel, "sponsor-code-alipay")
             verify(alipay.mapToItem(panel, 0, 0).y > wechat.mapToItem(panel, 0, 0).y, "codes stack")
