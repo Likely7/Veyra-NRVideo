@@ -19,10 +19,43 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 using namespace veyra;
+
+static int av1DecodePaths(gfx::D3D12DeviceContext& ctx,const wchar_t* path,bool tenBit){
+ std::vector<pipeline::Rational> reference;
+ for(unsigned mode=0;mode<3;++mode){
+  source::MediaFileSource source;
+  source::SourceOpenDesc desc;
+  const bool hardware=mode==1;
+  desc.path=path;desc.preferHardwareDecode=mode!=0;desc.requireHardwareDecode=hardware;
+  if(hardware){desc.d3d12Device=ctx.device();desc.d3d12Queue=ctx.directQueue();}
+  if(!source.open(desc))return 1;
+  const auto layout=tenBit?pipeline::SourcePixelFormat::P010:hardware
+      ?pipeline::SourcePixelFormat::NV12:pipeline::SourcePixelFormat::Yuv420P;
+  std::vector<pipeline::Rational> pts;
+  for(unsigned i=0;i<500&&pts.size()<60;++i){
+   pipeline::FramePacket packet;const AVFrame* frame=nullptr;
+   const auto status=source.read(packet,&frame);
+   if(status==source::SourceReadStatus::Waiting)continue;
+   if(status!=source::SourceReadStatus::Frame||!frame||
+      (frame->format==AV_PIX_FMT_D3D12)!=hardware||packet.colorInfo.pixelFormat!=layout)return 1;
+   pts.push_back(packet.pts);
+  }
+  if(pts.size()!=60)return 1;
+  if(mode==0)reference=pts;
+  else for(size_t i=0;i<pts.size();++i)
+   if(std::abs(pts[i].toDouble()-reference[i].toDouble())>1e-6)return 1;
+  std::cout<<"PASS AV1 depth="<<(tenBit?10:8)<<" mode="<<mode<<" frames="<<pts.size()
+      <<" hardware="<<hardware<<" layout="<<int(layout)<<'\n';
+ }
+ return 0;
+}
+
 int wmain(int argc,wchar_t** argv){
  CoInitializeEx(nullptr,COINIT_MULTITHREADED);
  gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;
  if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 2;
+ if(argc==4&&std::wstring_view(argv[1])==L"--verify-av1")
+  return av1DecodePaths(ctx,argv[2],std::wstring_view(argv[3])==L"10");
  int failures=captureGpuCases(ctx,ring)+decklinkGpuCases(ctx,ring)+sdrColorGpuCases(ctx,ring)+hdrRoundTrip::run(ctx,ring)+hdrToneTests::run(ctx,ring)+screenScRgbCases(ctx,ring);
  {
   using pipeline::TransferFunction;
