@@ -11,6 +11,7 @@ PATCHES = (
     "0001-chiaki-msvc-vla-compat.patch",
     "0002-chiaki-video-metadata.patch",
     "0003-chiaki-feedback-history.patch",
+    "0004-chiaki-pad-proc-no.patch",
 )
 
 
