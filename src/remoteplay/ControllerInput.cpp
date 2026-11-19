@@ -116,7 +116,7 @@ ControllerState ControllerInput::poll(bool focused){
             }
         }
     }
-    if(!focused||!gamepad_){touchQueue_.clear();touchState_={};touchIds_={-1,-1};haveGyro_=haveAccel_=false;releaseEffects();return state;}
+    if(!focused||!gamepad_){touchQueue_.clear();touchState_={};touchIds_={-1,-1};haveGyro_=haveAccel_=false;triggerFilter_.reset();releaseEffects();return state;}
     state.inputActive=true;
     struct Button{SDL_GamepadButton input;ControllerState::Button output;};
     constexpr Button buttons[]={
@@ -133,6 +133,8 @@ ControllerState ControllerInput::poll(bool focused){
     state.rightX=SDL_GetGamepadAxis(gamepad_,SDL_GAMEPAD_AXIS_RIGHTX);state.rightY=SDL_GetGamepadAxis(gamepad_,SDL_GAMEPAD_AXIS_RIGHTY);
     state.l2=uint8_t(std::max(0,int(SDL_GetGamepadAxis(gamepad_,SDL_GAMEPAD_AXIS_LEFT_TRIGGER)))*255/32767);
     state.r2=uint8_t(std::max(0,int(SDL_GetGamepadAxis(gamepad_,SDL_GAMEPAD_AXIS_RIGHT_TRIGGER)))*255/32767);
+    // Jitter must not push a trigger release out of Chiaki's history window (TriggerFilter.h).
+    {const auto t=triggerFilter_.apply(state.l2,state.r2,now);state.l2=t.l2;state.r2=t.r2;}
     if(!touchQueue_.empty()){state.touches=touchQueue_.front();touchQueue_.pop_front();}
     else{
         for(int finger=0;finger<2;++finger){bool down=false;float x=0,y=0,pressure=0;
