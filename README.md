@@ -77,7 +77,7 @@ I've received creator fees from a community-created Veyra token. These contribut
 
 <br>
 
-**112K+ Veyra portable-package downloads** (112,870) · **140K+ total GitHub Release asset downloads** (140,848 including source archives, checksums and images). [GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · As of 2026-11-15. Download events, not unique users.
+**178K+ Veyra portable-package downloads** (178,996, including historical `.7z` packages and virtual-camera builds) · **214K+ total GitHub Release asset downloads** (214,277 including source archives, checksums and images). [GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · As of 2026-11-18 (Pacific Time). Download events, not unique users.
 
 <br>
 
