@@ -11892,12 +11892,12 @@
    "ko": "열기"
   },
   {
-   "zh": "打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；",
+   "zh": "打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；有 HDR 版本的视频会自动播 HDR。",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "打開 B 站視頻時的默認畫質與編碼。畫質選「自動」時取賬號能用的最高檔；",
-   "en": "Default quality and encoding for Bilibili. Auto quality uses the highest level your account allows;",
-   "ja": "Bilibili の既定画質とエンコードです。自動画質ではアカウントで使える最高画質を選びます。",
-   "ko": "Bilibili 기본 화질 및 인코딩입니다. 자동 화질은 계정에서 허용하는 최고 수준을 사용합니다."
+   "zh-TW": "打開 B 站視頻時的默認畫質與編碼。畫質選「自動」時取賬號能用的最高檔；有 HDR 版本的影片會自動播放 HDR。",
+   "en": "Default quality and encoding for Bilibili. Auto quality uses the highest level your account allows. Videos that have an HDR version play in HDR automatically.",
+   "ja": "Bilibili の既定画質とエンコードです。自動画質ではアカウントで使える最高画質を選びます。HDR 版がある動画は自動的に HDR で再生します。",
+   "ko": "Bilibili 기본 화질 및 인코딩입니다. 자동 화질은 계정에서 허용하는 최고 수준을 사용합니다. HDR 버전이 있는 영상은 자동으로 HDR로 재생합니다."
   },
   {
    "zh": "打开 GitHub Issues，诊断信息已自动复制",

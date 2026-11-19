@@ -903,6 +903,10 @@ VPage {
                         for (const r of veyra.stageTimings) w = Math.max(w, Math.ceil(stageLabelMetrics.advanceWidth(r.label || "")) + 2)
                         return Math.min(w, 104)
                     }
+                    // The value column fits "000.0 ms" and the unmeasured word in the interface
+                    // language (a fixed 48px let the English "Not measured" run out of the card).
+                    FontMetrics { id: stageValueMetrics; font.family: Theme.fontMono; font.pixelSize: 11 }
+                    readonly property real stageValueWidth: Math.min(120, Math.ceil(Math.max(stageValueMetrics.advanceWidth("000.0 ms"), stageValueMetrics.advanceWidth(qsTr("未测量")))) + 2)
                     Layout.fillWidth: true
                     columns: 2
                     columnSpacing: 16
@@ -958,8 +962,9 @@ VPage {
                             }
                         }
                         Text {
-                            Layout.preferredWidth: 48
+                            Layout.preferredWidth: stageRow.parent ? stageRow.parent.stageValueWidth : 48
                             Layout.fillWidth: meter2.narrow
+                            elide: Text.ElideRight
                             text: modelData.measured ? modelData.ms.toFixed(1) + " ms" : qsTr("未测量")
                             HoverHandler { id: stageValueHover }
                             ToolTip.visible: stageValueHover.hovered && modelData.measured
