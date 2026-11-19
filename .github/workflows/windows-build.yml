@@ -125,7 +125,10 @@ jobs:
           C:\v\vcpkg.exe install --classic --overlay-ports=C:\vcpkg-overlay --clean-after-build `
             'ffmpeg[core,avcodec,avformat,avfilter,swresample,swscale,dav1d,zlib]:x64-windows' `
             'libass:x64-windows-static'
-          C:\v\vcpkg.exe list | Tee-Object C:\vcpkg-list.txt
+          $list = C:\v\vcpkg.exe list --classic
+          $list | Set-Content -Encoding utf8 C:\vcpkg-list.txt
+          $list | Write-Host
+          if (-not ($list -match '^ffmpeg:x64-windows')) { throw 'ffmpeg not installed' }
 
       - name: Save vcpkg binary cache
         if: steps.vcpkg-cache.outputs.cache-hit != 'true'
