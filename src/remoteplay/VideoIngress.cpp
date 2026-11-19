@@ -29,8 +29,10 @@ void VideoIngress::updateStatsLocked() {
     stats_.highWaterBytes=std::max(stats_.highWaterBytes,stats_.bytes);
 }
 bool VideoIngress::expiredLocked(HostTime now) const {
-    return !queue_.empty() && (now<queue_.front().sample.arrival100ns ||
-        now-queue_.front().sample.arrival100ns>limits_.maxAge100ns);
+    // `now` is the caller's clock sample from before it took the lock. A frame that was
+    // stamped and queued in between carries a later stamp: it is new, not expired.
+    return !queue_.empty() && now>queue_.front().sample.arrival100ns &&
+        now-queue_.front().sample.arrival100ns>limits_.maxAge100ns;
 }
 PushStatus VideoIngress::push(VideoSample sample,HostTime now) {
     std::lock_guard lock(mutex_);

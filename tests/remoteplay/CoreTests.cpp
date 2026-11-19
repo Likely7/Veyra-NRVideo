@@ -94,6 +94,14 @@ TEST(queue_fifo_not_latest_compressed){VideoIngress q;start(q);q.push(frame(1,fa
 TEST(queue_overflow_requires_idr){QueueLimits l;l.maxFrames=2;VideoIngress q(l);start(q);q.push(frame(1,false),0);CHECK(q.push(frame(2,false),0)==PushStatus::WaitingForIdr);CHECK(q.stats().depth==0);CHECK(q.stats().waitingForIdr);CHECK(q.push(frame(3,false),0)==PushStatus::WaitingForIdr);CHECK(q.push(frame(4,true),0)==PushStatus::Accepted);auto s=q.tryPop(0);CHECK(s&&s->resetDecoder&&s->configBefore);CHECK(s->epoch==2);}
 TEST(queue_overflow_incoming_idr){QueueLimits l;l.maxFrames=1;VideoIngress q(l);start(q);CHECK(q.push(frame(1,true),0)==PushStatus::Accepted);auto s=q.tryPop(0);CHECK(s&&s->sample.wireFrameIndex==1&&s->resetDecoder);}
 TEST(queue_age_recovery){VideoIngress q;start(q);CHECK(!q.tryPop(1000001));CHECK(q.stats().waitingForIdr&&q.stats().depth==0);}
+TEST(queue_frame_stamped_after_reader_clock){
+    // The reader samples its clock before it takes the lock. A frame stamped and queued in
+    // between is new: it is handed out and the queue is not reset.
+    VideoIngress q;q.begin(1);q.push(config(1,1000),1000);CHECK(q.push(frame(0,true,1000),1000)==PushStatus::Accepted);
+    auto s=q.tryPop(999);CHECK(s&&s->sample.wireFrameIndex==0);CHECK(q.stats().recoveries==0&&!q.stats().waitingForIdr);
+    // A frame that waited longer than the limit still resets the queue.
+    CHECK(q.push(frame(1,false,2000),2000)==PushStatus::Accepted);CHECK(!q.tryPop(2000+1000001));CHECK(q.stats().recoveries==1&&q.stats().waitingForIdr);
+}
 TEST(queue_idr_coalescing){VideoIngress q;q.begin(1);q.push(config(),0);q.push(frame(0,false),0);CHECK(q.takeIdrRequest(0));q.push(frame(1,false),0);CHECK(!q.takeIdrRequest(100000));CHECK(q.takeIdrRequest(5000000));CHECK(!q.takeIdrRequest(10000000));}
 TEST(queue_config_change_clears_history){VideoIngress q;start(q);auto c=config();c.width=1280;c.height=720;q.push(std::move(c),0);CHECK(q.stats().depth==0&&q.stats().epoch==2);auto f=frame(1,true);f.width=1280;f.height=720;CHECK(q.push(std::move(f),0)==PushStatus::Accepted);CHECK(q.tryPop(0)->configBefore->width==1280);}
 TEST(queue_identical_config_no_reset){VideoIngress q;start(q);q.push(config(),0);CHECK(q.stats().depth==1&&q.stats().epoch==1);}
@@ -130,6 +138,13 @@ TEST(inbox_begin_and_stop_guards){SessionInbox q;THROWS(q.begin(-1));auto t=q.be
 TEST(inbox_callbacks_race_invalidate){SessionInbox q;auto t=q.begin(monotonic100ns());std::atomic<bool> finish=false;std::thread worker([&]{while(!finish){t.connected();(void)t.audio(audio(0,480,t.generation()));}});q.invalidate();finish=true;worker.join();CHECK(!q.isCurrent(t.generation()));CHECK(!q.tryAudio());q.finishStop();CHECK(q.snapshot().state==SessionState::Idle);}
 TEST(inbox_failed_requires_backend_join){SessionInbox q;auto t=q.begin(monotonic100ns());t.failed(42);THROWS(q.begin(monotonic100ns()));q.invalidate();q.finishStop();CHECK(q.begin(monotonic100ns()).generation()>t.generation());}
 TEST(input_and_mailbox_zero_generation){InputGate g;THROWS(g.begin(0));LatestMailbox<int> m;THROWS(m.begin(0));VideoIngress v;THROWS(v.begin(0));AudioIngress a;THROWS(a.begin(0));}
+TEST(inbox_frame_stamped_after_reader_clock){
+    // The same through the session boundary, in the product's order: the reader's clock
+    // sample, then the callback stamps and queues a frame, then the reader takes the lock.
+    SessionInbox q;auto t=q.begin(monotonic100ns());const auto readerNow=monotonic100ns()-1;
+    CHECK(t.video(config(t.generation(),monotonic100ns())));CHECK(t.video(frame(0,true,monotonic100ns(),t.generation())));
+    auto v=q.tryVideo(readerNow);CHECK(v&&v->sample.wireFrameIndex==0);CHECK(q.snapshot().video.recoveries==0&&!q.snapshot().video.waitingForIdr);
+}
 TEST(inbox_real_sample_vs_config_counts){SessionInbox q;auto t=q.begin(monotonic100ns());auto now=monotonic100ns();CHECK(t.video(config(t.generation(),now)));CHECK(q.snapshot().video.accessUnits==0);CHECK(t.video(frame(0,true,monotonic100ns(),t.generation())));CHECK(q.snapshot().video.accessUnits==1);auto v=q.tryVideo(monotonic100ns());CHECK(v&&v->sample.generation==t.generation());}
 }
 TEST(recovery_keyframes_before_reconnect){
