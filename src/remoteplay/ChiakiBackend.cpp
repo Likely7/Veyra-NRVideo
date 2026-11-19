@@ -101,6 +101,9 @@ struct ChiakiBackend::Impl {
         case CHIAKI_EVENT_RUMBLE:{std::lock_guard lock(self.feedbackMutex);self.feedback.rumble=true;self.feedback.left=event->rumble.left;self.feedback.right=event->rumble.right;break;}
         case CHIAKI_EVENT_TRIGGER_EFFECTS:{std::lock_guard lock(self.feedbackMutex);auto& f=self.feedback;f.triggers=true;f.leftTrigger[0]=event->trigger_effects.type_left;f.rightTrigger[0]=event->trigger_effects.type_right;std::copy_n(event->trigger_effects.left,10,f.leftTrigger.begin()+1);std::copy_n(event->trigger_effects.right,10,f.rightTrigger.begin()+1);break;}
         case CHIAKI_EVENT_MOTION_RESET:{std::lock_guard lock(self.feedbackMutex);self.feedback.motionReset=true;break;}
+        // Light bar colour and player indicator, as chiaki-ng's StreamSession forwards them.
+        case CHIAKI_EVENT_LED_COLOR:{std::lock_guard lock(self.feedbackMutex);auto& f=self.feedback;f.led=true;std::copy_n(event->led_state,3,f.ledColor.begin());break;}
+        case CHIAKI_EVENT_PLAYER_INDEX:{std::lock_guard lock(self.feedbackMutex);self.feedback.playerIndex=true;self.feedback.player=event->player_index;break;}
         default:break; // No mic, standby or keyboard side effects.
 
         }
