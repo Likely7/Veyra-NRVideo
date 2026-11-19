@@ -2,6 +2,11 @@
 
 ## PushFPS frame generation and recording features (2026-11-19)
 
+The Spanish, French, German, Brazilian Portuguese and Russian columns of
+`i18n/catalog.json` also reuse matching entries from the PushFPS catalog
+at the revision below under the same license. Veyra fills additional strings
+locally, preserves format arguments and adapts terminology for its player UI.
+
 Ported from PushFPS (https://github.com/DosukaSOL/PushFPS), a modified version of
 Veyra, at commit `3be641ca70f8179838cef4a8ff6cc3117664d185`. Copyright (C) 2026
 DosukaSOL and the PushFPS contributors. License: `GPL-3.0-or-later`, used here

@@ -20,8 +20,12 @@
 
 ## 测试结果
 
-（见下节，按实际运行填写）
+原移植分支通过帧节奏和自适应倍率单测。HUD GPU 对照中静止 HUD 的 2400 个像素均取自真实帧，31364 个运动像素均保留，重置检查通过，D3D12 调试错误为 0。NVENC 六组编码测试各完成 30 帧并产出关键帧，包括 H.264 的五种组合和 HEVC 完整两遍加 AQ。
+
+接手时 VFG 和 Video AI 设置测试均退出 2。两个程序要求传入尚不存在的绝对目录，用各自独立的新目录重跑，分别为 683 和 274 项检查、0 失败。原始失败见 `reports/claude-pushfps-ports-20261119/REGRESS.json`，补测日志在同目录的 `vfg_settings-verified.log` 和 `video_ai_settings-verified.log`。
+
+在综合测试版内打开 VFG、自适应倍率、帧节奏修复和 HUD 锁定，对自建移动图案窗口做 Windows Graphics Capture。RTX 5070 上实际创建了 HUD 处理资源，帧节奏统计收到输入帧。切到传输帧率模式，以 60 FPS 输入和 120 FPS 输出目标测试自适应倍率，手动上限 4X 实际选择 2X。该 WGC 样本没有产生可判定的重复帧；节奏修复实际重排的验证来自单测。详见 `reports/codex-claude-handoff-20261119/APP-FEATURES.json`。
 
 ## 未验证
 
-（见下节）
+现场采集卡的节奏改善、RTX 30 冷缓存的编译耗时，以及 AMD/Intel 实机表现仍待硬件复测。本机 NVENC 结果限于编码可用性，没有测量相同码率下的主观画质。

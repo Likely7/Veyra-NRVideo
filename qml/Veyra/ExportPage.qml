@@ -50,10 +50,10 @@ VPage {
         valueRole: "id"
         currentIndex: Math.max(0, options.findIndex(o => String(o.id) === selected))
         implicitWidth: 172
-        implicitHeight: 30
+        implicitHeight: Math.max(30, contentItem.implicitHeight + 8)
         onActivated: index => picked(String(options[index].id))
         background: Rectangle { radius: 8; color: Theme.card2; border.color: Theme.stroke2 }
-        contentItem: Text { leftPadding: 10; rightPadding: 24; verticalAlignment: Text.AlignVCenter; text: choice.currentText; color: Theme.t1; elide: Text.ElideRight; font.family: Theme.fontUi; font.pixelSize: 12 }
+        contentItem: Text { leftPadding: 10; rightPadding: 24; verticalAlignment: Text.AlignVCenter; text: choice.currentText; color: Theme.t1; wrapMode: Text.Wrap; font.family: Theme.fontUi; font.pixelSize: 12 }
         indicator: VIcon { x: choice.width - 22; y: 8; name: "down"; size: 14; color: Theme.t3 }
         popup: Popup {
             id: choicesPopup
@@ -78,11 +78,11 @@ VPage {
                 delegate: Basic.ItemDelegate {
                     required property var modelData
                     required property int index
-                    width: list.width; height: 32
+                    width: list.width; height: Math.max(32, contentItem.implicitHeight + 8)
                     enabled: modelData.disabled !== true
                     highlighted: index === choice.currentIndex
                     background: Rectangle { radius: 5; color: parent.highlighted ? Theme.card3 : "transparent" }
-                    contentItem: Text { text: modelData.label; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                    contentItem: Text { text: modelData.label; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; wrapMode: Text.Wrap }
                     onClicked: { choice.picked(String(modelData.id)); choicesPopup.close() }
                 }
             }
