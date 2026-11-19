@@ -224,6 +224,11 @@ inline bool hdrPresetMatches(const HdrCurveSettings& curve, const HdrMetadataSet
 //      (lift, range -> 0; mid-gray -> 203; roll-off -> 100), and the roll-off start
 //      moves inversely because a *lower* start means a *stronger* effect. The hard
 //      cap is a protection value, so it does not follow the dial.
+inline unsigned resolveHdrDisplayPeakNits(unsigned manualPeakNits, unsigned reportedPeakNits, bool plausible) {
+    if (manualPeakNits != 0) return manualPeakNits;
+    return plausible ? std::clamp(reportedPeakNits, 100u, 10000u) : 0u;
+}
+
 inline void resolveHdrTuning(const HdrCurveSettings& base, const HdrMetadataSettings& baseMetadata,
                              HdrCurveSettings& curve, HdrMetadataSettings& metadata) {
     curve = base;

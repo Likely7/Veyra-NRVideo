@@ -228,6 +228,17 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto& metadataBaseline=graph.hdrMetadata();
     const bool needsDisplayPeak=hdrBaseline.enabled||(metadataBaseline.enabled&&
         (metadataBaseline.masteringPeakNits||metadataBaseline.maxCllNits||metadataBaseline.maxFallNits));
+    if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
+        const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
+        gfx::PresentSink::DisplayPeakInfo peak{};
+        if(displayStates_)if(const auto known=displayStates_->state(monitor))
+            peak={known->color.peakNits,known->color.fullFrameNits,known->color.minNits,
+                  known->color.peakValid,known->color.peakPlausible};
+        hdrBaseline.displayPeakNits=resolveHdrDisplayPeakNits(0,peak.peakNits,peak.plausible);
+        if(hdrBaseline.displayPeakNits!=resolveHdrDisplayPeakNits(0,hdrPeakInfo_.peakNits,hdrPeakInfo_.plausible))
+            retainedFrame_.reset();
+        hdrPeakInfo_=peak;
+    }
     {
         // Custom: one-shot record of what the display reports and whether it was
         // trusted, so the curve's effective target is never a guess.
@@ -240,24 +251,6 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
                 hdrPeakInfo_.peakNits, hdrPeakInfo_.minNits,
                 needsDisplayPeak ? 1 : 0, hdrBaseline.displayPeakNits));
         }
-    }
-    if(graph.hdrOutput()&&needsDisplayPeak&&hdrBaseline.displayPeakNits==0){
-        // The panel's own peak from the shared display state: no driver call here
-        // (this thread used to build a DXGI factory for it every 2 s).
-        const auto monitor=MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST);
-        gfx::PresentSink::DisplayPeakInfo peak{};
-        if(displayStates_)if(const auto known=displayStates_->state(monitor))
-            peak={known->color.peakNits,known->color.fullFrameNits,known->color.minNits,known->color.peakValid};
-        if(peak.valid!=hdrPeakInfo_.valid||peak.peakNits!=hdrPeakInfo_.peakNits)retainedFrame_.reset();
-        hdrPeakInfo_=peak;
-        if(hdrPeakInfo_.valid)hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
-        // Only a plausible report may scale the curve; a ceiling value would push the
-        // highlight start past anything the content contains. Kept from the custom
-        // branch: upstream switched to the event-driven DisplayStateService.
-        if(hdrPeakInfo_.valid&&hdrPeakInfo_.plausible)
-            hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
-        else if(hdrPeakInfo_.valid)
-            hdrBaseline.displayPeakNits=std::clamp(hdrPeakInfo_.peakNits,100u,10000u);
     }
     HdrCurveSettings hdrCurve;HdrMetadataSettings hdrMetadata;
     resolveHdrTuning(hdrBaseline,graph.hdrMetadata(),hdrCurve,hdrMetadata);
