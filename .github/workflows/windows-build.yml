@@ -121,7 +121,8 @@ jobs:
           VCPKG_DISABLE_METRICS: '1'
         run: |
           New-Item -ItemType Directory -Force C:\vcache | Out-Null
-          C:\v\vcpkg.exe install --overlay-ports=C:\vcpkg-overlay --clean-after-build `
+          # --classic: vcpkg.json in the repo root would otherwise force manifest mode.
+          C:\v\vcpkg.exe install --classic --overlay-ports=C:\vcpkg-overlay --clean-after-build `
             'ffmpeg[core,avcodec,avformat,avfilter,swresample,swscale,dav1d,zlib]:x64-windows' `
             'libass:x64-windows-static'
           C:\v\vcpkg.exe list | Tee-Object C:\vcpkg-list.txt
