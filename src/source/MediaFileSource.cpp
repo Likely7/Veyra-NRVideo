@@ -950,14 +950,15 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // keeps the real color in the RPU, which compatibility playback does
         // not apply. Pin the base layer to the routed HDR container instead of
         // letting it fall back to BT.709 SDR (which then mismatches / washes
-        // out). Explicit, non-assumed tags from P7/P8/P10 are left untouched.
-        // Profile 8.4 routes to HLG, not PQ: its base layer is an HLG encoding and
-        // pinning it to PQ would invert the transfer and wash the picture out.
+        // out). A declared Profile 8.4 HLG layer can also carry a stale PQ VUI.
         if(dv.route()==DolbyBaseLayer::Hdr10||dv.route()==DolbyBaseLayer::Hlg){
             auto& c=info_.color;
+            c.dolbyVisionP84=dv.isProfile84();
             const auto routed=dv.route()==DolbyBaseLayer::Hlg
                 ?pipeline::TransferFunction::HLG:pipeline::TransferFunction::PQ;
-            if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
+            if(c.dolbyVisionP84&&c.transfer==pipeline::TransferFunction::PQ){
+                c.transfer=routed;c.transferAssumed=false;
+            }else if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
                 c.transfer=routed;c.transferAssumed=true;}
             if(c.matrix==pipeline::YuvMatrix::Unknown||c.matrixAssumed){
                 c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}

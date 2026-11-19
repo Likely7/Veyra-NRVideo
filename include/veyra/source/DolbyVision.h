@@ -34,6 +34,7 @@ struct DolbyVisionInfo {
         default:return DolbyBaseLayer::Unsupported;
         }
     }
+    bool isProfile84() const { return profile == 8 && route() == DolbyBaseLayer::Hlg; }
     std::wstring description() const {
         if(!present)return {};
         const auto layer=route();

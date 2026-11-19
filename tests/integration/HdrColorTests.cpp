@@ -24,6 +24,26 @@ int wmain(int argc,wchar_t** argv){
  gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;
  if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 2;
  int failures=captureGpuCases(ctx,ring)+decklinkGpuCases(ctx,ring)+sdrColorGpuCases(ctx,ring)+hdrRoundTrip::run(ctx,ring)+hdrToneTests::run(ctx,ring)+screenScRgbCases(ctx,ring);
+ {
+  using pipeline::TransferFunction;
+  AVFrame frame{};frame.format=AV_PIX_FMT_YUV420P10LE;frame.height=1080;
+  frame.colorspace=AVCOL_SPC_BT2020_NCL;frame.color_primaries=AVCOL_PRI_BT2020;
+  frame.color_trc=AVCOL_TRC_SMPTE2084;
+  source::DolbyVisionInfo dv;dv.present=dv.baseLayer=true;dv.profile=8;dv.compatibility=4;
+  pipeline::ColorDescription fallback;fallback.dolbyVisionP84=dv.isProfile84();
+  const auto p84=pipeline::resolveFrameColor(frame,fallback);
+  const auto upload=pipeline::resolveFrameColor(frame,p84);
+  const auto pq=pipeline::resolveFrameColor(frame);
+  frame.color_trc=AVCOL_TRC_BT709;
+  const auto conflicting=pipeline::resolveFrameColor(frame,p84);
+  frame.color_trc=AVCOL_TRC_ARIB_STD_B67;
+  const auto hlg=pipeline::resolveFrameColor(frame);
+  dv.profile=10;
+  const bool ok=p84.transfer==TransferFunction::HLG && upload.transfer==TransferFunction::HLG
+      && pq.transfer==TransferFunction::PQ && conflicting.transfer==TransferFunction::BT709
+      && hlg.transfer==TransferFunction::HLG && !dv.isProfile84();
+  std::cout<<(ok?"PASS":"FAIL")<<" P8.4 stale PQ VUI survives upload color resolution\n";failures+=!ok;
+ }
  if(argc>1){
   std::vector<uint8_t> software;const float expectedPeak=argc>2?float(_wtof(argv[2])):0;
   for(bool hardware:{false,true}){
