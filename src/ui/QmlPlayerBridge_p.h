@@ -209,6 +209,10 @@ struct QmlPlayerBridge::Impl {
     engine::EngineController& engine;
     PlayerUiFacade facade;
 
+    // Announce the format when a new source first delivers a picture.
+    std::unique_ptr<media::FormatBadgeWindow> formatBadge;
+    uint64_t formatBadgeSession = 0;
+
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.
     engine::PlayerSnapshot snapshot;
