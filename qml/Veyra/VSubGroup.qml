@@ -30,7 +30,7 @@ Rectangle {
         Item {
             id: header
             Layout.fillWidth: true
-            implicitHeight: 30
+            implicitHeight: Math.max(30, groupLabel.implicitHeight + 10)
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10
@@ -38,6 +38,9 @@ Rectangle {
                 spacing: 8
                 Text {
                     Layout.fillWidth: true
+                    id: groupLabel
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.Wrap
                     text: sub.label
                     color: Theme.t2
                     font.family: Theme.fontUi

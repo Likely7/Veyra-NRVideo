@@ -20,7 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOG = ROOT / 'i18n/catalog.json'
-LANGS = ('zh-TW', 'en', 'ja', 'ko')
+LANGS = ('zh-TW', 'en', 'ja', 'ko', 'es', 'fr', 'de', 'pt-BR', 'ru')
 HAN = re.compile('[一-鿿]')
 ESC = {'n': '\n', 't': '\t', '"': '"', "'": "'", '\\': '\\', '0': '\0'}
 

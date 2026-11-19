@@ -15,13 +15,13 @@ ColumnLayout {
         objectName:"colour-mixer-mode-row"
         property string label:qsTr("模式")
         Layout.fillWidth:true
-        Layout.preferredHeight:Theme.rowMinHeight
+        Layout.minimumHeight:Theme.rowMinHeight
         spacing:12
         Text {
             Layout.fillWidth:true;Layout.minimumWidth:0
             text:modeRow.label;color:Theme.t2
             font.family:Theme.fontUi;font.pixelSize:Theme.fsBody
-            elide:Text.ElideRight
+            wrapMode:Text.Wrap
         }
         VSeg {
             objectName:"colour-mixer-mode"
@@ -68,7 +68,7 @@ ColumnLayout {
                 resettable:true;defaultValue:0
                 valueFromModel:true
                 objectName:"colour-mixer-"+modelData.key
-                Layout.minimumWidth:150;Layout.maximumWidth:150;Layout.preferredWidth:150
+                Layout.minimumWidth:76;Layout.preferredWidth:Math.min(150, parent.width * 0.43)
                 from:-100;to:100;center:true
                 showCenterFill:true
                 Accessible.name:root.names[root.band]+" · "+modelData.label
@@ -77,7 +77,7 @@ ColumnLayout {
             }
             VSliderValue {
                 objectName:"colour-mixer-value-"+modelData.key
-                Layout.minimumWidth:40;Layout.maximumWidth:40;Layout.preferredWidth:40
+                Layout.minimumWidth:Math.max(40, implicitWidth)
                 slider:mixerSlider
                 readonly property int amount:Math.round(root.state[modelData.key][root.band])
                 text:(amount>0?"+":"")+String(amount)

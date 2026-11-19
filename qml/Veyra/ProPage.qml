@@ -1231,13 +1231,18 @@ VPage {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: 30
+                        implicitWidth: tabLabel.implicitWidth + 10
+                        implicitHeight: Math.max(30, tabLabel.implicitHeight + 8)
                         radius: 9
                         color: root.tab === modelData.id ? Theme.card3
                              : tabHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                         Text {
+                            id: tabLabel
+                            width: Math.max(1, parent.width - 6)
                             anchors.centerIn: parent
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
                             text: modelData.label
                             color: root.tab === modelData.id ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
@@ -1271,7 +1276,7 @@ VPage {
                     spacing: 7
                     RowLayout {
                         Layout.fillWidth: true
-                        VEyebrow { text: qsTr("处理顺序"); Layout.fillWidth: true }
+                        VEyebrow { text: qsTr("处理顺序"); Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.Wrap }
                         Text { text: qsTr("点击定位"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
                     }
                     Flow {

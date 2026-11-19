@@ -293,7 +293,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
     Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
     Q_PROPERTY(bool enhancementPrewarmAvailable READ enhancementPrewarmAvailable CONSTANT)
-    // The interface language in use (zh-CN / zh-TW / en / ja / ko), after "auto" is resolved;
+    // The interface language in use after "auto" is resolved;
     // preferences.language holds the choice itself.
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
     Q_PROPERTY(QString screenshotDirectory READ screenshotDirectory NOTIFY preferencesChanged)

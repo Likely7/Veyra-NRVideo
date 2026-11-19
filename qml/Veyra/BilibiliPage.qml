@@ -1690,8 +1690,7 @@ VPage {
                             color: Theme.t3
                             font.family: Theme.fontUi
                             font.pixelSize: 12
-                            text: qsTr("默认画质是「上限」：实际取不高于此档的最高可用画质。"
-                                       + "全部可用画质都高于此档时，取最低档。")
+                            text: qsTr("默认画质是「上限」：实际取不高于此档的最高可用画质。全部可用画质都高于此档时，取最低档。")
                         }
 
                         Text { text: qsTr("默认画质"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
@@ -1819,8 +1818,7 @@ VPage {
                             color: Theme.t3
                             font.family: Theme.fontUi
                             font.pixelSize: 11
-                            text: qsTr("Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；"
-                                       + "选中的音轨不存在时自动回退到最高码率 AAC。")
+                            text: qsTr("Hi-Res 与杜比全景声需要大会员，且视频本身要有对应音轨；选中的音轨不存在时自动回退到最高码率 AAC。")
                         }
 
                         RowLayout {
@@ -2194,8 +2192,7 @@ RowLayout {
                             color: Theme.t3
                             font.family: Theme.fontUi
                             font.pixelSize: 11
-                            text: qsTr("显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。"
-                                       + "防遮挡需要 B 站的额外蒙版数据，目前未支持。")
+                            text: qsTr("显示区域 = 弹幕最多占用画面上方多高的比例，100% 会盖住整个画面。防遮挡需要 B 站的额外蒙版数据，目前未支持。")
                         }
 
                         Item { Layout.fillHeight: true }

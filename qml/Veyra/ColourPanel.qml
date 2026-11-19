@@ -81,6 +81,8 @@ ColumnLayout {
         Text {
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left; anchors.leftMargin: 10
+            anchors.right: parent.right; anchors.rightMargin: 10
+            elide: Text.ElideRight
             visible: field.text.length === 0
             text: parent.placeholder; color: Theme.t3
             font.family: Theme.fontUi; font.pixelSize: Theme.fsBody
@@ -97,20 +99,20 @@ ColumnLayout {
                 readonly property string key:rows.keys[index]
                 readonly property var spec:panel.descriptor(key)
                 Layout.fillWidth:true
-                Layout.preferredHeight:Theme.rowMinHeight
+                Layout.minimumHeight:Theme.rowMinHeight
                 spacing:12
                 Text {
                     Layout.fillWidth:true;Layout.minimumWidth:0
                     text:spec.label;color:Theme.t2
                     font.family:Theme.fontUi;font.pixelSize:Theme.fsBody
-                    elide:Text.ElideRight
+                    wrapMode:Text.Wrap
                 }
                 VSlider {
                     id:paramSlider
                     objectName:"colour-param-"+key
                     valueFromModel:true
                     resettable:true;defaultValue:spec.defaultValue
-                    Layout.minimumWidth:150;Layout.maximumWidth:150;Layout.preferredWidth:150
+                    Layout.minimumWidth:76;Layout.preferredWidth:Math.min(150, parent.width * 0.43)
                     from:spec.min;to:spec.max;center:from<0&&to>0
                     showCenterFill:true
                     Accessible.name:spec.label
@@ -121,7 +123,7 @@ ColumnLayout {
                     onMoved:value=>panel.api.setColourParameter(key,Math.round(value/spec.step)*spec.step)
                 }
                 VSliderValue {
-                    Layout.minimumWidth:40;Layout.maximumWidth:40;Layout.preferredWidth:40
+                    Layout.minimumWidth:Math.max(40, implicitWidth)
                     slider:paramSlider
                     text:panel.valueFor(key).toFixed(spec.step<1?2:0)
                 }
@@ -170,7 +172,7 @@ ColumnLayout {
                         Layout.fillWidth:true
                         text:panel.state.enabled?qsTr("关闭时这条链路不存在，零开销"):qsTr("已关闭 · 参数保留但不生效")
                         color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:11
-                        elide:Text.ElideRight
+                        wrapMode:Text.Wrap
                     }
                 }
                 VSwitch {objectName:"colour-master";checked:panel.state.enabled;onToggled:checked=>panel.api.colorEnabled=checked}
