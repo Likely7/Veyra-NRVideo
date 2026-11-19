@@ -897,12 +897,12 @@
    "ko": "6개 항목"
   },
   {
-   "zh": "60→30：固定每两帧保留一帧。自动去除：检测并跳过重复画面。",
+   "zh": "60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。",
    "src": "qml/DedupModeRow.qml",
-   "zh-TW": "60→30：固定每兩幀保留一幀。自動去除：偵測並跳過重複畫面。",
-   "en": "60→30 keeps every other frame. Automatic removal detects and skips duplicate images.",
-   "ja": "60→30 は2フレームに1枚を保持します。自動除去は重複した映像を検出してスキップします。",
-   "ko": "60→30은 한 프레임씩 건너뛰어 30fps로 줄입니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다."
+   "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：偵測並跳過重複畫面。",
+   "en": "60→30 keeps every other frame and skips repeated images when the game runs below 30 fps. Automatic removal detects and skips duplicate images.",
+   "ja": "60→30 は2フレームに1枚を保持し、ゲームが30fpsを下回るときは重複した映像をスキップします。自動除去は重複した映像を検出してスキップします。",
+   "ko": "60→30은 두 프레임마다 한 프레임을 남기고, 게임이 30fps 아래로 떨어지면 반복된 화면을 건너뜁니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다."
   },
   {
    "zh": "8 位配对码",

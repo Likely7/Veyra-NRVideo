@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-18 #152 60→30 在游戏不足30帧时送入重复画面（Claude，分支 claude/issue152-halfrate-20261118，未合 main）
+
+用户反馈PS5（2K60 NV12，VFG 2X中）掉帧时60→30剔除后31–32、补帧后61–63且卡顿。原因：`CaptureHalfRate`固定每两帧取一帧，游戏低于30帧时同一画面出现3次以上，网格会把同一画面保留两次（VFG在两张相同图之间插帧=顿挫）；同时2026-10-27的相位修正被反复触发，额外收入相邻帧导致超过30。修改：到期样本若与上次保留的画面编号相同，且距该保留不足`kHitchSlots`=5个采集周期（与ContentDedup 30帧节拍的卡顿窗口一致），则跳过并等下一张新画面，网格从新画面重新起算；超过窗口按静止画面在网格上保持（原行为）。保留原始PTS，帧间50ms按实际跨度插帧，不补帧凑30。无画面编号时（压缩采集等）行为不变。日志`capture-rate`增加repeatsSkipped/repeatsHeld。设置说明及四种译文同步。
+
+验证（Linux aarch64 g++ 15，仅平台无关部分）：从`LivePresentationTimingTests.cpp`原样抽取CaptureHalfRate全部用例单独编译，修改前17/17通过；修改后26/26通过；新用例对旧实现10项失败。静止转60帧用例按新规则由360改为359（静止开头3个样本落在卡顿窗口内）。模拟30帧上限、三缓冲vsync游戏（30→24，含尖峰，每档20×60秒）：旧实现30–26帧时每秒保留31.0–31.3、重复2.3–4.8；新实现24帧时保留23.47（游戏23.39）、重复0.08（仅≥83ms的单帧尖峰）、无相邻帧、无丢画面。`extract.py --check`无缺失/占位符问题；dropped列表与写入模式的430行差异在未改HEAD上同样存在。
+
+未验证：Windows完整构建、`veyra_live_timing_tests`完整运行、`LivePresentationTests --half-rate`、PS5/采集卡/VFG实机。实机判据：60→30开启时，掉帧场景下界面"当前约N fps"随游戏低于30，`capture-rate`日志repeatsSkipped增长、shifts基本不再增加，主观卡顿消失。
+
 ## 2026-11-13 SDR 截图 Alpha 与暗部量化修复（独立分支）
 
 基于公开 main 8332c8a8，在 fix/screenshot-alpha-quantization 修复 SDR 视频/采集截图：显式选择不透明 BGR PNG 编码；普通图片继续保留原 Alpha 策略，HDR JXR、处理 Shader、录制与呈现代码不改，无新增持续回读。原图 straight RGB 在 Pillow/WIC 一致，原始纯黑37像素；实际 WIC 8-bit 预乘/反预乘后为20.8582%纯黑，首次量化在该消费者转换中观察到。低 Alpha 的上游产生阶段未宣称定位。
