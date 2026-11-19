@@ -1479,3 +1479,8 @@ main run44346915750 在 us-east-2.ec2.archive.ubuntu.com 的 HTTP 包下载阶�
 构建命令：scripts/acceptance/build-recording-handoff.py --task codex-ps5-sdr-code-values-20261119 --root E:/项目/Veyra/worktrees/ps5-sdr-code-values-20261119 --label 2.1.9-ps5-sdr-test --jobs 2，libdovi/Chiaki三项option沿用开发入口，目标qml_ui/remoteplay_source_tests/yuy2_color_tests/hdr_color_tests/capture_color_tests/source_fidelity_tests。首编译测试参考删代码时漏花括号失败，已修正，原build-20261119-024957日志保留；build-20261119-025700六目标通过。
 
 prepare-qa.py生成H264/HEVC8/PQ10；run-qa.py完成9/9预期结果（8正向+1旧策略负对照）。GPU四组旧策略误差13，新策略1，呈现回读误差0；实际软硬解SDR/HDR/8位回退、文件/采集/HDR、冷启动通过；89shader独立核验一致。日志及SHA在 E:/项目/Veyra/{logs,reports}/codex-ps5-sdr-code-values-20261119；私有app和media在tests同任务，临时目录在tmp同任务。stage独立复制，没有硬链接，不改正式包、真实配置/凭据或系统组件。真实PS5/Chiaki/显示器同场景未复测，不宣称现场画质验收。记录 PS5_SDR_CODE_VALUES_2026-11-19.md / FINAL.json。本轮本地提交/合main，不推送或发布。
+
+
+### 2026-11-19 项目页更新至15群
+
+用户授权把新交流群二维码更新到GitHub项目页。隔离分支codex/community-group-15-20261119从远端main创建，仅更新README.md、README_CN.md及RELEASE_SUPPORT模板；README_EN.md继续链接首页。原图无修改复制为docs/images/community/group-15-20261119.png，标注15群与2026-11-26前有效，双图width220及赞助图保留。准备脚本和图像/源码校验记录位于E:/项目/Veyra/reports/codex-community-group-15-20261119；执行git diff --check及原图逐字节核验。本次仅授权项目页公开更新，不发布软件包，也不将前轮未推送的PS5产品改动附带推送。远端更新后核对README和图片原始字节。
