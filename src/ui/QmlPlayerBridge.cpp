@@ -535,7 +535,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // frame carried its dynamic metadata, so announcing there would say
             // "SDR" for an HDR Vivid or HDR10+ stream.
             if (s.transport == engine::TransportState::Playing && !s.image && !s.failed &&
-                s.frames > 0 && impl_->formatBadgeSession != s.sessionId)
+                s.frames > 0 && !s.sourceHdrLabel.empty() &&
+                (impl_->formatBadgeSession != s.sessionId || impl_->formatBadgeLabel != s.sourceHdrLabel))
                 showFormatBadge(s);
             if (had && !wasFailed && s.failed && !s.capture && !s.remotePlay &&
                 impl_->prefString("decode") == QLatin1String("hardware"))

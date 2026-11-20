@@ -455,11 +455,68 @@ int main(){
         }
     }
     {
+        using veyra::engine::LiveCapturePacer;
+        using veyra::engine::FramePaceWindow;
+        constexpr int64_t period = 166667, base = 100000000;
+        // A late packet is followed by a short interval, as on the T900.
+        constexpr std::array<int64_t, 8> phase{-9500, 33490, -3500, 0, -6000, 9900, -10050, 1500};
+        LiveCapturePacer capture;
+        FramePaceWindow before, after;
+        int64_t last = 0;
+        bool bounded = true;
+        for (int i = 0; i < 720; ++i) {
+            const auto pts = i * period;
+            const auto arrival = base + pts + i * 80 + phase[i % phase.size()];
+            const auto deadline = capture.deadline(pts, arrival, period);
+            const auto presented = std::max(arrival + 6000, deadline);
+            bounded &= !deadline || (deadline >= arrival && deadline - arrival <= LiveCapturePacer::kMaxHold100ns);
+            if (i >= 60) {
+                before.complete(arrival + 6000);
+                after.complete(presented);
+            }
+            last = presented;
+        }
+        check(bounded && before.lowFps(last).value_or(0) < 50 && after.lowFps(last).value_or(0) > 57,
+              "jittery 60 Hz card keeps regular real-frame delivery with bounded hold");
+
+        const auto afterGap = capture.deadline(722 * period, base + 722 * period + 61000, period);
+        check(!afterGap, "missed capture frame drops old pacing anchor immediately");
+        const auto wrongPts = capture.deadline(721 * period, base + 723 * period + 61000, period);
+        check(!wrongPts, "backwards device timestamp returns to ready-driven preview");
+
+        for (int64_t cleanPeriod : {333667, 166667, 83333}) {
+            LiveCapturePacer clean, variable;
+            bool cleanReady = true, variableReady = true;
+            for (int i = 0; i < 360; ++i) {
+                const int64_t pts = i * cleanPeriod;
+                const int64_t arrival = base + pts + (i % 2 ? 300 : -300);
+                cleanReady &= !clean.deadline(pts, arrival, cleanPeriod);
+                variableReady &= !variable.deadline(pts + (i % 2 ? cleanPeriod / 4 : 0), arrival, cleanPeriod);
+            }
+            check(cleanReady, "steady capture stays ready-driven after warmup");
+            check(variableReady, "variable source PTS remains ready-driven");
+        }
+    }
+    {
+        CaptureHalfRate preview, fg;
+        constexpr int64_t period = 166667;
+        unsigned previewCount = 0, fgCount = 0;
+        for (uint64_t i = 0; i < 240; ++i) {
+            const uint64_t picture = i / 4;
+            previewCount += preview.accept(i * period, period, i == 0, &picture, i + 1, false);
+            fgCount += fg.accept(i * period, period, i == 0, &picture, i + 1);
+        }
+        check(previewCount == 120 && preview.repeatsSkipped() == 0 && preview.repeatsHeld() == 60,
+              "manual 60-to-30 keeps original preview grid while the game varies below 30");
+        check(fgCount == 60 && fg.repeatsSkipped() > 0 && fg.repeatsHeld() == 0,
+              "manual 60-to-30 FG continues to skip still pairs across game hitches");
+    }
+    {
         // 60 fps window capture without FG (2026-10-29): the first frame was read
         // 52 ms after its compositor time, later frames 1 ms after theirs. Same
         // sequence as the engine: anchor only when this epoch and mode have none.
         using veyra::engine::livePacesSourcePts;
-        check(!livePacesSourcePts(false,false,true)&&!livePacesSourcePts(false,true,false),"screen and physical capture without FG are ready-driven");
+        check(!livePacesSourcePts(false,false,true)&&!livePacesSourcePts(false,true,false),"screen and physical capture without FG use a ready-driven default anchor");
         check(livePacesSourcePts(false,false,false)&&livePacesSourcePts(true,false,true)&&livePacesSourcePts(true,true,false),"file replay, streams and FG pairs keep their PTS clock");
         auto worstHold=[](bool screen){
             veyra::engine::PresentationScheduler timeline;const bool paced=livePacesSourcePts(false,false,screen);

@@ -21,7 +21,8 @@ namespace veyra::engine {
 // second at 26-29 fps), and the phase move above fired again and again, adding
 // adjacent samples (31-32 kept per second). A due sample that repeats the last
 // kept picture is therefore skipped while it is within kHitchSlots samples of
-// that keep; the next new picture is taken instead and the grid restarts on it.
+// that keep while generating frames; the next new picture is taken instead and
+// the grid restarts on it. With FG off, the real preview uses every grid slot.
 // Kept samples stay at least two slots apart with their original PTS, so a
 // 50 ms step is interpolated as 50 ms. Nothing is inserted to make up 30: the
 // kept rate is the game's own rate. Past the window the picture is still
@@ -34,7 +35,8 @@ public:
     void reset(){anchored_=false;havePicture_=false;previousNew_=false;shift_=false;secondCopies_=0;lastSequence_=nextSequence_=0;keptValid_=holding_=waiting_=false;}
     static bool supported(double fps){return std::isfinite(fps)&&fps>=59&&fps<=61;}
     // picture: the sample's picture number, nullptr when unknown.
-    bool accept(int64_t pts,int64_t transportInterval,bool boundary,const uint64_t* picture=nullptr,uint64_t sequence=0){
+    bool accept(int64_t pts,int64_t transportInterval,bool boundary,const uint64_t* picture=nullptr,uint64_t sequence=0,
+                bool skipTransientRepeats=true){
         if(transportInterval<=0){reset();return true;}
         const bool repeat=picture&&havePicture_&&*picture==lastPicture_;
         const bool adjacent=sequence&&lastSequence_?sequence==lastSequence_+1:
@@ -58,7 +60,7 @@ public:
             holding_=false;kept(pts,picture,sequence);return true;
         }
         const bool repeatOfKept=picture&&keptValid_&&*picture==keptPicture_;
-        if(repeatOfKept&&!holding_){
+        if(skipTransientRepeats&&repeatOfKept&&!holding_){
             const bool withinHitch=sequence&&keptSequence_?sequence-keptSequence_<kHitchSlots:
                 pts-keptPts_+transportInterval/4<transportInterval*int64_t(kHitchSlots);
             // Due, but the game has not drawn a new picture yet: wait for it.
@@ -90,7 +92,7 @@ public:
     uint64_t gridKept()const{return grid_;}
     uint64_t secondCopiesKept()const{return secondKept_;}
     // Due samples skipped because they repeated the last kept picture, and
-    // repeats kept anyway because the picture stayed still past kHitchSlots.
+    // repeats sent on the grid during still holds or preview without FG.
     uint64_t repeatsSkipped()const{return repeatsSkipped_;}
     uint64_t repeatsHeld()const{return held_;}
 private:

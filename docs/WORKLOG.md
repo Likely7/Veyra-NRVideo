@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-20 T900 原速采集稳帧与 HDR 角标
+
+从已发行 2.2.0 对应的 main eb5fd6d0 开隔离树。原速无补帧采集同时满足稳定设备时间戳和明显到帧抖动后，按跟踪后的源时钟调度真实帧。沿用现有两批呈现队列和原始媒体时间戳，最大额外持有为半帧或 8 ms 中较小者。断点和掉帧重新建锚。无补帧的手动 60→30 保留原帧网格。补帧模式仍过滤短暂重复画面，避免把相同画面作为插值对。采集角标使用图实际采用的输入色彩，首帧或输入格式变动时显示。
+
+MCS 4K-T900 实卡 A/B 在用户断开正式版采集后进行。同一个测试引擎分别使用旧到帧即送和新调度，各测 19 秒。输入 2560×1440 NV12 59.94～60 FPS、DirectShow 格式 24、原 Line In，NR、SR、补帧、去重及 60→30 均关闭。两组每秒提交中位数 60 FPS、捕获丢帧计数为 0。对末尾十秒逐帧配对，提交间隔 P99 为 21.238→16.911 ms，1% Low 为 47.084→59.134 FPS。回调至提交 P95 为 0.885→5.587 ms。最长提交间隔为 24.24→17.88 ms。以 run-pacing.py --physical --idle-veyra --label t900 --seconds 19 和 analyze-physical-pacing.py 生成 t900-frame-intervals-ab.csv。实卡测试位于软件提交层。驱动的最小缓冲模式实际请求 1 个，仍返回 10 个。测试结束后释放设备。
+
+Windows Release 构建由 scripts/acceptance/build-recording-handoff.py --task codex-capture-cadence-220-20261120 --label 2.2.0-capture-test 完成，2 个并行编译任务，初次 364.6 秒，8 个目标。着色器 91 个逐 SHA 核对。362 项时序断言通过，覆盖稳定 30/60/120、抖动、断点以及 60→30 开关补帧。断言夹具先误用了低于目标抖动的输入，后改用根据实卡节奏构造的相邻长短间隔。用两个历史实卡回放各 1455 帧，经新调度代码重算提交时刻后稳态低帧 47.02→59.68 / 47.08→59.53 FPS，额外等待中位数 4.70 / 4.66 ms。另用实际引擎复跑高抖动合成输入，送帧均为 60 FPS，低帧中位数 34.28→39.49 FPS。
+
+采集回放与正式 Qt 入口分别验证 HDR10、HLG、SDR 标签。HLG 测试片初版色彩标签未写入，明确写入 HEVC VUI 并用 ffprobe 核对后复测。采集色彩合同、D3D12 缩放、YUY2 图到呈现、VFG 时序 GPU 检查通过。Claude 报告的人物发斑只有手机拍屏，未在同源缩放对照复现。120 Hz 窗口合成的上屏节奏和报告的原 Elgato 硬件尚未复测。
+
+工作目录和输出位于 E:/项目/Veyra/{worktrees,build,tests,logs,reports,tmp}/codex-capture-cadence-220-20261120。测试入口为 tests/codex-capture-cadence-220-20261120/启动采集稳帧测试.cmd，使用独立配置、日志和 Qt 缓存。程序直接复用 2.2.0 的运行库并同步本次着色器。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。
