@@ -13,6 +13,7 @@ import QtQuick.Layouts
 
 VPage {
     id: root
+    property alias videoBackgroundHost: stage
     signal requestPage(string page)
 
     // cineIn (pages.css @keyframes cineIn, plan M21 "上下各 12% 裁切展开 | 子窗口区域"):

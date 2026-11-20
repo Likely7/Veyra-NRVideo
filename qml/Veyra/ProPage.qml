@@ -18,6 +18,7 @@ import QtQuick.Effects
 
 VPage {
     id: root
+    property alias videoBackgroundHost: videoArea
     signal requestPage(string page)
     signal requestDialog(string key)
     signal requestFullscreen()
