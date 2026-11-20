@@ -434,6 +434,21 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
     veyra::log::error("crash", std::format("unhandled exception code=0x{:08X} address=0x{:X} module={} offset=0x{:X} thread={}",
         code, address, std::filesystem::path(moduleName).filename().string(),
         module ? address - reinterpret_cast<uintptr_t>(module) : uintptr_t(0), GetCurrentThreadId()));
+    // The file offset alone only names the faulting instruction. A return-address
+    // list, printed as module-relative offsets, names the callers too, so a field
+    // crash can be attributed without a debugger attached.
+    {
+        void* frames[32]{};
+        const USHORT count = CaptureStackBackTrace(0, 32, frames, nullptr);
+        std::string trace;
+        const auto base = module ? reinterpret_cast<uintptr_t>(module) : uintptr_t(0);
+        for (USHORT k = 0; k < count; ++k) {
+            const auto frame = reinterpret_cast<uintptr_t>(frames[k]);
+            if (!trace.empty()) trace += ' ';
+            trace += std::format("{:X}", base && frame >= base ? frame - base : frame);
+        }
+        veyra::log::error("crash", std::format("stack(module offsets): {}", trace));
+    }
     SYSTEMTIME st{};
     GetLocalTime(&st);
     wchar_t name[96]{};
