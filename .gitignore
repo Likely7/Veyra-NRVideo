@@ -28,3 +28,4 @@ CMakeUserPresets.json
 # User-authorized runtime music is distributed only in binary packages.
 startup-music.mp3
 BGM.MP3
+__pycache__/
