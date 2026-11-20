@@ -628,7 +628,7 @@ void MoonlightSessionSource::run(std::stop_token, MoonlightConnectDesc desc) {
             return;
         } catch (const moonlight::TransportError& e) {
             if (e.kind == moonlight::TransportError::Kind::Cancelled) { fail(L"已取消。"); return; }
-            fail(e.kind == moonlight::TransportError::Kind::Tls ? L"与主机的加密连接失败，主机的证书可能已改变，请重新配对。" : L"连不上主机，请检查网络和主机是否开机。");
+            fail(e.kind == moonlight::TransportError::Kind::Tls || e.kind == moonlight::TransportError::Kind::CertificateMismatch ? L"与主机的加密连接失败，主机的证书可能已改变，请重新配对。" : L"连不上主机，请检查网络和主机是否开机。");
             return;
         }
         // The identity (the client's private key) is not needed any more.

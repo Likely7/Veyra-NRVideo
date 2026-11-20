@@ -36,8 +36,9 @@ public:
     // only server certificate accepted over TLS. HTTPS without both is refused.
     HttpClient(const Identity* identity, std::string pinnedServerCertPem);
 
-    // GET path?query. Throws TransportError. A TLS failure (handshake, pinned
-    // certificate mismatch, rejected client certificate) has Kind::Tls.
+    // GET path?query. Throws TransportError. A TLS failure (handshake, rejected
+    // client certificate) has Kind::Tls; a server certificate other than the pinned
+    // one has Kind::CertificateMismatch.
     HttpResponse get(const HttpTarget& target, const std::string& pathAndQuery, const HttpOptions& options) const;
 
     void setPinnedServerCertificate(std::string pem) { pinned_ = std::move(pem); }
