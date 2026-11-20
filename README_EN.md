@@ -17,7 +17,7 @@
 <!-- veyra-creator-and-tutorials:end -->
 
 <!-- veyra-main-pr-integration -->
-Current main (unreleased): eight community PRs integrated with compatibility fixes; [changes and validation](docs/PR_INTEGRATION_2026-11-18.md). Existing 2.1.9 downloads are unchanged.
+Local 2.2.0 source includes the capture and live-streaming fixes, Claude’s display and frame-generation updates, and signed portable update support. [Current source status](docs/CURRENT_STATUS.md).
 
 
 The English README is now the [repository homepage](README.md).

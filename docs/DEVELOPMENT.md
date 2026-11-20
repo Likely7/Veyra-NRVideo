@@ -39,7 +39,7 @@ py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task code
 
 已合main且无在用进程/本地文件的干净工作树可在tip映射和verify过的bundle后关闭，恢复见[分支归档](BRANCH_ARCHIVE.md)。保留脏树、暂停研究、依赖与正式资产；不把路径字节相加冒充实际磁盘回收。
 
-当前main构建仍是本地整合测试版，版本2.1.9。此前八项PR已按授权更新GitHub main；本轮PS5截图修复不新增push/Release授权。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
+本地 main 源码版本为 2.2.0。最近一次手测构建来自整合前的 `74e9bf3b`。便携版验签复用已有 Chiaki 依赖中的 OpenSSL Crypto，美乐威 SDK 路径为 `E:/项目/Veyra/deps/magewell/3.3.1.1596`。GitHub 的公开版本为 2.1.9。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
 
 ## 新增外部依赖（#136 / #133）
 

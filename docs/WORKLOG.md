@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-19 2.2.0 分支合并至本地 main
+
+以原本地 main `af5ec15e` 和上次手测源码 `74e9bf3b` 为基础。合入 Claude 接手整合 `2be802ee`、美乐威 `1edaa7e2` 与便携签名更新 `3b5b34e8`，保留来源祖先。录制设置与桥接同时保留分段和 NVENC 两遍/AQ。按现有主线保留通用网络播放及 Dolby Vision，B 站站点模块继续移除。补齐五种新增语言的 34 条裁切、时移、录制、耗时和更新提示。
+
+早期 Claude 工作树的产品变化以已有主线提交为准。精修光流 `7bacdb02`、回放和麦克风 `6061d901`、低延迟复审 `d4be12d2`、虚拟摄像机 `740534e4`、PS5 SDR `20a75845` 已收录。Lecram、旧 AverMedia 诊断和原生音频驱动原型继续按已有决定隔离。来源工作树与之前的测试程序保留。
+
+检查 `git diff --check`、词库 `scripts/i18n/extract.py --check`、变动 QML 解析与合并提交祖先。证据保存在 `E:/项目/Veyra/reports/codex-2.2.0-integrated-20261119`。本轮按用户要求先不构建或打包，现有手测二进制对应旧提交 `74e9bf3b`。当前 GitHub main 为 `9c0c5352`。
+
 ## 2026-11-19 Veyra 2.2.0 本地手测构建
 
 按用户要求从 `codex/capture-and-live-20261119` 的 `329a489a` 构建 2.2.0。CMake 产品版本和程序显示版本均为 2.2.0，PE 数字版本为 2.2.0.0。复用同一源码树的增量目录 `E:/项目/Veyra/build/codex-capture-and-live-20261119/product`，通过 `build-recording-handoff.py --task codex-test-2.2.0-20261119 --label 2.2.0 --jobs 2 --reconfigure` 构建产品及四个回归目标，86.0 秒。EXE SHA256 为 `913f7ce7fa8e9afe1b609040d90ded069554460038b3cfb0596dbe94f3793d1f`。
