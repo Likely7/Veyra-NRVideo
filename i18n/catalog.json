@@ -1385,11 +1385,11 @@
    "en": "60→30 keeps every other frame and skips repeated images when the game runs below 30 fps. Automatic removal detects and skips duplicate images.",
    "ja": "60→30 は2フレームに1枚を保持し、ゲームが30fpsを下回るときは重複した映像をスキップします。自動除去は重複した映像を検出してスキップします。",
    "ko": "60→30은 두 프레임마다 한 프레임을 남기고, 게임이 30fps 아래로 떨어지면 반복된 화면을 건너뜁니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다.",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "60→30 conserva un fotograma de cada dos y omite los duplicados cuando el juego baja de 30 FPS. La eliminación automática detecta y omite fotogramas repetidos.",
+   "fr": "60→30 conserve une image sur deux et ignore les doublons lorsque le jeu passe sous 30 i/s. La suppression automatique détecte et ignore les images répétées.",
+   "de": "60→30 behält jedes zweite Bild und überspringt Duplikate, wenn das Spiel unter 30 FPS fällt. Die automatische Entfernung erkennt und überspringt doppelte Bilder.",
+   "pt-BR": "60→30 mantém um quadro a cada dois e pula os repetidos quando o jogo fica abaixo de 30 FPS. A remoção automática detecta e pula quadros duplicados.",
+   "ru": "60→30 оставляет каждый второй кадр и пропускает повторы, когда частота игры падает ниже 30 FPS. Автоматическое удаление находит и пропускает повторяющиеся кадры."
   },
   {
    "zh": "8 位配对码",
@@ -2412,11 +2412,11 @@
    "en": "GPU · Mean / P95",
    "ja": "GPU · 平均 / P95",
    "ko": "GPU · 평균 / P95",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "GPU · Media / P95",
+   "fr": "GPU · Moyenne / P95",
+   "de": "GPU · Mittelwert / P95",
+   "pt-BR": "GPU · Média / P95",
+   "ru": "GPU · Среднее / P95"
   },
   {
    "zh": "GPU 优先级",
@@ -2477,11 +2477,11 @@
    "en": "GPU ready wait",
    "ja": "GPU 完了待ち",
    "ko": "GPU 완료 대기",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Espera de disponibilidad de la GPU",
+   "fr": "Attente de la disponibilité du GPU",
+   "de": "Wartezeit bis GPU bereit",
+   "pt-BR": "Espera pela GPU",
+   "ru": "Ожидание готовности GPU"
   },
   {
    "zh": "GPU 已重置，正在自动重新连接采集卡",
@@ -4499,6 +4499,19 @@
    "ru": "VFG требует NVIDIA RTX 30/40/50 (RTX 30 совместимость является экспериментальной)"
   },
   {
+   "zh": "Veyra 已更新",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "Veyra 已更新",
+   "en": "Veyra has been updated",
+   "ja": "Veyra を更新しました",
+   "ko": "Veyra가 업데이트되었습니다",
+   "es": "Veyra se ha actualizado",
+   "fr": "Veyra a été mis à jour",
+   "de": "Veyra wurde aktualisiert",
+   "pt-BR": "O Veyra foi atualizado",
+   "ru": "Veyra обновлён"
+  },
+  {
    "zh": "Veyra 开源免费，也需要你的支持",
    "src": "qml/SponsorPanel.qml",
    "zh-TW": "Veyra 開源免費，也需要你的支持",
@@ -4731,6 +4744,19 @@
    "de": "Windows lässt Veyra das Mikrofon nicht benutzen; erlaubt Desktop-Apps in Einstellungen → Datenschutz & Sicherheit → Mikrofon",
    "pt-BR": "O Windows não permite que Veyra use o microfone; permite aplicativos de desktop em Configurações → Privacidade e segurança → Microfone",
    "ru": "Windows не позволяет Veyra использовать микрофон; разрешить настольные приложения в настройках → Конфиденциальность и безопасность → Микрофон"
+  },
+  {
+   "zh": "Windows 已阻止本次更新，请查看保护历史",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "Windows 已封鎖此更新，請查看保護歷程記錄",
+   "en": "Windows blocked the update. Check Protection History.",
+   "ja": "Windows が更新をブロックしました。保護の履歴を確認してください。",
+   "ko": "Windows가 업데이트를 차단했습니다. 보호 기록을 확인하세요.",
+   "es": "Windows bloqueó esta actualización. Consulta el historial de protección.",
+   "fr": "Windows a bloqué la mise à jour. Consultez l’historique de protection.",
+   "de": "Windows hat das Update blockiert. Sieh im Schutzverlauf nach.",
+   "pt-BR": "O Windows bloqueou a atualização. Consulte o histórico de proteção.",
+   "ru": "Windows заблокировала обновление. Проверьте журнал защиты."
   },
   {
    "zh": "X 为上限",
@@ -5628,6 +5654,19 @@
    "de": "Herunterladen —",
    "pt-BR": "Baixar —",
    "ru": "Скачать —"
+  },
+  {
+   "zh": "下载并在退出后更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "下載並在結束後更新",
+   "en": "Download and update on exit",
+   "ja": "ダウンロードして終了時に更新",
+   "ko": "다운로드 후 종료 시 업데이트",
+   "es": "Descargar e instalar al salir",
+   "fr": "Télécharger et installer à la fermeture",
+   "de": "Herunterladen und beim Beenden installieren",
+   "pt-BR": "Baixar e instalar ao sair",
+   "ru": "Скачать и установить при выходе"
   },
   {
    "zh": "不使用 LUT",
@@ -7359,6 +7398,19 @@
    "ru": "напр. Вечерняя игра"
   },
   {
+   "zh": "便携版更新 · %1",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "可攜版更新 · %1",
+   "en": "Portable update · %1",
+   "ja": "ポータブル版の更新 · %1",
+   "ko": "포터블 업데이트 · %1",
+   "es": "Actualización portátil · %1",
+   "fr": "Mise à jour de la version portable · %1",
+   "de": "Update für die portable Version · %1",
+   "pt-BR": "Atualização da versão portátil · %1",
+   "ru": "Обновление портативной версии · %1"
+  },
+  {
    "zh": "保存",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "儲存",
@@ -7677,11 +7729,11 @@
    "en": "Keep recent live content in up to 256 MiB of memory. Higher bitrates shorten the available window.",
    "ja": "直近のライブ映像を最大 256 MiB のメモリに保存します。ビットレートが高いほど視聴可能時間が短くなります。",
    "ko": "최근 라이브 콘텐츠를 최대 256 MiB 메모리에 보관합니다. 비트레이트가 높으면 되감기 구간이 짧아집니다.",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Guarda el contenido reciente de la emisión con un máximo de 256 MiB de memoria. A mayor tasa de bits, menor será el tiempo disponible.",
+   "fr": "Conserve le contenu récent du direct dans 256 Mio de mémoire au maximum. Un débit plus élevé raccourcit la durée disponible.",
+   "de": "Speichert den jüngsten Teil des Livestreams in bis zu 256 MiB Arbeitsspeicher. Höhere Bitraten verkürzen den verfügbaren Zeitraum.",
+   "pt-BR": "Guarda o conteúdo recente da transmissão em até 256 MiB de memória. Taxas de bits maiores reduzem o tempo disponível.",
+   "ru": "Хранит последние фрагменты эфира в памяти объёмом до 256 МиБ. Чем выше битрейт, тем короче доступный интервал."
   },
   {
    "zh": "信号",
@@ -10740,6 +10792,19 @@
    "ru": "Отмена"
   },
   {
+   "zh": "取消更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "取消更新",
+   "en": "Cancel update",
+   "ja": "更新をキャンセル",
+   "ko": "업데이트 취소",
+   "es": "Cancelar actualización",
+   "fr": "Annuler la mise à jour",
+   "de": "Update abbrechen",
+   "pt-BR": "Cancelar atualização",
+   "ru": "Отменить обновление"
+  },
+  {
    "zh": "变化容差",
    "src": "qml/NodePage.qml",
    "zh-TW": "變化容差",
@@ -11097,11 +11162,11 @@
    "en": "Visual crop",
    "ja": "プレビューでクロップ",
    "ko": "미리보기 자르기",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Recorte visual",
+   "fr": "Recadrage visuel",
+   "de": "Visuelles Zuschneiden",
+   "pt-BR": "Recorte visual",
+   "ru": "Визуальная обрезка"
   },
   {
    "zh": "可选 · 采集卡直采无声时使用",
@@ -11552,11 +11617,11 @@
    "en": "Command slot wait",
    "ja": "コマンドスロット待ち",
    "ko": "명령 슬롯 대기",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Espera de un espacio de comandos",
+   "fr": "Attente d’un emplacement de commande",
+   "de": "Wartezeit auf einen Befehlsplatz",
+   "pt-BR": "Espera por um slot de comandos",
+   "ru": "Ожидание слота команд"
   },
   {
    "zh": "和「PS5 串流」共用配对",
@@ -11630,11 +11695,11 @@
    "en": "Go live",
    "ja": "ライブに戻る",
    "ko": "라이브로 이동",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Volver al directo",
+   "fr": "Revenir au direct",
+   "de": "Zum Livepunkt",
+   "pt-BR": "Voltar ao vivo",
+   "ru": "Вернуться в эфир"
   },
   {
    "zh": "回放 %1",
@@ -16570,11 +16635,11 @@
    "en": "Apply crop",
    "ja": "クロップを適用",
    "ko": "자르기 적용",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Aplicar recorte",
+   "fr": "Appliquer le recadrage",
+   "de": "Zuschnitt anwenden",
+   "pt-BR": "Aplicar recorte",
+   "ru": "Применить обрезку"
   },
   {
    "zh": "应用设置并重连",
@@ -17766,11 +17831,11 @@
    "en": "Recording split",
    "ja": "録画の分割",
    "ko": "녹화 분할",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Segmentación de la grabación",
+   "fr": "Segmentation de l’enregistrement",
+   "de": "Aufnahmeaufteilung",
+   "pt-BR": "Divisão da gravação",
+   "ru": "Разбиение записи"
   },
   {
    "zh": "录制回读缓冲分配失败",
@@ -18156,11 +18221,11 @@
    "en": "Performance and timing",
    "ja": "パフォーマンスと処理時間",
    "ko": "성능 및 처리 시간",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Rendimiento y tiempos",
+   "fr": "Performances et temps de traitement",
+   "de": "Leistung und Verarbeitungszeiten",
+   "pt-BR": "Desempenho e tempos",
+   "ru": "Производительность и время обработки"
   },
   {
    "zh": "总体强度",
@@ -19248,11 +19313,11 @@
    "en": "Drag the edges or move the crop · %1 × %2",
    "ja": "縁をドラッグするか、切り抜き枠を移動 · %1 × %2",
    "ko": "가장자리를 끌거나 영역 이동 · %1 × %2",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Arrastra los bordes o mueve el marco de recorte · %1 × %2",
+   "fr": "Faites glisser les bords ou déplacez le cadre de recadrage · %1 × %2",
+   "de": "Ziehe die Ränder oder verschiebe den Zuschneiderahmen · %1 × %2",
+   "pt-BR": "Arraste as bordas ou mova o quadro de recorte · %1 × %2",
+   "ru": "Перетащите края или переместите рамку обрезки · %1 × %2"
   },
   {
    "zh": "按下新按键…",
@@ -20736,6 +20801,19 @@
    "de": "Konnte den Recording Header nicht schreiben: ",
    "pt-BR": "Não foi possível gravar o cabeçalho da gravação: ",
    "ru": "Не удалось написать заголовок записи: "
+  },
+  {
+   "zh": "无法写入更新目录",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "無法寫入更新資料夾",
+   "en": "Cannot write to the update folder",
+   "ja": "更新フォルダーに書き込めません",
+   "ko": "업데이트 폴더에 쓸 수 없습니다",
+   "es": "No se puede escribir en la carpeta de actualización",
+   "fr": "Impossible d’écrire dans le dossier de mise à jour",
+   "de": "Schreiben in den Updateordner fehlgeschlagen",
+   "pt-BR": "Não foi possível gravar na pasta de atualização",
+   "ru": "Не удалось записать данные в папку обновления"
   },
   {
    "zh": "无法分配媒体上下文",
@@ -22493,6 +22571,45 @@
    "ru": "Изменить…"
   },
   {
+   "zh": "更新下载或校验失败，请重试",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "更新下載或驗證失敗，請重試",
+   "en": "Update download or verification failed. Try again.",
+   "ja": "更新のダウンロードまたは検証に失敗しました。再試行してください。",
+   "ko": "업데이트 다운로드 또는 검증에 실패했습니다. 다시 시도하세요.",
+   "es": "No se pudo descargar o verificar la actualización. Inténtalo de nuevo.",
+   "fr": "Le téléchargement ou la vérification de la mise à jour a échoué. Réessayez.",
+   "de": "Das Update konnte nicht heruntergeladen oder geprüft werden. Versuche es erneut.",
+   "pt-BR": "Falha ao baixar ou verificar a atualização. Tente novamente.",
+   "ru": "Не удалось скачать или проверить обновление. Повторите попытку."
+  },
+  {
+   "zh": "更新已就绪，将在退出后安装",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "更新已準備就緒，將在結束後安裝",
+   "en": "Update ready. It will be installed after exit.",
+   "ja": "更新の準備が完了しました。終了後にインストールします。",
+   "ko": "업데이트 준비가 완료되었습니다. 종료 후 설치합니다.",
+   "es": "La actualización está lista y se instalará al salir",
+   "fr": "La mise à jour est prête et sera installée à la fermeture",
+   "de": "Das Update ist bereit und wird beim Beenden installiert",
+   "pt-BR": "Atualização pronta para instalação ao sair",
+   "ru": "Обновление готово и будет установлено при выходе"
+  },
+  {
+   "zh": "更新未完成，已打开可用版本",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "更新未完成，已開啟可用版本",
+   "en": "Update did not complete. A working version was opened.",
+   "ja": "更新を完了できなかったため、利用可能なバージョンを開きました。",
+   "ko": "업데이트를 완료하지 못해 실행 가능한 버전을 열었습니다.",
+   "es": "No se completó la actualización. Se abrió una versión operativa.",
+   "fr": "La mise à jour a échoué. Une version fonctionnelle a été ouverte.",
+   "de": "Das Update wurde nicht abgeschlossen. Eine funktionsfähige Version wurde gestartet.",
+   "pt-BR": "A atualização não foi concluída. Uma versão funcional foi aberta.",
+   "ru": "Обновление не завершилось. Запущена рабочая версия."
+  },
+  {
    "zh": "更新组件",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "更新元件",
@@ -24077,6 +24194,19 @@
    "de": "Positive Werte verzögern den Ton",
    "pt-BR": "Valores positivos atrasam o áudio",
    "ru": "Положительные значения задерживают звук"
+  },
+  {
+   "zh": "正在下载更新 %1%",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "正在下載更新 %1%",
+   "en": "Downloading update · %1%",
+   "ja": "更新をダウンロード中 · %1%",
+   "ko": "업데이트 다운로드 중 · %1%",
+   "es": "Descargando actualización · %1%",
+   "fr": "Téléchargement de la mise à jour · %1%",
+   "de": "Update wird heruntergeladen · %1%",
+   "pt-BR": "Baixando atualização · %1%",
+   "ru": "Загрузка обновления · %1%"
   },
   {
    "zh": "正在保存正式文件",
@@ -25905,11 +26035,11 @@
    "en": "Source frame budget %1 ms",
    "ja": "入力フレーム予算 %1 ms",
    "ko": "원본 프레임 예산 %1 ms",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Tiempo disponible por fotograma de origen: %1 ms",
+   "fr": "Temps disponible par image source : %1 ms",
+   "de": "Zeitbudget pro Quellbild: %1 ms",
+   "pt-BR": "Tempo disponível por quadro de origem: %1 ms",
+   "ru": "Бюджет времени на исходный кадр: %1 мс"
   },
   {
    "zh": "源帧预算 —",
@@ -25918,11 +26048,11 @@
    "en": "Source frame budget —",
    "ja": "入力フレーム予算 —",
    "ko": "원본 프레임 예산 —",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Tiempo disponible por fotograma de origen —",
+   "fr": "Temps disponible par image source —",
+   "de": "Zeitbudget pro Quellbild —",
+   "pt-BR": "Tempo disponível por quadro de origem —",
+   "ru": "Бюджет времени на исходный кадр —"
   },
   {
    "zh": "源文件不存在",
@@ -27140,11 +27270,11 @@
    "en": "Open a video stream over HTTP, HTTPS, RTSP, RTP, or UDP.",
    "ja": "HTTP、HTTPS、RTSP、RTP、UDP の動画ストリームを開きます。",
    "ko": "HTTP, HTTPS, RTSP, RTP 또는 UDP 영상 스트림을 엽니다.",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Abrir un flujo de vídeo por HTTP, HTTPS, RTSP, RTP o UDP",
+   "fr": "Ouvrir un flux vidéo via HTTP, HTTPS, RTSP, RTP ou UDP",
+   "de": "Videostream über HTTP, HTTPS, RTSP, RTP oder UDP öffnen",
+   "pt-BR": "Abrir um fluxo de vídeo via HTTP, HTTPS, RTSP, RTP ou UDP",
+   "ru": "Открыть видеопоток по HTTP, HTTPS, RTSP, RTP или UDP"
   },
   {
    "zh": "直接查看完整格式列表，包含被常用帧率筛选隐藏的模式",
@@ -27166,11 +27296,11 @@
    "en": "Live",
    "ja": "ライブ",
    "ko": "라이브",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "En directo",
+   "fr": "En direct",
+   "de": "Live",
+   "pt-BR": "Ao vivo",
+   "ru": "Прямой эфир"
   },
   {
    "zh": "直播兼容模式未能启用，已恢复",
@@ -27192,11 +27322,11 @@
    "en": "Live timeshift",
    "ja": "ライブタイムシフト",
    "ko": "라이브 타임시프트",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Control de tiempo del directo",
+   "fr": "Lecture différée du direct",
+   "de": "Zeitversetzte Wiedergabe",
+   "pt-BR": "Controle de tempo da transmissão",
+   "ru": "Отложенный просмотр эфира"
   },
   {
    "zh": "直播画面节奏",
@@ -27394,6 +27524,19 @@
    "ru": "Запись остановлена: записи на диске слишком медленные (используйте более быстрый диск или более низкий битрейт)."
   },
   {
+   "zh": "磁盘空间不足，无法下载并解压更新",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "磁碟空間不足，無法下載並解壓縮更新",
+   "en": "Insufficient disk space to download and extract the update",
+   "ja": "更新のダウンロードと展開に必要な空き容量がありません",
+   "ko": "업데이트를 다운로드하고 압축을 풀 공간이 부족합니다",
+   "es": "No hay espacio en disco para descargar y extraer la actualización",
+   "fr": "Espace disque insuffisant pour télécharger et extraire la mise à jour",
+   "de": "Nicht genügend Speicherplatz zum Herunterladen und Entpacken des Updates",
+   "pt-BR": "Espaço em disco insuficiente para baixar e extrair a atualização",
+   "ru": "Недостаточно места на диске для загрузки и распаковки обновления"
+  },
+  {
    "zh": "磨皮",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "磨皮",
@@ -27478,11 +27621,11 @@
    "en": "s",
    "ja": "秒",
    "ko": "초",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "s",
+   "fr": "s",
+   "de": "s",
+   "pt-BR": "s",
+   "ru": "с"
   },
   {
    "zh": "程序启动时的页面、窗口和恢复行为。",
@@ -31898,11 +32041,11 @@
    "en": "Use a direct media URL. Include a port in RTP and UDP MPEG-TS URLs.",
    "ja": "メディアの直接 URL を入力してください。RTP と UDP の MPEG-TS URL にはポートが必要です。",
    "ko": "직접 미디어 URL을 입력하세요. RTP 및 UDP MPEG-TS URL에는 포트가 필요합니다.",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Usa la URL directa del medio. Las direcciones MPEG-TS por RTP y UDP deben incluir un puerto.",
+   "fr": "Utilisez l’URL directe du média. Les adresses MPEG-TS sur RTP et UDP doivent inclure un port.",
+   "de": "Verwende eine direkte Medien-URL. MPEG-TS-Adressen über RTP oder UDP müssen einen Port enthalten.",
+   "pt-BR": "Use a URL direta da mídia. Endereços MPEG-TS via RTP ou UDP precisam incluir uma porta.",
+   "ru": "Используйте прямой URL медиа. В адресах MPEG-TS по RTP и UDP укажите порт."
   },
   {
    "zh": "请先切换到要保存的编辑模式",
@@ -32288,11 +32431,11 @@
    "en": "Enter a valid HTTP, HTTPS, RTSP, RTP, or UDP video URL.",
    "ja": "有効な HTTP、HTTPS、RTSP、RTP または UDP の動画 URL を入力してください。",
    "ko": "유효한 HTTP, HTTPS, RTSP, RTP 또는 UDP 영상 URL을 입력하세요.",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Introduce una URL de vídeo válida por HTTP, HTTPS, RTSP, RTP o UDP.",
+   "fr": "Saisissez une URL vidéo valide en HTTP, HTTPS, RTSP, RTP ou UDP.",
+   "de": "Gib eine gültige Video-URL mit HTTP, HTTPS, RTSP, RTP oder UDP ein.",
+   "pt-BR": "Insira uma URL de vídeo válida via HTTP, HTTPS, RTSP, RTP ou UDP.",
+   "ru": "Введите действительный URL видео по HTTP, HTTPS, RTSP, RTP или UDP."
   },
   {
    "zh": "请选择",
@@ -32535,11 +32678,11 @@
    "en": "Scheduling wait",
    "ja": "スケジューリング待ち",
    "ko": "스케줄링 대기",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Espera de planificación",
+   "fr": "Attente de planification",
+   "de": "Wartezeit im Ablaufplan",
+   "pt-BR": "Espera de agendamento",
+   "ru": "Ожидание планировщика"
   },
   {
    "zh": "调度等待 P95",
@@ -34147,11 +34290,11 @@
    "en": "Split at the next keyframe after either limit is reached. Enter 0 to disable a limit. Settings apply to the next recording.",
    "ja": "どちらかの上限に達すると、次のキーフレームで分割します。0 は無効です。設定は次回録画から適用されます。",
    "ko": "하나의 한도에 도달하면 다음 키프레임에서 분할합니다. 0은 끄기이며 다음 녹화부터 적용됩니다.",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Divide en el siguiente fotograma clave al alcanzar cualquiera de los límites. 0 desactiva el límite. Los ajustes se aplican a la próxima grabación.",
+   "fr": "Crée un segment à l’image clé suivante dès qu’une limite est atteinte. Saisissez 0 pour désactiver une limite. Les réglages s’appliquent au prochain enregistrement.",
+   "de": "Teilt am nächsten Schlüsselbild, sobald ein Grenzwert erreicht ist. 0 deaktiviert das jeweilige Limit. Die Einstellungen gelten ab der nächsten Aufnahme.",
+   "pt-BR": "Divide no próximo quadro-chave após atingir qualquer limite. 0 desativa o limite. As configurações valem para a próxima gravação.",
+   "ru": "Разделяет запись на следующем ключевом кадре после достижения любого из лимитов. Значение 0 отключает лимит. Настройки действуют со следующей записи."
   },
   {
    "zh": "运动估算质量",
@@ -35993,11 +36136,11 @@
    "en": "Reset",
    "ja": "リセット",
    "ko": "초기화",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Restablecer",
+   "fr": "Réinitialiser",
+   "de": "Zurücksetzen",
+   "pt-BR": "Redefinir",
+   "ru": "Сбросить"
   },
   {
    "zh": "重置本页",
@@ -37202,11 +37345,11 @@
    "en": "Preview and drag",
    "ja": "プレビューして調整",
    "ko": "미리보기에서 끌기",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "es": "Vista previa y ajuste por arrastre",
+   "fr": "Prévisualiser et ajuster par glissement",
+   "de": "Vorschau und Zuschnitt per Ziehen",
+   "pt-BR": "Pré-visualizar e ajustar arrastando",
+   "ru": "Просмотреть и настроить перетаскиванием"
   },
   {
    "zh": "预览：SDR 转 HDR 已运行",

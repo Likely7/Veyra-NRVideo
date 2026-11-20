@@ -1,4 +1,5 @@
 #include "veyra/ui/UpdateChecker.h"
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,7 +19,10 @@ QVersionNumber versionNumber(const QString& text, bool local) {
 }
 }
 UpdateChecker::UpdateChecker(QString currentVersion, QObject* parent, QUrl endpoint, int timeoutMs)
-    : QObject(parent), currentVersion_(std::move(currentVersion)), endpoint_(std::move(endpoint)), timeoutMs_(timeoutMs) {
+    : QObject(parent), currentVersion_(std::move(currentVersion)), endpoint_(std::move(endpoint)), timeoutMs_(timeoutMs),
+      portable_(currentVersion_) {
+    connect(this, &UpdateChecker::releaseChanged, &portable_, [this] { portable_.selectRelease(latestVersion_); });
+    connect(&portable_, &PortableUpdate::notice, this, &UpdateChecker::notice);
     deadline_.setSingleShot(true);
     connect(&deadline_, &QTimer::timeout, this, [this] {
         if (reply_) { failure_ = QStringLiteral("timeout"); reply_->abort(); }
@@ -32,7 +36,7 @@ UpdateChecker::~UpdateChecker() {
     }
 }
 void UpdateChecker::startAutomaticCheck() {
-    if (automaticScheduled_) return;
+    if (automaticScheduled_ || QCoreApplication::arguments().contains(QStringLiteral("--portable-update-probe"))) return;
     automaticScheduled_ = true;
     QTimer::singleShot(2500, this, [this] {
         // A manual check made during startup already fulfils this run's check.

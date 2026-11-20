@@ -31,6 +31,19 @@
 
 未验证：Windows完整构建、`veyra_live_timing_tests`完整运行、`LivePresentationTests --half-rate`、PS5/采集卡/VFG实机。实机判据：60→30开启时，掉帧场景下界面"当前约N fps"随游戏低于30，`capture-rate`日志repeatsSkipped增长、shifts基本不再增加，主观卡顿消失。
 
+
+## 2026-11-19 便携 ZIP 在线更新
+
+基于 main `eb8674e5` 在 `codex/portable-online-update-20261119` 实施。设置 → 关于保留原 GitHub 正式版检查，签名清单可用时显示按包型选择的更新、大小、摘要和下载进度。可取消，正常退出后复验、暂存、启动检查并原子切换。根目录 `Veyra.exe` 负责启动与回退。配置和 LUT 使用独立的便携数据目录。
+
+用 `build-recording-handoff.py` 构建两个回环测试版本，再用 `package-portable-update.py wrap/sign --test` 签署最终 ZIP 对应的清单。测试中的 2.1.10 是本地版本标记，源码的项目版本复原为 2.1.9。原始物理路径试配出现 pkg-config 与 MSVC 响应文件编码错误，构建改用已有的 Qt 和 core 依赖兼容入口。已为静态 OpenSSL 补齐 Winsock 和 Crypt32 链接。原始回归日志和最终构建回执保存在任务日志目录。
+
+Windows 11 26200 上，`smoke-portable-update.py` 验证 NVIDIA、AMD 两种完整包下载并安装、重开和保留设置及 LUT。改动 ZIP 的一个字节后未进入待安装状态，无效签名在请求 ZIP 之前被拒绝，启动检查失败的测试包未切换活动版本。NVIDIA 测试中移开活动版 EXE 后启动器成功找到旧版。首轮测试夹具误把写入 Qt 日志前的启动消息作为通过条件，已用状态记录与真实重开来核实并将结果日志移到事件循环内。
+
+原更新检查 29 项、QML 数据迁移和四语目录检查通过。无测试端口配置的更新目标构建通过，实际 GitHub HTTPS 检查返回最新正式版 2.1.9。软件端完整升级验证在回环测试源运行。正式发布密钥和 Windows Authenticode 尚未配置，Defender 告警及其他系统未验。
+
+任务目录为 `E:/项目/Veyra/{build,tests,logs,reports,tmp,test-packages}/codex-portable-online-update-20261119`。用户操作、发版命令和签名边界见 [便携更新方案](PORTABLE_UPDATE_PLAN_2026-11-19.md)。
+
 ## 2026-11-13 SDR 截图 Alpha 与暗部量化修复（独立分支）
 
 基于公开 main 8332c8a8，在 fix/screenshot-alpha-quantization 修复 SDR 视频/采集截图：显式选择不透明 BGR PNG 编码；普通图片继续保留原 Alpha 策略，HDR JXR、处理 Shader、录制与呈现代码不改，无新增持续回读。原图 straight RGB 在 Pillow/WIC 一致，原始纯黑37像素；实际 WIC 8-bit 预乘/反预乘后为20.8582%纯黑，首次量化在该消费者转换中观察到。低 Alpha 的上游产生阶段未宣称定位。
