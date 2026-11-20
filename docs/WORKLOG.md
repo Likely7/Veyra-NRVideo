@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-20 构建 Veyra 2.2.0
+
+从干净的本地 `main` 提交 `ecbe0543` 全量构建 Windows x64 2.2.0，MSVC/Ninja 并发 2，成功用时 324.4 秒。命令为 `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-build-2.2.0-20261120 --root <main工作树> --build-dir <同任务build/product> --label 2.2.0 --jobs 2 --reconfigure` 加任务的已核验依赖和目标。第一次配置时 pkg-config 误解码含中文的 json-c 前缀，在新输出目录通过已有 ASCII junction 引用同一份 E 盘依赖后通过。日志在同名任务的 `build-20261120-010302` 和 `build-20261120-010425`。使用 `FileVersionRaw` 核对两份安装程序的 2.2.0.0，避开字符串版本字段的尾部填充。
+
+沿用安装器提交 `7ecb5d1d` 的 Inno 模板，用 `package-windows-installer.py --local-test` 生成未签名 NVIDIA、AMD 安装包。重新组装本次程序、QML、91 个着色器、32/64 位虚拟摄像机组件与对应安装器。逐文件核对既有分版运行组件和 patched FFmpeg。实时翻译模型与 CPU 运行库仍由应用内按需下载。安装程序和校验和在 `E:/项目/Veyra/test-packages/codex-build-2.2.0-20261120`，详细回执在同任务 `reports/FINAL.json`。
+
+本次原生构建复测 Qt Quick 238 项、更新检测 29 项、语言目录、实时翻译测试字幕和 DirectShow 暂停队列通过。NVIDIA 私有目录逐哈希核对 1712 个载荷条目，播放器成功启动、打开翻译面板并播放测试片。AMD 安装实测 30.3 秒，核对 2336 个载荷条目，播放及翻译面板通过，卸载并核对注册项清除。显卡平台为 RTX 5070，AMD 专属 GPU 路径和真实语音识别未在本轮验收。临时打包阶段与测试夹具保留在 E 盘任务目录，工具自动审查拒绝了本轮递归清理命令。
+
 ## 2026-11-20 社区 PR 整合与实时翻译
 
 锁定 GitHub 24 个开放 PR 的提交。19 个修复与功能合入，#202 采用生成文件清理部分。#176 的构建工作流、#198 的 MFG 共用解析、#199 历史清理和 #201 旧 Win32 删除留待专项。逐项决定在 `E:/项目/Veyra/reports/codex-pr-integration-20261120/PR-审查.md`，固定提交见同目录 `pinned-prs.json`。
