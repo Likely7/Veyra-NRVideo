@@ -273,11 +273,16 @@ bool PlayerUiFacade::savePreferencesLocked() {
     // still loads: the reader treats a missing tail as defaults.
     out << (reducedMotion_ ? 1 : 0) << ' ' << std::quoted(utf8(defaultPage_)) << '\n';
     const auto temporary = std::filesystem::path(preferencesPath()).concat(L".tmp");
-    { std::ofstream f(temporary, std::ios::binary | std::ios::trunc); if (!f) { error_ = L"界面状态写入失败"; return false; } f << out.str(); if (!f) { error_ = L"界面状态写入失败"; return false; } }
-    if (!MoveFileExW(temporary.c_str(), preferencesPath().c_str(), MOVEFILE_REPLACE_EXISTING)) {
+    const auto data = out.str();
+    HANDLE file = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) { error_ = L"界面状态写入失败"; return false; }
+    DWORD written = 0;
+    const bool ok = WriteFile(file, data.data(), DWORD(data.size()), &written, nullptr) && written == data.size() && FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!ok || !MoveFileExW(temporary.c_str(), preferencesPath().c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::error_code ec;
         std::filesystem::remove(temporary, ec);
-        error_ = L"界面状态替换失败";
+        error_ = ok ? L"界面状态替换失败" : L"界面状态写入失败";
         return false;
     }
     return true;
