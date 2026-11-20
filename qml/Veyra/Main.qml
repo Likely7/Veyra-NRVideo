@@ -39,6 +39,7 @@ Window {
     // Page ids match the prototype's PAGES keys so a design screenshot and an
     // app screenshot can be compared under the same name.
     property string page: "home"
+    readonly property bool onboardingActive: onboarding.visible
     // The node page splitter: height of its video card (picture + 40px bar).
     property real nodeVideoHeight: 330
     // Every navigation goes through here: "专业" means the node page while the
@@ -136,6 +137,7 @@ Window {
         videoHost.syncRect()
     }
     onPageChanged: {
+        if (onboarding.visible) onboarding.close()
         if (page === "node" && veyra.nodeMode !== 1) {
             veyra.nodeMode = 1
             if (veyra.nodeMode !== 1) { page = "pro"; return }
@@ -260,7 +262,14 @@ Window {
         visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.quickPanelShown
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
-        HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p); onRequestSponsor: root.showSponsor() }
+        HomePage {
+            id: homePage
+            pageId: "home"
+            home: pages
+            onRequestPage: p => root.goPage(p)
+            onRequestSponsor: root.showSponsor()
+            onRequestOnboarding: if (root.page === "home" && dialogs.dialog === "") onboarding.start()
+        }
         MinimalPage {
             id: minPage
             pageId: "min"
@@ -276,6 +285,7 @@ Window {
             // Also follows wrapping status text and the compact header/transport.
             onVideoViewportChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
             home: pages
+            onboardingActive: root.onboardingActive
             overlay: root.quickPanelShown && root.page === "pro"
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
@@ -309,6 +319,7 @@ Window {
     DialogHost {
         id: dialogs
         anchors.fill: parent
+        onboardingActive: root.onboardingActive
         // The dialogs open the source through the bridge; show the picture.
         onStartCapture: if (root.page === "home") root.goPage("min")
         onStartPs5: if (root.page === "home") root.goPage("min")
@@ -322,6 +333,42 @@ Window {
             root.goPage("min")
             screenCrop.begin(veyra.screenOptions)
         }
+    }
+
+    OnboardingGuide {
+        id: onboarding
+        parent: root.contentItem
+        z: 1100
+        property var savedProView
+        property real savedCaptureScroll
+        targetFor: key => {
+            if (key === "capture") return { item: homePage.captureCard() }
+            if (dialogs.dialog === "capture") return dialogs.captureSettings.onboardingTarget(key)
+            return proPage.onboardingTarget(key)
+        }
+        onAboutToShow: {
+            savedProView = proPage.saveOnboardingView()
+            savedCaptureScroll = dialogs.captureSettings.bodyViewport.contentY
+        }
+        onStepRequested: step => {
+            // Only the displayed page changes. The player, remembered page and
+            // native video window stay in the same state as on the home page.
+            if (step.tab) {
+                dialogs.close()
+                proPage.showOnboardingStep(step)
+                root.shownPage = "pro"
+            } else {
+                root.shownPage = "home"
+                dialogs.dialog = step.target === "capture" ? "" : "capture"
+            }
+        }
+        onAboutToHide: {
+            dialogs.close()
+            dialogs.captureSettings.bodyViewport.contentY = savedCaptureScroll
+            root.shownPage = "home"
+            proPage.restoreOnboardingView(savedProView)
+        }
+        onClosed: if (root.page === "home" && dialogs.dialog === "") homePage.onboardingEntry.forceActiveFocus()
     }
 
     // The dock floats above every page and retracts on its own.
@@ -745,7 +792,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && !screenCrop.editing && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -910,10 +957,11 @@ Window {
 
     Connections {
         target: veyra
-        function onPlaylistRequested() { playlistWindow.open() }
+        function onPlaylistRequested() { onboarding.close(); playlistWindow.open() }
         function onNotice(text, isError) { toast.show(text, isError) }
-        function onOverlayRestartSuggested(kind) { overlayRestart.kind = kind; overlayRestart.open() }
+        function onOverlayRestartSuggested(kind) { onboarding.close(); overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
+            onboarding.close()
             // A dialog key opens the dialog; anything else is a page.
             if (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
                 || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {

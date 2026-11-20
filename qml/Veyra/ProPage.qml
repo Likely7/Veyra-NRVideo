@@ -24,6 +24,31 @@ VPage {
     // Fullscreen quick-adjust (Home, Main.qml): only the inspector is shown, moved
     // to the left of the picture, cut out of the native video window.
     property bool overlay: false
+    property bool onboardingActive: false
+    function saveOnboardingView() {
+        return { tab: tab, scroll: inspFlick.contentY, fgOpen: fgCard.open,
+                 flowOpen: fgFlowGroup.expanded }
+    }
+    function restoreOnboardingView(view) {
+        fgCard.open = view.fgOpen
+        fgFlowGroup.expanded = view.flowOpen
+        tab = view.tab
+        inspFlick.contentY = view.scroll
+    }
+    function showOnboardingStep(step) {
+        const changedTab = tab !== step.tab
+        tab = step.tab
+        if (step.target === "fg" || step.target === "dedup") fgCard.open = true
+        if (step.target === "dedup") fgFlowGroup.expanded = true
+        if (changedTab || step.target === "fg") inspFlick.contentY = inspFlick.originY
+    }
+    function onboardingTarget(key) {
+        if (key === "fg") return { item: insp }
+        if (key === "timing") return { item: meters }
+        const items = { "sr": srCard.headerItem, "nr": nrStage.headerItem,
+                        "hdr": hdrCard.headerItem, "dedup": dedupRow }
+        return { item: items[key], viewport: inspFlick }
+    }
     readonly property bool hdrMeterObserved: visible && tab === "display" && displayCol.hdrMeterObserved
     onHdrMeterObservedChanged: veyra.observeHdrCoverage(hdrMeterObserved)
     function overlayContains(x, y) {
@@ -33,7 +58,7 @@ VPage {
     // Leaving the page (or switching to the node editor) disarms region drawing;
     // showing it replays the GPU bars' staggered entrance (M27).
     onVisibleChanged: {
-        if (!visible && veyra.protectionDrawShape.length > 0) veyra.beginProtectionDraw("")
+        if (!visible && !onboardingActive && veyra.protectionDrawShape.length > 0) veyra.beginProtectionDraw("")
         if (visible) armBars()
     }
 
@@ -50,7 +75,7 @@ VPage {
     // (pages-pro.js render(true): 460 ms, i*30 ms, y 10).
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col, step, span, dy) {
-        if (Theme.reduced || !col) return
+        if (Theme.reduced || onboardingActive || !col) return
         let i = 0
         for (let k = 0; k < col.children.length; ++k) {
             const c = col.children[k]
@@ -558,7 +583,7 @@ VPage {
             }
             Shortcut {
                 sequence: "Escape"
-                enabled: root.visible && (!root.shell || !root.shell.fullscreen) &&
+                enabled: root.visible && !root.onboardingActive && (!root.shell || !root.shell.fullscreen) &&
                          veyra.protectionDrawShape.length > 0
                 onActivated: veyra.beginProtectionDraw("")
             }
@@ -1246,7 +1271,8 @@ VPage {
                 implicitHeight: chainCol.implicitHeight + 20
                 objectName: "pro-processing-order"
                 // The design draws the chain bar on the 画质 tab only.
-                visible: root.tab === "quality"
+                // In a short walkthrough window, keep room for the highlighted control.
+                visible: root.tab === "quality" && (!root.onboardingActive || insp.height >= 240)
                 radius: 12
                 color: Qt.rgba(1, 1, 1, 0.03)
                 border.width: 1
@@ -1367,6 +1393,7 @@ VPage {
                         }
 
                         VAccordion {
+                            id: srCard
                             objectName: "list-sr"
                             Layout.fillWidth: true
                             glyph: "sparkles"
@@ -1424,6 +1451,7 @@ VPage {
                         // RTX Video HDR: SDR -> HDR before frame generation. Runs
                         // only on an HDR display path; the status says why not.
                         VAccordion {
+                            id: hdrCard
                             objectName: "list-video-hdr"
                             Layout.fillWidth: true
                             glyph: "sun"
@@ -1735,6 +1763,7 @@ VPage {
                         VAccordion {
                             id: fgCard
                             objectName: "list-fg-card"
+                            instantExpansion: root.onboardingActive
                             Layout.fillWidth: true
                             glyph: "layers"
                             hue: "#3DDC84"
@@ -1875,7 +1904,9 @@ VPage {
                                 }
                             }
                             VSubGroup {
+                                id: fgFlowGroup
                                 objectName: "list-fg-flow-group"
+                                instantExpansion: root.onboardingActive
                                 Layout.fillWidth: true
                                 Layout.topMargin: 6
                                 label: qsTr("光流 · 运动估算")
@@ -1919,7 +1950,7 @@ VPage {
                                         onPicked: id => veyra.flowQuality = Number(id)
                                     }
                                 }
-                                DedupModeRow { backend: veyra; namePrefix: "list" }
+                                DedupModeRow { id: dedupRow; backend: veyra; namePrefix: "list" }
                             }
                             NvidiaLowLatencyEditor { namePrefix: "list" }
                             VRow {

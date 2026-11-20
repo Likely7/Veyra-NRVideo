@@ -77,6 +77,7 @@ DialogTextField 1.0 DialogTextField.qml
 NetworkSourceDialog 1.0 NetworkSourceDialog.qml
 CaptureSourceDialog 1.0 CaptureSourceDialog.qml
 CaptureGuideDialog 1.0 CaptureGuideDialog.qml
+OnboardingGuide 1.0 OnboardingGuide.qml
 Ps5SourceDialog 1.0 Ps5SourceDialog.qml
 PcSourceDialog 1.0 PcSourceDialog.qml
 XboxSourceDialog 1.0 XboxSourceDialog.qml

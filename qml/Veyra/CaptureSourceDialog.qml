@@ -7,6 +7,8 @@ DialogLayer {
     required property var legacyPicker
     signal guideRequested()
     id: captureDialog
+    property bool onboardingActive: false
+    instantTransition: onboardingActive
     objectName: "capture-dialog"
     key: "capture"
     glyph: "video"
@@ -19,6 +21,7 @@ DialogLayer {
         { label: qsTr("连接并开始"), primary: true, icon: "play" }
     ]
     onActionTriggered: label => {
+        if (onboardingActive) return
         if (label === qsTr("断开")) { veyra.stopPlayback(); return }
         if (label !== qsTr("连接并开始")) { dialogHost.close(); return }
         if (veyra.startCaptureSession()) { dialogHost.close(); dialogHost.startCapture() }
@@ -26,11 +29,22 @@ DialogLayer {
     Connections {
         target: dialogHost
         function onDialogChanged() {
-            if (dialogHost.dialog !== "capture") return
+            if (dialogHost.dialog !== "capture" || captureDialog.onboardingActive) return
             veyra.refreshCaptureDevices()
             // The PS5 手柄控制 host list is the PS5 dialog's saved pairings.
             if (veyra.ps5Control.available === true) veyra.ps5Load()
         }
+    }
+    function onboardingTarget(key) {
+        const rows = {
+            "device": videoDeviceRow,
+            "resolution": resolutionRow,
+            "capture-rate": captureRateRow,
+            "format": pixelFormatRow,
+            "input-color": inputColorRow
+        }
+        return key === "connect" ? { item: primaryAction }
+                                 : { item: rows[key], viewport: bodyViewport }
     }
     function labelOf(list, id, fallback) { const f = list.find(x => String(x.id) === String(id)); return f ? f.label : fallback }
     readonly property bool live: veyra.captureSignalLevel !== "idle"
@@ -129,6 +143,7 @@ DialogLayer {
     DialogSection { text: qsTr("设备") }
     DialogGroup {
         VRow {
+            id: videoDeviceRow
             label: qsTr("视频输入设备")
             hint: veyra.captureQueryBusy ? qsTr("正在查询…当前播放继续") : (veyra.captureDevices.length === 0 ? qsTr("未检测到采集设备") : "")
             RowLayout {
@@ -166,6 +181,7 @@ DialogLayer {
             }
         }
         VRow {
+            id: resolutionRow
             label: qsTr("分辨率")
             hint: qsTr("先选择分辨率，再选择该分辨率支持的帧率和像素格式")
             VSelect {
@@ -189,6 +205,7 @@ DialogLayer {
             }
         }
         VRow {
+            id: captureRateRow
             label: qsTr("帧率")
             hint: qsTr("列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值")
             VSelect {
@@ -217,6 +234,7 @@ DialogLayer {
             }
         }
         VRow {
+            id: pixelFormatRow
             label: qsTr("像素格式")
             // Never search veyra.captureFormats here: a card can list 15000+ (logs(18)).
             hint: veyra.captureFormatCostHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式")
@@ -534,6 +552,7 @@ DialogLayer {
     DialogSection { text: qsTr("格式与画面") }
     DialogGroup {
         VRow {
+            id: inputColorRow
             label: qsTr("输入色彩（SDR / HDR）")
             hint: qsTr("不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连")
             VSeg {

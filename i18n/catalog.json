@@ -1210,6 +1210,19 @@
    "ru": "1 мин"
   },
   {
+   "zh": "10 位 4:2:0 · 这四种里，采集原生 HDR10 要选 P010。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "10 位元 4:2:0 · 這四種格式中，擷取原生 HDR10 要選 P010。",
+   "en": "10-bit 4:2:0 · Of these four formats, use P010 for native HDR10 capture.",
+   "ja": "10 ビット 4:2:0 · この 4 種類の中では、HDR10 をそのまま取り込む場合に P010 を使います。",
+   "ko": "10비트 4:2:0 · 이 네 형식 중 네이티브 HDR10 캡처에는 P010을 사용합니다.",
+   "es": "10 bits 4:2:0 · De estos cuatro formatos, usa P010 para capturar HDR10 nativo.",
+   "fr": "10 bits 4:2:0 · Parmi ces quatre formats, utilisez P010 pour capturer du HDR10 natif.",
+   "de": "10 Bit 4:2:0 · Von diesen vier Formaten benötigst du P010 für natives HDR10.",
+   "pt-BR": "10 bits 4:2:0 · Entre esses quatro formatos, use P010 para capturar HDR10 nativo.",
+   "ru": "10 бит 4:2:0 · Из этих четырёх форматов для захвата исходного HDR10 используйте P010."
+  },
+  {
    "zh": "10 位 4:2:0，主机确实在输出 HDR10 时配 **HDR · PQ**。P010 传 SDR 时仍按 SDR 读。卡带不动 4K60 HDR 的话，我会先试 1440p60 HDR。",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "10 位元 4:2:0。主機確實輸出 HDR10 時搭配 **HDR · PQ**。P010 傳送 SDR 時仍按 SDR 讀取。擷取卡跑不動 4K60 HDR 的話，我會先試 1440p60 HDR。",
@@ -1340,6 +1353,19 @@
    "ru": "2X - это родной путь; 3X / 4X - экспериментальные разблокировки. Диагностика неудач"
   },
   {
+   "zh": "30 FPS 游戏示例",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "30 FPS 遊戲範例",
+   "en": "30 FPS game example",
+   "ja": "30 FPS のゲームの例",
+   "ko": "30 FPS 게임 예시",
+   "es": "Ejemplo con un juego a 30 FPS",
+   "fr": "Exemple avec un jeu à 30 i/s",
+   "de": "Beispiel mit einem 30-FPS-Spiel",
+   "pt-BR": "Exemplo de jogo a 30 FPS",
+   "ru": "Пример игры с частотой 30 кадров/с"
+  },
+  {
    "zh": "30 帧游戏，我还是建议采 60 帧",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "30 幀遊戲，我還是建議擷取 60 幀",
@@ -1431,6 +1457,19 @@
    "ru": "6 элементов"
   },
   {
+   "zh": "60 FPS 采集",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "60 FPS 擷取",
+   "en": "60 FPS capture",
+   "ja": "60 FPS でキャプチャー",
+   "ko": "60 FPS 캡처",
+   "es": "Captura a 60 FPS",
+   "fr": "Capture à 60 i/s",
+   "de": "Aufnahme mit 60 FPS",
+   "pt-BR": "Captura a 60 FPS",
+   "ru": "Захват с частотой 60 кадров/с"
+  },
+  {
    "zh": "60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。",
    "src": "qml/DedupModeRow.qml",
    "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：偵測並跳過重複畫面。",
@@ -1442,6 +1481,19 @@
    "de": "60→30 behält jedes zweite Bild und überspringt Duplikate, wenn das Spiel unter 30 FPS fällt. Die automatische Entfernung erkennt und überspringt doppelte Bilder.",
    "pt-BR": "60→30 mantém um quadro a cada dois e pula os repetidos quando o jogo fica abaixo de 30 FPS. A remoção automática detecta e pula quadros duplicados.",
    "ru": "60→30 оставляет каждый второй кадр и пропускает повторы, когда частота игры падает ниже 30 FPS. Автоматическое удаление находит и пропускает повторяющиеся кадры."
+  },
+  {
+   "zh": "8 位 4:2:0 · SDR，所需带宽较低。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "8 位元 4:2:0 · SDR，所需頻寬較低。",
+   "en": "8-bit 4:2:0 · SDR with lower bandwidth requirements.",
+   "ja": "8 ビット 4:2:0 · SDR。必要な帯域が少なめです。",
+   "ko": "8비트 4:2:0 · 더 적은 대역폭을 사용하는 SDR.",
+   "es": "8 bits 4:2:0 · SDR con un menor ancho de banda.",
+   "fr": "8 bits 4:2:0 · SDR avec un débit plus faible.",
+   "de": "8 Bit 4:2:0 · SDR mit geringerem Bandbreitenbedarf.",
+   "pt-BR": "8 bits 4:2:0 · SDR com menor uso de largura de banda.",
+   "ru": "8 бит 4:2:0 · SDR с меньшей требуемой пропускной способностью."
   },
   {
    "zh": "8 位 4:2:0。带宽省，跑高分辨率和高帧率时我优先用它。采集卡支持 4K60 NV12，也可以直接用。",
@@ -1457,6 +1509,19 @@
    "ru": "8 бит, 4:2:0. Требует меньше пропускной способности. Я выбираю его первым для высокого разрешения и частоты кадров. Если карта поддерживает 4K60 NV12, попробуйте этот режим."
   },
   {
+   "zh": "8 位 4:2:2 · SDR，保留更多纵向色彩细节。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "8 位元 4:2:2 · SDR，保留較多垂直色彩細節。",
+   "en": "8-bit 4:2:2 · SDR with more vertical color detail.",
+   "ja": "8 ビット 4:2:2 · SDR。垂直方向の色の細部を多く残せます。",
+   "ko": "8비트 4:2:2 · 세로 방향 색상 디테일을 더 많이 보존하는 SDR.",
+   "es": "8 bits 4:2:2 · SDR que conserva más detalle de color vertical.",
+   "fr": "8 bits 4:2:2 · SDR avec plus de détails de couleur dans le sens vertical.",
+   "de": "8 Bit 4:2:2 · SDR mit mehr vertikalen Farbdetails.",
+   "pt-BR": "8 bits 4:2:2 · SDR que preserva mais detalhes verticais de cor.",
+   "ru": "8 бит 4:2:2 · SDR с большей цветовой детализацией по вертикали."
+  },
+  {
    "zh": "8 位 4:2:2，保留更多纵向色彩细节。卡上没有合适的 NV12 档位，或细小彩色文字确实需要 4:2:2 时，可以试它。",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "8 位元 4:2:2，保留較多縱向色彩細節。擷取卡沒有合適的 NV12 模式，或細小彩色文字確實需要 4:2:2 時，可以試試。",
@@ -1468,6 +1533,19 @@
    "de": "8 Bit, 4:2:2. In vertikaler Richtung bleiben mehr Farbdetails erhalten. Probiere es, wenn kein passender NV12-Modus verfügbar ist oder du für kleine farbige Schrift 4:2:2 brauchst.",
    "pt-BR": "4:2:2 de 8 bits, com mais detalhes de cor na vertical. Experimente se não houver um modo NV12 adequado ou se precisar de 4:2:2 para texto colorido pequeno.",
    "ru": "8 бит, 4:2:2. Сохраняет больше цветовых деталей по вертикали. Попробуйте, если подходящего режима NV12 нет или для мелкого цветного текста нужно 4:2:2."
+  },
+  {
+   "zh": "8 位 RGB · SDR，每像素有完整的 RGB 分量，带宽较高。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "8 位元 RGB · SDR，每個像素都有完整的 RGB 分量，所需頻寬較高。",
+   "en": "8-bit RGB · SDR with a full set of RGB components per pixel and higher bandwidth.",
+   "ja": "8 ビット RGB · SDR。画素ごとに RGB の全成分を持ち、より広い帯域が必要です。",
+   "ko": "8비트 RGB · 픽셀마다 모든 RGB 성분이 있는 SDR. 더 많은 대역폭이 필요합니다.",
+   "es": "RGB de 8 bits · SDR con los tres componentes RGB por píxel y mayor ancho de banda.",
+   "fr": "RVB 8 bits · SDR avec toutes les composantes RVB par pixel et un débit plus élevé.",
+   "de": "8 Bit RGB · SDR mit vollständigen RGB-Komponenten pro Pixel und höherer Bandbreite.",
+   "pt-BR": "RGB de 8 bits · SDR com todos os componentes RGB por pixel e maior uso de largura de banda.",
+   "ru": "8-битный RGB · SDR с полным набором RGB-компонентов на пиксель и большей требуемой пропускной способностью."
   },
   {
    "zh": "8 位配对码",
@@ -2157,6 +2235,19 @@
    "de": "DLAA: NVIDIA DLSS bei nativer Auflösung, Rekonstruktion von Rändern über Frames entlang des optischen Flusses; es verwendet das DLSS SR Modell und kostet mehr als die anderen Methoden. Gefangene Bilder haben keine Jitter-Samples wie ein Spiel, so dass der Effekt schwächer ist als im Spiel DLAA",
    "pt-BR": "DLAA: NVIDIA DLSS na resolução nativa, reconstruindo as bordas entre os quadros ao longo do fluxo óptico; utiliza o modelo DLSS SR e custa mais do que os outros métodos. Imagens capturadas não têm amostras agitadas como as de um jogo, então o efeito é mais fraco do que no jogo DLAA",
    "ru": "DLAA: NVIDIA DLSS в нативном разрешении, перестраивая края по кадрам вдоль оптического потока; он использует модель DLSS SR и стоит дороже, чем другие методы. Захваченные фотографии не имеют дрожащих образцов, как в игре, поэтому эффект слабее, чем в игре DLAA."
+  },
+  {
+   "zh": "DLSS 5 神经渲染（NR）",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "DLSS 5 神經渲染（NR）",
+   "en": "DLSS 5 neural rendering (NR)",
+   "ja": "DLSS 5 ニューラルレンダリング（NR）",
+   "ko": "DLSS 5 신경 렌더링(NR)",
+   "es": "Renderizado neuronal DLSS 5 (NR)",
+   "fr": "Rendu neuronal DLSS 5 (NR)",
+   "de": "DLSS 5 Neural Rendering (NR)",
+   "pt-BR": "Renderização neural DLSS 5 (NR)",
+   "ru": "Нейронный рендеринг DLSS 5 (NR)"
   },
   {
    "zh": "DLSS 帧生成",
@@ -4382,6 +4473,19 @@
    "ru": "Источники SDR не имеют метаданных яркости HDR. Выберите предварительно установленный вручную; это относится к выходу HDR."
   },
   {
+   "zh": "SDR 转 HDR 在这里",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "在這裡將 SDR 轉為 HDR",
+   "en": "Convert SDR to HDR here",
+   "ja": "SDR から HDR へ変換",
+   "ko": "SDR을 HDR로 변환",
+   "es": "Convierte SDR a HDR",
+   "fr": "Convertissez le SDR en HDR",
+   "de": "SDR in HDR umwandeln",
+   "pt-BR": "Converta SDR em HDR",
+   "ru": "Преобразуйте SDR в HDR"
+  },
+  {
    "zh": "SDR显示未转换",
    "src": "qml/NodePage.qml",
    "zh-TW": "SDR顯示未轉換",
@@ -5396,6 +5500,19 @@
    "ru": "Аппаратное декодирование, возможно, не смогло выделить память, особенно для 4K. Перезагрузите проигрыватель; если он повторяется, выберите Программное декодирование в настройках → Воспроизведение"
   },
   {
+   "zh": "「像素格式」会列出当前分辨率和帧率下可以用的选项。这几种常见格式的区别如下。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "「像素格式」會列出目前解析度和幀率下可用的選項。以下是幾種常見格式的差異。",
+   "en": "Pixel format lists the options available at the selected resolution and frame rate. Here is what the common formats carry.",
+   "ja": "「ピクセルフォーマット」には、選択した解像度とフレームレートで使える形式が表示されます。主な形式には次の違いがあります。",
+   "ko": "‘픽셀 형식’에 현재 해상도와 프레임률에서 사용 가능한 옵션이 표시됩니다. 자주 쓰는 형식의 차이는 다음과 같습니다.",
+   "es": "Formato de píxel muestra las opciones disponibles para la resolución y la frecuencia que has elegido. Estos son los formatos más comunes.",
+   "fr": "Format de pixel affiche les options disponibles à la résolution et à la fréquence d’images choisies. Voici les différences entre ces formats courants.",
+   "de": "Unter Pixelformat stehen die Formate zur Auswahl, die bei der gewählten Auflösung und Bildrate verfügbar sind. So unterscheiden sich die gängigen Formate.",
+   "pt-BR": "Formato de pixel mostra as opções disponíveis na resolução e na taxa escolhidas. Veja as diferenças entre os formatos mais comuns.",
+   "ru": "Под пунктом «Формат пикселей» показаны варианты, доступные для выбранного разрешения и частоты кадров. У распространённых форматов есть следующие различия."
+  },
+  {
    "zh": "一键推荐",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "一鍵推薦",
@@ -5472,6 +5589,19 @@
    "de": "Die vorherige Charge läuft noch oder wird gereinigt",
    "pt-BR": "O lote anterior ainda está em execução ou a ser limpo",
    "ru": "Предыдущая партия все еще работает или очищается."
+  },
+  {
+   "zh": "上一步",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "上一步",
+   "en": "Previous",
+   "ja": "前へ",
+   "ko": "이전",
+   "es": "Anterior",
+   "fr": "Précédent",
+   "de": "Zurück",
+   "pt-BR": "Anterior",
+   "ru": "Назад"
   },
   {
    "zh": "上一段回放仍在保存，请稍后再试",
@@ -5680,6 +5810,19 @@
    "de": "Mit \"Auto\" oben wird immer noch die stärkste GPU verwendet; Wählen Sie eine GPU oben, um auch darauf zu berechnen",
    "pt-BR": "Com \"Auto\" acima, o mais poderoso GPU ainda é usado; escolha um GPU acima para computar nele também",
    "ru": "С «Auto» выше все еще используется самый мощный GPU; выберите GPU выше, чтобы вычислить на нем тоже."
+  },
+  {
+   "zh": "下一步",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "下一步",
+   "en": "Next",
+   "ja": "次へ",
+   "ko": "다음",
+   "es": "Siguiente",
+   "fr": "Suivant",
+   "de": "Weiter",
+   "pt-BR": "Próximo",
+   "ru": "Далее"
   },
   {
    "zh": "下一项",
@@ -6722,6 +6865,19 @@
    "ru": "Хост подключается к другому устройству; попробуйте снова."
   },
   {
+   "zh": "主机正在输出 HDR10 时，选 P010，再把这里设为「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改后重新连接才生效。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "主機正在輸出 HDR10 時，選擇 P010，再將這裡設為「HDR · PQ」。NV12、YUY2 和 RGB24 請選「SDR · 709」。變更後重新連線才會生效。",
+   "en": "When your console is outputting HDR10, choose P010 and set the input to HDR · PQ. Use SDR · 709 for NV12, YUY2, or RGB24. Reconnect to apply the change.",
+   "ja": "ゲーム機が HDR10 を出力している場合は P010 を選び、ここを「HDR · PQ」に設定します。NV12、YUY2、RGB24 は「SDR · 709」を使います。変更は再接続すると反映されます。",
+   "ko": "콘솔이 HDR10을 출력 중이면 P010을 선택하고 입력을 ‘HDR · PQ’로 설정하세요. NV12, YUY2, RGB24에는 ‘SDR · 709’를 사용하세요. 변경 후 다시 연결해야 적용됩니다.",
+   "es": "Si la consola emite en HDR10, selecciona P010 y ajusta la entrada a HDR · PQ. Usa SDR · 709 para NV12, YUY2 y RGB24. Vuelve a conectar para aplicar el cambio.",
+   "fr": "Si la console émet en HDR10, choisissez P010 et réglez l’entrée sur HDR · PQ. Avec NV12, YUY2 ou RGB24, choisissez SDR · 709. Reconnectez la source pour appliquer le changement.",
+   "de": "Wenn deine Konsole HDR10 ausgibt, wähle P010 und stelle den Eingang auf HDR · PQ. Verwende mit NV12, YUY2 oder RGB24 die Einstellung SDR · 709. Stelle die Verbindung erneut her, um die Änderung anzuwenden.",
+   "pt-BR": "Se o console estiver enviando HDR10, selecione P010 e ajuste a entrada para HDR · PQ. Use SDR · 709 com NV12, YUY2 ou RGB24. Reconecte a fonte para aplicar a alteração.",
+   "ru": "Если консоль выдаёт HDR10, выберите P010 и установите HDR · PQ. Для NV12, YUY2 и RGB24 используйте SDR · 709. Чтобы применить изменения, подключите источник заново."
+  },
+  {
    "zh": "主机正在运行另一个游戏。先选它继续，或点「退出游戏」结束它（未保存的进度会丢失），再开始新的。",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "主機正在執行另一個遊戲。先選它繼續，或點「退出遊戲」結束它（未儲存的進度會丟失），再開始新的。",
@@ -7253,6 +7409,32 @@
    "de": "Aus Wiedergabeliste entfernen; Datei behalten",
    "pt-BR": "Remover da playlist; manter arquivo",
    "ru": "Убрать из плейлиста; файл оставить"
+  },
+  {
+   "zh": "从这张采集卡列出的分辨率里选你要用的那一档。帧率列表会随这项选择更新。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "從擷取卡支援的解析度中選擇要使用的項目。幀率清單會跟著更新。",
+   "en": "Pick one of the resolutions your capture card reports. The list of frame rates updates with your selection.",
+   "ja": "キャプチャーカードが対応する解像度の中から選びます。選択に応じてフレームレートの一覧が更新されます。",
+   "ko": "캡처 카드가 지원하는 해상도 중 원하는 항목을 고르세요. 선택에 따라 프레임률 목록이 업데이트됩니다.",
+   "es": "Selecciona una resolución de las que admite la capturadora. La lista de frecuencias de fotogramas se actualiza según tu elección.",
+   "fr": "Sélectionnez l’une des résolutions prises en charge par la carte. La liste des fréquences d’images s’actualise en fonction de ce choix.",
+   "de": "Wähle eine von der Capture-Karte unterstützte Auflösung. Die Liste der Bildraten passt sich an deine Auswahl an.",
+   "pt-BR": "Selecione uma das resoluções compatíveis com a placa. A lista de taxas de quadros é atualizada conforme a sua escolha.",
+   "ru": "Выберите одно из разрешений, поддерживаемых картой захвата. Список частот кадров обновится в соответствии с вашим выбором."
+  },
+  {
+   "zh": "从采集卡开始",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "從擷取卡開始",
+   "en": "Start with your capture card",
+   "ja": "キャプチャーカードから始める",
+   "ko": "캡처 카드로 시작",
+   "es": "Empieza con tu capturadora",
+   "fr": "Commencez avec votre carte d’acquisition",
+   "de": "Mit der Capture-Karte beginnen",
+   "pt-BR": "Comece com a placa de captura",
+   "ru": "Начните с карты захвата"
   },
   {
    "zh": "以下轨道当前封装无法保留，导出时跳过",
@@ -9399,6 +9581,19 @@
    "de": "Konvertierter Untertitel",
    "pt-BR": "Alocar legenda convertida",
    "ru": "Выделить преобразованный подзаголовок"
+  },
+  {
+   "zh": "切到「补帧」，在这里选算法、倍率和档位。倍率决定每组原始画面之间生成多少帧。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "切換到「補幀」，在這裡選擇演算法、倍率和品質。倍率決定兩張原始畫面之間會生成多少幀。",
+   "en": "Go to Frame Gen to choose an algorithm, a multiplier, and a quality mode. The multiplier controls how many frames are generated between source frames.",
+   "ja": "「フレーム生成」でアルゴリズム、倍率、品質を選びます。倍率によって元のフレーム間に生成する枚数が決まります。",
+   "ko": "‘프레임 생성’에서 알고리즘, 배율, 품질을 고르세요. 배율에 따라 원본 프레임 사이에 생성할 프레임 수가 결정됩니다.",
+   "es": "En Interpolación puedes elegir el algoritmo, el multiplicador y la calidad. El multiplicador determina cuántos fotogramas se generan entre los originales.",
+   "fr": "Dans Interpolation, choisissez l’algorithme, le multiplicateur et la qualité. Le multiplicateur détermine le nombre d’images générées entre les images sources.",
+   "de": "Wähle unter Zwischenbilder den Algorithmus, Multiplikator und die Qualität. Der Multiplikator legt fest, wie viele Bilder zwischen den Originalbildern erzeugt werden.",
+   "pt-BR": "Em Interpolação, escolha o algoritmo, o multiplicador e a qualidade. O multiplicador determina quantos quadros são gerados entre os originais.",
+   "ru": "В разделе «Интерполяция» выберите алгоритм, множитель и качество. Множитель определяет число кадров, создаваемых между исходными."
   },
   {
    "zh": "切换会重建处理链，画面可能停顿几百毫秒。",
@@ -12235,6 +12430,45 @@
    "ru": "Установите номер своего аккаунта PSNTools, а затем введите его в PS5 окно потоковой передачи."
   },
   {
+   "zh": "在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "在「NR 畫面增強」新增一層。Veyra 對已擷取的畫面使用實驗性神經渲染，增強光照、材質和視覺細節。",
+   "en": "Add a layer under NR enhancement. Veyra applies experimental neural rendering to the captured picture to enhance lighting, materials, and visual details.",
+   "ja": "「NR 画質補正」でレイヤーを追加します。Veyra は取り込んだ映像に実験的なニューラルレンダリングを適用して、光の表現、素材の質感、細部を補正します。",
+   "ko": "‘NR 화질 개선’에서 레이어를 추가하세요. Veyra는 캡처 영상에 실험적인 신경 렌더링을 적용해 조명, 재질, 세부 묘사를 개선합니다.",
+   "es": "Añade una capa en Mejora NR. Veyra aplica renderizado neuronal experimental al vídeo capturado para mejorar la iluminación, los materiales y los detalles.",
+   "fr": "Ajoutez une couche dans Amélioration NR. Veyra applique un rendu neuronal expérimental à l’image capturée pour améliorer l’éclairage, les matériaux et les détails.",
+   "de": "Füge unter NR-Verbesserung eine Ebene hinzu. Veyra wendet experimentelles Neural Rendering auf das erfasste Bild an und verbessert Beleuchtung, Materialien und Details.",
+   "pt-BR": "Adicione uma camada em Melhoria NR. O Veyra aplica renderização neural experimental à imagem capturada para melhorar a iluminação, os materiais e os detalhes.",
+   "ru": "Добавьте слой в разделе «Улучшение NR». Veyra применяет экспериментальный нейронный рендеринг к захваченному изображению и улучшает освещение, материалы и детали."
+  },
+  {
+   "zh": "在「光流 · 运动估算」打开「去除重复帧」，下拉选「自动去除」。软件比较画面内容，跳过重复帧，让补帧用不同画面生成中间帧。游戏帧率波动时也按画面内容判断。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "在「光流 · 運動估算」開啟「去除重複幀」，再選「自動去除」。Veyra 會比較畫面內容並跳過重複幀，讓補幀使用不同的畫面生成中間幀。遊戲幀率變動時也會依畫面內容判斷。",
+   "en": "Under Optical flow · motion estimation, turn on Remove duplicate frames and select Automatic removal. Veyra compares images and skips repeats so frame generation uses different source frames. It checks the picture even when the game's frame rate varies.",
+   "ja": "「オプティカルフロー · 動き推定」で「重複フレームを除去」をオンにし、「自動除去」を選びます。Veyra が映像を比較して同じフレームを飛ばすので、異なる映像から中間フレームを生成できます。ゲームのフレームレートが変動しても、映像の内容をもとに判断します。",
+   "ko": "‘광학 흐름·모션 추정’에서 ‘중복 프레임 제거’를 켜고 ‘자동 제거’를 선택하세요. Veyra는 영상을 비교해 중복 프레임을 건너뛰므로 서로 다른 원본 프레임으로 중간 영상을 생성할 수 있습니다. 게임 프레임률이 달라져도 영상 내용을 기준으로 판단합니다.",
+   "es": "En Flujo óptico · estimación de movimiento, activa Eliminar fotogramas duplicados y selecciona Eliminación automática. Veyra compara las imágenes y omite las repetidas para interpolar a partir de fotogramas distintos. Comprueba el contenido incluso si varía la frecuencia del juego.",
+   "fr": "Dans Flux optique · estimation du mouvement, activez Supprimer les images en double, puis choisissez Suppression automatique. Veyra compare les images et ignore les doublons pour interpoler entre des images différentes. La comparaison suit le contenu même quand la fréquence du jeu varie.",
+   "de": "Aktiviere unter Optical Flow · Bewegungsschätzung die Option Doppelte Frames entfernen und wähle Automatisch entfernen. Veyra vergleicht die Bilder und überspringt Wiederholungen, damit Zwischenbilder aus unterschiedlichen Vorlagen entstehen. Das funktioniert auch bei wechselnder Spielbildrate anhand des Bildinhalts.",
+   "pt-BR": "Em Fluxo óptico · estimativa de movimento, ative Remover quadros duplicados e selecione Remoção automática. O Veyra compara as imagens e pula as repetidas para gerar quadros intermediários usando originais diferentes. A comparação usa o conteúdo da imagem mesmo quando a taxa do jogo varia.",
+   "ru": "В разделе «Оптический поток · оценка движения» включите «Удалять повторяющиеся кадры» и выберите «Автоматическое удаление». Veyra сравнивает изображения и пропускает повторы, чтобы промежуточные кадры строились по разным исходным кадрам. При переменной частоте Veyra по-прежнему сравнивает содержимое кадров."
+  },
+  {
+   "zh": "在「视频输入设备」里选你实际连接的采集卡。选定后会读取它支持的采集档位。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "在「影片輸入裝置」選擇你實際連接的擷取卡，接著就能看到它支援的擷取規格。",
+   "en": "Under Video input device, pick the capture card you connected. Veyra will list the capture modes it supports.",
+   "ja": "「映像入力デバイス」で接続したキャプチャーカードを選ぶと、対応するキャプチャーモードが表示されます。",
+   "ko": "‘영상 입력 장치’에서 연결한 캡처 카드를 선택하세요. Veyra에 카드가 지원하는 캡처 모드가 표시됩니다.",
+   "es": "En Dispositivo de entrada de vídeo, selecciona la capturadora que has conectado. Veyra mostrará los modos de captura compatibles.",
+   "fr": "Dans Appareil d'entrée vidéo, sélectionnez la carte d’acquisition que vous avez connectée. Veyra affiche les modes de capture qu’elle prend en charge.",
+   "de": "Wähle unter Video-Eingabegerät die angeschlossene Capture-Karte aus. Veyra zeigt dann deren unterstützte Aufnahmemodi an.",
+   "pt-BR": "Em Dispositivo de entrada de vídeo, selecione a placa que você conectou. O Veyra mostra os modos de captura compatíveis com ela.",
+   "ru": "В разделе «Устройство видеовхода» выберите подключённую карту захвата. Veyra покажет поддерживаемые режимы захвата."
+  },
+  {
    "zh": "在主机上打开 Sunshine 网页（https://主机IP:47990），进入「PIN」页，输入下面的数字并提交：",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "在主機上開啟 Sunshine 網頁（https://主機IP:47990），進入「PIN」頁，輸入下面的數字並提交：",
@@ -12402,6 +12636,19 @@
    "de": "Kopieren Sie die PSN-Account-ID von der Website in das Pairing-Feld und geben Sie dann den 8-stelligen Pairing-Code der Konsole ein.",
    "pt-BR": "Copie o ID da conta PSN do site para o campo de emparelhamento e, em seguida, digite o código de emparelhamento de 8 dígitos do console.",
    "ru": "Скопируйте идентификатор учетной записи PSN с веб-сайта в поле сопряжения, а затем введите 8-значный код сопряжения консоли."
+  },
+  {
+   "zh": "在首页打开「采集卡」，进入 HDMI 画面的采集设置。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "在首頁開啟「擷取卡」，進入 HDMI 畫面的擷取設定。",
+   "en": "On the home page, open Capture card to set up your HDMI input.",
+   "ja": "ホームで「キャプチャーカード」を開き、HDMI 映像のキャプチャーを設定します。",
+   "ko": "홈에서 ‘캡처 카드’를 열어 HDMI 영상 캡처를 설정하세요.",
+   "es": "En la pantalla de inicio, abre Capturadora para configurar la captura de la señal HDMI.",
+   "fr": "Sur l’accueil, ouvrez Carte d'acquisition pour configurer la capture du signal HDMI.",
+   "de": "Öffne auf der Startseite Capture-Karte, um die Aufnahme des HDMI-Signals einzurichten.",
+   "pt-BR": "Na tela inicial, abra Placa de captura para configurar a captura do sinal HDMI.",
+   "ru": "На главной странице откройте «Карта захвата», чтобы настроить захват сигнала HDMI."
   },
   {
    "zh": "地址格式不对。",
@@ -13405,6 +13652,19 @@
    "ru": "Если вы включаете DLSS5 (NR), установите ограничение частоты кадров до 60: DLSS5, тогда будет меньше кадров для обработки и меньше нагрузки."
   },
   {
+   "zh": "如果设备提供 60 FPS，优先选它。59.94 FPS 也是常见的近 60 档。游戏本身跑 30 FPS，也可以按 60 FPS 采集。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "如果裝置支援 60 FPS，優先選它。59.94 FPS 也是常見的近 60 幀選項。即使遊戲本身只有 30 FPS，也可以用 60 FPS 擷取。",
+   "en": "Use 60 FPS if your card offers it. 59.94 FPS is another common option close to 60. You can capture at 60 FPS even if the game runs at 30 FPS.",
+   "ja": "対応していれば 60 FPS を選びます。59.94 FPS も一般的な 60 FPS に近い選択肢です。ゲームが 30 FPS でも 60 FPS でキャプチャーできます。",
+   "ko": "장치가 60 FPS를 지원하면 우선 선택하세요. 59.94 FPS도 흔히 쓰이는 60 FPS에 가까운 옵션입니다. 게임이 30 FPS여도 60 FPS로 캡처할 수 있습니다.",
+   "es": "Usa 60 FPS si tu capturadora los admite. 59,94 FPS es otra opción habitual cercana a 60. Puedes capturar a 60 FPS aunque el juego funcione a 30 FPS.",
+   "fr": "Utilisez 60 i/s si la carte le permet. 59,94 i/s est une autre option courante proche de 60. Vous pouvez capturer à 60 i/s même si le jeu tourne à 30 i/s.",
+   "de": "Wähle möglichst 60 FPS, wenn deine Capture-Karte diese Bildrate anbietet. 59,94 FPS ist eine gängige Option nahe 60. Auch Spiele mit 30 FPS lassen sich mit 60 FPS aufnehmen.",
+   "pt-BR": "Use 60 FPS se a placa oferecer essa opção. 59,94 FPS é outra opção comum próxima de 60. Mesmo se o jogo rodar a 30 FPS, você pode capturar a 60 FPS.",
+   "ru": "Выберите 60 кадров/с, если карта это позволяет. 59,94 кадра/с — другой распространённый вариант, близкий к 60. Можно захватывать с частотой 60 кадров/с, даже если игра работает на 30."
+  },
+  {
    "zh": "始终在所有画质效果之后",
    "src": "qml/ProPage.qml",
    "zh-TW": "始終在所有畫質效果之後",
@@ -14144,6 +14404,19 @@
    "de": "Referenzbasis",
    "pt-BR": "Base de referência",
    "ru": "Опорная база"
+  },
+  {
+   "zh": "对照输入帧率、输出帧率和 GPU 耗时，看看设置能否稳定运行。全屏按 Home 可以看详细耗时。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "對照輸入幀率、輸出幀率和 GPU 耗時，確認設定能否穩定運作。全螢幕按 Home 可查看詳細耗時。",
+   "en": "Compare input FPS, output FPS, and GPU timings to check whether your settings are running steadily. In fullscreen, press Home for detailed timings.",
+   "ja": "入力 FPS、出力 FPS、GPU の処理時間を見比べて、設定した状態で安定しているか確認します。全画面で Home キーを押すと詳しい処理時間が見られます。",
+   "ko": "입력 FPS, 출력 FPS, GPU 처리 시간을 비교해 설정이 안정적으로 작동하는지 확인하세요. 전체 화면에서 Home 키를 누르면 자세한 처리 시간을 볼 수 있습니다.",
+   "es": "Compara los FPS de entrada y de salida con los tiempos de la GPU para comprobar que todo funciona de forma estable. En pantalla completa, pulsa Inicio (Home) para ver los tiempos detallados.",
+   "fr": "Comparez les fréquences d’entrée et de sortie ainsi que les temps GPU pour vérifier la stabilité des réglages. En plein écran, appuyez sur Home pour voir les mesures détaillées.",
+   "de": "Vergleiche Eingangs-FPS, Ausgangs-FPS und GPU-Zeiten, um die Einstellungen auf Stabilität zu prüfen. Drücke im Vollbild Pos1 (Home) für detaillierte Zeiten.",
+   "pt-BR": "Compare os FPS de entrada e de saída com os tempos de processamento da GPU para verificar a estabilidade dos ajustes. Em tela cheia, pressione Home para ver os tempos detalhados.",
+   "ru": "Сравните входную и выходную частоту кадров и время работы GPU, чтобы проверить стабильность настроек. В полноэкранном режиме нажмите Home для подробных замеров."
   },
   {
    "zh": "导入",
@@ -18514,6 +18787,19 @@
    "ru": "Вернуть по умолчанию"
   },
   {
+   "zh": "想把 SDR 画面转换为 HDR，可以在支持的显卡和 HDR 显示器上试用 RTX Video HDR。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "若要將 SDR 畫面轉為 HDR，可以在支援的顯示卡和 HDR 顯示器上試用 RTX Video HDR。",
+   "en": "Try RTX Video HDR to convert SDR to HDR when you have a supported GPU and an HDR display.",
+   "ja": "対応 GPU と HDR ディスプレイがあれば、RTX Video HDR で SDR 映像を HDR に変換できます。",
+   "ko": "지원 GPU와 HDR 모니터가 있으면 RTX Video HDR로 SDR을 HDR로 변환해 볼 수 있습니다.",
+   "es": "Prueba RTX Video HDR para convertir SDR a HDR si tienes una tarjeta gráfica compatible y una pantalla HDR.",
+   "fr": "Essayez RTX Video HDR pour convertir le SDR en HDR si vous disposez d’un GPU compatible et d’un écran HDR.",
+   "de": "Mit einer unterstützten GPU und einem HDR-Display kannst du SDR mit RTX Video HDR in HDR umwandeln.",
+   "pt-BR": "Experimente o RTX Video HDR para converter SDR em HDR quando tiver uma GPU compatível e uma tela HDR.",
+   "ru": "Если у вас поддерживаемый GPU и HDR-дисплей, попробуйте RTX Video HDR для преобразования SDR в HDR."
+  },
+  {
    "zh": "想要 4K60 HDR，可以看这些卡",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "想要 4K60 HDR，可以看這幾張卡",
@@ -19162,6 +19448,19 @@
    "de": "Konnte den Magewell Capture Channel nicht öffnen",
    "pt-BR": "Não foi possível abrir o canal de captura Magewell",
    "ru": "Не удалось открыть канал захвата Magewell"
+  },
+  {
+   "zh": "打开自动去重",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "開啟自動去除重複幀",
+   "en": "Turn on automatic deduplication",
+   "ja": "自動で重複フレームを除去",
+   "ko": "중복 프레임 자동 제거",
+   "es": "Activa la eliminación automática",
+   "fr": "Activez la suppression automatique des doublons",
+   "de": "Doppelte Frames automatisch entfernen",
+   "pt-BR": "Ative a remoção automática de quadros repetidos",
+   "ru": "Включите автоматическое удаление дублей"
   },
   {
    "zh": "打开视频",
@@ -22909,6 +23208,19 @@
    "ru": "Обновление компонентов"
   },
   {
+   "zh": "最后看帧率和耗时",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "最後查看幀率和耗時",
+   "en": "Check frame rates and timings",
+   "ja": "フレームレートと処理時間を確認",
+   "ko": "프레임률과 처리 시간 확인",
+   "es": "Comprueba los FPS y los tiempos de procesamiento",
+   "fr": "Vérifiez les fréquences d’images et les temps de traitement",
+   "de": "Bildraten und Verarbeitungszeiten prüfen",
+   "pt-BR": "Confira as taxas de quadros e os tempos",
+   "ru": "Проверьте частоту кадров и время обработки"
+  },
+  {
    "zh": "最多 4 个保护区域，请先删除一个",
    "src": "src/ui/bridge/View.cpp",
    "zh-TW": "最多 4 個保護區域，請先刪除一個",
@@ -23973,6 +24285,19 @@
    "de": "Ansicht",
    "pt-BR": "Exibir",
    "ru": "Вид"
+  },
+  {
+   "zh": "查看新手引导",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "查看新手導覽",
+   "en": "Open the quick tour",
+   "ja": "クイックガイドを見る",
+   "ko": "시작 가이드 보기",
+   "es": "Ver la guía rápida",
+   "fr": "Ouvrir le guide rapide",
+   "de": "Kurzanleitung öffnen",
+   "pt-BR": "Abrir o guia rápido",
+   "ru": "Открыть краткое руководство"
   },
   {
    "zh": "查看更新",
@@ -28135,6 +28460,32 @@
    "ru": "Конечная точка открыта"
   },
   {
+   "zh": "第 %1 / %2 步",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "第 %1 / %2 步",
+   "en": "Step %1 of %2",
+   "ja": "ステップ %1 / %2",
+   "ko": "%1 / %2단계",
+   "es": "Paso %1 de %2",
+   "fr": "Étape %1 sur %2",
+   "de": "Schritt %1 von %2",
+   "pt-BR": "Etapa %1 de %2",
+   "ru": "Шаг %1 из %2"
+  },
+  {
+   "zh": "第一次使用？",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "第一次使用？",
+   "en": "First time here?",
+   "ja": "初めての方へ",
+   "ko": "처음 사용하시나요?",
+   "es": "¿Es tu primera vez?",
+   "fr": "Première utilisation ?",
+   "de": "Zum ersten Mal hier?",
+   "pt-BR": "Primeira vez aqui?",
+   "ru": "Вы здесь впервые?"
+  },
+  {
    "zh": "第二次 %1",
    "src": "qml/ProPage.qml",
    "zh-TW": "第二次 %1",
@@ -29732,6 +30083,19 @@
    "de": "Automatisch entfernen",
    "pt-BR": "Remoção automática",
    "ru": "Автоматическое удаление"
+  },
+  {
+   "zh": "自动去除后",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "自動去除後",
+   "en": "After automatic removal",
+   "ja": "自動除去後",
+   "ko": "자동 제거 후",
+   "es": "Tras la eliminación automática",
+   "fr": "Après suppression automatique",
+   "de": "Nach dem automatischen Entfernen",
+   "pt-BR": "Após a remoção automática",
+   "ru": "После автоматического удаления"
   },
   {
    "zh": "自动去隔行",
@@ -31385,6 +31749,19 @@
    "ru": "Генерация кадров фиксируется в конце и может быть отключена"
   },
   {
+   "zh": "补帧在这里设置",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "在這裡設定補幀",
+   "en": "Set up frame generation",
+   "ja": "フレーム生成を設定",
+   "ko": "프레임 생성 설정",
+   "es": "Configura la interpolación de fotogramas",
+   "fr": "Réglez la génération d’images",
+   "de": "Zwischenbilder einstellen",
+   "pt-BR": "Ajuste a geração de quadros",
+   "ru": "Настройте генерацию кадров"
+  },
+  {
    "zh": "补帧方式",
    "src": "qml/NodePage.qml",
    "zh-TW": "補幀方式",
@@ -32176,6 +32553,19 @@
    "de": "Konnte die Präsentation nicht ablassen, um die Einstellungen wiederherzustellen. Playback gestoppt.",
    "pt-BR": "Não foi possível drenar a apresentação para restaurar as configurações. A reprodução parou.",
    "ru": "Не удалось слить презентацию для восстановления настроек. Воспроизведение прекратилось."
+  },
+  {
+   "zh": "设置输入色彩",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "設定輸入色彩",
+   "en": "Set the input color",
+   "ja": "入力の色設定を選択",
+   "ko": "입력 색상 설정",
+   "es": "Configura el color de entrada",
+   "fr": "Réglez les couleurs d’entrée",
+   "de": "Eingabefarben einstellen",
+   "pt-BR": "Ajuste a cor de entrada",
+   "ru": "Настройте цвет входного сигнала"
   },
   {
    "zh": "识别档位",
@@ -33450,6 +33840,19 @@
    "de": "Superauflösung",
    "pt-BR": "Super-resolução",
    "ru": "Суперразрешение"
+  },
+  {
+   "zh": "超分辨率在这里",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "超解析度在這裡",
+   "en": "Find Super resolution here",
+   "ja": "超解像の設定はこちら",
+   "ko": "초해상도 설정",
+   "es": "Configura la superresolución",
+   "fr": "Réglez la super-résolution",
+   "de": "Superauflösung einstellen",
+   "pt-BR": "Ajuste a super-resolução",
+   "ru": "Настройте суперразрешение"
   },
   {
    "zh": "超分运动来源",
@@ -35350,6 +35753,19 @@
    "ru": "Подключить и начать"
   },
   {
+   "zh": "连接并开始采集",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "連線並開始擷取",
+   "en": "Connect and start capture",
+   "ja": "接続してキャプチャーを開始",
+   "ko": "연결하여 캡처 시작",
+   "es": "Conecta e inicia la captura",
+   "fr": "Connectez la source pour démarrer la capture",
+   "de": "Verbinden und Aufnahme starten",
+   "pt-BR": "Conecte a fonte e inicie a captura",
+   "ru": "Подключите источник и начните захват"
+  },
+  {
    "zh": "连接服务器超时（40 秒内没有完成），请检查地址和网络",
    "src": "src/media/DemuxSession.cpp",
    "zh-TW": "連線伺服器超時（40 秒內沒有完成），請檢查位址和網路",
@@ -35400,6 +35816,19 @@
    "de": "Lassen Sie Vollbild und stellen Sie normale Fenstersteuerungen wieder her",
    "pt-BR": "Deixar tela cheia e restaurar controles normais da janela",
    "ru": "Оставьте полный экран и восстановите нормальное управление окнами"
+  },
+  {
+   "zh": "退出引导",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "關閉導覽",
+   "en": "Exit tour",
+   "ja": "ガイドを終了",
+   "ko": "가이드 닫기",
+   "es": "Salir de la guía",
+   "fr": "Quitter le guide",
+   "de": "Anleitung schließen",
+   "pt-BR": "Sair do guia",
+   "ru": "Закрыть руководство"
   },
   {
    "zh": "退出游戏",
@@ -35480,6 +35909,19 @@
    "ru": "Выберите регион для его перемещения. Контуры исключены из записей и экспорта."
   },
   {
+   "zh": "选好设备和格式后，在这里连接。先确认预览有画面、采集帧率符合预期，再看专业模式里的增强选项。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "選好裝置和格式後，在這裡連線。先確認預覽有畫面、擷取幀率符合預期，再看專業模式的增強選項。",
+   "en": "After you choose a device and format, connect here. Check that the preview has a picture and the capture rate looks right, then explore enhancements in Pro mode.",
+   "ja": "デバイスと形式を選んだら、ここで接続します。プレビューに映像が出て、想定したフレームレートで取り込めていることを確認してから、プロモードで画質を調整します。",
+   "ko": "장치와 형식을 고른 후 여기서 연결하세요. 미리보기에 영상이 표시되고 캡처 프레임률이 예상과 일치하는지 확인한 뒤 전문가 모드에서 화질 개선 기능을 살펴보세요.",
+   "es": "Tras elegir el dispositivo y el formato, conecta aquí. Comprueba que hay imagen en la vista previa y que la frecuencia de captura es la esperada. Luego puedes explorar las mejoras del modo profesional.",
+   "fr": "Après avoir choisi le périphérique et le format, connectez la source ici. Vérifiez que l’aperçu montre bien une image et que la fréquence de capture est celle attendue, puis explorez les améliorations en mode Pro.",
+   "de": "Nachdem du Gerät und Format gewählt hast, stellst du hier die Verbindung her. Prüfe das Bild in der Vorschau und die Aufnahmebildrate. Danach kannst du im Pro-Modus die Bildverbesserungen ausprobieren.",
+   "pt-BR": "Depois de escolher o dispositivo e o formato, conecte a fonte aqui. Confira a imagem na prévia e a taxa de captura. Em seguida, explore as melhorias no modo Pro.",
+   "ru": "Выбрав устройство и формат, подключите источник здесь. Проверьте, что в предпросмотре есть изображение, а частота захвата соответствует ожиданиям. Затем откройте настройки улучшения в профессиональном режиме."
+  },
+  {
    "zh": "选择…",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "選擇…",
@@ -35491,6 +35933,19 @@
    "de": "Auswählen…",
    "pt-BR": "Escolher…",
    "ru": "Выбрать…"
+  },
+  {
+   "zh": "选择你接入的采集卡",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "選擇已連接的擷取卡",
+   "en": "Choose your capture card",
+   "ja": "キャプチャーカードを選択",
+   "ko": "연결한 캡처 카드 선택",
+   "es": "Elige tu capturadora",
+   "fr": "Choisissez votre carte d’acquisition",
+   "de": "Capture-Karte auswählen",
+   "pt-BR": "Escolha a placa de captura",
+   "ru": "Выберите карту захвата"
   },
   {
    "zh": "选择保存目录…",
@@ -35582,6 +36037,32 @@
    "de": "Spuren wählen",
    "pt-BR": "Escolher faixas",
    "ru": "Выбрать дорожки"
+  },
+  {
+   "zh": "选择采集分辨率",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "選擇擷取解析度",
+   "en": "Choose a capture resolution",
+   "ja": "キャプチャー解像度を選択",
+   "ko": "캡처 해상도 선택",
+   "es": "Elige la resolución de captura",
+   "fr": "Choisissez la résolution de capture",
+   "de": "Aufnahmeauflösung auswählen",
+   "pt-BR": "Escolha a resolução de captura",
+   "ru": "Выберите разрешение захвата"
+  },
+  {
+   "zh": "选择采集格式",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "選擇擷取格式",
+   "en": "Choose a capture format",
+   "ja": "キャプチャー形式を選択",
+   "ko": "캡처 형식 선택",
+   "es": "Elige el formato de captura",
+   "fr": "Choisissez le format de capture",
+   "de": "Aufnahmeformat auswählen",
+   "pt-BR": "Escolha o formato de captura",
+   "ru": "Выберите формат захвата"
   },
   {
    "zh": "选档方式：两种选法写的是同一条曲线，切换只影响界面上怎么叫它",
@@ -36115,6 +36596,19 @@
    "de": "Verbindet sich mit der PS5, sobald die Capture Card verbunden ist",
    "pt-BR": "Liga-se ao PS5 uma vez que a placa de captura está conectada",
    "ru": "Подключается к PS5 после подключения карты захвата"
+  },
+  {
+   "zh": "采集帧率优先选 60 FPS",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "擷取幀率優先選 60 FPS",
+   "en": "Prefer 60 FPS for capture",
+   "ja": "キャプチャーは 60 FPS を優先",
+   "ko": "캡처는 60 FPS 우선",
+   "es": "Prioriza los 60 FPS al capturar",
+   "fr": "Privilégiez 60 i/s pour la capture",
+   "de": "60 FPS bei der Aufnahme bevorzugen",
+   "pt-BR": "Dê preferência a 60 FPS na captura",
+   "ru": "Для захвата предпочтительны 60 кадров/с"
   },
   {
    "zh": "采集帧率请输入 1–1000 的数字（可带小数），或 0 沿用设备默认",
@@ -37168,6 +37662,19 @@
    "de": "Benötigt eine Hardware GPU mit DirectX 12 Unterstützung",
    "pt-BR": "Requer um hardware GPU com apoio DirectX 12",
    "ru": "Требуется оборудование GPU с поддержкой DirectX 12"
+  },
+  {
+   "zh": "需要改变输出尺寸时，在「超分辨率」里选择算法和目标尺寸。",
+   "src": "qml/OnboardingGuide.qml",
+   "zh-TW": "需要調整輸出大小時，在「超解析度」選擇演算法和目標大小。",
+   "en": "In Super resolution, pick an algorithm and a target size when you want to change the output resolution.",
+   "ja": "出力解像度を変えたいときは、「超解像」でアルゴリズムと出力サイズを選びます。",
+   "ko": "출력 해상도를 바꾸려면 ‘초해상도’에서 알고리즘과 목표 크기를 선택하세요.",
+   "es": "Si quieres cambiar la resolución de salida, elige un algoritmo y un tamaño de destino en Superresolución.",
+   "fr": "Pour modifier la résolution de sortie, choisissez un algorithme et une taille cible dans Super-résolution.",
+   "de": "Wenn du die Ausgabeauflösung ändern möchtest, wähle unter Superauflösung einen Algorithmus und die Zielgröße.",
+   "pt-BR": "Para mudar a resolução de saída, escolha um algoritmo e um tamanho de destino em Super-resolução.",
+   "ru": "Чтобы изменить выходное разрешение, выберите алгоритм и целевой размер в разделе «Суперразрешение»."
   },
   {
    "zh": "需要管理员权限",

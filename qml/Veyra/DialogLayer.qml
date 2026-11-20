@@ -15,6 +15,15 @@ Rectangle {
     property string foot: ""
     default property alias body: bodyCol.data
     signal actionTriggered(string label)
+    readonly property alias bodyViewport: bodyScroll
+    readonly property Item primaryAction: {
+        for (let i = 0; i < actionButtons.count; ++i) {
+            const button = actionButtons.itemAt(i)
+            if (button && button.primary) return button
+        }
+        return null
+    }
+    property bool instantTransition: false
 
     // Which dialog key shows this layer.
     property string key: ""
@@ -23,7 +32,21 @@ Rectangle {
     // scrim's .2s fade; closing runs the same back while the scrim fades out.
     property real motionS: 0.9
     property real motionDy: 14
-    onShownChanged: { if (shown) { motionS = 0.9; motionDy = 14; enterAnim.restart() } else exitAnim.restart() }
+    onShownChanged: {
+        if (instantTransition) {
+            enterAnim.stop()
+            exitAnim.stop()
+            motionS = 1
+            motionDy = 0
+            if (shown) dialogHost.motionScale = 1
+        } else if (shown) {
+            motionS = 0.9
+            motionDy = 14
+            enterAnim.restart()
+        } else {
+            exitAnim.restart()
+        }
+    }
     onMotionSChanged: if (shown) dialogHost.motionScale = motionS
     ParallelAnimation {
         id: enterAnim
@@ -43,7 +66,10 @@ Rectangle {
     // Keyed on shown/opacity, never on visible: an item without a parent always
     // reads invisible, so "visible ? host : null" never brought a dialog back.
     parent: (shown || opacity > 0) ? dialogHost : null
-    Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+    Behavior on opacity {
+        enabled: !dlg.instantTransition
+        NumberAnimation { duration: Theme.d(200) }
+    }
     transform: [
         Scale { origin.x: dlg.width / 2; origin.y: dlg.height / 2; xScale: dlg.motionS; yScale: dlg.motionS },
         Translate { y: dlg.motionDy }
@@ -148,6 +174,7 @@ Rectangle {
             }
             Item { Layout.fillWidth: true; visible: dlg.foot.length === 0 }
             Repeater {
+                id: actionButtons
                 model: dlg.actions
                 delegate: VButton {
                     required property var modelData

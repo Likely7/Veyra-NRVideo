@@ -11,6 +11,15 @@ import QtQuick.Effects
 VPage {
     id: root
     signal requestPage(string page)
+    signal requestOnboarding()
+    readonly property Item onboardingEntry: guideEntry
+    function captureCard() {
+        for (let i = 0; i < sourceCards.count; ++i) {
+            const slot = sourceCards.itemAt(i)
+            if (slot && slot.modelData.act === "capture") return slot.card
+        }
+        return null
+    }
     // The coffee line under the title: Main opens 设置 → 赞助作者.
     signal requestSponsor()
     // Main.qml keeps the dusk wordmark hidden while the startup intro (DuskIntro.qml) flies a
@@ -197,6 +206,7 @@ VPage {
                 }
             }
             Repeater {
+                id: sourceCards
                 model: [
                     { glyph: "folder", title: qsTr("打开视频"), act: "file" },
                     { glyph: "video", title: qsTr("采集卡"), act: "capture" },
@@ -212,6 +222,7 @@ VPage {
                     id: slot
                     required property var modelData
                     required property int index
+                    readonly property alias card: srcCard
                     implicitWidth: 164
                     implicitHeight: 124
                     VRise { page: root; target: slot; d: 2 + slot.index }
@@ -446,6 +457,38 @@ VPage {
                 primary: true
                 tip: qsTr("只清空这个列表，不会删除文件。")
                 onClicked: clearRecentConfirm.open()
+            }
+        }
+    }
+
+    Row {
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        spacing: 4
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: qsTr("第一次使用？")
+            color: Theme.t2
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsBody
+        }
+        VButton {
+            id: guideEntry
+            objectName: "home-onboarding"
+            text: qsTr("查看新手引导")
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: text
+            Accessible.onPressAction: clicked()
+            Keys.onReturnPressed: clicked()
+            Keys.onEnterPressed: clicked()
+            Keys.onSpacePressed: clicked()
+            border.width: activeFocus ? 2 : 1
+            border.color: activeFocus ? Theme.accent : Theme.stroke2
+            onClicked: {
+                forceActiveFocus()
+                root.requestOnboarding()
             }
         }
     }
