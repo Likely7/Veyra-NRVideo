@@ -254,10 +254,15 @@ HttpResponse readResponse(Connection& connection, size_t maxBody) {
                 if (n == 0) throw TransportError(TransportError::Kind::Protocol, "connection closed inside a chunked body");
                 body.append(chunk, n);
             }
-            const size_t size = std::strtoull(body.substr(cursor, lineEnd - cursor).c_str(), nullptr, 16);
+            const std::string sizeLine = body.substr(cursor, lineEnd - cursor);
+            char* sizeEnd = nullptr;
+            const size_t size = std::strtoull(sizeLine.c_str(), &sizeEnd, 16);
+            if (sizeEnd == sizeLine.c_str()) throw TransportError(TransportError::Kind::Protocol, "malformed chunk size");
             cursor = lineEnd + 2;
             if (size == 0) break;
-            if (decoded.size() + size > maxBody) throw TransportError(TransportError::Kind::Protocol, "response body too large");
+            // decoded.size() <= maxBody, so this cannot wrap; a sum could, and a wrapped
+            // size made `cursor += size + 2` land back on this same size line forever.
+            if (size > maxBody - decoded.size()) throw TransportError(TransportError::Kind::Protocol, "response body too large");
             while (body.size() < cursor + size + 2) {
                 const size_t n = connection.read(chunk, sizeof(chunk));
                 if (n == 0) throw TransportError(TransportError::Kind::Protocol, "connection closed inside a chunked body");

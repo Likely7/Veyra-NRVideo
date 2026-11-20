@@ -17,8 +17,10 @@
 #include <atomic>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iterator>
 #include <map>
 #include <mutex>
@@ -417,6 +419,49 @@ void inputTests() {
     }
 }
 
+// Any LAN device can answer the discovery probe. A chunk size near SIZE_MAX once wrapped
+// the body limit and re-parsed the same size line forever without reading, so neither
+// the timeout nor cancel could end it.
+void hostileChunkTests() {
+    WSADATA wsa;
+    WSAStartup(MAKEWORD(2, 2), &wsa);
+    SOCKET listener = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    bind(listener, reinterpret_cast<sockaddr*>(&address), sizeof(address));
+    listen(listener, 1);
+    int length = sizeof(address);
+    getsockname(listener, reinterpret_cast<sockaddr*>(&address), &length);
+    std::thread server([listener] {
+        SOCKET client = accept(listener, nullptr, nullptr);
+        if (client == INVALID_SOCKET) return;
+        const DWORD holdMs = 15000;
+        setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&holdMs), sizeof(holdMs));
+        char request[2048];
+        recv(client, request, sizeof(request), 0);
+        const std::string answer = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                                   "14\r\n01234567890123456789\r\nFFFFFFFFFFFFFFEC\r\n";
+        send(client, answer.data(), int(answer.size()), 0);
+        recv(client, request, sizeof(request), 0);   // keep the connection open until the client gives up
+        closesocket(client);
+    });
+    const HttpTarget target{"127.0.0.1", ntohs(address.sin_port), false};
+    auto result = std::async(std::launch::async, [target] {
+        try { HttpClient(nullptr, {}).get(target, "/serverinfo", HttpOptions{}); }
+        catch (const TransportError& e) { return e.kind == TransportError::Kind::Protocol; }
+        return false;
+    });
+    if (result.wait_for(std::chrono::seconds(10)) != std::future_status::ready) {
+        std::printf("FAIL a wrapping chunk size hangs the HTTP client\n");
+        std::fflush(stdout);
+        std::_Exit(1);
+    }
+    check(result.get(), "a wrapping chunk size is a protocol error");
+    server.join();
+    closesocket(listener);
+}
+
 } // namespace
 
 int main() {
@@ -428,6 +473,7 @@ int main() {
     routerTests();
     discoveryTests();
     protocolTests();
+    hostileChunkTests();
     std::printf("moonlight protocol tests: %d checks, %d failures\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
 }
