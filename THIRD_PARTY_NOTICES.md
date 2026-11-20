@@ -7,7 +7,7 @@ translation workflow proposed by jjjxxxttt in [PR #203](https://github.com/Likel
 at `fb08b6cd87afcc2942eca2201958da4fbabfabaf` under the project's GPL-3.0 license.
 Windows speech recognition comes from Windows Live Captions.
 
-The optional in-app downloads are [llama.cpp b12240 Windows x64 CPU](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
+The optional in-app downloads are [llama.cpp b12240 Windows x64 Vulkan](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
 (MIT and the included LLVM OpenMP license) and [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/tree/91cad51170dc346986eccefdc2dd33a9da36ead9)
 (Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
 `src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
@@ -27,6 +27,8 @@ Ported into `include/veyra/engine/ScreenText.h`, `src/engine/ScreenText.cpp` and
 icons, highlight colours, game screens, phrasebook, sync server) are not included.
 The frame readback, the Windows OCR wrapper (`src/engine/ScreenTextCapture.cpp`)
 and the user interface are Veyra's own. Text recognition is Windows.Media.Ocr.
+When each line's translation is shown follows VI Translator's presenter (`src-tauri/src/main.rs`,
+same version), ported into `src/ui/CaptionPresenter.h` and `tests/unit/CaptionPresenterTests.cpp`.
 
 ```
 MIT License

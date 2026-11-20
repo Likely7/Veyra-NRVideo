@@ -3199,6 +3199,19 @@
    "ru": "MP4 не может сохранить этот кодек как есть; выберите MKV или исключите этот трек"
   },
   {
+   "zh": "MyMemory 今日免费额度已用完，请换用其他翻译引擎",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "MyMemory 今日免費額度已用完，請改用其他翻譯引擎",
+   "en": "MyMemory's free quota for today is used up. Choose another translation engine",
+   "ja": "MyMemory の本日の無料枠を使い切りました。別の翻訳エンジンを選んでください",
+   "ko": "MyMemory의 오늘 무료 사용량을 모두 썼습니다. 다른 번역 엔진을 선택하세요",
+   "es": "Se agotó la cuota gratuita de MyMemory de hoy. Elige otro motor de traducción",
+   "fr": "Le quota gratuit de MyMemory pour aujourd’hui est épuisé. Choisissez un autre moteur de traduction",
+   "de": "Das kostenlose Tageskontingent von MyMemory ist aufgebraucht. Wähle eine andere Übersetzungsmaschine",
+   "pt-BR": "A cota gratuita do MyMemory de hoje acabou. Escolha outro mecanismo de tradução",
+   "ru": "Бесплатный лимит MyMemory на сегодня исчерпан. Выберите другой переводчик"
+  },
+  {
    "zh": "MyMemory 需要选择原文语言",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "MyMemory 需要選擇原文語言",
@@ -4265,17 +4278,17 @@
    "ru": "Яркость профиля 5 находится в RPU, а не в метаданных HDR10; автоматические предустановленные рекомендации недоступны."
   },
   {
-   "zh": "Qwen2.5 1.5B Q4 与 CPU 运行库 · 按需下载 %1 GB",
+   "zh": "Qwen2.5 1.5B Q4 与显卡/CPU 运行库 · 按需下载 %1 GB",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "Qwen2.5 1.5B Q4 與 CPU 執行庫 · 按需下載 %1 GB",
-   "en": "Qwen2.5 1.5B Q4 and CPU runtime · %1 GB on demand",
-   "ja": "Qwen2.5 1.5B Q4 と CPU ランタイム · %1 GB をダウンロード",
-   "ko": "Qwen2.5 1.5B Q4 및 CPU 런타임 · %1 GB 다운로드",
-   "es": "Qwen2.5 1.5B Q4 y entorno de CPU · Descarga de %1 GB",
-   "fr": "Qwen2.5 1.5B Q4 et moteur CPU · %1 Go à télécharger",
-   "de": "Qwen2.5 1.5B Q4 und CPU-Laufzeit · %1 GB Download",
-   "pt-BR": "Qwen2.5 1.5B Q4 e runtime de CPU · Download de %1 GB",
-   "ru": "Qwen2.5 1.5B Q4 и среда ЦП · Загрузка %1 ГБ"
+   "zh-TW": "Qwen2.5 1.5B Q4 與顯示卡/CPU 執行庫 · 按需下載 %1 GB",
+   "en": "Qwen2.5 1.5B Q4 and GPU/CPU runtime · %1 GB on demand",
+   "ja": "Qwen2.5 1.5B Q4 と GPU/CPU ランタイム · %1 GB をダウンロード",
+   "ko": "Qwen2.5 1.5B Q4 및 GPU/CPU 런타임 · %1 GB 다운로드",
+   "es": "Qwen2.5 1.5B Q4 y entorno de GPU/CPU · Descarga de %1 GB",
+   "fr": "Qwen2.5 1.5B Q4 et moteur GPU/CPU · %1 Go à télécharger",
+   "de": "Qwen2.5 1.5B Q4 und GPU/CPU-Laufzeit · %1 GB Download",
+   "pt-BR": "Qwen2.5 1.5B Q4 e runtime de GPU/CPU · Download de %1 GB",
+   "ru": "Qwen2.5 1.5B Q4 и среда ГП/ЦП · Загрузка %1 ГБ"
   },
   {
    "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
@@ -12716,19 +12729,6 @@
    "ru": "Круг "
   },
   {
-   "zh": "在 CPU 上运行，字幕文本留在本机。",
-   "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "在 CPU 上執行，字幕文字留在本機。",
-   "en": "Runs on the CPU. Caption text stays on this device.",
-   "ja": "CPU で動作し、字幕テキストは端末内で処理されます。",
-   "ko": "CPU에서 실행하며 자막 텍스트는 이 기기에서 처리합니다.",
-   "es": "Se ejecuta en la CPU. El texto permanece en el dispositivo.",
-   "fr": "Le CPU traite le texte des sous-titres sur cet appareil.",
-   "de": "Die CPU verarbeitet den Untertiteltext auf diesem Gerät.",
-   "pt-BR": "A CPU processa as legendas neste dispositivo.",
-   "ru": "ЦП обрабатывает субтитры на этом устройстве."
-  },
-  {
    "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
@@ -12857,6 +12857,19 @@
    "de": "Stabilisieren Sie unveränderte Pixel nach der letzten NR Schicht.",
    "pt-BR": "Estabilizar pixels inalterados após a camada final NR.",
    "ru": "Стабилизировать неизмененные пиксели после финального NR слоя."
+  },
+  {
+   "zh": "在本机运行，字幕文本留在本机。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "在本機執行，字幕文字留在本機。",
+   "en": "Runs on this device. Caption text stays on this device.",
+   "ja": "この端末で動作し、字幕テキストは端末内で処理されます。",
+   "ko": "이 기기에서 실행하며 자막 텍스트는 이 기기에서 처리합니다.",
+   "es": "Se ejecuta en este equipo. El texto permanece en el dispositivo.",
+   "fr": "Fonctionne sur cet appareil. Le texte des sous-titres y reste.",
+   "de": "Läuft auf diesem Gerät. Der Untertiteltext bleibt auf dem Gerät.",
+   "pt-BR": "Roda neste dispositivo. O texto das legendas fica nele.",
+   "ru": "Работает на этом устройстве. Текст субтитров не покидает его."
   },
   {
    "zh": "在浏览器打开登录页",
@@ -27912,6 +27925,32 @@
    "de": "Benutzerdaten",
    "pt-BR": "Dados do usuário",
    "ru": "Данные пользователя"
+  },
+  {
+   "zh": "用显卡运行本地模型",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "用顯示卡執行本機模型",
+   "en": "Run the local model on the graphics card",
+   "ja": "ローカルモデルを GPU で実行",
+   "ko": "그래픽 카드에서 로컬 모델 실행",
+   "es": "Ejecutar el modelo local en la tarjeta gráfica",
+   "fr": "Exécuter le modèle local sur la carte graphique",
+   "de": "Lokales Modell auf der Grafikkarte ausführen",
+   "pt-BR": "Executar o modelo local na placa de vídeo",
+   "ru": "Запускать локальную модель на видеокарте"
+  },
+  {
+   "zh": "用显卡（Vulkan）翻译，每句只需不到一秒；没有可用显卡时自动改用 CPU。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "用顯示卡（Vulkan）翻譯，每句只需不到一秒；沒有可用顯示卡時自動改用 CPU。",
+   "en": "Translates on the graphics card (Vulkan) in under a second per line; falls back to the CPU when no card is usable.",
+   "ja": "GPU (Vulkan) で 1 行 1 秒未満で翻訳します。使える GPU がない場合は CPU を使います。",
+   "ko": "그래픽 카드(Vulkan)로 한 줄을 1초 안에 번역합니다. 사용할 수 있는 카드가 없으면 CPU를 사용합니다.",
+   "es": "Traduce en la tarjeta gráfica (Vulkan) en menos de un segundo por línea; usa la CPU si no hay una tarjeta disponible.",
+   "fr": "Traduit sur la carte graphique (Vulkan) en moins d’une seconde par ligne ; utilise le CPU si aucune carte n’est disponible.",
+   "de": "Übersetzt auf der Grafikkarte (Vulkan) in unter einer Sekunde pro Zeile; ohne nutzbare Karte über die CPU.",
+   "pt-BR": "Traduz na placa de vídeo (Vulkan) em menos de um segundo por linha; usa a CPU se não houver placa disponível.",
+   "ru": "Переводит на видеокарте (Vulkan) быстрее секунды на строку; без подходящей видеокарты — на ЦП."
   },
   {
    "zh": "用远程游玩控制 PS5",

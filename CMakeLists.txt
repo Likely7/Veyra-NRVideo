@@ -137,6 +137,10 @@ add_executable(veyra_screen_text_tests tests/unit/ScreenTextTests.cpp src/engine
 target_compile_features(veyra_screen_text_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_screen_text_tests PRIVATE veyra_base)
 
+# When each on-screen line's translation is shown (src/ui/CaptionPresenter.h, no Qt).
+add_executable(veyra_caption_presenter_tests tests/unit/CaptionPresenterTests.cpp)
+target_compile_features(veyra_caption_presenter_tests PRIVATE cxx_std_20)
+
 add_executable(veyra_export_timeline_tests tests/unit/ExportTimelineTests.cpp)
 target_compile_features(veyra_export_timeline_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_export_timeline_tests PRIVATE veyra_base)

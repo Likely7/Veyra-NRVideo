@@ -72,10 +72,11 @@ QtObject {
         property string sourceLanguage: ""
         property string targetLanguage: "en"
         property bool showOriginal: true
+        property bool useGpu: true
         property bool modelInstalled: false
         property bool downloading: false
         property real downloadProgress: 0
-        property real downloadBytes: 1142252715
+        property real downloadBytes: 1155212906
         property string apiBase: ""
         property string apiModel: ""
         property string status: ""

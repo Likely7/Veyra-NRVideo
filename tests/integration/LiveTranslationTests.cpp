@@ -137,11 +137,14 @@ void screenChecks(const QString& root) {
     check(QTest::qWaitFor([&] { return !translation.translated().isEmpty(); }, 6000) && requests == 1 && requestCorrect,
           "on-screen line translated through the selected service");
     check(translation.translated() == QString::fromUtf8("الجسر مغلق."), "right-to-left reply decoded");
+    check(translation.caption() == QStringLiteral("The bridge is closed."), "the line is shown with its translation");
     translation.acceptScreenText(QString(), true, QString());
-    check(translation.caption().isEmpty() && translation.translated().isEmpty(), "line gone from the picture clears it");
+    check(!translation.translated().isEmpty(), "a line gone from the picture keeps its translation a moment (time to read it)");
+    check(QTest::qWaitFor([&] { return translation.caption().isEmpty() && translation.translated().isEmpty(); }, 5000),
+          "then its translation is taken down");
     translation.acceptScreenText(QStringLiteral("The bridge is closed."), true, QString());
-    check(QTest::qWaitFor([&] { return !translation.translated().isEmpty(); }, 3000) && requests == 1,
-          "a repeated line is shown from the recent translations without a new request");
+    check(!translation.translated().isEmpty() && requests == 1,
+          "a repeated line is shown at once from the recent translations without a new request");
     translation.acceptScreenText(QString(), false, QStringLiteral("fixture OCR error"));
     check(translation.caption().isEmpty() && translation.status() == QStringLiteral("fixture OCR error"),
           "an OCR error clears the line and shows as the status");
@@ -154,10 +157,10 @@ void screenChecks(const QString& root) {
     check(!translation.screenTextWanted(), "disabling stops reading the picture");
 }
 
-// The reported case: a line leaves while its translation is still on the way (a slow
-// CPU model), then the next line comes. The next one must be translated, the first
-// request must not be aborted (the model would go on with it and hold up the next),
-// and its late reply is kept for when the line comes back.
+// The reported cases: a translator slower than the dialogue (a CPU model). A line leaves
+// while its translation is still on the way and the next line comes. Before, the late
+// translation was never shown and lines went untranslated; now each one is shown, for
+// about as long as its line was up, and the request on its way is never aborted.
 void secondLineChecks(const QString& root) {
     LiveTranslation translation(root);
     translation.setCaptionSource(LiveTranslation::ScreenText);
@@ -174,11 +177,14 @@ void secondLineChecks(const QString& root) {
             for (const auto& line : data.first(end).split('\n'))
                 if (line.toLower().startsWith("content-length:")) n = line.mid(15).trimmed().toInt();
             if (data.size() < end + 4 + n) return;
-            const bool first = data.mid(end + 4, n).contains("Line one");
-            order << (first ? QStringLiteral("one") : QStringLiteral("two"));
-            const QByteArray json = first ? QByteArray(R"({"choices":[{"message":{"content":"السطر الأول"}}]})")
-                                          : QByteArray(R"({"choices":[{"message":{"content":"السطر الثاني"}}]})");
-            QTimer::singleShot(first ? 1500 : 100, socket, [socket, json] {
+            const auto body = data.mid(end + 4, n);
+            const QString which = body.contains("Line one") ? QStringLiteral("one")
+                : body.contains("Line two") ? QStringLiteral("two") : QStringLiteral("three");
+            order << which;
+            const QByteArray json = which == QStringLiteral("one") ? QByteArray(R"({"choices":[{"message":{"content":"السطر الأول"}}]})")
+                : which == QStringLiteral("two") ? QByteArray(R"({"choices":[{"message":{"content":"السطر الثاني"}}]})")
+                                                 : QByteArray(R"({"choices":[{"message":{"content":"السطر الثالث"}}]})");
+            QTimer::singleShot(which == QStringLiteral("one") ? 1500 : 100, socket, [socket, json] {
                 socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: "
                     + QByteArray::number(json.size()) + "\r\n\r\n" + json);
                 socket->disconnectFromHost();
@@ -200,14 +206,33 @@ void secondLineChecks(const QString& root) {
     QTest::qWait(600);                                         // its translation is still on the way
     translation.acceptScreenText(QString(), true, QString());  // the line leaves first
     translation.acceptScreenText(QStringLiteral("Line two follows it."), true, QString());
+    check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الأول"); }, 4000)
+          && translation.caption() == QStringLiteral("Line one is on screen."),
+          "the first line's translation is shown although it came after the line left");
     check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الثاني"); }, 8000),
-          "a second line after the first one left is translated");
+          "then the second line's translation follows");
     check(order == QStringList({QStringLiteral("one"), QStringLiteral("two")}),
           "the first request was not aborted and the second waited for it");
     translation.acceptScreenText(QString(), true, QString());
     translation.acceptScreenText(QStringLiteral("Line one is on screen."), true, QString());
-    check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الأول"); }, 3000)
-          && order.size() == 2, "the first line's late reply was kept and is shown when it returns");
+    check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الأول"); }, 5000)
+          && order.size() == 2, "a line that comes back is shown from the recent translations");
+
+    // A line replaced while another is being translated is skipped: it has gone, and
+    // translating it would only put the translator further behind the dialogue.
+    translation.setEnabled(false);
+    translation.setEnabled(true);
+    translation.setPlayback(10, true, false);
+    order.clear();
+    translation.acceptScreenText(QString(), true, QString());
+    translation.acceptScreenText(QStringLiteral("Line one again, slowly."), true, QString());
+    QTest::qWait(300);
+    translation.acceptScreenText(QStringLiteral("Line two, briefly."), true, QString());
+    QTest::qWait(300);
+    translation.acceptScreenText(QStringLiteral("Line three stays."), true, QString());
+    check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الثالث"); }, 8000)
+          && order == QStringList({QStringLiteral("one"), QStringLiteral("three")}),
+          "a translator behind the dialogue goes on with the line on screen now");
     translation.setEnabled(false);
 }
 

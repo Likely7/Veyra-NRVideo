@@ -38,6 +38,9 @@ constexpr int cacheEntries = 300;
 // On-screen source: a CPU model can need several seconds for a line, so its requests get
 // longer; a failed line is tried again a couple of times instead of being left untranslated.
 constexpr int localScreenTimeoutMs = 30000, retryDelayMs = 1500, maxRetries = 2;
+// The engine reports an on-screen line gone once it has not been read for this long
+// (ScreenText.h, LineTracker::clearAfterMs): the line really left that much earlier.
+constexpr qint64 screenClearMs = 800;
 
 bool languageCode(const QString& value) {
     if (value.isEmpty() || value.size() > 15) return false;
@@ -129,6 +132,7 @@ LiveTranslation::LiveTranslation(const QString& directory, QObject* parent)
     if (targetLanguage_ == QLatin1String("zh")) targetLanguage_ = QStringLiteral("zh-CN");
     if (!languageCode(targetLanguage_)) targetLanguage_ = QStringLiteral("en");
     showOriginal_ = settings_.value(QStringLiteral("original"), true).toBool();
+    useGpu_ = settings_.value(QStringLiteral("gpu"), true).toBool();
     apiBase_ = settings_.value(QStringLiteral("apiBase")).toString();
     apiModel_ = settings_.value(QStringLiteral("apiModel")).toString();
     // Without Windows Live Captions (Windows 10), the on-screen source is the one that works.
@@ -183,9 +187,18 @@ LiveTranslation::LiveTranslation(const QString& directory, QObject* parent)
             setStatus(tr("无法启动本地翻译进程"));
         }
     });
-    connect(&server_, &QProcess::finished, this, [this] {
+    connect(&server_, &QProcess::finished, this, [this](int code) {
         if (serverJob_) CloseHandle(std::exchange(serverJob_, nullptr));
         if (enabled_ && provider_ == Local && serverPort_) {
+            // Stopped on the graphics card (its driver or runtime refused the model):
+            // tick() starts the same model again on the CPU.
+            if (useGpu_ && !gpuFailed_) {
+                gpuFailed_ = true;
+                serverPort_ = 0;
+                serverKey_.clear();
+                log::info("live-translation", std::format("local server stopped on the GPU code={}, using the CPU", code));
+                return;
+            }
             serverFailed_ = true;
             setStatus(tr("本地翻译进程已停止，请重新启用"));
         }
@@ -276,6 +289,7 @@ void LiveTranslation::setEnabled(bool value) {
     readerStarted_ = false;
     captionsOpen_ = false;
     serverFailed_ = false;
+    gpuFailed_ = false;
     screenError_.clear();
     if (enabled_) {
         setStatus(captionSource_ == ScreenText ? tr("正在启动画面文字识别…") : tr("请打开 Windows 实时字幕"));
@@ -376,6 +390,18 @@ void LiveTranslation::setShowOriginal(bool value) {
     emit changed();
 }
 
+void LiveTranslation::setUseGpu(bool value) {
+    if (useGpu_ == value) return;
+    useGpu_ = value;
+    settings_.setValue(QStringLiteral("gpu"), value);
+    // A running model keeps its device until it is started again.
+    if (provider_ == Local && enabled_) {
+        stopLocal();
+        gpuFailed_ = false;
+    }
+    emit changed();
+}
+
 void LiveTranslation::setApiBase(QString value) {
     value = value.trimmed().left(1024);
     // Avoid saving credentials or query tokens in the configuration file.
@@ -450,20 +476,78 @@ void LiveTranslation::acceptCaption(const QString& text) {
     if (raw_ == text) return;
     raw_ = text;
     if (!enabled_ || !active_ || !captionsOpen_) return;
-    // A line leaving the picture does not abort its translation: the model would go on
-    // with it anyway and hold up the next line; the result is kept for when it returns.
-    if (text.isEmpty()) { resetCaption(captionSource_ == ScreenText); return; }
+    if (captionSource_ == ScreenText) { acceptScreenLine(text); return; }
+    if (text.isEmpty()) { resetCaption(); return; }
     if (!sameCaption(caption_, text)) { translated_.clear(); retries_ = 0; }
     caption_ = text;
     newTextAt_ = clock_.elapsed();
     emit captionChanged();
 }
 
-void LiveTranslation::resetCaption(bool keepRequest) {
-    if (!keepRequest) cancelRequest();
+// Each new line on the picture gets a number; the line before it ended now (or, when the
+// picture holds no text any more, when the engine last saw it). A line already translated
+// goes to the presenter at once; the others are requested in tick().
+void LiveTranslation::acceptScreenLine(const QString& text) {
+    if (text == current_) return;
+    const qint64 now = clock_.elapsed();
+    if (!current_.isEmpty())
+        presenter_.ended(currentSeq_, text.isEmpty() ? std::max(currentStart_, now - screenClearMs) : now);
+    current_ = text;
+    retries_ = 0;
+    retryAt_ = 0;
+    if (text.isEmpty()) {
+        currentSeq_ = 0;
+        return;
+    }
+    currentSeq_ = ++lineSeq_;
+    currentStart_ = now;
+    newTextAt_ = now;
+    if (const auto known = knownTranslation(text)) {
+        requestedSeq_ = currentSeq_;
+        present(text, *known, currentSeq_, currentStart_);
+    }
+}
+
+std::optional<QString> LiveTranslation::knownTranslation(const QString& text) const {
+    if (!sourceLanguage_.isEmpty() && sourceLanguage_.compare(targetLanguage_, Qt::CaseInsensitive) == 0) return text;
+    if (const auto hit = cache_.constFind(cacheKey(text)); hit != cache_.constEnd()) return *hit;
+    return std::nullopt;
+}
+
+void LiveTranslation::present(const QString& original, const QString& translation, quint64 seq, qint64 start) {
+    // Time to read it: about a second plus 40 ms a character, 1.2 to 3.5 s.
+    const qint64 read = std::clamp<qint64>(1000 + 40 * qint64(std::max(original.size(), translation.size())), 1200, 3500);
+    presenter_.ready(seq, start, ShownLine{original, translation}, clock_.elapsed(), read);
+    stepPresenter();
+}
+
+void LiveTranslation::stepPresenter() {
+    switch (presenter_.tick(clock_.elapsed())) {
+    case CaptionPresenter<ShownLine>::Act::Show:
+        caption_ = presenter_.shown()->original;
+        translated_ = presenter_.shown()->translation;
+        setStatus(tr("实时翻译运行中"));
+        emit captionChanged();
+        break;
+    case CaptionPresenter<ShownLine>::Act::Hide:
+        caption_.clear();
+        translated_.clear();
+        emit captionChanged();
+        break;
+    case CaptionPresenter<ShownLine>::Act::None:
+        break;
+    }
+}
+
+void LiveTranslation::resetCaption() {
+    cancelRequest();
     retries_ = 0;
     requestedText_.clear();
     requestedAt_ = 0;
+    current_.clear();
+    currentSeq_ = requestedSeq_ = 0;
+    retryAt_ = 0;
+    presenter_.clear(lineSeq_);
     if (caption_.isEmpty() && translated_.isEmpty()) return;
     caption_.clear();
     translated_.clear();
@@ -499,6 +583,8 @@ void LiveTranslation::tick() {
             setStatus(tr("正在启动画面文字识别…"));
             return;
         }
+        // What is shown changes with time, whatever the translator is doing.
+        stepPresenter();
     } else if (!captionsOpen_) {
         if (reader_.state() != QProcess::NotRunning) setStatus(tr("请打开 Windows 实时字幕"));
         return;
@@ -514,27 +600,50 @@ void LiveTranslation::tick() {
         if (!serverPort_ && server_.state() == QProcess::NotRunning) startLocal();
         if (!serverJob_ || server_.state() != QProcess::Running) return;
     }
-    if (caption_.isEmpty()) {
+    if (screen) { tickScreen(now); return; }
+    if (caption_.isEmpty()) return;
+    if (caption_ == requestedText_ || request_) return;
+    // Live captions grow word by word: wait for a pause before sending.
+    if (now - requestedAt_ < 850 || (now - newTextAt_ < 300 && now - requestedAt_ < 1400)) return;
+    if (provider_ == Local && !loopbackListenerIsOwned(serverPort_, DWORD(server_.processId()))) {
+        serverNotListening(now);
+        return;
+    }
+    requestTranslation(caption_);
+}
+
+// On-screen source: one request at a time, always for the line on the picture now. A line
+// replaced while another was being translated is skipped (it is gone); the one being
+// translated is not aborted - the presenter still shows it when it comes.
+void LiveTranslation::tickScreen(qint64 now) {
+    auto listening = [this] { return provider_ != Local || loopbackListenerIsOwned(serverPort_, DWORD(server_.processId())); };
+    if (current_.isEmpty()) {
         // The model is up and nothing is on screen yet: say so instead of "loading".
-        if (screen && provider_ == Local && status_ == tr("正在加载本地翻译模型…") && serverPort_
-            && loopbackListenerIsOwned(serverPort_, DWORD(server_.processId())))
+        if (provider_ == Local && status_ == tr("正在加载本地翻译模型…") && serverPort_ && listening())
             setStatus(tr("正在等待画面字幕…"));
         return;
     }
-    if (caption_ == requestedText_ || request_) return;
-    // The engine shows an on-screen line only once it has settled; live captions grow word by word.
-    if (screen ? now - requestedAt_ < 250
-               : now - requestedAt_ < 850 || (now - newTextAt_ < 300 && now - requestedAt_ < 1400))
-        return;
-    if (provider_ == Local && !loopbackListenerIsOwned(serverPort_, DWORD(server_.processId()))) {
-        if (now - serverStartedAt_ > 20000) {
-            stopLocal();
-            serverFailed_ = true;
-            setStatus(tr("本地翻译服务启动超时，请重新启用"));
-        }
+    if (request_ || currentSeq_ == requestedSeq_ || now < retryAt_) return;
+    if (!listening()) {
+        serverNotListening(now);
         return;
     }
-    requestTranslation();
+    requestTranslation(current_, currentSeq_, currentStart_);
+}
+
+// The local server is still not answering. Too long on the graphics card (a driver that
+// hangs while it prepares its shaders): the CPU instead. Too long on the CPU: give up.
+void LiveTranslation::serverNotListening(qint64 now) {
+    const bool gpu = useGpu_ && !gpuFailed_;
+    if (now - serverStartedAt_ <= (gpu ? 45000 : 20000)) return;
+    stopLocal();
+    if (gpu) {
+        gpuFailed_ = true;
+        log::info("live-translation", "local server did not start on the GPU, using the CPU");
+        return;
+    }
+    serverFailed_ = true;
+    setStatus(tr("本地翻译服务启动超时，请重新启用"));
 }
 
 void LiveTranslation::startLocal() {
@@ -557,18 +666,22 @@ void LiveTranslation::startLocal() {
         if (key.startsWith(QLatin1String("LLAMA_"), Qt::CaseInsensitive) ||
             key.startsWith(QLatin1String("GGML_"), Qt::CaseInsensitive)) env.remove(key);
     env.insert(QStringLiteral("LLAMA_API_KEY"), QString::fromLatin1(serverKey_));
-    const int threads = std::clamp(QThread::idealThreadCount() / 4, 1, 4);
+    // On the graphics card (Vulkan) the whole model runs there: a line takes a fraction of a
+    // second instead of seconds. Without a usable card llama.cpp stays on the CPU.
+    const bool gpu = useGpu_ && !gpuFailed_;
+    const int threads = std::clamp(QThread::idealThreadCount() / 2, 2, 8);
     const auto n = QString::number(threads);
     server_.setProcessEnvironment(env);
     server_.setWorkingDirectory(assets_.runtimePath());
     serverStartedAt_ = clock_.elapsed();
+    log::info("live-translation", std::format("local server start gpu={} threads={}", gpu, threads));
     setStatus(tr("正在加载本地翻译模型…"));
     server_.start(QDir(assets_.runtimePath()).filePath(QStringLiteral("llama-server.exe")),
         {QStringLiteral("--model"), assets_.modelPath(), QStringLiteral("--host"), QStringLiteral("127.0.0.1"),
          QStringLiteral("--port"), QString::number(serverPort_), QStringLiteral("--threads"), n,
          QStringLiteral("--threads-batch"), n, QStringLiteral("--parallel"), QStringLiteral("1"),
          QStringLiteral("--alias"), QString::fromLatin1(localAlias), QStringLiteral("--ctx-size"), QStringLiteral("1024"),
-         QStringLiteral("--n-gpu-layers"), QStringLiteral("0"), QStringLiteral("--offline"),
+         QStringLiteral("--n-gpu-layers"), gpu ? QStringLiteral("99") : QStringLiteral("0"), QStringLiteral("--offline"),
          QStringLiteral("--no-webui"), QStringLiteral("--log-disable")});
 }
 
@@ -579,21 +692,17 @@ void LiveTranslation::stopLocal() {
     if (server_.state() != QProcess::NotRunning) server_.kill();
 }
 
-void LiveTranslation::requestTranslation() {
-    const auto text = caption_;
+void LiveTranslation::requestTranslation(const QString& text, quint64 seq, qint64 start) {
     requestedAt_ = clock_.elapsed();
     requestedText_ = text;
-    if (sourceLanguage_.compare(targetLanguage_, Qt::CaseInsensitive) == 0) {
-        translated_ = text;
-        setStatus(tr("实时翻译运行中"));
-        emit captionChanged();
-        return;
-    }
-    if (const auto hit = cache_.constFind(cacheKey(text)); hit != cache_.constEnd()) {
-        translated_ = *hit;
-        setStatus(tr("实时翻译运行中"));
-        emit captionChanged();
-        return;
+    requestedSeq_ = seq;
+    if (!seq) {
+        if (const auto known = knownTranslation(text)) {
+            translated_ = *known;
+            setStatus(tr("实时翻译运行中"));
+            emit captionChanged();
+            return;
+        }
     }
     QUrl url;
     QByteArray token, payload;
@@ -639,27 +748,55 @@ void LiveTranslation::requestTranslation() {
         if (reply->bytesAvailable() > maxResponseBytes) reply->abort();
     });
     const qint64 sentAt = clock_.elapsed();
-    connect(reply, &QNetworkReply::finished, this, [this, reply, text, sentAt] {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, text, seq, start, sentAt] {
         request_ = nullptr;
         const int code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         // Timing and outcome only: the text itself is never logged.
-        log::info("live-translation", std::format("request provider={} source={} http={} error={} ms={} chars={}",
-            provider_, captionSource_, code, int(reply->error()), clock_.elapsed() - sentAt, text.size()));
-        receiveTranslation(reply, text);
+        log::info("live-translation", std::format("request provider={} source={} http={} error={} ms={} chars={} line={}",
+            provider_, captionSource_, code, int(reply->error()), clock_.elapsed() - sentAt, text.size(),
+            seq ? (seq == currentSeq_ ? "current" : "earlier") : "live"));
+        receiveTranslation(reply, text, seq, start);
         reply->deleteLater();
     });
 }
 
-void LiveTranslation::receiveTranslation(QNetworkReply* reply, const QString& text) {
-    // On-screen source: a reply for a line no longer shown is still kept (cached), so the
-    // line appears at once if it comes back; it is just not shown now.
-    const bool screen = captionSource_ == ScreenText;
-    const bool current = enabled_ && active_ && sameCaption(text, caption_);
-    if (!enabled_ || (!current && !screen)) return;
+QString LiveTranslation::parseTranslation(const QByteArray& body, QString* problem) const {
+    const auto json = QJsonDocument::fromJson(body).object();
+    QString translation;
+    if (provider_ == MyMemory) {
+        const int status = json.value(QStringLiteral("responseStatus")).toVariant().toInt();
+        if (status == 200)
+            translation = json.value(QStringLiteral("responseData")).toObject().value(QStringLiteral("translatedText")).toString();
+        else if (status == 429 || json.value(QStringLiteral("quotaFinished")).toBool())
+            *problem = tr("MyMemory 今日免费额度已用完，请换用其他翻译引擎");
+        // Over the quota MyMemory may still answer 200 with a warning in place of the text.
+        if (translation.startsWith(QLatin1String("MYMEMORY WARNING"))) {
+            translation.clear();
+            *problem = tr("MyMemory 今日免费额度已用完，请换用其他翻译引擎");
+        }
+    } else {
+        const auto choices = json.value(QStringLiteral("choices")).toArray();
+        if (!choices.isEmpty())
+            translation = choices.first().toObject().value(QStringLiteral("message")).toObject().value(QStringLiteral("content")).toString();
+    }
+    if (translation.trimmed().isEmpty() && problem->isEmpty()) *problem = tr("翻译接口未返回译文");
+    return translation.simplified().left(500);
+}
+
+void LiveTranslation::receiveTranslation(QNetworkReply* reply, const QString& text, quint64 seq, qint64 start) {
+    if (!enabled_) return;
+    const bool screen = seq != 0;
+    // Windows Live Captions: only the line still being shown is of use.
+    const bool current = screen ? seq == currentSeq_ : active_ && sameCaption(text, caption_);
+    if (!screen && !current) return;
     const int code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    if (provider_ == Local && code == 503 && clock_.elapsed() - serverStartedAt_ < 20000) {
+    if (provider_ == Local && code == 503 && clock_.elapsed() - serverStartedAt_ < 45000) {
         if (!current) return;
         requestedText_.clear();
+        if (screen) {
+            requestedSeq_ = 0;
+            retryAt_ = clock_.elapsed() + 500;
+        }
         setStatus(tr("正在加载本地翻译模型…"));
         return;
     }
@@ -667,30 +804,25 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const QString& te
         if (!current) return;
         setStatus(code ? tr("翻译接口返回 HTTP %1").arg(code) : tr("翻译请求失败，请检查连接"));
         if (screen && retries_ < maxRetries) {
-            // Try the same line again shortly (the 250 ms gate in tick() measures from requestedAt_).
+            // The same line again shortly (tick() waits for retryAt_).
             ++retries_;
-            requestedText_.clear();
-            requestedAt_ = clock_.elapsed() + retryDelayMs;
+            requestedSeq_ = 0;
+            retryAt_ = clock_.elapsed() + retryDelayMs;
         }
         return;
     }
-    const auto json = QJsonDocument::fromJson(reply->readAll()).object();
-    QString translation;
-    if (provider_ == MyMemory) {
-        if (json.value(QStringLiteral("responseStatus")).toVariant().toInt() == 200)
-            translation = json.value(QStringLiteral("responseData")).toObject().value(QStringLiteral("translatedText")).toString();
-    } else {
-        const auto choices = json.value(QStringLiteral("choices")).toArray();
-        if (!choices.isEmpty())
-            translation = choices.first().toObject().value(QStringLiteral("message")).toObject().value(QStringLiteral("content")).toString();
-    }
-    if (translation.trimmed().isEmpty()) {
-        if (current) setStatus(tr("翻译接口未返回译文"));
+    QString problem;
+    const auto result = parseTranslation(reply->readAll(), &problem);
+    if (result.isEmpty()) {
+        if (current) setStatus(problem);
         return;
     }
-    const auto result = translation.simplified().left(500);
     remember(text, result);
-    if (!current) return;
+    if (screen) {
+        // Shown even when its line has gone meanwhile (the presenter decides for how long).
+        present(text, result, seq, start);
+        return;
+    }
     translated_ = result;
     setStatus(tr("实时翻译运行中"));
     emit captionChanged();

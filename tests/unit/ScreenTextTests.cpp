@@ -69,6 +69,14 @@ void centred() {
     const std::vector<Word> line{w(L"Come", 700, 10, 60), w(L"on,", 768, 10, 40), w(L"let's", 816, 10, 60), w(L"go.", 884, 10, 40)};
     check(centeredWords(line, 192, 1920).size() == 4, "a centred line is kept whole");
     check(centeredWords({w(L"Browse", 1400, 10, 90)}, 192, 1920).empty(), "text only at the side is not a subtitle");
+    // Veyra: a long line with its last words missed (or a game that does not centre exactly)
+    // is still the subtitle; a short line that stays on one side is not.
+    std::vector<Word> partial;
+    for (uint32_t i = 0; i < 9; ++i) partial.push_back(w(L"word", 500 + i * 90, 10, 80));
+    check(centeredWords(partial, 192, 1920).size() == 9, "a line across the middle, a little off-centre, is kept whole");
+    const std::vector<Word> left{w(L"Objective:", 40, 10, 120), w(L"reach", 170, 10, 70), w(L"the", 250, 10, 40),
+                                 w(L"boat", 300, 10, 60)};
+    check(centeredWords(left, 192, 1920).empty(), "a line on the left side is not a subtitle");
 }
 
 void quality_and_order() {

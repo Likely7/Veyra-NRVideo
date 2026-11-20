@@ -179,7 +179,7 @@ DialogLayer {
             label: qsTr("翻译引擎")
             hintBelow: true
             hint: root.provider === 0
-                ? qsTr("在 CPU 上运行，字幕文本留在本机。")
+                ? qsTr("在本机运行，字幕文本留在本机。")
                 : root.screenSource ? qsTr("启用后会把识别出的画面文字发送给所选服务。")
                                     : qsTr("启用后会把系统字幕文本发送给所选服务。")
             VSelect {
@@ -226,7 +226,7 @@ DialogLayer {
         VRow {
             label: root.translation && root.translation.modelInstalled ? qsTr("本地模型已就绪") : qsTr("本地模型")
             hintBelow: true
-            hint: qsTr("Qwen2.5 1.5B Q4 与 CPU 运行库 · 按需下载 %1 GB")
+            hint: qsTr("Qwen2.5 1.5B Q4 与显卡/CPU 运行库 · 按需下载 %1 GB")
                 .arg(root.translation ? (root.translation.downloadBytes / 1000000000).toFixed(2) : "")
             RowLayout {
                 VButton {
@@ -240,6 +240,16 @@ DialogLayer {
                         else root.translation.downloadModel()
                     }
                 }
+            }
+        }
+        VRow {
+            label: qsTr("用显卡运行本地模型")
+            hintBelow: true
+            hint: qsTr("用显卡（Vulkan）翻译，每句只需不到一秒；没有可用显卡时自动改用 CPU。")
+            VSwitch {
+                objectName: "live-translation-gpu"
+                checked: root.translation && root.translation.useGpu !== undefined ? root.translation.useGpu : true
+                onToggled: value => { root.translation.useGpu = value }
             }
         }
         ProgressBar {

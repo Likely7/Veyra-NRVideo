@@ -1,5 +1,6 @@
 #pragma once
 
+#include "CaptionPresenter.h"
 #include "TranslationAssets.h"
 #include <QElapsedTimer>
 #include <QHash>
@@ -7,6 +8,7 @@
 #include <QSettings>
 #include <QStringList>
 #include <QTimer>
+#include <optional>
 
 namespace veyra::ui {
 class LiveTranslation final : public QObject {
@@ -26,6 +28,8 @@ class LiveTranslation final : public QObject {
     Q_PROPERTY(QString sourceLanguage READ sourceLanguage WRITE setSourceLanguage NOTIFY changed)
     Q_PROPERTY(QString targetLanguage READ targetLanguage WRITE setTargetLanguage NOTIFY changed)
     Q_PROPERTY(bool showOriginal READ showOriginal WRITE setShowOriginal NOTIFY changed)
+    // Local model: run it on the graphics card (Vulkan) when there is one; CPU otherwise.
+    Q_PROPERTY(bool useGpu READ useGpu WRITE setUseGpu NOTIFY changed)
     Q_PROPERTY(QString apiBase READ apiBase WRITE setApiBase NOTIFY changed)
     Q_PROPERTY(QString apiModel READ apiModel WRITE setApiModel NOTIFY changed)
     Q_PROPERTY(QString status READ status NOTIFY changed)
@@ -63,6 +67,7 @@ public:
     QString sourceLanguage() const { return sourceLanguage_; }
     QString targetLanguage() const { return targetLanguage_; }
     bool showOriginal() const { return showOriginal_; }
+    bool useGpu() const { return useGpu_; }
     QString apiBase() const { return apiBase_; }
     QString apiModel() const { return apiModel_; }
     QString status() const;
@@ -78,6 +83,7 @@ public:
     void setSourceLanguage(QString value);
     void setTargetLanguage(QString value);
     void setShowOriginal(bool value);
+    void setUseGpu(bool value);
     void setApiBase(QString value);
     void setApiModel(QString value);
     void setCaptionSource(int value);
@@ -102,13 +108,24 @@ private:
     void tick();
     void readCaptions();
     void acceptCaption(const QString& text);
-    // keepRequest: a translation already on its way is left to finish (on-screen source).
-    void resetCaption(bool keepRequest = false);
+    // On-screen source: the engine's line changed (empty: gone).
+    void acceptScreenLine(const QString& text);
+    void tickScreen(qint64 now);
+    // Hands a line's translation to the presenter, and shows what it decides.
+    void present(const QString& original, const QString& translation, quint64 seq, qint64 start);
+    void stepPresenter();
+    void resetCaption();
     void cancelRequest();
     void startLocal();
     void stopLocal();
-    void requestTranslation();
-    void receiveTranslation(QNetworkReply* reply, const QString& text);
+    void serverNotListening(qint64 now);
+    // seq/start: the on-screen line the text is (0 for Windows Live Captions).
+    void requestTranslation(const QString& text, quint64 seq = 0, qint64 start = 0);
+    void receiveTranslation(QNetworkReply* reply, const QString& text, quint64 seq, qint64 start);
+    // The translation in a reply body; empty when there is none, with the reason in *problem.
+    QString parseTranslation(const QByteArray& body, QString* problem) const;
+    // A translation already known (same language, or recently translated).
+    std::optional<QString> knownTranslation(const QString& text) const;
     QString cacheKey(const QString& text) const;
     void remember(const QString& text, const QString& translation);
 
@@ -121,7 +138,7 @@ private:
     QNetworkReply* request_ = nullptr;
     void* serverJob_ = nullptr;
     bool enabled_ = false, active_ = false, captionsOpen_ = false, serverFailed_ = false, readerStarted_ = false;
-    bool showOriginal_ = true;
+    bool showOriginal_ = true, useGpu_ = true, gpuFailed_ = false;
     int provider_ = Local;
     int captionSource_ = WindowsCaptions;
     int screenRegion_ = BottomSubtitles;
@@ -137,6 +154,13 @@ private:
     qint64 newTextAt_ = 0, requestedAt_ = 0, serverStartedAt_ = 0, lastCaptionReadAt_ = 0;
     QByteArray captionBuffer_, serverKey_;
     QString raw_, caption_, translated_, requestedText_, status_;
+    // On-screen source: the line on the picture now (caption_/translated_ are what the
+    // presenter shows: a line and its translation, possibly the previous line's).
+    struct ShownLine { QString original, translation; };
+    CaptionPresenter<ShownLine> presenter_;
+    QString current_;
+    quint64 lineSeq_ = 0, currentSeq_ = 0, requestedSeq_ = 0;
+    qint64 currentStart_ = 0, retryAt_ = 0;
     QString sourceLanguage_, targetLanguage_, apiBase_, apiModel_;
     QByteArray apiKey_;
 };

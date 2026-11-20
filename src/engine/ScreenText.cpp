@@ -426,7 +426,11 @@ std::vector<Word> centeredWords(const std::vector<Word>& words,double cropX,doub
         double x1=0;
         for(const auto& c:cols)x1=std::max(x1,c.x1);
         const double cx=(cropX+(x0+x1)/2.0)/frameW;
-        if(std::abs(cx-0.5)<=0.04){
+        // Veyra: a block across the middle of the picture is a subtitle too when it is a
+        // little off-centre (a few words the OCR missed at one end, a game that does not
+        // centre its lines exactly). VI Translator's 4% suits GTA VI's exactly centred lines.
+        const bool across=(cropX+x0)/frameW<0.47&&(cropX+x1)/frameW>0.53;
+        if(std::abs(cx-0.5)<=0.04||(across&&std::abs(cx-0.5)<=0.15)){
             std::vector<bool> keep(words.size(),false);
             for(const auto& c:cols)for(size_t i:c.members)keep[i]=true;
             std::vector<Word> out;
