@@ -112,6 +112,23 @@ DialogLayer {
                 onPicked: id => { root.translation.screenRegion = Number(id) }
             }
         }
+        // What the last read found, so it is visible whether the area holds the subtitles.
+        Text {
+            objectName: "live-translation-reading"
+            Layout.fillWidth: true
+            visible: root.supported && root.screenSource && root.translation !== null && root.translation.enabled
+            readonly property string reading: root.translation && root.translation.screenReading ? root.translation.screenReading : ""
+            readonly property int words: root.translation && root.translation.screenWords ? root.translation.screenWords : 0
+            text: reading.length ? qsTr("画面上读到：%1").arg(reading)
+                : words > 0 ? qsTr("读到 %1 个词，但不像居中的字幕").arg(words)
+                : qsTr("识别区域内暂时没有文字")
+            color: reading.length ? Theme.t2 : Theme.t3
+            font.family: Theme.fontUi
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+            maximumLineCount: 3
+            elide: Text.ElideRight
+        }
         VRow {
             visible: root.supported && root.screenSource && root.region === 4
             label: qsTr("区域左边")

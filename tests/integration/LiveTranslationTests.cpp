@@ -11,6 +11,7 @@
 #include <QTcpSocket>
 #include <QTest>
 #include <QThread>
+#include <QTimer>
 #include <chrono>
 #include <cstdio>
 
@@ -153,6 +154,63 @@ void screenChecks(const QString& root) {
     check(!translation.screenTextWanted(), "disabling stops reading the picture");
 }
 
+// The reported case: a line leaves while its translation is still on the way (a slow
+// CPU model), then the next line comes. The next one must be translated, the first
+// request must not be aborted (the model would go on with it and hold up the next),
+// and its late reply is kept for when the line comes back.
+void secondLineChecks(const QString& root) {
+    LiveTranslation translation(root);
+    translation.setCaptionSource(LiveTranslation::ScreenText);
+    QTcpServer service;
+    if (!service.listen(QHostAddress::LocalHost)) { check(false, "loopback service listens"); return; }
+    QStringList order;
+    QObject::connect(&service, &QTcpServer::newConnection, &service, [&] {
+        auto* socket = service.nextPendingConnection();
+        QObject::connect(socket, &QTcpSocket::readyRead, socket, [&, socket, data = QByteArray{}]() mutable {
+            data += socket->readAll();
+            const auto end = data.indexOf("\r\n\r\n");
+            if (end < 0) return;
+            int n = 0;
+            for (const auto& line : data.first(end).split('\n'))
+                if (line.toLower().startsWith("content-length:")) n = line.mid(15).trimmed().toInt();
+            if (data.size() < end + 4 + n) return;
+            const bool first = data.mid(end + 4, n).contains("Line one");
+            order << (first ? QStringLiteral("one") : QStringLiteral("two"));
+            const QByteArray json = first ? QByteArray(R"({"choices":[{"message":{"content":"السطر الأول"}}]})")
+                                          : QByteArray(R"({"choices":[{"message":{"content":"السطر الثاني"}}]})");
+            QTimer::singleShot(first ? 1500 : 100, socket, [socket, json] {
+                socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: "
+                    + QByteArray::number(json.size()) + "\r\n\r\n" + json);
+                socket->disconnectFromHost();
+            });
+        });
+        QObject::connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+    });
+    translation.setProvider(LiveTranslation::OpenAi);
+    translation.setApiBase(QStringLiteral("http://localhost:%1/v1").arg(service.serverPort()));
+    translation.setApiModel(QStringLiteral("fixture-model"));
+    translation.setTargetLanguage(QStringLiteral("ar"));
+    translation.setEnabled(true);
+    translation.setPlayback(9, true, false);
+    translation.acceptScreenText(QString(), true, QString());
+    translation.acceptScreenText(QStringLiteral("Line one is on screen."), true, QString(),
+                                 QStringLiteral("Line one is on screen."), 5);
+    check(translation.screenReading() == QStringLiteral("Line one is on screen.") && translation.screenWords() == 5,
+          "the last read is offered as a preview");
+    QTest::qWait(600);                                         // its translation is still on the way
+    translation.acceptScreenText(QString(), true, QString());  // the line leaves first
+    translation.acceptScreenText(QStringLiteral("Line two follows it."), true, QString());
+    check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الثاني"); }, 8000),
+          "a second line after the first one left is translated");
+    check(order == QStringList({QStringLiteral("one"), QStringLiteral("two")}),
+          "the first request was not aborted and the second waited for it");
+    translation.acceptScreenText(QString(), true, QString());
+    translation.acceptScreenText(QStringLiteral("Line one is on screen."), true, QString());
+    check(QTest::qWaitFor([&] { return translation.translated() == QString::fromUtf8("السطر الأول"); }, 3000)
+          && order.size() == 2, "the first line's late reply was kept and is shown when it returns");
+    translation.setEnabled(false);
+}
+
 void localChecks(const QString& root, bool download) {
     LiveTranslation translation(root);
     translation.setTargetLanguage(QStringLiteral("zh-CN"));
@@ -193,6 +251,7 @@ int main(int argc, char** argv) {
     if (args.size() < 2 || !QDir().mkpath(args.at(1))) return 2;
     const auto root = args.at(1);
     screenChecks(QDir(root).filePath(QStringLiteral("screen")));
+    secondLineChecks(QDir(root).filePath(QStringLiteral("second-line")));
     if (!LiveTranslation::supported()) {
         std::puts("SKIP Live Captions unavailable on this Windows build");
         return failures ? 1 : 77;

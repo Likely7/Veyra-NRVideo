@@ -36,7 +36,14 @@ struct ScreenTextStatus {
     double readMs=0;      // duration of the last read (all passes)
     std::wstring language;// the recognizer's language tag
     std::wstring error;   // Chinese source text, translated by the UI catalog
+    // The last read, for the settings preview (shown, never logged): the line it found
+    // after cleanup (before it settles; empty: none) and how many words the OCR returned.
+    std::wstring reading;
+    uint32_t words=0;
 };
+// Diagnostics: with the environment variable VEYRA_SCREEN_TEXT_DEBUG set, every read's
+// words and a few images of the read area go to logs/screen-text (opt-in only; the
+// normal log carries counts and timing, never the text).
 
 class ScreenTextCapture final : public PresentCapture {
 public:

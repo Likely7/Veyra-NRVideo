@@ -18,6 +18,9 @@ class LiveTranslation final : public QObject {
     Q_PROPERTY(int captionSource READ captionSource WRITE setCaptionSource NOTIFY changed)
     Q_PROPERTY(int screenRegion READ screenRegion WRITE setScreenRegion NOTIFY changed)
     Q_PROPERTY(QRectF customRegion READ customRegion WRITE setCustomRegion NOTIFY changed)
+    // The last read of the on-screen source (a preview while ScreenText is on).
+    Q_PROPERTY(QString screenReading READ screenReading NOTIFY previewChanged)
+    Q_PROPERTY(int screenWords READ screenWords NOTIFY previewChanged)
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY changed)
     Q_PROPERTY(int provider READ provider WRITE setProvider NOTIFY changed)
     Q_PROPERTY(QString sourceLanguage READ sourceLanguage WRITE setSourceLanguage NOTIFY changed)
@@ -53,6 +56,8 @@ public:
     bool screenTextCentered() const;
     QString screenTextLanguage() const;
     int screenTextIntervalMs() const;
+    QString screenReading() const { return screenReading_; }
+    int screenWords() const { return screenWords_; }
     bool enabled() const { return enabled_; }
     int provider() const { return provider_; }
     QString sourceLanguage() const { return sourceLanguage_; }
@@ -79,8 +84,10 @@ public:
     void setScreenRegion(int value);
     void setCustomRegion(QRectF value);
     // The engine's latest settled on-screen line (empty: none), whether its OCR is
-    // ready, and why not. Ignored unless ScreenText is the enabled source.
-    void acceptScreenText(const QString& text, bool ready, const QString& error);
+    // ready, and why not; plus the last read for the preview (what it found, words seen).
+    // Ignored unless ScreenText is the enabled source.
+    void acceptScreenText(const QString& text, bool ready, const QString& error,
+                          const QString& reading = {}, int words = 0);
     Q_INVOKABLE void setApiKey(const QString& value);
     Q_INVOKABLE void openWindowsCaptions();
     Q_INVOKABLE void downloadModel();
@@ -89,12 +96,14 @@ public:
 signals:
     void changed();
     void captionChanged();
+    void previewChanged();
 private:
     void setStatus(QString status);
     void tick();
     void readCaptions();
     void acceptCaption(const QString& text);
-    void resetCaption();
+    // keepRequest: a translation already on its way is left to finish (on-screen source).
+    void resetCaption(bool keepRequest = false);
     void cancelRequest();
     void startLocal();
     void stopLocal();
@@ -117,7 +126,8 @@ private:
     int captionSource_ = WindowsCaptions;
     int screenRegion_ = BottomSubtitles;
     QRectF customRegion_{0.08, 0.70, 0.84, 0.27};
-    QString screenError_;
+    QString screenError_, screenReading_;
+    int screenWords_ = 0, retries_ = 0;
     // Recent translations: game lines repeat (hints, menus, the same speaker), and a
     // repeated line is shown at once instead of being sent again. Bounded.
     QHash<QString, QString> cache_;

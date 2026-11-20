@@ -28031,6 +28031,19 @@
    "ru": "Отразить по вертикали"
   },
   {
+   "zh": "画面上读到：%1",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "畫面上讀到：%1",
+   "en": "Reading now: %1",
+   "ja": "画面から読み取り中：%1",
+   "ko": "현재 읽은 내용: %1",
+   "es": "Leyendo ahora: %1",
+   "fr": "Lecture en cours : %1",
+   "de": "Gerade gelesen: %1",
+   "pt-BR": "Lendo agora: %1",
+   "ru": "Сейчас прочитано: %1"
+  },
+  {
    "zh": "画面中断，正在请求关键帧恢复…",
    "src": "src/source/RemotePlaySessionSource.cpp",
    "zh-TW": "畫面中斷，正在請求關鍵幀恢復…",
@@ -33569,6 +33582,19 @@
    "ru": "Область распознавания"
   },
   {
+   "zh": "识别区域内暂时没有文字",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識區域內暫時沒有文字",
+   "en": "No text in the area right now",
+   "ja": "現在、領域内に文字はありません",
+   "ko": "현재 영역에 텍스트가 없습니다",
+   "es": "Ahora no hay texto en la zona",
+   "fr": "Aucun texte dans la zone pour l’instant",
+   "de": "Im Bereich ist gerade kein Text",
+   "pt-BR": "Nenhum texto na área no momento",
+   "ru": "Сейчас в области нет текста"
+  },
+  {
    "zh": "识别档位",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "識別檔位",
@@ -34347,6 +34373,19 @@
    "de": "Wählen Sie einen Eingangsanschluss, um den Link zu beenden · Esc zum Abbrechen",
    "pt-BR": "Escolha uma porta de entrada para terminar o link · Esc para cancelar",
    "ru": "Выберите входной порт для завершения ссылки · Esc для отмены"
+  },
+  {
+   "zh": "读到 %1 个词，但不像居中的字幕",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "讀到 %1 個詞，但不像置中的字幕",
+   "en": "Read %1 words, but they don’t look like a centred subtitle",
+   "ja": "%1 語を読み取りましたが、中央の字幕ではないようです",
+   "ko": "%1개 단어를 읽었지만 가운데 자막으로 보이지 않습니다",
+   "es": "Se leyeron %1 palabras, pero no parecen un subtítulo centrado",
+   "fr": "%1 mots lus, mais ils ne ressemblent pas à un sous-titre centré",
+   "de": "%1 Wörter gelesen, aber sie sehen nicht wie ein zentrierter Untertitel aus",
+   "pt-BR": "%1 palavras lidas, mas não parecem uma legenda centralizada",
+   "ru": "Прочитано слов: %1, но это не похоже на субтитры по центру"
   },
   {
    "zh": "读取协商后的采集格式失败（0x{:08X}）。",

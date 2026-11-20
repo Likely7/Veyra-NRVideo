@@ -65,6 +65,8 @@ QtObject {
         property int captionSource: 0
         property int screenRegion: 0
         property rect customRegion: Qt.rect(0.08, 0.70, 0.84, 0.27)
+        property string screenReading: ""
+        property int screenWords: 0
         property bool enabled: false
         property int provider: 0
         property string sourceLanguage: ""

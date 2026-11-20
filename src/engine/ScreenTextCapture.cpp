@@ -4,6 +4,7 @@
 #include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/ScreenText.h"
 #include "veyra/Log.h"
+#include "veyra/RuntimePaths.h"
 
 #include <wrl/client.h>
 #include <winrt/base.h>
@@ -23,7 +24,9 @@
 #include <cmath>
 #include <cstring>
 #include <exception>
+#include <filesystem>
 #include <format>
+#include <fstream>
 #include <mutex>
 #include <thread>
 #include <vector>
@@ -176,6 +179,34 @@ screentext::Crop toCrop(const uint8_t* data,uint32_t pitch,DXGI_FORMAT format,ui
     return crop;
 }
 
+bool debugEnabled(){
+    static const bool on=[]{wchar_t value[8]{};return GetEnvironmentVariableW(L"VEYRA_SCREEN_TEXT_DEBUG",value,8)>0;}();
+    return on;
+}
+
+std::string joined(const std::vector<screentext::Word>& words){
+    std::wstring text;
+    for(const auto& w:words){if(!text.empty())text+=L' ';text+=w.text;}
+    return utf8(text);
+}
+
+// The read area as a 24-bit BMP (diagnostics only).
+void saveBmp(const screentext::Crop& crop,const std::filesystem::path& path){
+    const uint32_t row=(crop.w*3+3)&~3u,size=54+row*crop.h;
+    std::vector<uint8_t> file(size,0);
+    auto put32=[&](size_t at,uint32_t v){for(int i=0;i<4;++i)file[at+size_t(i)]=uint8_t(v>>(8*i));};
+    file[0]='B';file[1]='M';put32(2,size);put32(10,54);put32(14,40);put32(18,crop.w);put32(22,crop.h);
+    file[26]=1;file[28]=24;put32(34,row*crop.h);
+    for(uint32_t y=0;y<crop.h;++y){
+        uint8_t* out=&file[54+size_t(crop.h-1-y)*row];
+        for(uint32_t x=0;x<crop.w;++x){
+            const uint8_t* p=&crop.rgba[(size_t(y)*crop.w+x)*4];
+            out[x*3]=p[2];out[x*3+1]=p[1];out[x*3+2]=p[0];
+        }
+    }
+    std::ofstream(path,std::ios::binary).write(reinterpret_cast<const char*>(file.data()),std::streamsize(file.size()));
+}
+
 // Windows.Media.Ocr for one language. Worker thread only (an MTA thread: RecognizeAsync().get() blocks).
 class OcrReader {
 public:
@@ -305,6 +336,14 @@ void ScreenTextCapture::State::run(){
     int64_t retryAt=0,summaryAt=nowMs();
     uint64_t summaryReads=0;double summaryMs=0;
     bool readFailureLogged=false;
+    int64_t debugImageAt=0;uint32_t debugImages=0;
+    std::filesystem::path debugDir;
+    if(debugEnabled()){
+        std::error_code ec;
+        debugDir=runtime::logsDirectory()/L"screen-text";
+        std::filesystem::create_directories(debugDir,ec);
+        log::info("screen-text",std::format("diagnostics on: words of every read and area images in {}",debugDir.string()));
+    }
     while(!shutdown.load()){
         HANDLE events[2]={wake,gpuDone};
         WaitForMultipleObjects(2,events,FALSE,100);
@@ -371,6 +410,8 @@ void ScreenTextCapture::State::run(){
             if(!readFailureLogged){readFailureLogged=true;log::warn("screen-text",std::string("OCR read ")+e.what());}
             reading={};
         }
+        const uint32_t rawWords=uint32_t(reading.words.size());
+        const std::string rawText=debugDir.empty()?std::string{}:joined(reading.words);
         auto words=screentext::dropTallWords(std::move(reading.words));
         if(o.centeredOnly&&!words.empty()&&frameWidth){
             auto kept=screentext::centeredWords(words,double(left)/factor,double(frameWidth)/factor);
@@ -381,9 +422,17 @@ void ScreenTextCapture::State::run(){
         if(trackerEpoch!=generation){tracker.reset();trackerEpoch=generation;}
         const bool changed=tracker.feed(text,reading.sure,nowMs());
         const double ms=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-begin).count();
+        if(!debugDir.empty()){
+            log::info("screen-text-debug",std::format("words={} sure={} ms={:.1f} raw=\"{}\" kept=\"{}\" text=\"{}\" shown=\"{}\"",
+                rawWords,reading.sure,ms,rawText,joined(words),utf8(text),utf8(tracker.shown())));
+            if(debugImages<40&&nowMs()-debugImageAt>=2000){
+                debugImageAt=nowMs();
+                saveBmp(crop,debugDir/std::format("area-{:02}.bmp",debugImages++));
+            }
+        }
         {
             std::lock_guard lock(mutex);
-            ++published.reads;published.readMs=ms;
+            ++published.reads;published.readMs=ms;published.reading=text;published.words=rawWords;
             // stop() or a new source in the meantime: that line is not this picture's
             if(changed&&epoch.load()==generation){published.text=tracker.shown();++published.sequence;}
         }

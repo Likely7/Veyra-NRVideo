@@ -148,7 +148,8 @@ void QmlPlayerBridge::tickSubtitles() {
     if (screenText) {
         const auto onScreen = i.engine.screenTextSnapshot();
         liveTranslation_->acceptScreenText(QString::fromStdWString(onScreen.text), onScreen.ready,
-                                           onScreen.error.empty() ? QString() : uiText(onScreen.error));
+                                           onScreen.error.empty() ? QString() : uiText(onScreen.error),
+                                           QString::fromStdWString(onScreen.reading), int(onScreen.words));
     }
     // Draw. The overlay is a layered child of the video window: it moves with the
     // picture and is clipped by the same window region as the video itself.
