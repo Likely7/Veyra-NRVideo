@@ -201,6 +201,7 @@ add_library(veyra_ngx STATIC
   src/ngx/compat/hde/hde64.c
   src/ngx/AdaMfgUnlock.cpp
   src/ngx/AmpereMfgUnlock.cpp
+  src/ngx/MfgUnlockUtil.cpp
   src/ngx/NvapiArchSpoof.cpp
   src/ngx/DlssgTransfusion.cpp
 )

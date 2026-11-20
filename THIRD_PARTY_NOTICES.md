@@ -622,6 +622,9 @@ together, which is recorded as an open question in
 
 Two upstream projects are ported into `include/veyra/ngx/AdaMfgUnlock.h` /
 `src/ngx/AdaMfgUnlock.cpp`; both are MIT-licensed and are attributed separately.
+The parsing helpers this port shares with the RTX 30 port below (`readU16/32/64`,
+`sha256Equals`, `lz4BlockDecompress`, `pointsToCString`) were moved unchanged into
+`src/ngx/MfgUnlockUtil.h` / `src/ngx/MfgUnlockUtil.cpp` on 2026-11-20.
 
 ### ImDreamt/MFGAdaUnlock-RenoDx (initial port)
 
