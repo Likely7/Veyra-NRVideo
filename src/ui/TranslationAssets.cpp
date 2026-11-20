@@ -21,11 +21,14 @@ struct Asset {
     qint64 bytes;
     const char* sha256;
 };
+// The Vulkan build: the same server and CPU runtime (byte for byte the files of the CPU
+// build) plus ggml-vulkan.dll, which runs the model on the graphics card (NVIDIA, AMD,
+// Intel) when its driver offers Vulkan. Without one, llama.cpp stays on the CPU.
 constexpr Asset runtime{
     "runtime.zip",
-    "https://github.com/ggml-org/llama.cpp/releases/download/b12240/llama-b12240-bin-win-cpu-x64.zip",
-    24931979,
-    "ecfd6e90619d44cdb417e073056e48a467086cdf756129e5d75fd50f14e424b6"
+    "https://github.com/ggml-org/llama.cpp/releases/download/b12240/llama-b12240-bin-win-vulkan-x64.zip",
+    37892170,
+    "9ea8f113961f32024e0c34409432d3bd350590b040259520bb0b98aeba3a8ac7"
 };
 constexpr Asset model{
     "qwen2.5-1.5b-instruct-q4_k_m.gguf",
@@ -34,7 +37,7 @@ constexpr Asset model{
     "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e"
 };
 
-// Only the server and its CPU runtime are extracted from the pinned archive.
+// Only the server and its CPU and Vulkan runtime are extracted from the pinned archive.
 // DLLs are checked again before executing, including the CPU variants ggml loads.
 constexpr struct { const char* name; const char* sha256; } runtimeFiles[]{
     {"ggml-base.dll", "c65ded825b8b9d462f02f3445d3ee8b7cf7ae5970de12e9d0b41b36ce2e78b08"},
@@ -52,6 +55,7 @@ constexpr struct { const char* name; const char* sha256; } runtimeFiles[]{
     {"ggml-cpu-sse42.dll", "0151293ddf02869f9e7632f9598745a88d1df07ed9f85fcba4d6631882473e89"},
     {"ggml-cpu-x64.dll", "c06523f6820f6db09fc5e3d23e8c0e7d8bc5f3e2065207928672f38b57469e83"},
     {"ggml-cpu-zen4.dll", "95b38de9b7a2bf2a1e1f875a4bf6229964d4ad04b2723c51da9d86aedc5659ea"},
+    {"ggml-vulkan.dll", "345812d6e453bd23c9b12e8996babed0769c0eaeb916e29decdfbd35c8d4522d"},
     {"ggml.dll", "803f2b54b29e42d170f39b838e183ba86de7820eff6685f522a2cbacb4ed390b"},
     {"libomp.dll", "a12116ba72d1d6820407cf30be23da04ce79d6bb8a71a5ee71759c5a1faa6f1c"},
     {"LICENSE-LLVM-OpenMP", "fdad1758a9e1f9d5a81e18879b3406772115edc92c24bfa36b70c654f325e8e4"},
@@ -124,7 +128,8 @@ TranslationAssets::~TranslationAssets() {
     }
 }
 
-QString TranslationAssets::runtimePath() const { return QDir(root_).filePath(QStringLiteral("llama-b12240")); }
+// A new folder for the Vulkan runtime: an earlier CPU-only download is not mistaken for it.
+QString TranslationAssets::runtimePath() const { return QDir(root_).filePath(QStringLiteral("llama-b12240-vulkan")); }
 QString TranslationAssets::modelPath() const { return QDir(root_).filePath(QString::fromLatin1(model.name)); }
 bool TranslationAssets::installed() const {
     return QFileInfo(modelPath()).size() == model.bytes

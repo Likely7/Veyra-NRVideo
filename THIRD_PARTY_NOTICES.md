@@ -7,11 +7,52 @@ translation workflow proposed by jjjxxxttt in [PR #203](https://github.com/Likel
 at `fb08b6cd87afcc2942eca2201958da4fbabfabaf` under the project's GPL-3.0 license.
 Windows speech recognition comes from Windows Live Captions.
 
-The optional in-app downloads are [llama.cpp b12240 Windows x64 CPU](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
+The optional in-app downloads are [llama.cpp b12240 Windows x64 Vulkan](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
 (MIT and the included LLVM OpenMP license) and [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/tree/91cad51170dc346986eccefdc2dd33a9da36ead9)
 (Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
 `src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
 data directory and are independent of the application installer.
+
+### On-screen text source: VI Translator capture reading (2026-11-20)
+
+Live translation can read the subtitles drawn on the picture (capture card, PS5
+Remote Play, Xbox/PC streaming, video) instead of Windows Live Captions. The
+reading logic is ported to C++ from [VI Translator - Desktop](https://github.com/vi-translator/vi-translator-desktop)
+v1.2.3 at `715f04a8188e7c39be5d264c5d89f362a6f07e04`: the three OCR passes and their choice, outline-only letters,
+junk/quality/order checks, gap filling, the centred-subtitle filter, the lost
+apostrophe fixes, the "could this be English" check, edit-distance line matching
+and the settle/clear timing (`src-tauri/src/ocr.rs`, area loop in `src-tauri/src/main.rs`).
+Ported into `include/veyra/engine/ScreenText.h`, `src/engine/ScreenText.cpp` and
+`tests/unit/ScreenTextTests.cpp`; the GTA VI specific parts (speaker names, button
+icons, highlight colours, game screens, phrasebook, sync server) are not included.
+The frame readback, the Windows OCR wrapper (`src/engine/ScreenTextCapture.cpp`)
+and the user interface are Veyra's own. Text recognition is Windows.Media.Ocr.
+When each line's translation is shown follows VI Translator's presenter (`src-tauri/src/main.rs`,
+same version), ported into `src/ui/CaptionPresenter.h` and `tests/unit/CaptionPresenterTests.cpp`.
+
+```
+MIT License
+
+Copyright (c) 2026 Fouad Almalki
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## PushFPS frame generation and recording features (2026-11-19)
 
