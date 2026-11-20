@@ -57,7 +57,9 @@ struct SubtitleAssData {
     struct Event { int64_t startMs=0,durationMs=0; std::string chunk; }; // "ReadOrder,Layer,Style,...,Text"
     std::vector<Event> events;          // embedded track: decoded in file order
     struct Font { std::string name; std::vector<char> data; };
-    std::vector<Font> fonts;            // container attachments (Matroska fonts)
+    // Container attachments (Matroska fonts), shared by every ASS track of the
+    // file and every published snapshot: one copy however many tracks there are.
+    std::shared_ptr<const std::vector<Font>> fonts;
     std::wstring source;                // identity of the script source (path + stream)
 };
 
