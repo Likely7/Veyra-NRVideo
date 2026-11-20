@@ -20,12 +20,17 @@ constexpr int kProbeTimeoutMs = 30000;       // avformat_find_stream_info
 constexpr int kReadTimeoutVodMs = 20000;     // one av_read_frame / seek on a seekable source
 constexpr int kReadTimeoutLiveMs = 10000;    // one av_read_frame on a live source
 
+inline bool datagramMediaInput(std::wstring_view path) {
+    return path.size() >= 4 && (_wcsnicmp(path.data(), L"rtp:", 4) == 0 ||
+                               _wcsnicmp(path.data(), L"udp:", 4) == 0);
+}
+
 inline bool networkMediaInput(std::wstring_view path) {
     const auto colon=path.find(L':');
     if(colon==std::wstring_view::npos||colon>5)return false;
     std::wstring scheme(path.substr(0,colon));
     for(auto& ch:scheme)ch=std::towlower(ch);
-    return scheme==L"http"||scheme==L"https"||scheme==L"rtsp";
+    return scheme==L"http"||scheme==L"https"||scheme==L"rtsp"||datagramMediaInput(path);
 }
 // A file on a server: a UNC path (\\host\share\...) or a drive letter mapped to a
 // network share (GetDriveType == DRIVE_REMOTE). Local extended paths (\\?\C:\...)

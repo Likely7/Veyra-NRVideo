@@ -41,8 +41,12 @@ VPage {
     signal videoHeightEdited(real height)
     // The status summary can wrap and the transport gains a row on narrow
     // windows. The native video host must use this same responsive geometry.
+    readonly property bool shortLayout: height < 400
+    readonly property real minimumVideoCardHeight: shortLayout ? statsBar.height + 44 : 180
+    readonly property real maximumVideoCardHeight:
+        Math.max(minimumVideoCardHeight, height - 28 - 10 - (shortLayout ? 110 : 200))
     readonly property real videoCardHeight: Math.max(statsBar.height + 1,
-        Math.min(root.videoHeight, Math.max(180, root.height - 28 - 10 - 200)))
+        Math.min(root.videoHeight, maximumVideoCardHeight))
     readonly property rect videoViewport: Qt.rect(14, 14, Math.max(1, root.width - 28),
         Math.max(1, root.videoCardHeight - statsBar.height))
     // Where a node picked from the add menu lands (world coordinates).
@@ -407,12 +411,13 @@ VPage {
             // .nv-bar: transport, then the stats strip.
             Rectangle {
                 id: statsBar
+                readonly property bool tight: width < 800
                 readonly property bool compact: width < nodeSourceBtn.implicitWidth + nodePresetBtn.implicitWidth
                     + nodeModeSwitch.implicitWidth + nodeOrbs.implicitWidth + 3 * 32 + 32 + 8 * 8 + 360
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
+                height: root.shortLayout ? 40 : (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
                 color: Theme.card
 
                 GridLayout {
@@ -451,6 +456,7 @@ VPage {
                     // .nv-stats: each entry separated by a hairline, mono numbers.
                     Flickable {
                         objectName: "node-stats-scroll"
+                        visible: !root.shortLayout
                         Layout.row: statsBar.compact ? 1 : 0
                         Layout.column: statsBar.compact ? 0 : 4
                         Layout.columnSpan: statsBar.compact ? 8 : 1
@@ -508,7 +514,16 @@ VPage {
                     }
 
                     // Total time / GPU / output-vs-target orbs (replace "已测增强 P95").
-                    ProPage.PerfOrbs { id: nodeOrbs; Layout.row: 0; Layout.column: statsBar.compact ? 4 : 5; objectName: "node-perf-orbs"; size: 32; showLabels: false; spacing: 6 }
+                    ProPage.PerfOrbs {
+                        id: nodeOrbs
+                        objectName: "node-perf-orbs"
+                        visible: !root.shortLayout && !statsBar.tight
+                        Layout.row: 0
+                        Layout.column: statsBar.compact ? 4 : 5
+                        size: 32
+                        showLabels: false
+                        spacing: 6
+                    }
                     VButton {
                         Layout.row: 0; Layout.column: statsBar.compact ? 5 : 6
                         objectName: "node-fullscreen"
@@ -535,12 +550,14 @@ VPage {
                         objectName: "node-preset-button"
                         iconName: "nodes"
                         trailingIcon: "down"
-                        maxTextWidth: 150
+                        maxTextWidth: statsBar.tight ? 90 : 150
                         text: qsTr("节点预设：") + veyra.currentPresetName
+                        tip: text
                         onClicked: nodePresetMenu.openAt(this, "down")
                     }
                     ProPage.StatusSummary {
                         id: nodeStatus
+                        visible: !root.shortLayout
                         Layout.row: statsBar.compact ? 2 : 1
                         Layout.column: 0
                         Layout.columnSpan: statsBar.compact ? 8 : 9
@@ -574,8 +591,8 @@ VPage {
                 property real origin: 0
                 onActiveChanged: if (active) origin = root.videoHeight
                 onActiveTranslationChanged: if (active) {
-                    const most = Math.max(180, root.height - 28 - 10 - 200)
-                    root.videoHeightEdited(Math.round(Math.max(180, Math.min(most, origin + activeTranslation.y))))
+                    const height = Math.min(root.maximumVideoCardHeight, origin + activeTranslation.y)
+                    root.videoHeightEdited(Math.round(Math.max(root.minimumVideoCardHeight, height)))
                 }
             }
         }
@@ -583,6 +600,7 @@ VPage {
         // --- canvas --------------------------------------------------------
         Rectangle {
             id: canvasCard
+            objectName: "node-canvas"
             // Over the fullscreen picture the canvas is a cover like any panel.
             readonly property bool videoCover: root.overlay
             property real coverRadius: radius
@@ -988,7 +1006,7 @@ VPage {
                 objectName: "node-canvas-tools"
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 12 + 16 + 8
+                anchors.bottomMargin: root.shortLayout && !root.overlay ? 8 : 36
                 z: 4
                 width: toolsRow.implicitWidth + 8
                 height: toolsRow.implicitHeight + 8
@@ -1045,7 +1063,7 @@ VPage {
                 height: 18
                 radius: 5
                 color: Theme.shade(10, 10, 13, 0.85)
-                visible: segments.length > 0
+                visible: segments.length > 0 && (!root.shortLayout || root.overlay)
                 readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", aa: "#7FD4FF",
                                                "frame-generation": "#3DDC84", protection: "#E7B868" })
                 readonly property var segments: {
@@ -1619,7 +1637,8 @@ VPage {
                     VSelect {
                         objectName: "node-fg-backend"
                         options: veyra.fgBackendChoices
-                        value: (options.find(o => o.id === veyra.fgBackendName) || options[0]).label
+                        value: (options.find(o => o.id === veyra.fgBackendName) || options[0] || {}).label || ""
+                        displayValue: Support.fgBackendShortLabel(selectedOption) || value
                         onPicked: id => veyra.fgBackendName = id
                     }
                 }
@@ -1669,6 +1688,24 @@ VPage {
                     opacity: enabled ? 1 : 0.5
                     hint: qsTr("实时采集 2X 时，当前档来不及赶上屏幕刷新，这一对帧就改用下一档，不丢帧也不加延迟。多占约 2 GB 显存，显存不够时不生效")
                     VSwitch { objectName: "node-vfg-auto-regulate"; checked: veyra.vfgAutoRegulate; onToggled: checked => veyra.vfgAutoRegulate = checked }
+                }
+                VRow {
+                    label: qsTr("自适应倍率")
+                    visible: veyra.fgMultiplier > 2 && (veyra.fgBackendName === "dlss" || veyra.fgBackendName === "anr" || veyra.fgBackendName === "vfg")
+                    hint: qsTr("把所选倍率当上限，按游戏实时帧率逐对选用最接近目标帧率（输出上限或屏幕刷新率）的倍率，游戏掉帧时输出仍保持平稳；不重建补帧 · 默认关闭")
+                    VSwitch { objectName: "node-fg-adaptive"; checked: veyra.fgAdaptive; onToggled: checked => veyra.fgAdaptive = checked }
+                }
+                VRow {
+                    label: qsTr("帧节奏修复")
+                    visible: veyra.fgBackendName !== "xess"
+                    hint: qsTr("锁 30 帧但送帧不均（17/50 ms 交替）的主机游戏，补帧前把真实帧排回均匀间隔；只处理能确认是不均匀送帧的情况，最多晚一个采集刷新 · 需自动去重 · 默认关闭")
+                    VSwitch { objectName: "node-pacing-repair"; checked: veyra.pacingRepair; onToggled: checked => veyra.pacingRepair = checked }
+                }
+                VRow {
+                    label: qsTr("HUD 自动锁定")
+                    visible: veyra.fgBackendName !== "xess"
+                    hint: qsTr("自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭")
+                    VSwitch { objectName: "node-hud-lock"; checked: veyra.hudLock; onToggled: checked => veyra.hudLock = checked }
                 }
                 VRow {
                     label: qsTr("补帧运动来源")

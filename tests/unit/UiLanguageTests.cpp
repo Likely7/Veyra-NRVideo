@@ -18,6 +18,17 @@ int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
     using namespace veyra::ui;
 
+    const struct { const char* code; const char* play; } languages[] = {
+        {"es", "Reproducir"}, {"fr", "Lire"}, {"de", "Abspielen"},
+        {"pt-BR", "Reproduzir"}, {"ru", "Воспроизвести"}
+    };
+    for (const auto& language : languages) {
+        const auto code = QString::fromLatin1(language.code);
+        expect(i18n::resolve(code), code, "explicit language");
+        if (!i18n::apply(code)) return 1;
+        expect(QCoreApplication::translate("Player", "播放"), QString::fromUtf8(language.play), "localized playback action");
+    }
+
     expect(i18n::resolve(QStringLiteral("ja")), QStringLiteral("ja"), "explicit choice kept");
     if (!i18n::apply(QStringLiteral("en"))) { std::printf("FAIL catalog did not load\n"); return 1; }
 

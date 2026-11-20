@@ -41,6 +41,13 @@ struct RecordingSettings {
     bool microphone=false;       // record a microphone
     std::wstring microphoneId;   // its endpoint; empty: the default recording device
     bool microphoneTrack=false;  // on a track of its own instead of mixed into the sound
+    uint32_t splitSeconds=0;     // 0: no time limit, otherwise split at a keyframe
+    uint64_t splitBytes=0;       // 0: no size limit; a file can exceed the target by a GOP
+    // NVENC tuning (from PushFPS): 0 off, 1 two-pass at quarter resolution, 2 two-pass at full
+    // resolution; psychoAq turns on spatial (and, where supported, temporal) adaptive quantization.
+    // A GPU that refuses them records without them. Media Foundation encoders ignore both.
+    uint32_t multipass=0;
+    bool psychoAq=false;
     // Instant replay recorder only.
     uint32_t replaySeconds=60;   // how much the buffer keeps
     uint64_t replayMemoryBytes=0;// memory cap; 0: an eighth of the installed memory, 512 MB to 4 GB

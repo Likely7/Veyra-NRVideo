@@ -787,6 +787,8 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.fgMotionRefine != next.fgMotionRefine) return true;
     if (previous.dlssgLite != next.dlssgLite) return true;
     if (previous.vfgAutoRegulate != next.vfgAutoRegulate) return true;
+    // Live HUD Lock owns its mask and compose passes (pipeline/HudLock.h).
+    if (previous.multiplier > 1 && next.multiplier > 1 && previous.hudLock != next.hudLock) return true;
     if (previous.flow != next.flow) return true;
     if (previous.captureCompatible != next.captureCompatible) return true;
     if (previous.forceSdrPreview != next.forceSdrPreview) return true;

@@ -11,6 +11,17 @@ import QtQuick.Effects
 VPage {
     id: root
     signal requestPage(string page)
+    signal requestOnboarding()
+    readonly property Item onboardingEntry: guideEntry
+    readonly property alias sourceViewport: homeScroll
+    readonly property bool compact: height < 500
+    function captureCard() {
+        for (let i = 0; i < sourceCards.count; ++i) {
+            const slot = sourceCards.itemAt(i)
+            if (slot && slot.modelData.act === "capture") return slot.card
+        }
+        return null
+    }
     // The coffee line under the title: Main opens 设置 → 赞助作者.
     signal requestSponsor()
     // Main.qml keeps the dusk wordmark hidden while the startup intro (DuskIntro.qml) flies a
@@ -18,9 +29,28 @@ VPage {
     property bool introHold: false
     readonly property Item wordmarkItem: wordmark
 
+    Flickable {
+        id: homeScroll
+        objectName: "source-card-scroll"
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: guideRow.top
+        anchors.bottomMargin: 8
+        contentWidth: width
+        contentHeight: Math.max(height, homeContent.implicitHeight + 24)
+        flickableDirection: Flickable.VerticalFlick
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+        ScrollBar.vertical: VScrollBar { }
+    }
+
     ColumnLayout {
-        anchors.centerIn: parent
-        spacing: 24
+        id: homeContent
+        parent: homeScroll.contentItem
+        anchors.horizontalCenter: parent.horizontalCenter
+        y: Math.max(root.compact ? 8 : 12, Math.round((homeScroll.height - height) / 2))
+        spacing: root.compact ? 8 : 24
 
         // .home .mark: 128px wide, drop-shadow(0 0 20px rgba(255,255,255,.35)) and the
         // 4.5s "breathe" loop: at 50% the glow is 30px at .55 and the mark scales 1.02.
@@ -51,7 +81,7 @@ VPage {
                 id: logoImg
                 anchors.centerIn: parent
                 source: Theme.logoImage
-                sourceSize.width: 128
+                sourceSize.width: root.compact ? 42 : 128
                 fillMode: Image.PreserveAspectFit
             }
             // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
@@ -101,7 +131,8 @@ VPage {
             Image {
                 id: wordmark
                 objectName: "home-wordmark"
-                height: Math.round(Math.max(130, Math.min(210, root.height * 0.24)))
+                height: Math.round(root.compact ? Math.min(90, root.height * 0.15)
+                                               : Math.max(130, Math.min(210, root.height * 0.24)))
                 width: Math.round(height * 1164 / 969)
                 source: "wordmark-dusk.png"
                 sourceSize: Qt.size(width, height)
@@ -179,7 +210,10 @@ VPage {
             id: srcGrid
             Layout.alignment: Qt.AlignHCenter
             Layout.preferredWidth: Math.min(1044, root.width - 48)
-            spacing: 12
+            spacing: root.compact ? 8 : 12
+            readonly property int cardWidth: root.compact
+                ? Math.max(1, Math.min(164, Math.floor((Layout.preferredWidth - 5 * spacing) / 6))) : 164
+            readonly property int cardHeight: root.compact ? 80 : 124
             // Subtitles name what is really there: the device of the last capture
             // session and the saved PS5 host; generic wording when there is none.
             // Only the subtitle follows the live state. The cards themselves are a fixed
@@ -197,6 +231,7 @@ VPage {
                 }
             }
             Repeater {
+                id: sourceCards
                 model: [
                     { glyph: "folder", title: qsTr("打开视频"), act: "file" },
                     { glyph: "video", title: qsTr("采集卡"), act: "capture" },
@@ -212,15 +247,16 @@ VPage {
                     id: slot
                     required property var modelData
                     required property int index
-                    implicitWidth: 164
-                    implicitHeight: 124
+                    readonly property alias card: srcCard
+                    implicitWidth: srcGrid.cardWidth
+                    implicitHeight: srcGrid.cardHeight
                     VRise { page: root; target: slot; d: 2 + slot.index }
                   Rectangle {
                     id: srcCard
                     readonly property var modelData: slot.modelData
                     // .srccard: 164x124, radius 14, content pinned top and bottom.
-                    width: 164
-                    height: 124
+                    width: slot.width
+                    height: slot.height
                     radius: Theme.rCard
                     color: cardHover.hovered ? Theme.card2 : Theme.card
                     border.width: 1
@@ -233,7 +269,7 @@ VPage {
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 14
+                        anchors.margins: root.compact ? 8 : 14
                         spacing: 0
                         Rectangle {
                             // .srccard .ico: 34x34, radius 10, translucent plate.
@@ -250,6 +286,10 @@ VPage {
                         ColumnLayout {
                             spacing: 3
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                elide: Text.ElideRight
+                                id: sourceTitle
                                 text: modelData.title
                                 color: Theme.t1
                                 font.family: Theme.fontUi
@@ -257,6 +297,10 @@ VPage {
                                 font.weight: Font.Medium
                             }
                             Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                elide: Text.ElideRight
+                                id: sourceSubtitle
                                 text: srcGrid.cardSub(modelData.act)
                                 color: Theme.t3
                                 font.family: Theme.fontUi
@@ -274,6 +318,8 @@ VPage {
                         kind: "acc"
                     }
                     HoverHandler { id: cardHover; cursorShape: Qt.PointingHandCursor }
+                    ToolTip.visible: cardHover.hovered && (sourceTitle.truncated || sourceSubtitle.truncated)
+                    ToolTip.text: sourceTitle.text + " · " + sourceSubtitle.text
                     TapHandler {
                         id: cardTap
                         onTapped: {
@@ -400,34 +446,37 @@ VPage {
                         id: chip
                         required property var modelData
                         readonly property bool isImage: /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
-                    width: chipRow.implicitWidth + 22
+                    width: Math.min(recent.width, chipRow.implicitWidth + 22)
                     height: 28
                     radius: 99
                     opacity: modelData.exists ? 1 : 0.45
                     color: chipHover.hovered && modelData.exists ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.04)
                     border.width: 1
                     border.color: Theme.stroke
-                    Row {
+                    RowLayout {
                         id: chipRow
-                        anchors.centerIn: parent
+                        anchors.fill: parent
+                        anchors.leftMargin: 11
+                        anchors.rightMargin: 11
                         spacing: 7
                         VIcon {
-                            anchors.verticalCenter: parent.verticalCenter
                             name: chip.isImage ? "image" : "film"
                             size: 14
                             color: chipText.color
                         }
                         Text {
                             id: chipText
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideMiddle
                             text: modelData.label
                             color: chipHover.hovered && modelData.exists ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
                             font.pixelSize: 12
                         }
                     }
-                    ToolTip.visible: chipHover.hovered && !modelData.exists
-                    ToolTip.text: qsTr("文件已不存在")
+                    ToolTip.visible: chipHover.hovered && (!modelData.exists || chipText.truncated)
+                    ToolTip.text: modelData.exists ? modelData.label : qsTr("文件已不存在")
                     HoverHandler { id: chipHover; cursorShape: modelData.exists ? Qt.PointingHandCursor : Qt.ArrowCursor }
                     TapHandler { onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                 }
@@ -446,6 +495,39 @@ VPage {
                 primary: true
                 tip: qsTr("只清空这个列表，不会删除文件。")
                 onClicked: clearRecentConfirm.open()
+            }
+        }
+    }
+
+    Row {
+        id: guideRow
+        anchors.left: parent.left
+        anchors.bottom: parent.bottom
+        anchors.margins: 16
+        spacing: 4
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            text: qsTr("第一次使用？")
+            color: Theme.t2
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsBody
+        }
+        VButton {
+            id: guideEntry
+            objectName: "home-onboarding"
+            text: qsTr("查看新手引导")
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: text
+            Accessible.onPressAction: clicked()
+            Keys.onReturnPressed: clicked()
+            Keys.onEnterPressed: clicked()
+            Keys.onSpacePressed: clicked()
+            border.width: activeFocus ? 2 : 1
+            border.color: activeFocus ? Theme.accent : Theme.stroke2
+            onClicked: {
+                forceActiveFocus()
+                root.requestOnboarding()
             }
         }
     }

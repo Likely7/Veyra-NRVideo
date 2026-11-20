@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <charconv>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -245,26 +246,35 @@ HttpResponse readResponse(Connection& connection, size_t maxBody) {
 
     if (chunked) {
         std::string decoded;
-        size_t cursor = 0;
         for (;;) {
-            // Make sure a full chunk-size line is buffered.
-            size_t lineEnd;
-            while ((lineEnd = body.find("\r\n", cursor)) == std::string::npos) {
+            size_t lineEnd = body.find("\r\n");
+            while (lineEnd == std::string::npos && body.size() <= 8192) {
                 const size_t n = connection.read(chunk, sizeof(chunk));
                 if (n == 0) throw TransportError(TransportError::Kind::Protocol, "connection closed inside a chunked body");
                 body.append(chunk, n);
+                lineEnd = body.find("\r\n");
             }
-            const size_t size = std::strtoull(body.substr(cursor, lineEnd - cursor).c_str(), nullptr, 16);
-            cursor = lineEnd + 2;
+            if (lineEnd > 8192) throw TransportError(TransportError::Kind::Protocol, "chunk size line too long");
+            const auto line = std::string_view(body).substr(0, lineEnd);
+            const auto hex = trim(line.substr(0, line.find(';')));
+            size_t size = 0;
+            const auto [end, error] = std::from_chars(hex.data(), hex.data() + hex.size(), size, 16);
+            if (error != std::errc{} || end != hex.data() + hex.size())
+                throw TransportError(TransportError::Kind::Protocol, "malformed chunk size");
             if (size == 0) break;
-            if (decoded.size() + size > maxBody) throw TransportError(TransportError::Kind::Protocol, "response body too large");
-            while (body.size() < cursor + size + 2) {
+            const size_t start = lineEnd + 2;
+            if (size > maxBody - decoded.size() || size > body.max_size() - start - 2)
+                throw TransportError(TransportError::Kind::Protocol, "response body too large");
+            const size_t next = start + size + 2;
+            while (body.size() < next) {
                 const size_t n = connection.read(chunk, sizeof(chunk));
                 if (n == 0) throw TransportError(TransportError::Kind::Protocol, "connection closed inside a chunked body");
                 body.append(chunk, n);
             }
-            decoded.append(body, cursor, size);
-            cursor += size + 2;
+            if (body.compare(next - 2, 2, "\r\n") != 0)
+                throw TransportError(TransportError::Kind::Protocol, "missing chunk terminator");
+            decoded.append(body, start, size);
+            body.erase(0, next);
         }
         response.body = std::move(decoded);
     } else if (contentLength >= 0) {
@@ -323,7 +333,7 @@ HttpResponse HttpClient::get(const HttpTarget& target, const std::string& pathAn
         std::unique_ptr<BIO, BioFree> pinBio(BIO_new_mem_buf(pinned_.data(), int(pinned_.size())));
         std::unique_ptr<X509, X509Free> pin(pinBio ? PEM_read_bio_X509(pinBio.get(), nullptr, nullptr, nullptr) : nullptr);
         if (!peer || !pin || X509_cmp(peer.get(), pin.get()) != 0)
-            throw TransportError(TransportError::Kind::Tls, "the server certificate does not match the paired one");
+            throw TransportError(TransportError::Kind::CertificateMismatch, "the server certificate does not match the paired one");
     }
 
     const bool defaultPort = (target.tls && target.port == 443) || (!target.tls && target.port == 80);

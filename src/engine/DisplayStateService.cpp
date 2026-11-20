@@ -25,6 +25,7 @@ DisplayState DisplayStateService::queryDisplayState(HWND window,HMONITOR monitor
     state.color.hdr=gfx::PresentSink::queryHdrDisplayActive(window,nullptr,&peak);
     state.color.peakValid=peak.valid;state.color.peakNits=peak.peakNits;
     state.color.fullFrameNits=peak.fullFrameNits;state.color.minNits=peak.minNits;
+    state.color.peakPlausible=peak.plausible;
     const auto finished=Clock::now();
     state.refreshMs=Ms(refreshed-began).count();state.vrrMs=Ms(vrrDone-refreshed).count();state.colorMs=Ms(finished-vrrDone).count();
     if(IsWindow(window)&&MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST)==monitor)state.monitor=monitor;

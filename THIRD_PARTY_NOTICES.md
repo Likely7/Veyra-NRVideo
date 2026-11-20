@@ -1,5 +1,55 @@
 # Third-party dependencies
 
+## Live subtitle translation (2026-11-20)
+
+Veyra's native subtitle translation adapts the Live Captions integration and
+translation workflow proposed by jjjxxxttt in [PR #203](https://github.com/Likely7/Veyra-NRVideo/pull/203)
+at `fb08b6cd87afcc2942eca2201958da4fbabfabaf` under the project's GPL-3.0 license.
+Windows speech recognition comes from Windows Live Captions.
+
+The optional in-app downloads are [llama.cpp b12240 Windows x64 CPU](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
+(MIT and the included LLVM OpenMP license) and [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/tree/91cad51170dc346986eccefdc2dd33a9da36ead9)
+(Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
+`src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
+data directory and are independent of the application installer.
+
+## PushFPS frame generation and recording features (2026-11-19)
+
+The Spanish, French, German, Brazilian Portuguese and Russian columns of
+`i18n/catalog.json` also reuse matching entries from the PushFPS catalog
+at the revision below under the same license. Veyra fills additional strings
+locally, preserves format arguments and adapts terminology for its player UI.
+
+Ported from PushFPS (https://github.com/DosukaSOL/PushFPS), a modified version of
+Veyra, at commit `3be641ca70f8179838cef4a8ff6cc3117664d185`. Copyright (C) 2026
+DosukaSOL and the PushFPS contributors. License: `GPL-3.0-or-later`, used here
+under GPL-3.0. Each ported file keeps their copyright line and says what was
+changed (renamed, wired into Veyra's settings, engine and interface):
+
+- Live HUD Lock: `include/veyra/pipeline/HudLock.h`, `src/pipeline/HudLock.cpp`,
+  `shaders/HudLockUpdate.hlsl`, `shaders/HudLockCompose.hlsl` (from `PushHudLock*`, a0b76239).
+- Frame pacing repair: `include/veyra/engine/FramePacingRepair.h` and its unit test
+  (from `PushPacingRepair`, a0b76239 and ebbde37d).
+- Adaptive multiplier: `include/veyra/engine/AdaptiveFgMultiplier.h` and its unit test
+  (from `PushAdaptiveFg`, 9d4e61a2).
+- Fixes and smaller pieces re-implemented in existing Veyra files: the output-cap
+  multiplier uses the de-duplicated content rate (9d4e61a2); the CUDA compute cache is
+  raised to 4 GiB for VFG kernels (9e9a4340); NVENC two-pass and adaptive
+  quantization for recordings (e6d3e5c8).
+
+## Remote Play adaptive trigger request (2026-11-19)
+
+`scripts/remoteplay/patches/0004-chiaki-pad-proc-no.patch` backports chiaki-ng
+`27ab96fd000bd0904f8ea3953c81f3ddb75b188b` ("Ask a PS5 for trigger effects the
+controller can apply", chiaki-ng issue #759) onto the unchanged
+`0e16950165f06e5c3291537c2eeba6e852be7120` pin after patches 0001-0003. The PS5 ctrl
+request now carries `RP-PadProcNo: 3`; without it the console sends some adaptive
+trigger effects in a form the DualSense does not apply, so L2/R2 have no resistance.
+
+Source: https://github.com/chiaki-ng/chiaki-ng . License remains
+`LicenseRef-AGPL-3.0-only-OpenSSL`; see `licenses/remoteplay` and the upstream
+`COPYING`. The patch is an otherwise unchanged backport of the upstream change.
+
 ## Remote Play feedback history backport (2026-11-17)
 
 `scripts/remoteplay/patches/0003-chiaki-feedback-history.patch` backports four
@@ -358,17 +408,9 @@ The Qt/QML interface (2026-09-26) draws the Lucide geometry that the approved pr
 The sponsor page (2026-10-19) adds Lucide `coffee` and `external-link` (as `external`) from lucide-static 1.51.0 to the same
 `icons.js`, under the same ISC notice.
 
-## QR code generation for Bilibili sign-in (2026-11-07)
-
-Project Nayuki, QR Code generator library (C++): https://github.com/nayuki/QR-Code-generator.
-`third_party/qrcodegen/qrcodegen.cpp` and `third_party/qrcodegen/qrcodegen.hpp` are imported
-verbatim; both files keep their upstream header with the full MIT notice ("Copyright (c) Project
-Nayuki"). Used by `src/media/QrImage.cpp` to encode the Bilibili sign-in URL into the QR image the
-Bilibili page shows. No modification.
-
 ## Simple Icons brand glyphs (sponsor page, 2026-10-19)
 
-设置 → 赞助作者 draws the Bilibili, TikTok (Douyin uses the same mark), X, GitHub, YouTube, Ko-fi, WeChat and Alipay
+设置 → 赞助作者 draws the TikTok (Douyin uses the same mark), X, GitHub, YouTube, Ko-fi, WeChat and Alipay
 glyphs from [Simple Icons](https://github.com/simple-icons/simple-icons) 16.34.0 (npm `simple-icons`, CC0-1.0).
 `tools/qt_probe/make-sponsor-icons.py` places the unmodified path data on coloured tiles in `qml/Veyra/sponsor/*.svg`;
 the Ko-fi glyph is split into its subpaths to colour the cup the way Ko-fi's own button does. CC0 covers the
@@ -886,6 +928,10 @@ License texts: `licenses/moonlight/ENET_MIT.txt`, `licenses/moonlight/NANORS_MIT
 
 The streamed machine runs **Sunshine** (GPL-3.0, https://github.com/LizardByte/Sunshine), which users install
 themselves; Veyra neither ships nor downloads it.
+
+## Portable ZIP updates
+
+The updater verifies the Ed25519 release manifest using OpenSSL Crypto (Apache-2.0), from the same vcpkg build used by the streaming clients. Downloads use Qt Network. The updater uses the host Windows installation's Attachment Services and `tar.exe` to check and unpack the verified ZIP.
 
 ## Xbox home streaming (unofficial, 2026-10-01)
 

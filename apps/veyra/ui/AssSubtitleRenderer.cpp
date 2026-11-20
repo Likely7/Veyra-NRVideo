@@ -60,8 +60,9 @@ struct AssSubtitleRenderer::Impl {
     }
     void addFonts(const engine::SubtitleAssData& script){
         bool added=false;
-        for(;fontsAdded<script.fonts.size();++fontsAdded){
-            const auto& font=script.fonts[fontsAdded];
+        const size_t count=script.fonts?script.fonts->size():0;
+        for(;fontsAdded<count;++fontsAdded){
+            const auto& font=(*script.fonts)[fontsAdded];
             if(font.data.empty()||font.data.size()>size_t(INT32_MAX))continue;
             ass_add_font(library,font.name.c_str(),font.data.data(),int(font.data.size()));
             added=true;
@@ -111,7 +112,7 @@ bool AssSubtitleRenderer::prepare(const std::shared_ptr<const engine::SubtitleAs
     if(!p.library||!p.renderer||!data)return false;
     if(data==p.data)return p.track!=nullptr;
     const bool grownEmbedded=p.track&&data->script.empty()&&data->source==p.source&&data->header==p.header&&
-        data->events.size()>=p.fedEvents&&data->fonts.size()>=p.fontsAdded;
+        data->events.size()>=p.fedEvents&&(data->fonts?data->fonts->size():0)>=p.fontsAdded;
     if(grownEmbedded){p.addFonts(*data);p.feed(*data);}
     else p.rebuild(*data);
     p.data=data;

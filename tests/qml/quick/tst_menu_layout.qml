@@ -14,6 +14,18 @@ Item {
         value: "MJPEG（不建议使用）"
         options: [{id:"nv12",label:"NV12"},{id:"jpeg",label:"MJPEG（不建议使用）",danger:true}]
     }
+    VSelect {
+        id: fgSelect
+        x: 12
+        y: 272
+        width: 150
+        options: [
+            { id: "vfg", label: "NVIDIA VFG 👑 · Best quality · RTX 30 (experimental) / 40 / 50", gold: true },
+            { id: "anr", label: "ANR FG · Very poor quality · Local experiment", danger: true }
+        ]
+        value: options[0].label
+        displayValue: "NVIDIA VFG 👑"
+    }
     VRow {
         id: row; x: 12; y: 12; width: 285
         label: "The capture device's actual supported pixel format"
@@ -29,6 +41,21 @@ Item {
         name: "MenuAndRowLayout"
         when: windowShown
         function cleanup() { menu.close() }
+        function test_compact_selection_keeps_full_menu_labels() {
+            compare(fgSelect.height, 30)
+            compare(fgSelect.valueColor, Theme.warn)
+            compare(fgSelect.selectedOption.id, "vfg")
+            let popup
+            for (const child of fgSelect.data)
+                if (child instanceof VMenu) popup = child
+            verify(popup !== undefined)
+            mouseClick(fgSelect)
+            tryVerify(() => popup.visible)
+            const optionLabels = labels(popup.contentItem, []).map(label => label.text)
+            compare(optionLabels, fgSelect.options.map(option => option.label))
+            popup.close()
+            tryCompare(popup, "visible", false)
+        }
         function test_open_motion_preserves_text_layout_data() {
             return [{tag:"menu",select:false},{tag:"select",select:true}]
         }

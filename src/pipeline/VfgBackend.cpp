@@ -97,7 +97,7 @@ struct VfgBackend::Impl {
 #define CU_FN(name) decltype(&name) name##Fn=nullptr
     CU_FN(cuInit);CU_FN(cuDeviceGetCount);CU_FN(cuDeviceGet);CU_FN(cuDeviceGetLuid);CU_FN(cuDeviceGetAttribute);
     CU_FN(cuDevicePrimaryCtxRetain);CU_FN(cuDevicePrimaryCtxRelease);CU_FN(cuCtxPushCurrent);CU_FN(cuCtxPopCurrent);
-    CU_FN(cuStreamCreate);CU_FN(cuStreamDestroy);CU_FN(cuStreamSynchronize);
+    CU_FN(cuStreamCreate);CU_FN(cuStreamDestroy);CU_FN(cuStreamSynchronize);CU_FN(cuStreamQuery);CU_FN(cuCtxDestroy);
     CU_FN(cuImportExternalMemory);CU_FN(cuExternalMemoryGetMappedBuffer);CU_FN(cuDestroyExternalMemory);CU_FN(cuMemFree);
     CU_FN(cuImportExternalSemaphore);CU_FN(cuDestroyExternalSemaphore);CU_FN(cuWaitExternalSemaphoresAsync);CU_FN(cuSignalExternalSemaphoresAsync);
     CU_FN(cuGetErrorName);CU_FN(cuGetErrorString);
@@ -115,7 +115,8 @@ struct VfgBackend::Impl {
     Microsoft::WRL::ComPtr<ID3D12Fence> producer,completion;
     CUexternalSemaphore inputSemaphore=nullptr,outputSemaphore=nullptr;
     CUcontext cudaContext=nullptr;CUstream stream=nullptr;CUdevice device=0;
-    bool retained=false;
+    using CreateContextV2=CUresult (CUDAAPI*)(CUcontext*,unsigned int,CUdevice);
+    bool retained=false,privateContext=false;
     // [0] runs every subframe, or only the middle one of a mixed tier; [1]
     // (mixed tiers only) the others. Both share the stream, so their CUDA work
     // stays serial and the producer/completion fences are unchanged.
@@ -145,7 +146,8 @@ struct VfgBackend::Impl {
     struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;bool fast;};
     std::array<std::atomic<SubmissionState>,kOutputs> states{};
     std::atomic<bool> failed=false;
-    std::mutex jobsMutex,profileMutex;
+    uint64_t queuedFence=0; // jobsMutex: greatest completion dependency queued for D3D12
+    std::mutex jobsMutex,profileMutex,cudaSubmissionMutex;
     std::condition_variable jobsChanged;
     std::deque<Job> jobs;
     std::thread worker;
@@ -321,7 +323,7 @@ struct VfgBackend::Impl {
         const auto [parity,sub,multiplier,reset,revision,value,fast]=job;
         Current current(*this);if(!current.active)return false;
         CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS wait{};wait.params.fence.value=value;
-        bool ok=cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync")&&!failed.load();
+        bool ok=!failed.load()&&cu(cpuCall(2,[&]{return cuWaitExternalSemaphoresAsyncFn(&inputSemaphore,&wait,1,stream);}),"cuWaitExternalSemaphoresAsync");
         bool profiling=false;const unsigned profileSlot=unsigned(profileHead%kProfileJobs);
         if(profileGpu){
             resolveGpu();logGpu();
@@ -378,11 +380,43 @@ struct VfgBackend::Impl {
         }
         return ok;
     }
+    void checkCudaCompletion(){
+        // An accepted async Run can fail on the GPU after it returned. A
+        // subsequent D3D12 wait may prevent another submission from ever
+        // observing that failure.
+        std::lock_guard submit(cudaSubmissionMutex);
+        Current current(*this);
+        const auto result=current.active?cuStreamQueryFn(stream):CUDA_ERROR_INVALID_CONTEXT;
+        if(result==CUDA_SUCCESS||result==CUDA_ERROR_NOT_READY)return;
+        cu(result,"asynchronous VFG completion");
+        std::lock_guard lock(jobsMutex);
+        failed.store(true);
+        for(auto& state:states)state.store(SubmissionState::Failed);
+        if(completion->GetCompletedValue()<queuedFence)
+            hr(completion->Signal(queuedFence),"release VFG waits after CUDA fault");
+    }
     void work(){
         for(;;){
             Job job{};
-            {std::unique_lock lock(jobsMutex);jobsChanged.wait(lock,[&]{return stopping||!jobs.empty();});
-                if(jobs.empty())return;job=jobs.front();jobs.pop_front();}
+            {
+                std::unique_lock lock(jobsMutex);
+                if(jobs.empty()&&!stopping){
+                    if(!failed.load()&&queuedFence&&completion->GetCompletedValue()<queuedFence){
+                        jobsChanged.wait_for(lock,std::chrono::milliseconds(4),[&]{return stopping||!jobs.empty();});
+                    }else{
+                        jobsChanged.wait(lock,[&]{return stopping||!jobs.empty()||
+                            (!failed.load()&&queuedFence&&completion->GetCompletedValue()<queuedFence);});
+                    }
+                }
+                if(jobs.empty()){
+                    if(stopping)return;
+                    const bool pending=!failed.load()&&queuedFence&&completion->GetCompletedValue()<queuedFence;
+                    lock.unlock();
+                    if(pending)checkCudaCompletion();
+                    continue;
+                }
+                job=jobs.front();jobs.pop_front();
+            }
             bool ok=false;
             try{ok=cudaJob(job);}catch(...){log::error("vfg","SDK worker exception; disabling VFG");}
             if(!ok){
@@ -402,6 +436,7 @@ struct VfgBackend::Impl {
     bool handoff(unsigned parity,unsigned sub,unsigned multiplier,bool reset,bool fast){
         const unsigned slot=parity+2*(sub-1);
         if(!asynchronous){
+            std::lock_guard submit(cudaSubmissionMutex);
             const uint64_t value=++signalValue;
             if(!hr(cpuCall(1,[&]{return context->directQueue()->Signal(producer.Get(),value);}),"signal VFG producer"))return false;
             const bool ok=cudaJob({parity,sub,multiplier,reset,inputRevision,value,fast});
@@ -411,7 +446,16 @@ struct VfgBackend::Impl {
                 hr(completion->Signal(value),"release failed synchronous VFG job");
             }
             states[slot].store(ok?SubmissionState::Succeeded:SubmissionState::Failed);
-            if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion"))return false;
+            {
+                std::lock_guard lock(jobsMutex);
+                if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion"))return false;
+                queuedFence=value;
+                // A concurrently observed fault may have released the prior
+                // dependency before this submission reached the queue.
+                if(failed.load()&&completion->GetCompletedValue()<value)
+                    hr(completion->Signal(value),"release VFG wait after concurrent CUDA fault");
+            }
+            jobsChanged.notify_one();
             logCpu();return ok;
         }
         std::lock_guard lock(jobsMutex);
@@ -426,6 +470,7 @@ struct VfgBackend::Impl {
         if(!hr(cpuCall(11,[&]{return context->directQueue()->Wait(completion.Get(),value);}),"queue wait VFG completion")){
             jobs.pop_back();return false;
         }
+        queuedFence=value;
         states[slot].store(SubmissionState::Pending);++outstanding;jobsChanged.notify_one();return true;
     }
     void stopWorker(){
@@ -461,6 +506,7 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     BIND_CU(cuDevicePrimaryCtxRetain,"cuDevicePrimaryCtxRetain");BIND_CU(cuDevicePrimaryCtxRelease,"cuDevicePrimaryCtxRelease_v2");
     BIND_CU(cuCtxPushCurrent,"cuCtxPushCurrent_v2");BIND_CU(cuCtxPopCurrent,"cuCtxPopCurrent_v2");
     BIND_CU(cuStreamCreate,"cuStreamCreate");BIND_CU(cuStreamDestroy,"cuStreamDestroy_v2");BIND_CU(cuStreamSynchronize,"cuStreamSynchronize");
+    BIND_CU(cuStreamQuery,"cuStreamQuery");BIND_CU(cuCtxDestroy,"cuCtxDestroy_v2");
     BIND_CU(cuImportExternalMemory,"cuImportExternalMemory");BIND_CU(cuExternalMemoryGetMappedBuffer,"cuExternalMemoryGetMappedBuffer");
     BIND_CU(cuDestroyExternalMemory,"cuDestroyExternalMemory");BIND_CU(cuMemFree,"cuMemFree_v2");
     BIND_CU(cuImportExternalSemaphore,"cuImportExternalSemaphore");BIND_CU(cuDestroyExternalSemaphore,"cuDestroyExternalSemaphore");
@@ -486,7 +532,24 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     if(VfgAmpereCompat::restoreUncertain()){log::error("vfg","VFG import restoration uncertain; restart before using VFG");return false;}
     const bool ampere=vfgAmpereArchitecture(major,minor);
     if(!ampere&&!vfgNativeArchitecture(major,minor)){log::error("vfg",std::format("Windows VFG requires SM86 (experimental), Ada or Blackwell; compute={}.{}",major,minor));return false;}
-    if(!p.cu(p.cuDevicePrimaryCtxRetainFn(&p.cudaContext,p.device),"cuDevicePrimaryCtxRetain"))return false;p.retained=true;
+    const bool adaMedium=major==8&&minor==9&&
+        (p.effects[0].mode==1||(p.mixed&&p.effects[1].mode==1)||(fastFallback&&quality==2));
+    const bool forcedPrivate=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_PRIVATE_CONTEXT",nullptr,0)>0;
+    if(adaMedium||forcedPrivate){
+        // Keep the affected provider tier off the primary context that other
+        // GPU features may be using. Destroying this context does not reset
+        // their allocations or streams when an illegal address poisons it.
+        Impl::CreateContextV2 createContext=nullptr;
+        if(!bind(driver,"cuCtxCreate_v2",createContext)||
+           !p.cu(createContext(&p.cudaContext,CU_CTX_SCHED_AUTO,p.device),"cuCtxCreate (VFG isolated)"))return false;
+        p.privateContext=true;
+        CUcontext popped=nullptr;
+        if(!p.cu(p.cuCtxPopCurrentFn(&popped),"cuCtxPopCurrent (VFG isolated)")||popped!=p.cudaContext)return false;
+    }else{
+        if(!p.cu(p.cuDevicePrimaryCtxRetainFn(&p.cudaContext,p.device),"cuDevicePrimaryCtxRetain"))return false;
+        p.retained=true;
+    }
+    log::info("vfg",p.privateContext?"VFG uses a private CUDA context":"VFG uses the selected device's primary CUDA context");
     Impl::Current current(p);if(!current.active)return false;
     if(!p.cu(p.cuStreamCreateFn(&p.stream,CU_STREAM_NON_BLOCKING),"cuStreamCreate"))return false;
     if(p.profileGpu)for(auto& event:p.events)if(!p.cu(p.cuEventCreateFn(&event,CU_EVENT_DEFAULT),"cuEventCreate profile"))return false;
@@ -568,10 +631,8 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     }
     if(p.gpuShotChange&&!p.createShotChangeTest())return false;
     p.asynchronous=asynchronousSubmission;
-    if(p.asynchronous){
-        try{p.worker=std::thread([&p]{p.work();});}
-        catch(...){log::error("vfg","VFG worker creation failed");return false;}
-    }
+    try{p.worker=std::thread([&p]{p.work();});}
+    catch(...){log::error("vfg","VFG worker creation failed");return false;}
     log::info("vfg",std::format("SDK submission={} capacity={} (CUDA work remains serial)",p.asynchronous?"bounded worker":"graph owner",kOutputs));
     p.ready=true;log::info("vfg","native VFG initialized; GPU-only D3D12 buffer/fence bridge");return true;
 #else
@@ -620,7 +681,7 @@ bool VfgBackend::generate(unsigned parity,unsigned sub,unsigned multiplier,bool 
 }
 VfgBackend::SubmissionState VfgBackend::submissionState(unsigned slot)const{
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
-    return slot<kOutputs?impl_->states[slot].load():SubmissionState::Failed;
+    return slot<kOutputs&&!impl_->failed.load()?impl_->states[slot].load():SubmissionState::Failed;
 #else
     (void)slot;return SubmissionState::Failed;
 #endif
@@ -688,6 +749,7 @@ void VfgBackend::shutdown(){
         }
     }
     if(p.retained)p.cu(p.cuDevicePrimaryCtxReleaseFn(p.device),"cuDevicePrimaryCtxRelease");
+    if(p.privateContext&&p.cudaContext)p.cu(p.cuCtxDestroyFn(p.cudaContext),"cuCtxDestroy (VFG isolated)");
     if(!p.ampereCompat.reset())log::error("vfg-ampere","cannot prove restoration; compatibility modules retained until process exit");
     p.producer.Reset();p.completion.Reset();
     for(auto i=p.libraries.rbegin();i!=p.libraries.rend();++i)FreeLibrary(*i);

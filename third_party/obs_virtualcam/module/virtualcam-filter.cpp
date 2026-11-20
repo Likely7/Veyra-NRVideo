@@ -238,7 +238,22 @@ void VCamFilter::Thread()
 	HANDLE timer = CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS);
 	while (!stopped()) {
 		if (!os_atomic_load_bool(&active)) {
-			if (WaitForMultipleObjects(2, h, false, INFINITE) != WAIT_OBJECT_0)
+			/* Veyra: a paused graph still lets go of a queue its producer has closed,
+			   as Refresh does while running. The producer recreates the queue under the
+			   same name on a size, rate or source change and cannot while any consumer
+			   maps the old one. A live queue stays open, so Run continues in order.
+			   Not in Pause(): Deliver may hold frame_mutex inside a downstream Receive. */
+			{
+				std::lock_guard<std::mutex> guard(frame_mutex);
+				if (vq && video_queue_state(vq) == SHARED_QUEUE_STATE_STOPPING) {
+					video_queue_close(vq);
+					vq = nullptr;
+					prev_state = SHARED_QUEUE_STATE_INVALID;
+					ResetPacing();
+				}
+			}
+			const DWORD woke = WaitForMultipleObjects(2, h, false, 100);
+			if (woke != WAIT_OBJECT_0 && woke != WAIT_TIMEOUT)
 				break;
 			continue;
 		}

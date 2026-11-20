@@ -184,7 +184,7 @@ ColumnLayout {
         }
     }
     RowLayout {
-        Text { Layout.fillWidth: true; text: qsTr("单击曲线加点并拖动 · 右键删点 · 最多 8 点"); color: Theme.t3; font.pixelSize: 11 }
+        Text { Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.Wrap; text: qsTr("单击曲线加点并拖动 · 右键删点 · 最多 8 点"); color: Theme.t3; font.pixelSize: 11 }
         VButton { text: qsTr("还原通道"); ghost: true; onClicked: root.edited(root.channel, [{x:0,y:0},{x:1,y:1}]) }
     }
 }

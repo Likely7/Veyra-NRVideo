@@ -63,8 +63,11 @@
 #include "veyra/ui/QmlDiskCache.h"
 #include "veyra/ui/PlaybackServer.h"   // Custom: local HTTP endpoint for the browser extension
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "../../src/ui/WinCaptionReader.h"
 #include "veyra/ui/StartupMusic.h"
 #include "veyra/ui/ThumbnailProvider.h"
+#include "veyra/ui/UpdateChecker.h"
+#include "veyra/base/PortableLayout.h"
 
 using namespace veyra;
 
@@ -465,6 +468,7 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
 } // namespace
 
 static int runApplication(int argc, char** argv, QString& restartProgram, QStringList& restartArgs) {
+    const bool updateProbe = argc > 2 && std::strcmp(argv[1], "--portable-update-probe") == 0;
     // ExportJobManager relaunches the owning executable with an inherited mapping.
     // Dispatch before Qt or the video HWND exists, as the Win32 shell does.
     if (argc > 1 && std::strcmp(argv[1], "--export-worker") == 0) {
@@ -516,7 +520,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     {
         int count = 0;
         LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
-        std::filesystem::path dir = veyra::runtime::localDataDirectory() / L"user-data-2.0.0";
+        std::filesystem::path dir = veyra::runtime::userDataDirectory() / L"user-data-2.0.0";
         bool obsGameCaptureArg = false;
         for (int i = 1; args && i < count; ++i) {
             if (std::wstring(args[i]) == L"--data-dir" && i + 1 < count) dir = args[++i];
@@ -609,6 +613,19 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             GetModuleHandleW(L"RTSSHooks64.dll") != nullptr, overlayCompatAuto ? "auto" : "off", gpuD3d12 ? "off (GPU interface)" : "on"));
         veyra::log::info("app", std::format("NVIDIA overlay running={} GamePP running={} Douyin companion running={} interface={}", nvidiaOverlay, gamePP, douyin, softwareUi ? "software" : "GPU"));
     }
+    {
+        // NVIDIA VFG on RTX 30 runs retargeted CUDA kernels (VfgAmpereCompat.cpp) that the driver
+        // compiles from PTX when they load. The driver keeps compiled kernels in its compute cache,
+        // but the default size is too small for these models, so later sessions compiled them again
+        // and the picture stalled inside nvptxJitCompiler64.dll (a PushFPS hang dump, 2026-11-16).
+        // Raise the cache to its 4 GiB maximum when the user has not chosen a size, and do not let it
+        // be disabled for this process. Fix ported from PushFPS 9e9a4340 (GPL-3.0-or-later).
+        wchar_t value[32]{};
+        if (GetEnvironmentVariableW(L"CUDA_CACHE_MAXSIZE", value, 32) == 0) SetEnvironmentVariableW(L"CUDA_CACHE_MAXSIZE", L"4294967296");
+        if (GetEnvironmentVariableW(L"CUDA_CACHE_DISABLE", value, 32) > 0 && wcscmp(value, L"0") != 0) SetEnvironmentVariableW(L"CUDA_CACHE_DISABLE", nullptr);
+        GetEnvironmentVariableW(L"CUDA_CACHE_MAXSIZE", value, 32);
+        veyra::log::info("app", std::format("CUDA compute cache maxSize={} (compiled VFG kernels are kept between sessions)", std::string(value, value + wcslen(value))));
+    }
     QApplication app(argc, argv);
     // Qt does not automatically use the executable's Win32 icon for its windows.
     // Load the same embedded multi-size resource for the taskbar and Alt+Tab.
@@ -684,8 +701,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // Keep 2.0.0 settings separate from 1.4.4 so the old executable remains a
     // working rollback. An explicit data directory is for isolated runs and is
     // never populated from the user's old settings.
-    std::filesystem::path dataDirectory = veyra::runtime::localDataDirectory() / L"user-data-2.0.0";
-    std::filesystem::path legacyDirectory = veyra::runtime::localDataDirectory();
+    std::filesystem::path dataDirectory = veyra::runtime::userDataDirectory() / L"user-data-2.0.0";
+    std::filesystem::path legacyDirectory = veyra::runtime::userDataDirectory();
     bool explicitDataDirectory = false;
     {
         const QStringList early = QCoreApplication::arguments();
@@ -708,34 +725,34 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         veyra::log::info("app", std::format("2.0.0 data directory ready; copied {} legacy files",
                                              migration.copied));
     }
-    // Custom (Chrome bridge): veyra://play?url=...&quality=N — the URL protocol the
+    // Custom (Chrome bridge): veyra://play?url=... — the URL protocol the
     // extension falls back to when the player is not running. Parsed here because
     // the bridge below consumes it; the handler is installed by install-protocol.cmd.
     QString protocolUrl;
-    int protocolQuality = 0;
     for (const QString& a : QCoreApplication::arguments()) {
         if (!a.startsWith(QStringLiteral("veyra://"), Qt::CaseInsensitive)) continue;
         const QUrlQuery query(QUrl(a).query());
         protocolUrl = query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
-        protocolQuality = query.queryItemValue(QStringLiteral("quality")).toInt();
         break;
     }
     ui::QmlPlayerBridge bridge(controller, dataDirectory);
+    if (updateProbe && portable::releaseVersion(bridge.version()) != QString::fromLatin1(argv[2])) return 2;
     bridge.attachVideoWindow(reinterpret_cast<qulonglong>(g_video));
+    auto* updater = qobject_cast<ui::UpdateChecker*>(bridge.updates())->portableUpdate();
 
     // Custom (Chrome bridge): local HTTP endpoint the browser extension posts to.
     // 127.0.0.1 only; port 18765 is fixed so the extension can find it without
     // reading anything off disk (a browser cannot open local files).
-    ui::PlaybackServer playbackServer([&bridge](const QString& url,int quality,const QString& cookie){
-        bridge.bringToFront();bridge.openNetworkAddress(url,quality,cookie);
+    ui::PlaybackServer playbackServer([&bridge](const QString& url){
+        bridge.bringToFront();bridge.openNetworkAddress(url);
     });
-    playbackServer.listen(18765);
+    if (!updateProbe) playbackServer.listen(18765);
     if (!protocolUrl.isEmpty()) {
-        veyra::log::info("playback-server", std::format("protocol request: quality={} host={}",
-                                                         protocolQuality, QUrl(protocolUrl).host().toStdString()));
-        QTimer::singleShot(1500, &bridge, [&bridge, url = protocolUrl, q = protocolQuality] {
+        veyra::log::info("playback-server", std::format("protocol request: host={}",
+                                                         QUrl(protocolUrl).host().toStdString()));
+        QTimer::singleShot(1500, &bridge, [&bridge, url = protocolUrl] {
             bridge.bringToFront();
-            bridge.openNetworkAddress(url, q);
+            bridge.openNetworkAddress(url);
         });
     }
 
@@ -781,7 +798,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
 
     // The 日落 startup music (StartupMusic.h): the user's file next to the program, if any.
     // Declared before the engine, so it outlives every QML reference to it.
-    ui::StartupMusic startupMusic(QCoreApplication::applicationDirPath() + QStringLiteral("/media/startup-music.mp3"));
+    ui::StartupMusic startupMusic(updateProbe ? QString{} :
+        QCoreApplication::applicationDirPath() + QStringLiteral("/media/startup-music.mp3"));
     QObject::connect(&bridge, &ui::QmlPlayerBridge::mediaOpenRequested, &startupMusic, &ui::StartupMusic::pause);
     QObject::connect(&bridge, &ui::QmlPlayerBridge::preferencesChanged, &startupMusic, [&] {
         if (bridge.preferences().value(QStringLiteral("introMusic")).isValid()
@@ -827,15 +845,18 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
+    if (updateProbe) testOptions.insert(QStringLiteral("portableUpdateProbe"), true);
     if(qEnvironmentVariableIsSet("VEYRA_TEST_DISABLE_PAUSED_UI_IDLE"))
         testOptions.insert(QStringLiteral("disablePausedUiIdle"),true);
     QSize testSize;
     // --exit-after: see the switch table. 0 means "run until closed".
-    int exitAfterMs = 0;
+    int exitAfterMs = updateProbe ? 350 : 0;
     for (int i = 1; i < args.size(); ++i) {
         const QString& a = args.at(i);
         const bool hasValue = i + 1 < args.size();
-        if (a == QLatin1String("--page") && hasValue) {
+        if (a == QLatin1String("--portable-update-probe") && hasValue) {
+            ++i;
+        } else if (a == QLatin1String("--page") && hasValue) {
             bridge.setInitialPage(args.at(++i));
         } else if (a == QLatin1String("--tab") && hasValue) {
             testOptions.insert(QStringLiteral("tab"), args.at(++i));
@@ -924,64 +945,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                     bridge.setFgAutoMultiplier(true);
                 });
             }
-        } else if (a == QLatin1String("--bili-play") && hasValue) {
-            // Test switch: play a Bilibili part so the pre-open multiplier decision can be
-            // checked against a real DASH response. Format: --bili-play <bvid> <cid> [qn]
-            const QString bvid = args.at(++i);
-            qlonglong cid = 0;
-            int qn = 0;
-            if (i + 1 < args.size()) cid = args.at(++i).toLongLong();
-            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
-                qn = args.at(++i).toInt();
-            QTimer::singleShot(1200, &bridge, [&bridge, bvid, cid, qn] {
-                veyra::log::info("qml-test", std::format("bili-play {} cid={} qn={}",
-                    bvid.toStdString(), cid, qn));
-                bridge.bilibiliPlayCid(bvid, cid, qn, false);
-            });
-        } else if (a == QLatin1String("--bili-interaction") && hasValue) {
-            // Test switch: read one video's liked/coined/favourited state, so the button
-            // refresh can be checked against the live account without clicking.
-            const QString bvid = args.at(++i);
-            QTimer::singleShot(1200, &bridge, [&bridge, bvid] {
-                veyra::log::info("qml-test", std::format("bili-interaction {}", bvid.toStdString()));
-                bridge.bilibiliRequestInteractionState(bvid);
-            });
-        } else if (a == QLatin1String("--bili-favorite") && hasValue) {
-            // Favourite or un-favourite, then read the state immediately and again after two
-            // seconds - exactly the race the button refresh has to win.
-            const QString bvid = args.at(++i);
-            bool add = true;
-            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
-                add = args.at(++i).toInt() != 0;
-            QTimer::singleShot(1200, &bridge, [&bridge, bvid, add] {
-                veyra::log::info("qml-test", std::format("bili-favorite {} add={}", bvid.toStdString(), add));
-                bridge.bilibiliRequestFavorite(bvid, add, 0, QStringLiteral("test"));
-            });
-            QTimer::singleShot(2600, &bridge, [&bridge, bvid] {
-                veyra::log::info("qml-test", "bili-interaction immediately after the write");
-                bridge.bilibiliRequestInteractionState(bvid);
-            });
-            QTimer::singleShot(4600, &bridge, [&bridge, bvid] {
-                veyra::log::info("qml-test", "bili-interaction after 2 s");
-                bridge.bilibiliRequestInteractionState(bvid);
-            });
-        } else if (a == QLatin1String("--bili-like") && hasValue) {
-            const QString bvid = args.at(++i);
-            bool like = true;
-            if (i + 1 < args.size() && !args.at(i + 1).startsWith(QLatin1Char('-')))
-                like = args.at(++i).toInt() != 0;
-            QTimer::singleShot(1200, &bridge, [&bridge, bvid, like] {
-                veyra::log::info("qml-test", std::format("bili-like {} like={}", bvid.toStdString(), like));
-                bridge.bilibiliRequestLike(bvid, like);
-            });
-            QTimer::singleShot(2600, &bridge, [&bridge, bvid] {
-                veyra::log::info("qml-test", "bili-interaction immediately after the write");
-                bridge.bilibiliRequestInteractionState(bvid);
-            });
-            QTimer::singleShot(4600, &bridge, [&bridge, bvid] {
-                veyra::log::info("qml-test", "bili-interaction after 2 s");
-                bridge.bilibiliRequestInteractionState(bvid);
-            });
         } else if (a == QLatin1String("--pref-at") && hasValue) {
             // Test switch: set a preference N ms in, exactly as the settings page would,
             // so live-update paths can be checked without clicking.
@@ -1003,9 +966,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                                             testSize.width(), testSize.height()));
     veyra::log::info("qml-window", std::format("probe mode={}", videoProbeName()));
     engine.rootContext()->setContextProperty(QStringLiteral("vyTest"), testOptions);
-    if (!openPath.isEmpty()) {
+    if (!openPath.isEmpty() && !updateProbe) {
         QTimer::singleShot(600, &bridge, [&bridge, openPath] { bridge.openPath(openPath); });
-    } else {
+    } else if (!updateProbe) {
         QTimer::singleShot(600, &bridge, [&bridge] { bridge.autoResumeLastSource(); });
     }
 
@@ -1077,11 +1040,25 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     if (exitAfterMs > 0) {
         // Self-terminating test run: the same teardown path as a user closing the
         // window, so the log a harness reads is complete either way.
-        QTimer::singleShot(exitAfterMs, &app, [window] {
+        QTimer::singleShot(exitAfterMs, &app, [window, updateProbe] {
             veyra::log::info("qml", "exit-after elapsed: closing the window");
-            window->close();
+            if (updateProbe) QCoreApplication::quit();
+            else window->close();
         });
     }
+#ifdef VEYRA_PORTABLE_UPDATE_TEST
+    if (!updateProbe && qEnvironmentVariableIsSet("VEYRA_PORTABLE_UPDATE_SMOKE")) {
+        QObject::connect(updater, &ui::PortableUpdate::changed, window, [window, updater, attempted = false]() mutable {
+            if (updater->available() && !attempted) {
+                attempted = true;
+                updater->downloadAndSchedule();
+            } else if (updater->scheduled()) {
+                QTimer::singleShot(200, window, &QWindow::close);
+            }
+        });
+        QTimer::singleShot(100000, window, &QWindow::close);
+    }
+#endif
 
     // Focus changes are diagnostic only: they never pause playback, change the
     // selected effects, or reduce submission cadence. Keep the actual throughput
@@ -1265,7 +1242,18 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // be verified end to end by a test rather than by a person clicking around;
     // it is not a user-facing feature.
     const int rc = app.exec();
+    if (updateProbe) veyra::log::info("portable-update-probe", "QML startup completed");
+    if (rc == 0 && updater->scheduled() && !bridge.exportRunning()) {
+        if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
+        return portable::applyExitCode;
+    }
     if (rc == 42) {
+        if (args.contains(QStringLiteral("--managed-portable"))) {
+            const auto restartCode = app.property("veyraOverlayCompatRestart").toBool()
+                ? portable::overlayRestartExitCode : 42;
+            if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
+            return restartCode;
+        }
         restartProgram = QCoreApplication::applicationFilePath();
         // Preserve the selected profile, not transient capture/open/test flags.
         const auto args = QCoreApplication::arguments();
@@ -1284,6 +1272,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
 }
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::strcmp(argv[1], "--read-live-captions") == 0)
+        return veyra::ui::runLiveCaptionReader();
     // A child for the AMD HIP self-test (AmdHipPreflight.h): no Qt, no window and
     // no player state, only the HIP calls and their result lines on the pipe.
     if (argc >= 2 && std::strcmp(argv[1], "--amd-hip-preflight") == 0) {
@@ -1297,11 +1287,26 @@ int main(int argc, char** argv) {
         std::wstring self(32768, L'\0');
         self.resize(GetModuleFileNameW(nullptr, self.data(), DWORD(self.size())));
         veyra::pipeline::amdhip::setPreflightExecutable(self);
+        const std::string_view option = argc > 1 ? argv[1] : "";
+        if (option != "--managed-portable" && option != "--portable-update-probe" && option != "--export-worker") {
+            const auto root = portable::rootFromVersionDirectory(std::filesystem::path(self).parent_path());
+            if (!root.empty()) {
+                int count = 0;
+                auto* wide = CommandLineToArgvW(GetCommandLineW(), &count);
+                QStringList args;
+                if (wide) {
+                    for (int i = 1; i < count; ++i) args << QString::fromWCharArray(wide[i]);
+                    LocalFree(wide);
+                }
+                return QProcess::startDetached(QString::fromStdWString((root / portable::launcherName).wstring()), args)
+                    ? 0 : 1;
+            }
+        }
     }
     QString program;
     QStringList arguments;
     const int result = runApplication(argc, argv, program, arguments);
-    if (result != 42) return result;
+    if (result != 42 || program.isEmpty()) return result;
     // Player, QML engine and QApplication have all been destroyed.
     if (QProcess::startDetached(program, arguments)) return 0;
     MessageBoxW(nullptr, L"设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen Veyra.",

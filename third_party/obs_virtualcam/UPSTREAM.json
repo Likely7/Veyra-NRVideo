@@ -169,13 +169,13 @@
     }
   ],
   "veyraAdaptations": {
-    "date": "2026-11-18",
+    "date": "2026-11-20",
     "upstreamHashesDescribeOriginalFiles": true,
     "modifiedFiles": [
       {
         "path": "module/virtualcam-filter.cpp",
         "upstreamSha256": "9fcb61b4d74233d47876a066049d7488c4ab086d0a51bf2caf149f420f01afb4",
-        "adaptation": "Independent Veyra source and format negotiation; graph-relative samples; ordered protocol-2 delivery; bounded adaptive delay and in-process libobs tick alignment."
+        "adaptation": "Independent Veyra source and format negotiation; graph-relative samples; ordered protocol-2 delivery; bounded adaptive delay and in-process libobs tick alignment; a paused graph releases a queue its producer has closed."
       },
       {
         "path": "module/virtualcam-filter.hpp",

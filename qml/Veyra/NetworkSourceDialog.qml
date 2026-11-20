@@ -9,7 +9,7 @@ DialogLayer {
     key: "network"
     glyph: "cast"
     title: qsTr("播放地址")
-    sub: qsTr("直接打开 HTTP、HTTPS 或 RTSP 视频流，例如 IPTV 或摄像机地址")
+    sub: qsTr("直接打开 HTTP、HTTPS、RTSP、RTP 或 UDP 视频流")
     dialogWidth: 640
     actions: [{label:qsTr("取消")},{label:qsTr("打开"),primary:true,icon:"play"}]
     onActionTriggered: label => {
@@ -20,14 +20,25 @@ DialogLayer {
         id: networkAddress
         objectName: "network-address"
         Layout.fillWidth: true
-        placeholder: "https://… / rtsp://…"
+        placeholder: "https://… / rtsp://… / rtp://… / udp://…"
     }
     Text {
         Layout.fillWidth: true
-        text: qsTr("需要直接媒体地址，普通网页或需要网页登录的页面不能直接播放。直播流通常无法拖动进度。")
+        text: qsTr("请使用直接媒体地址。RTP 和 UDP 的 MPEG-TS 地址需要包含端口。")
         wrapMode: Text.Wrap
         color: Theme.t3
         font.family: Theme.fontUi
         font.pixelSize: 12
+    }
+    VRow {
+        label: qsTr("直播时移")
+        hint: qsTr("保留最近的直播内容。最多使用 256 MiB 内存，高码率时可回看时间会缩短。")
+        VSeg {
+            objectName: "network-timeshift"
+            options: [{id:"0",label:qsTr("关闭","off")},{id:"60",label:qsTr("1 分钟")},
+                      {id:"120",label:qsTr("2 分钟")},{id:"300",label:qsTr("5 分钟")}]
+            current: String(veyra.preferences.networkTimeshift || 0)
+            onPicked: id => veyra.setPreference("networkTimeshift", Number(id))
+        }
     }
 }

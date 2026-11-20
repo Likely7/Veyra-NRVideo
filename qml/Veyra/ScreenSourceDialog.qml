@@ -143,6 +143,19 @@ DialogLayer {
             }
         }
         VRow {
+            label: qsTr("可视化裁剪")
+            VButton {
+                objectName: "screen-crop-preview"
+                text: qsTr("预览并拖拽")
+                enabled: screenDialog.o.passthrough !== true && veyra.screenTargetId.length > 0
+                onClicked: {
+                    if (!veyra.startScreenCapture(true)) return
+                    dialogHost.close()
+                    dialogHost.startScreenCrop()
+                }
+            }
+        }
+        VRow {
             label: qsTr("画面")
             hint: screenDialog.o.passthrough === true ? qsTr("填满屏幕支持键盘和手柄；需要精确鼠标穿透时请选择贴合原窗口") : ""
             VSeg {

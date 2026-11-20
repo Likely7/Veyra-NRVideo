@@ -5,6 +5,7 @@
 #include <QTimer>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
+#include "veyra/ui/PortableUpdate.h"
 
 namespace veyra::ui {
 // UI-only, bounded asynchronous metadata request; never touches the engine.
@@ -13,14 +14,17 @@ class UpdateChecker final : public QObject {
     Q_PROPERTY(bool checking READ checking NOTIFY checkingChanged)
     Q_PROPERTY(QString latestVersion READ latestVersion NOTIFY releaseChanged)
     Q_PROPERTY(QUrl releaseUrl READ releaseUrl NOTIFY releaseChanged)
+    Q_PROPERTY(veyra::ui::PortableUpdate* portable READ portableUpdate CONSTANT)
 public:
     explicit UpdateChecker(QString currentVersion, QObject* parent = nullptr,
-        QUrl endpoint = QUrl(QStringLiteral("https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest")),
+        QUrl endpoint = veyra::portable::releaseApiUrl(),
         int timeoutMs = 12000);
     ~UpdateChecker() override;
     bool checking() const { return reply_ != nullptr; }
     QString latestVersion() const { return latestVersion_; }
     QUrl releaseUrl() const { return releaseUrl_; }
+    PortableUpdate* portableUpdate() { return &portable_; }
+    void setDownloadRoute(veyra::portable::DownloadRoute route);
     Q_INVOKABLE void startAutomaticCheck();
     Q_INVOKABLE void check(bool manual = true);
     Q_INVOKABLE void openRelease();
@@ -32,6 +36,7 @@ signals:
     // Terminal diagnostic result (also used by deterministic/real HTTP tests).
     void completed(const QString& result);
 private:
+    void request(const QUrl& url);
     void finish();
     QNetworkAccessManager network_;
     QTimer deadline_;
@@ -42,5 +47,8 @@ private:
     QString failure_;
     int timeoutMs_;
     bool automaticScheduled_ = false, manual_ = false;
+    bool usingMirror_ = false;
+    veyra::portable::DownloadRoute route_ = veyra::portable::DownloadRoute::GitHub;
+    PortableUpdate portable_;
 };
 }

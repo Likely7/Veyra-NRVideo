@@ -31,7 +31,8 @@ QString describe(const std::exception& e) {
         switch (transport->kind) {
         case moonlight::TransportError::Kind::Connect: return QObject::tr("连不上主机：请确认地址正确、主机已开机且 Sunshine 在运行，并且防火墙放行了 TCP 47984 / 47989。");
         case moonlight::TransportError::Kind::Timeout: return QObject::tr("主机没有及时回应，请检查网络。");
-        case moonlight::TransportError::Kind::Tls: return QObject::tr("主机的证书与配对时保存的不一致（主机重装过，或这不是配对过的那台）。请删除这台主机后重新配对。");
+        case moonlight::TransportError::Kind::Tls: return QObject::tr("与主机的加密连接失败，主机的证书可能已改变，请重新配对。");
+        case moonlight::TransportError::Kind::CertificateMismatch: return QObject::tr("主机的证书与配对时保存的不一致（主机重装过，或这不是配对过的那台）。请删除这台主机后重新配对。");
         case moonlight::TransportError::Kind::Cancelled: return QObject::tr("已取消。");
         case moonlight::TransportError::Kind::Protocol: return QObject::tr("主机的回应无法识别（不是 Sunshine / GameStream 主机？）。");
         }
@@ -263,25 +264,58 @@ void MoonlightModel::probe(const QString& address, int port, bool manual) {
     std::erase_if(probes_, [](std::jthread& t) { return !t.joinable(); });
     // A host we already know is asked with its saved certificate (over HTTPS), so the
     // answer can confirm the pairing instead of only saying "online".
-    QString cert;
+    QString cert, pinnedId;
     int httpsPort = moonlight::kDefaultHttpsPort;
     bool nvidia = false;
     if (const Host* known = findByAddress(address, port); known && known->paired) {
         cert = known->cert;
+        pinnedId = known->id;
         httpsPort = known->httpsPort;
         nvidia = known->nvidia;
     }
-    probes_.emplace_back([this, address, port, manual, cert, httpsPort, nvidia](std::stop_token stop) {
+    struct Pin { QString id, cert; int httpsPort; bool nvidia; };
+    std::vector<Pin> pins;
+    for (const Host& h : hosts_) if (h.paired && !h.cert.isEmpty()) pins.push_back({h.id, h.cert, h.httpsPort, h.nvidia});
+    probes_.emplace_back([this, address, port, manual, cert, pinnedId, httpsPort, nvidia, pins](std::stop_token stop) {
         try {
             const moonlight::Identity id = identity();
             moonlight::ServerClient client(id, moonlight::HostAddress{utf8(address), uint16_t(port)}, utf8(cert), uint16_t(httpsPort), !nvidia);
             client.setCancel(&cancel_);
-            const moonlight::ServerInfo info = client.serverInfo(true);
+            moonlight::ServerInfo info = client.serverInfo(true);
+            // Over plain HTTP the uniqueid is only a claim. It may move a paired host to
+            // this address only if the address also answers with that host's saved certificate.
+            QString authenticatedCert;
+            if (!cert.isEmpty() && info.pairStatusKnown && info.paired && pinnedId == qs(info.uniqueId))
+                authenticatedCert = cert;
+            if (cert.isEmpty()) {
+                for (const Pin& p : pins) {
+                    if (p.id != qs(info.uniqueId)) continue;
+                    try {
+                        moonlight::ServerClient pinned(id, moonlight::HostAddress{utf8(address), uint16_t(port)}, utf8(p.cert), uint16_t(p.httpsPort), !p.nvidia);
+                        pinned.setCancel(&cancel_);
+                        const moonlight::ServerInfo checked = pinned.serverInfo(true);
+                        if (checked.pairStatusKnown && checked.paired && qs(checked.uniqueId) == p.id) {
+                            info = checked;
+                            authenticatedCert = p.cert;
+                            break;
+                        }
+                    } catch (const std::exception&) {}
+                }
+            }
             if (stop.stop_requested()) return;
-            QMetaObject::invokeMethod(this, [this, address, port, manual, info] {
+            QMetaObject::invokeMethod(this, [this, address, port, manual, info, authenticatedCert, pinnedId, cert] {
                 Host* known = nullptr;
                 for (Host& h : hosts_) if (h.id == qs(info.uniqueId)) known = &h;
                 if (!known) known = findByAddress(address, port);
+                const bool sameAddress = known && known->address == address && known->port == port;
+                const bool samePin = known && !cert.isEmpty() && known->cert == cert && known->id == pinnedId;
+                const bool authenticated = known && !authenticatedCert.isEmpty() && known->cert == authenticatedCert;
+                if (known && known->paired && (known->id != qs(info.uniqueId)
+                        || (!authenticated && !(sameAddress && samePin)))) {
+                    log::warn("moonlight-ui", "host discovery could not confirm the saved identity; pairing retained");
+                    if (manual) { status_ = describe(moonlight::TransportError(moonlight::TransportError::Kind::CertificateMismatch, {})); emit changed(); }
+                    return;
+                }
                 if (!known) {
                     Host h;
                     h.id = qs(info.uniqueId);
@@ -347,7 +381,7 @@ void MoonlightModel::refresh() {
     std::vector<Target> targets;
     for (const Host& h : hosts_) targets.push_back({h.id, h.address, h.cert, h.port, h.httpsPort, h.nvidia});
     startJob(tr("正在检查主机…"), [this, targets](const std::atomic<bool>& cancel) -> std::function<void()> {
-        struct Result { QString id; bool online = false; moonlight::ServerInfo info; };
+        struct Result { QString id; bool online = false; moonlight::ServerInfo info; QString error; };
         auto results = std::make_shared<std::vector<Result>>();
         const moonlight::Identity id = identity();
         for (const Target& t : targets) {
@@ -359,6 +393,8 @@ void MoonlightModel::refresh() {
                 client.setCancel(&cancel);
                 r.info = client.serverInfo(true);
                 r.online = true;
+            } catch (const moonlight::TransportError& e) {
+                if (e.kind == moonlight::TransportError::Kind::CertificateMismatch) r.error = describe(e);
             } catch (const std::exception&) {}
             results->push_back(std::move(r));
         }
@@ -374,6 +410,8 @@ void MoonlightModel::refresh() {
             for (const Host& h : hosts_) changedStore = changedStore || h.saved;
             if (changedStore) saveStore();
             status_.clear();
+            for (const Result& r : *results)
+                if (const Host* h = find(r.id); h && !r.error.isEmpty()) status_ = QStringLiteral("%1：%2").arg(h->name, r.error);
             const Host* selected = find(selected_);
             if (selected && selected->paired && selected->online) reloadApps();
         };

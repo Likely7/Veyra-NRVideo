@@ -97,13 +97,46 @@ int main(){
         check(run([](int i){return uint64_t(i-i/4);},0,600,fortyFive)==0&&fortyFive.size()==300,"irregular content keeps the plain grid");
         // A still screen is no evidence that the half-rate grid sits on second
         // copies. Resuming with true 60 fps must not insert an extra sample.
+        // The still starts with a hitch window (samples 242-244 repeat the
+        // picture kept at 240 and are skipped); from 245 it is held on the grid:
+        // 120 moving + 89 still + 150 at 60 fps.
         CaptureHalfRate still;unsigned stillKept=0;
         for(int i=0;i<720;++i){
             const uint64_t id=i<240?uint64_t(i/2):i<421?1000:uint64_t(1000+i-420);
             stillKept+=still.accept(i*dt,dt,false,&id);
         }
-        check(still.shifts()==0&&stillKept==360,
+        check(still.shifts()==0&&stillKept==359&&still.repeatsSkipped()==CaptureHalfRate::kHitchSlots-2,
               "half-rate still-to-60 transition does not mistake a hold for second-copy phase");
+        // Below 30 (issue #152): a 30 fps-capped game at 29-24 fps shows its
+        // pictures two or three times. The plain grid kept 31-32 per second,
+        // several of them the picture it had just kept, which frame generation
+        // turned into stalls. Each picture is now kept exactly once and kept
+        // samples are never adjacent.
+        for(double fps:{29.0,28.0,26.0,24.0})for(bool sequenced:{true,false}){
+            CaptureHalfRate sampler;std::vector<uint64_t> keptIds;int last=-2;bool spaced=true;
+            constexpr int samples=1200;
+            for(int i=0;i<samples;++i){
+                const uint64_t id=uint64_t(i*fps/60);
+                if(sampler.accept(i*dt+(sequenced?0:(i%3-1)*1000),dt,false,&id,sequenced?uint64_t(i+1):0)){
+                    spaced&=i-last>=2;last=i;keptIds.push_back(id);
+                }
+            }
+            bool once=true;for(size_t n=0;n<keptIds.size();++n)once&=keptIds[n]==n;
+            const auto pictures=uint64_t((samples-1)*fps/60)+1;
+            check(once&&keptIds.size()+1>=pictures&&spaced&&sampler.shifts()==0,
+                  "below-30 content keeps each picture once, never a repeat or an adjacent sample");
+        }
+        {
+            // A freeze past the hitch window (picture 20 on samples 40-47) is
+            // held on the grid from kHitchSlots after its keep, as a still screen.
+            CaptureHalfRate sampler;std::vector<int> repeats;uint64_t lastKept=~0ull;
+            for(int i=0;i<120;++i){
+                const uint64_t id=i<40?uint64_t(i/2):i<48?20:uint64_t(21+(i-48)/2);
+                if(sampler.accept(i*dt,dt,false,&id,uint64_t(i+1))){if(id==lastKept)repeats.push_back(i);lastKept=id;}
+            }
+            check(repeats==std::vector<int>{45,47}&&sampler.repeatsSkipped()==3&&sampler.repeatsHeld()==2,
+                  "a freeze longer than the hitch window is held on the grid");
+        }
     }
     check(!CaptureHalfRate::supported(30)&&!CaptureHalfRate::supported(18)&&!CaptureHalfRate::supported(120)&&CaptureHalfRate::supported(59.94),"60-to-30 setting does not halve other transport modes");
     {
@@ -364,6 +397,12 @@ int main(){
         check(std::abs(liveSmoothedCapacityWaitMs(16.68,.48)-2.5)<.01,"sd 0.6 ms (mean distance 0.48 ms) waits 2.5 ms");
         check(liveSmoothedCapacityWaitMs(16.68,1.5)==3&&liveSmoothedCapacityWaitMs(33.4,20)==3,"and nothing waits more than 3 ms");
         check(liveSmoothedCapacityWaitMs(4.17,5)==2&&liveSmoothedCapacityWaitMs(8.33,5)==liveSmoothedCapacityWaitMs(8.33)&&liveSmoothedCapacityWaitMs(12.4,5)==liveSmoothedCapacityWaitMs(12.4),"above 80 fps the wait ignores the jitter");
+        using veyra::engine::liveHalfRateCapacityWaitMs;
+        check(std::abs(liveHalfRateCapacityWaitMs(2,16.68,8.33,16.68)-7.85)<.01,"59.94 on 120 Hz can wait with a refresh left for the real frame");
+        check(liveHalfRateCapacityWaitMs(2,16.68,8.33,8.7)==2,"a late pair gets only the regular wait");
+        check(liveHalfRateCapacityWaitMs(2,16.68,16.67,16.68)==2,"60 Hz keeps the existing wait");
+        check(liveHalfRateCapacityWaitMs(2,16.68,0,16.68)==2,"unknown refresh keeps the existing wait");
+        check(liveHalfRateCapacityWaitMs(2,16.68,3.125,16.68)==3.125,"fast refresh waits at most one refresh");
         const auto measuredJitter=[&](double sdMs){
             LiveArrivalSmoother smoother;uint32_t seed=7;
             for(unsigned n=0;n<2000;++n)smoother.anchor(int64_t(n*333643.0*(1-800e-6)),int64_t(n*333643.0+40000+gaussian(seed,sdMs*10000)),interval);

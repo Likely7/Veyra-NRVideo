@@ -12,7 +12,15 @@ Item {
 
     // Active dialog: network/capture/ps5/moonlight/xbox/screen/subtitle/audio/save/manage.
     property string dialog: ""
-    onDialogChanged: if (dialog !== "capture") legacyCapturePicker.close()
+    property bool onboardingActive: false
+    readonly property alias captureSettings: captureDialog
+    readonly property bool captureGuideOpen: captureGuide.visible
+    onDialogChanged: {
+        if (dialog !== "capture") {
+            legacyCapturePicker.close()
+            captureGuide.close()
+        }
+    }
 
     function open(key) {
         if (key === "save") saveDialog.resetForOpen()
@@ -25,11 +33,13 @@ Item {
     }
     function close() { host.dialog = "" }
 
-    signal startCapture()
     signal startPs5()
     signal startMoonlight()
     signal startXbox()
     signal startScreen()
+    signal startScreenCrop()
+
+    CaptureGuideDialog { id: captureGuide }
 
     CaptureLegacyPicker {
         id: legacyCapturePicker
@@ -48,7 +58,7 @@ Item {
     Rectangle {
         anchors.fill: parent
         color: Qt.rgba(0, 0, 0, 0.55)
-        opacity: host.dialog !== "" ? 1 : 0
+        opacity: host.dialog !== "" && !host.onboardingActive ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
         TapHandler { onTapped: host.close() }
@@ -71,7 +81,9 @@ Item {
     CaptureSourceDialog {
         id: captureDialog
         dialogHost: host
+        onboardingActive: host.onboardingActive
         legacyPicker: legacyCapturePicker
+        onGuideRequested: captureGuide.open()
     }
 
     // --- PS5 串流 ---------------------------------------------------------
@@ -105,6 +117,9 @@ Item {
     // --- 字幕设置 ---------------------------------------------------------
     SubtitleSettingsDialog {
         id: subtitleDialog
+        dialogHost: host
+    }
+    LiveTranslationDialog {
         dialogHost: host
     }
 

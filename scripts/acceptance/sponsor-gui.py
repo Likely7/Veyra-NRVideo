@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BASE = Path('E:/项目/Veyra'); TASK = 'claude-sponsor-20261019'
 APP = Path(sys.argv[1])
 LOG = BASE / 'logs' / TASK / ('gui-' + time.strftime('%Y%m%d-%H%M%S')); LOG.mkdir(parents=True)
-LINKS = [('bilibili', 'https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0'), ('douyin', 'https://v.douyin.com/9s06Bf2Inqc/'),
+LINKS = [('douyin', 'https://v.douyin.com/9s06Bf2Inqc/'),
          ('x', 'https://x.com/likely2002'), ('github', 'https://github.com/Likely7'),
          ('youtube', 'https://www.youtube.com/@Likely7Ai'), ('patreon', 'https://www.patreon.com/cw/Likely7'),
          ('patreonCoffee', 'https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110')]

@@ -29,6 +29,15 @@ DialogLayer {
         const t = veyra.subtitleTracks.find(x => x.index === index)
         return t ? t.label : qsTr("关闭", "off")
     }
+    VRow {
+        visible: (veyra.liveTranslation || null) !== null
+        label: qsTr("实时翻译")
+        VButton {
+            objectName: "subtitle-live-translation"
+            text: qsTr("实时翻译设置…")
+            onClicked: dialogHost.open("translation")
+        }
+    }
 
     // dialogs.js .sub-prev: a sample line over the picture, drawn with the
     // current style so every change shows at once.

@@ -58,6 +58,23 @@ QtObject {
     property string nrAutoStatus: ""
     property var nodeTimings: ({})
     property var preferences: ({exportStopsPlayback:false})
+    property QtObject liveTranslation: QtObject {
+        property bool supported: true
+        property bool enabled: false
+        property int provider: 0
+        property string sourceLanguage: ""
+        property string targetLanguage: "en"
+        property bool showOriginal: true
+        property bool modelInstalled: false
+        property bool downloading: false
+        property real downloadProgress: 0
+        property real downloadBytes: 1142252715
+        property string apiBase: ""
+        property string apiModel: ""
+        property string status: ""
+        function downloadModel() { downloading = true }
+        function cancelModelDownload() { downloading = false }
+    }
     property real playbackRate: 1
     property real volume: 1
     readonly property real maximumVolume: 3
@@ -65,6 +82,12 @@ QtObject {
     property real duration: 100
     property bool hasSource: true
     property bool isCapture: false
+    property bool openingSource: false
+    property string sourceKind: "screen"
+    property int sourceWidth: 1000
+    property int sourceHeight: 500
+    property string statusText: ""
+    property var appliedCrop: ({})
     // Off by default, as before these existed: only the low latency test turns them on.
     property bool nvidiaLowLatencyAvailable: false
     property int nvidiaLowLatency: 0
@@ -84,6 +107,10 @@ QtObject {
     }
     function logUi(category, text) {}
     function observeHdrCoverage(on) {}
+    function applyScreenCrop(left, top, right, bottom) {
+        appliedCrop = {left, top, right, bottom}
+        return true
+    }
 })qml", QUrl());
         auto* model = snapshot.create(engine->rootContext());
         if (!model) qFatal("Cannot create explicit component snapshot: %s", qPrintable(snapshot.errorString()));

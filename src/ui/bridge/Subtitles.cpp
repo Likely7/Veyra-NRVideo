@@ -1,5 +1,6 @@
 // QML bridge: Subtitles responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "../LiveTranslation.h"
 
 namespace veyra::ui {
 // --- subtitles (P4-c) --------------------------------------------------------
@@ -39,22 +40,6 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
 }
 void QmlPlayerBridge::tickSubtitles() {
     auto& i = *impl_;
-    // The only place that sees playback while it happens: remember where the Bilibili
-    // video got to, so the report at flush time describes what was actually watched.
-    // 这里是唯一逐帧看到播放进度的地方：记下 B 站视频播到哪，切走或播完时才能把
-    // 真实位置写回历史。2.1.2→2.1.3 拆桥接层时这段丢过，续播因此失效。
-    if (!i.biliWatchBvid.empty() && i.biliWatchCid > 0) {
-        const auto& cur = i.snapshot;
-        using Tr = engine::TransportState;
-        const bool playing = cur.running && !cur.failed &&
-                             (cur.transport == Tr::Playing || cur.transport == Tr::Paused);
-        if (playing && cur.position > 0.0) {
-            i.biliWatchLastPos = cur.position;
-            if (cur.duration > 0.0) i.biliWatchDuration = cur.duration;
-        } else if (cur.transport == Tr::Ended && !cur.failed) {
-            reportBiliWatchProgressAsync();
-        }
-    }
     bool changed = false;
     if (i.subScanGate) {
         // Opens once playback holds a few seconds ahead (or has read the whole file), closes when
@@ -140,6 +125,9 @@ void QmlPlayerBridge::tickSubtitles() {
     if (i.subAligning.load() != (i.subStatus.startsWith(tr("正在自动对齐")))) changed = true;
     if (changed) emit subtitlesChanged();
 
+    const auto& s = i.snapshot;
+    liveTranslation_->setPlayback(s.sessionId, s.running && !s.image &&
+        s.transport == engine::TransportState::Playing, false);
     // Draw. The overlay is a layered child of the video window: it moves with the
     // picture and is clipped by the same window region as the video itself.
     if (!i.videoWindow || !IsWindow(i.videoWindow)) return;
@@ -157,7 +145,6 @@ void QmlPlayerBridge::tickSubtitles() {
     RECT current{}; GetClientRect(i.subOverlay, &current);
     if (current.right != client.right || current.bottom != client.bottom)
         SetWindowPos(i.subOverlay, HWND_TOP, 0, 0, client.right, client.bottom, SWP_NOACTIVATE);
-    const auto& s = i.snapshot;
     std::vector<SubtitleLine> draw;
     const bool show = i.prefBool("subtitleEnabled", true) && (s.running && !s.image && !s.capture) && !i.subTracks.empty();
     if (show) {
@@ -210,7 +197,6 @@ void QmlPlayerBridge::tickSubtitles() {
     view.preview = i.engine.previewView();
     view.videoWidth = s.metrics.resolution.output.width;
     view.videoHeight = s.metrics.resolution.output.height;
-    updateSubtitleOverlay(i.subOverlay, draw, view);
     QString joined;
     for (const auto& line : draw) { if (line.text.empty()) continue; if (!joined.isEmpty()) joined += QStringLiteral(" | "); joined += QString::fromStdWString(line.text); }
     if (joined != i.subText) {
@@ -218,7 +204,20 @@ void QmlPlayerBridge::tickSubtitles() {
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
         emit subtitleTextChanged();
     }
-    tickDanmaku();
+    // Live text is never copied into subtitle diagnostics or the export graph.
+    const QString translated = liveTranslation_->translated();
+    const QString original = liveTranslation_->caption();
+    const bool showOriginal = liveTranslation_->showOriginal();
+    QString live = translated;
+    if (showOriginal && !original.isEmpty() && original != translated)
+        live = translated.isEmpty() ? original : original + QLatin1Char('\n') + translated;
+    if (!live.isEmpty()) {
+        SubtitleLine line;
+        line.text = live.toStdWString();
+        line.style.alignment = draw.empty() ? 2 : 8;
+        draw.push_back(std::move(line));
+    }
+    updateSubtitleOverlay(i.subOverlay, draw, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {
     QVariantList out;

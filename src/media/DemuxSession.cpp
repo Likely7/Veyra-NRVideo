@@ -9,6 +9,7 @@
 #include <cwctype>
 #include <format>
 #include <limits>
+#include <utility>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -200,14 +201,57 @@ struct DemuxSession::FileAvio {
     }
 };
 
+// A packet's share of the buffered content. Timestamp jumps do not count as lead.
+static int64_t itemSpanUs(int64_t startUs, int64_t endUs) { return std::clamp<int64_t>(endUs - startUs, 0, 5000000); }
+
 void DemuxSession::Queue::clear() {
     for (auto& item : items) av_packet_free(&item.packet);
     items.clear();
     bytes = 0;
+    next = retainedBytes = 0;
     durationUs = 0;
     firstUs = lastEndUs = lastDtsUs = INT64_MIN;
     ended = false;
     dedupe = false;
+}
+
+bool DemuxSession::Queue::take(AVPacket* packet, Meta& meta, bool retain) {
+    auto& item=items[next];
+    if (retain) {
+        if (av_packet_ref(packet,item.packet)<0) return false;
+        ++next;
+    } else {
+        av_packet_move_ref(packet,item.packet);
+        av_packet_free(&item.packet);
+    }
+    bytes-=item.bytes;
+    durationUs-=itemSpanUs(item.startUs,item.endUs);
+    meta={item.discontinuity,item.generation};
+    if (!retain) items.pop_front();
+    return true;
+}
+
+bool DemuxSession::Queue::evict() {
+    const auto& item=items.front();
+    retainedBytes-=item.retained;
+    const bool unread=next==0;
+    if (unread) {
+        bytes-=item.bytes;
+        durationUs-=itemSpanUs(item.startUs,item.endUs);
+    } else --next;
+    av_packet_free(&items.front().packet);
+    items.pop_front();
+    return unread;
+}
+
+void DemuxSession::Queue::rewind(size_t cursor) {
+    next=cursor;
+    bytes=0;
+    durationUs=0;
+    for (size_t i=next; i<items.size(); ++i) {
+        bytes+=items[i].bytes;
+        durationUs+=itemSpanUs(items[i].startUs,items[i].endUs);
+    }
 }
 
 DemuxSession::DemuxSession() = default;
@@ -495,7 +539,10 @@ std::shared_ptr<DemuxSession> DemuxSession::open(const OpenParams& params, std::
     // A source with a known length that can be repositioned is on demand; anything
     // else (RTSP, HTTP-TS without length, live HLS) is live: no seek, no resume point.
     s.live_ = !(s.durationUs_ > 0 && (byteSeekable || hls));
-    if (s.network_ && s.formatName_.find("rtsp") != std::string::npos) s.live_ = true;
+    if (s.network_ && (s.formatName_.find("rtsp") != std::string::npos ||
+                       s.formatName_ == "rtp" || datagramMediaInput(s.path_))) s.live_ = true;
+    if (s.network_ && s.live_) s.timeshiftUs_=int64_t(std::clamp(params.settings.timeshiftSeconds,0,600))*1000000;
+    s.timelineStartUs_=s.startTimeUs_;
     s.plan_ = networkBufferPlan(s.settings_, s.live_);
     {
         std::lock_guard lock(s.m_);
@@ -527,9 +574,6 @@ uint64_t DemuxSession::aheadBytesLocked() const {
     return settings_.level == NetworkBufferLevel::Auto && bandwidthLow_ ? plan_.growBytes : plan_.aheadBytes;
 }
 
-// A packet's share of the buffered content. Estimated durations only: timestamps are not trusted here (see below).
-static int64_t itemSpanUs(int64_t startUs, int64_t endUs) { return std::clamp<int64_t>(endUs - startUs, 0, 5000000); }
-
 double DemuxSession::leadSecondsLocked() const {
     // Seconds of content downloaded beyond the playback position: what waits in a queue (the packets' durations)
     // plus what the consumers already took but playback has not reached yet. Never lastEnd - position: a damaged
@@ -544,7 +588,7 @@ double DemuxSession::leadSecondsLocked() const {
         }
         double taken = 0;
         if (position >= 0) {
-            const int64_t head = q.items.empty() ? q.lastEndUs : q.items.front().startUs;
+            const int64_t head = q.empty() ? q.lastEndUs : q.front().startUs;
             taken = std::clamp(double(head - position) / 1e6, 0.0, 5.0);   // the two may sit on different timelines: bounded
         }
         best = std::min(best, double(q.durationUs) / 1e6 + taken);
@@ -661,6 +705,7 @@ void DemuxSession::updatePhaseLocked() {
 
 bool DemuxSession::flowBlockedLocked() const {
     if (endedLocked()) return true;
+    if (timeshiftEnabled()) return false;
     const uint64_t queued = video_.bytes + audio_.bytes;
     if (queued >= aheadBytesLocked()) return true;
     if (videoStarved_) return false;
@@ -677,7 +722,7 @@ void DemuxSession::logSummaryLocked(bool force) {
     for (const auto& a : arrivals_) arrivalBytes += double(a.bytes);
     log::info("net-buffer", std::format("state={} leadSec={:.2f} targetSec={:.2f} videoQ={} audioQ={} queuedMiB={:.1f} downloadMBps={:.2f} serverMBps={:.2f} bitrateMBps={:.2f} bandwidthLow={} reconnects={} attempt={} stalls={} corruptPackets={} totalMiB={:.1f} eof={} failed={}",
         reconnecting_ ? "reconnecting" : phase_ == Phase::Playing ? "playing" : phase_ == Phase::Buffering ? "buffering" : "prebuffering",
-        leadSecondsLocked(), targetSeconds_, video_.items.size(), audio_.items.size(), double(video_.bytes + audio_.bytes) / 1048576.0,
+        leadSecondsLocked(), targetSeconds_, video_.pending(), audio_.pending(), double(video_.bytes + audio_.bytes) / 1048576.0,
         arrivalBytes / 3.0 / 1048576.0, serverRateLocked() / 1048576.0, bitrate / 1048576.0, bandwidthLow_, reconnects_, reconnectAttempt_, stalls_,
         corruptPackets_, double(totalBytes_) / 1048576.0, eof_, failed_));
 }
@@ -692,21 +737,14 @@ DemuxSession::Pop DemuxSession::popVideo(AVPacket* dst, Meta& meta, int waitMs, 
         if (stop_.load() || (cancelled_ && cancelled_->load())) return Pop::Cancelled;
         updatePhaseLocked();
         const bool hold = honourHold && phase_ != Phase::Playing;
-        if (!hold && !video_.items.empty()) {
-            Item item = std::move(video_.items.front());
-            video_.items.pop_front();
-            video_.bytes -= item.bytes;
-            video_.durationUs -= itemSpanUs(item.startUs, item.endUs);
-            consumedUs_ = item.startUs;
-            av_packet_move_ref(dst, item.packet);
-            av_packet_free(&item.packet);
-            meta.discontinuity = item.discontinuity;
-            meta.generation = item.generation;
+        if (!hold && !video_.empty()) {
+            consumedUs_ = video_.front().startUs;
+            if (!video_.take(dst,meta,timeshiftEnabled())) return Pop::Failed;
             producerCv_.notify_one();
             return Pop::Packet;
         }
-        if (video_.items.empty() && endedLocked()) return failed_ ? Pop::Failed : Pop::Eof;
-        if (video_.items.empty() && !hold && !videoStarved_) {
+        if (video_.empty() && endedLocked()) return failed_ ? Pop::Failed : Pop::Eof;
+        if (video_.empty() && !hold && !videoStarved_) {
             // Out of pictures: whatever the lead says, the producer has to read on.
             videoStarved_ = true;
             producerCv_.notify_one();
@@ -722,15 +760,8 @@ DemuxSession::Pop DemuxSession::popAudio(AVPacket* dst, Meta& meta, int waitMs) 
     for (;;) {
         if (stop_.load() || (cancelled_ && cancelled_->load())) return Pop::Cancelled;
         if (audioIndex_.load() < 0) return Pop::Eof;
-        if (!audio_.items.empty()) {
-            Item item = std::move(audio_.items.front());
-            audio_.items.pop_front();
-            audio_.bytes -= item.bytes;
-            audio_.durationUs -= itemSpanUs(item.startUs, item.endUs);
-            av_packet_move_ref(dst, item.packet);
-            av_packet_free(&item.packet);
-            meta.discontinuity = item.discontinuity;
-            meta.generation = item.generation;
+        if (!audio_.empty()) {
+            if (!audio_.take(dst,meta,timeshiftEnabled())) return Pop::Failed;
             producerCv_.notify_one();
             return Pop::Packet;
         }
@@ -754,7 +785,10 @@ bool DemuxSession::selectAudioStream(int index) {
 void DemuxSession::setPlaybackPositionUs(int64_t us) {
     if (us < 0) return;
     std::lock_guard lock(m_);
-    playbackUs_ = us;
+    // Packets carry the container's PTS. The player's clock starts at zero.
+    // Mixing those origins can invent enough lead to stop the reader before
+    // the first audio prefill on MPEG-TS and streams joined mid-programme.
+    playbackUs_ = timelineStartUs_ + us;
     hasHint_ = true;
     updatePhaseLocked();
     producerCv_.notify_one();
@@ -765,24 +799,18 @@ DemuxSession::Pop DemuxSession::popEl(AVPacket* dst, Meta& meta, int waitMs) {
     const auto deadline = Clock::now() + std::chrono::milliseconds(std::max(waitMs, 0));
     for (;;) {
         if (stop_.load() || (cancelled_ && cancelled_->load())) return Pop::Cancelled;
-        if (!el_.items.empty()) {
-            Item item = std::move(el_.items.front());
-            el_.items.pop_front();
-            el_.bytes -= item.bytes;
-            av_packet_move_ref(dst, item.packet);
-            av_packet_free(&item.packet);
-            meta.discontinuity = item.discontinuity;
-            meta.generation = item.generation;
+        if (!el_.empty()) {
+            if (!el_.take(dst,meta,timeshiftEnabled())) return Pop::Failed;
             return Pop::Packet;
         }
-        if (el_.items.empty() && endedLocked()) return failed_ ? Pop::Failed : Pop::Eof;
+        if (el_.empty() && endedLocked()) return failed_ ? Pop::Failed : Pop::Eof;
         if (consumerCv_.wait_until(lock, deadline) == std::cv_status::timeout) return Pop::Empty;
     }
 }
 
 bool DemuxSession::seek(int64_t targetUs) {
-    if (live_) return false;
     std::unique_lock lock(m_);
+    if (live_) return timeshiftEnabled() && seekTimeshiftLocked(targetUs);
     if (failed_ && !settings_.autoReconnect) return false;
     seekTargetUs_ = std::max<int64_t>(0, targetUs);
     // A seek that is already running is retargeted rather than interrupted: raising
@@ -874,13 +902,19 @@ NetworkStats DemuxSession::stats() const {
     out.skippedFrames = skippedFrames_;
     out.sessionBytes = totalBytes_;
     out.connections = connections_;
+    out.timeshiftEnabled=timeshiftEnabled();
+    if (out.timeshiftEnabled&&!video_.items.empty()&&
+        (video_.items.front().packet->flags&(AV_PKT_FLAG_KEY|AV_PKT_FLAG_CORRUPT))==AV_PKT_FLAG_KEY) {
+        out.timeshiftStartSeconds=std::max(0.0,double(video_.items.front().startUs-timelineStartUs_)/1e6);
+        out.timeshiftEndSeconds=std::max(out.timeshiftStartSeconds,double(video_.lastEndUs-timelineStartUs_)/1e6);
+    }
     if (failed_) {
         out.state = NetworkStats::State::Failed;
         out.message = failure_;
     } else if (reconnecting_) {
         out.state = NetworkStats::State::Reconnecting;
         out.message = std::format(L"网络中断，正在重连（第 {} 次）", reconnectAttempt_ ? reconnectAttempt_ : 1u);
-    } else if (eof_ && video_.items.empty()) {
+    } else if (eof_ && video_.empty()) {
         out.state = NetworkStats::State::Ended;
     } else if (phase_ == Phase::Prebuffering) {
         out.state = NetworkStats::State::Prebuffering;
@@ -1049,7 +1083,7 @@ void DemuxSession::threadMain() {
             video_.ended = true;
             audio_.ended = true;
             el_.ended = true;
-            log::info("net-session", std::format("end of stream: video queued {} audio queued {}", video_.items.size(), audio_.items.size()));
+            log::info("net-session", std::format("end of stream: video queued {} audio queued {}", video_.pending(), audio_.pending()));
             updatePhaseLocked();
             consumerCv_.notify_all();
             continue;
@@ -1250,6 +1284,10 @@ void DemuxSession::onPacket(AVPacket* pkt) {
 
 bool DemuxSession::pushLocked(Item&& item, bool video, bool el) {
     Queue& queue = el ? el_ : (video ? video_ : audio_);
+    if (!video && !el && item.packet->stream_index!=audioIndex_.load()) {
+        av_packet_free(&item.packet);
+        return false;
+    }
     if (item.packet->flags & AV_PKT_FLAG_CORRUPT) {
         if (video) ++corruptPackets_;
     }
@@ -1266,10 +1304,89 @@ bool DemuxSession::pushLocked(Item&& item, bool video, bool el) {
         if (rateSamples_.empty() || item.endUs - rateSamples_.back().contentUs >= 500000) rateSamples_.push_back({item.endUs, contentBytes_});
         while (rateSamples_.size() > 2 && rateSamples_.back().contentUs - rateSamples_[1].contentUs > 12000000) rateSamples_.pop_front();
     }
+    if (timeshiftEnabled()) {
+        item.retained=sizeof(Item)+sizeof(AVPacket)+item.bytes;
+        for (int i=0; i<item.packet->side_data_elems; ++i) item.retained+=item.packet->side_data[i].size;
+        queue.retainedBytes+=item.retained;
+    }
     queue.items.push_back(std::move(item));
+    if (timeshiftEnabled()) trimTimeshiftLocked();
     updatePhaseLocked();
     consumerCv_.notify_all();
     return true;
+}
+
+void DemuxSession::trimTimeshiftLocked() {
+    constexpr size_t byteLimit=256ull<<20;
+    constexpr size_t packetLimit=32768;
+    const auto tooLarge=[&]{
+        return video_.retainedBytes+audio_.retainedBytes+el_.retainedBytes>byteLimit ||
+            video_.items.size()+audio_.items.size()+el_.items.size()>packetLimit;
+    };
+    const auto key=[](const Item& item) {
+        return (item.packet->flags&(AV_PKT_FLAG_KEY|AV_PKT_FLAG_CORRUPT))==AV_PKT_FLAG_KEY;
+    };
+    const int64_t expiry=video_.lastEndUs==INT64_MIN?INT64_MIN:video_.lastEndUs-timeshiftUs_;
+    while (!video_.items.empty()) {
+        const bool forced=tooLarge();
+        auto& front=video_.items.front();
+        const bool expired=front.startUs<expiry;
+        if (!forced&&!expired&&key(front)) break;
+        if (!forced) {
+            // Keep a decodable GOP until there is another keyframe at or
+            // before the cutoff. A hard memory limit always wins.
+            const auto next=std::find_if(std::next(video_.items.begin()),video_.items.end(),key);
+            if (next==video_.items.end() || (key(front)&&next->startUs>expiry)) break;
+        }
+        do {
+            timeshiftOverrun_=video_.evict()||timeshiftOverrun_;
+        } while (!video_.items.empty()&&!key(video_.items.front()));
+    }
+    if (!video_.items.empty() && key(video_.items.front())) {
+        const auto earliest=video_.items.front().startUs;
+        for (auto* q:{&audio_,&el_})
+            while (!q->items.empty() && q->items.front().endUs<=earliest) q->evict();
+    }
+    for (auto* q:{&audio_,&el_})
+        while (!q->items.empty()&&tooLarge()) q->evict();
+}
+
+bool DemuxSession::seekTimeshiftLocked(int64_t targetUs) {
+    if (video_.items.empty()) return false;
+    size_t selected=video_.items.size();
+    const int64_t absolute=timelineStartUs_+std::min(targetUs,std::max<int64_t>(0,video_.lastEndUs-timelineStartUs_));
+    for (size_t i=0; i<video_.items.size(); ++i) {
+        const auto& item=video_.items[i];
+        if ((item.packet->flags&(AV_PKT_FLAG_KEY|AV_PKT_FLAG_CORRUPT))!=AV_PKT_FLAG_KEY) continue;
+        if (selected!=video_.items.size()&&item.startUs>absolute) break;
+        selected=i;
+    }
+    if (selected==video_.items.size()) return false;
+    const auto anchor=video_.items[selected].startUs;
+    video_.rewind(selected);
+    for (auto* q:{&audio_,&el_}) {
+        const auto start=std::find_if(q->items.begin(),q->items.end(),[&](const Item& item){return item.endUs>anchor;});
+        q->rewind(size_t(start-q->items.begin()));
+    }
+    ++generation_;
+    for (auto* q:{&video_,&audio_,&el_})
+        for (size_t i=q->next; i<q->items.size(); ++i) q->items[i].generation=generation_.load();
+    timeshiftOverrun_=false;
+    playbackUs_=std::max(absolute,anchor);
+    consumedUs_=anchor;
+    hasHint_=false;
+    videoStarved_=false;
+    updatePhaseLocked();
+    consumerCv_.notify_all();
+    return true;
+}
+
+bool DemuxSession::takeTimeshiftOverrun() {
+    if (!timeshiftEnabled()) return false;
+    std::lock_guard lock(m_);
+    if (video_.items.empty()||
+        (video_.items.front().packet->flags&(AV_PKT_FLAG_KEY|AV_PKT_FLAG_CORRUPT))!=AV_PKT_FLAG_KEY) return false;
+    return std::exchange(timeshiftOverrun_,false);
 }
 
 // ---------------------------------------------------------------------------
@@ -1294,8 +1411,8 @@ void DemuxSession::doSeek() {
         pendingAudioBytes_ = 0;
         generation_.fetch_add(1);
         eof_ = false;
-        playbackUs_ = target;
-        consumedUs_ = target;
+        playbackUs_ = timelineStartUs_ + target;
+        consumedUs_ = playbackUs_;
         rateSamples_.clear();
         contentBytes_ = 0;
         afterSeek_ = true;

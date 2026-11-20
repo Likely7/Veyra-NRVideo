@@ -199,7 +199,13 @@ public:
             const bool same=audio_?sameAudio(*changed,connected_):compressed_?sameCompressed(*changed,connected_):allocatorMode_==CaptureAllocatorMode::Upstream?nativeCaptureContractsMatch(*changed,connected_):equivalentCaptureTypes(*changed,connected_);
             clearType(*changed);CoTaskMemFree(changed);if(!same){log::error("capture",std::format("dynamic capture contract changed; reopen required hr=0x{:08X}",uint32_t(VFW_E_INVALIDMEDIATYPE)));return VFW_E_INVALIDMEDIATYPE;}
         }
-        if(compressed_){if(sample->GetActualDataLength()<=0)return VFW_E_BUFFER_UNDERFLOW;}
+        if(compressed_){
+            const auto bytes=sample->GetActualDataLength();
+            // Some compressed video pins deliver an empty priming sample.
+            // Acknowledge it without sending a packet to the decoder.
+            if(bytes==0&&desired_.majortype==MEDIATYPE_Video)return S_OK;
+            if(bytes<=0)return VFW_E_BUFFER_UNDERFLOW;
+        }
         else if(audio_){const auto block=reinterpret_cast<const WAVEFORMATEX*>(connected_.pbFormat)->nBlockAlign;if(sample->GetActualDataLength()<0||sample->GetActualDataLength()%block)return VFW_E_BUFFER_UNDERFLOW;}
         else if(sample->GetActualDataLength()<LONG(layout_.sampleBytes))return VFW_E_BUFFER_UNDERFLOW;
         try{return callback_(sample);}catch(...){return E_FAIL;}

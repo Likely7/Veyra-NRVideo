@@ -14,15 +14,22 @@ extern "C" {
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <filesystem>
+#include <source_location>
+#include <string_view>
 using namespace veyra;
 using namespace veyra::remoteplay;
 using namespace veyra::source;
 static bool testHardware=false;
 namespace veyra::source {
 struct RemotePlaySourceTestAccess {
-static void check(bool ok) { if(!ok) throw std::runtime_error("RemotePlay source regression failed"); }
+static inline unsigned checks=0;
+static void check(bool ok, const std::source_location where=std::source_location::current()) {
+    ++checks;
+    if(!ok) throw std::runtime_error("RemotePlay source regression failed at line " + std::to_string(where.line()));
+}
 static std::vector<uint8_t> bytes(const char* path) {
-    std::ifstream f(path,std::ios::binary); return {std::istreambuf_iterator<char>(f),{}};
+    std::ifstream f(std::filesystem::u8path(path),std::ios::binary);check(f.good()); return {std::istreambuf_iterator<char>(f),{}};
 }
 static void setup(RemotePlaySource& s) {
     if(testHardware){
@@ -36,6 +43,7 @@ static void setup(RemotePlaySource& s) {
     s.token_->connected(); s.connected_=true;
     s.clock_.reset(static_cast<HostTime>(s.origin100ns_),60);
     s.info_.width=1280;s.info_.height=720;
+    s.initializeColorContract(Codec::H264, false);
     s.info_.color.matrix=pipeline::YuvMatrix::BT601;
     s.info_.color.range=pipeline::ColorRange::Limited;
     s.info_.color.transfer=pipeline::TransferFunction::BT709;
@@ -62,8 +70,24 @@ static void pcm() {
     float large[1920];check(s.pullAudio(large,960,&pts)==480);
     check(s.pullAudio(large,480,&pts)==480 && std::abs(pts-70.0)<0.001);
 }
-static void splitTest(const char* prefix, Codec codec=Codec::H264) {
-    RemotePlaySource s;setup(s);s.request_.video.codec=codec;auto config=bytes((std::string(prefix)+"-config.bin").c_str());
+static void colorContracts() {
+    for(bool reconstruct:{false,true}) for(auto codec:{Codec::H264,Codec::H265,Codec::H265Hdr}) {
+        RemotePlaySource s;s.initializeColorContract(codec,reconstruct);
+        const auto& c=s.info().color;const bool hdr=codec==Codec::H265Hdr;
+        check(c.reconstructChroma==reconstruct);
+        check(c.isHdrPath()==hdr && c.preserveSdrCodeValues==!hdr);
+        check(c.range==pipeline::ColorRange::Limited && c.rangeAssumed);
+        check(c.transfer==(hdr?pipeline::TransferFunction::PQ:pipeline::TransferFunction::BT709));
+        check(c.matrix==(hdr?pipeline::YuvMatrix::BT2020NCL:pipeline::YuvMatrix::BT709));
+        check(c.primaries==(hdr?pipeline::ColorPrimaries::BT2020:pipeline::ColorPrimaries::BT709));
+        if(!hdr)check(pipeline::workingTransferCode(c)==1);
+    }
+    pipeline::ColorDescription reference;reference.transfer=pipeline::TransferFunction::BT709;reference.displayReferred709=true;
+    check(pipeline::workingTransferCode(reference)==3); // The general BT.1886 branch still exists.
+    std::cout<<"INITIAL_SDR_HDR_COLOR_CONTRACTS_PASS\n";
+}
+static void splitTest(const char* prefix, Codec codec=Codec::H264, bool expectHdr=false) {
+    RemotePlaySource s;setup(s);s.initializeColorContract(codec,false);s.request_.video.codec=codec;auto config=bytes((std::string(prefix)+"-config.bin").c_str());
     auto au=bytes((std::string(prefix)+"-au.bin").c_str());
     VideoSample c;c.generation=s.token_->generation();c.width=1280;c.height=720;
     c.codec=codec;c.arrival100ns=monotonic100ns();c.kind=SampleKind::CodecConfig;c.payload=PaddedBytes::copy(config);
@@ -74,6 +98,14 @@ static void splitTest(const char* prefix, Codec codec=Codec::H264) {
     std::cout<<(codec==Codec::H264?"SPLIT_H264":"SPLIT_H265")<<" config_accepted="<<ca<<" au_accepted="<<fa<<" read_status="<<int(r)
         <<" frame="<<bool(frame)<<" session_state="<<int(s.sessionSnapshot().state)<<"\n";
     check(ca && fa && r==SourceReadStatus::Frame && frame && s.sessionSnapshot().state==SessionState::Streaming);
+    check(p.colorInfo.isHdrPath()==expectHdr);
+    check(p.colorInfo.preserveSdrCodeValues==!expectHdr);
+    check(s.info().color.preserveSdrCodeValues==p.colorInfo.preserveSdrCodeValues);
+    if(expectHdr) {
+        check(p.colorInfo.transfer==pipeline::TransferFunction::PQ && p.colorInfo.primaries==pipeline::ColorPrimaries::BT2020);
+        check(p.colorInfo.pixelFormat==pipeline::SourcePixelFormat::P010);
+    } else check(pipeline::workingTransferCode(p.colorInfo)==1);
+    std::cout<<"DECODED_COLOR_CONTRACT codec="<<int(codec)<<" hdr="<<expectHdr<<" preserveSdrCodes="<<p.colorInfo.preserveSdrCodeValues<<" workingTransfer="<<pipeline::workingTransferCode(p.colorInfo)<<"\n";
     if(testHardware){check(frame->format==AV_PIX_FMT_D3D12&&s.info().hardwareDecodeActive);std::cout<<"REAL_D3D12_DECODE_PASS codec="<<int(codec)<<"\n";}
     // Decode across the real 16-bit wrap, retaining a valid increasing PTS.
     const auto firstPts=p.pts.to100ns();
@@ -81,7 +113,7 @@ static void splitTest(const char* prefix, Codec codec=Codec::H264) {
     wrapped.arrival100ns=monotonic100ns();wrapped.wireFrameIndex=0;wrapped.payload=PaddedBytes::copy(au);
     check(s.token_->video(std::move(wrapped)));check(s.read(p,&frame)==SourceReadStatus::Frame);
     check(!p.pts.isUnknown() && p.pts.to100ns()>firstPts);
-    if(codec==Codec::H265)return;
+    if(codec!=Codec::H264)return;
     // Same actual decoder/stream, with SPS/PPS prepended to AU in one packet.
     RemotePlaySource combined;setup(combined);combined.openDecoder(Codec::H264,1920,1080);
     config.insert(config.end(),au.begin(),au.end());pipeline::FramePacket sp;sp.pts={0,60};sp.colorInfo=combined.info_.color;
@@ -163,11 +195,28 @@ static void fallback(const char* prefix){
 }
 };
 }
-int main(int argc,char**argv) {
-    if(argc!=3&&argc!=4&&argc!=5)return 2;
-    testHardware=argc==5&&std::string_view(argv[4])=="--hardware";
+int wmain(int argc,wchar_t**argv) {
+    std::vector<std::string> paths;std::string hdrPrefix;
+    for(int i=1;i<argc;++i){
+        if(std::wstring_view(argv[i])==L"--hardware"){testHardware=true;continue;}
+        if(std::wstring_view(argv[i])==L"--hdr10-prefix"){
+            if(++i>=argc)return 2;
+            const auto u=std::filesystem::path(argv[i]).u8string();hdrPrefix.assign(u.begin(),u.end());continue;
+        }
+        const auto u=std::filesystem::path(argv[i]).u8string();paths.emplace_back(u.begin(),u.end());
+    }
+    if(paths.size()<2||paths.size()>3||(testHardware&&paths.size()!=3))return 2;
     std::cout<<"SOURCE_TEST: real FFmpeg, direct inbox injection; no PS5/WASAPI/presentation validation; hardware="<<testHardware<<"\n";
-    try{RemotePlaySourceTestAccess::pcm();RemotePlaySourceTestAccess::splitTest(argv[1]);RemotePlaySourceTestAccess::reorder(argv[2]);if(argc>=4)RemotePlaySourceTestAccess::splitTest(argv[3],Codec::H265);if(testHardware){RemotePlaySourceTestAccess::compareDecode(argv[1],Codec::H264);RemotePlaySourceTestAccess::compareDecode(argv[3],Codec::H265);RemotePlaySourceTestAccess::fallback(argv[1]);}}
+    try{
+        RemotePlaySourceTestAccess::colorContracts();RemotePlaySourceTestAccess::pcm();
+        RemotePlaySourceTestAccess::splitTest(paths[0].c_str());RemotePlaySourceTestAccess::reorder(paths[1].c_str());
+        if(paths.size()==3){
+            RemotePlaySourceTestAccess::splitTest(paths[2].c_str(),Codec::H265);
+            RemotePlaySourceTestAccess::splitTest(paths[2].c_str(),Codec::H265Hdr); // Actual 8-bit SDR fallback.
+        }
+        if(!hdrPrefix.empty())RemotePlaySourceTestAccess::splitTest(hdrPrefix.c_str(),Codec::H265Hdr,true);
+        if(testHardware){RemotePlaySourceTestAccess::compareDecode(paths[0].c_str(),Codec::H264);RemotePlaySourceTestAccess::compareDecode(paths[2].c_str(),Codec::H265);RemotePlaySourceTestAccess::fallback(paths[0].c_str());}
+    }
     catch(const std::exception& e){std::cerr<<e.what()<<"\n";return 2;}
-    std::cout<<"REMOTEPLAY_SOURCE_REGRESSIONS_PASS\n"; return 0;
+    std::cout<<"REMOTEPLAY_SOURCE_REGRESSIONS_PASS checks="<<RemotePlaySourceTestAccess::checks<<"\n";return 0;
 }

@@ -25,7 +25,7 @@ Window {
     // about 330px wide).
     minimumWidth: cinema ? 360 : 720
     minimumHeight: 260
-    visible: true
+    visible: !test.portableUpdateProbe
     // The software scene graph cannot draw the Shape background. Keep the native
     // window opaque as well, including while its first frame is being produced.
     color: typeof vySoftwareUi !== "undefined" && vySoftwareUi ? (cinema ? Theme.videoBlack : Theme.bgOuter) : "transparent"
@@ -39,6 +39,7 @@ Window {
     // Page ids match the prototype's PAGES keys so a design screenshot and an
     // app screenshot can be compared under the same name.
     property string page: "home"
+    readonly property bool onboardingActive: onboarding.visible
     // The node page splitter: height of its video card (picture + 40px bar).
     property real nodeVideoHeight: 330
     // Every navigation goes through here: "专业" means the node page while the
@@ -136,6 +137,7 @@ Window {
         videoHost.syncRect()
     }
     onPageChanged: {
+        if (onboarding.visible) onboarding.close()
         if (page === "node" && veyra.nodeMode !== 1) {
             veyra.nodeMode = 1
             if (veyra.nodeMode !== 1) { page = "pro"; return }
@@ -171,19 +173,13 @@ Window {
         const prev = shownPage
         if (prev === page) return
         leavingPage = Theme.reduced || prev === "" || instantPage ? "" : prev
-        // Leaving a page without a picture (home, settings, the Bilibili browser): an
-        // open may follow in the same call (openPath navigates, then opens) and the
-        // engine samples the host size once, so the rect is placed now, not 150 ms
-        // later. There is no picture on the old page to fade against. "bili" belongs
-        // here too: its own videoRect is zero-sized, so without this the open read a
-        // 0x0 host and the native window was never placed.
-        if (prev === "home" || prev === "set" || prev === "bili") videoHost.syncRect()
+        if (prev === "home" || prev === "set") videoHost.syncRect()
         if (leavingPage !== "") { leaveAnim.restart(); showTimer.restart() }
         else showPage(false)
     }
     // The page on screen (entering or settled) and the one sinking out.
     property string shownPage: "home"
-    readonly property var pageItems: [homePage, minPage, proPage, nodePage, exportPage, settingsPage, biliPage]
+    readonly property var pageItems: [homePage, minPage, proPage, nodePage, exportPage, settingsPage]
     property string leavingPage: ""
     function showPage(animated) {
         shownPage = page
@@ -236,11 +232,7 @@ Window {
             return veyra.gameVideoRect
         // Fullscreen is a video-only viewport (AppShell): the picture is the screen
         // and the controls float above it in their own window (FullscreenBar).
-        // "bili" is excluded like home/settings: that page is a browser, its own case
-        // below already hides the picture, and taking the whole-screen rect instead
-        // covered the list with the native window so it could not be clicked at all.
-        if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set"
-            && page !== "bili")
+        if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set")
             return { x: 0, y: 0, width: width, height: height }
         switch (page) {
         case "min":
@@ -252,12 +244,6 @@ Window {
             return proPage.videoViewport
         case "node":
             return nodePage.videoViewport
-        case "bili":
-            // This page is a browser, not a player. Playback moves the user to 极简
-            // (openPath navigates there), so returning here must hide the picture
-            // rather than draw it over the list: a zero-sized rect takes the native
-            // video window out of the way while the audio and engine keep running.
-            return { x: 0, y: 0, width: 0, height: 0 }
         case "exp":
             return ExportLayout.calculate(width, height, exportPage.compactTab).video
         default:
@@ -273,10 +259,17 @@ Window {
         // In fullscreen the picture covers the page, and the native video window
         // passes the pointer through: a hidden page control must not take a click
         // meant for the picture.
-        visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.page === "bili" || root.quickPanelShown
+        visible: !root.fullscreen || root.page === "home" || root.page === "set" || root.quickPanelShown
         // Each page is shown while current or while sinking out; the sinking one
         // takes no input (.page.leave { pointer-events: none }).
-        HomePage { id: homePage; pageId: "home"; home: pages; onRequestPage: p => root.goPage(p); onRequestSponsor: root.showSponsor() }
+        HomePage {
+            id: homePage
+            pageId: "home"
+            home: pages
+            onRequestPage: p => root.goPage(p)
+            onRequestSponsor: root.showSponsor()
+            onRequestOnboarding: if (root.page === "home" && dialogs.dialog === "") onboarding.start()
+        }
         MinimalPage {
             id: minPage
             pageId: "min"
@@ -292,6 +285,7 @@ Window {
             // Also follows wrapping status text and the compact header/transport.
             onVideoViewportChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
             home: pages
+            onboardingActive: root.onboardingActive
             overlay: root.quickPanelShown && root.page === "pro"
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
@@ -318,16 +312,23 @@ Window {
             }
         }
         ExportPage { id: exportPage; pageId: "exp"; home: pages; onRequestPage: p => root.goPage(p) }
-        SettingsPage { id: settingsPage; pageId: "set"; home: pages; onRequestPage: p => root.goPage(p) }
-        BilibiliPage { id: biliPage; pageId: "bili"; home: pages; onRequestPage: p => root.goPage(p) }
+        SettingsPage {
+            id: settingsPage
+            pageId: "set"
+            home: pages
+            onRequestPage: p => {
+                if (p === "translation") dialogs.open(p)
+                else root.goPage(p)
+            }
+        }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.
     DialogHost {
         id: dialogs
         anchors.fill: parent
+        onboardingActive: root.onboardingActive
         // The dialogs open the source through the bridge; show the picture.
-        onStartCapture: if (root.page === "home") root.goPage("min")
         onStartPs5: if (root.page === "home") root.goPage("min")
         onStartMoonlight: if (root.page === "home") root.goPage("min")
         onStartXbox: if (root.page === "home") root.goPage("min")
@@ -335,6 +336,49 @@ Window {
             if (root.page === "home") root.goPage("min")
             if (veyra.screenOptions.passthrough === true) root.enterGameFullscreen()
         }
+        onStartScreenCrop: {
+            root.goPage("min")
+            screenCrop.begin(veyra.screenOptions)
+        }
+    }
+
+    OnboardingGuide {
+        id: onboarding
+        parent: root.contentItem
+        z: 1100
+        property var savedProView
+        property real savedCaptureScroll
+        property real savedHomeScroll
+        targetFor: key => {
+            if (key === "capture") return { item: homePage.captureCard(), viewport: homePage.sourceViewport }
+            if (dialogs.dialog === "capture") return dialogs.captureSettings.onboardingTarget(key)
+            return proPage.onboardingTarget(key)
+        }
+        onAboutToShow: {
+            savedProView = proPage.saveOnboardingView()
+            savedCaptureScroll = dialogs.captureSettings.bodyViewport.contentY
+            savedHomeScroll = homePage.sourceViewport.contentY
+        }
+        onStepRequested: step => {
+            // Only the displayed page changes. The player, remembered page and
+            // native video window stay in the same state as on the home page.
+            if (step.tab) {
+                dialogs.close()
+                proPage.showOnboardingStep(step)
+                root.shownPage = "pro"
+            } else {
+                root.shownPage = "home"
+                dialogs.dialog = step.target === "capture" ? "" : "capture"
+            }
+        }
+        onAboutToHide: {
+            dialogs.close()
+            dialogs.captureSettings.bodyViewport.contentY = savedCaptureScroll
+            homePage.sourceViewport.contentY = savedHomeScroll
+            root.shownPage = "home"
+            proPage.restoreOnboardingView(savedProView)
+        }
+        onClosed: if (root.page === "home" && dialogs.dialog === "") homePage.onboardingEntry.forceActiveFocus()
     }
 
     // The dock floats above every page and retracts on its own.
@@ -443,6 +487,16 @@ Window {
     onQuickPanelShownChanged: {
         veyra.logUi("ui-fullscreen", "quick panel shown=" + quickPanelShown)
         veyra.setGamePanelOpen(quickPanelShown)
+    }
+    FullscreenTimingPanel {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 16
+        width: Math.min(330, Math.max(180, parent.width - 424))
+        maximumHeight: Math.max(120, root.height - (root.page === "node" ? Math.min(root.height * 0.6, 460) : 90))
+        visible: root.quickPanelShown && veyra.hasSource
+        onCloseRequested: root.closeQuickPanel()
+        z: 75
     }
     // 游戏模式 (屏幕捕获 → 游戏模式): fullscreen on the captured monitor (or the
     // monitor of the captured window); the bridge then makes the picture click-through
@@ -568,6 +622,19 @@ Window {
         }
     }
     // Shared mask input follows the exact native host across list/node/cinema/fullscreen.
+    ScreenCropEditor {
+        id: screenCrop
+        z: 94
+        hostRect: Qt.rect(videoHost.x, videoHost.y, videoHost.width, videoHost.height)
+        onCancelled: {
+            veyra.stopPlayback()
+            dialogs.open("screen")
+        }
+    }
+    Connections {
+        target: veyra
+        function onMediaOpenRequested() { screenCrop.editing = false }
+    }
     MouseArea {
         id: maskInput
         objectName: "mask-edit-input"
@@ -575,7 +642,7 @@ Window {
         z: 80
         visible: veyra.hasSource && videoHost.width > 0 && videoHost.height > 0
                  && (veyra.protectionDrawShape.length > 0 || veyra.exclusionOverlayVisible)
-        enabled: visible && !veyra.gameInputActive && dialogs.dialog === ""
+        enabled: visible && !screenCrop.editing && !veyra.gameInputActive && dialogs.dialog === ""
         preventStealing: true
         cursorShape: veyra.protectionDrawShape.length > 0 ? Qt.CrossCursor : pressed ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         property point start
@@ -638,7 +705,7 @@ Window {
         id: pictureTap
         // Scaled game input deliberately catches mouse events instead of
         // forwarding wrong coordinates; they must not control the player either.
-        enabled: !root.fullLocked && !veyra.gameInputActive
+        enabled: !root.fullLocked && !screenCrop.editing && !veyra.gameInputActive
         // Judged where the press landed: by the release the page may already have changed.
         property bool pressOnCover: false
         property bool pressOnPicture: false
@@ -735,7 +802,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: veyra.hasSource && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -767,7 +834,7 @@ Window {
     Binding { target: veyra; property: "subtitleBottomInset"; value: fullBar.shown ? (root.fullscreen ? 84 : 56) : 0 }
     // Rebindable (设置 → 快捷键); the hold-to-compare key is handled by the bridge's
     // application event filter because it needs the key release too.
-    Shortcut { sequence: veyra.shortcuts.playPause; onActivated: veyra.togglePlayPause() }
+    Shortcut { sequence: veyra.shortcuts.playPause; enabled: !screenCrop.editing; onActivated: veyra.togglePlayPause() }
     Shortcut { sequence: veyra.shortcuts.fullscreen; onActivated: root.toggleFullscreen() }
     Shortcut { sequence: veyra.shortcuts.screenshot; onActivated: veyra.takeScreenshot() }
     Shortcut { sequence: veyra.shortcuts.record; autoRepeat: false; onActivated: veyra.toggleRecording("shortcut") } // a held key must not toggle at the repeat rate
@@ -781,7 +848,7 @@ Window {
     // In 游戏模式 Esc closes the adjust panel and gives the input back to the game.
     Shortcut {
         sequence: "Esc"
-        enabled: root.fullscreen && !maskInput.moving
+        enabled: root.fullscreen && !screenCrop.editing && !maskInput.moving && !dialogs.captureGuideOpen
         onActivated: {
             // Visible editing operations own the first Escape. Hidden pages and
             // the hidden playlist must never compete with fullscreen's shortcut.
@@ -804,8 +871,8 @@ Window {
     // 5 s steps (field request 2026-10-02).
     Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-5) }
     Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
-    Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
-    Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
+    Shortcut { sequence: "Up"; enabled: !dialogs.captureGuideOpen; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
+    Shortcut { sequence: "Down"; enabled: !dialogs.captureGuideOpen; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
     Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }
     Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }
@@ -832,7 +899,10 @@ Window {
         anchors.topMargin: 12
         anchors.horizontalCenter: parent.horizontalCenter
         width: Math.min(500, root.width - 32)
-        onOpenRequested: veyra.updates.openRelease()
+        onOpenRequested: {
+            settingsPage.section = "about"
+            root.goPage("set")
+        }
     }
     Connections {
         target: veyra.updates
@@ -897,13 +967,14 @@ Window {
 
     Connections {
         target: veyra
-        function onPlaylistRequested() { playlistWindow.open() }
+        function onPlaylistRequested() { onboarding.close(); playlistWindow.open() }
         function onNotice(text, isError) { toast.show(text, isError) }
-        function onOverlayRestartSuggested(kind) { overlayRestart.kind = kind; overlayRestart.open() }
+        function onOverlayRestartSuggested(kind) { onboarding.close(); overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
+            onboarding.close()
             // A dialog key opens the dialog; anything else is a page.
             if (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
-                || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
+                || p === "subtitle" || p === "translation" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return
             }

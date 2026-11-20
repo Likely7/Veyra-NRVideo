@@ -93,6 +93,7 @@ struct FsrSrBackend::Impl {
     std::string providerVersion;
 #ifdef VEYRA_HAS_FSR
     HMODULE loader = nullptr;
+    HMODULE provider = nullptr;
     ffxFunctions functions{};
     ffxContext context = nullptr;
     uint32_t maxRenderWidth = 0, maxRenderHeight = 0;
@@ -123,10 +124,10 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
         log::error("fsr-sr", std::format("loader load failed win32={}", GetLastError()));
         return false;
     }
-    if (std::filesystem::exists(providerPath) &&
-        LoadLibraryExW(providerPath.c_str(), nullptr,
-                       LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32) == nullptr) {
-        log::warn("fsr-sr", std::format("provider preload failed win32={}", GetLastError()));
+    if (std::filesystem::exists(providerPath)) {
+        p.provider=LoadLibraryExW(providerPath.c_str(), nullptr,
+                       LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if(!p.provider)log::warn("fsr-sr", std::format("provider preload failed win32={}", GetLastError()));
     }
     ffxLoadFunctions(&p.functions, p.loader);
     if (p.functions.CreateContext == nullptr || p.functions.DestroyContext == nullptr ||
@@ -175,6 +176,11 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
     if (result != FFX_API_RETURN_OK || p.context == nullptr) {
         log::warn("fsr-sr", std::format("context with version desc failed result={}; retrying without it",
                                         returnName(result)));
+        if(p.context){
+            const auto cleanup=p.functions.DestroyContext(&p.context,nullptr);
+            if(cleanup!=FFX_API_RETURN_OK){log::error("fsr-sr","cannot release partial context");return false;}
+            p.context=nullptr;
+        }
         backendDesc.header.pNext = nullptr;
         result = p.functions.CreateContext(&p.context, &upscaleDesc.header, nullptr);
     }
@@ -215,6 +221,22 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
         ++p.failureCount;
         return false;
     }
+    const auto inputOk=[&](ID3D12Resource* resource){
+        const auto desc=resource->GetDesc();
+        return desc.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&desc.SampleDesc.Count==1&&
+            desc.Width>=renderWidth&&desc.Height>=renderHeight&&surfaceFormatFromDxgi(desc.Format)!=FFX_API_SURFACE_FORMAT_UNKNOWN;
+    };
+    const auto target=output->GetDesc();
+    if(!renderWidth||!renderHeight||!upscaleWidth||!upscaleHeight||
+        !inputOk(color)||!inputOk(motion)||!inputOk(depth)||output==color||
+        target.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||target.SampleDesc.Count!=1||
+        target.Width<upscaleWidth||target.Height<upscaleHeight||
+        !(target.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
+        surfaceFormatFromDxgi(target.Format)==FFX_API_SURFACE_FORMAT_UNKNOWN){
+        log::error("fsr-sr","dispatch rejected: invalid render, guidance, or output resource");
+        ++p.failureCount;
+        return false;
+    }
     ffxDispatchDescUpscale dispatch{};
     dispatch.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
     dispatch.commandList = list;
@@ -241,7 +263,7 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
     dispatch.cameraNear = 0.1f;
     dispatch.cameraFar = 1000.0f;
     dispatch.cameraFovAngleVertical = 1.0f;
-    dispatch.viewSpaceToMetersFactor = 0.0f;
+    dispatch.viewSpaceToMetersFactor = 1.0f;
     dispatch.flags = 0;
     const auto result = p.functions.Dispatch(&p.context, &dispatch.header);
     if (result != FFX_API_RETURN_OK) {
@@ -271,6 +293,10 @@ void FsrSrBackend::release() {
     if (p.loader != nullptr) {
         FreeLibrary(p.loader);
         p.loader = nullptr;
+    }
+    if (p.provider != nullptr) {
+        FreeLibrary(p.provider);
+        p.provider = nullptr;
     }
     p.available = false;
 #endif

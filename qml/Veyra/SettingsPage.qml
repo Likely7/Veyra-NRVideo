@@ -21,12 +21,14 @@ VPage {
     property string capturingKey: ""
     onSectionChanged: {
         capturingKey = ""
+        if (settingsBodyScroll) settingsBodyScroll.contentY = settingsBodyScroll.originY
         if (section === "ps5") veyra.ps5Load()
         // M32: the section's groups redraw one after another (pages-b.js
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
     readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
+    readonly property var portableUpdate: veyra.updates.portable
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
         if (Theme.reduced || !col) return
@@ -69,9 +71,22 @@ VPage {
         border.width: 1
         border.color: Theme.stroke
 
-        ColumnLayout {
+        Flickable {
+            id: navScroll
+            objectName: "settings-navigation"
             anchors.fill: parent
             anchors.margins: 10
+            contentWidth: width
+            contentHeight: navColumn.implicitHeight
+            flickableDirection: Flickable.VerticalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            ScrollBar.vertical: VScrollBar { }
+        }
+        ColumnLayout {
+            id: navColumn
+            parent: navScroll.contentItem
+            width: navScroll.width - (navScroll.contentHeight > navScroll.height ? 8 : 0)
             spacing: 2
             VH2 { text: qsTr("设置"); Layout.margins: 8 }
             Item { implicitHeight: 6 }
@@ -86,20 +101,23 @@ VPage {
                          : navHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                     // .setnav button: icon, 10px, label.
-                    Row {
+                    RowLayout {
                         anchors.left: parent.left
+                        anchors.right: parent.right
                         anchors.leftMargin: 10
+                        anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 10
                         VIcon {
-                            anchors.verticalCenter: parent.verticalCenter
                             name: modelData.icon
                             size: 15
                             color: modelData.tint !== undefined ? modelData.tint : navLabel.color
                         }
                         Text {
                             id: navLabel
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: modelData.label
                             color: root.section === modelData.id ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
@@ -107,11 +125,13 @@ VPage {
                             font.weight: Font.Medium
                         }
                     }
+                    ToolTip.visible: navHover.hovered && navLabel.truncated
+                    ToolTip.text: navLabel.text
+                    ToolTip.delay: 500
                     HoverHandler { id: navHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.section = modelData.id }
                 }
             }
-            Item { Layout.fillHeight: true }
         }
     }
 
@@ -133,6 +153,7 @@ VPage {
         clip: true
 
         Flickable {
+            id: settingsBodyScroll
             anchors.fill: parent
             contentHeight: body.implicitHeight + 44
             clip: true
@@ -299,7 +320,12 @@ VPage {
                                     { id: "zh-TW", label: qsTr("繁體中文") },
                                     { id: "en", label: "English" },
                                     { id: "ja", label: qsTr("日本語") },
-                                    { id: "ko", label: "한국어" }
+                                    { id: "ko", label: "한국어" },
+                                    { id: "es", label: "Español" },
+                                    { id: "fr", label: "Français" },
+                                    { id: "de", label: "Deutsch" },
+                                    { id: "pt-BR", label: "Português (Brasil)" },
+                                    { id: "ru", label: "Русский" }
                                 ]
                                 value: (options.find(o => o.id === (veyra.preferences.language || "auto")) || options[0]).label
                                 onPicked: id => veyra.setPreference("language", id)
@@ -610,6 +636,15 @@ VPage {
                             }
                         }
                         VRow {
+                            visible: (veyra.liveTranslation || null) !== null
+                            label: qsTr("实时翻译")
+                            VButton {
+                                objectName: "set-live-translation"
+                                text: qsTr("实时翻译设置…")
+                                onClicked: root.requestPage("translation")
+                            }
+                        }
+                        VRow {
                             label: qsTr("截图保存位置")
                             hint: veyra.screenshotDirectory + qsTr("（SDR 存 PNG，HDR 存 JPEG XR）")
                             RowLayout {
@@ -650,6 +685,28 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("录制分段")
+                            hint: qsTr("达到任一限制后，在下一关键帧分段。0 表示关闭，设置在下次录制时生效。")
+                            RowLayout {
+                                DialogHost.VTextField {
+                                    objectName: "record-split-seconds"
+                                    implicitWidth: 74
+                                    text: String(veyra.preferences.recordSplitSeconds || 0)
+                                    validator: IntValidator { bottom: 0; top: 86400 }
+                                    onEdited: veyra.setPreference("recordSplitSeconds", Number(text))
+                                }
+                                Text { text: qsTr("秒"); color: Theme.t3; font.pixelSize: Theme.fsSmall }
+                                DialogHost.VTextField {
+                                    objectName: "record-split-mib"
+                                    implicitWidth: 88
+                                    text: String(veyra.preferences.recordSplitMiB || 0)
+                                    validator: IntValidator { bottom: 0; top: 1048576 }
+                                    onEdited: veyra.setPreference("recordSplitMiB", Number(text))
+                                }
+                                Text { text: "MiB"; color: Theme.t3; font.pixelSize: Theme.fsSmall }
+                            }
+                        }
+                        VRow {
                             label: qsTr("录制编码")
                             hint: qsTr("HDR 画面固定使用 HEVC 10bit；宽或高超过 4096 时自动使用 HEVC")
                             VSeg {
@@ -657,6 +714,25 @@ VPage {
                                 options: [{ id: "0", label: "H.264" }, { id: "1", label: "HEVC" }]
                                 current: veyra.recordingHevc ? "1" : "0"
                                 onPicked: id => veyra.setPreference("recordHevc", id === "1")
+                            }
+                        }
+                        VRow {
+                            label: qsTr("二次编码")
+                            hint: qsTr("编码器先快速分析一遍画面再分配码率，同样码率下快速运动和复杂画面更清晰；仅 NVIDIA（NVENC），四分之一分辨率首遍更轻，完整分辨率最好但更重 · 默认关闭")
+                            VSeg {
+                                objectName: "set-recmultipass"
+                                options: [{ id: "0", label: qsTr("关闭") }, { id: "1", label: qsTr("四分之一") }, { id: "2", label: qsTr("完整") }]
+                                current: String(veyra.preferences.recordMultipass !== undefined ? veyra.preferences.recordMultipass : 0)
+                                onPicked: id => veyra.setPreference("recordMultipass", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("心理视觉调优")
+                            hint: qsTr("自适应量化：把码率挪到眼睛更敏感的地方（平坦天空、暗部、静止细节），减少色块；仅 NVIDIA（NVENC），显卡支持时再加时间自适应量化 · 默认关闭")
+                            VSwitch {
+                                objectName: "set-recpsychoaq"
+                                checked: veyra.preferences.recordPsychoAq === true
+                                onToggled: v => veyra.setPreference("recordPsychoAq", v)
                             }
                         }
                         VRow {
@@ -826,66 +902,6 @@ VPage {
                             font.pixelSize: 12
                             wrapMode: Text.WordWrap
                             lineHeight: 1.3
-                        }
-                    }
-                    // Bilibili module. The video pipeline is shared with everything else,
-                    // so only what changes *what gets requested* from the site lives here.
-                    VH2 { text: qsTr("B 站") }
-                    Text {
-                        text: qsTr("打开 B 站视频时的默认画质与编码。画质选「自动」时取账号能用的最高档；"
-                                   + "有 HDR 版本的视频会自动播 HDR。")
-                        color: Theme.t2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsBody
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                    }
-                    VGroup {
-                        VRow {
-                            label: qsTr("默认画质")
-                            hint: qsTr("上限而非精确值：实际取「不高于此档」的最高可用画质；全部高于此档时取最低档")
-                            VSeg {
-                                objectName: "set-bili-quality"
-                                options: [
-                                    { id: "0", label: qsTr("自动") },
-                                    { id: "127", label: "8K" },
-                                    { id: "126", label: qsTr("杜比") },
-                                    { id: "125", label: "HDR" },
-                                    { id: "120", label: "4K" },
-                                    { id: "116", label: "1080P60" },
-                                    { id: "112", label: "1080P+" },
-                                    { id: "80", label: "1080P" },
-                                    { id: "74", label: "720P60" },
-                                    { id: "64", label: "720P" },
-                                    { id: "32", label: "480P" },
-                                    { id: "16", label: "360P" }
-                                ]
-                                current: String(veyra.preferences.biliQuality ?? 0)
-                                onPicked: id => veyra.setPreference("biliQuality", Number(id))
-                            }
-                        }
-                        VRow {
-                            label: qsTr("视频编码")
-                            hint: qsTr("同画质有多个版本时生效；自动 = 优先 HDR 编码（HEVC），该画质只有一种编码时照常播放")
-                            VSeg {
-                                objectName: "set-bili-codec"
-                                options: [
-                                    { id: "auto", label: qsTr("自动") },
-                                    { id: "avc", label: "H.264" },
-                                    { id: "hevc", label: "HEVC" }
-                                ]
-                                current: veyra.preferences.biliCodec || "auto"
-                                onPicked: id => veyra.setPreference("biliCodec", id)
-                            }
-                        }
-                        VRow {
-                            label: qsTr("备用 CDN")
-                            hint: qsTr("主地址打不开时自动换一个镜像节点；B 站每个画质通常有多个镜像")
-                            VSwitch {
-                                objectName: "set-bili-autocdn"
-                                checked: veyra.preferences.biliAutoCdn !== false
-                                onToggled: veyra.setPreference("biliAutoCdn", checked)
-                            }
                         }
                     }
                 }
@@ -1375,19 +1391,53 @@ VPage {
                     }
                     VGroup {
                         VRow {
+                            label: qsTr("下载线路")
+                            hint: qsTr("镜像失败时自动改用 GitHub 直连。")
+                            VSelect {
+                                objectName: "set-update-download-route"
+                                options: [
+                                    { id: "github", label: qsTr("GitHub 直连") },
+                                    { id: "gh-proxy", label: "GH-Proxy · gh-proxy.com" },
+                                    { id: "ghfast", label: "GHFast · ghfast.top" }
+                                ]
+                                value: (options.find(option => option.id === veyra.preferences.updateDownloadRoute) || options[0]).label
+                                enabled: !veyra.updates.checking && !root.portableUpdate.downloading
+                                onPicked: id => veyra.setPreference("updateDownloadRoute", id)
+                            }
+                        }
+                        VRow {
                             label: qsTr("检查更新")
                             hint: veyra.updates.latestVersion.length > 0
                                   ? qsTr("发现新版本 %1").arg(veyra.updates.latestVersion)
                                   : qsTr("启动时自动检查，有更新时提示")
-                            VButton {
-                                text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
-                                enabled: !veyra.updates.checking
-                                onClicked: veyra.updates.check(true)
+                            Row {
+                                spacing: 6
+                                VButton {
+                                    text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
+                                    enabled: !veyra.updates.checking
+                                    onClicked: veyra.updates.check(true)
+                                }
+                                VButton {
+                                    visible: veyra.updates.latestVersion.length > 0
+                                    text: qsTr("查看更新")
+                                    onClicked: veyra.updates.openRelease()
+                                }
                             }
+                        }
+                        VRow {
+                            visible: root.portableUpdate.available || root.portableUpdate.downloading || root.portableUpdate.scheduled
+                            label: root.portableUpdate.scheduled ? qsTr("更新已就绪，将在退出后安装")
+                                  : root.portableUpdate.downloading ? qsTr("正在下载更新 %1%").arg(root.portableUpdate.progress)
+                                  : qsTr("便携版更新 · %1").arg(root.portableUpdate.sizeText)
+                            hint: root.portableUpdate.available ? root.portableUpdate.releaseNotes : ""
+                            hintBelow: true
                             VButton {
-                                visible: veyra.updates.latestVersion.length > 0
-                                text: qsTr("查看更新")
-                                onClicked: veyra.updates.openRelease()
+                                objectName: "portable-download"
+                                text: root.portableUpdate.available ? qsTr("下载并在退出后更新") : qsTr("取消更新")
+                                onClicked: {
+                                    if (root.portableUpdate.available) root.portableUpdate.downloadAndSchedule()
+                                    else root.portableUpdate.cancel()
+                                }
                             }
                         }
                         VRow {

@@ -210,7 +210,7 @@ QVariantMap QmlPlayerBridge::hdrDisplayInfo()const{
     std::optional<engine::DisplayState> known;
     if(window){displays.request(window,"ui");known=displays.state(displays.monitorOf(window));}
     const engine::DisplayColorState c=known?known->color:engine::DisplayColorState{};
-    return {{"valid",c.peakValid},{"plausible",c.peakValid},{"peakNits",int(c.peakNits)},
+    return {{"valid",c.peakValid},{"plausible",c.peakPlausible},{"peakNits",int(c.peakNits)},
             {"fullFrameNits",int(c.fullFrameNits)},{"minNits",c.minNits}};
 }
 bool QmlPlayerBridge::hdrCurve()const{return settings().hdrCurve.enabled;}

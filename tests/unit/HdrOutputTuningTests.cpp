@@ -30,6 +30,10 @@ int main() {
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     using namespace veyra::engine;
 
+    check(resolveHdrDisplayPeakNits(0, 10000, false) == 0, "untrusted peak leaves curve at its reference");
+    check(resolveHdrDisplayPeakNits(0, 800, true) == 800, "plausible peak sets curve scaling");
+    check(resolveHdrDisplayPeakNits(600, 10000, false) == 600, "manual peak wins over display report");
+
     // ---- 1) the preset table itself ----
     check(kHdrTuningPresetCount >= 7, "presets: at least seven entries");
     for (std::size_t i = 0; i < kHdrTuningPresetCount; ++i) {

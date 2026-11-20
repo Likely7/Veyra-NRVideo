@@ -145,6 +145,35 @@ int wmain(int argc,wchar_t** argv){
             require(s.encoded==20&&std::filesystem::exists(output),"final output incomplete");
             require(!manager.start(input,output,settings,false),"existing output overwritten");
             require(manager.poll().message.find(L"已存在")!=std::wstring::npos,"startup reason was hidden");
+        }else if(mode==L"split-rename-conflict"){
+            SetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_REMOVE_DEVICE_AT",L"24");
+            SetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_SAVE_DELAY_MS",L"1500");
+            require(manager.start(input,output,settings,false,48),"split export start refused");
+            const auto first=manager.poll().temporaryPath;
+            const auto deadline=GetTickCount64()+20000;
+            ExportJobSnapshot s;
+            std::wstring joined;
+            do{
+                s=manager.poll();
+                require(s.active(),"missed split export save boundary");
+                joined=s.temporaryPath+L".joined";
+                if(s.temporaryPath!=first&&std::filesystem::exists(joined)&&
+                    s.message.find(L"正在保存正式文件")!=std::wstring::npos)break;
+                Sleep(5);
+            }while(GetTickCount64()<deadline);
+            require(s.temporaryPath!=first&&std::filesystem::exists(joined),"no complete joined export");
+            {std::ofstream external(std::filesystem::path(output),std::ios::binary);external<<"other file";}
+            s=finish(manager);collected(s);
+            require(s.state==ExportState::Failed&&s.message.find(joined)!=std::wstring::npos&&
+                s.message.find(first)!=std::wstring::npos,"rename failure hid recoverable outputs");
+            require(std::filesystem::exists(first)&&std::filesystem::exists(joined),"rename failure removed recoverable output");
+            SetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_REMOVE_DEVICE_AT",nullptr);
+            SetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_SAVE_DELAY_MS",nullptr);
+            require(manager.start(input,output+L".retry.mp4",settings,false,8),"next export refused");
+            s=finish(manager);collected(s);
+            require(s.state==ExportState::Succeeded&&std::filesystem::exists(first)&&
+                std::filesystem::exists(joined),"next export deleted previous recoverable output");
+            std::wcout<<L"PASS split save collision preserves the full file and previous segments after retry\n";
         }else if(mode==L"lifecycle-boundary"){
             SetEnvironmentVariableW(L"VEYRA_TEST_EXPORT_SAVE_DELAY_MS",L"1500");
             require(manager.start(input,output,settings,false,2),"save-boundary start refused");

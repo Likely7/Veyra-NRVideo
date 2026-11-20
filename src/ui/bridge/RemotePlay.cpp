@@ -95,7 +95,7 @@ void QmlPlayerBridge::setupXbox() {
         const bool pad = launch.desc.gamepad;
         const QString label = launch.label;
         auto request = std::make_shared<source::XboxConnectDesc>(std::move(launch.desc));
-        openAfterCinema(tr("正在连接 Xbox · %1").arg(label), [this, request, pad] {
+        openAfterLivePage(tr("正在连接 Xbox · %1").arg(label), [this, request, pad] {
             auto& k = *impl_;
             if (k.preOpen) k.preOpen();
             k.engine.previewView({});
@@ -200,7 +200,7 @@ void QmlPlayerBridge::setupMoonlight() {
         j.moonlightWantCapture = launch.captureInput;
         const QString label = launch.label;
         auto request = std::make_shared<source::MoonlightConnectDesc>(std::move(launch.desc));
-        openAfterCinema(tr("正在连接 %1").arg(label), [this, request, pad] {
+        openAfterLivePage(tr("正在连接 %1").arg(label), [this, request, pad] {
             auto& k = *impl_;
             if (k.preOpen) k.preOpen();
             k.engine.previewView({});
@@ -446,7 +446,7 @@ bool QmlPlayerBridge::ps5Connect() {
     emit mediaOpenRequested();
     i.openingSource = true; i.openingSessionId = 0; i.sourceLabel = L"PS5 · " + std::wstring(host.begin(), host.end()); i.resumeSession = 0; i.screenFillActive = false;
     auto request = std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
-    openAfterCinema(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly] {
+    openAfterLivePage(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly] {
         auto& i = *impl_;
         if (i.preOpen) i.preOpen();
         i.engine.previewView({});

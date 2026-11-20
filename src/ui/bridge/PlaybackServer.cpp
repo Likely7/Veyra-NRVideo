@@ -81,18 +81,17 @@ void PlaybackServer::handleRequest(QTcpSocket* socket,const QByteArray& request)
     QJsonParseError error;
     const auto doc=QJsonDocument::fromJson(request.mid(end+4),&error);
     const auto object=doc.object();
-    const auto url=object.value("url").toString().trimmed(),cookie=object.value("cookie").toString();
-    const int quality=object.value("quality").toInt(0);
+    const auto url=object.value("url").toString().trimmed();
+    const auto legacyCookie=object.value("cookie");
     const QUrl parsed(url,QUrl::StrictMode);
     if(error.error!=QJsonParseError::NoError||!doc.isObject()||!parsed.isValid()||
        (parsed.scheme()!="http"&&parsed.scheme()!="https")||parsed.host().isEmpty()||
-       !parsed.userInfo().isEmpty()||url.size()>8192||cookie.size()>32768||
-       cookie.contains('\r')||cookie.contains('\n')||cookie.contains(QChar(0))||quality<0||quality>1000){
+       !parsed.userInfo().isEmpty()||url.size()>8192||
+       (!legacyCookie.isUndefined() && legacyCookie != QJsonValue(QString()))){
         respond(socket,400,R"({"ok":false,"error":"invalid playback request"})",origin);return;
     }
-    QMetaObject::invokeMethod(this,[handler=handler_,url,quality,cookie]{if(handler)handler(url,quality,cookie);},Qt::QueuedConnection);
-    // Never log session cookies, signed query strings or URL passwords.
-    log::info("playback-server",std::format("play requested: quality={} host={}",quality,parsed.host().toStdString()));
+    QMetaObject::invokeMethod(this,[handler=handler_,url]{if(handler)handler(url);},Qt::QueuedConnection);
+    log::info("playback-server",std::format("play requested: host={}",parsed.host().toStdString()));
     respond(socket,200,R"({"ok":true})",origin);
 }
 void PlaybackServer::onNewConnection(){

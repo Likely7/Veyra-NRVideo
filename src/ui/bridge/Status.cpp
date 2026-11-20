@@ -147,6 +147,19 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     return out;
 }
 
+QVariantList QmlPlayerBridge::cpuTimings() const {
+    const auto& flow=impl_->snapshot.metrics.flow;
+    using Stage=diagnostics::CpuStage;
+    const auto row=[&](const QString& label,Stage stage) {
+        const auto& sample=flow.cpuTiming[size_t(stage)];
+        const bool measured=queuedFramesKnown()&&sample.samples&&sample.p95.has_value();
+        return QVariantMap{{"label",label},{"measured",measured},{"p95",measured?*sample.p95:0.0}};
+    };
+    return {row(tr("解码"),Stage::Decode),row(tr("提交"),Stage::Submit),
+        row(tr("命令槽等待"),Stage::SlotWait),row(tr("GPU 就绪等待"),Stage::ReadyWait),
+        row(tr("调度等待"),Stage::DeadlineWait),row(tr("呈现"),Stage::Present)};
+}
+
 QVariantMap QmlPlayerBridge::nodeTimings() const {
     // Per-node GPU timestamp P95, keyed by the card id chain() publishes. An
     // editor node borrows a number only when the wired path it sits on is the
@@ -421,6 +434,16 @@ void QmlPlayerBridge::updateRunStatus() {
     else if(i.presentation.enabled)options<<(s.running&&!s.presentationEffective.enabled?tr("低延迟队列 · 当前未生效"):tr("低延迟队列"));
     if(!s.capture&&std::abs(s.playbackRate-1.0)>.001)options<<tr("播放速度 %1×").arg(s.playbackRate,0,'f',2);
     if(i.compareMode!=0)options<<tr("画面对比 · 补帧暂停");
+    // Ported from PushFPS: frame pacing repair and Live HUD Lock state.
+    if(s.running&&!s.image&&s.applied.multiplier>1&&s.applied.pacingRepair){
+        if(s.pacingFrames>0)options<<tr("帧节奏修复 · 已重排 %1%").arg(qRound(100.0*double(s.pacingRepaired)/double(s.pacingFrames)));
+        else options<<tr("帧节奏修复 · 等待去重测出帧率");
+    }
+    if(s.running&&!s.image&&s.applied.multiplier>1&&s.applied.hudLock){
+        if(s.hudLockState==1)options<<tr("HUD 自动锁定");
+        else if(s.hudLockState==2)options<<tr("HUD 自动锁定 · 无法启用");
+        else if(s.hudLockState==3)options<<tr("HUD 自动锁定 · 当前补帧方式不支持");
+    }
     QStringList detail;
     // Live output hint: also shown under the 倍率 control (fgDisplayHint).
     QString fgHint;
@@ -447,6 +470,9 @@ void QmlPlayerBridge::updateRunStatus() {
             }
             detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
                           .arg(backend);
+            // Adaptive multiplier (from PushFPS): the multiplier the last pair used.
+            if (s.applied.fgAdaptive && s.previewFgMultiplier > 1 && s.applied.multiplier > 2)
+                detail << tr("自适应 · 现在 %1X").arg(s.previewFgMultiplier);
         }
         else detail << tr("未补帧");
         if (s.applied.multiplier > 1 && impl_->compareMode != 0) detail << tr("补帧暂停");

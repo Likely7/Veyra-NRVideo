@@ -146,13 +146,13 @@ struct ColorDescription {
     uint16_t rotationDegrees = 0;       // 0 / 90 / 180 / 270
     SampleAspectRatio sar;
 
-    // Display intent is separate from source VUI. PS5 SDR is displayed with
-    // BT.1886 (ideal black), not inverse camera OETF, before sRGB presentation.
+    // Reference-display BT.709 intent is separate from source VUI. It selects
+    // BT.1886 working decode only when reversible SDR code preservation is off.
     bool displayReferred709 = false;
     // Desktop SDR media uses a reversible sRGB working representation so
     // no-effects output retains the post-matrix RGB code values. This is a
     // display policy, not a rewrite of the source transfer metadata. Keep
-    // legacy PS5 reference-display intent separate until independently tested.
+    // reference-display intent separate from desktop/console passthrough.
     bool preserveSdrCodeValues = false;
     bool rangeAssumed = false;
     bool matrixAssumed = false;
@@ -171,6 +171,7 @@ struct ColorDescription {
     // 4K60 Pro MK.2 encode HDR P010 this way (Nitlink, measured against the
     // console on the TV). Decoding that chroma as limited over-saturates it.
     bool fullRangeChroma = false;
+    bool dolbyVisionP84 = false; // Declared HLG-compatible HEVC base layer.
 
     bool isHdrPath() const {
         return scRgb || transfer == TransferFunction::PQ || transfer == TransferFunction::HLG;

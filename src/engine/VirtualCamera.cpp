@@ -199,6 +199,7 @@ struct VirtualCamera::State {
     void run(){
         video_queue_t* queue=nullptr;
         uint64_t queueEpoch=0;unsigned queueW=0,queueH=0,queueFps=0;
+        bool createFailureLogged=false;
         while(true){
             const auto generation=epoch.load();
             if(queue&&(!armed.load()||generation!=queueEpoch)){
@@ -233,8 +234,11 @@ struct VirtualCamera::State {
                             queue=video_queue_create(group->width,group->height,10000000ull/rate);
                             if(queue){
                                 queueW=group->width;queueH=group->height;queueFps=rate;queueEpoch=generation;
-                                width=queueW;height=queueH;
+                                width=queueW;height=queueH;createFailureLogged=false;
                                 log::info("virtual-camera",std::format("NV12 BT709 limited {}x{} processing={}x{} offeredFps={} cap={} asyncReadback=1 slots={} queue=protocol2",queueW,queueH,group->inputWidth,group->inputHeight,queueFps,fps.load(),count));
+                            }else if(!createFailureLogged){
+                                createFailureLogged=true;
+                                log::warn("virtual-camera",std::format("queue {}x{} fps={} not created: a consumer still maps the previous queue (paused or not responding); frames are dropped until it lets go",group->width,group->height,rate));
                             }
                         }
                         if(queue){
@@ -253,7 +257,7 @@ struct VirtualCamera::State {
                                 fail(L"虚拟摄像机：无法读取输出画面");
                             }
                             const D3D12_RANGE none{0,0};if(SUCCEEDED(z))b.uvRead->Unmap(0,&none);if(SUCCEEDED(a))b.yRead->Unmap(0,&none);
-                        }else ++dropped; // An old consumer is releasing the previous mapping; retry without blocking playback.
+                        }else ++dropped; // A consumer still maps the previous queue; retry each frame without blocking playback.
                     }
                     b.fence.Reset();b.state=0;
                 }

@@ -1,5 +1,6 @@
 #include "veyra/engine/VideoExportJob.h"
 #include "veyra/engine/ExportStreams.h"
+#include "veyra/engine/ExportTimeline.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/ResolutionPlan.h"
@@ -223,7 +224,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         muxResult=avformat_write_header(mux,nullptr);
         if(muxResult<0){failAv(L"写入封装文件头",muxResult);break;}headerWritten=true;
         uint64_t sourceCount=0,generatedCount=0,holdCount=0;int64_t outputIndex=0;bool error=false;std::shared_ptr<pipeline::FrameLease> lastReal;
-        double previousPts=0;int64_t lastOutputUs=-1;
+        double previousPts=0;int64_t lastOutputUs=-1;ContinuousTimeline timeline;
         uint64_t slowFrames=0;
         // Directed export measurements exclude feature/encoder creation, but include final drain.
         const auto pipelineStart=std::chrono::steady_clock::now();
@@ -319,11 +320,16 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             if(rs==source::SourceReadStatus::Eos)break;if(rs!=source::SourceReadStatus::Frame){failureReason=source.errorMessage();error=true;break;}
             double sourcePts=packet.pts.toDouble();
             if(sourceCount==0)videoOriginSeconds=!packet.pts.isUnknown()&&std::isfinite(sourcePts)?sourcePts:0;
-            double pts=sourcePts-videoOriginSeconds;
-            if(requestedEnd>0&&sourcePts>=requestedEnd)break;
-            const bool repairPts=packet.pts.isUnknown()||!std::isfinite(pts)||(sourceCount&&pts<=previousPts);
+            // A splice that steps back realigns once and keeps its offset (one history reset);
+            // an unknown or single bad timestamp continues one interval after the last frame.
+            const bool unknownPts=packet.pts.isUnknown()||!std::isfinite(sourcePts-videoOriginSeconds);
+            bool steppedBack=false;
+            double pts=timeline.map(unknownPts?std::numeric_limits<double>::quiet_NaN():sourcePts-videoOriginSeconds,
+                                    sourceCount?previousPts+sourceInterval:0,&steppedBack);
+            if(requestedEnd>0&&pts+videoOriginSeconds>=requestedEnd)break;
+            const bool repairPts=unknownPts||steppedBack;
             if(repairPts){
-                pts=sourceCount?previousPts+sourceInterval:0;++repairedTimestamps;
+                ++repairedTimestamps;
                 if(repairedTimestamps<=5)veyra::log::warn("export-timeline",std::format("timestamp repaired source={} raw={} output={}",sourceCount,sourcePts,pts));
             }
             if(removeDeviceIndex>=0&&sourceCount==uint64_t(removeDeviceIndex)){
@@ -407,16 +413,16 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
     }
     ctx.shutdown();
     // Earlier processes of this job stopped at a GPU reset: join their parts and this
-    // one into the output. The parts are removed only once the joined file is complete.
+    // one into the output. The parts are removed only once the joined file is saved.
     std::wstring finished=partial;
+    ExportSegments parts;
     if(ok&&!priorSegments.empty()){
         progress(.999,L"正在拼接显卡重置前后的各段");
-        auto parts=priorSegments;parts.emplace_back(partial,videoOriginSeconds);
+        parts=priorSegments;parts.emplace_back(partial,videoOriginSeconds);
         const auto joined=partial+L".joined";
         std::wstring joinError;
         ok=!cancel&&joinExportSegments(parts,joined,options.exportMedia.container==ExportContainer::Matroska,joinError);
         if(ok){
-            for(const auto& part:parts){std::error_code ec;std::filesystem::remove(part.first,ec);}
             finished=joined;
             fgNote+=std::format(L"{}显卡重置 {} 次，已分 {} 段导出并无损拼接",fgNote.empty()?L"":L"；",priorSegments.size(),parts.size());
         } else {
@@ -435,8 +441,11 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             while(!cancel&&GetTickCount64()<deadline)Sleep(5);
         }
         ok=!cancel&&MoveFileExW(finished.c_str(),output.c_str(),MOVEFILE_WRITE_THROUGH)!=FALSE;
-        if(!ok&&!cancel){const DWORD error=GetLastError();failureReason=std::format(L"视频已编码，但保存文件名失败（Windows错误 {}）；可保留partial文件",error);veyra::log::error("export-rename",std::format("MoveFileExW failed error={} partial={}",error,utf8(partial)));}
-        if(ok)veyra::log::info("export","encoder drained, mux closed, output saved; no post-export decoding");
+        if(!ok&&!cancel){const DWORD error=GetLastError();failureReason=std::format(L"视频已编码，但保存文件名失败（Windows错误 {}）；下面保留的临时文件就是完整视频",error);veyra::log::error("export-rename",std::format("MoveFileExW failed error={} finished={}",error,utf8(finished)));}
+        if(ok){
+            for(const auto& part:parts){std::error_code ec;std::filesystem::remove(part.first,ec);}
+            veyra::log::info("export","encoder drained, mux closed, output saved; no post-export decoding");
+        }
     }
     if(ok){
         std::wstring done=encoderName.empty()?L"视频导出完成":std::format(L"视频导出完成（{}）",encoderName);
@@ -447,8 +456,9 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         std::wstring message=cancel?L"导出已取消":failureReason.empty()?L"视频导出失败，请查看诊断":failureReason;
         std::error_code ec;
         std::wstring cleanup;
+        if(cancel&&finished!=partial)std::filesystem::remove(finished,ec);
         if(cancel&&!removeExportTemporaryFile(partial,cleanup))message+=L"；"+cleanup;
-        else if(std::filesystem::exists(partial,ec))message+=L"；临时文件已保留："+partial;
+        else if(std::filesystem::exists(finished,ec))message+=L"；临时文件已保留："+finished;
         progress(0,message);
     }
     return ok;

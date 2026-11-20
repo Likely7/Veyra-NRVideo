@@ -236,8 +236,15 @@ ExportJobSnapshot ExportJobManager::poll(){
         const bool explained=(p_->snapshot.state==ExportState::Failed||p_->snapshot.state==ExportState::Succeeded)&&InterlockedCompareExchange(&s.state,0,0)==LONG(p_->snapshot.state)&&s.message[0];
         p_->snapshot.message=explained?s.message:label(p_->snapshot.state);
         if(p_->snapshot.state==ExportState::Cancelled){p_->removeParts();std::wstring cleanup;if(!removeExportTemporaryFile(p_->snapshot.temporaryPath,cleanup))p_->snapshot.message+=L"\n"+cleanup;else p_->snapshot.message=L"导出已取消，可重新开始";}
-        // The finishing worker joined and removed the parts; a failed one leaves them listed.
-        if(p_->snapshot.state==ExportState::Succeeded)p_->parts.clear();
+        if(p_->snapshot.state==ExportState::Failed){
+            std::wstring kept;
+            for(const auto& part:p_->parts)
+                if(p_->snapshot.message.find(part.first)==std::wstring::npos)kept+=L"\n"+part.first;
+            if(!kept.empty())p_->snapshot.message+=L"；已导出的部分保留在："+kept;
+        }
+        // The previous job's recoverable parts belong to its result. Detach
+        // their paths so starting the next export cannot delete them.
+        p_->parts.clear();
         const auto& final=p_->snapshot;
         log::info("export-worker",std::format("finished jobId={} pid={} exit={} state={} source={} generated={} holds={} encoded={} log={}",final.jobId,final.workerPid,code,int(final.state),final.sourceFrames,final.generated,final.holds,final.encoded,std::filesystem::path(final.workerLog).string()));
         log::info("export-worker",utf8(final.message));
@@ -261,7 +268,7 @@ int runExportWorker(HANDLE mapping){
     if(!s){log::error("export-worker",std::format("mapping failed win32={}",GetLastError()));CloseHandle(mapping);return 1;}
     auto reject=[&](const wchar_t* reason){
         log::error("export-worker",utf8(reason));
-        if(s->signature==magic&&s->version==10&&s->bytes==sizeof(Shared)){
+        if(s->signature==magic&&s->version==Shared::kVersion&&s->bytes==sizeof(Shared)){
             if(InterlockedCompareExchange(&s->messageLock,1,0)==0){
                 wcsncpy_s(s->message,reason,_TRUNCATE);
                 InterlockedExchange(&s->messageLock,0);

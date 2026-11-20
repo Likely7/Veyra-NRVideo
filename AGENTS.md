@@ -1,12 +1,12 @@
 # Veyra Agent 执行规则
 
-更新：2026-11-18。用户本轮明确授权整合八项社区 PR 并做好兼容后更新 GitHub main；此前 Claude/Codex 功能整合一并保留。旧规则全文在[归档](docs/history/rules/AGENTS_before_main_2026-11-18.md)，其中带日期的施工树、版本与授权属于当时记录，不能覆盖用户后续指令。
+更新：2026-11-19。当前任务为整合各功能与修复至本地 main，版本源码 2.2.0。用户要求本轮先不构建。旧规则全文在[归档](docs/history/rules/AGENTS_before_main_2026-11-18.md)，其中带日期的施工树、版本与授权属于当时记录，不能覆盖用户后续指令。
 
 ## 入口与当前状态
 
 - 唯一主线源码：`E:/项目/Veyra/worktrees/main-claude-anr-20261113`，分支`main`。桌面旧工程保留共用`.git`与未提交工作，不能按旧副本删除。
-- 当前构建/验证任务：`codex-pr-integration-20261118`（Windows build 子目录 `app`），目录分别为`E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-pr-integration-20261118`。主线已包含完整处理后虚拟摄像机及Claude协议2/有序送帧/OBS节拍修复；实际验证结果以[本轮记录](docs/PR_INTEGRATION_2026-11-18.md)及外部FINAL回执为准。
-- 当前应用版本仍为2.1.9，不因合并自动改版本或重发资产。11月17日虚拟摄像机附加包的既有发布记录见WORKLOG；本轮允许上述源码整合推送 GitHub main，不含新 Release/代发消息或关机。
+- 历史 PS5 SDR 修复构建/验证任务：`codex-ps5-sdr-code-values-20261119`，目录分别为`E:/项目/Veyra/{build,tests,logs,reports,tmp}/codex-ps5-sdr-code-values-20261119`。主线已包含完整处理后虚拟摄像机及Claude协议2/有序送帧/OBS节拍修复；实际验证结果以[本轮记录](docs/PS5_SDR_CODE_VALUES_2026-11-19.md)及外部FINAL回执为准。
+- 公开发行版本仍为 2.1.9。本地整合记录见 [当前状态](docs/CURRENT_STATUS.md) 和 WORKLOG。11月17日虚拟摄像机附加包的既有发布记录见WORKLOG；八项PR已按先前授权推送；当前PS5截图修复不新增push/Release/代发消息或关机授权。
 - 先读[当前状态](docs/CURRENT_STATUS.md)、[开发验证](docs/DEVELOPMENT.md)、任务对应计划/记录及[WORKLOG](docs/WORKLOG.md)，按需查[历史索引](docs/history/INDEX.md)。不要重新执行旧Loop、STOP、控制哈希或旧UI-only scope guard来阻塞后续已授权工作。
 
 ## 工作纪律

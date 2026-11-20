@@ -1,4 +1,5 @@
 #include "veyra/ui/UpdateChecker.h"
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -18,7 +19,10 @@ QVersionNumber versionNumber(const QString& text, bool local) {
 }
 }
 UpdateChecker::UpdateChecker(QString currentVersion, QObject* parent, QUrl endpoint, int timeoutMs)
-    : QObject(parent), currentVersion_(std::move(currentVersion)), endpoint_(std::move(endpoint)), timeoutMs_(timeoutMs) {
+    : QObject(parent), currentVersion_(std::move(currentVersion)), endpoint_(std::move(endpoint)), timeoutMs_(timeoutMs),
+      portable_(currentVersion_) {
+    connect(this, &UpdateChecker::releaseChanged, &portable_, [this] { portable_.selectRelease(latestVersion_); });
+    connect(&portable_, &PortableUpdate::notice, this, &UpdateChecker::notice);
     deadline_.setSingleShot(true);
     connect(&deadline_, &QTimer::timeout, this, [this] {
         if (reply_) { failure_ = QStringLiteral("timeout"); reply_->abort(); }
@@ -32,26 +36,36 @@ UpdateChecker::~UpdateChecker() {
     }
 }
 void UpdateChecker::startAutomaticCheck() {
-    if (automaticScheduled_) return;
+    if (automaticScheduled_ || QCoreApplication::arguments().contains(QStringLiteral("--portable-update-probe"))) return;
     automaticScheduled_ = true;
     QTimer::singleShot(2500, this, [this] {
         // A manual check made during startup already fulfils this run's check.
         if (!checking() && !manual_) check(false);
     });
 }
+void UpdateChecker::setDownloadRoute(veyra::portable::DownloadRoute route) {
+    route_ = route;
+    portable_.setDownloadRoute(route);
+}
 void UpdateChecker::check(bool manual) {
     if (checking()) { manual_ = manual_ || manual; return; }
     manual_ = manual;
+    request(endpoint_ == veyra::portable::releaseApiUrl() ? veyra::portable::releaseApiUrl(route_) : endpoint_);
+    emit checkingChanged();
+}
+void UpdateChecker::request(const QUrl& url) {
+    usingMirror_ = url != endpoint_;
     body_.clear(); failure_.clear();
-    QNetworkRequest request(endpoint_);
+    QNetworkRequest request(url);
     request.setRawHeader("Accept", "application/vnd.github+json");
     request.setRawHeader("User-Agent", "Veyra-Update-Check");
     request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
-    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, usingMirror_
+        ? QNetworkRequest::ManualRedirectPolicy : QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setMaximumRedirectsAllowed(3);
     request.setTransferTimeout(timeoutMs_);
     reply_ = network_.get(request);
-    qInfo().noquote() << "[update-check-start]" << (manual ? "manual" : "automatic");
+    qInfo().noquote() << "[update-check-start]" << (manual_ ? "manual" : "automatic") << url.host();
     reply_->setReadBufferSize(maxBody + 1);
     connect(reply_, &QIODevice::readyRead, this, [this] {
         body_ += reply_->read(maxBody + 1 - body_.size());
@@ -59,7 +73,6 @@ void UpdateChecker::check(bool manual) {
     });
     connect(reply_, &QNetworkReply::finished, this, &UpdateChecker::finish);
     deadline_.start(timeoutMs_);
-    emit checkingChanged();
 }
 void UpdateChecker::finish() {
     deadline_.stop();
@@ -97,6 +110,11 @@ void UpdateChecker::finish() {
             if (manual_) emit notice(tr("当前已是最新版本"), false);
             result = QStringLiteral("current");
         }
+    }
+    if (!failure_.isEmpty() && usingMirror_) {
+        qInfo().noquote() << "[update-check] mirror fallback" << failure_;
+        request(endpoint_);
+        return;
     }
     if (!failure_.isEmpty()) {
         if (manual_) emit notice(tr("检查更新失败，请检查网络后重试"), true);

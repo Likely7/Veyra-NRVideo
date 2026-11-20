@@ -308,10 +308,14 @@ bool PresetLibrary::save() {
     std::error_code ec;
     std::filesystem::create_directories(path_.parent_path(), ec);
     const auto temporary = std::filesystem::path(path_).concat(L".tmp");
-    { std::ofstream f(temporary, std::ios::binary | std::ios::trunc); if (!f) { error_ = L"预设库写入失败"; return false; } f << data; if (!f) { error_ = L"预设库写入失败"; return false; } }
-    if (!MoveFileExW(temporary.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING)) {
+    HANDLE file = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) { error_ = L"预设库写入失败"; return false; }
+    DWORD written = 0;
+    const bool ok = WriteFile(file, data.data(), DWORD(data.size()), &written, nullptr) && written == data.size() && FlushFileBuffers(file);
+    CloseHandle(file);
+    if (!ok || !MoveFileExW(temporary.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::filesystem::remove(temporary, ec);
-        error_ = L"预设库替换失败";
+        error_ = ok ? L"预设库替换失败" : L"预设库写入失败";
         return false;
     }
     return true;

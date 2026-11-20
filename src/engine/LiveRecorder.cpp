@@ -27,6 +27,7 @@
 #include <optional>
 #include <thread>
 #include <vector>
+#include <utility>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -219,9 +220,23 @@ struct AudioLane {
     int64_t outputPosition() const {return produced+(swr?swr_get_delay(swr,kAudioRate):0);}
     // Writer thread: the queued blocks into the fifo. final: up to the
     // picture's end (endTimeUs) and the resampler flushed.
-    bool process(bool final,int64_t endTimeUs,int64_t t0){
+    bool process(bool final,int64_t endTimeUs,int64_t t0,bool limitToVideo){
         std::deque<AudioBlock> taken;
-        {std::lock_guard lock(mutex);taken.swap(blocks);queued=0;}
+        {
+            std::lock_guard lock(mutex);
+            if(limitToVideo&&!final&&t0){
+                // The remaining blocks stay in the bounded input queue while
+                // the writer waits for video to reach their timestamps.
+                while(!blocks.empty()&&blocks.front().atUs<t0+endTimeUs){
+                    queued-=blocks.front().frames;
+                    taken.push_back(std::move(blocks.front()));
+                    blocks.pop_front();
+                }
+            }else{
+                taken.swap(blocks);
+                queued=0;
+            }
+        }
         if(!t0)return true; // nothing recorded yet: earlier sound is not part of the file
         if(!swr&&!configureSwr(taken.empty()?sink::AudioFormat{}:taken.front().format))return false;
         for(auto& block:taken){
@@ -252,7 +267,9 @@ struct AudioLane {
             // No sound arrives (paused, muted source, no audio monitoring, a
             // silent or missing microphone): keep the track continuous,
             // 200 ms behind real time.
-            const int64_t target=(sink::recordingClockUs()-t0-200000)*kAudioRate/1000000;
+            int64_t targetUs=sink::recordingClockUs()-t0-200000;
+            if(limitToVideo)targetUs=std::min(targetUs,endTimeUs);
+            const int64_t target=targetUs*kAudioRate/1000000;
             if(target>outputPosition()&&!feedSilence(target-outputPosition()))return false;
         }
         return true;
@@ -268,7 +285,6 @@ struct AudioTrack {
     AVFrame* frame=nullptr;
     std::vector<float> extra[2];
     int64_t encodedSamples=0;
-    AVStream* stream=nullptr;         // a recording's stream
     std::shared_ptr<const AVCodecParameters> parameters;
 
     AudioTrack()=default;
@@ -324,7 +340,7 @@ struct AudioTrack {
         for(;;){
             int64_t available=av_audio_fifo_size(lane->fifo);
             if(mix)available=std::min<int64_t>(available,av_audio_fifo_size(mix->fifo));
-            if(final)available=std::min(available,limit-encodedSamples);
+            available=std::min(available,limit-encodedSamples);
             if(available<=0||(!final&&available<size))break;
             const int n=int(std::min<int64_t>(available,size));
             if(av_frame_make_writable(frame)<0)return false;
@@ -429,11 +445,15 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     // Fixed at creation.
     ComPtr<ID3D12Device> device;
     uint32_t width=0,height=0,hdrMode=0,fps=60,bitrateMbps=20,vendor=0;
+    uint32_t multipass=0;bool psychoAq=false;   // NVENC tuning (RecordingSettings)
     bool hevc=false,nvenc=false;
     bool sound=false,microphone=false,microphoneTrack=false; // what the sound tracks take
     std::atomic<bool> audio{false};             // the file (or buffer) has sound tracks
     std::wstring path;                          // a recording's file
     std::shared_ptr<ReplayBuffer> replay;       // the instant replay buffer instead of a file
+    int64_t splitAfterUs=0;
+    uint64_t splitAfterBytes=0;
+    std::atomic<uint32_t> extraFiles{0},savedFiles{0};
 
     // Engine thread: conversion into the slots.
     pipeline::ComputePass convert;
@@ -482,16 +502,22 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     std::array<AudioTrack,2> tracks;
     unsigned trackCount=0;
 
-    // Writer-owned FFmpeg state of a recording.
-    AVFormatContext* mux=nullptr;
-    AVStream* videoStream=nullptr;
-    int64_t lastVideoDts=INT64_MIN;
-    bool headerWritten=false,originSet=false;
+    // Keep the preceding muxer for late AAC packets. The video encoder and
+    // audio clocks continue across a file boundary.
+    struct OutputFile {
+        AVFormatContext* mux=nullptr;
+        std::wstring path;
+        int64_t originUs=0,lastDts=INT64_MIN;
+        uint64_t frames=0,payloadBytes=0;
+        bool headerWritten=false;
+    };
+    OutputFile file,previousFile;
+    bool originSet=false;
 
     // Shared state.
     std::atomic<bool> closing{false},failed{false},encoderFinished{false},writerFinished{false};
     mutable std::mutex textMutex;
-    std::wstring error,encoderName,note;
+    std::wstring error,encoderName,note,currentPath,savedPath;
 
     ~Segment() override {
         if(encoderThread.joinable())encoderThread.join();
@@ -511,6 +537,11 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     std::wstring errorText() const {std::lock_guard lock(textMutex);return error;}
     std::wstring encoderText() const {std::lock_guard lock(textMutex);return encoderName;}
     std::wstring noteText() const {std::lock_guard lock(textMutex);return note;}
+    std::wstring filePath(bool saved) const {
+        std::lock_guard lock(textMutex);
+        const auto& chosen=saved?savedPath:currentPath;
+        return chosen.empty()?path:chosen;
+    }
     void setNote(std::wstring text){std::lock_guard lock(textMutex);note=std::move(text);}
     std::string name() const {return replay?std::string("replay buffer"):utf8(path);}
 
@@ -672,8 +703,18 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         sink::NvencLiveEncoder encoder;
         sink::NvencLiveEncoder::Config config;
         config.width=width;config.height=height;config.hevc=hevc;config.hdr=hdrMode!=0;config.fps=fps;config.bitrateMbps=bitrateMbps;
+        config.multipass=multipass;config.psychoAq=psychoAq;
         std::vector<ID3D12Resource*> inputs;for(auto& slot:slots)inputs.push_back(slot.nv12.Get());
-        if(!encoder.open(device.Get(),config,inputs)){fail(L"NVENC 无法开始录制："+encoder.lastError());return;}
+        bool opened=encoder.open(device.Get(),config,inputs);
+        if(!opened&&(config.multipass||config.psychoAq)){
+            // The tuning first: a GPU that refuses two-pass or AQ still records with the rest.
+            veyra::log::warn("live-recorder",std::format("encoder tuning refused ({}); encoding without two-pass and AQ",utf8(encoder.lastError())));
+            encoder.close();
+            config.multipass=0;config.psychoAq=false;
+            opened=encoder.open(device.Get(),config,inputs);
+        }
+        if(!opened){fail(L"NVENC 无法开始录制："+encoder.lastError());return;}
+        if(multipass||psychoAq)veyra::log::info("live-recorder",std::format("encoder tuning multipass={} psychoAq={} applied={}",multipass,psychoAq,config.multipass||config.psychoAq));
         publishHeaders(encoder.headers(),encoder.describe());
         veyra::log::info("live-recorder",std::format("encoder ready {} path={}",utf8(encoder.describe()),name()));
         for(;;){
@@ -759,11 +800,15 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     }
 
     // ---- writer thread ---------------------------------------------------------
+    static void freeOutput(OutputFile& out){
+        if(!out.mux)return;
+        if(out.mux->pb)avio_closep(&out.mux->pb);
+        avformat_free_context(out.mux);
+        out.mux=nullptr;
+    }
     void releaseMux(){
-        if(mux){
-            if(mux->pb)avio_closep(&mux->pb);
-            avformat_free_context(mux);mux=nullptr;
-        }
+        freeOutput(file);
+        freeOutput(previousFile);
         for(auto& track:tracks)track.release();
         soundLane.release();micLane.release();
     }
@@ -792,33 +837,70 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
             veyra::log::warn("live-recorder","AAC encoder unavailable; recording without sound");
         }
     }
-    bool openFile(std::vector<uint8_t> extradata){
+    bool openFile(const std::vector<uint8_t>& extradata,const std::wstring& destination,int64_t originUs){
+        file.path=destination;
+        file.originUs=originUs;
+        auto*& mux=file.mux;
         if(avformat_alloc_output_context2(&mux,nullptr,"mp4",nullptr)<0||!mux){fail(L"无法创建录制封装器");return false;}
-        videoStream=avformat_new_stream(mux,nullptr);
+        auto* videoStream=avformat_new_stream(mux,nullptr);
         if(!videoStream){fail(L"无法创建录制视频流");return false;}
         videoStream->time_base=AVRational{1,1000000};
         videoStream->avg_frame_rate=AVRational{int(fps),1};
         if(!setVideoParameters(videoStream->codecpar,width,height,hdrMode,hevc,extradata)){fail(L"无法写入录制文件头");return false;}
-        openSound();
         for(unsigned i=0;i<trackCount;++i){
-            auto& track=tracks[i];
-            track.stream=avformat_new_stream(mux,nullptr);
-            if(!track.stream||avcodec_parameters_copy(track.stream->codecpar,track.parameters.get())<0){fail(L"无法创建录制音频流");return false;}
-            track.stream->time_base=AVRational{1,kAudioRate};
-            av_dict_set(&track.stream->metadata,"handler_name",track.name.c_str(),0);
+            const auto& track=tracks[i];
+            auto* stream=avformat_new_stream(mux,nullptr);
+            if(!stream||avcodec_parameters_copy(stream->codecpar,track.parameters.get())<0){fail(L"无法创建录制音频流");return false;}
+            stream->time_base=AVRational{1,kAudioRate};
+            av_dict_set(&stream->metadata,"handler_name",track.name.c_str(),0);
         }
-        int rc=avio_open(&mux->pb,utf8(path).c_str(),AVIO_FLAG_WRITE);
+        int rc=avio_open(&mux->pb,utf8(destination).c_str(),AVIO_FLAG_WRITE);
         if(rc<0){fail(L"无法创建录制文件："+avError(rc));return false;}
         // Fragmented MP4: every fragment is playable on its own, so an
         // interrupted recording keeps what was written.
         AVDictionary* options=nullptr;
-        av_dict_set(&options,"movflags","frag_keyframe+empty_moov+default_base_moof",0);
+        av_dict_set(&options,"movflags",originUs?"frag_keyframe+delay_moov+default_base_moof":"frag_keyframe+empty_moov+default_base_moof",0);
         rc=avformat_write_header(mux,&options);
         av_dict_free(&options);
         if(rc<0){fail(L"无法写入录制文件头："+avError(rc));return false;}
-        headerWritten=true;
+        file.headerWritten=true;
+        {std::lock_guard lock(textMutex);currentPath=destination;}
         veyra::log::info("live-recorder",std::format("file open path={} extent={}x{} codec={} hdr={} fps={} bitrateMbps={} audio={} sound={} microphone={} tracks={}",
-            utf8(path),width,height,hevc?"HEVC":"H264",hdrMode,fps,bitrateMbps,audio.load(),sound,microphone?(microphoneTrack?"track":"mixed"):"off",trackCount));
+            utf8(destination),width,height,hevc?"HEVC":"H264",hdrMode,fps,bitrateMbps,audio.load(),sound,microphone?(microphoneTrack?"track":"mixed"):"off",trackCount));
+        return true;
+    }
+    bool finishFile(OutputFile& out){
+        if(!out.mux)return true;
+        const bool ok=!out.headerWritten||av_write_trailer(out.mux)>=0;
+        const auto at=out.mux->pb?avio_tell(out.mux->pb):0;
+        freeOutput(out);
+        if(ok&&out.frames){
+            ++savedFiles;
+            std::lock_guard lock(textMutex);savedPath=out.path;
+        }else if(!out.frames&&out.headerWritten){
+            std::error_code code;
+            std::filesystem::remove(out.path,code);
+        }
+        veyra::log::info("live-recorder",std::format("part closed path={} originUs={} frames={} bytes={} ok={}",
+            utf8(out.path),out.originUs,out.frames,at,ok));
+        return ok;
+    }
+    bool rotateFile(const std::vector<uint8_t>& extradata,const VideoPacket& next){
+        if(!next.key||!file.frames||!(splitAfterUs||splitAfterBytes))return true;
+        const auto outputBytes=avio_tell(file.mux->pb);
+        const auto bytes=std::max(file.payloadBytes,uint64_t(std::max<int64_t>(0,outputBytes)));
+        // A keyframe nominally on the boundary can arrive a fraction of a
+        // frame early on the monotonic clock. Do not skip a whole GOP for it.
+        const auto elapsed=next.ptsUs-file.originUs;
+        if(!(splitAfterUs&&elapsed>=splitAfterUs-500000/std::max(1u,fps))&&
+           !(splitAfterBytes&&bytes>=splitAfterBytes))return true;
+        if(!finishFile(previousFile))return false;
+        previousFile=std::exchange(file,OutputFile{});
+        const std::filesystem::path base(path);
+        const auto destination=uniqueFile(base.parent_path().wstring(),
+            base.stem().wstring()+std::format(L"-part-{}",extraFiles.load()+2));
+        if(!openFile(extradata,destination,next.ptsUs))return false;
+        ++extraFiles;
         return true;
     }
     // The instant replay buffer takes what a file would: the encoder's
@@ -838,23 +920,45 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         AVPacket* out=av_packet_alloc();
         if(!out||av_new_packet(out,int(packet.data.size()))<0){av_packet_free(&out);return false;}
         std::memcpy(out->data,packet.data.data(),packet.data.size());
-        out->stream_index=videoStream->index;out->pts=out->dts=packet.ptsUs;out->duration=std::max<int64_t>(1,durationUs);
+        const auto* videoStream=file.mux->streams[0];
+        out->stream_index=videoStream->index;out->pts=out->dts=packet.ptsUs-file.originUs;out->duration=std::max<int64_t>(1,durationUs);
         if(packet.key)out->flags|=AV_PKT_FLAG_KEY;
         av_packet_rescale_ts(out,AVRational{1,1000000},videoStream->time_base);
-        if(out->dts<=lastVideoDts)out->pts=out->dts=lastVideoDts+1;
-        lastVideoDts=out->dts;
-        const int rc=av_interleaved_write_frame(mux,out);
+        if(out->dts<=file.lastDts)out->pts=out->dts=file.lastDts+1;
+        file.lastDts=out->dts;
+        const int rc=av_interleaved_write_frame(file.mux,out);
         av_packet_free(&out);
         if(rc<0){veyra::log::error("live-recorder",std::format("video write failed rc={}",rc));return false;}
+        ++file.frames;
+        file.payloadBytes+=packet.data.size();
         ++videoWritten;writtenUs=packet.ptsUs;
         return true;
     }
+    bool writeAudio(AVPacket* packet,unsigned index){
+        constexpr AVRational sampleBase{1,kAudioRate};
+        const int64_t start=av_rescale_q(file.originUs,AVRational{1,1000000},sampleBase);
+        auto& out=previousFile.mux&&packet->pts<start?previousFile:file;
+        const int64_t origin=av_rescale_q(out.originUs,AVRational{1,1000000},sampleBase);
+        if(out.originUs&&packet->pts<origin){
+            veyra::log::warn("live-recorder","late AAC packet arrived after its recording part closed");
+            return true;
+        }
+        const auto* stream=out.mux->streams[index+1];
+        packet->stream_index=stream->index;
+        if(packet->pts!=AV_NOPTS_VALUE)packet->pts-=origin;
+        if(packet->dts!=AV_NOPTS_VALUE)packet->dts-=origin;
+        av_packet_rescale_ts(packet,sampleBase,stream->time_base);
+        out.payloadBytes+=size_t(packet->size);
+        return av_interleaved_write_frame(out.mux,packet)>=0;
+    }
     bool processAudio(bool final,int64_t endTimeUs){
         const int64_t t0=t0Us.load();
-        if(sound&&!soundLane.process(final,endTimeUs,t0))return false;
-        if(microphone&&!micLane.process(final,endTimeUs,t0))return false;
+        const bool limitToVideo=splitAfterUs||splitAfterBytes;
+        if(sound&&!soundLane.process(final,endTimeUs,t0,limitToVideo))return false;
+        if(microphone&&!micLane.process(final,endTimeUs,t0,limitToVideo))return false;
         if(!t0)return true;
-        const int64_t limit=final?std::max<int64_t>(endTimeUs*kAudioRate/1000000,0):INT64_MAX;
+        const bool limited=final||limitToVideo;
+        const int64_t limit=limited?std::max<int64_t>(endTimeUs*kAudioRate/1000000,0):INT64_MAX;
         for(unsigned i=0;i<trackCount;++i){
             auto& track=tracks[i];
             const bool ok=track.encode(final,limit,[&](AVPacket* packet){
@@ -862,9 +966,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
                     replay->pushAudio(i,{std::make_shared<const std::vector<uint8_t>>(packet->data,packet->data+packet->size),packet->pts,packet->duration,false});
                     return true;
                 }
-                packet->stream_index=track.stream->index;
-                av_packet_rescale_ts(packet,AVRational{1,kAudioRate},track.stream->time_base);
-                return av_interleaved_write_frame(mux,packet)>=0;
+                return writeAudio(packet,i);
             });
             if(!ok)return false;
         }
@@ -877,7 +979,8 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
             outCv.wait(lock,[&]{return headersReady||encoderDone;});
             if(headersReady)extradata=headers;
         }
-        bool ok=!extradata.empty()&&(replay?openReplay(std::move(extradata)):openFile(std::move(extradata)));
+        if(!replay&&!extradata.empty())openSound();
+        bool ok=!extradata.empty()&&(replay?openReplay(std::move(extradata)):openFile(extradata,path,0));
         std::optional<VideoPacket> held;
         const int64_t frameUs=1000000/std::max(1u,fps);
         while(ok){
@@ -896,10 +999,10 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
                     replay->pushVideo({std::make_shared<const std::vector<uint8_t>>(std::move(packet.data)),packet.ptsUs,0,packet.key});
                     continue;
                 }
-                if(ok&&held)ok=writeVideo(*held,packet.ptsUs-held->ptsUs);
+                if(ok&&held)ok=writeVideo(*held,packet.ptsUs-held->ptsUs)&&rotateFile(extradata,packet);
                 held=std::move(packet);
             }
-            if(ok&&audio)ok=processAudio(false,0);
+            if(ok&&audio)ok=processAudio(false,held?held->ptsUs:0);
             if(!ok){fail(replay?L"即时回放写入失败":L"写入录制文件失败（磁盘已满或没有写入权限？）");break;}
             if(ended)break;
         }
@@ -912,17 +1015,16 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
             replay->finish(std::max<int64_t>(end,0));
             veyra::log::info("live-recorder",std::format("replay buffer closed videoFrames={} seconds={:.2f} audioGaps={} audioOverflow={} microphoneGaps={} microphoneOverflow={} dropped={} ok={}",
                 videoWritten.load(),double(std::max<int64_t>(end,0))/1e6,soundLane.gaps.load(),soundLane.overflow.load(),micLane.gaps.load(),micLane.overflow.load(),dropped.load(),ok));
-        }else if(headerWritten){
+        }else if(file.headerWritten||previousFile.headerWritten){
             int64_t end=endUs.load();
             if(held)end=std::max(end,held->ptsUs+frameUs);
             if(ok&&held)ok=writeVideo(*held,end-held->ptsUs);
             if(ok&&audio&&videoWritten.load())ok=processAudio(true,end);
-            const int rc=av_write_trailer(mux);
-            if(rc<0)ok=false;
+            const bool previousOk=finishFile(previousFile);
+            const bool currentOk=finishFile(file);
+            ok=ok&&previousOk&&currentOk;
             if(!ok&&!failed.load())fail(L"录制文件收尾失败");
-            avio_closep(&mux->pb);
             if(!videoWritten.load()){
-                std::error_code code;std::filesystem::remove(path,code);
                 setNote(L"没有录到画面，未保存文件");
             }
             veyra::log::info("live-recorder",std::format("file closed path={} videoFrames={} seconds={:.2f} originUs={} audio={} audioGaps={} audioOverflow={} microphoneGaps={} microphoneOverflow={} dropped={} ok={}",
@@ -997,7 +1099,10 @@ struct LiveRecorder::State {
             auto& segment=*it;
             if(!segment->done()){++it;continue;}
             segment->join();
-            if(!replayMode&&segment->videoWritten.load()){path=segment->path;++saved;}
+            if(!replayMode){
+                files+=segment->extraFiles.load();
+                if(segment->savedFiles.load()){path=segment->filePath(true);saved+=segment->savedFiles.load();}
+            }
             if(segment->failed.load()&&error.empty()){failed=true;error=segment->errorText();}
             if(const auto text=segment->noteText();!text.empty())note=text;
             it=finishing.erase(it);
@@ -1036,6 +1141,7 @@ bool LiveRecorder::start(const RecordingSettings& settings,std::wstring& error){
         // stretch with them; the current one stays saveable meanwhile.
         const auto& o=s.settings;
         const bool same=s.armed&&o.bitrateMbps==settings.bitrateMbps&&o.hevc==settings.hevc&&o.fpsLimit==settings.fpsLimit&&
+            o.multipass==settings.multipass&&o.psychoAq==settings.psychoAq&&
             o.audio==settings.audio&&o.microphone==settings.microphone&&o.microphoneId==settings.microphoneId&&
             o.microphoneTrack==settings.microphoneTrack&&o.replaySeconds==settings.replaySeconds&&o.replayMemoryBytes==settings.replayMemoryBytes;
         s.settings=settings;
@@ -1093,7 +1199,7 @@ RecordingStatus LiveRecorder::status() const{
     out.error=s.error;out.note=s.note;out.files=s.files;out.started=s.started;out.saved=s.saved;
     out.frames=s.framesBase;out.dropped=s.droppedBase;out.path=s.path;out.encoder=s.encoder;out.audio=s.audioTrack;
     if(s.current){
-        if(!s.replayMode)out.path=s.current->path;
+        if(!s.replayMode){out.path=s.current->filePath(false);out.files+=s.current->extraFiles.load();}
         out.frames+=s.current->frames.load();out.dropped+=s.current->dropped.load();
         if(const auto name=s.current->encoderText();!name.empty())out.encoder=name;
         out.audio=s.current->audio;
@@ -1258,6 +1364,7 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         const double hint=s.presentFps.load();
         segment->fps=s.settings.fpsLimit?s.settings.fpsLimit:uint32_t(std::clamp<long>(std::lround(hint>1?hint:60.0),10,480));
         segment->bitrateMbps=s.settings.bitrateMbps?s.settings.bitrateMbps:autoBitrateMbps(frame.width,frame.height,segment->fps,segment->hevc);
+        segment->multipass=std::min(s.settings.multipass,2u);segment->psychoAq=s.settings.psychoAq;
         segment->sound=s.settings.audio;
         segment->microphone=s.settings.microphone;
         segment->microphoneTrack=s.settings.microphoneTrack;
@@ -1268,6 +1375,8 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         }else{
             const auto base=s.baseName+(s.nextNumber>1?std::format(L"-{}",s.nextNumber):L"");
             segment->path=uniqueFile(s.settings.directory,base);
+            segment->splitAfterUs=int64_t(s.settings.splitSeconds)*1000000;
+            segment->splitAfterBytes=s.settings.splitBytes;
         }
         std::wstring reason;
         if(!segment->create(reason))return fail(reason);

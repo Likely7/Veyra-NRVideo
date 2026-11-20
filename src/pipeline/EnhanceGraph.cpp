@@ -355,7 +355,7 @@ bool EnhanceGraph::createAdditionalColorResources(){
             // SDR -> RTX Video HDR also grades SDR before that later conversion.
             const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
             engine::ColorLutData lut;
-            const engine::ColorLutStore store(runtime::localDataDirectory());
+            const engine::ColorLutStore store(runtime::userDataDirectory());
             if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
                 colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",i+2,mismatch?L"输入空间不匹配":L"资源不可用");
                 veyra::log::warn("color-grade",std::format("instance={} lut rejected mismatch={} name={}",i+1,mismatch,utf8Of(settings.lutNameString())));
@@ -414,7 +414,7 @@ bool EnhanceGraph::createNodeColorResources(){
             if(settings.hasLut()){
                 const bool mismatch=desc_.hdrWorking()?settings.lutInputSpace==engine::ColorSettings::kLutInputSrgb:settings.lutInputSpace==engine::ColorSettings::kLutInputPq;
                 engine::ColorLutData lut;
-                const engine::ColorLutStore store(runtime::localDataDirectory());
+                const engine::ColorLutStore store(runtime::userDataDirectory());
                 if(mismatch||!store.resolve(settings.lutNameString(),lut)||!lut.valid()||!instance->setLut(context_.device(),lut.rgb.data(),unsigned(lut.size))){
                     colorLutNotice_+=std::format(L" 调色实例 {} LUT 未加载：{}；其他调色继续。",parameter+1,mismatch?L"输入空间不匹配":L"资源不可用");
                     veyra::log::warn("color-grade",std::format("node instance={} lut rejected mismatch={} name={}",parameter,mismatch,utf8Of(settings.lutNameString())));
@@ -903,6 +903,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if (!initFsrFg()) return false;
     if (!initVfg()) return false;
     if (!initAmfFrc()) return false;
+    if (!initHudLock()) return false;
     if(nrEnabled_&&GetEnvironmentVariableW(L"VEYRA_TEST_NR_INIT_FAILURE",nullptr,0)){
         failedBackend_=engine::FailedBackend::Nr;
         veyra::log::error("backend-recovery-test","test-only NR initialization rejection before SDK call; not a hardware failure");return false;
@@ -1067,7 +1068,7 @@ bool EnhanceGraph::createResources()
             }else{
                 colorLutNotice_.clear();
                 engine::ColorLutData lut;
-                const engine::ColorLutStore store(runtime::localDataDirectory());
+                const engine::ColorLutStore store(runtime::userDataDirectory());
                 if(store.resolve(desc_.color.lutNameString(),lut)&&lut.valid()&&setColorLut(lut.rgb.data(),unsigned(lut.size))){
                     // The name must be converted once: building the log argument
                     // from lutNameString().begin() and .end() created two
@@ -1545,6 +1546,25 @@ bool EnhanceGraph::initFsrFg() {
     return true;
 }
 
+// Live HUD Lock (HudLock.h, ported from PushFPS). Graph frame generation only (XeSS
+// generates inside its presenter); a pass that cannot be created leaves frame
+// generation as it was and reports state 2.
+bool EnhanceGraph::initHudLock() {
+    hudLock_.reset();
+    if(!desc_.hudLock||!fgEnabled_||presentSinkFg())return true;
+    auto pass=std::make_unique<HudLock>();
+    if(!pass->initialize(context_.device(),workW_,workH_,outputFormat(),hdr10Output()?2u:desc_.hdrOutput?1u:0u)){
+        veyra::log::error("hud-lock",std::format("Live HUD Lock unavailable at {}x{}; frame generation runs without it",workW_,workH_));
+        return true;
+    }
+    hudLock_=std::move(pass);
+    return true;
+}
+void EnhanceGraph::composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity){
+    if(hudLock_&&!hudLock_->compose(list,tracker_,generatedSlot,heldParity))
+        veyra::log::warn("hud-lock",std::format("compose skipped slot={} held={}",generatedSlot,heldParity));
+}
+
 bool EnhanceGraph::initVfg()
 {
     if(!fgEnabled_||desc_.frameGenerationBackend!=engine::FrameGenerationBackend::Vfg)return true;
@@ -1748,6 +1768,7 @@ bool EnhanceGraph::initNgxFeatures()
         veyra::log::error("graph", std::format("NR snippet init failed 0x{:X}", nrResult_));
         return false;
     }
+    nrSnippetInitialized_ = true;
     }
     failedBackend_=engine::FailedBackend::NgxCore;
     ngxParams_ = coreHost_->allocateParameters(st);
@@ -2258,6 +2279,12 @@ bool EnhanceGraph::createViews()
 {
     bindSignedHdrRestore(firstSrHdrRestore_,srStageInput(),firstSrLinear_.Get());
     bindSignedHdrRestore(srHdrRestore_,desc_.dualSr?srPrescaled_.Get():srStageInput(),workRgba_.Get());
+    if(hudLock_){
+        ID3D12Resource* const real[2]={videoFrame_[0].Get(),videoFrame_[1].Get()};
+        std::array<ID3D12Resource*,kGeneratedPoolSlots> generated{};
+        for(size_t i=0;i<kGeneratedPoolSlots;++i)generated[i]=genFrame_[i].Get();
+        hudLock_->createViews(context_.device(),stager_,real,generated.data(),unsigned(generated.size()));
+    }
     // Descriptor initialization is DEFAULT ON since the RAW-upload-SRV removal
     // (2026-09-06): texture SRV/UAV views keep the device alive and NVOF
     // executing (r33b-tu: 599/599 executes, real motion/confidence, 0
@@ -4223,6 +4250,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
     }
     if(!composeExclusion(list,parity,parity,presentSinkFg()))return false;
+    // Live HUD Lock learns from this real frame against the previous one (enhanced colours).
+    if(hudLock_&&!hudLock_->update(list,tracker_,parity,!prevValid_))veyra::log::warn("hud-lock","update skipped");
     if(!runFg)gpuTimer_.resolve(list);
     if (!submitGraph(slot)) return false;
     if(!runFg)gpuTimer_.submitted(ring_.lastSignaledValue());
@@ -4241,6 +4270,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
             const bool copied=amfFrc_->copyOutput(flist,genFrame_[generatedSlot].Get());
             if(!copied&&!resetFg){veyra::log::error("amf-frc","AMF returned no interpolated frame for this pair");failedBackend_=engine::FailedBackend::Fg;return false;}
+            composeHudLock(flist,generatedSlot,resetFg?parity:1-parity);
             if(!composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false))return false;
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             gpuTimer_.mark(flist,GpuStage::Fg1,true);gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);
@@ -4266,6 +4296,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto* flist=ring_.acquireNext(slot,st);if(!flist)return false;
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
             if(!vfgBackend_->copyOutput(flist,genFrame_[generatedSlot].Get(),generatedSlot)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            composeHudLock(flist,generatedSlot,resetFg?parity:1-parity);
             if(!composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false))return false;
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             const auto timingStage=GpuStage(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage,true);
@@ -4348,6 +4379,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(flist,fgDisable_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         flist->CopyBufferRegion(fgDisableReadback_[generatedSlot].Get(),0,fgDisable_[parity].Get(),0,4);
         }
+        composeHudLock(flist,generatedSlot,resetFg?parity:1-parity);
         if(!composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false))return false;
         tracker_.transition(flist,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -4773,6 +4805,15 @@ void EnhanceGraph::shutdown()
         ngxParams_ = nullptr;
     }
     if (nrAdapter_) {
+        // Same order as nr_harness: features and parameter blocks are gone, so the
+        // snippet shuts down before its IAT shim is restored and the DLL is freed.
+        if (nrSnippetInitialized_) {
+            uint64_t result = 0;
+            uint32_t seh = 0;
+            if (!nrAdapter_->snippetShutdown1(context_.device(), result, seh) || result != uint64_t(NVSDK_NGX_Result_Success))
+                veyra::log::error("graph", std::format("NR snippet Shutdown1 failed result=0x{:X} seh=0x{:X}", result, seh));
+            nrSnippetInitialized_ = false;
+        }
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
@@ -4854,6 +4895,7 @@ void EnhanceGraph::shutdown()
     neuralTex_.Reset();
     proxyTex_.Reset();
     exclusionPass_={};exclusionScratch_.Reset();
+    hudLock_.reset();
     for(auto& r:exclusionVideo_)r.Reset();
     for(auto& r:exclusionUi_)r.Reset();
     for(auto& r:sourceReferences_)r.Reset();for(auto& r:baseReferences_)r.Reset();workRgba_.Reset();

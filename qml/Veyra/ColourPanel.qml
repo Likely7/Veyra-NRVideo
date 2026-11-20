@@ -65,7 +65,7 @@ ColumnLayout {
         property alias text: field.text
         property string placeholder: ""
         signal accepted()
-        implicitHeight: 30
+        implicitHeight: Math.max(30, placeholderLabel.implicitHeight + 8)
         radius: 9
         color: Qt.rgba(1, 1, 1, 0.04)
         border.width: 1
@@ -79,8 +79,11 @@ ColumnLayout {
             onAccepted: parent.accepted()
         }
         Text {
+            id: placeholderLabel
             anchors.verticalCenter: parent.verticalCenter
             anchors.left: parent.left; anchors.leftMargin: 10
+            anchors.right: parent.right; anchors.rightMargin: 10
+            wrapMode: Text.Wrap
             visible: field.text.length === 0
             text: parent.placeholder; color: Theme.t3
             font.family: Theme.fontUi; font.pixelSize: Theme.fsBody
@@ -92,25 +95,31 @@ ColumnLayout {
         spacing:0
         Repeater {
             model:rows.keys.length
-            delegate:RowLayout {
+            delegate:Item {
                 required property int index
                 readonly property string key:rows.keys[index]
                 readonly property var spec:panel.descriptor(key)
                 Layout.fillWidth:true
-                Layout.preferredHeight:Theme.rowMinHeight
-                spacing:12
+                implicitHeight: Math.max(Theme.rowMinHeight, parameterLabel.implicitHeight + 6)
                 Text {
-                    Layout.fillWidth:true;Layout.minimumWidth:0
+                    id: parameterLabel
+                    anchors.left: parent.left
+                    anchors.right: paramSlider.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
                     text:spec.label;color:Theme.t2
                     font.family:Theme.fontUi;font.pixelSize:Theme.fsBody
-                    elide:Text.ElideRight
+                    wrapMode:Text.Wrap
                 }
                 VSlider {
                     id:paramSlider
                     objectName:"colour-param-"+key
                     valueFromModel:true
                     resettable:true;defaultValue:spec.defaultValue
-                    Layout.minimumWidth:150;Layout.maximumWidth:150;Layout.preferredWidth:150
+                    anchors.right: parameterValue.left
+                    anchors.rightMargin: 12
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(150, parent.width * 0.5)
                     from:spec.min;to:spec.max;center:from<0&&to>0
                     showCenterFill:true
                     Accessible.name:spec.label
@@ -121,7 +130,10 @@ ColumnLayout {
                     onMoved:value=>panel.api.setColourParameter(key,Math.round(value/spec.step)*spec.step)
                 }
                 VSliderValue {
-                    Layout.minimumWidth:40;Layout.maximumWidth:40;Layout.preferredWidth:40
+                    id: parameterValue
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Math.max(40, implicitWidth)
                     slider:paramSlider
                     text:panel.valueFor(key).toFixed(spec.step<1?2:0)
                 }
@@ -170,7 +182,7 @@ ColumnLayout {
                         Layout.fillWidth:true
                         text:panel.state.enabled?qsTr("关闭时这条链路不存在，零开销"):qsTr("已关闭 · 参数保留但不生效")
                         color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:11
-                        elide:Text.ElideRight
+                        wrapMode:Text.Wrap
                     }
                 }
                 VSwitch {objectName:"colour-master";checked:panel.state.enabled;onToggled:checked=>panel.api.colorEnabled=checked}

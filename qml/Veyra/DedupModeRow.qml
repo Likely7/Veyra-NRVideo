@@ -16,7 +16,7 @@ VRow {
     onCurrentModeChanged: if(currentMode!==0)lastMode=currentMode
     Component.onCompleted: if(currentMode!==0)lastMode=currentMode
     label: qsTr("去除重复帧")
-    hint: showHelp?qsTr("60→30：固定每两帧保留一帧。自动去除：检测并跳过重复画面。"):""
+    hint: showHelp?qsTr("60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。"):""
     hintBelow: true
     RowLayout {
         spacing: 8

@@ -26,6 +26,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <memory>
 #include <mutex>
 #include <random>
 #include <string>
@@ -104,7 +105,19 @@ static ComPtr<IBaseFilter> registered(HRESULT& hr){
     }
     hr=E_FAIL;return nullptr;
 }
-static int consume(const std::wstring& source,unsigned seconds,unsigned fps,unsigned width,unsigned height,unsigned row,const std::wstring& prefix){
+static int consume(const std::wstring& source,unsigned seconds,unsigned fps,unsigned width,unsigned height,unsigned row,const std::wstring& prefix,bool reopenPaused=false){
+    std::unique_ptr<video_queue_t, decltype(&video_queue_close)> writer(nullptr, video_queue_close);
+    if(reopenPaused){
+        const auto tag=L"paused-reopen-"+std::to_wstring(GetCurrentProcessId());
+        SetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_NAMESPACE",tag.c_str());
+        writer.reset(video_queue_create(width,height,166667));
+        if(!writer)return failure("fixture queue",E_FAIL);
+        std::vector<uint8_t> pixels(size_t(width)*height*3/2,128);
+        uint8_t* planes[]={pixels.data(),pixels.data()+size_t(width)*height};
+        uint32_t pitches[]={width,width};
+        if(!video_queue_write(writer.get(),planes,pitches,video_queue_now_100ns()))
+            return failure("fixture frame",E_FAIL);
+    }
     HRESULT hr=S_OK;
     auto camera=source==L"registered"?registered(hr):fromDll(source,hr);
     if(!camera)return failure("camera filter",hr);
@@ -135,6 +148,22 @@ static int consume(const std::wstring& source,unsigned seconds,unsigned fps,unsi
     hr=direct(graph.Get(),camera.Get(),grabFilter.Get());if(SUCCEEDED(hr))hr=direct(graph.Get(),grabFilter.Get(),sink.Get());
     if(FAILED(hr)){grab->SetCallback(nullptr,0);receiver->Release();return failure("connection",hr);}
     hr=control->Run();if(FAILED(hr)){grab->SetCallback(nullptr,0);receiver->Release();return failure("run",hr);}
+    if(reopenPaused){
+        for(unsigned i=0;i<100&&!video_queue_consumer_interval(writer.get());++i)Sleep(10);
+        const bool connected=video_queue_consumer_interval(writer.get())!=0;
+        hr=control->Pause();
+        FILTER_STATE state=State_Running;
+        const bool paused=SUCCEEDED(hr)&&SUCCEEDED(camera->GetState(1000,&state))&&state==State_Paused;
+        writer.reset();
+        for(unsigned i=0;i<100&&!writer;++i){
+            writer.reset(video_queue_create(width,height,166667));
+            if(!writer)Sleep(10);
+        }
+        control->Stop();grab->SetCallback(nullptr,0);receiver->Release();
+        if(!connected||!paused||!writer)return failure("paused graph did not release the closed producer queue",E_FAIL);
+        std::puts("PASS DirectShow filter released the closed queue while paused");
+        return 0;
+    }
     Sleep(seconds*1000);
     control->Stop();grab->SetCallback(nullptr,0);
     {
@@ -198,6 +227,8 @@ int wmain(int argc,wchar_t** argv){
         result=consume(argv[2],unsigned(_wtoi(argv[3])),unsigned(_wtoi(argv[4])),unsigned(_wtoi(argv[5])),unsigned(_wtoi(argv[6])),unsigned(_wtoi(argv[7])),argv[8]);
     else if(argc==9&&std::wstring(argv[1])==L"produce")
         result=produce(unsigned(_wtoi(argv[2])),_wtof(argv[3]),unsigned(_wtoi(argv[4])),unsigned(_wtoi(argv[5])),unsigned(_wtoi(argv[6])),_wtof(argv[7]),_wtof(argv[8]));
-    else std::fprintf(stderr,"usage: consume <dll|registered> <seconds> <fps> <width> <height> <row> <out-prefix> | produce <seconds> <fps> <width> <height> <jitter us> <delay ms min> <delay ms max>\n");
+    else if(argc==3&&std::wstring(argv[1])==L"reopen-paused")
+        result=consume(argv[2],0,60,640,360,0,L"",true);
+    else std::fprintf(stderr,"usage: consume <dll|registered> <seconds> <fps> <width> <height> <row> <out-prefix> | produce <seconds> <fps> <width> <height> <jitter us> <delay ms min> <delay ms max> | reopen-paused <dll>\n");
     CoUninitialize();return result;
 }

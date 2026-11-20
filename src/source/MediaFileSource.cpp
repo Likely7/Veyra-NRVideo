@@ -27,6 +27,7 @@ extern "C" {
 #include <libavutil/hdr_dynamic_vivid_metadata.h>
 #include <libavutil/mastering_display_metadata.h>
 #include <libavutil/hwcontext_d3d12va.h>
+#include <libavutil/hwcontext.h>
 }
 #if VEYRA_HAVE_LIBDOVI
 // After the extern "C" block so <libavutil/dovi_meta.h> has C linkage here.
@@ -115,6 +116,24 @@ int64_t rationalToUs(const pipeline::Rational& r)
         / static_cast<long double>(r.den) + (r.num >= 0 ? 0.5L : -0.5L));
 }
 
+// Prefer the container PTS; fall back to FFmpeg's best-effort estimate and
+// finally the packet DTS. Raw elementary streams and some TS/AVI muxes
+// leave pts unset on individual frames, which used to stop playback
+// outright (sweep 2026-09-22 B4). Still never invent a value.
+// PTS is absolute in the container timeline (m2ts starts at e.g. 4200 s), while
+// duration and seeking are relative: subtract the container start time so the
+// position readout and the scrubber agree with the media's own 0..duration.
+pipeline::Rational framePts(const AVFrame* frame, int tbNum, int tbDen, int64_t startTimeUs)
+{
+    const int64_t stamp = frame->pts != AV_NOPTS_VALUE ? frame->pts
+        : frame->best_effort_timestamp != AV_NOPTS_VALUE ? frame->best_effort_timestamp
+        : frame->pkt_dts;
+    if (stamp == AV_NOPTS_VALUE || tbDen <= 0) { return pipeline::Rational::unknown(); }
+    const int64_t startStamp = startTimeUs > 0
+        ? av_rescale_q(startTimeUs, AVRational{1, 1000000}, AVRational{tbNum, tbDen}) : 0;
+    return pipeline::Rational{(stamp - startStamp) * static_cast<int64_t>(tbNum), tbDen};
+}
+
 // Custom (P5): the Dolby Vision enhancement layer travels inside each access unit
 // as private NAL type 63, framed as 0x7E 0x01 followed by a complete standard NAL.
 // Strip the framing and hand the decoder only the inner NALs.
@@ -126,7 +145,8 @@ std::vector<std::vector<uint8_t>> extractEnhancementNals(const uint8_t* data, in
         uint32_t length = 0;
         for (unsigned b = 0; b < lengthSize; ++b) length = (length << 8) | data[pos + b];
         pos += int(lengthSize);
-        if (length == 0 || pos + int(length) > size) break;
+        // Unsigned: int(length) of a hostile length >= 2^31 is negative and passed the bound.
+        if (length == 0 || length > uint32_t(size - pos)) break;
         const uint8_t* nal = data + pos;
         if (((nal[0] >> 1) & 0x3F) == 63 && length >= 4 && nal[0] == 0x7E && nal[1] == 0x01) {
             const int inner = int(length) - 2;
@@ -187,9 +207,10 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
         // A live session cannot go back: the software decoder continues at the current position.
         if (demuxer_.shared() && !demuxer_.seekable()) veyra::log::warn("source-file", "software fallback on a live source continues at the current position");
         else if (!demuxer_.seekToUs(std::max<int64_t>(0, resumeUs))) veyra::log::warn("source-file", "software fallback could not seek back; continuing from stream start");
+        else resumeAfterUs_ = resumeUs;
         decoder_.flushBuffers();
-        // The engine treats Seek as a hard history reset; frames before the
-        // resume point are dropped by the caller's discardBefore logic.
+        // The engine treats Seek as a hard history reset; frames the hardware
+        // decoder already delivered are skipped in readBase.
         pendingSeekFlag_ = true;
         lastPtsUs_ = INT64_MIN;
         ++epoch_;
@@ -202,7 +223,6 @@ bool MediaFileSource::fallbackToSoftware(std::string_view reason)
         ? av_get_pix_fmt_name(static_cast<AVPixelFormat>(params->format)) : "unknown";
     draining_ = false;
     eofSignalled_ = false;
-    pendingSeekFlag_ = false;
     lastPtsUs_ = INT64_MIN;
     return true;
 }
@@ -950,14 +970,15 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
         // keeps the real color in the RPU, which compatibility playback does
         // not apply. Pin the base layer to the routed HDR container instead of
         // letting it fall back to BT.709 SDR (which then mismatches / washes
-        // out). Explicit, non-assumed tags from P7/P8/P10 are left untouched.
-        // Profile 8.4 routes to HLG, not PQ: its base layer is an HLG encoding and
-        // pinning it to PQ would invert the transfer and wash the picture out.
+        // out). A declared Profile 8.4 HLG layer can also carry a stale PQ VUI.
         if(dv.route()==DolbyBaseLayer::Hdr10||dv.route()==DolbyBaseLayer::Hlg){
             auto& c=info_.color;
+            c.dolbyVisionP84=params->codec_id==AV_CODEC_ID_HEVC&&dv.isProfile84();
             const auto routed=dv.route()==DolbyBaseLayer::Hlg
                 ?pipeline::TransferFunction::HLG:pipeline::TransferFunction::PQ;
-            if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
+            if(c.dolbyVisionP84&&c.transfer==pipeline::TransferFunction::PQ){
+                c.transfer=routed;c.transferAssumed=false;
+            }else if(c.transfer==pipeline::TransferFunction::Unknown||c.transferAssumed){
                 c.transfer=routed;c.transferAssumed=true;}
             if(c.matrix==pipeline::YuvMatrix::Unknown||c.matrixAssumed){
                 c.matrix=pipeline::YuvMatrix::BT2020NCL;c.matrixAssumed=true;}
@@ -1054,6 +1075,7 @@ bool MediaFileSource::open(const SourceOpenDesc& desc)
     eofSignalled_ = false;
     pendingSeekFlag_ = false;
     lastPtsUs_ = INT64_MIN;
+    resumeAfterUs_ = INT64_MIN;
     epoch_ = 1;
     ++epoch_; // fresh open = new epoch
 
@@ -1094,6 +1116,11 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         }
         frame = decoder_.receiveFrame();
         if(frame){
+            if(resumeAfterUs_!=INT64_MIN){
+                const auto pts=framePts(frame,decoder_.frameTimeBaseNum(),decoder_.frameTimeBaseDen(),startTimeUs_);
+                if(!pts.isUnknown()&&rationalToUs(pts)<=resumeAfterUs_)continue;
+                resumeAfterUs_=INT64_MIN;
+            }
             if(deinterlaceEnabled_&&((frame->flags&AV_FRAME_FLAG_INTERLACED)||deinterlacer_.active())){
                 const bool damaged=frame->decode_error_flags||(frame->flags&AV_FRAME_FLAG_CORRUPT);
                 if(frame->width!=int(info_.width)||frame->height!=int(info_.height)||(damaged&&!tolerant_)){
@@ -1267,25 +1294,9 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
     out.sequence = sequence_;
     const int tbNum = deinterlacer_.active()?deinterlacer_.timeBaseNum():decoder_.frameTimeBaseNum();
     const int tbDen = deinterlacer_.active()?deinterlacer_.timeBaseDen():decoder_.frameTimeBaseDen();
-    // Prefer the container PTS; fall back to FFmpeg's best-effort estimate and
-    // finally the packet DTS. Raw elementary streams and some TS/AVI muxes
-    // leave pts unset on individual frames, which used to stop playback
-    // outright (sweep 2026-09-22 B4). Still never invent a value.
-    const int64_t stamp = frame->pts != AV_NOPTS_VALUE ? frame->pts
-        : frame->best_effort_timestamp != AV_NOPTS_VALUE ? frame->best_effort_timestamp
-        : frame->pkt_dts;
-    if (stamp != AV_NOPTS_VALUE && tbDen > 0) {
-        // PTS is absolute in the container timeline (m2ts starts at e.g. 4200 s), while
-        // duration and seeking are relative: subtract the container start time so the
-        // position readout and the scrubber agree with the media's own 0..duration.
-        const int64_t startStamp = startTimeUs_ > 0
-            ? av_rescale_q(startTimeUs_, AVRational{1, 1000000}, AVRational{tbNum, tbDen}) : 0;
-        out.pts = pipeline::Rational{(stamp - startStamp) * static_cast<int64_t>(tbNum), tbDen};
-        if (frame->pts == AV_NOPTS_VALUE && (ptsFallbacks_++ % 300) == 0)
-            veyra::log::info("source-file", std::format("frame pts missing; using {} (count={})", frame->best_effort_timestamp != AV_NOPTS_VALUE ? "best_effort_timestamp" : "pkt_dts", ptsFallbacks_));
-    } else {
-        out.pts = pipeline::Rational::unknown(); // never fabricate a timestamp
-    }
+    out.pts = framePts(frame, tbNum, tbDen, startTimeUs_);
+    if (!out.pts.isUnknown() && frame->pts == AV_NOPTS_VALUE && (ptsFallbacks_++ % 300) == 0)
+        veyra::log::info("source-file", std::format("frame pts missing; using {} (count={})", frame->best_effort_timestamp != AV_NOPTS_VALUE ? "best_effort_timestamp" : "pkt_dts", ptsFallbacks_));
     if (frame->duration > 0 && tbDen > 0) {
         out.duration = pipeline::Rational{frame->duration * static_cast<int64_t>(tbNum), tbDen};
     } else if (info_.averageFps > 0.0) {
@@ -1521,13 +1532,21 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
         errorMessage_=L"Dolby Vision 基础层颜色与兼容声明不匹配，已停止以避免错误颜色";
         return SourceReadStatus::Error;
     }
-    // D3D12VA frames expose the underlying surface through AV_PIX_FMT_D3D12,
-    // so resolveFrameColor cannot infer NV12/P010 from frame->format. HDR
-    // hardware surfaces are P010 by contract; SDR surfaces are NV12. Software
-    // AV1/ProRes paths retain the exact planar format mapping above.
-    if (frame->format == AV_PIX_FMT_D3D12 && out.colorInfo.pixelFormat == pipeline::SourcePixelFormat::Unknown) {
-        out.colorInfo.pixelFormat = out.colorInfo.isHdrPath()
-            ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::NV12;
+    // The hardware frame format does not encode bit depth. In particular,
+    // 10-bit SDR AV1 can use a P010 surface just like HDR.
+    if (frame->format == AV_PIX_FMT_D3D12) {
+        const auto* frames=frame->hw_frames_ctx
+            ? reinterpret_cast<const AVHWFramesContext*>(frame->hw_frames_ctx->data) : nullptr;
+        switch(frames?frames->sw_format:AV_PIX_FMT_NONE){
+        case AV_PIX_FMT_NV12:out.colorInfo.pixelFormat=pipeline::SourcePixelFormat::NV12;break;
+        case AV_PIX_FMT_P010:out.colorInfo.pixelFormat=pipeline::SourcePixelFormat::P010;break;
+        case AV_PIX_FMT_P016:out.colorInfo.pixelFormat=pipeline::SourcePixelFormat::P016;break;
+        default:
+            if(out.colorInfo.pixelFormat==pipeline::SourcePixelFormat::Unknown)
+                out.colorInfo.pixelFormat=out.colorInfo.isHdrPath()
+                    ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::NV12;
+            break;
+        }
     }
     info_.color = out.colorInfo;
     // Custom (HDR Vivid): the HEVC parser attaches the CUVA 005.1 dynamic metadata
@@ -1765,7 +1784,8 @@ bool MediaFileSource::keepDamagedPicture(const AVFrame* frame)
 bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
 {
     if (!info_.opened) { return false; }
-    if((media::networkMediaInput(path_)||demuxer_.shared())&&!demuxer_.seekable())return false;
+    if((media::networkMediaInput(path_)||demuxer_.shared())&&!demuxer_.seekable()&&
+       !(demuxer_.session()&&demuxer_.session()->timeshiftEnabled()))return false;
     if (targetSeconds.isUnknown() || targetSeconds.den == 0 || targetSeconds.isNegative()) {
         veyra::log::error("source-file", "seek target must be a known non-negative rational");
         return false;
@@ -1803,6 +1823,7 @@ bool MediaFileSource::seek(const pipeline::Rational& targetSeconds)
     waitKeyframe_ = false;
     noOutputSince_ = {};
     lastPtsUs_ = INT64_MIN;
+    resumeAfterUs_ = INT64_MIN;
     ++epoch_;
     ++seekCount_;
     veyra::log::info("source-file", std::format("seek targetUs={} epoch={}", targetUs, epoch_));

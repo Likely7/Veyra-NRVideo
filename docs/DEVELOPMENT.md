@@ -1,13 +1,13 @@
 # 开发与验证入口
 
-更新：2026-11-18。[当前状态](CURRENT_STATUS.md) · [本轮整合](PR_INTEGRATION_2026-11-18.md) · [执行规则](../AGENTS.md)。
+更新：2026-11-19。[当前状态](CURRENT_STATUS.md) · [本轮修复](PS5_SDR_CODE_VALUES_2026-11-19.md) · [执行规则](../AGENTS.md)。
 
 | 用途 | 当前入口 |
 |---|---|
 | main源码 | `E:/项目/Veyra/worktrees/main-claude-anr-20261113` |
-| 当前构建 | `E:/项目/Veyra/build/codex-pr-integration-20261118/app` |
-| 当前私有运行/配置 | `E:/项目/Veyra/tests/codex-pr-integration-20261118` |
-| 本轮日志与报告 | `E:/项目/Veyra/logs/codex-pr-integration-20261118`、`reports/codex-pr-integration-20261118` |
+| 当前构建 | `E:/项目/Veyra/build/codex-ps5-sdr-code-values-20261119` |
+| 当前私有运行/配置 | `E:/项目/Veyra/tests/codex-ps5-sdr-code-values-20261119` |
+| 本轮日志与报告 | `E:/项目/Veyra/logs/codex-ps5-sdr-code-values-20261119`、`reports/codex-ps5-sdr-code-values-20261119` |
 | 共用Git | `C:/Users/123/Desktop/Veyra DLSS Video Player/.git`，保留 |
 | 正式2.1.9原包 | `E:/项目/Veyra/releases/codex-release-2.1.9-20261115` |
 | 既有虚拟摄像机附加包 | `E:/项目/Veyra/releases/claude-release-2.1.9-virtual-camera-20261117` |
@@ -18,10 +18,10 @@
 ## 构建
 
 ```powershell
-py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-pr-integration-20261118 --build-dir E:/项目/Veyra/build/codex-pr-integration-20261118/main-app --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --label 2.1.9-pr-integration-test --jobs 2 --option VEYRA_LIBDOVI_ROOT=E:/项目/Veyra/deps/codex-pr-integration-20261118/libdovi --option VEYRA_RP_CHIAKI_SOURCE_DIR=E:/项目/Veyra/deps/codex-pr-integration-20261118/chiaki-stage --option VEYRA_RP_CHIAKI_VERIFY_DIR=E:/项目/Veyra/deps/core/chiaki-source veyra_qml_ui
+py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-ps5-sdr-code-values-20261119 --build-dir E:/项目/Veyra/build/codex-ps5-sdr-code-values-20261119/main-app --root 'E:/项目/Veyra/worktrees/main-claude-anr-20261113' --label 2.1.9-ps5-sdr-test --jobs 2 --option VEYRA_LIBDOVI_ROOT=E:/项目/Veyra/deps/codex-pr-integration-20261118/libdovi --option VEYRA_RP_CHIAKI_SOURCE_DIR=E:/项目/Veyra/deps/codex-pr-integration-20261118/chiaki-stage --option VEYRA_RP_CHIAKI_VERIFY_DIR=E:/项目/Veyra/deps/core/chiaki-source veyra_qml_ui
 ```
 
-本轮已验证的 `build/.../app` 来自保留的隔离树 `worktrees/pr-integration-20261118`，源码已随 #146 合入 main。上面的 main 重建示例使用独立 `main-app` 输出，避免复用不同源码树的 CMake cache；构建脚本会拒绝 source-root 不匹配。
+本轮已验证的 `build/codex-ps5-sdr-code-values-20261119` 来自保留的隔离树 `worktrees/ps5-sdr-code-values-20261119`，完成后本地合main。上面的 main 重建示例使用独立 `main-app` 输出，避免复用不同源码树的 CMake cache；构建脚本会拒绝 source-root 不匹配。
 
 首次/变更CMake选项或显示版本传`--reconfigure`。保持构建并发≤2、单次≤900秒。脚本读取`logs/pr64-avermedia-20261019/build-20261019-094942/receipt.json`固定依赖参数，该小回执不能按旧日志删除。保留patched FFmpeg与实际对应源码/许可。
 
@@ -39,7 +39,7 @@ py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task code
 
 已合main且无在用进程/本地文件的干净工作树可在tip映射和verify过的bundle后关闭，恢复见[分支归档](BRANCH_ARCHIVE.md)。保留脏树、暂停研究、依赖与正式资产；不把路径字节相加冒充实际磁盘回收。
 
-当前main构建仍是本地整合测试版，版本2.1.9。本轮已授权源码整合到 GitHub main；没有新 Release 或改写已发布下载资产授权。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
+本地 main 源码版本为 2.2.0。最近一次手测构建来自整合前的 `74e9bf3b`。便携版验签复用已有 Chiaki 依赖中的 OpenSSL Crypto，美乐威 SDK 路径为 `E:/项目/Veyra/deps/magewell/3.3.1.1596`。GitHub 的公开版本为 2.1.9。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
 
 ## 新增外部依赖（#136 / #133）
 

@@ -237,8 +237,13 @@ void protocolTests() {
         host.presentDifferentCertificate();
         bool mismatch = false;
         try { paired.request(true, "applist", "", 3000); }
-        catch (const TransportError& e) { mismatch = e.kind == TransportError::Kind::Tls; }
+        catch (const TransportError& e) { mismatch = e.kind == TransportError::Kind::CertificateMismatch; }
         check(mismatch, "a server certificate that is not the pinned one is rejected");
+        // Another machine cannot make a paired host look unpaired: serverinfo does not fall back to HTTP.
+        bool infoMismatch = false;
+        try { (void)paired.serverInfo(); }
+        catch (const TransportError& e) { infoMismatch = e.kind == TransportError::Kind::CertificateMismatch; }
+        check(infoMismatch, "serverinfo from a different certificate is a mismatch, not \"not paired\"");
     } catch (const std::exception& e) { ++g_failures; std::printf("FAIL exception: %s\n", e.what()); }
 
     try {   // --- wrong PIN

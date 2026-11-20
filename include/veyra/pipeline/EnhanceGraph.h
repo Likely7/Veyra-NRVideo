@@ -6,6 +6,7 @@
 #include "veyra/pipeline/ColorGradeInstance.h"
 #include "veyra/pipeline/AntiAliasPass.h"
 #include "veyra/pipeline/BeautyPass.h"
+#include "veyra/pipeline/HudLock.h"
 #include "veyra/beauty/FaceTracker.h"
 #include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/ResolutionPlan.h"
@@ -124,7 +125,7 @@ struct EnhanceGraphDesc {
     // being tone-mapped down first.
     bool hdrWorking() const {return hdrInput&&hdrOutput;}
     bool convertVideoHdr() const {return videoHdr.enabled&&hdrOutput&&!hdrInput;}
-    bool highQualityPresentation = false; // PS5 ordinary scaling, no AI SR
+    bool highQualityPresentation = false; // high-quality screen resampling (the app sets it for every source)
     bool rgbInput = false;       // allocate direct RGBA ingestion before NGX creation
     bool yuy2Input = false;      // packed Y0 U Y1 V -> linear FP16; never subsample to NV12
     // N1: packed capture ingress (1 BGR24, 2 RGB555, 3 RGB565, 4 UYVY, 5 YVYU).
@@ -152,6 +153,7 @@ struct EnhanceGraphDesc {
     bool vfgAsyncSubmission=false; // preview-only; export retains synchronous SDK verdicts
     bool vfgAutoRegulate=false;
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
+    bool hudLock=false; // Live HUD Lock (HudLock.h, from PushFPS), graph frame generation only
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
     engine::OpticalFlowBackend opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;
@@ -762,6 +764,9 @@ public:
     bool hdr10Output() const { return desc_.hdrOutput && (desc_.enableFg||desc_.hdrOutputMode==engine::HdrOutputMode::Hdr10); }
     DXGI_FORMAT outputFormat() const { return hdr10Output()?DXGI_FORMAT_R10G10B10A2_UNORM:desc_.hdrOutput?DXGI_FORMAT_R16G16B16A16_FLOAT:DXGI_FORMAT_R8G8B8A8_UNORM; }
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }
+    // Live HUD Lock: 0 off, 1 running, 2 asked for but its passes could not be created,
+    // 3 asked for with a frame generation that presents on its own (XeSS) or none.
+    int hudLockState() const { if(!desc_.hudLock)return 0; if(hudLock_)return 1; if(!fgEnabled_||presentSinkFg())return 3; return 2; }
     bool xessEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::XeSS; }
     bool fsrEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && engine::fsrFrameGeneration(desc_.frameGenerationBackend); }
     bool fsrActive() const;
@@ -1175,6 +1180,9 @@ private:
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;
     std::unique_ptr<gfx::AmfFrcBackend> amfFrc_;
+    std::unique_ptr<HudLock> hudLock_;  // Live HUD Lock (from PushFPS)
+    bool initHudLock();
+    void composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity);
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
     std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
@@ -1193,6 +1201,8 @@ private:
     uint32_t dlssgLiteState_ = 0;
     std::wstring dlssgDirectory_;
     uint32_t nrSeh_ = 0;
+    // Init1Ext succeeded: Shutdown1 is owed before the snippet DLL is unloaded.
+    bool nrSnippetInitialized_ = false;
     bool fgCapsAvailable_ = false;
     int fgMultiFrameMax_ = 0;
 

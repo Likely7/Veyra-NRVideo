@@ -146,6 +146,49 @@ int main(){
         input->Disconnect();input.Reset();filter.Reset();output.Reset();
     }
     {
+        auto compressed=type;
+        compressed.subtype=MEDIASUBTYPE_MJPG;
+        unsigned packets=0;
+        double pts=-1;
+        HRESULT downstream=S_OK;
+        output.Attach(new OutputPin);
+        const auto deliver=source::timedCaptureDelivery([&](double time,IMediaSample*){
+            ++packets;
+            pts=time;
+            return downstream;
+        });
+        const bool connected=source::createCompressedCaptureSink(compressed,deliver,filter,input)==S_OK&&
+            input->ReceiveConnection(output.Get(),&compressed)==S_OK&&SUCCEEDED(filter.As(&memory));
+        check(connected,"MJPEG regression uses the production input pin");
+        if(connected){
+            ALLOCATOR_PROPERTIES wanted{},actual{};
+            const bool ready=memory->GetAllocatorRequirements(&wanted)==S_OK&&memory->GetAllocator(&allocator)==S_OK&&
+                allocator->SetProperties(&wanted,&actual)==S_OK&&allocator->Commit()==S_OK;
+            check(ready,"MJPEG regression uses a real DirectShow sample");
+            if(ready){
+                ComPtr<IMediaSample> sample;
+                const bool gotSample=allocator->GetBuffer(&sample,nullptr,nullptr,0)==S_OK;
+                check(gotSample,"allocate compressed video sample");
+                if(gotSample){
+                    filter->Run(0);
+                    REFERENCE_TIME start=166833,end=333666;
+                    sample->SetTime(&start,&end);
+                    sample->SetActualDataLength(0);
+                    check(memory->Receive(sample.Get())==S_OK&&packets==0,"timestamped empty MJPEG sample is acknowledged without decoding");
+                    sample->SetActualDataLength(101);
+                    check(memory->Receive(sample.Get())==S_OK&&packets==1&&pts==double(start)/1e7,"next MJPEG payload reaches decoder callback with original PTS");
+                    downstream=E_FAIL;
+                    check(memory->Receive(sample.Get())==E_FAIL&&packets==2,"real MJPEG downstream errors propagate");
+                    filter->Stop();
+                }
+                sample.Reset();
+                allocator->Decommit();
+            }
+            input->Disconnect();
+        }
+        memory.Reset();input.Reset();filter.Reset();output.Reset();allocator.Reset();
+    }
+    {
         AM_MEDIA_TYPE compressed{};compressed.majortype=MEDIATYPE_Audio;
         compressed.subtype={0x2000,0,0x10,{0x80,0,0,0xaa,0,0x38,0x9b,0x71}};
         compressed.formattype=FORMAT_None;

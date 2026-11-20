@@ -13,13 +13,17 @@ Rectangle {
     property string label: ""
     property int count: 0
     property bool expanded: false
+    property bool instantExpansion: false
     default property alias content: inner.data
 
     implicitHeight: header.implicitHeight + (expanded ? inner.implicitHeight + 8 : 0)
     radius: 9
     color: Qt.rgba(1, 1, 1, 0.03)
     clip: true
-    Behavior on implicitHeight { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.springSoft } }
+    Behavior on implicitHeight {
+        enabled: !sub.instantExpansion
+        NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.springSoft }
+    }
 
     ColumnLayout {
         anchors.left: parent.left
@@ -30,7 +34,7 @@ Rectangle {
         Item {
             id: header
             Layout.fillWidth: true
-            implicitHeight: 30
+            implicitHeight: Math.max(30, groupLabel.implicitHeight + 10)
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10
@@ -38,6 +42,9 @@ Rectangle {
                 spacing: 8
                 Text {
                     Layout.fillWidth: true
+                    id: groupLabel
+                    Layout.minimumWidth: 0
+                    wrapMode: Text.Wrap
                     text: sub.label
                     color: Theme.t2
                     font.family: Theme.fontUi

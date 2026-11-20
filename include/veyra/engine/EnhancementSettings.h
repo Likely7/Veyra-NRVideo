@@ -499,6 +499,17 @@ struct EnhancementSettings {
     // chosen one would miss its refresh or the budget (LivePresentationTiming.h).
     // A global control kept in shell preferences.
     bool vfgAutoRegulate=false;
+    // UI "自适应倍率" (engine/AdaptiveFgMultiplier.h, from PushFPS): the multiplier is a
+    // ceiling and each source pair uses the one whose output lands closest to the target.
+    // Changes only the per-pair multiplier, never the graph, so the configuration
+    // comparisons below leave it out. A global control kept in shell preferences.
+    bool fgAdaptive=false;
+    // UI "帧节奏修复" (engine/FramePacingRepair.h, from PushFPS): even times for a locked
+    // game whose frames arrive unevenly (17/50 ms). Re-times frames on the engine thread only.
+    bool pacingRepair=false;
+    // UI "HUD 自动锁定" (pipeline/HudLock.h, from PushFPS): a per-pixel HUD mask found every
+    // frame and kept out of graph frame generation. Its passes exist only when on.
+    bool hudLock=false;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -575,12 +586,18 @@ struct EnhancementSettings {
             active.fgMotionRefine=defaults.fgMotionRefine;
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Dlss))active.dlssgLite=defaults.dlssgLite;
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Vfg))active.vfgAutoRegulate=defaults.vfgAutoRegulate;
+        if(!(multiplier>2))active.fgAdaptive=defaults.fgAdaptive;
+        if(!(multiplier>1))active.pacingRepair=defaults.pacingRepair;
+        // XeSS generates inside its own presenter; HUD Lock works on graph frame generation.
+        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS))active.hudLock=defaults.hudLock;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {
         auto active=activeVideoSettings();const auto target=other.activeVideoSettings();
         active.revision=target.revision;active.audioSync=target.audioSync;active.audioOffsetMs=target.audioOffsetMs;
         active.captureFlipVertical=target.captureFlipVertical;active.exportBitrateMbps=target.exportBitrateMbps;
+        // Read by the engine loop each pair; no graph update or NR history reset.
+        active.fgAdaptive=target.fgAdaptive;active.pacingRepair=target.pacingRepair;
         return active==target;
     }
     bool sameVideoConfiguration(const EnhancementSettings& other) const {
@@ -594,6 +611,9 @@ struct EnhancementSettings {
         // Export-only fields: changing the bitrate must never invalidate the
         // running preview graph (the controller would otherwise rebuild it).
         video.exportBitrateMbps=target.exportBitrateMbps;
+        // Adaptive multiplier and pacing repair: chosen per pair inside the running graph.
+        video.fgAdaptive=target.fgAdaptive;
+        video.pacingRepair=target.pacingRepair;
         // Colour grade: parameters are uniform-only (never a rebuild), but the
         // master switch changes the graph shape, so it stays in the comparison.
         const auto oldColor=video.color;const auto oldAdditional=video.additionalColors;

@@ -168,6 +168,9 @@ private:
     bool eofSignalled_ = false;
     std::wstring errorMessage_;
     int64_t lastPtsUs_ = INT64_MIN;
+    // After a mid-stream software fallback seeks back to a keyframe: frames up to
+    // this PTS were already delivered by the hardware decoder and are skipped.
+    int64_t resumeAfterUs_ = INT64_MIN;
     // Container start time in microseconds: PTS values are absolute, so subtracting
     // it makes frame timestamps media-relative (0..duration) like every other source.
     int64_t startTimeUs_ = 0;

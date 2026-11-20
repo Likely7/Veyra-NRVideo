@@ -19,7 +19,7 @@ namespace veyra::ui {
 class PlaybackServer : public QObject {
     Q_OBJECT
 public:
-    using PlayHandler=std::function<void(const QString&,int,const QString&)>;
+    using PlayHandler=std::function<void(const QString&)>;
     explicit PlaybackServer(PlayHandler handler, QObject* parent = nullptr);
     ~PlaybackServer() override;
 

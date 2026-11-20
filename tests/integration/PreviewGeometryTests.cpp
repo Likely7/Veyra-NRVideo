@@ -11,7 +11,8 @@ extern "C" {
 }
 using namespace veyra;
 int wmain(int argc,wchar_t** argv){
-    if(argc!=2)return 2;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    // --fine: the same geometry through the high-quality resampling every app source now uses.
+    if(argc<2||argc>3||(argc==3&&wcscmp(argv[2],L"--fine")!=0))return 2;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     const auto dir=std::filesystem::path(argv[1]);std::filesystem::create_directories(dir);
     HWND window=CreateWindowExW(0,L"STATIC",L"Preview geometry test",WS_POPUP,0,0,320,240,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!window)return 1;
@@ -19,6 +20,7 @@ int wmain(int argc,wchar_t** argv){
     if(!ctx.initialize(device,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 1;
     pipeline::EnhanceGraph graph(ctx,ring);engine::VideoPresenter presenter;
     pipeline::EnhanceGraphDesc desc;desc.sourceWidth=desc.workWidth=64;desc.sourceHeight=desc.workHeight=32;desc.rgbInput=desc.stillImage=desc.noFeatures=true;desc.enableNr=desc.enableFg=false;
+    desc.highQualityPresentation=argc==3;
     bool ok=graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
     AVFrame* f=av_frame_alloc();f->format=AV_PIX_FMT_RGBA;f->width=64;f->height=32;f->color_trc=AVCOL_TRC_IEC61966_2_1;
     ok=ok&&av_frame_get_buffer(f,32)>=0;

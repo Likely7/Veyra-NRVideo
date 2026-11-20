@@ -2,6 +2,7 @@
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/ui/UpdateChecker.h"
 
 namespace veyra::ui {
 // --- shell preferences -------------------------------------------------------
@@ -191,17 +192,17 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
-        // B 站字幕底色不透明度：0..100，覆盖站方 BCC 头里的 background_alpha。
-        // Subtitle background alpha override for Bilibili tracks.
-        {"biliSubtitleBgAlpha", {-1, 100}},   // -1 = 跟随视频自带的 background_alpha
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
         {"networkPrebuffer", {-1, 60}},
+        {"networkTimeshift", {0, 600}},
         // Live recording: the target bitrate for the file, and the frame rate
         // cap (0 keeps the presented rate).
         {"recordBitrateMbps", {0, 400}},
         {"recordFps", {0, 240}},
+        {"recordSplitSeconds", {0, 86400}},
+        {"recordSplitMiB", {0, 1048576}},
         {"virtualCameraFps", {0, 120}},
         // Instant replay (#103): seconds the buffer keeps.
         {"replaySeconds", {15, 600}}};
@@ -209,11 +210,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
                                    "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
                                    // 设置 → 外观 → 启动动画 / 启动音乐 / 剔除遮罩（2.1.9）
-                                   "introAnimation", "introMusic", "exclusionOverlay",
-                                   // Bilibili module: backup CDN, danmaku on by default, return to the detail page after playback.
-                                   "biliAutoCdn", "biliDanmaku", "biliReturnAfterEnd",
-                                   // 字幕：默认开；双语默认关（合并两行会改变单行位置）。
-                                   "biliSubtitles", "biliSubtitlesBilingual"};
+                                   "introAnimation", "introMusic", "exclusionOverlay"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -222,35 +219,6 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = n;
     } else if (flags.contains(key)) {
         stored = value.toBool();
-    } else if (key == QLatin1String("biliQuality")) {
-        // Bilibili module: the quality a video opens with. 0 = automatic (the best the
-        // account may use, which is HDR on a video that has an HDR master).
-        bool ok = false;
-        const int n = value.toInt(&ok);
-        static const QList<int> allowed{0, 127, 126, 125, 120, 116, 112, 80, 74, 64, 32, 16};
-        if (!ok || !allowed.contains(n)) return false;
-        stored = n;
-    } else if (key == QLatin1String("biliCodec")) {
-        // "auto" takes the HDR-capable one first (HEVC), "avc" forces H.264, "hevc" forces HEVC.
-        const QString v = value.toString();
-        if (v != QLatin1String("auto") && v != QLatin1String("avc") && v != QLatin1String("hevc")) return false;
-        stored = v;
-    } else if (key == QLatin1String("biliAudio")) {
-        // Hi-Res, then Dolby, then the highest-bitrate AAC; falls back to auto rather than going silent.
-        const QString v = value.toString();
-        if (v != QLatin1String("auto") && v != QLatin1String("flac") && v != QLatin1String("dolby")
-            && v != QLatin1String("aac192") && v != QLatin1String("aac132")
-            && v != QLatin1String("aac64")) return false;
-        stored = v;
-    } else if (key == QLatin1String("danmakuScale") || key == QLatin1String("danmakuArea")) {
-        // Danmaku appearance: size 50-250%, area 10-100% of the picture height.
-        bool ok = false; const int n = value.toInt(&ok);
-        if (!ok || n < (key == QLatin1String("danmakuArea") ? 10 : 50) || n > (key == QLatin1String("danmakuArea") ? 100 : 250)) return false;
-        stored = n;
-    } else if (key == QLatin1String("danmakuOpacity") || key == QLatin1String("danmakuSpeed")) {
-        bool ok = false; const int n = value.toInt(&ok);
-        if (!ok || n < (key == QLatin1String("danmakuSpeed") ? 50 : 10) || n > (key == QLatin1String("danmakuSpeed") ? 200 : 100)) return false;
-        stored = n;
     } else if (key == QLatin1String("nrResidualView") || key == QLatin1String("nrCorrectionView")) {
         const auto view = value.toString();
         if (view != QLatin1String("web") && view != QLatin1String("list")) return false;
@@ -321,23 +289,15 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString v = value.toString();
         if (v != QLatin1String("conceal") && v != QLatin1String("keyframe")) return false;
         stored = v;
-    } else if (key == QLatin1String("biliSubtitleBgColor")) {
-        // 字幕底色：固定预设而不是任意取色，空串表示用 BCC 头里的视频默认样式。
-        // Subtitle background colour: fixed presets; empty means "use what the site sent".
-        const QString v = value.toString();
-        // 空串 = 视频默认样式；否则必须是 #RRGGBB（取色器给的就是这个形状）。
-        // Empty means "follow the site"; otherwise it has to be #RRGGBB.
-        if (!v.isEmpty()) {
-            if (v.size() != 7 || v.at(0) != QLatin1Char('#')) return false;
-            for (int k = 1; k < 7; ++k)
-                if (!isxdigit(v.at(k).toLatin1())) return false;
-        }
-        stored = v;
     } else if (key == QLatin1String("rememberPosition") || key == QLatin1String("dockPinned")) {
         stored = value.toBool();
+    } else if (key == QLatin1String("updateDownloadRoute")) {
+        const auto name = value.toString();
+        if (!portable::parseDownloadRoute(name)) return false;
+        stored = name;
     } else if (key == QLatin1String("language")) {
         const QString v = value.toString();
-        static const QStringList languages{"auto", "zh-CN", "zh-TW", "en", "ja", "ko"};
+        static const QStringList languages{"auto", "zh-CN", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "pt-BR", "ru"};
         if (!languages.contains(v)) return false;
         stored = v;
     } else if (key == QLatin1String("monitorGpu")) {
@@ -355,10 +315,6 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     if (impl_->prefs.value(key) == stored) return true;
     const auto previous = impl_->prefs;
     impl_->prefs[key] = stored;
-    // 字幕底色类偏好改了就地重刷，正在播放的字幕立刻换色。
-    // Repaint the running Bilibili subtitle right away when a background preference changes.
-    if (key == QLatin1String("biliSubtitleBgColor") || key == QLatin1String("biliSubtitleBgAlpha"))
-        refreshBiliSubtitleStyle();
     if (!impl_->savePrefs()) {
         impl_->prefs = previous;
         emit notice(tr("偏好保存失败，已保留原设置"), true);
@@ -378,6 +334,11 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
             !downmix && impl_->prefBool("captureAudioMonitor", true),
             impl_->prefString("audioDevice").toStdWString()});
         emit audioDevicesChanged();
+    }
+    if (key == QLatin1String("updateDownloadRoute")) {
+        const auto route = portable::parseDownloadRoute(impl_->prefString("updateDownloadRoute"));
+        static_cast<UpdateChecker*>(updates_)->setDownloadRoute(route.value_or(portable::DownloadRoute::GitHub));
+        return;
     }
     if(key==QLatin1String("virtualCameraFps")&&virtualCameraEnabled())setVirtualCameraEnabled(true);
     if(key==QLatin1String("captureAudioMonitor"))
@@ -667,7 +628,6 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
     // The author's pages as the author gave them (2026-10-19); the page shows buttons,
     // never these addresses.
     static constexpr std::pair<const char*, const char*> links[] = {
-        {"bilibili", "https://space.bilibili.com/19500532?spm_id_from=333.1007.0.0"},
         {"douyin", "https://v.douyin.com/9s06Bf2Inqc/"},
         {"x", "https://x.com/likely2002"},
         {"github", "https://github.com/Likely7"},
@@ -720,7 +680,9 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
             // Typing into a text field never compares.
             const QObject* focus = QGuiApplication::focusObject();
             const bool typing = focus && (focus->inherits("QQuickTextInput") || focus->inherits("QQuickTextEdit"));
-            if (!hold.isEmpty() && hold[0].toCombined() == pressed && !typing && impl_->prefBool("holdCompare", true)) {
+            // The walkthrough owns keyboard input, including custom hold-to-compare bindings.
+            const bool onboarding = watched->property("onboardingActive").toBool();
+            if (!hold.isEmpty() && hold[0].toCombined() == pressed && !typing && !onboarding && impl_->prefBool("holdCompare", true)) {
                 const bool down = type == QEvent::KeyPress;
                 if (down != impl_->holdKeyDown) { impl_->holdKeyDown = down; holdOriginal(down); }
                 return true;
