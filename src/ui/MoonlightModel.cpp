@@ -264,18 +264,19 @@ void MoonlightModel::probe(const QString& address, int port, bool manual) {
     std::erase_if(probes_, [](std::jthread& t) { return !t.joinable(); });
     // A host we already know is asked with its saved certificate (over HTTPS), so the
     // answer can confirm the pairing instead of only saying "online".
-    QString cert;
+    QString cert, pinnedId;
     int httpsPort = moonlight::kDefaultHttpsPort;
     bool nvidia = false;
     if (const Host* known = findByAddress(address, port); known && known->paired) {
         cert = known->cert;
+        pinnedId = known->id;
         httpsPort = known->httpsPort;
         nvidia = known->nvidia;
     }
     struct Pin { QString id, cert; int httpsPort; bool nvidia; };
     std::vector<Pin> pins;
     for (const Host& h : hosts_) if (h.paired && !h.cert.isEmpty()) pins.push_back({h.id, h.cert, h.httpsPort, h.nvidia});
-    probes_.emplace_back([this, address, port, manual, cert, httpsPort, nvidia, pins](std::stop_token stop) {
+    probes_.emplace_back([this, address, port, manual, cert, pinnedId, httpsPort, nvidia, pins](std::stop_token stop) {
         try {
             const moonlight::Identity id = identity();
             moonlight::ServerClient client(id, moonlight::HostAddress{utf8(address), uint16_t(port)}, utf8(cert), uint16_t(httpsPort), !nvidia);
@@ -283,28 +284,38 @@ void MoonlightModel::probe(const QString& address, int port, bool manual) {
             moonlight::ServerInfo info = client.serverInfo(true);
             // Over plain HTTP the uniqueid is only a claim. It may move a paired host to
             // this address only if the address also answers with that host's saved certificate.
-            bool authenticated = info.pairStatusKnown && info.paired;
-            if (!authenticated && cert.isEmpty()) {
+            QString authenticatedCert;
+            if (!cert.isEmpty() && info.pairStatusKnown && info.paired && pinnedId == qs(info.uniqueId))
+                authenticatedCert = cert;
+            if (cert.isEmpty()) {
                 for (const Pin& p : pins) {
                     if (p.id != qs(info.uniqueId)) continue;
                     try {
                         moonlight::ServerClient pinned(id, moonlight::HostAddress{utf8(address), uint16_t(port)}, utf8(p.cert), uint16_t(p.httpsPort), !p.nvidia);
                         pinned.setCancel(&cancel_);
                         const moonlight::ServerInfo checked = pinned.serverInfo(true);
-                        if (checked.pairStatusKnown && checked.paired) { info = checked; authenticated = true; }
+                        if (checked.pairStatusKnown && checked.paired && qs(checked.uniqueId) == p.id) {
+                            info = checked;
+                            authenticatedCert = p.cert;
+                            break;
+                        }
                     } catch (const std::exception&) {}
                 }
             }
             if (stop.stop_requested()) return;
-            QMetaObject::invokeMethod(this, [this, address, port, manual, info, authenticated] {
+            QMetaObject::invokeMethod(this, [this, address, port, manual, info, authenticatedCert, pinnedId, cert] {
                 Host* known = nullptr;
                 for (Host& h : hosts_) if (h.id == qs(info.uniqueId)) known = &h;
-                if (known && known->paired && !authenticated && (known->address != address || known->port != port)) {
-                    log::warn("moonlight-ui", "a host at a new address claims a paired host's id without its certificate; address not changed");
+                if (!known) known = findByAddress(address, port);
+                const bool sameAddress = known && known->address == address && known->port == port;
+                const bool samePin = known && !cert.isEmpty() && known->cert == cert && known->id == pinnedId;
+                const bool authenticated = known && !authenticatedCert.isEmpty() && known->cert == authenticatedCert;
+                if (known && known->paired && (known->id != qs(info.uniqueId)
+                        || (!authenticated && !(sameAddress && samePin)))) {
+                    log::warn("moonlight-ui", "host discovery could not confirm the saved identity; pairing retained");
                     if (manual) { status_ = describe(moonlight::TransportError(moonlight::TransportError::Kind::CertificateMismatch, {})); emit changed(); }
                     return;
                 }
-                if (!known) known = findByAddress(address, port);
                 if (!known) {
                     Host h;
                     h.id = qs(info.uniqueId);

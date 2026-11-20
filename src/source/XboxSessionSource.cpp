@@ -285,7 +285,11 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             if (!q.audioReady || !q.opus) return;
             // Lost packets never reach this callback: time comes from RTP, not from
             // counting decoded samples, so a loss leaves a gap instead of pulling audio ahead.
-            if (q.haveAudioRtp) q.audioRtpTicks += int32_t(rtp - q.lastAudioRtp);
+            if (q.haveAudioRtp) {
+                const auto advance = int32_t(rtp - q.lastAudioRtp);
+                if (advance <= 0) return; // late or repeated Opus packet
+                q.audioRtpTicks += advance;
+            }
             q.lastAudioRtp = rtp;
             q.haveAudioRtp = true;
             const int frames = opus_decode_float(q.opus, data, opus_int32(size), q.pcm.data(), 5760, 0);

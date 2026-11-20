@@ -75,8 +75,10 @@ int main() {
         TriggerFilter f;
         f.apply(200, 120, 0);
         f.apply(0, 120, ms(4));                       // L2 released
-        auto held = f.apply(0, 160, ms(50));
-        check(held.r2 == 120, "other trigger's in-between values held after a release");
+        auto held = f.apply(0, 125, ms(40));
+        check(held.r2 == 120, "nearby noise is held after a release");
+        auto changed = f.apply(0, 160, ms(50));
+        check(changed.r2 == 160, "real analog travel continues after releasing the other trigger");
         auto full = f.apply(0, 255, ms(60));
         check(full.r2 == 255, "other trigger reaching 255 still goes through during the hold");
         auto after = f.apply(0, 160, ms(200));

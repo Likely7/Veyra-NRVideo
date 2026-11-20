@@ -24,10 +24,9 @@ namespace veyra::remoteplay {
 //  1. Ends snap: a value within kDeadzone of 0 or 255 reads as 0 or 255.
 //  2. Between the ends, a value is only sent once it moves kStep or more from
 //     the last sent value. 0 and 255 are always sent at once.
-//  3. For kEdgeHold after a trigger is released, the other trigger's in-between
-//     values are held. The release stays the newest history event, so the
-//     tail resend repeats it. Reaching 0 or 255 still goes through at once.
-//     The trigger being moved itself is never held.
+//  3. For kEdgeHold after a trigger is released, raise the other trigger's
+//     movement threshold. Real trigger travel and both endpoints still go
+//     through immediately, while small noise leaves the release in history.
 class TriggerFilter {
 public:
     static constexpr std::uint8_t kDeadzone = 6;
@@ -49,8 +48,8 @@ public:
                 sent = v;
                 continue;
             }
-            if (now < holdUntil_[i]) continue;
-            if (std::abs(int(v) - int(sent)) >= kStep) sent = v;
+            const int step = now < holdUntil_[i] ? 2 * kStep : kStep;
+            if (std::abs(int(v) - int(sent)) >= step) sent = v;
         }
         return {sent_[0], sent_[1]};
     }

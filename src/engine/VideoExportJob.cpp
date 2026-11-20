@@ -326,7 +326,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             bool steppedBack=false;
             double pts=timeline.map(unknownPts?std::numeric_limits<double>::quiet_NaN():sourcePts-videoOriginSeconds,
                                     sourceCount?previousPts+sourceInterval:0,&steppedBack);
-            if(requestedEnd>0&&sourcePts+timeline.offset>=requestedEnd)break;
+            if(requestedEnd>0&&pts+videoOriginSeconds>=requestedEnd)break;
             const bool repairPts=unknownPts||steppedBack;
             if(repairPts){
                 ++repairedTimestamps;
