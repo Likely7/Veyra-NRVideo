@@ -112,7 +112,13 @@ I've received creator fees from a community-created Veyra token. These contribut
 <h2 align="center">⭐ Star History</h2>
 
 <p align="center">
-  <img src="assets/star-history.svg" alt="Veyra Star History" width="900">
+  <a href="https://gittrend.io/repo/Likely7/Veyra-NRVideo">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://gittrend.io/api/badge/chart/Likely7/Veyra-NRVideo.svg?theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://gittrend.io/api/badge/chart/Likely7/Veyra-NRVideo.svg" />
+      <img src="https://gittrend.io/api/badge/chart/Likely7/Veyra-NRVideo.svg" alt="Veyra Star History" width="900" />
+    </picture>
+  </a>
 </p>
 
 <p align="center">
