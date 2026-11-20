@@ -335,6 +335,8 @@ add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 # ScaleBlit: working frame -> swapchain backbuffer (Phase 6 present path).
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
 enable_testing()
+
+add_subdirectory(tests/hdmi-bitstream)
 add_subdirectory(tests/screenshot-alpha)
 veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
 # Nv12Upload: byte buffer -> luma/chroma planes (copy-free upload path).
@@ -710,6 +712,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/sink/CaptureAudioDsp.cpp
     src/sink/BitstreamAudio.cpp
     src/sink/BitstreamAudioSink.cpp
+    src/sink/HdmiBitstreamOutput.cpp
+    src/sink/Iec61937Burst.cpp
     src/sink/ImageExportSink.cpp
     src/sink/NvencD3D12Encoder.cpp
     src/sink/NvencLiveEncoder.cpp
@@ -722,6 +726,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_features(veyra_sinks PRIVATE cxx_std_20)
   target_compile_definitions(veyra_sinks PRIVATE
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  set_source_files_properties(src/sink/HdmiBitstreamOutput.cpp PROPERTIES COMPILE_DEFINITIONS VEYRA_HDMI_BITSTREAM_DIAGNOSTICS)
   target_include_directories(veyra_sinks PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_include_directories(veyra_sinks PRIVATE ${FFMPEG_INCLUDE_DIRS})
   set(VEYRA_NVENC_HEADERS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party_local/nvidia/nv-codec-headers-13.0" CACHE PATH "NVENC 13.0 ABI headers (nv-codec-headers n13.0.19.0)")
@@ -1008,6 +1013,9 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
   target_compile_features(veyra_audio_timeline_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_audio_timeline_tests PRIVATE veyra_sinks)
   add_executable(veyra_capture_audio_tests tests/integration/CaptureAudioTests.cpp)
+  add_test(NAME veyra_capture_audio_hdmi_branch COMMAND veyra_capture_audio_tests --hdmi-branch)
+  add_test(NAME veyra_capture_audio_bitstream_reservation COMMAND veyra_capture_audio_tests --bitstream-reservation)
+  set_tests_properties(veyra_capture_audio_hdmi_branch veyra_capture_audio_bitstream_reservation PROPERTIES SKIP_RETURN_CODE 77)
   target_include_directories(veyra_capture_audio_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
   add_executable(veyra_avermedia_switch_tests tests/unit/AverMediaAudioSwitchTests.cpp)
   target_compile_features(veyra_avermedia_switch_tests PRIVATE cxx_std_20)
@@ -1018,6 +1026,7 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
   target_compile_options(veyra_avermedia_carrier_tests PRIVATE /utf-8)
   target_compile_definitions(veyra_avermedia_carrier_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
   target_include_directories(veyra_avermedia_carrier_tests PRIVATE ${FFMPEG_INCLUDE_DIRS})
+  add_test(NAME veyra_avermedia_carrier COMMAND veyra_avermedia_carrier_tests)
   target_link_libraries(veyra_avermedia_carrier_tests PRIVATE veyra_sources ${FFMPEG_LIBRARIES})
   add_library(veyra_avermedia_fake_vendor SHARED tests/fixtures/FakeAverMediaVendor.cpp tests/fixtures/FakeAverMediaVendor.def)
   target_compile_features(veyra_avermedia_fake_vendor PRIVATE cxx_std_20)

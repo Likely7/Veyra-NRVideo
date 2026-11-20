@@ -526,6 +526,7 @@ struct QmlPlayerBridge::Impl {
     uint64_t imageSession = 0;
     enum class ImagePhase { Idle, Opening, Saving } imagePhase = ImagePhase::Idle;
     sink::ActiveRenderEndpoint audioActive;
+    sink::HdmiBitstreamState hdmiState;
     int audioPollTicks = 0;
     // --- protection drawing (#8) ---
     QString protDraw;                         // "" | rect | ellipse

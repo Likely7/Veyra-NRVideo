@@ -26,6 +26,7 @@
 #include "veyra/sink/AudioFormat.h"
 #include "veyra/sink/BitstreamAudio.h"
 #include "veyra/sink/BitstreamAudioSink.h"
+#include "veyra/sink/HdmiBitstreamOutput.h"
 #include <windows.h>
 #include <dshow.h>
 #include <dvdmedia.h>
@@ -373,6 +374,17 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     // which this object drives in-process while it is bound to the source.
     std::unique_ptr<AverMediaVendorAudio> vendorAudio;
     std::shared_ptr<std::atomic<bool>> vendorDelivering;
+    std::shared_ptr<sink::HdmiBitstreamOutput> hdmiBitstream;
+    AverMediaAudioCarrier::BurstCallback hdmiTap(std::shared_ptr<std::atomic<bool>> delivering = {}) {
+        if(!hdmiBitstream)return {};
+        return [output=std::weak_ptr(hdmiBitstream),delivering=std::move(delivering)](
+            uint16_t pc,uint16_t pd,unsigned rate,std::span<const uint8_t> words) {
+            if(auto sink=output.lock()){
+                if(rate==0)sink->reset();
+                else if(!delivering||delivering->load())sink->submit(pc,pd,rate,words);
+            }
+        };
+    }
     // Dolby/DTS passthrough: when the device offers only compressed media types
     // the raw bursts are decoded here and the session is configured with the
     // decoded layout on the first frame (that is why its start is deferred).
@@ -941,6 +953,9 @@ bool CaptureCardSource::showDeviceProperties(std::wstring_view devicePath,uintpt
     return SUCCEEDED(hr);
 }
 const SourceInfo& CaptureCardSource::info()const{return p_->info;}
+void CaptureCardSource::setHdmiBitstream(std::shared_ptr<sink::HdmiBitstreamOutput> output){
+    p_->hdmiBitstream=std::move(output);
+}
 void CaptureCardSource::setAudioIngress(unsigned mode){
     auto& p=*p_;
     const unsigned clamped=mode>2?0:mode;
@@ -1330,7 +1345,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         // Preserve the explicit receiver passthrough preference. Automatic mode
         // uses the vendor graph, PCM-only never arms the non-PCM component.
         bool audioReady=false;
-        if(p.audioIngressMode==2){
+        if(p.audioIngressMode==2&&!p.hdmiBitstream){
             if(useVendor)applyVendorAudioSwitch(wantedName,wantedPath);
             audioReady=connectDirectShowAudio(desc);
             if(!audioReady&&useVendor){p.averMediaSwitch.stop();audioReady=connectVendorAudio(wantedName,wantedName,wantedPath);}
@@ -1553,7 +1568,7 @@ bool CaptureCardSource::connectVendorAudio(const std::wstring& deviceName,const 
         if(!accepted&&format->delivery.logRejection())
             log::warn("capture-audio-vendor",std::format("audio session rejected block bytes={} channels={} rate={} consecutive={} keepingStream={}",bytes,block.channels,block.rate,format->delivery.rejected(),keep));
         return keep;
-    },preferName,preferPath);
+    },preferName,preferPath,p.hdmiTap(delivering));
     const auto state=vendor->state();
     if(!started){
         log::warn("capture-audio-vendor",std::format("vendor graph unavailable device=\"{}\" error=\"{}\" callbacks={}",
@@ -1696,7 +1711,7 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
                     if(target->push(block.samples,block.frames*block.channels*sizeof(float),pts,discontinuity))return true;
                     if((++format.rejected&(format.rejected-1))==0)log::warn("capture-audio-carrier",std::format("audio session rejected decoded block channels={} rejected={}",block.channels,format.rejected));
                     return false;
-                });
+                },p.hdmiTap());
             hr=createNativeAudioSink(*type,[target,probe,router,decodedFormat,pcm=parsed,clock=CaptureAudioClock{},rate=parsed.wave.nAvgBytesPerSec,warned=false](IMediaSample* sample) mutable {
                 BYTE* bytes=nullptr;REFERENCE_TIME begin=0,end=0;
                 const auto pointerHr=sample->GetPointer(&bytes);if(FAILED(pointerHr))return pointerHr;
@@ -1750,7 +1765,7 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
             // decode Dolby Atmos / DTS:X object audio; the in-player decode
             // below would reduce it to plain 5.1 PCM. Falls back silently when
             // no endpoint advertises the format.
-            if(wantBitstreamFirst&&iec){
+            if(wantBitstreamFirst&&iec&&!p.hdmiBitstream){
                 const GUID* carrier=nullptr;
                 switch(kind){
                 case sink::BitstreamKind::Ac3:carrier=&KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL;break;
@@ -1805,11 +1820,23 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
             auto started=std::make_shared<bool>(false);
             const std::string kindName=sink::bitstreamKindName(kind);
             const std::wstring kindWide(kindName.begin(),kindName.end());
-            hr=createBitstreamAudioSink(*type,[target,decoder,pcmBuffer,started,kindWide,clock=CaptureAudioClock{},warned=false](IMediaSample* sample) mutable {
+            uint32_t carrierRate=48000;
+            if(type->pbFormat&&type->cbFormat>=sizeof(WAVEFORMATEX)){
+                const auto* wave=reinterpret_cast<const WAVEFORMATEX*>(type->pbFormat);
+                if(wave->nSamplesPerSec)carrierRate=wave->nSamplesPerSec;
+            }
+            auto tap=iec&&p.hdmiBitstream
+                ?std::make_shared<AverMediaAudioCarrier>(AverMediaAudioCarrier::Callback{},p.hdmiTap()):nullptr;
+            hr=createBitstreamAudioSink(*type,[target,decoder,pcmBuffer,started,kindWide,tap,carrierRate,clock=CaptureAudioClock{},warned=false](IMediaSample* sample) mutable {
                 BYTE* bytes=nullptr;REFERENCE_TIME begin=0,end=0;
                 const auto pointerHr=sample->GetPointer(&bytes);if(FAILED(pointerHr))return pointerHr;
                 const auto timeHr=sample->GetTime(&begin,&end);const bool timed=SUCCEEDED(timeHr);
                 if(!timed&&!warned){log::warn("capture-audio",std::format("bitstream timestamp missing hr=0x{:X}; using decoded sample-count clock",unsigned(timeHr)));warned=true;}
+                if(tap){
+                    const double now=std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+                    if(sample->IsDiscontinuity()==S_OK)tap->reset();
+                    if(!tap->feed({bytes,size_t(sample->GetActualDataLength())},{2,16,carrierRate},now))tap->reset();
+                }
                 pcmBuffer->clear();
                 if(!decoder->push(bytes,size_t(sample->GetActualDataLength()),*pcmBuffer))return S_OK;
                 if(pcmBuffer->empty())return S_OK;
@@ -1922,6 +1949,7 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     const HRESULT stopped=p.control->Stop();
     log::warn("capture-audio-reconnect",std::format("PCM stalled; Stop hr=0x{:08X} videoFilterRetained=1",uint32_t(stopped)));
     if(FAILED(stopped)){p.audioError=L"音频恢复等待采集驱动停止；稍后重试";return;}
+    if(p.hdmiBitstream)p.hdmiBitstream->reset();
     const bool connected=[&]{
         if(p.audioSink){const HRESULT hr=p.graph->RemoveFilter(p.audioSink.Get());log::info("capture-audio-reconnect",std::format("Remove PCM sink hr=0x{:08X}",uint32_t(hr)));if(FAILED(hr))return false;p.audioSink.Reset();}
         if(p.audioSession)p.audioSession->stop();
@@ -2061,6 +2089,7 @@ void CaptureCardSource::close()noexcept{
     p.elgatoHdr.reset();
     if(p.vendorDelivering)p.vendorDelivering->store(false);
     if(p.vendorAudio){p.vendorAudio->stop();p.vendorAudio.reset();}p.vendorDelivering.reset();
+    if(p.hdmiBitstream)p.hdmiBitstream->reset();
     p.averMediaSwitch.stop();p.embeddedAudioUnavailable=false;
     if(p.audioSession)p.audioSession->stop();p.audioError.clear();
     if(p.audioPassthrough)p.audioPassthrough->close();

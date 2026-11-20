@@ -12,8 +12,10 @@ uint16_t word(const uint8_t* p){return uint16_t(p[0])|uint16_t(p[1])<<8;}
 bool sync(const uint8_t* p){return std::memcmp(p,syncBytes,4)==0;}
 bool supported(sink::BitstreamKind k){return k==sink::BitstreamKind::Ac3||k==sink::BitstreamKind::Eac3||k==sink::BitstreamKind::Dts;}
 }
-AverMediaAudioCarrier::AverMediaAudioCarrier(Callback callback):callback_(std::move(callback)){}
+AverMediaAudioCarrier::AverMediaAudioCarrier(Callback callback,BurstCallback burst)
+    :burst_(std::move(burst)),callback_(std::move(callback)){}
 void AverMediaAudioCarrier::reset(){
+    if(burst_)burst_(0,0,0,{});
     buffer_.clear();packet_.clear();pcm_.clear();decoder_.reset();state_={};
     kind_=candidate_=sink::BitstreamKind::None;confirmations_=undecodedBursts_=0;compressed_=false;discontinuity_=true;lastIec_=0;revision_=0;input_={};
 }
@@ -23,6 +25,7 @@ bool AverMediaAudioCarrier::emitPcm(std::span<const uint8_t> bytes,avermedia::Sa
     if(info.channels<1||info.channels>8||info.rate<8000||info.rate>192000
         ||(info.bits!=16&&info.bits!=24&&info.bits!=32)){state_.error="unsupported vendor PCM format";return false;}
     const size_t sampleBytes=info.bits/8,align=sampleBytes*info.channels,frames=bytes.size()/align;
+    if(!callback_)return true;
     // Limit each session push to 20 ms; never replay a four-second probe queue.
     const size_t blockFrames=std::max<size_t>(1,info.rate/50);
     for(size_t frame=0;frame<frames;frame+=blockFrames){
@@ -42,10 +45,12 @@ bool AverMediaAudioCarrier::emitPcm(std::span<const uint8_t> bytes,avermedia::Sa
     state_.channels=info.channels;state_.rate=info.rate;state_.codec="linear PCM";state_.bitstream=false;state_.error.clear();
     return true;
 }
-bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,size_t payloadBytes,sink::BitstreamKind kind){
+bool AverMediaAudioCarrier::emitBurst(std::span<const uint8_t> words,size_t payloadBytes,sink::BitstreamKind kind,uint16_t pc,uint16_t pd){
     if(kind!=candidate_){candidate_=kind;confirmations_=0;}
     if(confirmations_<2)++confirmations_;
     if(confirmations_<2)return true; // Count distinct complete payloads, not sync inside a payload.
+    if(burst_)burst_(pc,pd,input_.rate,words);
+    if(!callback_)return true;
     if(!supported(kind)){state_.error="unsupported IEC 61937 vendor carrier";return true;}
     if(!decoder_||kind!=kind_){
         decoder_=std::make_unique<sink::BitstreamDecoder>();
@@ -110,7 +115,7 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
         const size_t stored=(payload+1)&~size_t(1);
         if(cursor+8+stored>buffer_.size())break;
         ++state_.bursts;
-        const bool ok=emitBurst(std::span(buffer_).subspan(cursor+8,stored),payload,kind);
+        const bool ok=emitBurst(std::span(buffer_).subspan(cursor+8,stored),payload,kind,pc,pd);
         cursor+=8+stored;
         if(!ok){buffer_.erase(buffer_.begin(),buffer_.begin()+cursor);state_.retainedBytes=buffer_.size();return false;}
     }
@@ -120,6 +125,7 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
             // reset codec history and reconfigure the same playback session.
             const size_t complete=buffer_.size()/align*align;
             const size_t tail=std::min(complete,size_t(info.rate/50)*align);
+            if(burst_)burst_(0,0,0,{});
             decoder_.reset();kind_=candidate_=sink::BitstreamKind::None;confirmations_=0;compressed_=false;discontinuity_=true;
             const bool ok=emitPcm(std::span(buffer_).first(complete).last(tail),info);
             buffer_.erase(buffer_.begin(),buffer_.begin()+complete);state_.retainedBytes=buffer_.size();return ok;
@@ -135,14 +141,14 @@ bool AverMediaAudioCarrier::feed(std::span<const uint8_t> bytes,avermedia::Sampl
     }
     state_.retainedBytes=buffer_.size();return true;
 }
-PcmCarrierRouter::PcmCarrierRouter(uint32_t rate,AverMediaAudioCarrier::Callback decoded)
+PcmCarrierRouter::PcmCarrierRouter(uint32_t rate,AverMediaAudioCarrier::Callback decoded,AverMediaAudioCarrier::BurstCallback burst)
     :carrier_([this,decoded=std::move(decoded)](const VendorPcmBlock& block){
         // PCM blocks are the caller's own bytes, pushed unchanged by the caller. A
         // decoded block the session rejects is the session's business and must not
         // reset decoding (that would let the carrier through as noise).
         if(block.codec.empty())return true;
         decoding_=true;if(decoded)decoded(block);return true;
-    }),info_{2,16,rate}{}
+    },std::move(burst)),info_{2,16,rate}{}
 PcmCarrierRouter::Result PcmCarrierRouter::feed(std::span<const uint8_t> bytes,double now){
     Result result;
     if(!carrier_.feed(bytes,info_,now)){

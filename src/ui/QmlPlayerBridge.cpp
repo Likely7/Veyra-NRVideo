@@ -586,6 +586,11 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // up what it opened about twice a second.
         if (++impl_->audioPollTicks >= 30) {
             impl_->audioPollTicks = 0;
+            const auto hdmi = impl_->engine.hdmiBitstream().state();
+            if (impl_->hdmiState != hdmi) {
+                impl_->hdmiState = hdmi;
+                emit audioDevicesChanged();
+            }
             const auto active = sink::activeRenderEndpoint();
             if (active.valid != impl_->audioActive.valid || active.id != impl_->audioActive.id ||
                 active.fallback != impl_->audioActive.fallback || active.channels != impl_->audioActive.channels ||
