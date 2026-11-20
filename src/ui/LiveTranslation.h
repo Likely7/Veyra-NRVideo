@@ -2,13 +2,22 @@
 
 #include "TranslationAssets.h"
 #include <QElapsedTimer>
+#include <QHash>
+#include <QRectF>
 #include <QSettings>
+#include <QStringList>
 #include <QTimer>
 
 namespace veyra::ui {
 class LiveTranslation final : public QObject {
     Q_OBJECT
-    Q_PROPERTY(bool supported READ supported CONSTANT)
+    // supported: the selected caption source works on this Windows.
+    Q_PROPERTY(bool supported READ sourceSupported NOTIFY changed)
+    Q_PROPERTY(bool liveCaptionsSupported READ supported CONSTANT)
+    Q_PROPERTY(bool screenTextSupported READ screenTextSupported CONSTANT)
+    Q_PROPERTY(int captionSource READ captionSource WRITE setCaptionSource NOTIFY changed)
+    Q_PROPERTY(int screenRegion READ screenRegion WRITE setScreenRegion NOTIFY changed)
+    Q_PROPERTY(QRectF customRegion READ customRegion WRITE setCustomRegion NOTIFY changed)
     Q_PROPERTY(bool enabled READ enabled WRITE setEnabled NOTIFY changed)
     Q_PROPERTY(int provider READ provider WRITE setProvider NOTIFY changed)
     Q_PROPERTY(QString sourceLanguage READ sourceLanguage WRITE setSourceLanguage NOTIFY changed)
@@ -25,9 +34,25 @@ class LiveTranslation final : public QObject {
     Q_PROPERTY(qint64 downloadBytes READ downloadBytes CONSTANT)
 public:
     enum Provider { Local, OpenAi, MyMemory };
+    // Where the original text comes from: what Windows Live Captions hears, or the
+    // subtitles drawn on the picture (capture card, PS5/Xbox/PC streaming), read by OCR.
+    enum CaptionSource { WindowsCaptions, ScreenText };
+    // The part of the picture read for ScreenText.
+    enum ScreenRegion { BottomSubtitles, BottomWide, TopSubtitles, WholePicture, CustomRegion };
     explicit LiveTranslation(const QString& directory, QObject* parent = nullptr);
     ~LiveTranslation() override;
-    static bool supported();
+    static bool supported();           // Windows Live Captions is available
+    static bool screenTextSupported(); // Windows OCR is available (Windows 10 or later)
+    bool sourceSupported() const;
+    int captionSource() const { return captionSource_; }
+    int screenRegion() const { return screenRegion_; }
+    QRectF customRegion() const { return customRegion_; }
+    // What the engine reads while ScreenText is on (QmlPlayerBridge polls these).
+    bool screenTextWanted() const { return enabled_ && captionSource_ == ScreenText; }
+    QRectF screenTextRect() const;
+    bool screenTextCentered() const;
+    QString screenTextLanguage() const;
+    int screenTextIntervalMs() const;
     bool enabled() const { return enabled_; }
     int provider() const { return provider_; }
     QString sourceLanguage() const { return sourceLanguage_; }
@@ -50,6 +75,12 @@ public:
     void setShowOriginal(bool value);
     void setApiBase(QString value);
     void setApiModel(QString value);
+    void setCaptionSource(int value);
+    void setScreenRegion(int value);
+    void setCustomRegion(QRectF value);
+    // The engine's latest settled on-screen line (empty: none), whether its OCR is
+    // ready, and why not. Ignored unless ScreenText is the enabled source.
+    void acceptScreenText(const QString& text, bool ready, const QString& error);
     Q_INVOKABLE void setApiKey(const QString& value);
     Q_INVOKABLE void openWindowsCaptions();
     Q_INVOKABLE void downloadModel();
@@ -69,6 +100,8 @@ private:
     void stopLocal();
     void requestTranslation();
     void receiveTranslation(QNetworkReply* reply, const QString& text);
+    QString cacheKey(const QString& text) const;
+    void remember(const QString& text, const QString& translation);
 
     TranslationAssets assets_;
     QSettings settings_;
@@ -81,6 +114,14 @@ private:
     bool enabled_ = false, active_ = false, captionsOpen_ = false, serverFailed_ = false, readerStarted_ = false;
     bool showOriginal_ = true;
     int provider_ = Local;
+    int captionSource_ = WindowsCaptions;
+    int screenRegion_ = BottomSubtitles;
+    QRectF customRegion_{0.08, 0.70, 0.84, 0.27};
+    QString screenError_;
+    // Recent translations: game lines repeat (hints, menus, the same speaker), and a
+    // repeated line is shown at once instead of being sent again. Bounded.
+    QHash<QString, QString> cache_;
+    QStringList cacheOrder_;
     quint16 serverPort_ = 0;
     quint64 session_ = 0;
     qint64 newTextAt_ = 0, requestedAt_ = 0, serverStartedAt_ = 0, lastCaptionReadAt_ = 0;

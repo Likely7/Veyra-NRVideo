@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Based on the Windows Live Captions translation flow from jjjxxxttt, PR #203.
+// The on-screen text source (subtitles read from the picture by OCR in the engine,
+// ScreenTextCapture) follows VI Translator's capture flow (MIT License).
 #include <winsock2.h>
 #include "LiveTranslation.h"
 #include "WinCaptionReader.h"
@@ -19,6 +21,7 @@
 #include <QUrlQuery>
 #include <QUuid>
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 #include <windows.h>
@@ -29,6 +32,7 @@ namespace {
 constexpr auto localAlias = "veyra-translation";
 constexpr qint64 captionLifetimeMs = 6500;
 constexpr qint64 maxResponseBytes = 128 * 1024;
+constexpr int cacheEntries = 300;
 
 bool languageCode(const QString& value) {
     if (value.isEmpty() || value.size() > 15) return false;
@@ -61,6 +65,14 @@ QUrl completionEndpoint(const QString& value) {
     }
     url.setPath(path);
     return url;
+}
+
+// A region inside the picture, large enough to hold a line of text.
+QRectF boundedRegion(QRectF r) {
+    if (!std::isfinite(r.x()) || !std::isfinite(r.y()) || !std::isfinite(r.width()) || !std::isfinite(r.height()))
+        return {0.08, 0.70, 0.84, 0.27};
+    const double x = std::clamp(r.x(), 0.0, 0.95), y = std::clamp(r.y(), 0.0, 0.95);
+    return {x, y, std::clamp(r.width(), 0.05, 1.0 - x), std::clamp(r.height(), 0.05, 1.0 - y)};
 }
 
 bool sameCaption(const QString& earlier, const QString& latest) {
@@ -114,6 +126,13 @@ LiveTranslation::LiveTranslation(const QString& directory, QObject* parent)
     showOriginal_ = settings_.value(QStringLiteral("original"), true).toBool();
     apiBase_ = settings_.value(QStringLiteral("apiBase")).toString();
     apiModel_ = settings_.value(QStringLiteral("apiModel")).toString();
+    // Without Windows Live Captions (Windows 10), the on-screen source is the one that works.
+    captionSource_ = std::clamp(settings_.value(QStringLiteral("captionSource"),
+        int(supported() || !screenTextSupported() ? WindowsCaptions : ScreenText)).toInt(), int(WindowsCaptions), int(ScreenText));
+    screenRegion_ = std::clamp(settings_.value(QStringLiteral("screenRegion"), int(BottomSubtitles)).toInt(),
+        int(BottomSubtitles), int(CustomRegion));
+    if (settings_.contains(QStringLiteral("screenRect")))
+        customRegion_ = boundedRegion(settings_.value(QStringLiteral("screenRect")).toRectF());
 
     localNetwork_.setProxy(QNetworkProxy::NoProxy);
     reader_.setStandardErrorFile(QProcess::nullDevice());
@@ -189,6 +208,39 @@ bool LiveTranslation::supported() {
         QFileInfo::exists(windowsSystemExecutable(L"LiveCaptions.exe"));
 }
 
+bool LiveTranslation::screenTextSupported() {
+    return QOperatingSystemVersion::current() >= QOperatingSystemVersion::Windows10;
+}
+
+bool LiveTranslation::sourceSupported() const {
+    return captionSource_ == ScreenText ? screenTextSupported() : supported();
+}
+
+QRectF LiveTranslation::screenTextRect() const {
+    switch (screenRegion_) {
+    case BottomSubtitles: return {0.08, 0.70, 0.84, 0.27};
+    case BottomWide: return {0.02, 0.62, 0.96, 0.36};
+    case TopSubtitles: return {0.08, 0.03, 0.84, 0.27};
+    case WholePicture: return {0.0, 0.0, 1.0, 1.0};
+    default: return customRegion_;
+    }
+}
+
+// Subtitle bands keep only the centred block of words (a HUD panel or a menu
+// entry at the side is not part of the line); other regions read everything.
+bool LiveTranslation::screenTextCentered() const {
+    return screenRegion_ == BottomSubtitles || screenRegion_ == TopSubtitles;
+}
+
+// OCR needs a language; "auto" reads English, the usual language of game text.
+QString LiveTranslation::screenTextLanguage() const {
+    return sourceLanguage_.isEmpty() ? QStringLiteral("en") : sourceLanguage_;
+}
+
+int LiveTranslation::screenTextIntervalMs() const {
+    return screenRegion_ == WholePicture ? 600 : 250;
+}
+
 QString LiveTranslation::status() const {
     if (provider_ == Local && (assets_.downloading() || (!modelInstalled() && !assets_.status().isEmpty())))
         return assets_.status();
@@ -203,8 +255,9 @@ void LiveTranslation::setStatus(QString status) {
 
 void LiveTranslation::setEnabled(bool value) {
     if (enabled_ == value) return;
-    if (value && !supported()) {
-        setStatus(tr("实时翻译需要 Windows 11 22H2 或更新版本"));
+    if (value && !sourceSupported()) {
+        setStatus(captionSource_ == ScreenText ? tr("画面文字识别需要 Windows 10 或更新版本")
+                                              : tr("实时翻译需要 Windows 11 22H2 或更新版本"));
         return;
     }
     if (value && provider_ == OpenAi && (completionEndpoint(apiBase_).isEmpty() || apiModel_.isEmpty())) {
@@ -218,8 +271,9 @@ void LiveTranslation::setEnabled(bool value) {
     readerStarted_ = false;
     captionsOpen_ = false;
     serverFailed_ = false;
+    screenError_.clear();
     if (enabled_) {
-        setStatus(tr("请打开 Windows 实时字幕"));
+        setStatus(captionSource_ == ScreenText ? tr("正在启动画面文字识别…") : tr("请打开 Windows 实时字幕"));
         timer_.start();
     } else {
         timer_.stop();
@@ -259,6 +313,48 @@ void LiveTranslation::setTargetLanguage(QString value) {
     resetCaption();
     acceptCaption(text);
     emit changed();
+}
+
+void LiveTranslation::setCaptionSource(int value) {
+    if (value < WindowsCaptions || value > ScreenText || captionSource_ == value) return;
+    setEnabled(false);
+    captionSource_ = value;
+    settings_.setValue(QStringLiteral("captionSource"), value);
+    emit changed();
+}
+
+void LiveTranslation::setScreenRegion(int value) {
+    if (value < BottomSubtitles || value > CustomRegion || screenRegion_ == value) return;
+    screenRegion_ = value;
+    settings_.setValue(QStringLiteral("screenRegion"), value);
+    emit changed();
+}
+
+void LiveTranslation::setCustomRegion(QRectF value) {
+    value = boundedRegion(value);
+    if (customRegion_ == value) return;
+    customRegion_ = value;
+    settings_.setValue(QStringLiteral("screenRect"), value);
+    emit changed();
+}
+
+void LiveTranslation::acceptScreenText(const QString& text, bool ready, const QString& error) {
+    if (!enabled_ || captionSource_ != ScreenText) return;
+    lastCaptionReadAt_ = clock_.elapsed();
+    if (screenError_ != error) {
+        screenError_ = error;
+        if (!error.isEmpty()) {
+            resetCaption();
+            setStatus(error);
+        }
+    }
+    if (!error.isEmpty()) return;
+    if (ready != captionsOpen_) {
+        captionsOpen_ = ready;
+        if (!ready) resetCaption();
+        else if (caption_.isEmpty()) setStatus(tr("正在等待画面字幕…"));
+    }
+    acceptCaption(text.left(500));
 }
 
 void LiveTranslation::setShowOriginal(bool value) {
@@ -302,7 +398,7 @@ void LiveTranslation::openWindowsCaptions() {
 }
 
 void LiveTranslation::downloadModel() {
-    if (supported() && provider_ == Local && server_.state() == QProcess::NotRunning)
+    if (sourceSupported() && provider_ == Local && server_.state() == QProcess::NotRunning)
         assets_.download();
 }
 
@@ -312,8 +408,12 @@ void LiveTranslation::setPlayback(quint64 session, bool active, bool discontinui
     if (session_ == session && active_ == active && !discontinuity) return;
     session_ = session;
     active_ = active;
-    // Keep the last raw line as a baseline until Windows has a new line.
+    // Keep the last raw line as a baseline until Windows has a new line. A line on
+    // the picture is taken again as it is: it is still on screen.
     if (enabled_) resetCaption();
+    if (captionSource_ != ScreenText) return;
+    raw_.clear();
+    if (enabled_ && active_ && captionsOpen_ && screenError_.isEmpty()) setStatus(tr("正在等待画面字幕…"));
 }
 
 void LiveTranslation::readCaptions() {
@@ -365,21 +465,29 @@ void LiveTranslation::cancelRequest() {
 
 void LiveTranslation::tick() {
     const auto now = clock_.elapsed();
-    if (!readerStarted_ && reader_.state() == QProcess::NotRunning) {
+    const bool screen = captionSource_ == ScreenText;
+    if (!screen && !readerStarted_ && reader_.state() == QProcess::NotRunning) {
         readerStarted_ = true;
         reader_.start(QCoreApplication::applicationFilePath(), {QStringLiteral("--read-live-captions")});
     }
-    if (!caption_.isEmpty() && now - newTextAt_ > captionLifetimeMs) resetCaption();
+    // A live caption ages out; a line on the picture stays for as long as it is shown.
+    if (!screen && !caption_.isEmpty() && now - newTextAt_ > captionLifetimeMs) resetCaption();
     if (!active_) {
         if (serverPort_) stopLocal();
         setStatus(tr("播放或连接片源后开始翻译"));
         return;
     }
-    if (!captionsOpen_) {
+    if (screen) {
+        if (!screenError_.isEmpty()) { setStatus(screenError_); return; }
+        if (!captionsOpen_ || now - lastCaptionReadAt_ > 4000) {
+            resetCaption();
+            setStatus(tr("正在启动画面文字识别…"));
+            return;
+        }
+    } else if (!captionsOpen_) {
         if (reader_.state() != QProcess::NotRunning) setStatus(tr("请打开 Windows 实时字幕"));
         return;
-    }
-    if (now - lastCaptionReadAt_ > 4000) {
+    } else if (now - lastCaptionReadAt_ > 4000) {
         resetCaption();
         setStatus(tr("正在等待 Windows 字幕响应…"));
         return;
@@ -391,8 +499,10 @@ void LiveTranslation::tick() {
         if (!serverPort_ && server_.state() == QProcess::NotRunning) startLocal();
         if (!serverJob_ || server_.state() != QProcess::Running) return;
     }
-    if (caption_.isEmpty() || caption_ == requestedText_ || request_ || now - requestedAt_ < 850
-        || (now - newTextAt_ < 300 && now - requestedAt_ < 1400))
+    if (caption_.isEmpty() || caption_ == requestedText_ || request_) return;
+    // The engine shows an on-screen line only once it has settled; live captions grow word by word.
+    if (screen ? now - requestedAt_ < 250
+               : now - requestedAt_ < 850 || (now - newTextAt_ < 300 && now - requestedAt_ < 1400))
         return;
     if (provider_ == Local && !loopbackListenerIsOwned(serverPort_, DWORD(server_.processId()))) {
         if (now - serverStartedAt_ > 20000) {
@@ -453,6 +563,12 @@ void LiveTranslation::requestTranslation() {
     requestedText_ = text;
     if (sourceLanguage_.compare(targetLanguage_, Qt::CaseInsensitive) == 0) {
         translated_ = text;
+        setStatus(tr("实时翻译运行中"));
+        emit captionChanged();
+        return;
+    }
+    if (const auto hit = cache_.constFind(cacheKey(text)); hit != cache_.constEnd()) {
+        translated_ = *hit;
         setStatus(tr("实时翻译运行中"));
         emit captionChanged();
         return;
@@ -534,7 +650,21 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const QString& te
         return;
     }
     translated_ = translation.simplified().left(500);
+    remember(text, translated_);
     setStatus(tr("实时翻译运行中"));
     emit captionChanged();
+}
+
+QString LiveTranslation::cacheKey(const QString& text) const {
+    QString key = QString::number(provider_) + QLatin1Char('\x1f') + sourceLanguage_ + QLatin1Char('\x1f') + targetLanguage_;
+    if (provider_ == OpenAi) key += QLatin1Char('\x1f') + apiBase_ + QLatin1Char('\x1f') + apiModel_;
+    return key + QLatin1Char('\x1f') + text;
+}
+
+void LiveTranslation::remember(const QString& text, const QString& translation) {
+    const auto key = cacheKey(text);
+    if (!cache_.contains(key)) cacheOrder_.append(key);
+    cache_.insert(key, translation);
+    while (cacheOrder_.size() > cacheEntries) cache_.remove(cacheOrder_.takeFirst());
 }
 } // namespace veyra::ui

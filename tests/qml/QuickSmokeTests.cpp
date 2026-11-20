@@ -60,6 +60,11 @@ QtObject {
     property var preferences: ({exportStopsPlayback:false})
     property QtObject liveTranslation: QtObject {
         property bool supported: true
+        property bool liveCaptionsSupported: true
+        property bool screenTextSupported: true
+        property int captionSource: 0
+        property int screenRegion: 0
+        property rect customRegion: Qt.rect(0.08, 0.70, 0.84, 0.27)
         property bool enabled: false
         property int provider: 0
         property string sourceLanguage: ""

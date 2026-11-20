@@ -181,6 +181,21 @@ Item {
             dialog.translation.provider = 1
             tryCompare(api, "visible", true)
             tryCompare(download, "visible", false)
+            // On-screen text (capture card / PS5 subtitles): the region choice shows,
+            // and the custom region's sliders only for the custom choice.
+            const source = findChild(dialog, "live-translation-source")
+            const region = findChild(dialog, "live-translation-region")
+            const left = findChild(dialog, "live-translation-region-left")
+            verify(source !== null && region !== null && left !== null)
+            compare(region.visible, false)
+            dialog.translation.captionSource = 1
+            tryCompare(region, "visible", true)
+            compare(left.visible, false)
+            dialog.translation.screenRegion = 4
+            tryCompare(left, "visible", true)
+            dialog.translation.screenRegion = 0
+            dialog.translation.captionSource = 0
+            tryCompare(region, "visible", false)
             dialog.translation.supported = false
             tryCompare(power, "enabled", false)
             dialog.translation.provider = 0

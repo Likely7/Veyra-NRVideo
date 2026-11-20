@@ -6,6 +6,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRectF>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTest>
@@ -89,6 +90,69 @@ void apiChecks(const QString& root) {
     translation.setEnabled(false);
 }
 
+// On-screen text (capture card / PS5 subtitles): the bridge hands over the engine's
+// settled line. Needs no Live Captions and no OCR language: the line is supplied here.
+void screenChecks(const QString& root) {
+    LiveTranslation translation(root);
+    translation.setCaptionSource(LiveTranslation::ScreenText);
+    check(translation.captionSource() == LiveTranslation::ScreenText && translation.sourceSupported(),
+          "on-screen text source selectable");
+    check(!translation.screenTextWanted(), "picture not read while translation is off");
+    QTcpServer service;
+    if (!service.listen(QHostAddress::LocalHost)) { check(false, "loopback service listens"); return; }
+    int requests = 0;
+    bool requestCorrect = false;
+    const QByteArray json = R"({"choices":[{"message":{"content":"الجسر مغلق."}}]})";
+    QObject::connect(&service, &QTcpServer::newConnection, &service, [&] {
+        auto* socket = service.nextPendingConnection();
+        QObject::connect(socket, &QTcpSocket::readyRead, socket, [&, socket, data = QByteArray{}]() mutable {
+            data += socket->readAll();
+            const auto end = data.indexOf("\r\n\r\n");
+            if (end < 0) return;
+            int n = 0;
+            for (const auto& line : data.first(end).split('\n'))
+                if (line.toLower().startsWith("content-length:")) n = line.mid(15).trimmed().toInt();
+            if (data.size() < end + 4 + n) return;
+            ++requests;
+            requestCorrect = data.mid(end + 4, n).contains("The bridge is closed.");
+            socket->write("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: "
+                + QByteArray::number(json.size()) + "\r\n\r\n" + json);
+            socket->disconnectFromHost();
+        });
+        QObject::connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+    });
+    translation.setProvider(LiveTranslation::OpenAi);
+    translation.setApiBase(QStringLiteral("http://localhost:%1/v1").arg(service.serverPort()));
+    translation.setApiModel(QStringLiteral("fixture-model"));
+    translation.setApiKey(QStringLiteral("fixture-secret"));
+    translation.setTargetLanguage(QStringLiteral("ar"));
+    translation.setEnabled(true);
+    check(translation.enabled() && translation.screenTextWanted(), "enabled source asks the engine to read the picture");
+    check(translation.screenTextLanguage() == QStringLiteral("en") && translation.screenTextCentered()
+          && translation.screenTextRect().bottom() > 0.9, "auto source reads English in the centred bottom band");
+    translation.setPlayback(7, true, false);
+    translation.acceptScreenText(QString(), true, QString());
+    translation.acceptScreenText(QStringLiteral("The bridge is closed."), true, QString());
+    check(QTest::qWaitFor([&] { return !translation.translated().isEmpty(); }, 6000) && requests == 1 && requestCorrect,
+          "on-screen line translated through the selected service");
+    check(translation.translated() == QString::fromUtf8("الجسر مغلق."), "right-to-left reply decoded");
+    translation.acceptScreenText(QString(), true, QString());
+    check(translation.caption().isEmpty() && translation.translated().isEmpty(), "line gone from the picture clears it");
+    translation.acceptScreenText(QStringLiteral("The bridge is closed."), true, QString());
+    check(QTest::qWaitFor([&] { return !translation.translated().isEmpty(); }, 3000) && requests == 1,
+          "a repeated line is shown from the recent translations without a new request");
+    translation.acceptScreenText(QString(), false, QStringLiteral("fixture OCR error"));
+    check(translation.caption().isEmpty() && translation.status() == QStringLiteral("fixture OCR error"),
+          "an OCR error clears the line and shows as the status");
+    translation.setScreenRegion(LiveTranslation::CustomRegion);
+    translation.setCustomRegion(QRectF(0.9, -1.0, 0.5, 2.0));
+    const auto r = translation.screenTextRect();
+    check(r.left() >= 0.0 && r.top() >= 0.0 && r.right() <= 1.0001 && r.bottom() <= 1.0001 && r.width() >= 0.05,
+          "custom region kept inside the picture");
+    translation.setEnabled(false);
+    check(!translation.screenTextWanted(), "disabling stops reading the picture");
+}
+
 void localChecks(const QString& root, bool download) {
     LiveTranslation translation(root);
     translation.setTargetLanguage(QStringLiteral("zh-CN"));
@@ -127,11 +191,12 @@ int main(int argc, char** argv) {
     const auto args = app.arguments();
     if (args.size() == 2 && args.at(1) == QStringLiteral("--read-live-captions")) return fixtureReader();
     if (args.size() < 2 || !QDir().mkpath(args.at(1))) return 2;
+    const auto root = args.at(1);
+    screenChecks(QDir(root).filePath(QStringLiteral("screen")));
     if (!LiveTranslation::supported()) {
         std::puts("SKIP Live Captions unavailable on this Windows build");
-        return 77;
+        return failures ? 1 : 77;
     }
-    const auto root = args.at(1);
     apiChecks(QDir(root).filePath(QStringLiteral("api")));
     QFile settings(QDir(root).filePath(QStringLiteral("api/live-translation.ini")));
     check(settings.open(QIODevice::ReadOnly) && !settings.readAll().contains("fixture-secret"),

@@ -28,6 +28,7 @@
 #include "veyra/engine/ExportOptions.h"
 #include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/VirtualCamera.h"
+#include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
@@ -306,6 +307,11 @@ public:
     bool uninstallVirtualCamera(std::wstring& error);
     bool installVirtualCamera(std::wstring& error);
     VirtualCameraStatus virtualCameraSnapshot()const;
+    // On-screen text for live translation (ScreenTextCapture.h): while enabled, a
+    // region of the presented picture is read by Windows OCR a few times a second.
+    // Any thread.
+    void setScreenText(bool enabled,const ScreenTextOptions& options);
+    ScreenTextStatus screenTextSnapshot()const;
     // Instant replay (#103): while enabled, the last options.replaySeconds of
     // whatever is presented stay in memory, across sessions; saveReplay()
     // writes them to a new file in the background. Any thread.
@@ -355,7 +361,9 @@ private:
     std::unique_ptr<LiveRecorder> replay_=std::make_unique<LiveRecorder>(true);
     PresentCaptureFanout recordingCaptures_{*recorder_,*replay_};
     std::unique_ptr<VirtualCamera> virtualCamera_=std::make_unique<VirtualCamera>();
-    PresentCaptureFanout captures_{recordingCaptures_,*virtualCamera_};
+    std::unique_ptr<ScreenTextCapture> screenText_=std::make_unique<ScreenTextCapture>();
+    PresentCaptureFanout outputCaptures_{*virtualCamera_,*screenText_};
+    PresentCaptureFanout captures_{recordingCaptures_,outputCaptures_};
     // Declared before worker_: it outlives the engine thread's presenters.
     DisplayStateService displayStates_;
     std::thread worker_;

@@ -4993,6 +4993,19 @@
    "ru": "Windows не позволяет Veyra использовать микрофон; разрешить настольные приложения в настройках → Конфиденциальность и безопасность → Микрофон"
   },
   {
+   "zh": "Windows 实时字幕（语音）",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "Windows 即時字幕（語音）",
+   "en": "Windows Live Captions (speech)",
+   "ja": "Windows ライブ キャプション (音声)",
+   "ko": "Windows 라이브 캡션(음성)",
+   "es": "Subtítulos en directo de Windows (voz)",
+   "fr": "Sous-titres en direct de Windows (voix)",
+   "de": "Windows-Liveuntertitel (Sprache)",
+   "pt-BR": "Legendas ao vivo do Windows (fala)",
+   "ru": "Динамические субтитры Windows (речь)"
+  },
+  {
    "zh": "Windows 已阻止本次更新，请查看保护历史",
    "src": "src/ui/PortableUpdate.cpp",
    "zh-TW": "Windows 已封鎖此更新，請查看保護歷程記錄",
@@ -5004,6 +5017,19 @@
    "de": "Windows hat das Update blockiert. Sieh im Schutzverlauf nach.",
    "pt-BR": "O Windows bloqueou a atualização. Consulte o histórico de proteção.",
    "ru": "Windows заблокировала обновление. Проверьте журнал защиты."
+  },
+  {
+   "zh": "Windows 未安装“{}”的文字识别（OCR）语言，请在 设置 → 时间和语言 → 语言和区域 中添加该语言",
+   "src": "src/engine/ScreenTextCapture.cpp",
+   "zh-TW": "Windows 未安裝「{}」的文字辨識（OCR）語言，請在 設定 → 時間與語言 → 語言與地區 中新增該語言",
+   "en": "Windows has no text recognition (OCR) for “{}”. Add that language in Settings → Time & language → Language & region",
+   "ja": "Windows に「{}」の文字認識 (OCR) 言語がありません。設定 → 時刻と言語 → 言語と地域 でその言語を追加してください",
+   "ko": "Windows에 '{}' 텍스트 인식(OCR) 언어가 없습니다. 설정 → 시간 및 언어 → 언어 및 지역에서 해당 언어를 추가하세요",
+   "es": "Windows no tiene reconocimiento de texto (OCR) para «{}». Añade ese idioma en Configuración → Hora e idioma → Idioma y región",
+   "fr": "Windows n’a pas de reconnaissance de texte (OCR) pour « {} ». Ajoutez cette langue dans Paramètres → Heure et langue → Langue et région",
+   "de": "Windows hat keine Texterkennung (OCR) für „{}“. Füge die Sprache unter Einstellungen → Zeit und Sprache → Sprache und Region hinzu",
+   "pt-BR": "O Windows não tem reconhecimento de texto (OCR) para “{}”. Adicione esse idioma em Configurações → Hora e idioma → Idioma e região",
+   "ru": "В Windows нет распознавания текста (OCR) для «{}». Добавьте этот язык в разделе Параметры → Время и язык → Язык и регион"
   },
   {
    "zh": "X 为上限",
@@ -10298,6 +10324,19 @@
    "ru": "Включает"
   },
   {
+   "zh": "区域上边",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "區域上邊",
+   "en": "Area top edge",
+   "ja": "領域の上端",
+   "ko": "영역 위쪽",
+   "es": "Borde superior de la zona",
+   "fr": "Bord supérieur de la zone",
+   "de": "Oberer Rand des Bereichs",
+   "pt-BR": "Borda superior da área",
+   "ru": "Верхний край области"
+  },
+  {
    "zh": "区域内恢复原始画面与帧率",
    "src": "qml/ProPage.qml",
    "zh-TW": "區域內恢復原始畫面與幀率",
@@ -10350,6 +10389,32 @@
    "ru": "Исключите все NR Слой внутри регионов"
   },
   {
+   "zh": "区域宽度",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "區域寬度",
+   "en": "Area width",
+   "ja": "領域の幅",
+   "ko": "영역 너비",
+   "es": "Ancho de la zona",
+   "fr": "Largeur de la zone",
+   "de": "Breite des Bereichs",
+   "pt-BR": "Largura da área",
+   "ru": "Ширина области"
+  },
+  {
+   "zh": "区域左边",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "區域左邊",
+   "en": "Area left edge",
+   "ja": "領域の左端",
+   "ko": "영역 왼쪽",
+   "es": "Borde izquierdo de la zona",
+   "fr": "Bord gauche de la zone",
+   "de": "Linker Rand des Bereichs",
+   "pt-BR": "Borda esquerda da área",
+   "ru": "Левый край области"
+  },
+  {
    "zh": "区域扩展",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "區域擴展",
@@ -10361,6 +10426,19 @@
    "de": "Bereichserweiterung",
    "pt-BR": "Expansão da área",
    "ru": "Расширение области"
+  },
+  {
+   "zh": "区域高度",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "區域高度",
+   "en": "Area height",
+   "ja": "領域の高さ",
+   "ko": "영역 높이",
+   "es": "Alto de la zona",
+   "fr": "Hauteur de la zone",
+   "de": "Höhe des Bereichs",
+   "pt-BR": "Altura da área",
+   "ru": "Высота области"
   },
   {
    "zh": "半分辨率",
@@ -11559,6 +11637,32 @@
    "ru": "Открывать можно только локальные файлы"
   },
   {
+   "zh": "只读取这一部分画面。区域越小，识别越快、越准确。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "只讀取這一部分畫面。區域越小，辨識越快、越準確。",
+   "en": "Only this part of the picture is read. A smaller area is read faster and more accurately.",
+   "ja": "画面のこの部分だけを読み取ります。領域が小さいほど速く正確に認識します。",
+   "ko": "화면의 이 부분만 읽습니다. 영역이 작을수록 더 빠르고 정확하게 인식합니다.",
+   "es": "Solo se lee esta parte de la imagen. Cuanto más pequeña es la zona, más rápido y preciso es el reconocimiento.",
+   "fr": "Seule cette partie de l’image est lue. Plus la zone est petite, plus la reconnaissance est rapide et précise.",
+   "de": "Nur dieser Bildbereich wird gelesen. Je kleiner der Bereich, desto schneller und genauer die Erkennung.",
+   "pt-BR": "Só esta parte da imagem é lida. Quanto menor a área, mais rápido e preciso é o reconhecimento.",
+   "ru": "Читается только эта часть изображения. Чем меньше область, тем быстрее и точнее распознавание."
+  },
+  {
+   "zh": "只读取这一部分画面，并只保留居中的字幕，忽略两侧的界面文字。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "只讀取這一部分畫面，並只保留置中的字幕，忽略兩側的介面文字。",
+   "en": "Only this part of the picture is read, and only the centred subtitle is kept; interface text at the sides is ignored.",
+   "ja": "画面のこの部分だけを読み取り、中央の字幕だけを残して両側の UI の文字は無視します。",
+   "ko": "화면의 이 부분만 읽고 가운데 자막만 남기며 양쪽의 UI 텍스트는 무시합니다.",
+   "es": "Solo se lee esta parte de la imagen y solo se conserva el subtítulo centrado; se ignora el texto de la interfaz a los lados.",
+   "fr": "Seule cette partie de l’image est lue, et seul le sous-titre centré est gardé ; le texte d’interface sur les côtés est ignoré.",
+   "de": "Nur dieser Bildbereich wird gelesen, und nur der zentrierte Untertitel bleibt; Oberflächentext an den Seiten wird ignoriert.",
+   "pt-BR": "Só esta parte da imagem é lida, e só a legenda centralizada é mantida; o texto da interface nas laterais é ignorado.",
+   "ru": "Читается только эта часть изображения и остаются только субтитры по центру; текст интерфейса по бокам игнорируется."
+  },
+  {
    "zh": "可以保存",
    "src": "qml/SavePresetDialog.qml",
    "zh-TW": "可以儲存",
@@ -12077,6 +12181,19 @@
    "de": "Beim Einschalten wird der Untertiteltext an den gewählten Dienst gesendet.",
    "pt-BR": "Ao ativar, o texto das legendas do sistema é enviado ao serviço escolhido.",
    "ru": "При включении текст системных субтитров отправляется выбранному сервису."
+  },
+  {
+   "zh": "启用后会把识别出的画面文字发送给所选服务。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "啟用後會將辨識出的畫面文字傳送至所選服務。",
+   "en": "Enabling this sends the recognized on-screen text to the selected service.",
+   "ja": "有効にすると、認識した画面の文字が選択したサービスに送信されます。",
+   "ko": "활성화하면 인식한 화면 텍스트를 선택한 서비스로 전송합니다.",
+   "es": "Al activarlo, el texto reconocido en pantalla se envía al servicio elegido.",
+   "fr": "L’activation envoie le texte reconnu à l’écran au service choisi.",
+   "de": "Beim Einschalten wird der erkannte Text im Bild an den gewählten Dienst gesendet.",
+   "pt-BR": "Ao ativar, o texto reconhecido na tela é enviado ao serviço escolhido.",
+   "ru": "При включении распознанный текст с экрана отправляется выбранному сервису."
   },
   {
    "zh": "启用失败",
@@ -14105,6 +14222,19 @@
    "de": "Die Untertitel decken zu wenig Zeit ab, um zuverlässig auszurichten",
    "pt-BR": "As legendas cobrem muito pouco tempo para alinhar de forma confiável",
    "ru": "Субтитры охватывают слишком мало времени для надежного согласования."
+  },
+  {
+   "zh": "字幕来源",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "字幕來源",
+   "en": "Caption source",
+   "ja": "字幕の取得元",
+   "ko": "자막 소스",
+   "es": "Origen de los subtítulos",
+   "fr": "Source des sous-titres",
+   "de": "Untertitelquelle",
+   "pt-BR": "Origem das legendas",
+   "ru": "Источник субтитров"
   },
   {
    "zh": "字幕缓存已达上限，后续字幕未加载",
@@ -17394,6 +17524,32 @@
    "de": "Preset anwenden…",
    "pt-BR": "Aplicar predefinição…",
    "ru": "Применить пресет…"
+  },
+  {
+   "zh": "底部字幕",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "底部字幕",
+   "en": "Bottom subtitles",
+   "ja": "下部の字幕",
+   "ko": "하단 자막",
+   "es": "Subtítulos inferiores",
+   "fr": "Sous-titres en bas",
+   "de": "Untertitel unten",
+   "pt-BR": "Legendas na parte inferior",
+   "ru": "Субтитры внизу"
+  },
+  {
+   "zh": "底部整行",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "底部整行",
+   "en": "Bottom, full width",
+   "ja": "下部 (全幅)",
+   "ko": "하단 전체 너비",
+   "es": "Parte inferior, ancho completo",
+   "fr": "En bas, toute la largeur",
+   "de": "Unten, volle Breite",
+   "pt-BR": "Parte inferior, largura total",
+   "ru": "Внизу, во всю ширину"
   },
   {
    "zh": "底部距离",
@@ -21141,6 +21297,19 @@
    "ru": "Более высокие значения дают более мягкий переход"
   },
   {
+   "zh": "整个画面",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "整個畫面",
+   "en": "Whole picture",
+   "ja": "画面全体",
+   "ko": "화면 전체",
+   "es": "Toda la imagen",
+   "fr": "Image entière",
+   "de": "Ganzes Bild",
+   "pt-BR": "Imagem inteira",
+   "ru": "Весь кадр"
+  },
+  {
    "zh": "整体亮暗",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "整體亮暗",
@@ -22025,6 +22194,19 @@
    "ru": "Не удалось запустить чтение субтитров Windows"
   },
   {
+   "zh": "无法启动 Windows 文字识别（OCR）",
+   "src": "src/engine/ScreenTextCapture.cpp",
+   "zh-TW": "無法啟動 Windows 文字辨識（OCR）",
+   "en": "Could not start Windows text recognition (OCR)",
+   "ja": "Windows の文字認識 (OCR) を開始できません",
+   "ko": "Windows 텍스트 인식(OCR)을 시작할 수 없습니다",
+   "es": "No se pudo iniciar el reconocimiento de texto (OCR) de Windows",
+   "fr": "Impossible de démarrer la reconnaissance de texte (OCR) de Windows",
+   "de": "Die Windows-Texterkennung (OCR) konnte nicht gestartet werden",
+   "pt-BR": "Não foi possível iniciar o reconhecimento de texto (OCR) do Windows",
+   "ru": "Не удалось запустить распознавание текста (OCR) Windows"
+  },
+  {
    "zh": "无法启动 Windows 解压工具",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "無法啟動 Windows 解壓工具",
@@ -22075,6 +22257,19 @@
    "de": "Lokaler Übersetzungsprozess konnte nicht gestartet werden",
    "pt-BR": "Não foi possível iniciar o tradutor local",
    "ru": "Не удалось запустить локальный переводчик"
+  },
+  {
+   "zh": "无法启动画面文字识别",
+   "src": "src/engine/ScreenTextCapture.cpp",
+   "zh-TW": "無法啟動畫面文字辨識",
+   "en": "Could not start on-screen text recognition",
+   "ja": "画面の文字認識を開始できません",
+   "ko": "화면 텍스트 인식을 시작할 수 없습니다",
+   "es": "No se pudo iniciar el reconocimiento de texto en pantalla",
+   "fr": "Impossible de démarrer la reconnaissance du texte à l’écran",
+   "de": "Die Texterkennung im Bild konnte nicht gestartet werden",
+   "pt-BR": "Não foi possível iniciar o reconhecimento de texto na tela",
+   "ru": "Не удалось запустить распознавание текста на экране"
   },
   {
    "zh": "无法启动采集，请查看诊断",
@@ -25496,6 +25691,19 @@
    "ru": "Запрос кода входа от Microsoft..."
   },
   {
+   "zh": "正在启动画面文字识别…",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "正在啟動畫面文字辨識…",
+   "en": "Starting on-screen text recognition…",
+   "ja": "画面の文字認識を開始しています…",
+   "ko": "화면 텍스트 인식을 시작하는 중…",
+   "es": "Iniciando el reconocimiento de texto en pantalla…",
+   "fr": "Démarrage de la reconnaissance du texte à l’écran…",
+   "de": "Texterkennung im Bild wird gestartet…",
+   "pt-BR": "Iniciando o reconhecimento de texto na tela…",
+   "ru": "Запуск распознавания текста на экране…"
+  },
+  {
    "zh": "正在唤醒主机并准备串流…",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "正在喚醒主機並準備串流…",
@@ -25897,6 +26105,19 @@
    "de": "Warte auf Windows-Liveuntertitel…",
    "pt-BR": "Aguardando as legendas do Windows…",
    "ru": "Ожидание субтитров Windows…"
+  },
+  {
+   "zh": "正在等待画面字幕…",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "正在等待畫面字幕…",
+   "en": "Waiting for on-screen subtitles…",
+   "ja": "画面の字幕を待機中…",
+   "ko": "화면 자막 대기 중…",
+   "es": "Esperando subtítulos en pantalla…",
+   "fr": "En attente de sous-titres à l’écran…",
+   "de": "Warte auf Untertitel im Bild…",
+   "pt-BR": "Aguardando legendas na tela…",
+   "ru": "Ожидание субтитров на экране…"
   },
   {
    "zh": "正在等待语音…",
@@ -27654,6 +27875,19 @@
    "ru": "Активно: {} p / {} fps / {} / запрошенный {} Мбит/с · видео получено {:.1f} Мбит/с"
   },
   {
+   "zh": "用 Windows 文字识别（OCR）读取画面上的字幕：采集卡、PS5 远程游玩、Xbox/电脑串流或视频。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "用 Windows 文字辨識（OCR）讀取畫面上的字幕：擷取卡、PS5 遙控遊玩、Xbox/電腦串流或影片。",
+   "en": "Reads the subtitles on the picture with Windows text recognition (OCR): capture card, PS5 Remote Play, Xbox/PC streaming or video.",
+   "ja": "Windows の文字認識 (OCR) で画面上の字幕を読み取ります：キャプチャーカード、PS5 リモートプレイ、Xbox/PC ストリーミング、動画。",
+   "ko": "Windows 텍스트 인식(OCR)으로 화면의 자막을 읽습니다: 캡처 카드, PS5 리모트 플레이, Xbox/PC 스트리밍 또는 동영상.",
+   "es": "Lee los subtítulos de la imagen con el reconocimiento de texto (OCR) de Windows: capturadora, PS5 Remote Play, streaming de Xbox/PC o vídeo.",
+   "fr": "Lit les sous-titres de l’image avec la reconnaissance de texte (OCR) de Windows : carte d’acquisition, PS5 Remote Play, streaming Xbox/PC ou vidéo.",
+   "de": "Liest die Untertitel im Bild mit der Windows-Texterkennung (OCR): Capture-Karte, PS5 Remote Play, Xbox-/PC-Streaming oder Video.",
+   "pt-BR": "Lê as legendas da imagem com o reconhecimento de texto (OCR) do Windows: placa de captura, PS5 Remote Play, streaming do Xbox/PC ou vídeo.",
+   "ru": "Читает субтитры на изображении с помощью распознавания текста (OCR) Windows: карта захвата, PS5 Remote Play, стриминг Xbox/ПК или видео."
+  },
+  {
    "zh": "用你的 Xbox（微软）账号在微软的页面登录，软件看不到密码",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "用你的 Xbox（微軟）帳號在微軟的頁面登入，軟體看不到密碼",
@@ -27925,6 +28159,45 @@
    "de": "Bildstichproben-Statistik",
    "pt-BR": "Estatísticas de amostras de imagem",
    "ru": "Статистика выборок изображения"
+  },
+  {
+   "zh": "画面文字按此语言识别，“自动识别原文”按英语识别；其他语言需在 Windows 中安装对应语言。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "畫面文字依此語言辨識，「自動辨識原文」以英語辨識；其他語言需在 Windows 中安裝對應語言。",
+   "en": "On-screen text is read in this language; “Detect source language” reads English. Other languages must be installed in Windows.",
+   "ja": "画面の文字はこの言語で認識します。「原文の言語を検出」では英語で認識します。その他の言語は Windows に追加してください。",
+   "ko": "화면 텍스트는 이 언어로 인식합니다. '원문 언어 감지'는 영어로 인식하며, 다른 언어는 Windows에 설치해야 합니다.",
+   "es": "El texto en pantalla se lee en este idioma; «Detectar idioma de origen» lee inglés. Los demás idiomas deben estar instalados en Windows.",
+   "fr": "Le texte à l’écran est lu dans cette langue ; « Détecter la langue source » lit l’anglais. Les autres langues doivent être installées dans Windows.",
+   "de": "Text im Bild wird in dieser Sprache gelesen; „Ausgangssprache erkennen“ liest Englisch. Andere Sprachen müssen in Windows installiert sein.",
+   "pt-BR": "O texto na tela é lido neste idioma; “Detectar idioma de origem” lê inglês. Outros idiomas precisam estar instalados no Windows.",
+   "ru": "Текст на экране распознаётся на этом языке; «Определить исходный язык» читает английский. Другие языки нужно установить в Windows."
+  },
+  {
+   "zh": "画面文字识别需要 Windows 10 或更新版本",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "畫面文字辨識需要 Windows 10 或更新版本",
+   "en": "On-screen text recognition needs Windows 10 or later",
+   "ja": "画面の文字認識には Windows 10 以降が必要です",
+   "ko": "화면 텍스트 인식에는 Windows 10 이상이 필요합니다",
+   "es": "El reconocimiento de texto en pantalla requiere Windows 10 o posterior",
+   "fr": "La reconnaissance du texte à l’écran nécessite Windows 10 ou une version ultérieure",
+   "de": "Die Texterkennung im Bild erfordert Windows 10 oder neuer",
+   "pt-BR": "O reconhecimento de texto na tela requer o Windows 10 ou posterior",
+   "ru": "Для распознавания текста на экране нужна Windows 10 или новее"
+  },
+  {
+   "zh": "画面文字（采集卡 / PS5 字幕）",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "畫面文字（擷取卡 / PS5 字幕）",
+   "en": "On-screen text (capture card / PS5 subtitles)",
+   "ja": "画面の文字 (キャプチャーカード / PS5 の字幕)",
+   "ko": "화면 텍스트(캡처 카드 / PS5 자막)",
+   "es": "Texto en pantalla (capturadora / subtítulos de PS5)",
+   "fr": "Texte à l’écran (carte d’acquisition / sous-titres PS5)",
+   "de": "Text im Bild (Capture-Karte / PS5-Untertitel)",
+   "pt-BR": "Texto na tela (placa de captura / legendas do PS5)",
+   "ru": "Текст на экране (карта захвата / субтитры PS5)"
   },
   {
    "zh": "画面未收齐即可开始传输。持续丢帧时按原格式切回普通采集。重新连接后生效。",
@@ -31190,6 +31463,19 @@
    "ru": "Своё разрешение"
   },
   {
+   "zh": "自定义区域",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "自訂區域",
+   "en": "Custom area",
+   "ja": "カスタム領域",
+   "ko": "사용자 지정 영역",
+   "es": "Zona personalizada",
+   "fr": "Zone personnalisée",
+   "de": "Eigener Bereich",
+   "pt-BR": "Área personalizada",
+   "ru": "Своя область"
+  },
+  {
    "zh": "自定义播放速度",
    "src": "qml/PlaybackRateDialog.qml",
    "zh-TW": "自訂播放速度",
@@ -33270,6 +33556,19 @@
    "ru": "Настройте цвет входного сигнала"
   },
   {
+   "zh": "识别区域",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識區域",
+   "en": "Area to read",
+   "ja": "認識する領域",
+   "ko": "인식 영역",
+   "es": "Zona que se lee",
+   "fr": "Zone lue",
+   "de": "Gelesener Bereich",
+   "pt-BR": "Área lida",
+   "ru": "Область распознавания"
+  },
+  {
    "zh": "识别档位",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "識別檔位",
@@ -33281,6 +33580,19 @@
    "de": "Erkennungsstufe",
    "pt-BR": "Nível de detecção",
    "ru": "Уровень обнаружения"
+  },
+  {
+   "zh": "识别系统播放的声音。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識系統播放的聲音。",
+   "en": "Transcribes the sound the system plays.",
+   "ja": "システムで再生中の音声を認識します。",
+   "ko": "시스템에서 재생되는 소리를 인식합니다.",
+   "es": "Transcribe el sonido que reproduce el sistema.",
+   "fr": "Transcrit le son lu par le système.",
+   "de": "Erkennt den vom System wiedergegebenen Ton.",
+   "pt-BR": "Transcreve o som reproduzido pelo sistema.",
+   "ru": "Распознаёт звук, воспроизводимый системой."
   },
   {
    "zh": "诊断信息",
@@ -34100,6 +34412,19 @@
    "de": "Source Tracks lesen",
    "pt-BR": "Ler as faixas de origem",
    "ru": "Read Source Треки"
+  },
+  {
+   "zh": "读取画面上的英文字幕等文字并翻译，译文显示在 Veyra 预览画面内。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "讀取畫面上的英文字幕等文字並翻譯，譯文顯示在 Veyra 預覽畫面內。",
+   "en": "Reads English subtitles and other text on the picture and translates them. Translations appear in the Veyra preview.",
+   "ja": "画面上の英語字幕などの文字を読み取って翻訳し、訳文を Veyra のプレビューに表示します。",
+   "ko": "화면의 영어 자막 등 텍스트를 읽어 번역하고 Veyra 미리 보기에 번역을 표시합니다.",
+   "es": "Lee los subtítulos en inglés y otros textos de la imagen y los traduce. La traducción aparece en la vista previa de Veyra.",
+   "fr": "Lit les sous-titres anglais et les autres textes de l’image et les traduit. La traduction apparaît dans l’aperçu Veyra.",
+   "de": "Liest englische Untertitel und anderen Text im Bild und übersetzt sie. Die Übersetzung erscheint in der Veyra-Vorschau.",
+   "pt-BR": "Lê legendas em inglês e outros textos da imagem e os traduz. A tradução aparece na prévia do Veyra.",
+   "ru": "Читает английские субтитры и другой текст на изображении и переводит их. Перевод отображается в окне просмотра Veyra."
   },
   {
    "zh": "读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。",
@@ -38897,6 +39222,19 @@
    "de": "Seitenwechsler",
    "pt-BR": "Seletor de páginas",
    "ru": "Переключатель страниц"
+  },
+  {
+   "zh": "顶部字幕",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "頂部字幕",
+   "en": "Top subtitles",
+   "ja": "上部の字幕",
+   "ko": "상단 자막",
+   "es": "Subtítulos superiores",
+   "fr": "Sous-titres en haut",
+   "de": "Untertitel oben",
+   "pt-BR": "Legendas na parte superior",
+   "ru": "Субтитры вверху"
   },
   {
    "zh": "顺时针旋转 90°（已旋转 %1°）",

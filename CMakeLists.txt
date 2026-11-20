@@ -131,6 +131,12 @@ target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
 veyra_apply_warnings(veyra_logger_tests)
 
+# On-screen text reading for live translation (OCR passes, cleanup, line timing),
+# with a scripted OCR engine: no GPU, no Windows OCR language needed.
+add_executable(veyra_screen_text_tests tests/unit/ScreenTextTests.cpp src/engine/ScreenText.cpp)
+target_compile_features(veyra_screen_text_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_screen_text_tests PRIVATE veyra_base)
+
 add_executable(veyra_export_timeline_tests tests/unit/ExportTimelineTests.cpp)
 target_compile_features(veyra_export_timeline_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_export_timeline_tests PRIVATE veyra_base)
@@ -1752,6 +1758,10 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_compile_features(veyra_engine PUBLIC cxx_std_20)
   target_sources(veyra_engine PRIVATE src/engine/VirtualCamera.cpp src/virtualcam/CameraRegistration.cpp)
   target_link_libraries(veyra_engine PUBLIC veyra_virtualcam_transport advapi32)
+  # On-screen text for live translation: OCR reading logic (portable, ported from
+  # VI Translator, MIT) and the Windows OCR reader of the presented picture.
+  target_sources(veyra_engine PRIVATE src/engine/ScreenText.cpp src/engine/ScreenTextCapture.cpp)
+  target_link_libraries(veyra_engine PRIVATE windowsapp)
   add_dependencies(veyra_engine veyra_shader_virtual_camera_nv12)
   target_compile_options(veyra_engine PRIVATE /utf-8)
   target_compile_definitions(veyra_engine PUBLIC VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}" VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
