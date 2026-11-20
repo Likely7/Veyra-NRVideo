@@ -25,6 +25,8 @@ VPage {
     // to the left of the picture, with the performance orbs beside it. Both are cut
     // out of the native video window like any other cover.
     property bool overlay: false
+    // 翻译面板对外暴露一个句柄：快捷键（Main.qml）要直接开关它。
+    readonly property alias translatePanel: translateCol
     readonly property bool hdrMeterObserved: visible && tab === "display" && displayCol.hdrMeterObserved
     onHdrMeterObservedChanged: veyra.observeHdrCoverage(hdrMeterObserved)
     function overlayContains(x, y) {
@@ -62,7 +64,8 @@ VPage {
     }
     onTabChanged: Qt.callLater(() => stagger(tab === "quality" ? qualityCol : tab === "fg" ? fgCol
                                            : tab === "color" ? colourPanel.sectionColumn
-                                           : tab === "audio" ? audioCol : displayCol, 30, 460, 10))
+                                           : tab === "audio" ? audioCol
+                                           : tab === "translate" ? translateCol : displayCol, 30, 460, 10))
 
     // M30: the NR layer card that was just added pops in; the number is reset
     // shortly after so a later rebuild of the list does not pop it again.
@@ -1221,7 +1224,8 @@ VPage {
                         { id: "fg", label: qsTr("补帧") },
                         { id: "color", label: qsTr("色彩") },
                         { id: "audio", label: qsTr("声音") },
-                        { id: "display", label: qsTr("显示") }
+                        { id: "display", label: qsTr("显示") },
+                        { id: "translate", label: qsTr("翻译") }
                     ]
                     delegate: Rectangle {
                         required property var modelData
@@ -1931,6 +1935,14 @@ VPage {
                         id: displayCol
                         Layout.fillWidth: true
                         visible: root.tab === "display"
+                    }
+
+                    // --- 翻译 -------------------------------------------------
+                    // 实时语音翻译：控制外部侧车，字幕作为 Veyra 窗口的附属窗贴在画面里。
+                    ProTranslatePanel {
+                        id: translateCol
+                        Layout.fillWidth: true
+                        visible: root.tab === "translate"
                     }
 
                     Item { Layout.preferredHeight: 12 }

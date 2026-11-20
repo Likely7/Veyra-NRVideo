@@ -760,6 +760,18 @@ Window {
         enabled: dialogs.dialog === ""
         onActivated: root.goPage(root.page === "min" ? "pro" : "min")
     }
+    // 实时翻译开关。引擎维护的快捷键表只认内置动作（新增 id 会被拒绝），
+    // 所以这一项由 设置 → 快捷键 自己保管，这里直接跟随它的当前值。
+    Shortcut {
+        sequence: settingsPage.translateKey
+        autoRepeat: false
+        enabled: settingsPage.capturingKey === ""
+        onActivated: {
+            const p = proPage.translatePanel
+            if (p)
+                p.setEnabled(!p.enabled)
+        }
+    }
     Shortcut { sequences: ["F11", "Alt+Return", "Alt+Enter"]; onActivated: root.toggleFullscreen() }
     // In 游戏模式 Esc closes the adjust panel and gives the input back to the game.
     Shortcut {

@@ -65,6 +65,7 @@ ProStatusSummary 1.0 ProStatusSummary.qml
 ProAddLayerButton 1.0 ProAddLayerButton.qml
 ProAudioPanel 1.0 ProAudioPanel.qml
 ProDisplayPanel 1.0 ProDisplayPanel.qml
+ProTranslatePanel 1.0 ProTranslatePanel.qml
 
 # Dialog components
 DialogLayer 1.0 DialogLayer.qml

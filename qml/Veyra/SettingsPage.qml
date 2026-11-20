@@ -19,6 +19,10 @@ VPage {
     property bool hdrAdvancedExpanded: false
     // The shortcut row waiting for a new key ("" = none).
     property string capturingKey: ""
+    // 实时翻译的快捷键。引擎的偏好表是固定的：setPreference("translateKey", …)
+    // 返回 false（不认识的键一律拒绝），所以这一项由这里保管本次会话的值，
+    // Main.qml 的 Shortcut 直接读它；文件里已有的值（如果手写过）作为初值。
+    property string translateKey: veyra.preferences.translateKey || "Ctrl+Alt+T"
     onSectionChanged: {
         capturingKey = ""
         if (section === "ps5") veyra.ps5Load()
@@ -1174,7 +1178,8 @@ VPage {
                                 { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用") },
                                 { id: "toggleMode", a: qsTr("切换极简 / 专业") },
                                 { id: "gamePanel", a: qsTr("游戏模式：调整画面"), note: qsTr("仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合") },
-                                { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") }
+                                { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") },
+                                { id: "translate", a: qsTr("实时翻译开关"), note: qsTr("和 专业模式 → 翻译 面板里的开关同步；字幕层本身不进入录制") }
                             ]
                             delegate: VRow {
                                 id: keyRow
@@ -1184,6 +1189,11 @@ VPage {
                                 Rectangle {
                                     objectName: "key-" + keyRow.modelData.id
                                     readonly property bool capturing: root.capturingKey === keyRow.modelData.id
+                                    // 引擎的快捷键表是固定的（新增 id 会被拒绝），
+                                    // 实时翻译这一项由 SettingsPage 自己保管。
+                                    readonly property string bound: keyRow.modelData.id === "translate"
+                                        ? root.translateKey
+                                        : (veyra.shortcuts[keyRow.modelData.id] || "")
                                     implicitWidth: Math.max(64, keyText.implicitWidth + 20)
                                     implicitHeight: 26
                                     radius: 7
@@ -1193,7 +1203,7 @@ VPage {
                                     Text {
                                         id: keyText
                                         anchors.centerIn: parent
-                                        text: parent.capturing ? qsTr("按下新按键…") : (veyra.shortcuts[keyRow.modelData.id] || qsTr("未设置"))
+                                        text: parent.capturing ? qsTr("按下新按键…") : (parent.bound || qsTr("未设置"))
                                         color: Theme.t1
                                         font.family: Theme.fontMono
                                         font.pixelSize: Theme.fsSmall
@@ -1205,7 +1215,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("恢复默认")
-                            VButton { text: qsTr("全部还原"); ghost: true; onClicked: veyra.resetShortcuts() }
+                            VButton { text: qsTr("全部还原"); ghost: true; onClicked: { veyra.resetShortcuts(); root.translateKey = "Ctrl+Alt+T" } }
                         }
                     }
                     VGroup {
@@ -1250,7 +1260,15 @@ VPage {
                             if (!name && event.key >= 0x20 && event.key < 0x7F) name = String.fromCharCode(event.key)
                             if (!name) return
                             parts.push(name)
-                            if (veyra.setShortcut(root.capturingKey, parts.join("+"))) root.capturingKey = ""
+                            const seq = parts.join("+")
+                            if (root.capturingKey === "translate") {
+                                root.translateKey = seq
+                                // 引擎不认这个键（返回 false），留着是为了将来支持后自动接上。
+                                veyra.setPreference("translateKey", seq)
+                                root.capturingKey = ""
+                            } else if (veyra.setShortcut(root.capturingKey, seq)) {
+                                root.capturingKey = ""
+                            }
                         }
                     }
                 }
