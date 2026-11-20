@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-20 Veyra 2.2.0 正式发行
+
+用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。
+
+发行私钥采用加密 PEM，密码由当前 Windows 用户 DPAPI 保护，位于 E 盘的专用签名档案目录。只分发公钥与签名清单。本机代码签名证书库没有可用证书，Windows 安装器未做 Authenticode。两版均以 2.1.9 已公开虚拟摄像机包的运行资产为身份对照，保留启动音乐授权、补丁 FFmpeg 和分版限制，libdovi 使用固定源码的本地构建。对应源码提供精确 Chiaki 0001–0004 补丁及 stage、libdovi、RX7000 网络源码，其他固定依赖见 [构建记录](BUILD_2.2.0.md)。
+
+本轮产物位于 `E:/项目/Veyra/{releases,reports,logs,tests,tmp}/codex-release-2.2.0-20261120`。发布前核对包的载荷哈希、翻译和更新回归、安装与启动、两标签和草稿资产。命令结果、失败与重试、GitHub 服务端摘要及匿名入口验证以同任务 `FINAL.json` 为准。[完整更新和对比图](RELEASE_NOTES_2.2.0.md)。
+
 ## 2026-11-19 Veyra 2.2.0 Windows 安装向导
 
 从本地 main `613200bc` 建立 `codex/windows-installer-20261119`。采用 Inno Setup 7.1.1 x64，安装器使用 Veyra 现有日落背景、字标、图标及 10 种向导语言。当前用户安装，可浏览目录，桌面快捷方式默认不选，开始菜单和 Windows 已安装的应用都有卸载入口。安装目录的 `Veyra.exe` 启动现有版本布局。配置、LUT 和根目录里的其他用户文件归用户保留，卸载移除安装器自己的程序及更新目录。说明见 [Windows 安装包](WINDOWS_INSTALLER.md)。
