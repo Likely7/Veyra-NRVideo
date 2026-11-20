@@ -53,7 +53,7 @@ HevcLayerScan scanHevcLayers(const uint8_t* data, int size, unsigned lengthSize)
             uint32_t length = 0;
             for (unsigned b = 0; b < lengthSize; ++b) length = (length << 8) | data[pos + b];
             pos += int(lengthSize);
-            if (length == 0 || pos + int(length) > size) break;
+            if (length == 0 || length > uint32_t(size - pos)) break;
             countOneNal(data + pos, length, out);
             pos += int(length);
         }
