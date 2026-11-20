@@ -16,6 +16,7 @@ import QtQuick.Shapes
 
 VPage {
     id: root
+    property alias videoBackgroundHost: videoArea
     signal requestPage(string page)
     signal requestDialog(string key)
     signal requestInspector(int nodeIndex, string nodeType)

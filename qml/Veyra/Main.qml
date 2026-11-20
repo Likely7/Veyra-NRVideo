@@ -208,6 +208,29 @@ Window {
         strokeColor: root.cinema ? "transparent" : Theme.stroke
     }
 
+    // Below the fullscreen quick-adjust panels. In normal windows the same
+    // backdrop belongs to the page's video area, above the opaque card itself.
+    Item {
+        id: fullscreenBackgroundHost
+        anchors.fill: parent
+    }
+    FullscreenBackground {
+        id: ultrawideBackground
+        readonly property Item previewHost: root.fullscreen ? null
+            : root.shownPage === "pro" ? proPage.videoBackgroundHost
+            : root.shownPage === "node" ? nodePage.videoBackgroundHost
+            : root.shownPage === "min" ? minPage.videoBackgroundHost : null
+        parent: previewHost || fullscreenBackgroundHost
+        width: videoHost.width
+        height: videoHost.height
+        active: root.shownPage === root.page && veyra.hasSource && !veyra.gameMode
+            && (previewHost !== null || (root.fullscreen && root.page !== "home" && root.page !== "set"))
+            && (veyra.aspectMode === 0 || veyra.aspectMode >= 4)
+        pictureAspect: root.reportedAspect
+        pixelRatio: root.Screen.devicePixelRatio
+        settingsOpen: root.page === "set" && settingsPage.section === "look"
+    }
+
     // The one host item for the native video window; main.cpp finds it by name.
     // Exactly one must exist in the tree: an earlier version had a copy in each
     // page and the engine bound its swapchain to a hidden, zero-sized one.
@@ -302,7 +325,13 @@ Window {
             }
         }
         ExportPage { id: exportPage; pageId: "exp"; home: pages; onRequestPage: p => root.goPage(p) }
-        SettingsPage { id: settingsPage; pageId: "set"; home: pages; onRequestPage: p => root.goPage(p) }
+        SettingsPage {
+            id: settingsPage
+            pageId: "set"
+            home: pages
+            fullscreenBackground: ultrawideBackground
+            onRequestPage: p => root.goPage(p)
+        }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.
@@ -608,7 +637,7 @@ Window {
     function overVideoCover(scenePoint) {
         const visit = item => {
             if (!item || !item.visible || item.opacity <= 0) return false
-            if (item.objectName === "videoCover" || item.videoCover === true) {
+            if (!item.passiveVideoCover && (item.objectName === "videoCover" || item.videoCover === true)) {
                 const q = item.mapFromItem(null, scenePoint.x, scenePoint.y)
                 if (q.x >= 0 && q.y >= 0 && q.x <= item.width && q.y <= item.height) return true
             }
