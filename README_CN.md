@@ -1,19 +1,75 @@
-<p align="center"><img src="assets/veyra-wordmark-sun.gif" alt="Veyra 透明动态字标和太阳" width="480"></p>
-
 # Veyra
 
+<!-- veyra-creator-and-tutorials:start -->
 <p align="center">
-  <a href="https://x.com/likely2002">X · @likely2002</a> · <a href="https://www.youtube.com/@Likely7Ai">YouTube · @Likely7Ai</a><br>
-  <a href="https://www.youtube.com/watch?v=ZJ42jzNAbik">English tutorial</a> · <a href="https://www.bilibili.com/video/BV1KvsE6bEPw/">中文教程</a>
+  <strong>作者主页 / Creator</strong>：
+  <a href="https://x.com/likely2002">X · @likely2002</a>
+  &nbsp;|&nbsp;
+  <a href="https://www.youtube.com/@Likely7Ai">YouTube · @Likely7Ai</a>
 </p>
 
-[English](README.md) · [下载 Veyra 2.2.0](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0) · [使用文档](https://github.com/Likely7/Veyra-NRVideo/wiki) · [反馈问题](https://github.com/Likely7/Veyra-NRVideo/issues)
+<p align="center">
+  <strong>视频教程 / Video tutorials</strong>：
+  <a href="https://www.youtube.com/watch?v=ZJ42jzNAbik">English · YouTube</a>
+  &nbsp;|&nbsp;
+  <a href="https://www.bilibili.com/video/BV1KvsE6bEPw/">中文 · 哔哩哔哩</a>
+</p>
+<!-- veyra-creator-and-tutorials:end -->
 
-Veyra 是 Windows 上的实时画面增强、播放器和采集工具。支持本地文件、采集卡、屏幕与窗口捕获、网络播放和 PS5、Xbox、PC 串流。
+<!-- veyra-main-pr-integration -->
+**Veyra 2.2.0 已发布** · [下载和完整更新](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)
 
-- 在同一条 GPU 处理链里使用超分、NR（实验性 DLSS 5 画面增强）、HDR 和补帧。可选算法取决于实际使用的显卡。
-- 支持录制、即时回放、增强导出，以及通过 Veyra 虚拟摄像机向 OBS 输出处理后的画面。
-- 在专业模式的列表或节点视图调整效果、对照原画和查看耗时。
+
+<p align="center"><img src="assets/veyra-wordmark-sun.gif" alt="Veyra NR · 透明字标与太阳动效" width="480"></p>
+
+<p align="center">
+  <a href="https://github.com/Likely7/Veyra-NRVideo/blob/main/assets/veyra-2.0.0-promo.mp4">
+    <img src="assets/veyra-2.0.0-promo.webp" alt="Veyra 2.0 宣传动画（点击播放视频）" width="960">
+  </a>
+</p>
+
+[English](README.md) | 简体中文
+
+<p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 专业模式" width="1200"></p>
+
+Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
+
+---
+
+### 💜 Community Support / 社区支持
+
+**English**
+
+A huge thank you to the Pump.fun community for supporting Veyra!
+
+I've received creator fees from a community-created Veyra token. These contributions will help support the continued development of Veyra.
+
+**中文**
+
+非常感谢 Pump.fun 社区对 Veyra 的支持！
+
+我已经从社区自行创建的 Veyra 代币中领取了创作者手续费。这些收入将帮助支持 Veyra 的持续开发。
+
+**Token Contract Address (CA) / 代币合约地址：**
+
+`i6Aop7z5qLaY47kseaoUt6kGq4Pi2ySg8j7cxRkpump`
+
+**Disclaimer / 免责声明：** This token was independently created by the community and is not an official Veyra release or investment recommendation. Veyra remains free and open-source.
+
+该代币由社区独立创建，并非 Veyra 官方发行的代币，也不构成投资建议。Veyra 仍然是免费开源软件。
+
+---
+
+**Veyra Windows 免安装软件包累计下载 17.8 万+ 次**（截至 2026-11-18 美西时间，178,996 次，包含早期 `.7z` 软件包及虚拟摄像头版本）；**GitHub Release 全部附件累计下载 21.4 万+ 次**（214,277 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
+
+[下载 Veyra 2.2.0](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+
+
+**本机新增效果开销示例：** RTX5070，4K标准测试抗锯齿FXAA约0.15ms、SMAA/MLAA约0.30ms；最终网格美颜一张脸1080p约0.93ms、4K约1.42ms。不同素材/显卡会变化；AMD新模型没有本机实卡性能百分比。[条件与限制](docs/history/releases/RELEASE_NOTES_2.1.0.md)。
+
+**[Veyra 中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)**：整理四个群聊的消息汇总成的 Veyra 使用文档，大部分软件问题、采集卡问题可以先在里面查找答案。
+
+**📖 [English Documentation / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)**：供海外用户查看英文安装指南、采集卡兼容性、常见故障与群友实测经验。
 
 ## 最新更新 · 2.2.0
 
@@ -23,20 +79,143 @@ Veyra 是 Windows 上的实时画面增强、播放器和采集工具。支持�
 
 [查看完整更新、实测数据和画质对比图](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)
 
-## 开始使用
+## 功能重点
 
-需要 Windows 11 x64、DirectX 12 和显卡驱动。选与 Veyra 实际使用的 GPU 对应的版本，运行安装器，或将便携 ZIP 解压到可写目录后启动 **Veyra.exe**。第一次使用可点首页左下角的「第一次使用？查看新手引导」，采集格式说明在采集卡页面顶部。[下载与升级说明](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)
+**NR 调控：** 每层 NR 的“增强变化量 → 总变化强度”最高为 5。“画面调控”默认关闭，开启可选自动／手动。自动分别适配风格 0／1／2，新增力度滑块（0 保留原始强度，1 完整纠偏）。手动共九项：色相、色度、中性色、原图色彩保留、亮度保持、暗部、高光、局部压缩和时域稳定；“采用当前风格的自动参数”可作为手动起点。切换方式保留手动数值，关闭调控保留原始残差算法。5 是一次推理结果的残差外推，保护会降低对应变化量，不能保证所有素材在完整局部增益 5 下无失真。预设、列表／节点会话、PNG 与视频导出共用这些设置。验收与已知限制见[本轮记录](docs/history/reports/NR_STRENGTH_PROTECTION_EXECUTION_2026-10-05.md)。
 
-[构建说明](docs/BUILD_2.2.0.md) · [对应源码](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0-sources) · [Linux OBS 滤镜](docs/OBS_FILTER.md) · [GPL-3.0](LICENSE) · [第三方许可](THIRD_PARTY_NOTICES.md)
+- **全新界面**：首页、极简、专业列表、节点、调色、导出和设置重新组织；支持简中、繁中、English、日本語、한국어。
+- **节点编辑与多层 NR**：连线编排处理顺序，NR/调色独立参数；列表与节点各自保存配置、会话和预设。
+- **PC / Xbox 串流**：Moonlight/Sunshine 协议 PC 串流、非官方实验 Xbox 接入，与 PS5、采集卡、屏幕捕获共用增强。
+- **导出页重做**：可编辑顺序队列、剪辑、MP4/MKV、多音轨/内嵌字幕、取消重试和完成提示音。
+- **增强与兼容**：新版SF310.9.16双模型、50系NVIDIA原版与AMD lmxxf、DLSS/XeSS/FSR 补帧入口、采集优化及带重启确认的 OBS 游戏采集开关。详细新功能与修复见 Release。
 
-## 社区
+## 下载、启动与升级
 
-[Discord](https://discord.gg/qetVZTRkC) · [Patreon](https://www.patreon.com/cw/Likely7) · [请我喝杯咖啡](https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110) · [软件知识库](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home)
+1. 按 Veyra 实际使用的显卡下载 [2.2.0 安装器或便携 ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)。安装版直接运行安装器，便携版用 Windows 或 7-Zip 完整解压到可写的新目录，运行根目录的 **Veyra.exe**。运行只需一个显卡包，源码包仅供重编译。
+2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
+3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
+4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
+
+**升级并保留设置。** 退出 Veyra 后，同分版安装器可以在原目录覆盖。更换目录或从旧便携版迁移时，复制旧版的 `runtime_local/user-data-2.0.0` 和自定义 `runtime_local/luts` 到新的 `runtime_local`。自定义数据路径以「设置 → 关于」显示为准。
+
+## 新版操作
+
+### 片源与页面
+
+首页选择 **打开视频、采集卡、PS5 串流、PC 串流、Xbox 串流、屏幕捕获**；本地视频/图片也可拖入。底部导航切换首页、极简、专业、调色、导出和设置；隐藏时移到下沿唤出。
+
+- **极简**以画面为主，悬浮条控制片源、进度、音量和全屏，可在设置中隐藏。
+- **专业列表**右侧为画质、补帧、色彩、声音、显示；顶部处理顺序可定位设置，底部显示输入/输出、GPU 耗时和负载。
+- 文件画面点击暂停/继续，左右键跳转 5 秒；双击或点按钮切全屏。全屏移到顶沿可切换极简/专业，列表全屏按 **Home** 打开快速调节，**Ctrl+L** 锁定控制条。快捷键可在设置修改。
+- 顶部 **截图** 保存处理画面；预设菜单保存、管理、导入自己的配置，不强加内置画质预设。
+
+### 列表模式
+
+列表与节点的 **NR 版本** 可选RTX20–50 · SF310.9.16、RTX50 · NVIDIA原版、RX 7000 / 9000 · AMD NR（实验，按显卡路由RedDuke／lmxxf）。SF默认性能模型B，关闭“启用性能优化版”使用旧模型A；原版开关置灰，AMD默认开启时用Small、关闭用原模型，各层选择可保存。旧Lecram/SF-v2设置迁移至新版SF。不支持的版本保留置灰，支持的版本切换时全 NR 链同步。AMD NR需要驱动HIP 7；视频最高内部1080p推理并合成原尺寸输出，不等于原生4K NR；图片保持原尺寸模型预算。2.1.1通过SDR线性代理进行AMD原生HDR NR，再将结果还原至HDR基底（[本版说明](docs/RELEASE_NOTES_2.1.1.md)）。[本版运行组件身份](docs/history/releases/BUILD_2.1.0.md)。
+
+顶部选 **列表**，按需开启超分、NR、RTX Video HDR。NR 最多四层，独立调整内部尺寸、强度等参数；总开关关闭全部 NR，重开恢复各层原状态。
+
+列表的 **NR 全局保护区域**排除区域内全部 NR 层效果，保留非 NR 处理结果，可用于 HUD/字幕。调色页提供基础调整、曲线、混色器、色轮、LUT 与颜色预设。
+
+补帧页选可用后端/倍率，并核对内容节奏、显示同步、低延迟队列、输出上限。原画/增强对比期间补帧暂停，退出恢复。提交 FPS 不等于物理屏幕显示帧数或端到端延迟。
+
+### 节点模式：编排自己的处理链
+
+专业页顶部选 **节点**。这是实际执行的处理链，不只是示意图。
+
+1. 从输入到输出保持有效连接。空白处右键或点 **添加节点**。
+2. 拖动输出端口到输入端口，或依次点击两端。节点拖到线上可插入；拖离主链或按住 **Alt** 松手可断开。
+3. 在节点内直接调参数，NR/调色可独立设置、按允许顺序放在超分前后。右键可删除、复制、重置；复制产生独立的**未连接副本**，接入前不运行。
+4. **中键平移、滚轮缩放**；适配视图/自动排列整理布局。“草稿未运行”表示编辑链未连通或不合法，不代表所有可见节点都生效。
+5. 光流在输入后计算并共享，超分为单实例；RTX Video HDR 在补帧前，补帧固定末端，DLSS/XeSS/FSR 选一个后端。不是任意分支混合图。
+6. 列表和节点分别保存参数、预设、会话。切回列表恢复原列表配置，节点链保留；切换重建处理链，可能短暂停顿。
+
+**节点模式不支持离线导出，也没有列表的 NR 全局保护区域。** 导出前切回列表并确认效果，不会自动转换节点链。
+
+### 采集与串流
+
+| 来源 | 操作要点 |
+|---|---|
+| 采集卡 | 选设备、分辨率、帧率，再选支持的像素格式和音频输入；关闭其他程序占用。PQ/HLG/709、Limited/Full 匹配实际信号。美乐威 Pro Capture 有专用低延迟选项。 |
+| PS5 | 主机启用远程游玩，搜索或手填 IP；点击“获取 Account ID”打开 [PSNTools](https://www.psntools.com/psn/checker)，将查到的数字 ID 或 Base64 ID 填回软件，再输入主机八位配对码。已保存主机可直接重连。 |
+| PC | 主机自行安装配置 Sunshine；Veyra 发现/添加主机、PIN 配对、选应用或桌面连接。Sunshine 不随包安装。 |
+| Xbox | 按设备码流程登录，选开启远程功能的主机。非官方实验功能，服务、账号与主机限制可能影响连接。 |
+| 屏幕 | 选窗口/显示器，避免捕获 Veyra 自身形成递归。 |
+
+**屏幕捕获 → 游戏模式**：选择无边框游戏窗口或显示器，Home呼出调节，Home/Esc关闭面板，Ctrl+Alt+Home退出透传。**采集卡 → PS5手柄控制**：先配对主机；搭配第三方远程软件可将本机增强画面再串流、接收远端手柄输入，按需开启后台转发和音频监听。详细步骤与设备边界见2.0.8更新说明。 两个游戏模式快捷键现在可在设置→快捷键自定义，默认Home/Ctrl+Alt+Home保持。窗口化游戏画面贴合原窗口边界；需要铺满屏幕时将游戏设为无边框全屏。
+
+暂停采集/串流冻结预览并保留会话，不会暂停主机游戏。实卡、网络、HDR、手柄需按设备验证。
+
+### 导出
+
+切到**列表**确认效果，再打开导出页。添加文件后可排序、逐项修改、设置剪辑、MP4/MKV 与编码质量；音轨/内嵌字幕可保留全部或指定。
+
+“保留全部”遇到封装不支持的轨道会跳过并提示；明确指定不支持轨道则报错。可暂停、取消重试，完成可响铃。默认 VBR 8 Mbps、导出时关闭当前播放以释放 GPU，可修改。实时补帧不代表所有后端支持离线补帧，以导出页接受的配置为准。
+
+### OBS 与设置
+
+OBS 游戏采集前，开启 **设置 → 通用与外观 → OBS 游戏采集兼容**。立即保存，选“是”重启生效，“否”下次生效；导出时需等任务结束。兼容模式 UI 软件绘制，部分阴影/模糊简化，视频增强仍用 GPU。游戏采集抓**视频**；录完整界面用 Windows 10 (1903+) 窗口采集。
+
+**设置 → 通用与外观 → 启动后自动继续上次内容** 可选开启，恢复视频及进度，或采集卡设备、格式、帧率与音频配置；启动页面可选择极简或专业。双页面播放栏的倍速按钮可选 1× / 1.5× / 2× / 3×，不改变采集/串流和离线导出的速度。
+
+**监控软件兼容** 默认“自动”：启动时检测到小飞机 RTSS，界面软件绘制，OSD 只显示在视频上。RTSS 后启动时按提示重启 Veyra。与 OBS 游戏采集同开，在 RTSS 给 Veyra 开启 “Use Microsoft Detours API hooking”，或改用 OBS 窗口采集。
+
+**设置**支持选择运算 GPU、RTX50可选DLSS性能模式及可变刷新。每次启动后台检查更新，仅有新版时短暂顶部提示。检测到抖音直播伴侣时启动采用软件界面，运行期间把请求的实时GPU优先级暂限为高，伴侣退出后恢复请求值。
+
+设置还包含语言/缩放、快捷键、GPU 监控显卡、音频设备、组件信息。反馈附显卡/驱动、素材、效果组合、发生时间及 `logs/veyra-qml.log`，崩溃附 `.dmp`；分享前检查私人信息。
+
+## 已知边界
+
+RTSS 7.3.7 在本机 RTX 5070 已验证兼容，游戏加加及其他叠加层/显卡组合尚未验证。真实 Xbox 长时间串流、主机经 VRR 采集卡输入仍待现场复测。RTX 30/40 社区 NR/补帧、FSR 4 ML 实卡、部分 NR TDR/显存增长与跨设备串流仍有未验证或未解决项，详见 Release。社区运行库不代表厂商认证或完整官方 DLSS 5 集成。
+
+## 架构
+
+```mermaid
+flowchart TD
+    UI[Qt Quick / QML 页面] --> Bridge[共享 Bridge / 配置 / 会话 / 预设]
+    Sources[文件 / 采集卡 / PS5 / PC / Xbox / 屏幕] --> Source[FrameSource：帧、时间戳、色彩]
+    Bridge --> Graph[共享 EnhanceGraph：有效处理链]
+    Source --> Graph
+    Graph --> Effects[多 NR / 单 SR / 调色 / Video HDR]
+    Effects --> Live[实时预览：可选末端补帧]
+    Live --> Present[原生 D3D12 视频窗口]
+    Effects --> Export[列表离线导出 / 截图]
+    Export --> Sink[编码封装 / 图片保存]
+    Bridge --> Queue[导出队列：每任务配置快照]
+    Queue --> Export
+```
+
+QML 管界面，视频由原生 D3D12 呈现。列表/节点共用引擎，未连接草稿不运行；导出不是录制预览窗口。
+
+## 开源与构建
+
+ANR 自写适配源码可追溯，公开包继续遵守上游 Beta 运行组件的再分发限制。
+
+开发从[当前文档入口](docs/README.md)开始：[构建与验证](docs/DEVELOPMENT.md)、[界面代码职责](docs/ARCHITECTURE.md)。历史任务记录已单独归档。
+
+[RX 7000 实验 NR 接入](docs/AMD_RDNA3_NR_PLAN_2026-10-29.md)支持 Small / Original 与内部百分比，保留 RX 9000 和 NVIDIA 路径。本地协议和界面回归已完成，RX 7000 实卡推理尚待验收。
+
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.2.0 构建与对应源码](docs/BUILD_2.2.0.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
+
+## 支持与反馈
 
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="WeChat donation / 微信赞助" width="220">
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <img src="docs/images/community/group-15-20261119.png" alt="Veyra WeChat group 15 / 交流群 15" width="220">
+  <a href="https://discord.gg/qetVZTRkC"><img src="https://img.shields.io/badge/Discord-Join%20Community-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Join Veyra on Discord" height="36"></a>
+  &nbsp;&nbsp;
+  <a href="https://www.patreon.com/cw/Likely7" title="Patreon 主页 / Creator page"><img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/support/patreon-home.svg" alt="Patreon 主页 / Creator page" height="36"></a>
+  &nbsp;&nbsp;
+  <a href="https://www.patreon.com/Likely7/posts/buy-me-coffee-175018110" title="请我喝杯咖啡 · US$5 / Coffee support"><img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/support/patreon-coffee.svg" alt="☕ 请我喝杯咖啡 · US$5 / Coffee support" height="36"></a>
 </p>
 
-左边为微信赞助，右边为 Veyra 交流群 15。群码于 2026 年 11 月 26 日前有效。
+<p align="center">
+  Patreon 主页查看作者动态；☕ 咖啡按钮直达 US$5 赞助页面。<br>
+  Visit the creator page for updates, or open the US$5 coffee support page.
+</p>
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/v1.4.0/docs/images/1.4.0/donate-wechat.jpg" alt="微信赞助" width="220">
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="https://raw.githubusercontent.com/Likely7/Veyra-NRVideo/main/docs/images/community/group-15-20261119.png" alt="Veyra 交流群 15" width="220">
+</p>
+
+左：微信赞助（自愿，不影响功能）；右：交流群 15。群码按图片标注于 **2026-11-26 前**有效，过期请查看仓库更新。
