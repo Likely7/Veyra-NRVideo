@@ -385,7 +385,6 @@ target_link_libraries(veyra_parity_tests PRIVATE veyra_parity)
 
 add_executable(veyra_unified_tests
   tests/unit/UnifiedContractTests.cpp
-  src/core/EnhanceGraph.cpp
 )
 veyra_apply_warnings(veyra_unified_tests)
 target_compile_features(veyra_unified_tests PRIVATE cxx_std_20)
