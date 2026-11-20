@@ -261,7 +261,7 @@ int runExportWorker(HANDLE mapping){
     if(!s){log::error("export-worker",std::format("mapping failed win32={}",GetLastError()));CloseHandle(mapping);return 1;}
     auto reject=[&](const wchar_t* reason){
         log::error("export-worker",utf8(reason));
-        if(s->signature==magic&&s->version==10&&s->bytes==sizeof(Shared)){
+        if(s->signature==magic&&s->version==Shared::kVersion&&s->bytes==sizeof(Shared)){
             if(InterlockedCompareExchange(&s->messageLock,1,0)==0){
                 wcsncpy_s(s->message,reason,_TRUNCATE);
                 InterlockedExchange(&s->messageLock,0);
