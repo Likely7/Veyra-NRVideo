@@ -906,9 +906,19 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
     AVChannelLayout mono=AV_CHANNEL_LAYOUT_MONO;
     SwrContext* resampler=nullptr;
     AVChannelLayout inputLayout{};
-    if(av_channel_layout_copy(&inputLayout,&context->ch_layout)<0)av_channel_layout_default(&inputLayout,context->ch_layout.nb_channels>0?context->ch_layout.nb_channels:2);
-    if(swr_alloc_set_opts2(&resampler,&mono,AV_SAMPLE_FMT_FLT,kSampleRate,&inputLayout,context->sample_fmt,context->sample_rate,0,nullptr)<0||!resampler||swr_init(resampler)<0){
-        if(resampler)swr_free(&resampler);
+    int inputFormat=-1,inputRate=0;
+    // DVB recordings switch between 5.1 and stereo at ad breaks; a resampler built
+    // for the old layout reads planes the new frames do not have. Rebuild on change.
+    const auto configure=[&](const AVChannelLayout& layout,int format,int rate){
+        swr_free(&resampler);
+        av_channel_layout_uninit(&inputLayout);
+        if(av_channel_layout_copy(&inputLayout,&layout)<0)av_channel_layout_default(&inputLayout,layout.nb_channels>0?layout.nb_channels:2);
+        inputFormat=format;inputRate=rate;
+        if(swr_alloc_set_opts2(&resampler,&mono,AV_SAMPLE_FMT_FLT,kSampleRate,&inputLayout,AVSampleFormat(format),rate,0,nullptr)>=0&&resampler&&swr_init(resampler)>=0)return true;
+        swr_free(&resampler);
+        return false;
+    };
+    if(!configure(context->ch_layout,context->sample_fmt,context->sample_rate)){
         av_channel_layout_uninit(&inputLayout);
         avcodec_free_context(&context);
         avformat_close_input(&input);
@@ -922,11 +932,16 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
     AVPacket* packet=av_packet_alloc();
     AVFrame* frame=av_frame_alloc();
     const double limitSeconds=1800.0;
-    while(packet&&frame&&!stop.stop_requested()&&av_read_frame(input,packet)>=0){
+    while(packet&&frame&&resampler&&!stop.stop_requested()&&av_read_frame(input,packet)>=0){
         if(packet->stream_index!=audioIndex){av_packet_unref(packet);continue;}
         if(avcodec_send_packet(context,packet)<0){av_packet_unref(packet);continue;}
         av_packet_unref(packet);
         while(avcodec_receive_frame(context,frame)>=0){
+            if((frame->format!=inputFormat||frame->sample_rate!=inputRate||av_channel_layout_compare(&frame->ch_layout,&inputLayout)!=0)
+               &&!configure(frame->ch_layout,frame->format,frame->sample_rate)){
+                log::warn("subtitle",std::format("auto align: resampler rebuild failed channels={} rate={}; using the audio before it",frame->ch_layout.nb_channels,frame->sample_rate));
+                break;
+            }
             const int maxOut=int(swr_get_out_samples(resampler,frame->nb_samples));
             if(maxOut<=0)continue;
             converted.resize(size_t(maxOut));
