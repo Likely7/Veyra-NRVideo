@@ -2,6 +2,8 @@
 // source's deferred Run, bounded mailbox, and reader-buffer lifetime.
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/CaptureFrameRate.h"
+#include "veyra/sink/HdmiBitstreamOutput.h"
+#include "veyra/Log.h"
 #include <windows.h>
 #include <chrono>
 #include <thread>
@@ -14,6 +16,51 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 int wmain(int argc,wchar_t** argv){
+    if (argc == 4 && wcscmp(argv[1], L"--bitstream-capture") == 0) {
+        if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 2;
+        int result = 2;
+        {
+            veyra::Logger::instance().openFile(L"bitstream-capture.log", false);
+            veyra::sink::HdmiBitstreamSettings settings;
+            settings.enabled = true;
+            for (const auto& endpoint : veyra::sink::HdmiBitstreamOutput::endpoints()) {
+                if (endpoint.name == argv[3]) settings.endpointId = endpoint.id;
+            }
+            if (!settings.endpointId.empty()) {
+                auto output = std::make_shared<veyra::sink::HdmiBitstreamOutput>();
+                output->configure(settings);
+                veyra::source::CaptureCardSource capture;
+                capture.setHdmiBitstream(output);
+                veyra::source::SourceOpenDesc desc;
+                desc.path = argv[2];
+                if (capture.configure(desc) && capture.start()) {
+                    const auto until = std::chrono::steady_clock::now() + std::chrono::seconds(65);
+                    unsigned active = 0;
+                    uint64_t read = 0;
+                    const AVFrame* frame = nullptr;
+                    veyra::pipeline::FramePacket packet;
+                    while (std::chrono::steady_clock::now() < until) {
+                        if (capture.read(packet, &frame) == veyra::source::SourceReadStatus::Frame) {
+                            ++read;
+                            if (output->state().status == veyra::sink::HdmiBitstreamStatus::Active) ++active;
+                        }
+                    }
+                    const auto info = capture.info();
+                    printf("Capture %ux%u at %.3f fps, frames read=%llu, frames with bitstream active=%u\n",
+                        info.width, info.height, info.averageFps, static_cast<unsigned long long>(read), active);
+                    result = read && active ? 0 : 4;
+                    capture.close();
+                } else {
+                    wprintf(L"Capture start failed: %ls\n", capture.errorMessage().c_str());
+                    result = 3;
+                }
+            } else {
+                wprintf(L"Endpoint unavailable: %ls\n", argv[3]);
+            }
+        }
+        CoUninitialize();
+        return result;
+    }
     if(argc==4&&wcscmp(argv[1],L"--rate-test")==0){
         double expected=0;if(!veyra::source::parseCaptureFrameRate(argv[3],expected))return 2;
         CoInitializeEx(nullptr,COINIT_MULTITHREADED);

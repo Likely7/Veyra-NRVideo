@@ -326,6 +326,15 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if (key == "audioDevice") sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
+    if (key == "audioForceStereo" || key == "audioDevice" || key == "captureAudioMonitor") {
+        const bool downmix = impl_->prefBool("audioForceStereo", false);
+        sink::setForceStereoDownmix(downmix);
+        impl_->engine.hdmiBitstream().configure({
+            !downmix && impl_->prefBool("captureAudioMonitor", true),
+            impl_->prefString("audioDevice").toStdWString()});
+        emit audioDevicesChanged();
+    }
     if (key == QLatin1String("updateDownloadRoute")) {
         const auto route = portable::parseDownloadRoute(impl_->prefString("updateDownloadRoute"));
         static_cast<UpdateChecker*>(updates_)->setDownloadRoute(route.value_or(portable::DownloadRoute::GitHub));
@@ -356,8 +365,6 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     if(key==QLatin1String("overlayCompat"))updateLiveCompanionCompat();
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
     if(key==QLatin1String("captureShowAllFrameRates"))emit captureChanged();
-    if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
-    else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
     else if (key == QLatin1String("blackmagicNativeCapture")) { if(impl_->captureListed)refreshCaptureDevices();emit captureChanged(); }
     else if (key == QLatin1String("language")) {
@@ -484,6 +491,11 @@ QVariantList QmlPlayerBridge::audioDevices() const {
     return out;
 }
 QString QmlPlayerBridge::audioOutputStatus() const {
+    const auto bitstream = impl_->engine.hdmiBitstream().state();
+    if (bitstream.status == sink::HdmiBitstreamStatus::Active) {
+        const auto format = tr("%1 passthrough").arg(QString::fromLatin1(sink::bitstreamKindName(bitstream.codec)));
+        return bitstream.endpoint.empty() ? format : QString::fromStdWString(bitstream.endpoint) + " · " + format;
+    }
     const auto& a = impl_->audioActive;
     if (!a.valid) return tr("尚未打开音频输出");
     QString text = QString::fromStdWString(a.name.empty() ? L"(未命名设备)" : a.name) + tr(" · %1 声道").arg(a.channels);

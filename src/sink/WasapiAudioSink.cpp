@@ -809,6 +809,7 @@ bool AudioRenderer::copyPcm(BYTE* destination,const float* input,size_t frames,b
 namespace {
 std::mutex gEndpointMutex;
 std::wstring gPreferredEndpoint;
+std::wstring gBitstreamEndpoint;
 bool gForceStereo = false;
 ActiveRenderEndpoint gActiveEndpoint;
 std::atomic<uint64_t> gEndpointGeneration{1};
@@ -875,6 +876,16 @@ void setForceStereoDownmix(bool enabled){
 bool forceStereoDownmix(){std::lock_guard lock(gEndpointMutex);return gForceStereo;}
 ActiveRenderEndpoint activeRenderEndpoint(){std::lock_guard lock(gEndpointMutex);return gActiveEndpoint;}
 uint64_t renderEndpointGeneration(){return gEndpointGeneration.load();}
+void setBitstreamRenderEndpoint(const std::wstring& id){
+    std::lock_guard lock(gEndpointMutex);
+    if(gBitstreamEndpoint==id)return;
+    gBitstreamEndpoint=id;
+    ++gEndpointGeneration;
+}
+bool bitstreamRenderEndpointReserved(){
+    std::lock_guard lock(gEndpointMutex);
+    return !gBitstreamEndpoint.empty();
+}
 
 struct AudioRenderer::EndpointNotifier : IMMNotificationClient {
     std::atomic<HRESULT>* error;std::atomic<unsigned long> refs{1};
@@ -924,6 +935,18 @@ void AudioRenderer::unregisterEndpointNotification(){
     if(enum_)enum_->UnregisterEndpointNotificationCallback(notifier_);
     notifier_->Release();notifier_=nullptr;
 }
+void AudioRenderer::recordPcm(const float* samples,size_t frames,const AudioFormat& format,int64_t estimatedUs,bool withoutOutput)
+{
+    if(auto tap=recordingAudioSink()){
+        const auto earliest=withoutOutput||lastTapWithoutOutput_!=withoutOutput?lastTapEndUs_:lastTapUs_;
+        const auto stamp=std::max(estimatedUs,earliest);
+        tap->renderedPcm(samples,frames,format,stamp,this);
+        lastTapUs_=stamp;
+        lastTapEndUs_=stamp+int64_t(frames)*1000000/kAudioRate;
+        lastTapWithoutOutput_=withoutOutput;
+    }
+}
+
 bool AudioRenderer::start(AudioFormat input,double requestedBufferMs,std::wstring_view excludedEndpoint)
 {
     std::lock_guard endpointLock(endpointMutex_);
@@ -943,7 +966,8 @@ bool AudioRenderer::start(AudioFormat input,double requestedBufferMs,std::wstrin
     // Read the choice and its generation together, so a change made while this
     // endpoint opens is seen as stale on the next check and rebuilds again.
     bool stereo=false;
-    {std::lock_guard lock(gEndpointMutex);preferredId_=gPreferredEndpoint;stereo=gForceStereo;endpointGeneration_.store(gEndpointGeneration.load());}
+    std::wstring bitstreamEndpoint;
+    {std::lock_guard lock(gEndpointMutex);preferredId_=gPreferredEndpoint;bitstreamEndpoint=gBitstreamEndpoint;stereo=gForceStereo;endpointGeneration_.store(gEndpointGeneration.load());}
     followsDefault_=true;onFallback_=false;
     if(!preferredId_.empty()){
         IMMDevice* chosen=nullptr;DWORD state=0;
@@ -960,6 +984,10 @@ bool AudioRenderer::start(AudioFormat input,double requestedBufferMs,std::wstrin
         if (!checked(hr,"GetDefaultAudioEndpoint")) return false;
     }
     deviceId_=endpointId(device_);
+    if(!bitstreamEndpoint.empty()&&deviceId_==bitstreamEndpoint){
+        lastError_=kRenderReservedForBitstream;
+        return false;
+    }
     // A dedicated loopback session must never feed its own source, including
     // when a saved speaker is missing and Windows falls back to the default.
     if(!excludedEndpoint.empty()&&(deviceId_.empty()||
@@ -1085,7 +1113,7 @@ bool AudioRenderer::pumpOnce(AudioPcmSource& pipeline, double* firstWrittenPtsMs
     // shared buffer alone read ~40 ms early (engine and device latency).
     // Prefill before Start uses the queue plus the latency measured meanwhile.
     if(got&&!pausedEndpoint_&&recordingAudioActive()){
-        if(auto tap=recordingAudioSink()){
+        {
             const int64_t queuedUs=recordingClockUs()+int64_t(padding)*1000000/int64_t(sampleRate_);
             int64_t playoutUs=queuedUs+tapLatencyUs_;
             UINT64 pos=0,qpc=0;
@@ -1094,7 +1122,7 @@ bool AudioRenderer::pumpOnce(AudioPcmSource& pipeline, double* firstWrittenPtsMs
                 playoutUs=int64_t(qpc/10)+int64_t((double(timelineWriteFrame_.load())-played)*1e6/sampleRate_);
                 tapLatencyUs_=std::clamp<int64_t>((tapLatencyUs_*7+(playoutUs-queuedUs))/8,0,250000);
             }
-            tap->renderedPcm(chunk_.data(),got,inputFormat_,playoutUs,this);
+            recordPcm(chunk_.data(),got,inputFormat_,playoutUs,false);
         }
     }
     if (!started_ && !got) return checked(render_->ReleaseBuffer(0, 0),"Release empty prefill");
