@@ -127,7 +127,8 @@ std::vector<std::vector<uint8_t>> extractEnhancementNals(const uint8_t* data, in
         uint32_t length = 0;
         for (unsigned b = 0; b < lengthSize; ++b) length = (length << 8) | data[pos + b];
         pos += int(lengthSize);
-        if (length == 0 || pos + int(length) > size) break;
+        // Unsigned: int(length) of a hostile length >= 2^31 is negative and passed the bound.
+        if (length == 0 || length > uint32_t(size - pos)) break;
         const uint8_t* nal = data + pos;
         if (((nal[0] >> 1) & 0x3F) == 63 && length >= 4 && nal[0] == 0x7E && nal[1] == 0x01) {
             const int inner = int(length) - 2;
