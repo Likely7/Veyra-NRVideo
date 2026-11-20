@@ -13,7 +13,7 @@ Rectangle {
     signal picked(string id)
 
     implicitWidth: 150
-    implicitHeight: 30
+    implicitHeight: Math.max(30, valueLabel.implicitHeight + 8)
     radius: 9
     color: hover.hovered ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(1, 1, 1, 0.05)
     border.width: 1
@@ -34,7 +34,7 @@ Rectangle {
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsBody
             font.weight: Font.Medium
-            elide: Text.ElideRight
+            wrapMode: Text.Wrap
         }
         VIcon { name: "down"; size: 14; color: Theme.t3 }
     }

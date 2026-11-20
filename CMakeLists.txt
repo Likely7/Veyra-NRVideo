@@ -257,6 +257,17 @@ target_compile_definitions(veyra_descriptor_present_probe PRIVATE
   VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
 target_link_libraries(veyra_descriptor_present_probe PRIVATE d3d12 dxgi)
 add_dependencies(veyra_descriptor_present_probe veyra_shader_present_blit)
+
+# Presentation scaler check (2026-11-18): drives PresentBlit offscreen and
+# compares the fine path with a CPU model, the old bilinear blit and a
+# Lanczos-3 reference, and times each blit. D3D12 only.
+add_executable(veyra_present_scaling_tests tests/integration/PresentScalingGpuTests.cpp)
+veyra_apply_warnings(veyra_present_scaling_tests)
+target_compile_features(veyra_present_scaling_tests PRIVATE cxx_std_20)
+target_compile_options(veyra_present_scaling_tests PRIVATE /utf-8)
+target_compile_definitions(veyra_present_scaling_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+target_link_libraries(veyra_present_scaling_tests PRIVATE d3d12 dxgi)
+add_dependencies(veyra_present_scaling_tests veyra_shader_present_blit)
 veyra_apply_warnings(veyra_runtime_probe)
 target_compile_features(veyra_runtime_probe PRIVATE cxx_std_20)
 target_compile_definitions(veyra_runtime_probe PRIVATE
@@ -338,6 +349,9 @@ veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
 enable_testing()
 add_subdirectory(tests/screenshot-alpha)
 veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
+# Live HUD Lock (ported from PushFPS, GPL-3.0-or-later): per-pixel HUD mask and compose.
+veyra_add_compute_shader(veyra_shader_hud_lock_update HudLockUpdate)
+veyra_add_compute_shader(veyra_shader_hud_lock_compose HudLockCompose)
 # Nv12Upload: byte buffer -> luma/chroma planes (copy-free upload path).
 veyra_add_compute_shader(veyra_shader_nv12_upload Nv12Upload)
 # PresentBlit: fullscreen-triangle pixel blit onto flip-model back buffers.
@@ -623,7 +637,7 @@ endif()
 # EnhanceGraph (the real GPU chain) needs the NGX + NVOF backends; wire it
 # into veyra_pipeline only when both exist so bare contract builds still work.
 if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
-  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
+  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/HudLock.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
   target_include_directories(veyra_pipeline PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
@@ -738,7 +752,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -874,6 +888,30 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_options(veyra_live_timing_tests PRIVATE /utf-8)
   target_include_directories(veyra_live_timing_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+  # Frame pacing repair and the adaptive multiplier (ported from PushFPS): header-only logic.
+  add_executable(veyra_frame_pacing_repair_tests tests/unit/FramePacingRepairTests.cpp)
+  target_compile_features(veyra_frame_pacing_repair_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_frame_pacing_repair_tests PRIVATE /utf-8)
+  target_include_directories(veyra_frame_pacing_repair_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_executable(veyra_adaptive_fg_multiplier_tests tests/unit/AdaptiveFgMultiplierTests.cpp)
+  target_compile_features(veyra_adaptive_fg_multiplier_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_adaptive_fg_multiplier_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_adaptive_fg_multiplier_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+  target_include_directories(veyra_adaptive_fg_multiplier_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(veyra_adaptive_fg_multiplier_tests PRIVATE veyra_base veyra_engine ${FFMPEG_LIBRARIES})
+  # Live HUD Lock on a real D3D12 device (ported from PushFPS).
+  add_executable(veyra_hud_lock_gpu_tests tests/integration/HudLockGpuTests.cpp)
+  target_compile_features(veyra_hud_lock_gpu_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_hud_lock_gpu_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_hud_lock_gpu_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_hud_lock_gpu_tests PRIVATE veyra_pipeline d3d12 dxgi)
+  add_dependencies(veyra_hud_lock_gpu_tests veyra_shader_hud_lock_update veyra_shader_hud_lock_compose)
+  # NVENC recording tuning (two-pass, psycho-visual AQ; options from PushFPS).
+  add_executable(veyra_nvenc_tuning_tests tests/integration/NvencTuningTests.cpp)
+  target_compile_features(veyra_nvenc_tuning_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_nvenc_tuning_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_nvenc_tuning_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_nvenc_tuning_tests PRIVATE veyra_sinks veyra_base d3d12 dxgi)
   add_executable(veyra_repair_contract_tests tests/unit/RepairContractTests.cpp)
   add_executable(veyra_subtitle_loading_tests tests/integration/SubtitleLoadingTests.cpp)
   add_executable(veyra_subtitle_text_tests tests/integration/SubtitleTextTests.cpp)
@@ -1082,6 +1120,9 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
   target_compile_features(veyra_magewell_probe PRIVATE cxx_std_20)
   target_compile_definitions(veyra_magewell_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)
   target_link_libraries(veyra_magewell_probe PRIVATE veyra_sources)
+  add_executable(veyra_magewell_frame_pump_tests tests/unit/MagewellFramePumpTests.cpp)
+  target_compile_features(veyra_magewell_frame_pump_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_magewell_frame_pump_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/source)
   add_executable(veyra_stream_decode_bench tools/stream_decode_bench/main.cpp)
   target_compile_features(veyra_stream_decode_bench PRIVATE cxx_std_20)
   target_compile_definitions(veyra_stream_decode_bench PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN UNICODE _UNICODE)

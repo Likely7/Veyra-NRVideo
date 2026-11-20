@@ -21,6 +21,8 @@ public:
         bool hdr=false;          // HEVC Main10 from P010 inputs, BT.2020 PQ signalling
         uint32_t fps=60;         // rate-control frame rate
         uint32_t bitrateMbps=20; // VBR target
+        uint32_t multipass=0;    // 0 off, 1 two-pass at quarter resolution, 2 at full resolution
+        bool psychoAq=false;     // spatial AQ, plus temporal AQ where the GPU supports it
     };
     struct Packet {
         std::vector<uint8_t> data;

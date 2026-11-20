@@ -1521,3 +1521,25 @@ prepare-qa.py生成H264/HEVC8/PQ10；run-qa.py完成9/9预期结果（8正向+1�
 用户授权按审查结果适配 #168、#156、#59、#166、#167、#161，评估 #158、#165、#62 并关闭未采用项。隔离分支 `codex/community-prs-20261119` 从远端 main `0dac67a0` 建立。已移除应用内 B 站站点模块和扩展 Cookie 转交。沿用通用播放、字幕和 Dolby Vision，旧预设继续读取。详细改动和验收在 [社区 PR 整合](COMMUNITY_PRS_2026-11-19.md)。
 
 Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-community-prs-20261119 --jobs 2` 构建。首次 MSVC 响应文件中的非 ASCII Qt 路径导致 LNK1181，核验既有 ASCII Qt 入口指向相同实体后完成链接。真实 MCS-T911 1080p60 NV12 验证经过重连。HDR10 DXGI 元数据发送与清除、P8.4 色彩、libdovi、AV1 硬软解、PS5 队列和虚拟手柄回归均已执行，未触发真实主机连接。日志、测试夹具、构建及回执存于 `E:/项目/Veyra/{logs,tests,build,reports}/codex-community-prs-20261119`。
+
+
+### 2026-11-19 全屏发糊/像素化：送显缩放改为高质量（Claude，未提交）
+
+原因：PresentBlit 精细采样此前只给 PS5 远程游玩，其他来源全屏放大用双线性（软）、缩小时双线性跳过源像素（锯齿闪烁）。现在所有来源与大图预览默认精细采样，VEYRA_TEST_PRESENT_BILINEAR=1 可恢复旧算法对比；1:1 原样拷贝、放大有界 Catmull-Rom 不变，新增缩小：Catmull-Rom 按倍数加宽，≤2:1 16 次、2–4:1 64 次配对取样（与逐像素卷积一致），>4:1 封顶 2:1 宽度；取样值>1.0（scRGB 线性 HDR）时限制在正瓣样本范围防暗圈。虚拟摄像机非 1:1 跟随为有界三次插值。新 veyra_present_scaling_tests（真实着色器对 CPU 模型、HDR 亮块、波带片、耗时）全部通过，波带片误差降为 1/2.1–1/2.5，GTA 1080p→1440p PSNR 44.62→46.91dB；RTX5070 送显 4K→1440p 0.044→0.295ms、1080p→1440p 0.060→0.095ms。preview_geometry 旧/--fine 各 23/23，虚拟摄像机 GPU 523/0。真实程序窗口 A/B 因用户正运行 2.1.9 与 OBS 未执行；实卡全屏和其他显卡未测。分支 claude/present-scaling-20261118（main 20a75845），记录 docs/PRESENT_SCALING_2026-11-18.md 与 reports/claude-present-scaling-20261118/FINAL.json。
+
+### 2026-11-19 Claude 工作接手：本地综合测试版
+
+在 codex/claude-handoff-20261119 整合 PushFPS 移植、全来源送显缩放和多语言界面。之前三个工作分支均保留源码提交。主程序构建使用 scripts/acceptance/build-recording-handoff.py --task claude-pushfps-ports-20261119 --jobs 2，复用同一源目录的构建缓存。专有依赖保持在源码树外。
+
+语言选择、系统匹配、偏好设置和词库维护工具支持西班牙语、法语、德语、巴西葡萄牙语及俄语。从固定 PushFPS 版本按原文和语境复用翻译，缺项采用本地机器翻译并校对常用操作及视频术语，来源见 THIRD_PARTY_NOTICES。没有母语全面审校。修复 B 站整句、GPU 耗时栏和多语言控件排版。extract.py --check 覆盖当前提取的 3189 条消息，各语种缺失 0、占位符问题 0；运行时切换测试通过。QtQuick 初测有一项滑杆宽度回归、两项截图输出目录错误；修复宽度与测试环境后 220/0/0。两种尺寸的巡检计数及长文本边界见外部回执。
+
+综合测试版的 91 个着色器已核对。真实窗口缩放新旧算法 A/B 共 4 次成功抓图，图像放大及缩小均有输出差异，最终四次的引擎错误均为 0；没有将窗口抓图当作物理屏幕测量。PushFPS 设置、实际窗口捕获和硬件边界见 PUSHFPS_PORTS_2026-11-19.md。命令、失败日志及结果存 E:/项目/Veyra/reports/codex-claude-handoff-20261119 和同任务 logs；启动程序与独立手测配置在同任务 tests。未推送、未发布软件包。
+
+
+### 2026-11-19 美乐威低延迟掉帧
+
+用户现场 `logs(3).rar` 的两份日志经 tar 只抽取日志文件到 E:/项目/Veyra/logs/codex-magewell-low-latency-20261119/field。明细见 MAGEWELL_LOW_LATENCY_2026-11-19.md，时间段与统计脚本/回执见 E:/项目/Veyra/reports/codex-magewell-low-latency-20261119/field.py 与 FIELD.json。开关对照 4K P010 59.94 Hz，SDK 计数 56.33/56.40 FPS，普通回调中位数 59.94 FPS。启动双路与稳态串行 DMA/交付分别处理。两个锁页缓冲只允许单笔在途 DMA，下一笔就绪时在拷贝前发起，保持单帧邮箱。失去 DMA 完成或卡内确认持续漏帧时释放 SDK，再按原协商方式恢复 DirectShow，并标记时钟边界。
+
+在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
+
+初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。

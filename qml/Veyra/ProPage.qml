@@ -280,7 +280,8 @@ VPage {
                 iconName: veyra.sourceKind === "ps5" ? "gamepad" : veyra.sourceKind === "moonlight" ? "cast" : veyra.sourceKind === "xbox" ? "gamepad" : veyra.sourceKind === "screen" ? "monitor"
                         : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
                 text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
-                maxTextWidth: Math.max(36, Math.min(260, sourceInfo.width - formatTag.implicitWidth
+                tip: text
+                maxTextWidth: Math.max(64, Math.min(260, sourceInfo.width - formatTag.implicitWidth
                                                   - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
                 trailingIcon: "down"
                 onClicked: sourceMenu.openAt(this, "down")
@@ -471,6 +472,7 @@ VPage {
                 iconName: "layers"
                 trailingIcon: "down"
                 text: qsTr("预设：") + veyra.currentPresetName
+                tip: text
                 maxTextWidth: 180
                 onClicked: presetMenu.openAt(this, "down")
             }
@@ -480,7 +482,7 @@ VPage {
     // One geometry contract for this layout and Main's native video HWND.
     // These are available before the first layout pass when a source is opened.
     readonly property real videoColumnWidth: Math.max(1, root.width - root.inspectorWidth - 14 * 2 - 10)
-    readonly property real metersHeight: Math.max(172, meter3Content.implicitHeight + 28)
+    readonly property real metersHeight: Math.max(172, meter3Content.implicitHeight + 28, stageGrid.implicitHeight + 66)
     readonly property real videoCardHeight: Math.max(transport.height + 1,
         root.height - 14 * 2 - head.height - 10 - root.metersHeight - 10)
     readonly property rect videoViewport: Qt.rect(14, 14 + head.height + 10,
@@ -764,9 +766,10 @@ VPage {
         // first, so the stage timings beside it keep room to read.
         Rectangle {
             id: meter1
-            visible: meters.width >= 760
+            visible: meters.width >= 850
             Layout.fillWidth: true
             Layout.fillHeight: true
+            Layout.minimumWidth: 192
             Layout.preferredWidth: 1.05
             radius: Theme.rCard
             color: Theme.card
@@ -898,24 +901,28 @@ VPage {
                         font.pixelSize: 11
                     }
                 }
-                // Eight stages in two columns of four: a single column of eight
-                // overflowed the fixed 172px card.
+                // Switch to one column when two complete translated readings do not fit.
                 GridLayout {
+                    id: stageGrid
                     objectName: "pro-stage-grid"
                     // The label column fits the longest stage name in the interface
                     // language (52px held two Chinese characters; translations run longer).
                     FontMetrics { id: stageLabelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     readonly property real stageLabelWidth: {
                         let w = 52
-                        for (const r of veyra.stageTimings) w = Math.max(w, Math.ceil(stageLabelMetrics.advanceWidth(r.label || "")) + 2)
-                        return Math.min(w, 104)
+                        for (const r of veyra.stageTimings) w = Math.max(w, Math.ceil(stageLabelMetrics.advanceWidth(r.label || "")) + 6)
+                        return w
                     }
+                    // The value column fits "000.0 ms" and the unmeasured word in the interface
+                    // language (a fixed 48px let the English "Not measured" run out of the card).
+                    FontMetrics { id: stageValueMetrics; font.family: Theme.fontMono; font.pixelSize: 11 }
+                    readonly property real stageValueWidth: Math.min(120, Math.ceil(Math.max(stageValueMetrics.advanceWidth("000.0 ms"), stageValueMetrics.advanceWidth(qsTr("未测量")))) + 2)
                     Layout.fillWidth: true
-                    columns: 2
+                    columns: meter2.width - 28 >= 2 * (stageLabelWidth + stageValueWidth + 16) + 16 ? 2 : 1
                     columnSpacing: 16
                     rowSpacing: 6
                     flow: GridLayout.TopToBottom
-                    rows: Math.ceil(veyra.stageTimings.length / 2)
+                    rows: Math.max(1, Math.ceil(veyra.stageTimings.length / columns))
                 // The model is the row count, not the list: the list is a new array on
                 // every snapshot, and a list model rebuilt the rows each time, so every
                 // bar restarted from 0 (the 0 / 5.8 / 0 / 5.8 flicker in the field).
@@ -929,7 +936,8 @@ VPage {
                         Layout.preferredWidth: 1
                         spacing: 8
                         Text {
-                            Layout.preferredWidth: stageRow.parent ? stageRow.parent.stageLabelWidth : 52
+                            Layout.preferredWidth: stageGrid.stageLabelWidth
+                            Layout.minimumWidth: Math.min(stageGrid.stageLabelWidth, Math.max(0, stageRow.width - stageGrid.stageValueWidth - 16))
                             text: modelData.label
                             color: Theme.t2
                             font.family: Theme.fontUi
@@ -965,8 +973,9 @@ VPage {
                             }
                         }
                         Text {
-                            Layout.preferredWidth: 48
-                            Layout.fillWidth: meter2.narrow
+                            Layout.preferredWidth: stageRow.parent ? stageRow.parent.stageValueWidth : 48
+                            Layout.minimumWidth: Math.min(stageGrid.stageValueWidth, stageRow.width * 0.54)
+                            elide: Text.ElideRight
                             text: modelData.measured ? modelData.ms.toFixed(1) + " ms" : qsTr("未测量")
                             HoverHandler { id: stageValueHover }
                             ToolTip.visible: stageValueHover.hovered && modelData.measured
@@ -1204,13 +1213,18 @@ VPage {
                     delegate: Rectangle {
                         required property var modelData
                         Layout.fillWidth: true
-                        implicitHeight: 30
+                        implicitWidth: tabLabel.implicitWidth + 10
+                        implicitHeight: Math.max(30, tabLabel.implicitHeight + 8)
                         radius: 9
                         color: root.tab === modelData.id ? Theme.card3
                              : tabHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                         Text {
+                            id: tabLabel
+                            width: Math.max(1, parent.width - 6)
                             anchors.centerIn: parent
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
                             text: modelData.label
                             color: root.tab === modelData.id ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
@@ -1244,7 +1258,7 @@ VPage {
                     spacing: 7
                     RowLayout {
                         Layout.fillWidth: true
-                        VEyebrow { text: qsTr("处理顺序"); Layout.fillWidth: true }
+                        VEyebrow { text: qsTr("处理顺序"); Layout.fillWidth: true; Layout.minimumWidth: 0; wrapMode: Text.Wrap }
                         Text { text: qsTr("点击定位"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
                     }
                     Flow {
@@ -1825,6 +1839,39 @@ VPage {
                                 VSwitch {
                                     checked: veyra.fgAutoMultiplierEnabled
                                     onToggled: checked => veyra.fgAutoMultiplierEnabled = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-fg-adaptive"
+                                label: qsTr("自适应倍率")
+                                visible: veyra.fgMultiplier > 2 && (veyra.fgBackendName === "dlss" || veyra.fgBackendName === "anr" || veyra.fgBackendName === "vfg")
+                                hint: qsTr("把所选倍率当上限，按游戏实时帧率逐对选用最接近目标帧率（输出上限或屏幕刷新率）的倍率，游戏掉帧时输出仍保持平稳；不重建补帧 · 默认关闭")
+                                VSwitch {
+                                    objectName: "list-fg-adaptive-switch"
+                                    checked: veyra.fgAdaptive
+                                    onToggled: checked => veyra.fgAdaptive = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-pacing-repair"
+                                label: qsTr("帧节奏修复")
+                                visible: veyra.fgBackendName !== "xess"
+                                hint: qsTr("锁 30 帧但送帧不均（17/50 ms 交替）的主机游戏，补帧前把真实帧排回均匀间隔；只处理能确认是不均匀送帧的情况，最多晚一个采集刷新 · 需自动去重 · 默认关闭")
+                                VSwitch {
+                                    objectName: "list-pacing-repair-switch"
+                                    checked: veyra.pacingRepair
+                                    onToggled: checked => veyra.pacingRepair = checked
+                                }
+                            }
+                            VRow {
+                                objectName: "list-hud-lock"
+                                label: qsTr("HUD 自动锁定")
+                                visible: veyra.fgBackendName !== "xess"
+                                hint: qsTr("自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭")
+                                VSwitch {
+                                    objectName: "list-hud-lock-switch"
+                                    checked: veyra.hudLock
+                                    onToggled: checked => veyra.hudLock = checked
                                 }
                             }
                             VSubGroup {

@@ -85,7 +85,7 @@ Rectangle {
     property bool compactHeader: false
     property bool bypassed: false
 
-    readonly property int headerHeight: compactHeader ? 42 : 48
+    readonly property int headerHeight: Math.max(compactHeader ? 42 : 48, headerText.implicitHeight + 10)
     // Space between the header's hairline and the first body row: a body that
     // starts with buttons or text (NR 层's 复制此层 row) sat on the line itself
     // (field report 2026-10-05).
@@ -138,6 +138,8 @@ Rectangle {
                 }
 
                 ColumnLayout {
+                    id: headerText
+                    Layout.minimumWidth: 0
                     Layout.fillWidth: true
                     spacing: 2
                     Text {
@@ -148,7 +150,8 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.pixelSize: 13
                         font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
-                        elide: Text.ElideRight
+                        Layout.minimumWidth: 0
+                        wrapMode: Text.Wrap
                     }
                     Text {
                         Layout.fillWidth: true
@@ -157,7 +160,8 @@ Rectangle {
                         color: Theme.t3
                         font.family: Theme.fontUi
                         font.pixelSize: 11
-                        elide: Text.ElideRight
+                        Layout.minimumWidth: 0
+                        wrapMode: Text.Wrap
                     }
                 }
 

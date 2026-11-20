@@ -29,6 +29,8 @@
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/engine/CapturePreviewClock.h"
 #include "veyra/engine/DisplayFgBudget.h"
+#include "veyra/engine/AdaptiveFgMultiplier.h"
+#include "veyra/engine/FramePacingRepair.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/DeckLinkCapture.h"
@@ -793,7 +795,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
       snapshot_.sourceDoviRpu=dvinfo.present&&dvinfo.rpuDeclared;
       snapshot_.sourceDoviEnhancement=dvinfo.present&&dvinfo.enhancementLayer;
       snapshot_.sourceHdr10Plus=activeSource->info().hdr10Plus.present;}
-            gd.highQualityPresentation=isRemote&&activeSource->info().color.reconstructChroma;
+            // Every source is resampled to the screen with the high-quality present
+            // path (bounded Catmull-Rom up, Catmull-Rom widened by the shrink factor
+            // down; PresentBlit.hlsl).
+            // Until 2026-11-18 only PS5 Remote Play was: fullscreen captures and files
+            // were magnified bilinearly (soft) and shrunk without filtering (jagged).
+            // VEYRA_TEST_PRESENT_BILINEAR=1 restores the old sampling for comparison.
+            static const bool bilinearPresent=GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_BILINEAR",nullptr,0)>0;
+            gd.highQualityPresentation=!bilinearPresent;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
             auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
             gd.captureBitDepth=ingressBitDepth(activeSource->info().color.pixelFormat);
@@ -989,6 +998,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 fsrMaxGeneratedFramesCap_=graph->fsrEnabled()&&graph->fsrActive()?int((graph->fsrActive()?1u:0u)):0;
                 snapshot_.fsrMaxGeneratedFrames=fsrMaxGeneratedFramesCap_;
                 snapshot_.fsrProviderVersion=graph->fsrProviderVersion();
+                snapshot_.hudLockState=graph->hudLockState();
                 if(fgMultiFrameMaxCap_>0)veyra::log::info("settings",std::format("frame-generation capability: maxGeneratedFrames={} maxMultiplier={}",fgMultiFrameMaxCap_,fgMultiFrameMaxCap_+1));
                 veyra::log::info("settings",std::format("xess capability: active={} maxInterpolatedFrames={} unlockApplied={} (active context only)",presenter.xessActive(),xessMaxInterpolatedFramesCap_,xessState.applied));
                 if(fsrMaxGeneratedFramesCap_>0)veyra::log::info("settings",std::format("fsr capability: generatedPerPresent={} => maxMultiplier={}",fsrMaxGeneratedFramesCap_,fsrMaxGeneratedFramesCap_+1));
@@ -1214,6 +1224,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 restores the report-only content modes
             // for A/B runs.
             ContentDedup contentDedup;uint64_t dedupRevision=0;
+            // Frame pacing repair (FramePacingRepair.h, from PushFPS): even times for the kept
+            // frames of a locked game whose frames the console shows unevenly.
+            FramePacingRepair pacingRepair;int64_t pacingLastPts=0;bool pacingHaveLast=false;int64_t nextPacingLog=0;
             ContentDedup::Stats dedupLogged{};
             static const bool legacyCadence=GetEnvironmentVariableW(L"VEYRA_TEST_CONTENT_DEDUP_LEGACY",nullptr,0)>0;
             const auto dedupContent=[](ContentRate content){return content!=ContentRate::Transport&&content!=ContentRate::Capture60To30;};
@@ -1242,6 +1255,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // Live output hint (DisplayFgBudget.h): a status-line suggestion only.
             // VEYRA_TEST_DISPLAY_HZ=<hz> replaces the measured refresh for it.
             DisplayFgBudgetGate displayFgGate;
+            // Adaptive multiplier (AdaptiveFgMultiplier.h, from PushFPS): per-pair multiplier from
+            // the measured content rate, the configured one being the ceiling.
+            AdaptiveFgGate adaptiveFgGate;bool adaptiveFgWas=false;int64_t nextAdaptiveFgLog=0;
             static const double displayFgTestHz=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_DISPLAY_HZ",v,16)?std::clamp(_wtof(v),0.0,1000.0):0.0;}();
             // Live graph FG presents on a smoothed anchor (LiveArrivalSmoother).
             // VEYRA_TEST_LEGACY_LIVE_PACING=1 restores the callback anchor, the
@@ -2498,8 +2514,24 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pkt.sequence,pkt.pts.to100ns(),decision.keep,decision.reason,pictured?picture.id:0,picture.repeat,picture.over,picture.max8,decision.contentPts,decision.interval/1e4,dedupUs));
                     if(!decision.keep){std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;}
                     dedupHoldInterval100ns=decision.holdInterval;
-                    pkt.pts={decision.contentPts,10000000};
-                    if(decision.interval>0)pkt.duration={decision.interval,10000000};
+                    int64_t contentPts=decision.contentPts,contentInterval=decision.interval;
+                    // Frame pacing repair: frame generation shows a real frame one content
+                    // interval after it arrives, which is the room the repair uses; without
+                    // frame generation there is none, so it only runs with it.
+                    if(options.settings.pacingRepair&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
+                        const bool restart=boundary||decision.holdInterval>0;
+                        const auto repaired=pacingRepair.apply(pkt.pts.to100ns(),contentPts,capturePeriod,restart);
+                        contentPts=repaired.pts;
+                        if(pacingHaveLast&&!restart&&contentPts>pacingLastPts)contentInterval=contentPts-pacingLastPts;
+                        const auto now100=host100ns();
+                        if(now100>=nextPacingLog){nextPacingLog=now100+50000000;const auto& st=pacingRepair.stats();
+                            veyra::log::info("pacing-repair",std::format("revision={} frames={} repaired={} restarts={} variable={} maxLateMs={:.2f} maxEarlyMs={:.2f} contentFps={:.2f}",
+                                options.settings.revision,st.frames,st.repaired,st.restarts,st.variable,st.maxLate/1e4,st.maxEarly/1e4,contentDedup.contentFps()));}
+                        {std::lock_guard lock(mutex_);snapshot_.pacingFrames=pacingRepair.stats().frames;snapshot_.pacingRepaired=pacingRepair.stats().repaired;}
+                    }else pacingRepair.reset();
+                    pacingLastPts=contentPts;pacingHaveLast=true;
+                    pkt.pts={contentPts,10000000};
+                    if(contentInterval>0)pkt.duration={contentInterval,10000000};
                 }else if(halfRate&&!rereadCached){
                     // 60->30: every second sample on the effective capture clock; a due
                     // repeat of the last kept picture waits for the next new picture.
@@ -2673,9 +2705,36 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // that instead. Only ever lowers, never raises, the multiplier the
                 // user asked for; the present-time cap below stays as the residual
                 // after this integer rounding.
-                if(options.fg&&previewFgMultiplier>2&&presentationEffective.outputRate==OutputRateMode::Custom&&
+                // The rate of new pictures, not the capture transport: a 30 FPS game in a 60 Hz
+                // signal gives pairs 33 ms apart once duplicates are removed, and dividing the
+                // cap by the 60 Hz transport ran a 120 FPS cap at 2X (60 FPS). Unknown while
+                // duplicate removal is still measuring (0): no reduction until then.
+                // (Fix ported from PushFPS 9d4e61a2.)
+                const double pairContentFps=isImage?0.0:dedupActive?contentDedup.contentFps():
+                    activeSource->info().averageFps*(halfRate?0.5:1.0);
+                // Adaptive multiplier: the chosen multiplier becomes a ceiling and every pair uses
+                // the one whose output lands closest to the target (the output cap when one is set,
+                // otherwise the display refresh). Only the per-pair multiplier changes, never the
+                // graph. Not for backends that pace their own frames (FSR, AMD FRC, XeSS).
+                const bool adaptiveFg=options.fg&&options.settings.fgAdaptive&&!isImage&&options.fgMultiplier>2&&
+                    !presentSinkFrameGeneration(options.settings.frameGenerationBackend);
+                if(adaptiveFg!=adaptiveFgWas){adaptiveFgGate.reset();adaptiveFgWas=adaptiveFg;}
+                if(adaptiveFg){
+                    const double refresh=displayFgTestHz>0?displayFgTestHz:presenter.displayRefreshHz();
+                    const double target=presentationEffective.outputRate==OutputRateMode::Custom&&std::isfinite(presentationEffective.customFps)&&
+                        presentationEffective.customFps>0?presentationEffective.customFps:refresh;
+                    if(pairContentFps>0.01&&target>0.01){
+                        bool changed=false;
+                        const auto now100=host100ns();
+                        previewFgMultiplier=adaptiveFgGate.update(adaptiveFgMultiplier(options.settings.frameGenerationBackend,options.fgMultiplier,pairContentFps,target),now100,&changed);
+                        if(changed||now100>=nextAdaptiveFgLog){nextAdaptiveFgLog=now100+50000000;
+                            veyra::log::info("adaptive-fg",std::format("revision={} backend={} ceiling={}X chosen={}X contentFps={:.2f} targetFps={:.2f} outputFps={:.2f} changed={}",
+                                options.settings.revision,frameGenerationBackendName(options.settings.frameGenerationBackend),options.fgMultiplier,previewFgMultiplier,pairContentFps,target,pairContentFps*previewFgMultiplier,changed));}
+                    }else if(adaptiveFgGate.valid())previewFgMultiplier=adaptiveFgGate.applied();
+                }
+                if(!adaptiveFg&&options.fg&&previewFgMultiplier>2&&presentationEffective.outputRate==OutputRateMode::Custom&&
                    !presentSinkFrameGeneration(options.settings.frameGenerationBackend)){
-                    const double sourceFps=activeSource->info().averageFps;
+                    const double sourceFps=pairContentFps;
                     const double cap=presentationEffective.customFps;
                     if(sourceFps>0.01&&std::isfinite(cap)&&cap>0.0){
                         const auto needed=unsigned(std::ceil(cap/sourceFps-1e-6));

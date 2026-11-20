@@ -299,7 +299,12 @@ VPage {
                                     { id: "zh-TW", label: qsTr("繁體中文") },
                                     { id: "en", label: "English" },
                                     { id: "ja", label: qsTr("日本語") },
-                                    { id: "ko", label: "한국어" }
+                                    { id: "ko", label: "한국어" },
+                                    { id: "es", label: "Español" },
+                                    { id: "fr", label: "Français" },
+                                    { id: "de", label: "Deutsch" },
+                                    { id: "pt-BR", label: "Português (Brasil)" },
+                                    { id: "ru", label: "Русский" }
                                 ]
                                 value: (options.find(o => o.id === (veyra.preferences.language || "auto")) || options[0]).label
                                 onPicked: id => veyra.setPreference("language", id)
@@ -679,6 +684,25 @@ VPage {
                                 options: [{ id: "0", label: "H.264" }, { id: "1", label: "HEVC" }]
                                 current: veyra.recordingHevc ? "1" : "0"
                                 onPicked: id => veyra.setPreference("recordHevc", id === "1")
+                            }
+                        }
+                        VRow {
+                            label: qsTr("二次编码")
+                            hint: qsTr("编码器先快速分析一遍画面再分配码率，同样码率下快速运动和复杂画面更清晰；仅 NVIDIA（NVENC），四分之一分辨率首遍更轻，完整分辨率最好但更重 · 默认关闭")
+                            VSeg {
+                                objectName: "set-recmultipass"
+                                options: [{ id: "0", label: qsTr("关闭") }, { id: "1", label: qsTr("四分之一") }, { id: "2", label: qsTr("完整") }]
+                                current: String(veyra.preferences.recordMultipass !== undefined ? veyra.preferences.recordMultipass : 0)
+                                onPicked: id => veyra.setPreference("recordMultipass", Number(id))
+                            }
+                        }
+                        VRow {
+                            label: qsTr("心理视觉调优")
+                            hint: qsTr("自适应量化：把码率挪到眼睛更敏感的地方（平坦天空、暗部、静止细节），减少色块；仅 NVIDIA（NVENC），显卡支持时再加时间自适应量化 · 默认关闭")
+                            VSwitch {
+                                objectName: "set-recpsychoaq"
+                                checked: veyra.preferences.recordPsychoAq === true
+                                onToggled: v => veyra.setPreference("recordPsychoAq", v)
                             }
                         }
                         VRow {

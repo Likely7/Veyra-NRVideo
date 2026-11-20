@@ -228,7 +228,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
     Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
     Q_PROPERTY(bool enhancementPrewarmAvailable READ enhancementPrewarmAvailable CONSTANT)
-    // The interface language in use (zh-CN / zh-TW / en / ja / ko), after "auto" is resolved;
+    // The interface language in use after "auto" is resolved;
     // preferences.language holds the choice itself.
     Q_PROPERTY(QString uiLanguage READ uiLanguage NOTIFY preferencesChanged)
     Q_PROPERTY(QString screenshotDirectory READ screenshotDirectory NOTIFY preferencesChanged)
@@ -471,6 +471,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool dlssgLite READ dlssgLite WRITE setDlssgLite NOTIFY settingsChanged)
     // VFG 自动调控: EnhancementSettings::vfgAutoRegulate.
     Q_PROPERTY(bool vfgAutoRegulate READ vfgAutoRegulate WRITE setVfgAutoRegulate NOTIFY settingsChanged)
+    // 自适应倍率 / 帧节奏修复 / HUD 自动锁定 (ported from PushFPS): EnhancementSettings::
+    // fgAdaptive, pacingRepair and hudLock, global controls kept in shell preferences.
+    Q_PROPERTY(bool fgAdaptive READ fgAdaptive WRITE setFgAdaptive NOTIFY settingsChanged)
+    Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
+    Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
     Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
     Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
@@ -1170,6 +1175,12 @@ public:
     void setDlssgLite(bool value);
     bool vfgAutoRegulate() const;
     void setVfgAutoRegulate(bool value);
+    bool fgAdaptive() const;
+    void setFgAdaptive(bool value);
+    bool pacingRepair() const;
+    void setPacingRepair(bool value);
+    bool hudLock() const;
+    void setHudLock(bool value);
     bool dlssgLiteAvailable() const;
     QString dlssgLiteHint() const;
     int contentRate() const;

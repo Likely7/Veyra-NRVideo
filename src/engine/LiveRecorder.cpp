@@ -445,6 +445,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     // Fixed at creation.
     ComPtr<ID3D12Device> device;
     uint32_t width=0,height=0,hdrMode=0,fps=60,bitrateMbps=20,vendor=0;
+    uint32_t multipass=0;bool psychoAq=false;   // NVENC tuning (RecordingSettings)
     bool hevc=false,nvenc=false;
     bool sound=false,microphone=false,microphoneTrack=false; // what the sound tracks take
     std::atomic<bool> audio{false};             // the file (or buffer) has sound tracks
@@ -702,8 +703,18 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         sink::NvencLiveEncoder encoder;
         sink::NvencLiveEncoder::Config config;
         config.width=width;config.height=height;config.hevc=hevc;config.hdr=hdrMode!=0;config.fps=fps;config.bitrateMbps=bitrateMbps;
+        config.multipass=multipass;config.psychoAq=psychoAq;
         std::vector<ID3D12Resource*> inputs;for(auto& slot:slots)inputs.push_back(slot.nv12.Get());
-        if(!encoder.open(device.Get(),config,inputs)){fail(L"NVENC 无法开始录制："+encoder.lastError());return;}
+        bool opened=encoder.open(device.Get(),config,inputs);
+        if(!opened&&(config.multipass||config.psychoAq)){
+            // The tuning first: a GPU that refuses two-pass or AQ still records with the rest.
+            veyra::log::warn("live-recorder",std::format("encoder tuning refused ({}); encoding without two-pass and AQ",utf8(encoder.lastError())));
+            encoder.close();
+            config.multipass=0;config.psychoAq=false;
+            opened=encoder.open(device.Get(),config,inputs);
+        }
+        if(!opened){fail(L"NVENC 无法开始录制："+encoder.lastError());return;}
+        if(multipass||psychoAq)veyra::log::info("live-recorder",std::format("encoder tuning multipass={} psychoAq={} applied={}",multipass,psychoAq,config.multipass||config.psychoAq));
         publishHeaders(encoder.headers(),encoder.describe());
         veyra::log::info("live-recorder",std::format("encoder ready {} path={}",utf8(encoder.describe()),name()));
         for(;;){
@@ -1130,6 +1141,7 @@ bool LiveRecorder::start(const RecordingSettings& settings,std::wstring& error){
         // stretch with them; the current one stays saveable meanwhile.
         const auto& o=s.settings;
         const bool same=s.armed&&o.bitrateMbps==settings.bitrateMbps&&o.hevc==settings.hevc&&o.fpsLimit==settings.fpsLimit&&
+            o.multipass==settings.multipass&&o.psychoAq==settings.psychoAq&&
             o.audio==settings.audio&&o.microphone==settings.microphone&&o.microphoneId==settings.microphoneId&&
             o.microphoneTrack==settings.microphoneTrack&&o.replaySeconds==settings.replaySeconds&&o.replayMemoryBytes==settings.replayMemoryBytes;
         s.settings=settings;
@@ -1352,6 +1364,7 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         const double hint=s.presentFps.load();
         segment->fps=s.settings.fpsLimit?s.settings.fpsLimit:uint32_t(std::clamp<long>(std::lround(hint>1?hint:60.0),10,480));
         segment->bitrateMbps=s.settings.bitrateMbps?s.settings.bitrateMbps:autoBitrateMbps(frame.width,frame.height,segment->fps,segment->hevc);
+        segment->multipass=std::min(s.settings.multipass,2u);segment->psychoAq=s.settings.psychoAq;
         segment->sound=s.settings.audio;
         segment->microphone=s.settings.microphone;
         segment->microphoneTrack=s.settings.microphoneTrack;

@@ -150,7 +150,7 @@ QString translatePieces(const CatalogTranslator& t, const QString& s, int depth)
             part.replace(trimmed, done);
         }
         // Full-width separators read oddly between Latin sentences.
-        const QString glue = sep == QStringLiteral("；") && (currentCode == QStringLiteral("en") || currentCode == QStringLiteral("ko")) ? QStringLiteral("; ") : sep;
+        const QString glue = sep == QStringLiteral("；") && (currentCode != QStringLiteral("ja") && !currentCode.startsWith(QStringLiteral("zh"))) ? QStringLiteral("; ") : sep;
         return parts.join(glue);
     }
     return s;
@@ -159,7 +159,8 @@ QString translatePieces(const CatalogTranslator& t, const QString& s, int depth)
 } // namespace
 
 QString resolve(const QString& preference) {
-    static const QStringList known{QStringLiteral("zh-CN"), QStringLiteral("zh-TW"), QStringLiteral("en"), QStringLiteral("ja"), QStringLiteral("ko")};
+    static const QStringList known{QStringLiteral("zh-CN"), QStringLiteral("zh-TW"), QStringLiteral("en"), QStringLiteral("ja"), QStringLiteral("ko"),
+                                   QStringLiteral("es"), QStringLiteral("fr"), QStringLiteral("de"), QStringLiteral("pt-BR"), QStringLiteral("ru")};
     if (known.contains(preference)) return preference;
     const QLocale system = QLocale::system();
     if (system.language() == QLocale::Chinese) {
@@ -170,7 +171,9 @@ QString resolve(const QString& preference) {
     }
     if (system.language() == QLocale::Japanese) return QStringLiteral("ja");
     if (system.language() == QLocale::Korean) return QStringLiteral("ko");
-    return QStringLiteral("en");
+    if (system.language() == QLocale::Portuguese) return QStringLiteral("pt-BR");
+    const QString code = system.name().section(QLatin1Char('_'), 0, 0);
+    return known.contains(code) ? code : QStringLiteral("en");
 }
 
 bool apply(const QString& code) {

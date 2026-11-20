@@ -15,13 +15,13 @@ ColumnLayout {
         objectName:"colour-mixer-mode-row"
         property string label:qsTr("模式")
         Layout.fillWidth:true
-        Layout.preferredHeight:Theme.rowMinHeight
+        Layout.minimumHeight:Theme.rowMinHeight
         spacing:12
         Text {
             Layout.fillWidth:true;Layout.minimumWidth:0
             text:modeRow.label;color:Theme.t2
             font.family:Theme.fontUi;font.pixelSize:Theme.fsBody
-            elide:Text.ElideRight
+            wrapMode:Text.Wrap
         }
         VSeg {
             objectName:"colour-mixer-mode"
@@ -51,24 +51,30 @@ ColumnLayout {
     Repeater {
         model:root.state.blackWhite?[{key:"blackWhiteMix",label:qsTr("黑白")}]:
             [{key:"mixerHue",label:qsTr("色相")},{key:"mixerSaturation",label:qsTr("饱和度")},{key:"mixerLuminance",label:qsTr("明亮度")}]
-        delegate:RowLayout {
+        delegate:Item {
             required property var modelData
             objectName:"colour-mixer-row-"+modelData.key
             Layout.fillWidth:true
-            Layout.preferredHeight:Theme.rowMinHeight
-            spacing:12
+            implicitHeight: Math.max(Theme.rowMinHeight, parameterLabel.implicitHeight + 6)
             Text {
-                Layout.fillWidth:true;Layout.minimumWidth:0
+                id: parameterLabel
+                anchors.left: parent.left
+                anchors.right: mixerSlider.left
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
                 text:root.names[root.band]+" · "+modelData.label;color:Theme.t2
                 font.family:Theme.fontUi;font.pixelSize:Theme.fsBody
-                elide:Text.ElideRight
+                wrapMode: Text.Wrap
             }
             VSlider {
                 id:mixerSlider
                 resettable:true;defaultValue:0
                 valueFromModel:true
                 objectName:"colour-mixer-"+modelData.key
-                Layout.minimumWidth:150;Layout.maximumWidth:150;Layout.preferredWidth:150
+                anchors.right: parameterValue.left
+                anchors.rightMargin: 12
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.min(150, parent.width * 0.5)
                 from:-100;to:100;center:true
                 showCenterFill:true
                 Accessible.name:root.names[root.band]+" · "+modelData.label
@@ -77,7 +83,10 @@ ColumnLayout {
             }
             VSliderValue {
                 objectName:"colour-mixer-value-"+modelData.key
-                Layout.minimumWidth:40;Layout.maximumWidth:40;Layout.preferredWidth:40
+                id: parameterValue
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                width: Math.max(40, implicitWidth)
                 slider:mixerSlider
                 readonly property int amount:Math.round(root.state[modelData.key][root.band])
                 text:(amount>0?"+":"")+String(amount)
