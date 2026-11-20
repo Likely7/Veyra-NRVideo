@@ -110,11 +110,11 @@ void** FindImportedFunctionSlot(HMODULE module, const char* functionName)
             continue;
         }
 
-        const ULONGLONG lookupRva = descriptor->OriginalFirstThunk != 0 ? descriptor->OriginalFirstThunk : descriptor->FirstThunk;
-        if (lookupRva == 0) {
+        // Without OriginalFirstThunk the names are gone: once loaded, FirstThunk holds bound addresses, not RVAs.
+        if (descriptor->OriginalFirstThunk == 0 || descriptor->FirstThunk == 0) {
             continue;
         }
-        const auto* lookup = reinterpret_cast<const ULONGLONG*>(base + lookupRva);
+        const auto* lookup = reinterpret_cast<const ULONGLONG*>(base + descriptor->OriginalFirstThunk);
         auto* iat = reinterpret_cast<IMAGE_THUNK_DATA*>(base + descriptor->FirstThunk);
         for (size_t i = 0; lookup[i] != 0; ++i) {
             if (IMAGE_SNAP_BY_ORDINAL64(lookup[i])) {
