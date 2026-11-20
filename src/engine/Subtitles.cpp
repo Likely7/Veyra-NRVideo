@@ -557,6 +557,7 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
         attachedFonts.push_back({fileName,std::vector<char>(reinterpret_cast<const char*>(stream->codecpar->extradata),reinterpret_cast<const char*>(stream->codecpar->extradata)+size)});
     }
     if(!attachedFonts.empty())log::info("subtitle",std::format("container fonts attached={} bytes={}",attachedFonts.size(),attachedFontBytes));
+    const auto sharedFonts=std::make_shared<const std::vector<SubtitleAssData::Font>>(std::move(attachedFonts));
     std::vector<std::shared_ptr<SubtitleAssData>> assWork;
     for(unsigned streamIndex=0;streamIndex<input->nb_streams;++streamIndex){
         if(stop.stop_requested())return {};
@@ -600,7 +601,7 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
         if((codec==AV_CODEC_ID_ASS||codec==AV_CODEC_ID_SSA)&&context->subtitle_header&&context->subtitle_header_size>0){
             auto ass=std::make_shared<SubtitleAssData>();
             ass->header.assign(reinterpret_cast<const char*>(context->subtitle_header),size_t(context->subtitle_header_size));
-            ass->fonts=attachedFonts;ass->source=std::format(L"embedded:{}#{}",path,streamIndex);
+            ass->fonts=sharedFonts;ass->source=std::format(L"embedded:{}#{}",path,streamIndex);
             if(assWork.size()<=tracks.size())assWork.resize(tracks.size()+1);
             assWork[tracks.size()]=ass;track.ass=ass;
         }
