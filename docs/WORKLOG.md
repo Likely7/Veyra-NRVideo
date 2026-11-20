@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-19 Veyra 2.2.0 Windows 安装向导
+
+从本地 main `613200bc` 建立 `codex/windows-installer-20261119`。采用 Inno Setup 7.1.1 x64，安装器使用 Veyra 现有日落背景、字标、图标及 10 种向导语言。当前用户安装，可浏览目录，桌面快捷方式默认不选，开始菜单和 Windows 已安装的应用都有卸载入口。安装目录的 `Veyra.exe` 启动现有版本布局。配置、LUT 和根目录里的其他用户文件归用户保留，卸载移除安装器自己的程序及更新目录。说明见 [Windows 安装包](WINDOWS_INSTALLER.md)。
+
+用 `scripts/acceptance/build-recording-handoff.py --label 2.2.0 --jobs 2` 编译 `veyra_qml_ui`、`veyra_portable_launcher` 和 `veyra_update_worker`。首次末步因 MSVC 将 Qt 和导入库响应文件路径按 ANSI 解读而失败。核对 12 项 Qt 链接库是同一实体后，通过已有的 Qt 兼容入口及构建目录的相对 FFmpeg 导入库路径完成原对象链接。`tmp/.../relink-product.py` 和 `logs/.../product-qt-compat-link.log` 保留实际命令。EXE 数字产品版本为 2.2.0，包含当前主线的专业模式默认入口。
+
+验证 Inno Setup 官方下载的 SHA-256 及 Pyrsys B.V. Authenticode。用封存的 2.1.9 虚拟摄像机附加包清单核对供体。NVIDIA 保留已发布的 VFG 和 VSR 运行库，AMD 保留已发布的 RDNA 3 worker。复用补丁 FFmpeg、显卡运行库、BGM 及对应许可证，使用当次 2.2.0 QML、shader、libdovi 和双架构虚拟摄像机组件。只从清单选择载荷。命令为 `scripts/package-windows-installer.py --stage <GPU-stage> --build <product> --iscc <ISCC> --output <artifacts> --work-dir <tmp> --log <编译日志> --local-test`。
+
+实际向导核对了深色日落页、中文含空格目录和勾选桌面快捷方式后的安装摘要。首次安装成功播放，但卸载条目的条件在安装时求值，导致更新目录被漏掉。改为在卸载开始记录目录归属，在卸载后清理对应的程序目录和更新缓存。最终两个成品分别向自选 E 盘目录实际安装、逐文件验证 1711／2335 个条目、用根启动器播放，以及运行自带卸载程序。NVIDIA 勾选、AMD 取消桌面快捷方式，核对了链接目标与卸载后清除。两者均保留配置、LUT 和自建根目录文件。NVIDIA 另测运行锁拦截卸载，以及清理更新目录中的目录连接时外部目标文件保留。使用小型载荷复测修复安装、版本升级及旧版降级拒绝，实际成品也拒绝覆盖便携目录。
+
+构建、日志、测试和临时文件在 `E:/项目/Veyra/{build,logs,tests,tmp}/codex-windows-installer-20261119`。首次播放生成的 93 个 Qt 缓存文件已移到任务临时目录，最终测试使用专用缓存根。初版安装器移到 `tmp/.../before-uninstall-fix`。最终两个 EXE、SHA256 清单见 `test-packages/codex-windows-installer-20261119/已验证`，大小 723685552、618202510 字节。正式发布签名公钥及 Authenticode 未配置。验证范围是本机 Windows 的向导、安装、文件播放和卸载。
+
 ## 2026-11-20 构建 Veyra 2.2.0
 
 从干净的本地 `main` 提交 `ecbe0543` 全量构建 Windows x64 2.2.0，MSVC/Ninja 并发 2，成功用时 324.4 秒。命令为 `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-build-2.2.0-20261120 --root <main工作树> --build-dir <同任务build/product> --label 2.2.0 --jobs 2 --reconfigure` 加任务的已核验依赖和目标。第一次配置时 pkg-config 误解码含中文的 json-c 前缀，在新输出目录通过已有 ASCII junction 引用同一份 E 盘依赖后通过。日志在同名任务的 `build-20261120-010302` 和 `build-20261120-010425`。使用 `FileVersionRaw` 核对两份安装程序的 2.2.0.0，避开字符串版本字段的尾部填充。

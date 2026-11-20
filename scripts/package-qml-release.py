@@ -58,7 +58,8 @@ def validate_payload(name):
         raise ValueError('Forbidden candidate payload: ' + name)
     if any(part.startswith(('user-data', 'qml-preferences', 'last-applied', 'presets.v1')) for part in parts):
         raise ValueError('User data in candidate: ' + name)
-    if p.suffix.lower() == '.exe' and name not in {'veyra_qml_ui.exe', 'virtualcam/veyra-camera-setup.exe'}:
+    if p.suffix.lower() == '.exe' and name not in {'veyra_qml_ui.exe', 'virtualcam/veyra-camera-setup.exe',
+                                                  'runtime/amd-nr-rdna3/veyra_amd_nr_worker.exe'}:
         raise ValueError('Unexpected executable: ' + name)
     if any(token in name.lower() for token in ('qt6test', 'qt6quicktest', 'qml/qttest', 'qmltooling/')):
         raise ValueError('Test/development Qt dependency: ' + name)
