@@ -107,6 +107,22 @@ int main(int argc, char** argv) {
         auto bridge = makeBridge(contributed);
         check(bridge->volume()==2.5, "explicit gain from contributed build remains supported");
     }
+    const QString damaged = root + "/damaged";
+    QDir().mkpath(damaged);
+    {
+        QFile file(damaged + "/qml-preferences.v1.json");
+        if (!file.open(QIODevice::WriteOnly)) return 2;
+        file.write("{\"volume\":0.75,");
+    }
+    {
+        auto bridge = makeBridge(damaged);
+        bridge->setVolume(2.0);
+        QTest::qWait(650);
+    }
+    {
+        QFile file(damaged + "/qml-preferences.v1.json");
+        check(file.open(QIODevice::ReadOnly) && file.readAll() == "{\"volume\":0.75,", "damaged preferences are kept, not replaced by defaults");
+    }
     std::printf("SUMMARY: %d checks, %d failures\n", checks, failures);
     return failures ? 1 : 0;
 }
