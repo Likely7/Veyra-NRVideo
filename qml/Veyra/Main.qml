@@ -321,7 +321,6 @@ Window {
         anchors.fill: parent
         onboardingActive: root.onboardingActive
         // The dialogs open the source through the bridge; show the picture.
-        onStartCapture: if (root.page === "home") root.goPage("min")
         onStartPs5: if (root.page === "home") root.goPage("min")
         onStartMoonlight: if (root.page === "home") root.goPage("min")
         onStartXbox: if (root.page === "home") root.goPage("min")

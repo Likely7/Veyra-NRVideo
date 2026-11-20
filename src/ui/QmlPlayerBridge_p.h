@@ -278,7 +278,7 @@ struct QmlPlayerBridge::Impl {
     int thumbnailGeneration = 0;
     // The live source kind and label ("" for a file), for the page headers.
     QString liveKind, liveLabel;
-    // A live open waiting for the 极简 switch to settle (openAfterCinema); the
+    // A live open waiting for the destination page to settle; the
     // generation lets a newer open or a stop cancel it.
     int liveOpenGen = 0;
     QString pendingLiveText;

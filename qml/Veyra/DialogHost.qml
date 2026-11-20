@@ -33,7 +33,6 @@ Item {
     }
     function close() { host.dialog = "" }
 
-    signal startCapture()
     signal startPs5()
     signal startMoonlight()
     signal startXbox()

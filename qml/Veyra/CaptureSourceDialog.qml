@@ -24,7 +24,7 @@ DialogLayer {
         if (onboardingActive) return
         if (label === qsTr("断开")) { veyra.stopPlayback(); return }
         if (label !== qsTr("连接并开始")) { dialogHost.close(); return }
-        if (veyra.startCaptureSession()) { dialogHost.close(); dialogHost.startCapture() }
+        if (veyra.startCaptureSession()) dialogHost.close()
     }
     Connections {
         target: dialogHost

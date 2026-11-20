@@ -1610,9 +1610,10 @@ private:
     QString vrrSummaryText(int level) const;
     void applyPresentation();
     void applyAspect(bool force);
-    // Live sources started from the start page: switch to 极简 first, show the
-    // connecting note, and start the engine once the page and window have settled.
-    void openAfterCinema(const QString& pending, std::function<void()> open);
+    // From Home, show the destination and connection note before opening the
+    // live source so the video viewport has time to settle.
+    void openAfterLivePage(const QString& pending, std::function<void()> open,
+                           const QString& homeTarget = QStringLiteral("min"));
     void rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
     void updateMaskOverlay();

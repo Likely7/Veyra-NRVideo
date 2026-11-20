@@ -517,9 +517,9 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
     // Honor the dialog's initial viewport before input can be taken over.
     // Later explicit aspect choices still replace this session preset.
     if (!impl_->gameModeUri.empty() && uri == impl_->gameModeUri) impl_->aspectMode = 0;
-    const bool screen = uri.find(L"screen") != std::wstring::npos;
+    const bool screen = uri.starts_with(L"screen:");
     veyra::log::info("capture-ui", "open uri " + QString::fromStdWString(uri).toStdString());
-    openAfterCinema(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri] {
+    openAfterLivePage(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri] {
         if (impl_->preOpen) impl_->preOpen();
         impl_->engine.previewView({});
         impl_->engine.open(impl_->videoWindow, uri, impl_->options);
@@ -530,22 +530,19 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
         impl_->gameModeUri.clear();
         updateGameMode();
         refreshSubtitles({});
-    });
+    }, screen ? QStringLiteral("min") : QStringLiteral("pro"));
 }
 
-void QmlPlayerBridge::openAfterCinema(const QString& pending, std::function<void()> open) {
+void QmlPlayerBridge::openAfterLivePage(const QString& pending, std::function<void()> open, const QString& homeTarget) {
     const int gen = ++impl_->liveOpenGen;
     const bool fromHome = impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home");
+    if (fromHome) emit navigate(homeTarget);
     if (!fromHome || !impl_->gameModeUri.empty()) {
         // Game mode does not wait for the cinema animation or feature startup.
-        if (fromHome) emit navigate(QStringLiteral("min"));
         impl_->pendingLiveText.clear(); open(); return;
     }
-    // User report 2026-09-29: the window blacked out and jumped into 极简 when
-    // the engine opened in the same instant as the page switch and the window's
-    // height spring. Switch first, say that it is connecting, then open once
-    // the page (.22s out + 150 ms + rise) and the .7s height spring have settled.
-    emit navigate(QStringLiteral("min"));
+    // Open after the destination has laid out its video viewport. Cinema also
+    // needs this delay for its window-height animation.
     impl_->pendingLiveText = pending;
     emit snapshotChanged();
     const int delay = reducedMotion() ? 0 : 820;
