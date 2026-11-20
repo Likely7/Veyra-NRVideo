@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-20 实时语音识别与逐句翻译
+
+从 main `eb5fd6d0` 建独立分支 `codex/live-asr-20261120`。按 Claude 交接先完成 Veyra 音频首期。音量和静音前的播放 PCM 由已有音频监听接口取样，经有界缓冲和 16 kHz 降混后进入低优先级 CPU 子进程。Parakeet 英语和 Whisper Turbo 多语言、Silero VAD 及 sherpa-onnx 2.0.2 运行库按需下载。已安装文件在用户数据目录按版本保存。打开实时翻译前音频路径沿用现有监听开关。
+
+Windows 实时字幕作为可选来源，两种来源共用按句定稿、按 ID 请求、缓存和过期处理。译文最多三行，默认两行，原文最多一行。GDI+ 按实际字宽省略溢出内容。默认日志记录耗时和丢弃数量，识别文字仅供显式测试。安装包和源码的语音模型与运行库依赖保持为下载清单。
+
+本轮用 `scripts/acceptance/build-recording-handoff.py --task codex-live-asr-20261120 --label 2.2.0-live-asr-test --jobs 2` 完成原生程序及针对性测试构建。首次配置选错 Chiaki stage，切至 2.2.0 实际使用的 20261120 stage。修正 ASR 音频头文件的 COM 与 KS 引用顺序。独立下载测试先补齐 Qt TLS 插件路径，Parakeet 和 Whisper 均完成真实下载并通过大小与 SHA-256 校验，取消后保留已验证文件，篡改同尺寸运行 DLL 的夹具在加载前被拒绝。Qt Quick 补齐官方 QML 导入路径与私有光栅产物目录后通过。旧方式的长行与滚动用可控字幕窗口读取器夹具覆盖。
+
+真实程序以静音播放带背景声的英文测试片。起初小模型在上下文与目标同放用户消息时会原样返回英文。把上下文放入系统消息、使用中文目标对应提示后，六句均得到中文译文，分段结束到译文进入叠加的记录为 689–941 ms。暂停、跳转、恢复与缓存命中通过。Parakeet 四线程离线英文解码约 0.041 倍实时耗时，Whisper Turbo 三句中文混音约 0.34 倍，两者在 8 秒无对白伴奏夹具上均无输出。样本来自桌面语音合成。真实游戏、电台、采集卡与串流画面及满载 NR／补帧现场待复测。
+
+试用入口为 `E:/项目/Veyra/tests/codex-live-asr-20261120/启动实时翻译测试.cmd`。同任务 `build` 保留可重建程序，`tests` 保留独立配置与素材，`logs` 保留各次失败与通过，`reports/FINAL.json` 保存最终校验数据。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。

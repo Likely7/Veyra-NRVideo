@@ -48,8 +48,17 @@ QString captionText(IUIAutomationElement* element) {
     ComPtr<IUIAutomationTextPattern> pattern;
     if (SUCCEEDED(element->GetCurrentPatternAs(UIA_TextPatternId, IID_PPV_ARGS(&pattern)))) {
         ComPtr<IUIAutomationTextRange> range;
-        if (SUCCEEDED(pattern->get_DocumentRange(&range)) && range)
-            range->GetText(4096, &value);
+        if (SUCCEEDED(pattern->get_DocumentRange(&range)) && range) {
+            // Read a bounded rolling window from the end of the document. Keep
+            // complete lines so sentence IDs survive revisions of trailing words.
+            int moved = 0;
+            ComPtr<IUIAutomationTextRange> tail;
+            if (SUCCEEDED(range->Clone(&tail)) && tail &&
+                SUCCEEDED(tail->MoveEndpointByRange(TextPatternRangeEndpoint_Start, range.Get(), TextPatternRangeEndpoint_End)) &&
+                SUCCEEDED(tail->MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -4096, &moved)))
+                tail->GetText(4096, &value);
+            if (!value) range->GetText(4096, &value);
+        }
     }
     if (!value) element->get_CurrentName(&value);
     QString text;
@@ -57,9 +66,8 @@ QString captionText(IUIAutomationElement* element) {
         text = QString::fromWCharArray(value, int(SysStringLen(value)));
         SysFreeString(value);
     }
-    // Windows retains several old lines in the same element.
-    const auto lines = text.trimmed().split(QLatin1Char('\n'));
-    return lines.isEmpty() ? QString{} : lines.back().simplified().right(300);
+    text.replace(QStringLiteral("\r\n"), QStringLiteral("\n"));
+    return text.right(4096).trimmed();
 }
 
 int readCaptions(HANDLE input, HANDLE output) {

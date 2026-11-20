@@ -1347,6 +1347,11 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
     src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
     src/ui/LiveTranslation.cpp src/ui/LiveTranslation.h
+    src/ui/LiveSentences.cpp src/ui/LiveSentences.h
+    src/ui/LiveAsr.cpp src/ui/LiveAsr.h
+    src/ui/AsrAudioTap.cpp src/ui/AsrAudioTap.h
+    src/ui/AsrModels.cpp src/ui/AsrModels.h
+    src/ui/AsrWorker.cpp src/ui/AsrWorker.h
     src/ui/TranslationAssets.cpp src/ui/TranslationAssets.h
     src/ui/WinCaptionReader.cpp src/ui/WinCaptionReader.h
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
@@ -1432,7 +1437,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Widgets is needed only for QFileDialog: the native file picker is the one
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
-  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network PRIVATE shell32 ole32 oleaut32 uiautomationcore iphlpapi ws2_32)
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network PRIVATE shell32 ole32 oleaut32 uiautomationcore iphlpapi ws2_32 ${FFMPEG_LIBRARIES})
   add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
   set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)

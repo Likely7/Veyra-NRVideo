@@ -207,16 +207,26 @@ void QmlPlayerBridge::tickSubtitles() {
     // Live text is never copied into subtitle diagnostics or the export graph.
     const QString translated = liveTranslation_->translated();
     const QString original = liveTranslation_->caption();
-    const bool showOriginal = liveTranslation_->showOriginal();
-    QString live = translated;
-    if (showOriginal && !original.isEmpty() && original != translated)
-        live = translated.isEmpty() ? original : original + QLatin1Char('\n') + translated;
-    if (!live.isEmpty()) {
+    const int alignment = draw.empty() ? 2 : 8;
+    const auto beginLive = draw.size();
+    if (liveTranslation_->showOriginal() && !original.isEmpty() && original != translated) {
         SubtitleLine line;
-        line.text = live.toStdWString();
-        line.style.alignment = draw.empty() ? 2 : 8;
+        line.text = original.toStdWString();
+        line.style.alignment = alignment;
+        line.style.size *= 0.8;
+        line.style.primary = 0xb3ffffff;
+        line.maximumLines = 1;
         draw.push_back(std::move(line));
     }
+    if (!translated.isEmpty()) {
+        SubtitleLine line;
+        line.text = translated.toStdWString();
+        line.style.alignment = alignment;
+        line.maximumLines = std::clamp(view.targetLines, 1, 3);
+        draw.push_back(std::move(line));
+    }
+    if (alignment == 8 && draw.size() - beginLive == 2)
+        std::swap(draw[beginLive], draw[beginLive + 1]);
     updateSubtitleOverlay(i.subOverlay, draw, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {

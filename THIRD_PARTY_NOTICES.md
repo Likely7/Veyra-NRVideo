@@ -5,13 +5,39 @@
 Veyra's native subtitle translation adapts the Live Captions integration and
 translation workflow proposed by jjjxxxttt in [PR #203](https://github.com/Likely7/Veyra-NRVideo/pull/203)
 at `fb08b6cd87afcc2942eca2201958da4fbabfabaf` under the project's GPL-3.0 license.
-Windows speech recognition comes from Windows Live Captions.
+Windows Live Captions remains available as a legacy speech source.
 
 The optional in-app downloads are [llama.cpp b12240 Windows x64 CPU](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
 (MIT and the included LLVM OpenMP license) and [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/tree/91cad51170dc346986eccefdc2dd33a9da36ead9)
 (Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
 `src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
 data directory and are independent of the application installer.
+
+The optional speech-recognition path taps Veyra's playback PCM and runs on the
+CPU in a separate process. Timestamps and sentence identifiers are shared with
+the legacy Windows Live Captions source. ASR models and runtime binaries are
+downloaded on demand into the user's data directory.
+
+- [sherpa-onnx v2.0.2](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v2.0.2)
+  at 5d2bd37de78b223a2e8e00e25483d12c5b164299, Apache-2.0. The public
+  sherpa-onnx/c-api/c-api.h header is copied unmodified to
+  [third_party/sherpa-onnx](third_party/sherpa-onnx) with its license. Veyra uses
+  the CPU Windows x64 shared MD MinSizeRel no-TTS release. The child process
+  uses the C API for non-streaming recognition and VAD.
+- [ONNX Runtime 1.28.2](https://github.com/microsoft/onnxruntime/blob/v1.28.2/LICENSE),
+  MIT. The two CPU runtime DLLs come from the pinned sherpa-onnx release.
+- [Silero VAD](https://github.com/snakers4/silero-vad), MIT. The ONNX export
+  is the silero_vad.onnx asset from the sherpa-onnx ASR releases.
+- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2),
+  NVIDIA, CC BY 4.0. The sherpa-onnx maintainers export and quantize the
+  encoder, decoder and joiner to ONNX int8. This option recognizes English.
+- [OpenAI Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo),
+  OpenAI, MIT. The sherpa-onnx int8 ONNX export supplies multilingual recognition.
+
+src/ui/AsrModels.cpp pins the archive and member names, byte counts, and
+SHA-256 digests. The ASR child verifies the files before loading the runtime
+or parsing the models. All DLLs and model weights remain outside source Git
+and the installer.
 
 ## PushFPS frame generation and recording features (2026-11-19)
 
