@@ -351,6 +351,8 @@ add_subdirectory(tests/screenshot-alpha)
 veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
 # Live HUD Lock (ported from PushFPS, GPL-3.0-or-later): per-pixel HUD mask and compose.
 veyra_add_compute_shader(veyra_shader_hud_lock_update HudLockUpdate)
+veyra_add_compute_shader(veyra_shader_hud_lock_dynamic HudLockDynamic)
+veyra_add_compute_shader(veyra_shader_hud_lock_fill HudLockFill)
 veyra_add_compute_shader(veyra_shader_hud_lock_compose HudLockCompose)
 # Nv12Upload: byte buffer -> luma/chroma planes (copy-free upload path).
 veyra_add_compute_shader(veyra_shader_nv12_upload Nv12Upload)
@@ -752,7 +754,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_dynamic veyra_shader_hud_lock_fill veyra_shader_hud_lock_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp

@@ -510,6 +510,7 @@ struct EnhancementSettings {
     // UI "HUD 自动锁定" (pipeline/HudLock.h, from PushFPS): a per-pixel HUD mask found every
     // frame and kept out of graph frame generation. Its passes exist only when on.
     bool hudLock=false;
+    bool dynamicHud=false;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -589,7 +590,10 @@ struct EnhancementSettings {
         if(!(multiplier>2))active.fgAdaptive=defaults.fgAdaptive;
         if(!(multiplier>1))active.pacingRepair=defaults.pacingRepair;
         // XeSS generates inside its own presenter; HUD Lock works on graph frame generation.
-        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS))active.hudLock=defaults.hudLock;
+        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS)){
+            active.hudLock=defaults.hudLock;
+            active.dynamicHud=defaults.dynamicHud;
+        }
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {

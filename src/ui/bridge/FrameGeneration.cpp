@@ -279,6 +279,16 @@ void QmlPlayerBridge::setHudLock(bool value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "HUD lock not saved");
     emit settingsChanged();
 }
+bool QmlPlayerBridge::dynamicHud() const { return settings().dynamicHud; }
+void QmlPlayerBridge::setDynamicHud(bool value) {
+    auto s = settings();
+    if (s.dynamicHud == value) return;
+    s.dynamicHud = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("动态 HUD 保护设置未生效"), true); return; }
+    impl_->prefs[QStringLiteral("dynamicHud")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "dynamic HUD setting not saved");
+    emit settingsChanged();
+}
 bool QmlPlayerBridge::dlssgLiteAvailable() const {
     static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
     return present;

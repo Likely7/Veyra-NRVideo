@@ -281,6 +281,21 @@ void testExistingChainContracts() {
           check(requiresGraphRebuild(base, next), "turning NR off rebuilds"); }
         { auto next = base; next.multiplier = 2;
           check(requiresGraphRebuild(base, next), "changing the multiplier rebuilds"); }
+        {
+            EnhancementSettings off;
+            EnhancementSettings on = off;
+            on.dynamicHud = true;
+            check(!off.dynamicHud && on.dynamicHud && !on.hudLock, "dynamic HUD is opt-in and independent");
+            check(!requiresGraphRebuild(off, on) && on.sameVideoConfiguration(off),
+                  "saving dynamic HUD with frame generation off leaves the graph alone");
+            off.multiplier = on.multiplier = 2;
+            off.frameGenerationBackend = on.frameGenerationBackend = FrameGenerationBackend::Vfg;
+            check(requiresGraphRebuild(off, on) && requiresGraphRebuild(on, off) &&
+                  !off.sameVideoConfiguration(on), "both dynamic HUD transitions rebuild active VFG");
+            off.frameGenerationBackend = on.frameGenerationBackend = FrameGenerationBackend::XeSS;
+            check(!requiresGraphRebuild(off, on) && on.sameVideoConfiguration(off),
+                  "XeSS holds the choice without using or rebuilding the graph HUD pass");
+        }
         { auto next = base; next.nrTemporal = false;
           check(requiresGraphRebuild(base, next), "toggling temporal anti-flicker rebuilds"); }
         { auto next = base; next.videoHdr.enabled = false;

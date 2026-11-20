@@ -316,6 +316,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("hudLock")).toBool();
             if (s.hudLock != on) { s.hudLock = on; changed = true; }
         }
+        if (p.contains(QStringLiteral("dynamicHud"))) {
+            const bool on = p.value(QStringLiteral("dynamicHud")).toBool();
+            if (s.dynamicHud != on) { s.dynamicHud = on; changed = true; }
+        }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){

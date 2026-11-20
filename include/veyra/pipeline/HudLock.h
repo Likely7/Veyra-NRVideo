@@ -36,7 +36,9 @@ public:
     static constexpr UINT kConstants = 8;
     static constexpr UINT kMaxGenerated = 32;
     // outputMode: how the frames are encoded, as EffectExclusion (0 sRGB, 1 scRGB, 2 PQ).
-    bool initialize(ID3D12Device* device, uint32_t width, uint32_t height, DXGI_FORMAT format, unsigned outputMode);
+    bool initialize(ID3D12Device* device, uint32_t width, uint32_t height, DXGI_FORMAT format,
+                    unsigned outputMode, bool staticLock = true, bool dynamicProtection = false);
+    bool dynamicActive() const { return bool(protectionMask_); }
     // real[0..1]: the graph's two real-frame textures by parity; generated: the
     // generated-frame textures, in the graph's slot order.
     void createViews(ID3D12Device* device, DescriptorStager& stager, ID3D12Resource* const real[2],
@@ -45,15 +47,18 @@ public:
     // reset: no valid previous frame (start, seek, settings change): start over.
     bool update(ID3D12GraphicsCommandList* list, StateTracker& tracker, unsigned parity, bool reset);
     // Locked pixels of generated[slot] come from the held real frame real[heldParity].
-    bool compose(ID3D12GraphicsCommandList* list, StateTracker& tracker, unsigned slot, unsigned heldParity);
+    bool compose(ID3D12GraphicsCommandList* list, StateTracker& tracker, unsigned slot, unsigned heldParity,
+                 bool useNewerHud = false);
     std::string describe() const;
 
 private:
     uint32_t width_ = 0, height_ = 0;
+    uint32_t cellSize_ = 0, maskWidth_ = 0, maskHeight_ = 0;
     unsigned outputMode_ = 0, generatedCount_ = 0;
+    bool staticLock_ = true;
     DXGI_FORMAT format_ = DXGI_FORMAT_UNKNOWN;
-    ComputePass update_, compose_;
-    ComPtr<ID3D12Resource> state_, scratch_;
+    ComputePass update_, dynamic_, fill_, compose_;
+    ComPtr<ID3D12Resource> state_, dynamicMask_, protectionMask_, scratch_;
     ID3D12Resource* real_[2]{};
     ID3D12Resource* generated_[kMaxGenerated]{};
 };

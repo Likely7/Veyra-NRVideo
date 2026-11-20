@@ -1903,6 +1903,7 @@ VPage {
                                     onToggled: checked => veyra.hudLock = checked
                                 }
                             }
+                            DynamicHudRow { backend: veyra; namePrefix: "list" }
                             VSubGroup {
                                 id: fgFlowGroup
                                 objectName: "list-fg-flow-group"

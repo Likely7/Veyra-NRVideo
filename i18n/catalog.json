@@ -10155,6 +10155,58 @@
    "ru": "Загрузить файл…"
   },
   {
+   "zh": "动态 HUD 保护",
+   "src": "qml/DynamicHudRow.qml",
+   "zh-TW": "動態 HUD 保護",
+   "en": "Dynamic HUD protection",
+   "ja": "動的 HUD 保護",
+   "ko": "동적 HUD 보호",
+   "es": "Protección dinámica del HUD",
+   "fr": "Protection dynamique du HUD",
+   "de": "Dynamischer HUD-Schutz",
+   "pt-BR": "Proteção dinâmica do HUD",
+   "ru": "Динамическая защита HUD"
+  },
+  {
+   "zh": "动态 HUD 保护 · 当前补帧方式不支持",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "動態 HUD 保護 · 目前的補幀方式不支援",
+   "en": "Dynamic HUD protection · Unsupported by the current frame generation method",
+   "ja": "動的 HUD 保護 · 現在のフレーム生成方式では非対応",
+   "ko": "동적 HUD 보호 · 현재 프레임 생성 방식에서 지원되지 않음",
+   "es": "Protección dinámica del HUD · Incompatible con el método de interpolación actual",
+   "fr": "Protection dynamique du HUD · Non prise en charge par le mode d’interpolation actuel",
+   "de": "Dynamischer HUD-Schutz · Von der aktuellen Zwischenbildmethode nicht unterstützt",
+   "pt-BR": "Proteção dinâmica do HUD · Incompatível com o método atual de geração de quadros",
+   "ru": "Динамическая защита HUD · Текущий способ генерации кадров не поддерживает защиту"
+  },
+  {
+   "zh": "动态 HUD 保护 · 无法启用",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "動態 HUD 保護 · 無法啟用",
+   "en": "Dynamic HUD protection · Unavailable",
+   "ja": "動的 HUD 保護 · 利用不可",
+   "ko": "동적 HUD 보호 · 사용할 수 없음",
+   "es": "Protección dinámica del HUD · No disponible",
+   "fr": "Protection dynamique du HUD · Indisponible",
+   "de": "Dynamischer HUD-Schutz · Nicht verfügbar",
+   "pt-BR": "Proteção dinâmica do HUD · Indisponível",
+   "ru": "Динамическая защита HUD · Недоступна"
+  },
+  {
+   "zh": "动态 HUD 保护设置未生效",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "動態 HUD 保護設定未生效",
+   "en": "The dynamic HUD protection setting could not be applied",
+   "ja": "動的 HUD 保護の設定を適用できませんでした",
+   "ko": "동적 HUD 보호 설정을 적용하지 못했습니다",
+   "es": "No se pudo aplicar el ajuste de protección dinámica del HUD",
+   "fr": "Impossible d’appliquer le réglage de protection dynamique du HUD",
+   "de": "Die Einstellung für den dynamischen HUD-Schutz konnte nicht übernommen werden",
+   "pt-BR": "Não foi possível aplicar a configuração de proteção dinâmica do HUD",
+   "ru": "Не удалось применить настройку динамической защиты HUD"
+  },
+  {
    "zh": "勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "勾選後，高光起點同時參考每幀的平均亮度：暗場多的片子壓得更積極，亮場多的保留更多高光；取消則只看峰值",
@@ -32566,6 +32618,19 @@
    "de": "Eingabefarben einstellen",
    "pt-BR": "Ajuste a cor de entrada",
    "ru": "Настройте цвет входного сигнала"
+  },
+  {
+   "zh": "识别有固定边框的数字和状态条，补帧时保留真实画面中的内容 · 实验 · 默认关闭",
+   "src": "qml/DynamicHudRow.qml",
+   "zh-TW": "辨識具有固定邊框的數字和狀態條，補幀時保留原始畫面中的內容 · 實驗 · 預設關閉",
+   "en": "Detects counters and status bars within stable borders and preserves their original content during frame generation · Experimental · Off by default",
+   "ja": "固定枠のある数値やゲージを検出し、フレーム生成時に元の表示を維持します · 実験的 · デフォルトはオフ",
+   "ko": "고정 테두리 안의 숫자와 상태 표시줄을 감지하고 프레임 생성 중 원본 표시를 유지합니다 · 실험 기능 · 기본값 끔",
+   "es": "Detecta contadores y barras de estado con bordes fijos y conserva su contenido original durante la interpolación · Experimental · Desactivada por defecto",
+   "fr": "Détecte les compteurs et les jauges avec des bordures fixes et préserve leur contenu original pendant l’interpolation · Expérimental · Désactivé par défaut",
+   "de": "Erkennt Zähler und Statusleisten mit festen Rahmen und erhält ihren Originalinhalt bei der Zwischenbildberechnung · Experimentell · Standardmäßig aus",
+   "pt-BR": "Detecta contadores e barras de status com bordas fixas e preserva o conteúdo original durante a geração de quadros · Experimental · Desativada por padrão",
+   "ru": "Распознаёт счётчики и индикаторы с неподвижными рамками и сохраняет исходное содержимое при генерации кадров · Экспериментально · По умолчанию выключено"
   },
   {
    "zh": "识别档位",

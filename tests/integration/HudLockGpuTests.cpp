@@ -12,9 +12,11 @@
 #include <d3d12.h>
 #include <d3d12sdklayers.h>
 #include <dxgi1_6.h>
+#include <DirectXPackedVector.h>
 #include <wrl/client.h>
 #include "veyra/pipeline/HudLock.h"
 #include "veyra/pipeline/GpuPassUtils.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <cstdio>
@@ -262,13 +264,241 @@ void testHudLock(Gpu& gpu) {
     check(!gpu.debugErrors(), "hud lock: no D3D12 debug errors");
 }
 
+void setPixel(uint8_t* pixel, DXGI_FORMAT format, float r, float g, float b, float alpha) {
+    if (format == DXGI_FORMAT_R16G16B16A16_FLOAT) {
+        using DirectX::PackedVector::XMConvertFloatToHalf;
+        const uint16_t half[] = {XMConvertFloatToHalf(r), XMConvertFloatToHalf(g),
+                                 XMConvertFloatToHalf(b), XMConvertFloatToHalf(alpha)};
+        std::memcpy(pixel, half, sizeof half);
+    } else if (format == DXGI_FORMAT_R10G10B10A2_UNORM) {
+        const auto rgb10 = [](float value) { return uint32_t(std::lround(value * 1023)); };
+        const uint32_t packed = rgb10(r) | (rgb10(g) << 10) | (rgb10(b) << 20) |
+                                (uint32_t(std::lround(alpha * 3)) << 30);
+        std::memcpy(pixel, &packed, sizeof packed);
+    } else {
+        pixel[0] = uint8_t(std::lround(r * 255));
+        pixel[1] = uint8_t(std::lround(g * 255));
+        pixel[2] = uint8_t(std::lround(b * 255));
+        pixel[3] = uint8_t(std::lround(alpha * 255));
+    }
+}
+
+struct DynamicHudFixture {
+    Gpu& gpu;
+    pipeline::HudLock lock;
+    pipeline::StateTracker states;
+    Plane real[2]{};
+    Plane generated{};
+    std::vector<uint8_t> placeholder;
+    std::vector<uint8_t> uploaded[2];
+
+    bool initialize(uint32_t w, uint32_t h, DXGI_FORMAT format, unsigned outputMode,
+                    bool lockStatic = false, bool dynamic = true) {
+        auto* device = gpu.device.Get();
+        const uint32_t bpp = format == DXGI_FORMAT_R16G16B16A16_FLOAT ? 8u : 4u;
+        for (auto* plane : {&real[0], &real[1], &generated}) {
+            *plane = {pipeline::makeTexture(device, w, h, format, true), format, w, h, bpp};
+            if (!plane->texture) return false;
+        }
+        if (!lock.initialize(device, w, h, format, outputMode, lockStatic, dynamic) ||
+            lock.dynamicActive() != dynamic) return false;
+        pipeline::DescriptorStager stager;
+        if (!stager.initialize(device, 64)) return false;
+        ID3D12Resource* reals[]{real[0].texture.Get(), real[1].texture.Get()};
+        ID3D12Resource* gens[]{generated.texture.Get()};
+        lock.createViews(device, stager, reals, gens, 1);
+        placeholder.resize(size_t(w) * h * bpp);
+        for (size_t k = 0; k < placeholder.size(); k += bpp)
+            setPixel(placeholder.data() + k, format, 0.49f, 0.33f, 0.38f, 1.0f);
+        return true;
+    }
+
+    // A changing meter along thin fixed rails over a translating picture.
+    // Farther down, equally bright rails and matching insets surround moving
+    // scenery that never exposes the inset colour.
+    std::vector<uint8_t> picture(unsigned index, bool hud, bool vertical = false) const {
+        const auto& p = real[0];
+        std::vector<uint8_t> pixels(size_t(p.w) * p.h * p.bpp);
+        const uint32_t cell = std::clamp((p.h + 269u) / 270u, 2u, 8u);
+        for (uint32_t y = 0; y < p.h; ++y)
+            for (uint32_t x = 0; x < p.w; ++x) {
+                const uint32_t u = vertical ? y : x;
+                const uint32_t v = vertical ? x : y;
+                const uint32_t longSide = vertical ? p.h : p.w;
+                const uint32_t shortSide = vertical ? p.w : p.h;
+                const uint32_t start = shortSide / 8;
+                const uint32_t end = start + 6 * cell;
+                const uint32_t world = shortSide * 5 / 8;
+                uint32_t hash = (x + 7 * index) * 374761393u + (y + 3 * index) * 668265263u;
+                hash = (hash ^ (hash >> 13)) * 1274126177u;
+                float r = 0.18f + float(hash >> 25) / 640.0f;
+                float g = r + 0.06f, b = r + 0.08f;
+
+                if (u >= longSide / 9 && u < longSide / 2) {
+                    if (hud && v >= start && v <= end) {
+                        const bool rail = v == start || v == end;
+                        const bool fill = v >= start + 2 * cell && v <= start + 4 * cell &&
+                            u >= longSide / 7 && u < longSide / (index % 2 ? 3 : 4);
+                        r = rail ? 0.98f : fill ? 0.75f : 0.03f;
+                        g = rail ? 0.98f : fill ? 0.14f : 0.03f;
+                        b = rail ? 0.98f : 0.03f;
+                    }
+                    if (v == world || v == world + 6 * cell) {
+                        r = g = b = 0.99f;
+                    } else if (v > world && v < world + 6 * cell) {
+                        if (v <= world + 2 * cell) r = g = b = 0.13f;
+                        if (v >= world + 4 * cell) r = g = b = 0.13f;
+                    }
+                }
+                setPixel(pixels.data() + (size_t(y) * p.w + x) * p.bpp, p.format, r, g, b, 1.0f);
+            }
+        return pixels;
+    }
+
+    bool update(unsigned index, bool hud, bool reset, bool vertical = false) {
+        const auto parity = index & 1u;
+        if (!gpu.begin()) return false;
+        auto& plane = real[parity];
+        uploaded[parity] = picture(index, hud, vertical);
+        auto upload = recordFill(gpu, plane, uploaded[parity], states.get(plane.texture.Get()),
+                                 D3D12_RESOURCE_STATE_COMMON);
+        states.set(plane.texture.Get(), D3D12_RESOURCE_STATE_COMMON);
+        return upload && lock.update(gpu.list.Get(), states, parity, reset) && gpu.submitAndWait();
+    }
+
+    std::vector<uint8_t> compose(unsigned held, bool newer = false) {
+        if (!gpu.begin()) return {};
+        auto upload = recordFill(gpu, generated, placeholder, states.get(generated.texture.Get()),
+                                 D3D12_RESOURCE_STATE_COMMON);
+        states.set(generated.texture.Get(), D3D12_RESOURCE_STATE_COMMON);
+        if (!upload || !lock.compose(gpu.list.Get(), states, 0, held, newer)) return {};
+        auto result = recordRead(gpu, generated, states.get(generated.texture.Get()));
+        if (!result || !gpu.submitAndWait()) return {};
+        return mapRead(generated, result.Get());
+    }
+};
+
+void testDynamicHud(Gpu& gpu, DXGI_FORMAT format, unsigned outputMode, bool vertical, const char* title) {
+    constexpr uint32_t W = 257, H = 145;
+    DynamicHudFixture fixture{gpu};
+    const std::string name = std::string("dynamic HUD ") + title;
+    const bool initialized = fixture.initialize(W, H, format, outputMode);
+    check(initialized, name + ": passes created");
+    if (!initialized) return;
+    const bool first = fixture.update(0, true, true, vertical);
+    check(first && fixture.compose(0) == fixture.placeholder, name + ": no edit before temporal evidence");
+    if (!first) return;
+    bool updated = true;
+    for (unsigned i = 1; i < 64 && updated; ++i) updated = fixture.update(i, true, false, vertical);
+    check(updated, name + ": learned from 64 original frames");
+    if (!updated) return;
+
+    const auto previous = fixture.compose(0);
+    const auto newer = fixture.compose(0, true);
+    const bool composed = previous.size() == fixture.placeholder.size() && newer.size() == previous.size();
+    check(composed, name + ": read both interpolation phases");
+    if (!composed) return;
+    size_t changedHud = 0, matchingPrevious = 0, matchingNewer = 0, spill = 0;
+    const auto bpp = fixture.generated.bpp;
+    for (uint32_t y = 0; y < H; ++y)
+        for (uint32_t x = 0; x < W; ++x) {
+            const uint32_t u = vertical ? y : x, v = vertical ? x : y;
+            const uint32_t minSide = vertical ? W : H, maxSide = vertical ? H : W;
+            const uint32_t start = minSide / 8;
+            const size_t at = (size_t(y) * W + x) * bpp;
+            const auto equal = [at, bpp](const auto& a, const auto& b) {
+                return std::memcmp(a.data() + at, b.data() + at, bpp) == 0;
+            };
+            if (v >= start + 4 && v <= start + 8 && u >= maxSide / 4 && u < maxSide / 3) {
+                if (!equal(fixture.uploaded[0], fixture.uploaded[1])) {
+                    ++changedHud;
+                    matchingPrevious += equal(previous, fixture.uploaded[0]);
+                    matchingNewer += equal(newer, fixture.uploaded[1]);
+                }
+            }
+            if (u < maxSide / 9 || u >= maxSide / 2 || v <= start || v >= start + 12)
+                spill += !equal(previous, fixture.placeholder) || !equal(newer, fixture.placeholder);
+        }
+    std::printf("INFO %s: changing pixels correctly selected %zu/%zu early, %zu/%zu late, spill=%zu\n",
+                name.c_str(), matchingPrevious, changedHud, matchingNewer, changedHud, spill);
+    check(changedHud > 0 && matchingPrevious == changedHud && matchingNewer == changedHud,
+          name + ": nearest real colors selected across the change");
+    check(spill == 0, name + ": moving scenery untouched, including between matching rails");
+    check(fixture.update(64, false, false, vertical) && fixture.compose(1) == fixture.placeholder,
+          name + ": HUD removal releases the mask immediately");
+    check(fixture.update(65, true, true, vertical) && fixture.compose(1) == fixture.placeholder,
+          name + ": reset clears the mask without changing the frame");
+    check(!gpu.debugErrors(), name + ": no D3D12 debug errors");
+}
+
+bool benchmarkHud(Gpu& gpu, uint32_t width, uint32_t height, bool staticLock, bool dynamic) {
+    constexpr unsigned warmup = 64, samples = 100, frames = warmup + samples;
+    DynamicHudFixture fixture{gpu};
+    if (!fixture.initialize(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 0, staticLock, dynamic) ||
+        !fixture.update(0, true, true) || !fixture.update(1, true, false)) return false;
+    UINT64 frequency = 0;
+    if (FAILED(gpu.queue->GetTimestampFrequency(&frequency)) || frequency == 0) return false;
+    D3D12_QUERY_HEAP_DESC desc{};
+    desc.Type = D3D12_QUERY_HEAP_TYPE_TIMESTAMP;
+    desc.Count = 3 * samples;
+    ComPtr<ID3D12QueryHeap> timestamps;
+    if (FAILED(gpu.device->CreateQueryHeap(&desc, IID_PPV_ARGS(&timestamps)))) return false;
+    auto result = makeBuffer(gpu.device.Get(), desc.Count * sizeof(UINT64), D3D12_HEAP_TYPE_READBACK);
+    if (!result || !gpu.begin()) return false;
+    auto initial = recordFill(gpu, fixture.generated, fixture.placeholder,
+                              D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COMMON);
+    if (!initial) return false;
+
+    for (unsigned i = 0; i < frames; ++i) {
+        const UINT first = i >= warmup ? 3 * (i - warmup) : 0;
+        const unsigned parity = i & 1u;
+        if (i >= warmup) gpu.list->EndQuery(timestamps.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first);
+        if (!fixture.lock.update(gpu.list.Get(), fixture.states, parity, false)) return false;
+        if (i >= warmup) gpu.list->EndQuery(timestamps.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first + 1);
+        if (!fixture.lock.compose(gpu.list.Get(), fixture.states, 0, 1u - parity, true)) return false;
+        if (i >= warmup) gpu.list->EndQuery(timestamps.Get(), D3D12_QUERY_TYPE_TIMESTAMP, first + 2);
+    }
+    gpu.list->ResolveQueryData(timestamps.Get(), D3D12_QUERY_TYPE_TIMESTAMP, 0, desc.Count, result.Get(), 0);
+    if (!gpu.submitAndWait()) return false;
+    UINT64* data = nullptr;
+    if (FAILED(result->Map(0, nullptr, reinterpret_cast<void**>(&data)))) return false;
+    std::array<double, samples> trackUpdate{}, trackCompose{}, trackBoth{};
+    const double milliseconds = 1000.0 / double(frequency);
+    for (unsigned i = 0; i < samples; ++i) {
+        trackUpdate[i] = double(data[3 * i + 1] - data[3 * i]) * milliseconds;
+        trackCompose[i] = double(data[3 * i + 2] - data[3 * i + 1]) * milliseconds;
+        trackBoth[i] = double(data[3 * i + 2] - data[3 * i]) * milliseconds;
+    }
+    const D3D12_RANGE written{0, 0};
+    result->Unmap(0, &written);
+    std::sort(trackUpdate.begin(), trackUpdate.end());
+    std::sort(trackCompose.begin(), trackCompose.end());
+    std::sort(trackBoth.begin(), trackBoth.end());
+    std::printf("BENCH %ux%u static=%d dynamic=%d samples=%u update_p50_ms=%.3f compose_p50_ms=%.3f total_p50_ms=%.3f total_p95_ms=%.3f\n",
+                width, height, staticLock, dynamic, samples, trackUpdate[49], trackCompose[49], trackBoth[49], trackBoth[94]);
+    return !gpu.debugErrors();
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char** argv) {
     Gpu gpu;
     if (!gpu.create()) { std::printf("FAIL D3D12 device\n"); return 1; }
     std::printf("adapter: %s%s\n", gpu.adapter.c_str(), gpu.debug ? " (debug layer)" : "");
+    if (argc == 2 && std::string_view(argv[1]) == "--perf") {
+        for (const uint32_t width : {1920u, 3840u}) {
+            const uint32_t height = width * 9 / 16;
+            if (!benchmarkHud(gpu, width, height, true, false) ||
+                !benchmarkHud(gpu, width, height, false, true) ||
+                !benchmarkHud(gpu, width, height, true, true)) return 1;
+        }
+        return 0;
+    }
+    if (argc != 1) return 2;
     testHudLock(gpu);
+    testDynamicHud(gpu, DXGI_FORMAT_R8G8B8A8_UNORM, 0, false, "SDR");
+    testDynamicHud(gpu, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, true, "scRGB");
+    testDynamicHud(gpu, DXGI_FORMAT_R10G10B10A2_UNORM, 2, false, "HDR10 PQ");
     std::printf("%s: %d failure(s)\n", failures ? "FAILED" : "PASSED", failures);
     return failures ? 1 : 0;
 }

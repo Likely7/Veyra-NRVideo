@@ -154,6 +154,7 @@ struct EnhanceGraphDesc {
     bool vfgAutoRegulate=false;
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
     bool hudLock=false; // Live HUD Lock (HudLock.h, from PushFPS), graph frame generation only
+    bool dynamicHud=false;
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
     engine::OpticalFlowBackend opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;
@@ -767,6 +768,11 @@ public:
     // Live HUD Lock: 0 off, 1 running, 2 asked for but its passes could not be created,
     // 3 asked for with a frame generation that presents on its own (XeSS) or none.
     int hudLockState() const { if(!desc_.hudLock)return 0; if(hudLock_)return 1; if(!fgEnabled_||presentSinkFg())return 3; return 2; }
+    int dynamicHudState() const {
+        if (!desc_.dynamicHud) return 0;
+        if (!fgEnabled_ || presentSinkFg()) return 3;
+        return hudLock_ && hudLock_->dynamicActive() ? 1 : 2;
+    }
     bool xessEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::XeSS; }
     bool fsrEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && engine::fsrFrameGeneration(desc_.frameGenerationBackend); }
     bool fsrActive() const;
@@ -1182,7 +1188,7 @@ private:
     std::unique_ptr<gfx::AmfFrcBackend> amfFrc_;
     std::unique_ptr<HudLock> hudLock_;  // Live HUD Lock (from PushFPS)
     bool initHudLock();
-    void composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity);
+    void composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity,bool useNewerHud);
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
     std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
