@@ -1054,6 +1054,19 @@
    "ru": "(устройство без имени)"
   },
   {
+   "zh": "**采集原生 HDR10 时，P010 要配 HDR · PQ。** 主机开启 HDR，采集页「像素格式」选 **P010**，「输入色彩（SDR / HDR）」选 **HDR · PQ**，然后重新连接。**NV12、YUY2 和 RGB 在这套指南里都用 SDR · 709。**",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "**擷取原生 HDR10 時，P010 要搭配 HDR · PQ。** 在主機開啟 HDR，擷取頁「像素格式」選 **P010**，「輸入色彩（SDR / HDR）」選 **HDR · PQ**，然後重新連線。**本指南的 NV12、YUY2 和 RGB 都使用 SDR · 709。**",
+   "en": "**Use P010 with HDR · PQ for native HDR10 capture.** Enable HDR on your console, choose **P010** under Pixel format and **HDR · PQ** under Input color (SDR / HDR), then reconnect. **For NV12, YUY2 and RGB, use SDR · 709 in this setup.**",
+   "ja": "**ネイティブ HDR10 のキャプチャでは P010 と HDR · PQ を組み合わせます。** ゲーム機で HDR を有効にし、「ピクセルフォーマット」で **P010**、「入力の色（SDR / HDR）」で **HDR · PQ** を選んで再接続してください。**この手順で NV12、YUY2、RGB を使う場合は SDR · 709 を選びます。**",
+   "ko": "**네이티브 HDR10을 캡처할 때는 P010과 HDR · PQ를 함께 사용합니다.** 콘솔에서 HDR을 켜고 캡처 화면의 ‘픽셀 형식’에서 **P010**, ‘입력 색상(SDR/HDR)’에서 **HDR · PQ**를 선택한 뒤 다시 연결하세요. **이 가이드에서 NV12, YUY2, RGB는 SDR · 709를 사용합니다.**",
+   "es": "**Para capturar HDR10 nativo, usa P010 con HDR · PQ.** Activa HDR en la consola, elige **P010** en Formato de píxel y **HDR · PQ** en Color de entrada (SDR / HDR), y vuelve a conectar. **En esta configuración, usa SDR · 709 con NV12, YUY2 y RGB.**",
+   "fr": "**Pour capturer du HDR10 natif, associez P010 à HDR · PQ.** Activez le HDR sur la console, choisissez **P010** dans Format de pixel et **HDR · PQ** dans Couleur d’entrée (SDR / HDR), puis reconnectez-vous. **Avec NV12, YUY2 ou RGB, choisissez SDR · 709 dans cette configuration.**",
+   "de": "**Für natives HDR10 nimm P010 mit HDR · PQ.** Aktiviere HDR an der Konsole, wähle unter Pixelformat **P010** und unter Eingangsfarbe (SDR / HDR) **HDR · PQ**. Stelle anschließend die Verbindung neu her. **Für NV12, YUY2 und RGB wählst du in diesem Setup SDR · 709.**",
+   "pt-BR": "**Para capturar HDR10 nativo, combine P010 com HDR · PQ.** Ative o HDR no console, selecione **P010** em Formato de pixel e **HDR · PQ** em Cor de entrada (SDR / HDR), depois reconecte. **Use SDR · 709 com NV12, YUY2 e RGB nesta configuração.**",
+   "ru": "**Для захвата исходного HDR10 используйте P010 и HDR · PQ.** Включите HDR на консоли, выберите **P010** в пункте «Формат пикселей» и **HDR · PQ** в пункте «Цвет входа (SDR / HDR)», затем переподключитесь. **Для NV12, YUY2 и RGB в этой схеме выбирайте SDR · 709.**"
+  },
+  {
    "zh": "+  添加 NR 层",
    "src": "qml/ProPage.qml",
    "zh-TW": "+  添加 NR 層",
@@ -1197,6 +1210,19 @@
    "ru": "1 мин"
   },
   {
+   "zh": "10 位 4:2:0，主机确实在输出 HDR10 时配 **HDR · PQ**。P010 传 SDR 时仍按 SDR 读。卡带不动 4K60 HDR 的话，我会先试 1440p60 HDR。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "10 位元 4:2:0。主機確實輸出 HDR10 時搭配 **HDR · PQ**。P010 傳送 SDR 時仍按 SDR 讀取。擷取卡跑不動 4K60 HDR 的話，我會先試 1440p60 HDR。",
+   "en": "10-bit 4:2:0. Pair it with **HDR · PQ** when the console is sending HDR10. If the P010 signal is SDR, read it as SDR. I'd try 1440p60 HDR first on a card that can't do 4K60 HDR.",
+   "ja": "10 ビット 4:2:0。ゲーム機が実際に HDR10 を出力している場合は **HDR · PQ** を選びます。P010 で SDR が送られているときは SDR として扱います。4K60 HDR が難しければ、私は 1440p60 HDR を先に試します。",
+   "ko": "10비트 4:2:0입니다. 콘솔이 실제로 HDR10을 출력할 때 **HDR · PQ**를 선택하세요. P010 신호가 SDR이면 SDR로 처리합니다. 4K60 HDR이 어려우면 1440p60 HDR부터 써 봅니다.",
+   "es": "4:2:0 de 10 bits. Usa **HDR · PQ** cuando la consola esté enviando HDR10. Si la señal P010 es SDR, trátala como SDR. Si la tarjeta no da para 4K60 HDR, yo probaría primero 1440p60 HDR.",
+   "fr": "4:2:0 sur 10 bits. Choisissez **HDR · PQ** si la console envoie effectivement du HDR10. Si le signal P010 est SDR, traitez-le en SDR. Si la carte peine en 4K60 HDR, j’essaierais d’abord le 1440p60 HDR.",
+   "de": "10 Bit, 4:2:0. Wähle **HDR · PQ**, wenn die Konsole tatsächlich HDR10 ausgibt. Ein SDR-Signal in P010 bleibt SDR. Schafft die Karte 4K60 HDR nicht, probiere ich zuerst 1440p60 HDR.",
+   "pt-BR": "4:2:0 de 10 bits. Use **HDR · PQ** quando o console estiver enviando HDR10. Se o sinal P010 for SDR, mantenha SDR. Se a placa não der conta de 4K60 HDR, eu testaria 1440p60 HDR primeiro.",
+   "ru": "10 бит, 4:2:0. Выберите **HDR · PQ**, когда консоль передаёт HDR10. Если по P010 приходит SDR, обрабатывайте его как SDR. Если карта не справляется с 4K60 HDR, я сначала попробовал бы 1440p60 HDR."
+  },
+  {
    "zh": "10 分钟",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "10 分鐘",
@@ -1314,6 +1340,32 @@
    "ru": "2X - это родной путь; 3X / 4X - экспериментальные разблокировки. Диагностика неудач"
   },
   {
+   "zh": "30 帧游戏，我还是建议采 60 帧",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "30 幀遊戲，我還是建議擷取 60 幀",
+   "en": "Why I still capture 30 fps games at 60",
+   "ja": "30 fps のゲームでも 60 fps で取り込む理由",
+   "ko": "30 fps 게임도 60 fps로 캡처하는 이유",
+   "es": "Por qué sigo capturando a 60 los juegos de 30 FPS",
+   "fr": "Pourquoi je capture à 60 i/s les jeux à 30 i/s",
+   "de": "Warum ich 30-FPS-Spiele mit 60 FPS aufnehme",
+   "pt-BR": "Por que eu capturo jogos de 30 FPS a 60 FPS",
+   "ru": "Почему я захватываю игры с 30 FPS в режиме 60 FPS"
+  },
+  {
+   "zh": "30 帧源我更喜欢 **VFG**。在我试过的场景里，低帧率用 DLSS 或 XeSS 更容易看到拖影和果冻感。我会先开 **VFG 中档 2X**，跑稳了再试高档。如果本机没有 VFG，就从可用后端的 2X 试起。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "30 幀來源我比較喜歡 **VFG**。我試過的場景在低幀率用 DLSS 或 XeSS 時，更容易看到殘影和果凍感。我會先用 **VFG 中檔 2X**，穩定後再試高檔。裝置沒有 VFG 時，就從可用後端的 2X 試起。",
+   "en": "For a 30 fps source, I prefer **VFG**. In the scenes I tried, DLSS and XeSS showed more ghosting and wobble at low input rates. Start at **VFG Medium 2X**. If that runs smoothly, try High. If VFG is unavailable, start at 2X with a backend your GPU supports.",
+   "ja": "30 fps の素材では **VFG** が好みです。私のテストでは、低い入力レートで DLSS や XeSS の残像やゆがみが目立つ場面がありました。まず **VFG の中設定で 2X**、安定したら高設定を試します。VFG が使えない場合は、使える方式の 2X から始めます。",
+   "ko": "30 fps 소스에는 **VFG**를 선호합니다. 제가 테스트한 장면에선 입력 속도가 낮을 때 DLSS나 XeSS에서 잔상과 일렁임이 더 잘 보였습니다. **VFG 보통 2X**로 시작하고 안정적이면 높음도 시험해 보세요. VFG를 쓸 수 없다면 지원되는 방식의 2X로 시작하세요.",
+   "es": "Para una fuente de 30 FPS, prefiero **VFG**. En mis pruebas, DLSS y XeSS mostraban más estelas y deformaciones con tasas de entrada bajas. Empieza con **VFG Medio 2X** y prueba Alto si va fluido. Si VFG no está disponible, empieza a 2X con un método compatible.",
+   "fr": "Sur une source à 30 i/s, je préfère **VFG**. Dans mes essais à faible cadence, DLSS et XeSS laissaient plus de traînées et de déformations. Commencez par **VFG Moyen 2X**, puis essayez Élevé si le résultat est fluide. Sans VFG, commencez à 2X avec un mode compatible.",
+   "de": "Für eine Quelle mit 30 FPS nutze ich am liebsten **VFG**. In meinen Tests waren bei DLSS und XeSS mit niedrigen Eingangsbildraten mehr Schlieren und Verformungen zu sehen. Starte mit **VFG Mittel 2X** und probiere Hoch, wenn alles flüssig läuft. Gibt es kein VFG, starte mit 2X bei einer unterstützten Methode.",
+   "pt-BR": "Para uma fonte de 30 FPS, eu prefiro **VFG**. Nas cenas que testei, era mais fácil notar rastros e distorções com DLSS e XeSS em taxas de entrada baixas. Comece com **VFG Médio 2X** e teste Alto se ficar estável. Sem VFG, comece em 2X com uma opção compatível.",
+   "ru": "Для источника с 30 FPS я предпочитаю **VFG**. В моих тестах при низкой входной частоте с DLSS и XeSS чаще были видны шлейфы и искажения. Начните с **VFG 2X в среднем качестве**. Если всё плавно, попробуйте высокое. Если VFG недоступен, начните с 2X в поддерживаемом режиме."
+  },
+  {
    "zh": "30 秒",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "30 秒",
@@ -1390,6 +1442,32 @@
    "de": "60→30 behält jedes zweite Bild und überspringt Duplikate, wenn das Spiel unter 30 FPS fällt. Die automatische Entfernung erkennt und überspringt doppelte Bilder.",
    "pt-BR": "60→30 mantém um quadro a cada dois e pula os repetidos quando o jogo fica abaixo de 30 FPS. A remoção automática detecta e pula quadros duplicados.",
    "ru": "60→30 оставляет каждый второй кадр и пропускает повторы, когда частота игры падает ниже 30 FPS. Автоматическое удаление находит и пропускает повторяющиеся кадры."
+  },
+  {
+   "zh": "8 位 4:2:0。带宽省，跑高分辨率和高帧率时我优先用它。采集卡支持 4K60 NV12，也可以直接用。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "8 位元 4:2:0。省頻寬，高解析度、高幀率時我會優先用它。擷取卡支援 4K60 NV12，也可以直接用。",
+   "en": "8-bit 4:2:0. It's light on bandwidth and my first choice for high resolution and high frame rates. If your card offers 4K60 NV12, give it a try.",
+   "ja": "8 ビット 4:2:0。帯域を抑えられるので、高解像度や高フレームレートでは私の第一候補です。カードが 4K60 NV12 をサポートしているなら試してみてください。",
+   "ko": "8비트 4:2:0입니다. 대역폭을 덜 사용해서 고해상도와 높은 프레임 속도에 먼저 써 봅니다. 카드가 4K60 NV12를 지원한다면 그 모드도 좋습니다.",
+   "es": "4:2:0 de 8 bits. Ahorra ancho de banda y es mi primera opción para altas resoluciones y tasas de fotogramas. Si tu capturadora ofrece 4K60 NV12, puedes usarlo directamente.",
+   "fr": "4:2:0 sur 8 bits. Il économise de la bande passante, c’est mon premier choix à haute résolution et haute cadence. Vous pouvez essayer le 4K60 NV12 si votre carte le propose.",
+   "de": "8 Bit, 4:2:0. Das spart Bandbreite und ist meine erste Wahl für hohe Auflösungen und Bildraten. Unterstützt deine Karte 4K60 NV12, probiere den Modus gerne aus.",
+   "pt-BR": "4:2:0 de 8 bits. Consome pouca largura de banda e é minha primeira opção para resoluções e taxas de quadros altas. Se a placa tem 4K60 NV12, pode experimentar esse modo.",
+   "ru": "8 бит, 4:2:0. Требует меньше пропускной способности. Я выбираю его первым для высокого разрешения и частоты кадров. Если карта поддерживает 4K60 NV12, попробуйте этот режим."
+  },
+  {
+   "zh": "8 位 4:2:2，保留更多纵向色彩细节。卡上没有合适的 NV12 档位，或细小彩色文字确实需要 4:2:2 时，可以试它。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "8 位元 4:2:2，保留較多縱向色彩細節。擷取卡沒有合適的 NV12 模式，或細小彩色文字確實需要 4:2:2 時，可以試試。",
+   "en": "8-bit 4:2:2, with more vertical color detail. Try it if there's no suitable NV12 mode or you need 4:2:2 for fine colored text.",
+   "ja": "8 ビット 4:2:2。色の縦方向の解像度が高くなります。適した NV12 モードがなく、小さな色付き文字に 4:2:2 が必要な場合などに試せます。",
+   "ko": "8비트 4:2:2로 세로 방향 색상 세부 정보를 더 많이 유지합니다. 알맞은 NV12 모드가 없거나 작은 컬러 글씨에 4:2:2가 필요할 때 써 보세요.",
+   "es": "4:2:2 de 8 bits, con más detalle vertical de color. Pruébalo si no tienes un modo NV12 adecuado o necesitas 4:2:2 para texto pequeño en color.",
+   "fr": "4:2:2 sur 8 bits. Il conserve davantage de détails de couleur verticaux. Essayez-le si aucun mode NV12 ne convient ou si du texte coloré de petite taille demande du 4:2:2.",
+   "de": "8 Bit, 4:2:2. In vertikaler Richtung bleiben mehr Farbdetails erhalten. Probiere es, wenn kein passender NV12-Modus verfügbar ist oder du für kleine farbige Schrift 4:2:2 brauchst.",
+   "pt-BR": "4:2:2 de 8 bits, com mais detalhes de cor na vertical. Experimente se não houver um modo NV12 adequado ou se precisar de 4:2:2 para texto colorido pequeno.",
+   "ru": "8 бит, 4:2:2. Сохраняет больше цветовых деталей по вертикали. Попробуйте, если подходящего режима NV12 нет или для мелкого цветного текста нужно 4:2:2."
   },
   {
    "zh": "8 位配对码",
@@ -4499,6 +4577,32 @@
    "ru": "VFG требует NVIDIA RTX 30/40/50 (RTX 30 совместимость является экспериментальной)"
   },
   {
+   "zh": "VFG 高档在显卡跑得动时真挺丝滑，但开销很大。我用 RTX 5070 在 4K 实测，高档单次补帧约 **20 ms**，中档开销约是高档的 **1/3–1/4**。多转几次镜头，看看耗时和帧节奏，再决定哪一档适合你的显卡。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "顯示卡跑得動的話，VFG 高檔真的很滑順，但負載很高。我用 RTX 5070 在 4K 實測，高檔單次補幀約 **20 ms**，中檔約是高檔的 **1/3–1/4**。多轉幾次鏡頭，看處理時間和出幀節奏，再決定哪檔適合你的顯示卡。",
+   "en": "VFG High can look incredibly smooth and it's demanding. At 4K on my RTX 5070, a generated frame took about **20 ms** in High. Medium took around **one-third to one-quarter** as much time. Pan the camera a few times and check the timings and pacing to see which setting works on your GPU.",
+   "ja": "VFG の高設定は GPU に余裕があると本当になめらかですが、負荷は高めです。RTX 5070 で 4K を試したとき、高設定で 1 フレームの生成に約 **20 ms**、中設定はその **約 1/3～1/4** でした。カメラを何度か振って、処理時間とフレーム間隔を見て決めてください。",
+   "ko": "VFG 높음은 GPU가 감당하면 정말 부드럽지만 부담도 큽니다. RTX 5070에서 4K로 시험했을 때 높음은 생성 프레임 한 장에 약 **20 ms**, 보통은 그 **1/3~1/4** 정도였습니다. 시점을 몇 번 돌리면서 시간과 프레임 간격을 확인해 보세요.",
+   "es": "VFG Alto puede verse muy fluido y exige bastante a la GPU. A 4K con mi RTX 5070, un fotograma generado en Alto tardó unos **20 ms**. Medio costó alrededor de **un cuarto a un tercio** de ese tiempo. Gira la cámara varias veces y revisa los tiempos y el ritmo antes de decidir.",
+   "fr": "VFG Élevé peut être très fluide et demande beaucoup au GPU. Sur ma RTX 5070 à 4K, j’ai mesuré environ **20 ms** par image générée en Élevé. Moyen prenait autour d’**un quart à un tiers** de ce temps. Faites quelques rotations de caméra et regardez les temps et la régularité avant de choisir.",
+   "de": "VFG Hoch kann sehr flüssig aussehen und beansprucht die GPU stark. Auf meiner RTX 5070 dauerte bei 4K ein generiertes Bild in Hoch rund **20 ms**. Mittel brauchte etwa **ein Viertel bis ein Drittel** der Zeit. Schwenke die Kamera mehrmals und prüfe die Verarbeitungszeiten und Bildabstände.",
+   "pt-BR": "O VFG Alto pode ficar muito fluido e pesa bastante na GPU. Em 4K na minha RTX 5070, um quadro gerado em Alto levou cerca de **20 ms**. Médio levou aproximadamente **um quarto a um terço** desse tempo. Gire a câmera algumas vezes e confira os tempos e o ritmo dos quadros.",
+   "ru": "VFG в высоком качестве может быть очень плавным и сильно нагружает GPU. На моей RTX 5070 при 4K генерация одного кадра в высоком качестве занимала примерно **20 мс**, в среднем — **от четверти до трети** этого времени. Несколько раз поверните камеру и проверьте время обработки и равномерность кадров."
+  },
+  {
+   "zh": "Veyra 处理手上这张已经渲染好的画面，DLSS SR 在这里能发挥的空间有限。有 NVIDIA 显卡的话，我更推荐 **RTX 视频超分 · 标准 · 中**，画面变清楚，开销也比较好控。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "Veyra 處理的是已經渲染好的畫面，DLSS SR 在這裡能發揮的空間有限。有 NVIDIA 顯示卡的話，我更推薦 **RTX 影片超解析 · 標準 · 中**，畫面清楚，負載也比較好控制。",
+   "en": "Veyra works with a finished image, which limits what DLSS SR can do here. On an NVIDIA GPU, I reach for **RTX Video Super Resolution · Standard · Medium**. It sharpens up the picture without taking a big bite out of the GPU budget.",
+   "ja": "Veyra が扱うのはレンダリング済みの映像なので、ここでの DLSS SR の効果には限りがあります。NVIDIA GPU なら私は **RTX ビデオ超解像 · 標準 · 中** を選びます。画面がくっきりして、GPU の負荷も抑えやすいです。",
+   "ko": "Veyra는 렌더링이 끝난 화면을 받아 처리하므로 DLSS SR의 효과는 제한적입니다. NVIDIA GPU라면 **RTX 비디오 초해상도 · 표준 · 보통**을 추천합니다. 영상이 또렷해지고 GPU 부담도 비교적 적습니다.",
+   "es": "Veyra trabaja con una imagen ya renderizada, lo que limita el efecto de DLSS SR aquí. Con una GPU NVIDIA, suelo elegir **RTX Video Super Resolución · Estándar · Medio**. La imagen gana nitidez con un coste que resulta fácil de controlar.",
+   "fr": "Veyra traite une image déjà rendue et l’effet de DLSS SR est limité dans ce cas. Sur un GPU NVIDIA, je choisis plutôt **RTX Vidéo Super Résolution · Norme · Moyen**. L’image gagne en netteté et la charge reste raisonnable.",
+   "de": "Veyra verarbeitet das fertig gerenderte Bild. Dadurch ist die Wirkung von DLSS SR hier begrenzt. Auf einer NVIDIA-GPU verwende ich **RTX Video Super Auflösung · Standard · Mittel**. Das Bild wird klarer und die GPU-Last bleibt gut beherrschbar.",
+   "pt-BR": "O Veyra recebe a imagem já renderizada, então o ganho do DLSS SR aqui é limitado. Com uma GPU NVIDIA, prefiro **RTX Vídeo Super Resolução · Padrão · Médio**. A imagem fica mais nítida e a carga na GPU é mais fácil de controlar.",
+   "ru": "Veyra получает уже отрисованное изображение, поэтому эффект от DLSS SR здесь ограничен. На GPU NVIDIA я предпочитаю **RTX Video Super Resolution · Стандарт · Среднее**. Картинка становится чётче при умеренной нагрузке."
+  },
+  {
    "zh": "Veyra 已更新",
    "src": "src/ui/PortableUpdate.cpp",
    "zh-TW": "Veyra 已更新",
@@ -6280,6 +6384,19 @@
    "ru": "Временная очистка файлов не удалась (Windows ошибка {}): {}"
   },
   {
+   "zh": "为什么 30 帧游戏也采 60？60 帧采集约每 16.7 ms 取一次画面，30 帧约每 33.3 ms 取一次。新画面有机会更早被采到，实际延迟还看采集卡和驱动。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "為什麼 30 幀遊戲也擷取 60？60 幀擷取約每 16.7 ms 取一次畫面，30 幀約每 33.3 ms 取一次。新畫面有機會更早被擷取，實際延遲還得看擷取卡和驅動程式。",
+   "en": "Why capture a 30 fps game at 60? At 60 fps there's a capture opportunity about every 16.7 ms, compared with 33.3 ms at 30 fps. New frames can reach the PC sooner. The actual delay depends on your card and driver.",
+   "ja": "30 fps のゲームでも 60 fps にするのはなぜか。60 fps なら約 16.7 ms ごと、30 fps なら約 33.3 ms ごとに映像を取り込む機会が来ます。新しいフレームを早く受け取れることがあり、実際の遅延はカードとドライバーによって変わります。",
+   "ko": "30 fps 게임을 왜 60 fps로 캡처할까요? 60 fps에선 약 16.7 ms마다, 30 fps에선 약 33.3 ms마다 화면을 받을 기회가 옵니다. 새 화면을 더 일찍 받을 수 있고 실제 지연은 카드와 드라이버에 따라 달라집니다.",
+   "es": "¿Por qué capturar a 60 un juego que va a 30 FPS? A 60 FPS hay una oportunidad de capturar una imagen cada 16,7 ms, frente a 33,3 ms a 30 FPS. Las imágenes nuevas pueden llegar antes. El retardo real depende de la capturadora y el controlador.",
+   "fr": "Pourquoi passer à 60 i/s pour un jeu à 30 i/s ? La capture peut prendre une image environ toutes les 16,7 ms au lieu de 33,3 ms. Une nouvelle image peut donc arriver plus tôt. Le délai réel dépend de la carte et de son pilote.",
+   "de": "Warum 60 FPS bei einem Spiel mit 30 FPS? Bei 60 FPS lässt sich etwa alle 16,7 ms ein Bild erfassen, bei 30 FPS etwa alle 33,3 ms. Neue Bilder können somit früher ankommen. Die tatsächliche Verzögerung hängt von Karte und Treiber ab.",
+   "pt-BR": "Por que capturar a 60 FPS se o jogo roda a 30? A 60 FPS dá para pegar um quadro a cada 16,7 ms, em vez de esperar cerca de 33,3 ms. Um quadro novo pode chegar mais cedo. O atraso real depende da placa e do driver.",
+   "ru": "Зачем захватывать 60 FPS, когда в игре 30? При 60 FPS появляется возможность получить кадр примерно каждые 16,7 мс, при 30 FPS — каждые 33,3 мс. Новый кадр может прийти раньше. Реальная задержка зависит от карты и драйвера."
+  },
+  {
    "zh": "主字幕",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "主字幕",
@@ -6772,6 +6889,19 @@
    "de": "Der Gastgeber war lange Zeit nicht bereit zu streamen. Stellen Sie sicher, dass es eingeschaltet ist und das Netzwerk funktioniert.",
    "pt-BR": "O anfitrião não estava pronto para transmitir por muito tempo. Certifique-se de que está ligado e que a rede funciona.",
    "ru": "Хозяин долго не был готов к стриму. Убедитесь, что он включен и сеть работает."
+  },
+  {
+   "zh": "举个例子。游戏原帧是 `ABCDEFG`，采到的可能是 `AABBCCDDEEFFGG`。相同的两张图之间补不出新的运动。在「补帧」里选 **60→30** 或 **自动去除**，让补帧从 `A→B→C` 这样的不同画面开始。锁 30 帧可先试 60→30，帧率经常变化就对照自动去除和实际内容帧率。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "舉個例子。遊戲原幀是 `ABCDEFG`，擷取到的可能是 `AABBCCDDEEFFGG`。相同畫面之間沒有新的動作可以補。在「補幀」裡選 **60→30** 或 **自動去除**，讓補幀從 `A→B→C` 這樣不同的畫面開始。鎖 30 幀可先試 60→30，幀率常變就對照自動去除和實際內容幀率。",
+   "en": "Say the game outputs `ABCDEFG` and the card sends `AABBCCDDEEFFGG`. Two identical pictures give the interpolator no new motion to work with. In Frame Gen, choose **60→30** or **Automatic removal** so it handles distinct frames such as `A→B→C`. Start with 60→30 on a locked 30 fps game. If the rate moves around, compare Automatic removal with the game's actual frame rate.",
+   "ja": "ゲームのフレームが `ABCDEFG` なら、取り込んだ映像は `AABBCCDDEEFFGG` になることがあります。同じ映像が並ぶ区間には新しい動きがありません。「フレーム生成」で **60→30** または **自動除去** を選び、`A→B→C` のような異なるフレーム間で補間します。30 fps 固定なら 60→30 から。変動が大きいなら自動除去の結果をゲームの実際のフレームレートと比べてください。",
+   "ko": "게임 프레임이 `ABCDEFG`라면 캡처 프레임은 `AABBCCDDEEFFGG`가 될 수 있습니다. 같은 화면 두 장 사이에는 보간할 새 움직임이 없습니다. ‘프레임 생성’에서 **60→30** 또는 **자동 제거**를 선택하면 `A→B→C`처럼 서로 다른 프레임을 사용합니다. 30 fps 고정은 60→30부터 써 보고, 변동이 잦으면 자동 제거 결과를 게임의 실제 프레임 속도와 비교하세요.",
+   "es": "Imagina que el juego envía `ABCDEFG` y la captura entrega `AABBCCDDEEFFGG`. Dos imágenes idénticas no aportan movimiento nuevo. En Interpolación, elige **60→30** o **Eliminación automática** para usar fotogramas distintos como `A→B→C`. Si el juego está fijo a 30 FPS, prueba 60→30. Si la tasa fluctúa, compara la eliminación automática con la tasa real del juego.",
+   "fr": "Le jeu peut envoyer `ABCDEFG` et la carte fournir `AABBCCDDEEFFGG`. Deux images identiques ne fournissent aucun mouvement nouveau. Dans Interpolation, choisissez **60→30** ou **Suppression automatique** pour utiliser des images distinctes comme `A→B→C`. Essayez 60→30 si le jeu est verrouillé à 30 i/s. Si sa cadence varie, comparez la suppression automatique à la cadence réelle du jeu.",
+   "de": "Schickt das Spiel `ABCDEFG`, kann die Karte `AABBCCDDEEFFGG` liefern. Zwei identische Bilder liefern keine neue Bewegung. Wähle unter Zwischenbilder **60→30** oder **Automatisch entfernen**, damit verschiedene Bilder wie `A→B→C` verwendet werden. Bei festen 30 FPS probiere zuerst 60→30. Bei schwankender Bildrate vergleiche das automatische Entfernen mit der tatsächlichen Bildrate des Spiels.",
+   "pt-BR": "O jogo pode enviar `ABCDEFG` e a captura entregar `AABBCCDDEEFFGG`. Dois quadros idênticos não têm movimento novo. Em Interpolação, selecione **60→30** ou **Remoção automática** para usar quadros diferentes como `A→B→C`. Em um jogo travado a 30 FPS, comece com 60→30. Se variar muito, compare a remoção automática com a taxa de quadros real do jogo.",
+   "ru": "Допустим, игра выдаёт `ABCDEFG`, а захват — `AABBCCDDEEFFGG`. Две одинаковые картинки не содержат нового движения. В разделе «Интерполяция» выберите **60→30** или **Автоматическое удаление**, чтобы использовать разные кадры вроде `A→B→C`. При фиксированных 30 FPS начните с 60→30. Если частота скачет, сравните автоматическое удаление с фактической частотой кадров игры."
   },
   {
    "zh": "二次处理比例",
@@ -7981,6 +8111,19 @@
    "de": "Trennung vor Konfiguration des Treibers",
    "pt-BR": "Desligar a captura antes de configurar o driver",
    "ru": "Отключите захват перед настройкой драйвера"
+  },
+  {
+   "zh": "先选对采集格式",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "先選對擷取格式",
+   "en": "Pick your capture format first",
+   "ja": "まずキャプチャ形式を選ぶ",
+   "ko": "캡처 형식부터 고르기",
+   "es": "Elige primero el formato de captura",
+   "fr": "Bien choisir le format de capture",
+   "de": "Zuerst das passende Aufnahmeformat wählen",
+   "pt-BR": "Escolha primeiro o formato de captura",
+   "ru": "Сначала выберите формат захвата"
   },
   {
    "zh": "先选择一个捕获目标",
@@ -10205,6 +10348,19 @@
    "de": "Originalpixel",
    "pt-BR": "Pixels nativos",
    "ru": "Исходные пиксели"
+  },
+  {
+   "zh": "原帖里记录的大致量级，具体会随设备和采集档位变化。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "這是原文記錄的大致數值，實際數字會隨裝置和擷取模式變化。",
+   "en": "These are approximate readings from the original post. Your card and capture mode will affect the numbers.",
+   "ja": "元の投稿で記録した目安です。実際の値は機材とキャプチャモードによって変わります。",
+   "ko": "원문에서 기록한 대략적인 수치입니다. 장비와 캡처 모드에 따라 달라집니다.",
+   "es": "Son cifras aproximadas de la publicación original. Dependen del equipo y del modo de captura.",
+   "fr": "Ce sont des ordres de grandeur de la publication originale. Les résultats varient selon le matériel et le mode de capture.",
+   "de": "Das sind Richtwerte aus dem ursprünglichen Beitrag. Sie hängen vom Gerät und Aufnahmemodus ab.",
+   "pt-BR": "São valores aproximados da publicação original. O resultado muda com o equipamento e o modo de captura.",
+   "ru": "Это приблизительные значения из исходного поста. Они зависят от оборудования и режима захвата."
   },
   {
    "zh": "原样保留",
@@ -13221,6 +13377,19 @@
    "de": "Fehlgeschlagen · zum Wiederholen klicken",
    "pt-BR": "Falhou · clique para tentar de novo",
    "ru": "Ошибка · щёлкните, чтобы повторить"
+  },
+  {
+   "zh": "如何选择采集格式？",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "如何選擇擷取格式？",
+   "en": "How do I choose a capture format?",
+   "ja": "キャプチャ形式の選び方",
+   "ko": "캡처 형식은 어떻게 고르나요?",
+   "es": "¿Cómo elijo el formato de captura?",
+   "fr": "Comment choisir le format de capture ?",
+   "de": "Wie wähle ich das Aufnahmeformat?",
+   "pt-BR": "Como escolher o formato de captura?",
+   "ru": "Как выбрать формат захвата?"
   },
   {
    "zh": "如果要开启 DLSS5（NR），建议帧率设置 60，减少 DLSS5 需要处理的画面量，减轻负担",
@@ -16538,6 +16707,19 @@
    "ru": "Восстановление кадрового темпа · ожидание дублированного удаления для измерения частоты кадров"
   },
   {
+   "zh": "常见的是 RGB24，带宽更高。确实需要 RGB 或设备在该档只有 RGB 时再选。若自动去重一直报 60 帧，可以用 NV12 对照一下。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "常見的是 RGB24，頻寬需求較高。確實需要 RGB 或裝置在該模式只提供 RGB 時再選。若自動去除一直回報 60 幀，可以用 NV12 對照。",
+   "en": "Usually RGB24, with a higher bandwidth cost. Pick it when the device offers only RGB for that mode or when you specifically need RGB. If automatic removal keeps reporting 60 fps, compare it with NV12.",
+   "ja": "一般的には RGB24 で、必要な帯域は大きめです。そのモードでカードが RGB しか出せない場合や、RGB が必要な場合に選びます。自動除去が 60 fps のままなら NV12 と比較してみてください。",
+   "ko": "보통 RGB24이며 대역폭을 더 많이 사용합니다. 해당 모드에서 RGB만 지원하거나 RGB가 필요할 때 선택하세요. 자동 제거 결과가 계속 60 fps라면 NV12와 비교해 보세요.",
+   "es": "Suele ser RGB24 y consume más ancho de banda. Elígelo si necesitas RGB o si es el único formato disponible en ese modo. Si la eliminación automática sigue indicando 60 FPS, compáralo con NV12.",
+   "fr": "Généralement du RGB24, plus gourmand en bande passante. Choisissez-le si vous avez besoin de RGB ou si votre carte ne propose que ce format dans ce mode. Si la suppression automatique affiche toujours 60 i/s, comparez avec NV12.",
+   "de": "Meist RGB24, mit höherem Bandbreitenbedarf. Wähle es, wenn du RGB brauchst oder die Karte in diesem Modus nur RGB anbietet. Zeigt die automatische Entfernung weiter 60 FPS an, vergleiche mit NV12.",
+   "pt-BR": "Em geral é RGB24 e usa mais largura de banda. Escolha quando precisar de RGB ou se for a única opção nesse modo. Se a remoção automática continuar mostrando 60 FPS, compare com NV12.",
+   "ru": "Обычно это RGB24 с более высокими требованиями к пропускной способности. Используйте, когда нужен RGB или карта в этом режиме предлагает только RGB. Если автоматическое удаление повторов продолжает показывать 60 FPS, сравните с NV12."
+  },
+  {
    "zh": "平台或驱动初始化失败；请更新 NVIDIA 驱动或选择兼容运行库",
    "src": "include/veyra/engine/BackendRecovery.h",
    "zh-TW": "平台或驅動初始化失敗；請更新 NVIDIA 驅動或選擇相容執行庫",
@@ -18137,6 +18319,19 @@
    "ru": "Ожидание"
   },
   {
+   "zh": "很在意手感，我会选 **1440p60 NV12 再超分**。想兼顾预算和 HDR 观感，可以在 SDR 采集后开 **RTX 视频 HDR**。如果目标是原生 4K60 HDR 采集，我会看 PCIe 卡。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "很在意操作回應，我會選 **1440p60 NV12 再超解析**。想兼顧預算和 HDR 觀感，可以在 SDR 擷取後開 **RTX 影片 HDR**。目標是原生 4K60 HDR 擷取的話，我會看 PCIe 擷取卡。",
+   "en": "If you care most about responsiveness, I'd capture at **1440p60 NV12 and upscale**. For an HDR look on a budget, try **RTX Video HDR** after SDR capture. For native 4K60 HDR capture, I'd look at PCIe cards.",
+   "ja": "操作の反応を重視するなら、私は **1440p60 NV12 で取り込んでから超解像** を使います。予算を抑えて HDR らしい見た目にするなら、SDR キャプチャ後に **RTX Video HDR** を試してください。ネイティブ 4K60 HDR を取り込むなら PCIe カードを検討します。",
+   "ko": "조작 반응이 중요하면 **1440p60 NV12로 캡처한 뒤 초해상도**를 적용합니다. 비용을 아끼면서 HDR 느낌을 원한다면 SDR 캡처에 **RTX Video HDR**을 써 보세요. 네이티브 4K60 HDR 캡처가 목표라면 PCIe 카드를 살펴봅니다.",
+   "es": "Si lo más importante es la respuesta, capturaría en **1440p60 NV12 y luego reescalaría**. Si buscas un aspecto HDR sin gastar mucho, prueba **RTX Video HDR** tras una captura SDR. Para capturar 4K60 HDR nativo, miraría una tarjeta PCIe.",
+   "fr": "Si la réactivité est prioritaire, je choisis **1440p60 NV12 puis la super-résolution**. Pour retrouver un rendu HDR à moindre coût, essayez **RTX Video HDR** après la capture SDR. Pour capturer du HDR natif en 4K60, je regarderais les cartes PCIe.",
+   "de": "Wenn mir direkte Reaktion am wichtigsten ist, wähle ich **1440p60 NV12 und skaliere danach hoch**. Für einen HDR-Look mit kleinerem Budget kannst du nach der SDR-Aufnahme **RTX Video HDR** probieren. Für natives 4K60 HDR würde ich nach einer PCIe-Karte suchen.",
+   "pt-BR": "Se a prioridade é a resposta aos comandos, eu escolho **1440p60 NV12 com super-resolução depois**. Para um visual HDR gastando menos, tente **RTX Video HDR** após a captura em SDR. Para capturar 4K60 HDR nativo, eu olharia as placas PCIe.",
+   "ru": "Если важнее всего отзывчивость, я выбираю **захват в 1440p60 NV12 с последующим масштабированием**. Для эффекта HDR при меньших затратах попробуйте **RTX Video HDR** после захвата SDR. Для исходного 4K60 HDR я бы смотрел на карты PCIe."
+  },
+  {
    "zh": "微信扫码",
    "src": "qml/SponsorPanel.qml",
    "zh-TW": "微信掃碼",
@@ -18319,6 +18514,58 @@
    "ru": "Вернуть по умолчанию"
   },
   {
+   "zh": "想要 4K60 HDR，可以看这些卡",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "想要 4K60 HDR，可以看這幾張卡",
+   "en": "For 4K60 HDR, I'd look at these cards",
+   "ja": "4K60 HDR なら、例えばこのカードです",
+   "ko": "4K60 HDR이 필요하면 이 카드들을 살펴보세요",
+   "es": "Para 4K60 HDR, puedes mirar estas tarjetas",
+   "fr": "Pour du 4K60 HDR, regardez par exemple ces modèles",
+   "de": "Für 4K60 HDR kämen zum Beispiel diese Karten infrage",
+   "pt-BR": "Para 4K60 HDR, veja estes modelos",
+   "ru": "Для 4K60 HDR можно посмотреть на эти карты"
+  },
+  {
+   "zh": "我主要看 1440p60、4K30 的 SDR 档位。原帖举例",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "我主要看 1440p60、4K30 的 SDR 模式。原文舉例",
+   "en": "I mainly look at 1440p60 and 4K30 SDR modes. Examples from the post",
+   "ja": "主に 1440p60 と 4K30 の SDR モードを見ます。元の投稿の例",
+   "ko": "주로 1440p60과 4K30 SDR 모드를 봅니다. 원문에 나온 예시",
+   "es": "Suelo buscar modos SDR a 1440p60 y 4K30. Ejemplos de la publicación",
+   "fr": "Je vérifie surtout le 1440p60 et le 4K30 en SDR. Exemples de la publication",
+   "de": "Ich achte vor allem auf 1440p60 und 4K30 in SDR. Beispiele aus dem Beitrag",
+   "pt-BR": "Eu olho principalmente os modos SDR de 1440p60 e 4K30. Exemplos do post",
+   "ru": "В первую очередь смотрю режимы 1440p60 и 4K30 в SDR. Примеры из поста"
+  },
+  {
+   "zh": "我是 Veyra 的开发者。玩 GTA 6 这类 30 帧主机游戏，我会用下面这套设置。感谢大家一直在用，也把各种设备的实际效果告诉我。如果你之前用 OBS 或 PotPlayer 预览觉得有延迟，可以拿同一张卡、同一个档位在 Veyra 里试一下。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "我是 Veyra 的開發者。玩 GTA 6 這類 30 幀主機遊戲，我會用下面這套設定。謝謝大家一直使用，也回報各種裝置的實際效果。如果你用 OBS 或 PotPlayer 預覽時覺得有延遲，可以拿同一張卡、同一個模式在 Veyra 裡試試。",
+   "en": "I develop Veyra. Here's what I'd use for GTA 6 or another console game running at 30 fps. Thanks for using it and telling me how it runs on your gear. If previewing in OBS or PotPlayer felt laggy, try the same card and capture mode in Veyra.",
+   "ja": "Veyra の開発者です。GTA 6 のような 30 fps の家庭用ゲームなら、私はこの設定で遊びます。使ってくれて、いろいろな機材での結果を教えてくれてありがとう。OBS や PotPlayer のプレビューで遅延が気になったら、同じカードとモードで Veyra を試してみてください。",
+   "ko": "Veyra를 만든 개발자입니다. GTA 6처럼 30 fps로 돌아가는 콘솔 게임에는 아래 설정을 씁니다. 사용해 주시고 여러 장비에서 어떤지 알려 주셔서 감사합니다. OBS나 PotPlayer의 미리보기가 느리게 느껴졌다면 같은 카드와 캡처 모드를 Veyra에서 써 보세요.",
+   "es": "Soy el desarrollador de Veyra. Estos son los ajustes que usaría en GTA 6 u otro juego de consola a 30 FPS. Gracias por usarlo y contarme cómo va con vuestros equipos. Si la vista previa de OBS o PotPlayer te parecía lenta, compara con la misma capturadora y el mismo modo en Veyra.",
+   "fr": "Je développe Veyra. Voici les réglages que j’utiliserais pour GTA 6 ou un autre jeu sur console à 30 i/s. Merci de l’utiliser et de partager vos résultats avec différents matériels. Si l’aperçu d’OBS ou de PotPlayer vous paraissait lent, essayez la même carte et le même mode dans Veyra.",
+   "de": "Ich entwickle Veyra. Für GTA 6 und andere Konsolenspiele bei 30 FPS würde ich diese Einstellungen verwenden. Danke, dass ihr es nutzt und von euren Erfahrungen mit unterschiedlicher Hardware berichtet. Wenn sich die Vorschau in OBS oder PotPlayer verzögert angefühlt hat, probiere dieselbe Karte im selben Modus in Veyra.",
+   "pt-BR": "Sou o desenvolvedor do Veyra. Estas são as configurações que eu usaria para GTA 6 ou outro jogo de console a 30 FPS. Valeu por usar o programa e compartilhar os resultados no equipamento de vocês. Se a prévia do OBS ou do PotPlayer parecia atrasada, experimente o Veyra com a mesma placa e o mesmo modo.",
+   "ru": "Я разработчик Veyra. Для GTA 6 и других консольных игр с 30 FPS я бы использовал эти настройки. Спасибо, что пользуетесь программой и делитесь результатами на разном оборудовании. Если предпросмотр в OBS или PotPlayer казался медленным, попробуйте ту же карту и тот же режим в Veyra."
+  },
+  {
+   "zh": "我测过的同规格卡，延迟差通常在 5 ms 左右以内。先看你的分辨率、帧率和色彩模式能不能跑稳，再选牌子。祝你玩得开心！",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "我測過的同規格擷取卡，延遲差異通常在約 5 ms 以內。先看解析度、幀率和色彩模式能否穩定，再選品牌。玩得開心！",
+   "en": "Comparable cards in my tests were usually within about 5 ms of each other. Pick one that handles your resolution, frame rate and color mode reliably. Enjoy your games!",
+   "ja": "同等仕様のカードを試した際、遅延差はおおむね 5 ms 以内でした。使いたい解像度、フレームレート、色モードで安定してから、好みのメーカーを選んでください。ゲームを楽しんで！",
+   "ko": "제가 테스트한 비슷한 사양의 카드들은 보통 지연 차이가 약 5 ms 이내였습니다. 원하는 해상도, 프레임 속도, 색상 모드가 안정적인지 먼저 확인하고 브랜드를 고르세요. 즐겁게 플레이하세요!",
+   "es": "En mis pruebas, las tarjetas equivalentes solían quedar a unos 5 ms unas de otras. Comprueba que la resolución, la tasa de fotogramas y el modo de color que quieres sean estables. Después elige la marca. ¡Que disfrutes jugando!",
+   "fr": "Lors de mes essais, les cartes comparables avaient en général moins d’environ 5 ms d’écart. Vérifiez que la résolution, la cadence et le mode couleur qui vous intéressent sont stables, puis choisissez la marque. Bon jeu !",
+   "de": "Bei vergleichbaren Karten lag der Unterschied in meinen Tests meist bei höchstens rund 5 ms. Prüfe zuerst, ob deine Auflösung, Bildrate und der Farbmodus stabil laufen. Entscheide dich danach für eine Marke. Viel Spaß beim Spielen!",
+   "pt-BR": "Nos meus testes, placas comparáveis geralmente ficaram a cerca de 5 ms umas das outras. Confira se a resolução, a taxa de quadros e o modo de cor que você quer funcionam bem. Depois escolha a marca. Bom jogo!",
+   "ru": "При сравнении похожих карт разница в задержке у меня обычно была в пределах примерно 5 мс. Сначала проверьте, что нужные разрешение, частота и режим цвета работают стабильно, затем выбирайте марку. Приятной игры!"
+  },
+  {
    "zh": "我的屏能到多少 nit；0 = 自动",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "我的屏能到多少 nit；0 = 自動",
@@ -18330,6 +18577,32 @@
    "de": "Anzeigespitze in nits; 0 = automatisch",
    "pt-BR": "Mostrar o pico em nits; 0 = automático",
    "ru": "Пик отображения в nits; 0 = автоматический"
+  },
+  {
+   "zh": "我的采集延迟实测",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "我的擷取延遲實測",
+   "en": "Capture latency from my tests",
+   "ja": "キャプチャ遅延の実測値",
+   "ko": "제가 측정한 캡처 지연",
+   "es": "Latencia de captura en mis pruebas",
+   "fr": "Le délai de capture dans mes essais",
+   "de": "Aufnahmeverzögerung in meinen Tests",
+   "pt-BR": "Atraso de captura nos meus testes",
+   "ru": "Задержка захвата в моих тестах"
+  },
+  {
+   "zh": "我选卡先看它能把哪种画面采进电脑。同一张卡的 HDMI 直通规格和实际采集规格分开看。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "我先看擷取卡能把哪種畫面送進電腦。同一張卡的 HDMI 直通和實際擷取規格要分開看。",
+   "en": "Check what the card can deliver to the PC. HDMI passthrough and capture have separate specifications.",
+   "ja": "PC にどんな映像を取り込めるかを先に確認します。HDMI パススルーとキャプチャの仕様は個別に見てください。",
+   "ko": "카드가 PC로 어떤 영상을 넘길 수 있는지 먼저 봅니다. 같은 카드라도 HDMI 패스스루와 캡처 사양은 따로 확인하세요.",
+   "es": "Primero miro qué señal puede llevar al PC. Comprueba por separado las especificaciones del paso HDMI y las de captura.",
+   "fr": "Je commence par vérifier ce que la carte peut envoyer au PC. Regardez séparément ses caractéristiques de passthrough HDMI et de capture.",
+   "de": "Ich prüfe zuerst, in welchen Formaten die Karte tatsächlich Bilder an den PC liefert. Die Angaben für HDMI-Passthrough und Aufnahme stehen getrennt.",
+   "pt-BR": "Primeiro vejo o que a placa consegue enviar para o computador. Confira as especificações de passagem HDMI e de captura separadamente.",
+   "ru": "Сначала смотрю, какое изображение карта может передать на компьютер. Характеристики сквозного HDMI и захвата нужно смотреть отдельно."
   },
   {
    "zh": "截图",
@@ -22257,6 +22530,19 @@
    "de": "Normal",
    "pt-BR": "Normal",
    "ru": "Обычный"
+  },
+  {
+   "zh": "普通 SDR 游戏，我会先试 **1440p60 · NV12 · SDR · 709**。1080p 屏就从 1080p60 开始。先确认基础画面和帧率稳定，再开补帧和超分。",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "一般 SDR 遊戲，我會先試 **1440p60 · NV12 · SDR · 709**。1080p 螢幕就從 1080p60 開始。先確認基本畫面和幀率穩定，再開補幀和超解析。",
+   "en": "For a regular SDR game, I start with **1440p60 · NV12 · SDR · 709**. On a 1080p display, start at 1080p60. Check that the raw picture and capture rate are stable, then turn on frame generation and super resolution.",
+   "ja": "一般的な SDR ゲームなら、私は **1440p60 · NV12 · SDR · 709** から試します。1080p の画面なら 1080p60 から。まず映像とキャプチャのフレームレートが安定していることを確認し、その後でフレーム生成と超解像を有効にします。",
+   "ko": "일반 SDR 게임이라면 **1440p60 · NV12 · SDR · 709**부터 써 봅니다. 1080p 화면이라면 1080p60으로 시작하세요. 원본 화면과 캡처 프레임 속도가 안정적인지 확인한 뒤 프레임 생성과 초해상도를 켜세요.",
+   "es": "Para un juego SDR, empezaría con **1440p60 · NV12 · SDR · 709**. Si tu pantalla es 1080p, empieza a 1080p60. Comprueba que la imagen y la tasa de captura sean estables antes de activar la interpolación y la superresolución.",
+   "fr": "Pour un jeu SDR, je commence par **1440p60 · NV12 · SDR · 709**. Sur un écran 1080p, essayez d’abord 1080p60. Vérifiez que l’image et la cadence de capture sont stables, puis activez l’interpolation et la super-résolution.",
+   "de": "Bei einem SDR-Spiel fange ich mit **1440p60 · NV12 · SDR · 709** an. Auf einem 1080p-Bildschirm starte mit 1080p60. Prüfe, ob Bild und Aufnahmerate stabil sind, und schalte danach Zwischenbilder und Hochskalierung ein.",
+   "pt-BR": "Para jogos SDR, eu começo com **1440p60 · NV12 · SDR · 709**. Em uma tela 1080p, comece por 1080p60. Confira se a imagem e os quadros da captura estão estáveis e só então ative a interpolação e a super-resolução.",
+   "ru": "Для обычной SDR-игры я начинаю с **1440p60 · NV12 · SDR · 709**. На экране 1080p начните с 1080p60. Убедитесь, что изображение и частота захвата стабильны, и затем включайте интерполяцию и масштабирование."
   },
   {
    "zh": "暂不支持此字幕格式",
@@ -27394,6 +27680,19 @@
    "ru": "относительно размера лица; отрицательный уменьшает его"
   },
   {
+   "zh": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原帖举例",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原文舉例",
+   "en": "Look for 4K60 NV12, 1440p60 HDR or 4K30 HDR. Examples from the post",
+   "ja": "4K60 NV12、1440p60 HDR、4K30 HDR が目安です。元の投稿の例",
+   "ko": "4K60 NV12, 1440p60 HDR 또는 4K30 HDR을 확인하세요. 원문에 나온 예시",
+   "es": "Busca 4K60 NV12, 1440p60 HDR o 4K30 HDR. Ejemplos de la publicación",
+   "fr": "Cherchez 4K60 NV12, 1440p60 HDR ou 4K30 HDR. Exemples de la publication",
+   "de": "Achte auf 4K60 NV12, 1440p60 HDR oder 4K30 HDR. Beispiele aus dem Beitrag",
+   "pt-BR": "Procure 4K60 NV12, 1440p60 HDR ou 4K30 HDR. Exemplos do post",
+   "ru": "Ищите 4K60 NV12, 1440p60 HDR или 4K30 HDR. Примеры из поста"
+  },
+  {
    "zh": "睡眠（可唤醒）",
    "src": "src/ui/XboxModel.cpp",
    "zh-TW": "睡眠（可喚醒）",
@@ -31112,6 +31411,19 @@
    "ru": "Генерация кадров на паузе"
   },
   {
+   "zh": "补帧模型和档位怎么挑",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "補幀模型和畫質怎麼選",
+   "en": "Picking a frame generation model and quality",
+   "ja": "フレーム生成のモデルと品質の選び方",
+   "ko": "프레임 생성 모델과 품질 고르기",
+   "es": "Cómo elegir el modelo y la calidad de interpolación",
+   "fr": "Choisir le modèle et la qualité d’interpolation",
+   "de": "Modell und Qualitätsstufe für Zwischenbilder wählen",
+   "pt-BR": "Como escolher o modelo e a qualidade da interpolação",
+   "ru": "Как выбрать модель и качество интерполяции"
+  },
+  {
    "zh": "补帧节点固定在输出前，禁用时也不能移到链路中间",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "補幀節點固定在輸出前，停用時也不能移到鏈路中間",
@@ -33151,6 +33463,19 @@
    "de": "Bewegungsquelle der Superauflösung",
    "pt-BR": "Fonte de movimento da super-resolução",
    "ru": "Источник движения для суперразрешения"
+  },
+  {
+   "zh": "超分，我常用这一档",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "我常用的超解析設定",
+   "en": "The super resolution setting I use",
+   "ja": "私がよく使う超解像設定",
+   "ko": "제가 주로 쓰는 초해상도 설정",
+   "es": "El ajuste de superresolución que suelo usar",
+   "fr": "Mon réglage de super-résolution habituel",
+   "de": "Meine übliche Einstellung fürs Hochskalieren",
+   "pt-BR": "A configuração de super-resolução que eu uso",
+   "ru": "Мои настройки масштабирования"
   },
   {
    "zh": "超过上限的亮度需要压缩；是否触及硬上限以抽样读数为准",
@@ -35675,6 +36000,19 @@
    "ru": "Захват карты вверх по течению входного соединения не удался (0x {:08X}). Проверьте драйвера и выбранный вход."
   },
   {
+   "zh": "采集卡怎么挑",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "擷取卡怎麼挑",
+   "en": "Picking a capture card",
+   "ja": "キャプチャカードの選び方",
+   "ko": "캡처 카드 고르기",
+   "es": "Cómo elegir una capturadora",
+   "fr": "Choisir sa carte de capture",
+   "de": "Auswahl der Aufnahmekarte",
+   "pt-BR": "Como escolher a placa de captura",
+   "ru": "Как выбрать карту захвата"
+  },
+  {
    "zh": "采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "擷取卡無法連接所選壓縮格式（0x{:08X}），請重新選擇。",
@@ -35829,6 +36167,19 @@
    "de": "Aufnahmemethode",
    "pt-BR": "Método de captura",
    "ru": "Способ захвата"
+  },
+  {
+   "zh": "采集格式与补帧指南",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "擷取格式與補幀指南",
+   "en": "Capture format and frame generation guide",
+   "ja": "キャプチャ形式とフレーム生成ガイド",
+   "ko": "캡처 형식 및 프레임 생성 가이드",
+   "es": "Guía de formatos de captura e interpolación",
+   "fr": "Guide des formats de capture et de l’interpolation",
+   "de": "Leitfaden für Aufnahmeformate und Zwischenbilder",
+   "pt-BR": "Guia de formatos de captura e interpolação",
+   "ru": "Руководство по форматам захвата и интерполяции"
   },
   {
    "zh": "采集格式内存分配失败",
@@ -36349,6 +36700,19 @@
    "de": "Lange Zeit kein vollständiges Bild. Das Netzwerk ist sehr instabil oder die Bitrate ist zu hoch eingestellt.",
    "pt-BR": "Nenhum quadro completo por muito tempo. A rede é muito instável, ou a taxa de bits é muito alta.",
    "ru": "Долгое время не было полной картины. Сеть очень нестабильна, или битрейт установлен слишком высоко."
+  },
+  {
+   "zh": "阅读 Reddit 原帖",
+   "src": "qml/CaptureGuideDialog.qml",
+   "zh-TW": "閱讀 Reddit 原文",
+   "en": "Read the Reddit post",
+   "ja": "Reddit の元の投稿を読む",
+   "ko": "Reddit 원문 읽기",
+   "es": "Leer la publicación original de Reddit",
+   "fr": "Lire la publication originale sur Reddit",
+   "de": "Originalbeitrag auf Reddit lesen",
+   "pt-BR": "Ler a publicação original no Reddit",
+   "ru": "Читать исходный пост на Reddit"
   },
   {
    "zh": "阈值 %1",

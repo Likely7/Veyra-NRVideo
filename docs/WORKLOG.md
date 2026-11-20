@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-19 采集格式与补帧帮助
+
+在「采集卡」弹窗预览之前加入「如何选择采集格式？」。独立文档弹窗离线可读、可滚动，保留采集页选择。顶部先写 NV12、YUY2、RGB、P010 的区别与设置步骤。主机确实送 HDR10 时选择 P010 和 HDR · PQ，指南的三种 SDR 格式用 SDR · 709。
+
+按[用户原帖](https://www.reddit.com/r/GTA6unmoderated/comments/1xy9xff/how_to_properly_use_frame_generation_for_gta_6/)保留 30 帧游戏以 60 帧采集的示例、去重、VFG 档位、超分、三组原帖延迟数据和三类采集卡推荐。原帖延迟作为作者的实测参考，采集规格与直通分开核对。中文源文与九种翻译使用现有词库。
+
+用已安装的 Qt 6.8.3 `qmltestrunner.exe -input <任务 tmp/guide-qmltests> -import <main/qml>` 在 offscreen 软件后端验证。两个用例覆盖实际采集页顶部按钮、设备查询期间可用、弹窗正文顺序、翻页及 Esc、关闭后设置不变、再次打开回顶。6 条通过记录中包含测试初始化与清理，原始结果在 `E:/项目/Veyra/logs/codex-2.2.0-integrated-20261119/capture-guide-qa.log`。另运行 `qmlformat` 语法检查和 `scripts/i18n/extract.py --check`，没有构建、打包或发布软件。
+
 ## 2026-11-19 2.2.0 分支合并至本地 main
 
 以原本地 main `af5ec15e` 和上次手测源码 `74e9bf3b` 为基础。合入 Claude 接手整合 `2be802ee`、美乐威 `1edaa7e2` 与便携签名更新 `3b5b34e8`，保留来源祖先。录制设置与桥接同时保留分段和 NVENC 两遍/AQ。按现有主线保留通用网络播放及 Dolby Vision，B 站站点模块继续移除。补齐五种新增语言的 34 条裁切、时移、录制、耗时和更新提示。

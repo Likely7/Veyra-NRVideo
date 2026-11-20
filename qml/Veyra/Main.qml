@@ -791,7 +791,7 @@ Window {
     // In 游戏模式 Esc closes the adjust panel and gives the input back to the game.
     Shortcut {
         sequence: "Esc"
-        enabled: root.fullscreen && !screenCrop.editing && !maskInput.moving
+        enabled: root.fullscreen && !screenCrop.editing && !maskInput.moving && !dialogs.captureGuideOpen
         onActivated: {
             // Visible editing operations own the first Escape. Hidden pages and
             // the hidden playlist must never compete with fullscreen's shortcut.
@@ -814,8 +814,8 @@ Window {
     // 5 s steps (field request 2026-10-02).
     Shortcut { sequence: "Left"; onActivated: veyra.seekBy(-5) }
     Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
-    Shortcut { sequence: "Up"; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
-    Shortcut { sequence: "Down"; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
+    Shortcut { sequence: "Up"; enabled: !dialogs.captureGuideOpen; onActivated: veyra.volume = Math.min(veyra.maximumVolume, veyra.volume + 0.05) }
+    Shortcut { sequence: "Down"; enabled: !dialogs.captureGuideOpen; onActivated: veyra.volume = Math.max(0, veyra.volume - 0.05) }
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
     Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }
     Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }

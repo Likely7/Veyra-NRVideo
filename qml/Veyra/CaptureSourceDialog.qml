@@ -5,6 +5,7 @@ import QtQuick.Layouts
 
 DialogLayer {
     required property var legacyPicker
+    signal guideRequested()
     id: captureDialog
     objectName: "capture-dialog"
     key: "capture"
@@ -54,6 +55,14 @@ DialogLayer {
         case "recovering": case "failed": case "nopair": return pc.message || ""
         default: return qsTr("采集卡连上后自动连接 PS5")
         }
+    }
+
+    VButton {
+        objectName: "capture-guide-open"
+        Layout.alignment: Qt.AlignLeft
+        Layout.bottomMargin: 4
+        text: qsTr("如何选择采集格式？")
+        onClicked: captureDialog.guideRequested()
     }
 
     // dialogs.js .cap-prev: the picture and a signal line under it. The

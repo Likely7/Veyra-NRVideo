@@ -12,7 +12,13 @@ Item {
 
     // Active dialog: network/capture/ps5/moonlight/xbox/screen/subtitle/audio/save/manage.
     property string dialog: ""
-    onDialogChanged: if (dialog !== "capture") legacyCapturePicker.close()
+    readonly property bool captureGuideOpen: captureGuide.visible
+    onDialogChanged: {
+        if (dialog !== "capture") {
+            legacyCapturePicker.close()
+            captureGuide.close()
+        }
+    }
 
     function open(key) {
         if (key === "save") saveDialog.resetForOpen()
@@ -31,6 +37,8 @@ Item {
     signal startXbox()
     signal startScreen()
     signal startScreenCrop()
+
+    CaptureGuideDialog { id: captureGuide }
 
     CaptureLegacyPicker {
         id: legacyCapturePicker
@@ -73,6 +81,7 @@ Item {
         id: captureDialog
         dialogHost: host
         legacyPicker: legacyCapturePicker
+        onGuideRequested: captureGuide.open()
     }
 
     // --- PS5 串流 ---------------------------------------------------------
