@@ -131,6 +131,11 @@ target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
 veyra_apply_warnings(veyra_logger_tests)
 
+add_executable(veyra_export_timeline_tests tests/unit/ExportTimelineTests.cpp)
+target_compile_features(veyra_export_timeline_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_export_timeline_tests PRIVATE veyra_base)
+veyra_apply_warnings(veyra_export_timeline_tests)
+
 add_library(veyra_gfx STATIC
   src/gfx/GpuSchedulingPriority.cpp
   src/gfx/NvidiaVrrProfile.cpp
