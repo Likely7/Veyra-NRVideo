@@ -84,6 +84,7 @@ private:
     QTimer saveTimer_;
     int pending_ = 0, sort_ = Manual;
     bool autoAdvance_ = true;
+    bool unreadable_ = false;   // the stored list was not loaded; never overwrite it with this one
     std::atomic<uint64_t> generation_{1};
     std::mutex mutex_;
     std::condition_variable_any wake_;

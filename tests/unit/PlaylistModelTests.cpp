@@ -111,6 +111,9 @@ int main(int argc, char** argv) {
     check(absent.count() == 1 && !absent.play(0) && !error.isEmpty(), "missing media is explicit, retained, and never played");
     QFile damaged(root + "/bad.json"); damaged.open(QIODevice::WriteOnly); damaged.write("{broken"); damaged.close();
     PlaylistModel invalid(root + "/bad.json"); check(invalid.count() == 0 && !invalid.status().isEmpty(), "invalid JSON handled");
+    check(!invalid.save(), "a playlist that did not load is never overwritten");
+    QFile kept(root + "/bad.json"); kept.open(QIODevice::ReadOnly);
+    check(kept.readAll() == "{broken", "the unreadable playlist file keeps its bytes");
     model.clear(); check(model.count() == 0 && !model.busy(), "clear leaves no list or scan state");
     model.addPaths({folder}); model.clear(); model.addPaths({root + "/other"});
     check(wait([&] { return !model.busy(); }) && model.count() == 1 && name(model, 0) == "extra.mp4", "clear cancels stale queued scan results");

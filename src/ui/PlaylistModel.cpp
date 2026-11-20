@@ -284,6 +284,7 @@ void PlaylistModel::sortBy(int mode) {
 bool PlaylistModel::save() {
     saveTimer_.stop();
     if (storage_.isEmpty()) return true;
+    if (unreadable_) return false;   // status_ already tells the user the file was not loaded
     QJsonArray array;
     for (const auto& entry : entries_) array.append(QJsonObject{{"path", entry.path}, {"size", double(entry.size)}, {"modified", double(entry.modified)}});
     QSaveFile file(storage_);
@@ -298,13 +299,13 @@ void PlaylistModel::load() {
     QFile file(storage_);
     if (!file.exists()) return;
     if (!file.open(QIODevice::ReadOnly) || file.size() > 16 * 1024 * 1024) {
-        status_ = tr("播放列表文件无法读取，已使用空列表"); return;
+        unreadable_ = true; status_ = tr("播放列表文件无法读取，已使用空列表"); return;
     }
     QJsonParseError error;
     const auto doc = QJsonDocument::fromJson(file.readAll(), &error);
     const auto object = doc.object();
     if (error.error != QJsonParseError::NoError || object.value("version").toInt() != 1 || !object.value("entries").isArray()) {
-        status_ = tr("播放列表文件损坏，已使用空列表"); return;
+        unreadable_ = true; status_ = tr("播放列表文件损坏，已使用空列表"); return;
     }
     sort_ = std::clamp(object.value("sort").toInt(), int(Manual), int(SmallestFirst));
     autoAdvance_ = object.value("autoAdvance").toBool(true);
