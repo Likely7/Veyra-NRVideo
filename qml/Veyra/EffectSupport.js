@@ -13,3 +13,10 @@ function option(api, id, label, key) {
     var cap = (api.effectCapabilities || {})[key] || {available: true, reason: ""}
     return {id: id, label: label, disabled: !cap.available, note: cap.reason}
 }
+
+function fgBackendShortLabel(option) {
+    if (!option) return ""
+    if (option.id === "vfg") return "NVIDIA VFG 👑"
+    if (option.id === "anr") return "ANR FG"
+    return option.label || ""
+}

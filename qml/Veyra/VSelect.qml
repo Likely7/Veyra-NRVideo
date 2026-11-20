@@ -4,6 +4,7 @@ import QtQuick.Layouts
 Rectangle {
     id: sel
     property string value: ""
+    property string displayValue: value
     readonly property var selectedOption: options.find(o => o.label === value) || ({})
     readonly property color valueColor: selectedOption.danger === true ? Theme.err
                                        : selectedOption.gold === true ? Theme.warn : Theme.t1
@@ -29,7 +30,7 @@ Rectangle {
             id: valueLabel
             Layout.fillWidth: true
             Layout.minimumWidth: 0
-            text: sel.value
+            text: sel.displayValue
             color: sel.valueColor
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsBody
@@ -39,7 +40,7 @@ Rectangle {
         VIcon { name: "down"; size: 14; color: Theme.t3 }
     }
 
-    ToolTip.visible: hover.hovered && valueLabel.truncated
+    ToolTip.visible: hover.hovered && (sel.displayValue !== sel.value || valueLabel.truncated)
     ToolTip.delay: 500
     ToolTip.text: sel.value
 

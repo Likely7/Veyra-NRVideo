@@ -795,7 +795,9 @@ VPage {
             Layout.fillWidth: true
             Layout.fillHeight: true
             Layout.minimumWidth: 192
-            Layout.preferredWidth: 1.05
+            // Use pixel widths in the same range as the minimum. A ratio
+            // below the minimum is clamped and would squeeze the other cards.
+            Layout.preferredWidth: 210
             radius: Theme.rCard
             color: Theme.card
             border.width: 1
@@ -906,7 +908,7 @@ VPage {
             clip: true
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.preferredWidth: 1.5
+            Layout.preferredWidth: 300
             radius: Theme.rCard
             color: Theme.card
             border.width: 1
@@ -1023,7 +1025,7 @@ VPage {
             readonly property bool wide: width >= 380
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.preferredWidth: 1.15
+            Layout.preferredWidth: 230
             radius: Theme.rCard
             color: Theme.card
             border.width: 1
@@ -1763,13 +1765,14 @@ VPage {
                         VAccordion {
                             id: fgCard
                             objectName: "list-fg-card"
+                            readonly property var backendOption: veyra.fgBackendChoices.find(o => o.id === veyra.fgBackendName)
                             instantExpansion: root.onboardingActive
                             Layout.fillWidth: true
                             glyph: "layers"
                             hue: "#3DDC84"
                             title: qsTr("补帧")
                             summary: qsTr("始终在所有画质效果之后") + (veyra.fgEnabled
-                                     ? " · " + veyra.fgMultiplier + "X " + (veyra.fgBackendChoices.find(o => o.id === veyra.fgBackendName) || {}).label
+                                     ? " · " + veyra.fgMultiplier + "X " + Support.fgBackendShortLabel(backendOption)
                                      : qsTr(" · 已关闭"))
                             switchObjectName: "list-fg-enabled"
                             switchAvailable: Support.available(veyra, "frame-generation")
@@ -1784,8 +1787,8 @@ VPage {
                                     id: fgBackendSelect
                                     objectName: "list-fg-backend"
                                     options: veyra.fgBackendChoices
-                                    // The label of the chosen backend, not its id.
-                                    value: (options.find(o => o.id === veyra.fgBackendName) || options[0]).label
+                                    value: (fgCard.backendOption || options[0] || {}).label || ""
+                                    displayValue: Support.fgBackendShortLabel(selectedOption) || value
                                     onPicked: id => veyra.fgBackendName = id
                                 }
                             }

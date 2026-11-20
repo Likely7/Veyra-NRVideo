@@ -1619,7 +1619,8 @@ VPage {
                     VSelect {
                         objectName: "node-fg-backend"
                         options: veyra.fgBackendChoices
-                        value: (options.find(o => o.id === veyra.fgBackendName) || options[0]).label
+                        value: (options.find(o => o.id === veyra.fgBackendName) || options[0] || {}).label || ""
+                        displayValue: Support.fgBackendShortLabel(selectedOption) || value
                         onPicked: id => veyra.fgBackendName = id
                     }
                 }
