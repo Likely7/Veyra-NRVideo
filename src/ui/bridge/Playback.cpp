@@ -1,5 +1,6 @@
 // QML bridge: Playback responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "../LiveTranslation.h"
 
 #include <regex>
 #include "veyra/pipeline/NrReuse.h"
@@ -397,6 +398,7 @@ void QmlPlayerBridge::stopPlayback() {
 }
 void QmlPlayerBridge::seekTo(double seconds) {
     if(!timelineSeekable())return;
+    liveTranslation_->setPlayback(impl_->snapshot.sessionId, false, true);
     impl_->engine.seek(seconds);
 }
 void QmlPlayerBridge::seekBy(double seconds) {

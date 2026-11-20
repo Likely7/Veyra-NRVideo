@@ -1,5 +1,18 @@
 # Third-party dependencies
 
+## Live subtitle translation (2026-11-20)
+
+Veyra's native subtitle translation adapts the Live Captions integration and
+translation workflow proposed by jjjxxxttt in [PR #203](https://github.com/Likely7/Veyra-NRVideo/pull/203)
+at `fb08b6cd87afcc2942eca2201958da4fbabfabaf` under the project's GPL-3.0 license.
+Windows speech recognition comes from Windows Live Captions.
+
+The optional in-app downloads are [llama.cpp b12240 Windows x64 CPU](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
+(MIT and the included LLVM OpenMP license) and [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/tree/91cad51170dc346986eccefdc2dd33a9da36ead9)
+(Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
+`src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
+data directory and are independent of the application installer.
+
 ## PushFPS frame generation and recording features (2026-11-19)
 
 The Spanish, French, German, Brazilian Portuguese and Russian columns of

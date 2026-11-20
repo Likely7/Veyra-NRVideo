@@ -1,5 +1,6 @@
 // QML bridge: Core responsibilities.
 #include "QmlPlayerBridge_p.h"
+#include "LiveTranslation.h"
 #include "veyra/sink/AudioGain.h"
 #include "veyra/engine/MicrophoneCapture.h"
 #include "veyra/ui/NvidiaVrrProfileController.h"
@@ -59,7 +60,9 @@ namespace {bool prepareStartupPreset(const engine::PresetEntry& entry, engine::C
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    liveTranslation_ = new LiveTranslation(QString::fromStdWString(impl_->dataDir.wstring()), this);
     connect(this,&QmlPlayerBridge::mediaOpenRequested,this,[this]{
+        liveTranslation_->setPlayback(impl_->snapshot.sessionId, false, true);
         endExclusionMove(false);impl_->exclusionSelected=-1;beginProtectionDraw(QString{});
         emit protectionChanged();
     });
@@ -729,6 +732,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // Unsupported saved FG choices were repaired together with both modes
     // above, using actual provider availability rather than a brand alone.
 }
+QObject* QmlPlayerBridge::liveTranslation() const { return liveTranslation_; }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
     // Before anything is torn down: this reads the playback position.

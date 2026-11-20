@@ -63,6 +63,7 @@
 #include "veyra/ui/QmlDiskCache.h"
 #include "veyra/ui/PlaybackServer.h"   // Custom: local HTTP endpoint for the browser extension
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "../../src/ui/WinCaptionReader.h"
 #include "veyra/ui/StartupMusic.h"
 #include "veyra/ui/ThumbnailProvider.h"
 #include "veyra/ui/UpdateChecker.h"
@@ -1271,6 +1272,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
 }
 
 int main(int argc, char** argv) {
+    if (argc == 2 && std::strcmp(argv[1], "--read-live-captions") == 0)
+        return veyra::ui::runLiveCaptionReader();
     // A child for the AMD HIP self-test (AmdHipPreflight.h): no Qt, no window and
     // no player state, only the HIP calls and their result lines on the pipe.
     if (argc >= 2 && std::strcmp(argv[1], "--amd-hip-preflight") == 0) {

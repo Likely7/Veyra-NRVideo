@@ -2087,10 +2087,12 @@ VPage {
                                                      disabled: !t.usable, checked: t.index === veyra.subtitlePrimary })))
             .concat([{ label: qsTr("加载外部字幕…"), icon: "import", act: "load" },
                      { sep: true },
-                     { label: qsTr("字幕设置…"), note: qsTr("字体、字号、描边、位置、延时"), icon: "type", act: "dlg" }])
+                     { label: qsTr("字幕设置…"), note: qsTr("字体、字号、描边、位置、延时"), icon: "type", act: "dlg" },
+                     { label: qsTr("实时翻译设置…"), icon: "type", act: "translation" }])
         onPicked: (i, o) => {
             if (o.act === "load") veyra.loadSubtitleDialog()
             else if (o.act === "dlg") root.requestDialog("subtitle")
+            else if (o.act === "translation") root.requestDialog("translation")
             else if (o.track !== undefined) veyra.subtitlePrimary = o.track
         }
     }

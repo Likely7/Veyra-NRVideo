@@ -312,7 +312,15 @@ Window {
             }
         }
         ExportPage { id: exportPage; pageId: "exp"; home: pages; onRequestPage: p => root.goPage(p) }
-        SettingsPage { id: settingsPage; pageId: "set"; home: pages; onRequestPage: p => root.goPage(p) }
+        SettingsPage {
+            id: settingsPage
+            pageId: "set"
+            home: pages
+            onRequestPage: p => {
+                if (p === "translation") dialogs.open(p)
+                else root.goPage(p)
+            }
+        }
     }
 
     // The five dialogs sit above the pages and below the dock's own tooltips.
@@ -966,7 +974,7 @@ Window {
             onboarding.close()
             // A dialog key opens the dialog; anything else is a page.
             if (p === "network" || p === "capture" || p === "ps5" || p === "moonlight" || p === "xbox" || p === "screen"
-                || p === "subtitle" || p === "audio" || p === "save" || p === "manage") {
+                || p === "subtitle" || p === "translation" || p === "audio" || p === "save" || p === "manage") {
                 dialogs.open(p)
                 return
             }

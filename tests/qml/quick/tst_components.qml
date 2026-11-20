@@ -15,6 +15,19 @@ Item {
     VSwitch { id: sw; x: 10; y: 10; checked: root.swModel; onToggled: v => root.swModel = v }
     SignalSpy { id: swSpy; target: sw; signalName: "toggled" }
 
+    Component {
+        id: liveTranslationFixture
+        Item {
+            id: translationHost
+            width: 560
+            height: 440
+            property string dialog: "translation"
+            property real motionScale: 1
+            function close() { dialog = "" }
+            LiveTranslationDialog { dialogHost: translationHost; instantTransition: true }
+        }
+    }
+
     VSeg {
         id: seg
         x: 10; y: 50
@@ -149,6 +162,30 @@ Item {
     TestCase {
         name: "Components"
         when: windowShown
+
+        function test_liveTranslationChoicesFitNarrowDialog() {
+            const host = createTemporaryObject(liveTranslationFixture, root)
+            verify(host !== null)
+            const dialog = findChild(host, "live-translation-dialog")
+            const download = findChild(dialog, "live-translation-download")
+            const power = findChild(dialog, "live-translation-enabled")
+            tryCompare(dialog, "shown", true)
+            verify(dialog.width <= host.width && dialog.height <= host.height)
+            verify(dialog.bodyViewport.contentHeight > dialog.bodyViewport.height)
+            compare(power.checked, false)
+            download.clicked()
+            compare(dialog.translation.downloading, true)
+            download.clicked()
+            compare(dialog.translation.downloading, false)
+            const api = findChild(dialog, "live-translation-api-base")
+            dialog.translation.provider = 1
+            tryCompare(api, "visible", true)
+            tryCompare(download, "visible", false)
+            dialog.translation.supported = false
+            tryCompare(power, "enabled", false)
+            dialog.translation.provider = 0
+            dialog.translation.supported = true
+        }
 
         function initTestCase() { Theme.reduced = true }   // no waiting on transitions
 

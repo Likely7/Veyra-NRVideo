@@ -2692,6 +2692,19 @@
    "ru": "Этапы GPU · среднее за 1 с"
   },
   {
+   "zh": "GitHub 直连",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "GitHub 直連",
+   "en": "GitHub direct",
+   "ja": "GitHub に直接接続",
+   "ko": "GitHub 직접 연결",
+   "es": "GitHub directo",
+   "fr": "GitHub en direct",
+   "de": "GitHub direkt",
+   "pt-BR": "Acesso direto ao GitHub",
+   "ru": "GitHub напрямую"
+  },
+  {
    "zh": "HDMI 采集设备",
    "src": "qml/CineBar.qml",
    "zh-TW": "HDMI 擷取裝置",
@@ -3184,6 +3197,19 @@
    "de": "MP4 kann diesen Codec nicht so behalten, wie er ist; wähle MKV oder schließe diesen Track aus",
    "pt-BR": "MP4 não pode manter este codec como está; escolha MKV ou exclua esta faixa",
    "ru": "MP4 не может сохранить этот кодек как есть; выберите MKV или исключите этот трек"
+  },
+  {
+   "zh": "MyMemory 需要选择原文语言",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "MyMemory 需要選擇原文語言",
+   "en": "Select a source language for MyMemory",
+   "ja": "MyMemory の原文言語を選択してください",
+   "ko": "MyMemory의 원문 언어를 선택하세요",
+   "es": "Selecciona el idioma de origen para MyMemory",
+   "fr": "Choisissez la langue source pour MyMemory",
+   "de": "Eine Ausgangssprache für MyMemory auswählen",
+   "pt-BR": "Selecione o idioma de origem do MyMemory",
+   "ru": "Выберите исходный язык для MyMemory"
   },
   {
    "zh": "NGX 核心",
@@ -4237,6 +4263,19 @@
    "de": "Profil 5 Helligkeit ist in der RPU, nicht HDR10 Metadaten; automatische voreingestellte Empfehlungen sind nicht verfügbar. Dynamische Metadaten, die unten folgen, funktionieren noch",
    "pt-BR": "O brilho do perfil 5 está na RPU, não nos metadados HDR10; as recomendações predefinidas automáticas estão indisponíveis.",
    "ru": "Яркость профиля 5 находится в RPU, а не в метаданных HDR10; автоматические предустановленные рекомендации недоступны."
+  },
+  {
+   "zh": "Qwen2.5 1.5B Q4 与 CPU 运行库 · 按需下载 %1 GB",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "Qwen2.5 1.5B Q4 與 CPU 執行庫 · 按需下載 %1 GB",
+   "en": "Qwen2.5 1.5B Q4 and CPU runtime · %1 GB on demand",
+   "ja": "Qwen2.5 1.5B Q4 と CPU ランタイム · %1 GB をダウンロード",
+   "ko": "Qwen2.5 1.5B Q4 및 CPU 런타임 · %1 GB 다운로드",
+   "es": "Qwen2.5 1.5B Q4 y entorno de CPU · Descarga de %1 GB",
+   "fr": "Qwen2.5 1.5B Q4 et moteur CPU · %1 Go à télécharger",
+   "de": "Qwen2.5 1.5B Q4 und CPU-Laufzeit · %1 GB Download",
+   "pt-BR": "Qwen2.5 1.5B Q4 e runtime de CPU · Download de %1 GB",
+   "ru": "Qwen2.5 1.5B Q4 и среда ЦП · Загрузка %1 ГБ"
   },
   {
    "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
@@ -5916,6 +5955,58 @@
    "ru": "Скачать и установить при выходе"
   },
   {
+   "zh": "下载文件校验失败，请重新下载",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "下載檔案驗證失敗，請重新下載",
+   "en": "The download failed verification. Download it again.",
+   "ja": "ダウンロードの検証に失敗しました。再度ダウンロードしてください。",
+   "ko": "다운로드 검증에 실패했습니다. 다시 다운로드하세요.",
+   "es": "La descarga no se pudo verificar. Descárgala de nuevo.",
+   "fr": "Échec de la vérification. Téléchargez à nouveau le fichier.",
+   "de": "Downloadprüfung fehlgeschlagen. Erneut herunterladen.",
+   "pt-BR": "Falha ao verificar o download. Baixe novamente.",
+   "ru": "Файл не прошёл проверку. Загрузите его снова."
+  },
+  {
+   "zh": "下载文件的大小与预期不符",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "下載檔案的大小與預期不符",
+   "en": "The download has an unexpected file size",
+   "ja": "ダウンロードのサイズが一致しません",
+   "ko": "다운로드 파일 크기가 예상과 다릅니다",
+   "es": "El tamaño de la descarga no coincide",
+   "fr": "La taille du fichier téléchargé est incorrecte",
+   "de": "Die Größe des Downloads stimmt nicht",
+   "pt-BR": "O tamanho do arquivo baixado é inesperado",
+   "ru": "Размер загруженного файла не совпадает"
+  },
+  {
+   "zh": "下载模型",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "下載模型",
+   "en": "Download model",
+   "ja": "モデルをダウンロード",
+   "ko": "모델 다운로드",
+   "es": "Descargar modelo",
+   "fr": "Télécharger le modèle",
+   "de": "Modell herunterladen",
+   "pt-BR": "Baixar modelo",
+   "ru": "Загрузить модель"
+  },
+  {
+   "zh": "下载线路",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "下載線路",
+   "en": "Download route",
+   "ja": "ダウンロード経路",
+   "ko": "다운로드 경로",
+   "es": "Ruta de descarga",
+   "fr": "Route de téléchargement",
+   "de": "Download-Verbindung",
+   "pt-BR": "Rota de download",
+   "ru": "Канал загрузки"
+  },
+  {
    "zh": "不使用 LUT",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "不使用 LUT",
@@ -7320,6 +7411,19 @@
    "ru": "Только NVIDIA NR"
   },
   {
+   "zh": "仅本次运行有效",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "僅本次執行有效",
+   "en": "For this session",
+   "ja": "このセッションのみ",
+   "ko": "이 세션에서만 사용",
+   "es": "Solo para esta sesión",
+   "fr": "Pour cette session",
+   "de": "Für diese Sitzung",
+   "pt-BR": "Apenas nesta sessão",
+   "ru": "Только для текущего сеанса"
+  },
+  {
    "zh": "仅清空列表，不删除硬盘文件",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "僅清空清單，不刪除硬碟檔案",
@@ -7669,6 +7773,19 @@
    "de": "Reserve ",
    "pt-BR": "Folga ",
    "ru": "Запас "
+  },
+  {
+   "zh": "使用 Windows 实时字幕识别系统播放的声音，译文显示在 Veyra 预览画面内。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "使用 Windows 即時字幕辨識系統播放的聲音，譯文顯示在 Veyra 預覽畫面內。",
+   "en": "Windows Live Captions transcribes system audio. Translations appear in the Veyra preview.",
+   "ja": "Windows のライブ キャプションがシステム音声を認識し、訳文を Veyra のプレビューに表示します。",
+   "ko": "Windows 라이브 캡션으로 시스템 오디오를 인식하고 Veyra 미리 보기에 번역을 표시합니다.",
+   "es": "Los subtítulos en directo de Windows transcriben el audio del sistema. La traducción aparece en la vista previa de Veyra.",
+   "fr": "Les sous-titres en direct de Windows transcrivent le son du système. La traduction apparaît dans l’aperçu Veyra.",
+   "de": "Windows-Liveuntertitel erkennen die Systemwiedergabe. Die Übersetzung erscheint in der Veyra-Vorschau.",
+   "pt-BR": "As legendas ao vivo do Windows transcrevem o áudio do sistema. A tradução aparece na prévia do Veyra.",
+   "ru": "Динамические субтитры Windows распознают звук системы. Перевод отображается в окне просмотра Veyra."
   },
   {
    "zh": "使用说明",
@@ -10558,6 +10675,19 @@
    "ru": "Это приблизительные значения из исходного поста. Они зависят от оборудования и режима захвата."
   },
   {
+   "zh": "原文语言",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "原文語言",
+   "en": "Source language",
+   "ja": "原文の言語",
+   "ko": "원문 언어",
+   "es": "Idioma de origen",
+   "fr": "Langue source",
+   "de": "Ausgangssprache",
+   "pt-BR": "Idioma de origem",
+   "ru": "Исходный язык"
+  },
+  {
    "zh": "原样保留",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "原樣保留",
@@ -11091,6 +11221,19 @@
    "ru": "Отмена"
   },
   {
+   "zh": "取消下载",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "取消下載",
+   "en": "Cancel download",
+   "ja": "ダウンロードを中止",
+   "ko": "다운로드 취소",
+   "es": "Cancelar descarga",
+   "fr": "Annuler le téléchargement",
+   "de": "Download abbrechen",
+   "pt-BR": "Cancelar download",
+   "ru": "Отменить загрузку"
+  },
+  {
    "zh": "取消后可重新开始；已完成文件会跳过。",
    "src": "qml/ExportPage.qml",
    "zh-TW": "取消後可重新開始；已完成檔案會跳過。",
@@ -11167,6 +11310,19 @@
    "de": "Änderungstoleranz",
    "pt-BR": "Tolerância a mudanças",
    "ru": "Допуск изменений"
+  },
+  {
+   "zh": "另一个 Veyra 窗口正在下载模型",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "另一個 Veyra 視窗正在下載模型",
+   "en": "Another Veyra window is downloading the model",
+   "ja": "別の Veyra ウィンドウでモデルをダウンロード中です",
+   "ko": "다른 Veyra 창에서 모델을 다운로드하고 있습니다",
+   "es": "Otra ventana de Veyra está descargando el modelo",
+   "fr": "Le modèle se télécharge dans une autre fenêtre Veyra",
+   "de": "Das Modell wird in einem anderen Veyra-Fenster heruntergeladen",
+   "pt-BR": "Outra janela do Veyra está baixando o modelo",
+   "ru": "Модель загружается в другом окне Veyra"
   },
   {
    "zh": "另一个Veyra实例已启用虚拟摄像机",
@@ -11624,6 +11780,19 @@
    "ru": "Также записывайте микрофон; смешанный с записанным звуком по умолчанию или на собственной дорожке."
   },
   {
+   "zh": "同时显示原文",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "同時顯示原文",
+   "en": "Show original text",
+   "ja": "原文も表示",
+   "ko": "원문 함께 표시",
+   "es": "Mostrar texto original",
+   "fr": "Afficher le texte original",
+   "de": "Originaltext anzeigen",
+   "pt-BR": "Mostrar texto original",
+   "ru": "Показывать оригинал"
+  },
+  {
    "zh": "同时用这块显卡运算",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "同時用這塊顯示卡運算",
@@ -11895,6 +12064,19 @@
    "de": "Konnte die Startvorgabe nicht speichern",
    "pt-BR": "Não foi possível salvar a predefinição padrão de inicialização",
    "ru": "Не удалось сохранить старт по умолчанию предустановленной"
+  },
+  {
+   "zh": "启用后会把系统字幕文本发送给所选服务。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "啟用後會將系統字幕文字傳送至所選服務。",
+   "en": "Enabling this sends system caption text to the selected service.",
+   "ja": "有効にするとシステムの字幕テキストが選択したサービスに送信されます。",
+   "ko": "활성화하면 시스템 자막 텍스트를 선택한 서비스로 전송합니다.",
+   "es": "Al activarlo, el texto de los subtítulos se envía al servicio elegido.",
+   "fr": "L’activation envoie le texte des sous-titres système au service choisi.",
+   "de": "Beim Einschalten wird der Untertiteltext an den gewählten Dienst gesendet.",
+   "pt-BR": "Ao ativar, o texto das legendas do sistema é enviado ao serviço escolhido.",
+   "ru": "При включении текст системных субтитров отправляется выбранному сервису."
   },
   {
    "zh": "启用失败",
@@ -12417,6 +12599,19 @@
    "ru": "Круг "
   },
   {
+   "zh": "在 CPU 上运行，字幕文本留在本机。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "在 CPU 上執行，字幕文字留在本機。",
+   "en": "Runs on the CPU. Caption text stays on this device.",
+   "ja": "CPU で動作し、字幕テキストは端末内で処理されます。",
+   "ko": "CPU에서 실행하며 자막 텍스트는 이 기기에서 처리합니다.",
+   "es": "Se ejecuta en la CPU. El texto permanece en el dispositivo.",
+   "fr": "Le CPU traite le texte des sous-titres sur cet appareil.",
+   "de": "Die CPU verarbeitet den Untertiteltext auf diesem Gerät.",
+   "pt-BR": "A CPU processa as legendas neste dispositivo.",
+   "ru": "ЦП обрабатывает субтитры на этом устройстве."
+  },
+  {
    "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
@@ -12584,6 +12779,19 @@
    "de": "Halten Sie die linke Taste auf dem Bild und ziehen Sie den Teiler: Original auf der linken Seite, verbessert auf der rechten Seite.",
    "pt-BR": "Segure o botão esquerdo na imagem e arraste o separador: original à esquerda, realçado à direita.",
    "ru": "Держите левую кнопку на картинке и перетащите разделитель: оригинал слева, усилен справа."
+  },
+  {
+   "zh": "在画面上显示实时翻译",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "在畫面上顯示即時翻譯",
+   "en": "Show live translation on video",
+   "ja": "映像にリアルタイム翻訳を表示",
+   "ko": "영상에 실시간 번역 표시",
+   "es": "Mostrar traducción en el vídeo",
+   "fr": "Afficher la traduction sur la vidéo",
+   "de": "Live-Übersetzung im Bild anzeigen",
+   "pt-BR": "Mostrar tradução no vídeo",
+   "ru": "Показывать перевод на видео"
   },
   {
    "zh": "在直播软件的视频采集设备中选择 Veyra Virtual Camera；输出处理后的完整画面，不需要全屏",
@@ -13951,6 +14159,19 @@
    "ru": "Настройки субтитров…"
   },
   {
+   "zh": "字幕读取已停止，请重新启用",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "字幕讀取已停止，請重新啟用",
+   "en": "Caption reading stopped. Enable it again.",
+   "ja": "字幕の読み取りが停止しました。再度有効にしてください。",
+   "ko": "자막 읽기가 중지되었습니다. 다시 활성화하세요.",
+   "es": "Se detuvo la lectura de subtítulos. Actívala de nuevo.",
+   "fr": "La lecture des sous-titres s’est arrêtée. Réactivez-la.",
+   "de": "Untertitelerfassung beendet. Erneut einschalten.",
+   "pt-BR": "A leitura de legendas parou. Ative novamente.",
+   "ru": "Чтение субтитров остановлено. Включите его снова."
+  },
+  {
    "zh": "字幕轨",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "字幕軌",
@@ -14222,6 +14443,58 @@
    "de": "Intern in Echtzeit verarbeitet und zurückgeschrieben",
    "pt-BR": "Processado internamente em tempo real e gravado de volta",
    "ru": "Обрабатывается в режиме реального времени и переписывается"
+  },
+  {
+   "zh": "实时翻译",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "即時翻譯",
+   "en": "Live translation",
+   "ja": "リアルタイム翻訳",
+   "ko": "실시간 번역",
+   "es": "Traducción en directo",
+   "fr": "Traduction en direct",
+   "de": "Live-Übersetzung",
+   "pt-BR": "Tradução ao vivo",
+   "ru": "Перевод в реальном времени"
+  },
+  {
+   "zh": "实时翻译设置…",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "即時翻譯設定…",
+   "en": "Live translation settings…",
+   "ja": "リアルタイム翻訳の設定…",
+   "ko": "실시간 번역 설정…",
+   "es": "Ajustes de traducción en directo…",
+   "fr": "Paramètres de traduction en direct…",
+   "de": "Live-Übersetzung einstellen…",
+   "pt-BR": "Configurações de tradução ao vivo…",
+   "ru": "Настройки перевода…"
+  },
+  {
+   "zh": "实时翻译运行中",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "即時翻譯執行中",
+   "en": "Live translation active",
+   "ja": "リアルタイム翻訳中",
+   "ko": "실시간 번역 중",
+   "es": "Traducción en directo activa",
+   "fr": "Traduction en direct active",
+   "de": "Live-Übersetzung aktiv",
+   "pt-BR": "Tradução ao vivo ativa",
+   "ru": "Перевод включён"
+  },
+  {
+   "zh": "实时翻译需要 Windows 11 22H2 或更新版本",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "即時翻譯需要 Windows 11 22H2 或更新版本",
+   "en": "Live translation requires Windows 11 22H2 or later",
+   "ja": "リアルタイム翻訳には Windows 11 22H2 以降が必要です",
+   "ko": "실시간 번역에는 Windows 11 22H2 이상이 필요합니다",
+   "es": "Se requiere Windows 11 22H2 o posterior",
+   "fr": "Windows 11 22H2 ou ultérieur requis",
+   "de": "Windows 11 22H2 oder neuer erforderlich",
+   "pt-BR": "Requer Windows 11 22H2 ou posterior",
+   "ru": "Требуется Windows 11 22H2 или новее"
   },
   {
    "zh": "实时采集",
@@ -19437,6 +19710,19 @@
    "ru": "Открыть папку"
   },
   {
+   "zh": "打开系统字幕",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "開啟系統字幕",
+   "en": "Open Windows Live Captions",
+   "ja": "ライブ キャプションを開く",
+   "ko": "Windows 라이브 캡션 열기",
+   "es": "Abrir subtítulos de Windows",
+   "fr": "Ouvrir les sous-titres Windows",
+   "de": "Windows-Liveuntertitel öffnen",
+   "pt-BR": "Abrir legendas do Windows",
+   "ru": "Открыть субтитры Windows"
+  },
+  {
    "zh": "打开美乐威采集通道失败",
    "src": "src/source/MagewellCapture.cpp",
    "zh-TW": "開啟美樂威擷取通道失敗",
@@ -20087,6 +20373,32 @@
    "ru": "Сортировка"
   },
   {
+   "zh": "接口地址",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "介面位址",
+   "en": "API endpoint",
+   "ja": "API のアドレス",
+   "ko": "API 주소",
+   "es": "Dirección de la API",
+   "fr": "Adresse de l’API",
+   "de": "API-Adresse",
+   "pt-BR": "Endereço da API",
+   "ru": "Адрес API"
+  },
+  {
+   "zh": "接口模型名",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "介面模型名稱",
+   "en": "API model name",
+   "ja": "API のモデル名",
+   "ko": "API 모델 이름",
+   "es": "Nombre del modelo de la API",
+   "fr": "Nom du modèle de l’API",
+   "de": "API-Modellname",
+   "pt-BR": "Nome do modelo da API",
+   "ru": "Имя модели API"
+  },
+  {
    "zh": "描边",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "描邊",
@@ -20515,6 +20827,19 @@
    "de": "Playback beendet; Aufzeichnung gespeichert",
    "pt-BR": "A reprodução terminou; gravação gravada",
    "ru": "Воспроизведение закончилось, запись сохранена"
+  },
+  {
+   "zh": "播放或连接片源后开始翻译",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "播放或連接片源後開始翻譯",
+   "en": "Translation starts when a source plays",
+   "ja": "映像ソースの再生を開始すると翻訳します",
+   "ko": "소스를 재생하면 번역을 시작합니다",
+   "es": "La traducción comienza al reproducir una fuente",
+   "fr": "La traduction commence à la lecture d’une source",
+   "de": "Die Übersetzung beginnt bei laufender Wiedergabe",
+   "pt-BR": "A tradução começa quando a fonte é reproduzida",
+   "ru": "Перевод начнётся при воспроизведении источника"
   },
   {
    "zh": "播放时减闪；暂停单帧不体现时域效果",
@@ -21271,6 +21596,32 @@
    "ru": "Не удаётся сохранить или удалить копию"
   },
   {
+   "zh": "无法保存模型下载文件",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "無法儲存模型下載檔案",
+   "en": "Could not save the model download",
+   "ja": "モデルのダウンロードを保存できません",
+   "ko": "모델 다운로드를 저장할 수 없습니다",
+   "es": "No se pudo guardar el modelo descargado",
+   "fr": "Impossible d’enregistrer le modèle téléchargé",
+   "de": "Modelldownload konnte nicht gespeichert werden",
+   "pt-BR": "Não foi possível salvar o modelo baixado",
+   "ru": "Не удалось сохранить загружаемую модель"
+  },
+  {
+   "zh": "无法保存翻译运行库",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "無法儲存翻譯執行庫",
+   "en": "Could not save the translation runtime",
+   "ja": "翻訳ランタイムを保存できません",
+   "ko": "번역 런타임을 저장할 수 없습니다",
+   "es": "No se pudo guardar el entorno de traducción",
+   "fr": "Impossible d’enregistrer le moteur de traduction",
+   "de": "Übersetzungslaufzeit konnte nicht gespeichert werden",
+   "pt-BR": "Não foi possível salvar o runtime de tradução",
+   "ru": "Не удалось сохранить среду перевода"
+  },
+  {
    "zh": "无法保存虚拟扬声器安装包",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "無法儲存虛擬揚聲器安裝包",
@@ -21583,6 +21934,19 @@
    "ru": "Невозможно создать объединенный выход"
   },
   {
+   "zh": "无法创建模型下载目录",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "無法建立模型下載目錄",
+   "en": "Could not create the model download folder",
+   "ja": "モデルのダウンロード先を作成できません",
+   "ko": "모델 다운로드 폴더를 만들 수 없습니다",
+   "es": "No se pudo crear la carpeta de descarga",
+   "fr": "Impossible de créer le dossier de téléchargement",
+   "de": "Downloadordner konnte nicht erstellt werden",
+   "pt-BR": "Não foi possível criar a pasta de download",
+   "ru": "Не удалось создать папку загрузки модели"
+  },
+  {
    "zh": "无法创建虚拟扬声器安装目录",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "無法建立虛擬揚聲器安裝目錄",
@@ -21648,6 +22012,19 @@
    "ru": "Не удалось инициализировать процесс экспорта"
   },
   {
+   "zh": "无法启动 Windows 字幕读取器",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "無法啟動 Windows 字幕讀取器",
+   "en": "Could not start the Windows caption reader",
+   "ja": "Windows の字幕リーダーを開始できません",
+   "ko": "Windows 자막 판독기를 시작할 수 없습니다",
+   "es": "No se pudo iniciar el lector de subtítulos de Windows",
+   "fr": "Impossible de lancer le lecteur de sous-titres Windows",
+   "de": "Windows-Untertitelleser konnte nicht gestartet werden",
+   "pt-BR": "Não foi possível iniciar o leitor de legendas do Windows",
+   "ru": "Не удалось запустить чтение субтитров Windows"
+  },
+  {
    "zh": "无法启动 Windows 解压工具",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "無法啟動 Windows 解壓工具",
@@ -21685,6 +22062,19 @@
    "de": "Das Setup der Kamerakomponenten konnte nicht gestartet werden.",
    "pt-BR": "Não foi possível iniciar a configuração do componente da câmera. Veja o registro.",
    "ru": "Не удалось запустить настройку компонентов камеры."
+  },
+  {
+   "zh": "无法启动本地翻译进程",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "無法啟動本機翻譯程序",
+   "en": "Could not start the local translator",
+   "ja": "ローカル翻訳を開始できません",
+   "ko": "로컬 번역기를 시작할 수 없습니다",
+   "es": "No se pudo iniciar el traductor local",
+   "fr": "Impossible de lancer le traducteur local",
+   "de": "Lokaler Übersetzungsprozess konnte nicht gestartet werden",
+   "pt-BR": "Não foi possível iniciar o tradutor local",
+   "ru": "Не удалось запустить локальный переводчик"
   },
   {
    "zh": "无法启动采集，请查看诊断",
@@ -22010,6 +22400,19 @@
    "de": "Konnte das aktuelle GPU Gerät nicht erhalten",
    "pt-BR": "Não foi possível obter o dispositivo atual GPU",
    "ru": "Не удалось получить ток GPU устройства"
+  },
+  {
+   "zh": "无法解压翻译运行库",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "無法解壓縮翻譯執行庫",
+   "en": "Could not extract the translation runtime",
+   "ja": "翻訳ランタイムを展開できません",
+   "ko": "번역 런타임을 압축 해제할 수 없습니다",
+   "es": "No se pudo extraer el entorno de traducción",
+   "fr": "Impossible d’extraire le moteur de traduction",
+   "de": "Übersetzungslaufzeit konnte nicht entpackt werden",
+   "pt-BR": "Não foi possível extrair o runtime de tradução",
+   "ru": "Не удалось распаковать среду перевода"
   },
   {
    "zh": "无法解码PNG/JPEG",
@@ -24053,6 +24456,71 @@
    "ru": "Не сопряжено"
   },
   {
+   "zh": "本地模型",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "本機模型",
+   "en": "Local model",
+   "ja": "ローカルモデル",
+   "ko": "로컬 모델",
+   "es": "Modelo local",
+   "fr": "Modèle local",
+   "de": "Lokales Modell",
+   "pt-BR": "Modelo local",
+   "ru": "Локальная модель"
+  },
+  {
+   "zh": "本地模型已就绪",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "本機模型已就緒",
+   "en": "Local model ready",
+   "ja": "ローカルモデルを利用できます",
+   "ko": "로컬 모델 준비 완료",
+   "es": "Modelo local listo",
+   "fr": "Modèle local prêt",
+   "de": "Lokales Modell bereit",
+   "pt-BR": "Modelo local pronto",
+   "ru": "Локальная модель готова"
+  },
+  {
+   "zh": "本地翻译服务启动超时，请重新启用",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "本機翻譯服務啟動逾時，請重新啟用",
+   "en": "Local translator timed out. Enable it again.",
+   "ja": "ローカル翻訳の開始がタイムアウトしました。再度有効にしてください。",
+   "ko": "로컬 번역 시작 시간이 초과되었습니다. 다시 활성화하세요.",
+   "es": "El traductor local tardó demasiado. Actívalo de nuevo.",
+   "fr": "Délai de démarrage dépassé. Réactivez le traducteur local.",
+   "de": "Zeitlimit beim lokalen Start erreicht. Erneut einschalten.",
+   "pt-BR": "O tradutor local demorou a iniciar. Ative novamente.",
+   "ru": "Локальный переводчик не запустился вовремя. Включите его снова."
+  },
+  {
+   "zh": "本地翻译进程已停止，请重新启用",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "本機翻譯程序已停止，請重新啟用",
+   "en": "Local translator stopped. Enable it again.",
+   "ja": "ローカル翻訳が停止しました。再度有効にしてください。",
+   "ko": "로컬 번역기가 중지되었습니다. 다시 활성화하세요.",
+   "es": "Se detuvo el traductor local. Actívalo de nuevo.",
+   "fr": "Le traducteur local s’est arrêté. Réactivez-le.",
+   "de": "Lokaler Übersetzungsprozess beendet. Erneut einschalten.",
+   "pt-BR": "O tradutor local parou. Ative novamente.",
+   "ru": "Локальный переводчик остановлен. Включите его снова."
+  },
+  {
+   "zh": "本地运行库校验失败，请重新下载",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "本機執行庫驗證失敗，請重新下載",
+   "en": "Local runtime failed verification. Download it again.",
+   "ja": "ローカルランタイムの検証に失敗しました。再度ダウンロードしてください。",
+   "ko": "로컬 런타임 검증에 실패했습니다. 다시 다운로드하세요.",
+   "es": "El entorno local no se pudo verificar. Descárgalo de nuevo.",
+   "fr": "Échec de la vérification du moteur local. Téléchargez-le à nouveau.",
+   "de": "Prüfung der lokalen Laufzeit fehlgeschlagen. Erneut herunterladen.",
+   "pt-BR": "Falha ao verificar o runtime local. Baixe novamente.",
+   "ru": "Локальная среда не прошла проверку. Загрузите её снова."
+  },
+  {
    "zh": "本批完成：成功 {}，失败 {}",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "本批完成：成功 {}，失敗 {}",
@@ -24625,6 +25093,32 @@
    "ru": "Выход полный экран, если обнаружен аномальный рост; выключен по умолчанию"
   },
   {
+   "zh": "模型下载失败，请检查网络后重试",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "模型下載失敗，請檢查網路後重試",
+   "en": "Model download failed. Check the connection and try again.",
+   "ja": "モデルの取得に失敗しました。接続を確認して再試行してください。",
+   "ko": "모델 다운로드에 실패했습니다. 연결을 확인하고 다시 시도하세요.",
+   "es": "Falló la descarga del modelo. Revisa la conexión e inténtalo de nuevo.",
+   "fr": "Échec du téléchargement. Vérifiez la connexion et réessayez.",
+   "de": "Modelldownload fehlgeschlagen. Verbindung prüfen und erneut versuchen.",
+   "pt-BR": "Falha no download do modelo. Verifique a conexão e tente novamente.",
+   "ru": "Не удалось загрузить модель. Проверьте соединение и повторите попытку."
+  },
+  {
+   "zh": "模型下载已取消",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "模型下載已取消",
+   "en": "Model download canceled",
+   "ja": "モデルのダウンロードを中止しました",
+   "ko": "모델 다운로드가 취소되었습니다",
+   "es": "Descarga del modelo cancelada",
+   "fr": "Téléchargement du modèle annulé",
+   "de": "Modelldownload abgebrochen",
+   "pt-BR": "Download do modelo cancelado",
+   "ru": "Загрузка модели отменена"
+  },
+  {
    "zh": "模型参数",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "模型參數",
@@ -24820,6 +25314,32 @@
    "ru": "Загрузка обновления · %1%"
   },
   {
+   "zh": "正在下载本地推理运行库…",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "正在下載本機推論執行庫…",
+   "en": "Downloading the CPU runtime…",
+   "ja": "CPU ランタイムをダウンロード中…",
+   "ko": "CPU 런타임 다운로드 중…",
+   "es": "Descargando el entorno de CPU…",
+   "fr": "Téléchargement du moteur CPU…",
+   "de": "CPU-Laufzeit wird heruntergeladen…",
+   "pt-BR": "Baixando o runtime de CPU…",
+   "ru": "Загрузка среды ЦП…"
+  },
+  {
+   "zh": "正在下载翻译模型…",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "正在下載翻譯模型…",
+   "en": "Downloading the translation model…",
+   "ja": "翻訳モデルをダウンロード中…",
+   "ko": "번역 모델 다운로드 중…",
+   "es": "Descargando el modelo de traducción…",
+   "fr": "Téléchargement du modèle de traduction…",
+   "de": "Übersetzungsmodell wird heruntergeladen…",
+   "pt-BR": "Baixando o modelo de tradução…",
+   "ru": "Загрузка модели перевода…"
+  },
+  {
    "zh": "正在保存正式文件",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "正在儲存正式檔案",
@@ -24909,6 +25429,19 @@
    "de": "Externe Untertitel laden: %1",
    "pt-BR": "Carregando legendas externas: %1",
    "ru": "Загрузка внешних субтитров: %1"
+  },
+  {
+   "zh": "正在加载本地翻译模型…",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "正在載入本機翻譯模型…",
+   "en": "Loading the local translation model…",
+   "ja": "ローカル翻訳モデルを読み込み中…",
+   "ko": "로컬 번역 모델 로드 중…",
+   "es": "Cargando el modelo de traducción local…",
+   "fr": "Chargement du modèle de traduction local…",
+   "de": "Lokales Übersetzungsmodell wird geladen…",
+   "pt-BR": "Carregando o modelo de tradução local…",
+   "ru": "Загрузка локальной модели перевода…"
   },
   {
    "zh": "正在取消…",
@@ -25353,6 +25886,32 @@
    "ru": "Вход в стриминговый сервис Xbox..."
   },
   {
+   "zh": "正在等待 Windows 字幕响应…",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "正在等待 Windows 字幕回應…",
+   "en": "Waiting for Windows Live Captions…",
+   "ja": "ライブ キャプションの応答を待機中…",
+   "ko": "Windows 라이브 캡션 응답 대기 중…",
+   "es": "Esperando los subtítulos de Windows…",
+   "fr": "En attente des sous-titres Windows…",
+   "de": "Warte auf Windows-Liveuntertitel…",
+   "pt-BR": "Aguardando as legendas do Windows…",
+   "ru": "Ожидание субтитров Windows…"
+  },
+  {
+   "zh": "正在等待语音…",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "正在等待語音…",
+   "en": "Waiting for speech…",
+   "ja": "音声を待機中…",
+   "ko": "음성 대기 중…",
+   "es": "Esperando voz…",
+   "fr": "En attente de parole…",
+   "de": "Warte auf Sprache…",
+   "pt-BR": "Aguardando fala…",
+   "ru": "Ожидание речи…"
+  },
+  {
    "zh": "正在缓冲 {:.1f}/{:.1f} 秒",
    "src": "src/media/DemuxSession.cpp",
    "zh-TW": "正在緩衝 {:.1f}/{:.1f} 秒",
@@ -25611,6 +26170,19 @@
    "de": "Vorprüfung der Dateien und Tracks dieser Charge",
    "pt-BR": "Pré- verificação dos arquivos e faixas deste lote",
    "ru": "Предварительная проверка файлов и треков этой партии"
+  },
+  {
+   "zh": "正在验证翻译运行库…",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "正在驗證翻譯執行庫…",
+   "en": "Verifying the translation runtime…",
+   "ja": "翻訳ランタイムを検証中…",
+   "ko": "번역 런타임 검증 중…",
+   "es": "Verificando el entorno de traducción…",
+   "fr": "Vérification du moteur de traduction…",
+   "de": "Übersetzungslaufzeit wird geprüft…",
+   "pt-BR": "Verificando o runtime de tradução…",
+   "ru": "Проверка среды перевода…"
   },
   {
    "zh": "正常",
@@ -28148,6 +28720,19 @@
    "ru": "Запись остановлена: записи на диске слишком медленные (используйте более быстрый диск или более низкий битрейт)."
   },
   {
+   "zh": "磁盘可用空间不足，下载需要约 1.2 GB",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "磁碟可用空間不足，下載需要約 1.2 GB",
+   "en": "About 1.2 GB of free disk space is needed",
+   "ja": "約 1.2 GB の空き容量が必要です",
+   "ko": "약 1.2 GB의 여유 공간이 필요합니다",
+   "es": "Se necesitan unos 1,2 GB libres",
+   "fr": "Environ 1,2 Go d’espace libre sont nécessaires",
+   "de": "Etwa 1,2 GB freier Speicher sind erforderlich",
+   "pt-BR": "São necessários cerca de 1,2 GB livres",
+   "ru": "Требуется около 1,2 ГБ свободного места"
+  },
+  {
    "zh": "磁盘空间不足，无法下载并解压更新",
    "src": "src/ui/PortableUpdate.cpp",
    "zh-TW": "磁碟空間不足，無法下載並解壓縮更新",
@@ -28669,7 +29254,7 @@
   },
   {
    "zh": "简体中文",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "簡體中文",
    "en": "简体中文",
    "ja": "简体中文",
@@ -29046,7 +29631,7 @@
   },
   {
    "zh": "繁體中文",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "繁體中文",
    "en": "繁體中文",
    "ja": "繁體中文",
@@ -29773,6 +30358,97 @@
    "ru": "Растушёвка (пиксели)"
   },
   {
+   "zh": "翻译引擎",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "翻譯引擎",
+   "en": "Translation engine",
+   "ja": "翻訳エンジン",
+   "ko": "번역 엔진",
+   "es": "Motor de traducción",
+   "fr": "Moteur de traduction",
+   "de": "Übersetzungsdienst",
+   "pt-BR": "Mecanismo de tradução",
+   "ru": "Движок перевода"
+  },
+  {
+   "zh": "翻译成",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "翻譯成",
+   "en": "Translate to",
+   "ja": "翻訳先",
+   "ko": "번역할 언어",
+   "es": "Traducir a",
+   "fr": "Traduire en",
+   "de": "Übersetzen in",
+   "pt-BR": "Traduzir para",
+   "ru": "Язык перевода"
+  },
+  {
+   "zh": "翻译接口未返回译文",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "翻譯介面未回傳譯文",
+   "en": "The API returned no translation",
+   "ja": "API から訳文が返りませんでした",
+   "ko": "API가 번역문을 반환하지 않았습니다",
+   "es": "La API no devolvió una traducción",
+   "fr": "L’API n’a renvoyé aucune traduction",
+   "de": "Die API hat keine Übersetzung geliefert",
+   "pt-BR": "A API não retornou tradução",
+   "ru": "API не вернул перевод"
+  },
+  {
+   "zh": "翻译接口返回 HTTP %1",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "翻譯介面傳回 HTTP %1",
+   "en": "The translation API returned HTTP %1",
+   "ja": "翻訳 API が HTTP %1 を返しました",
+   "ko": "번역 API가 HTTP %1을 반환했습니다",
+   "es": "La API de traducción devolvió HTTP %1",
+   "fr": "L’API de traduction a renvoyé HTTP %1",
+   "de": "Übersetzungs-API meldet HTTP %1",
+   "pt-BR": "A API de tradução retornou HTTP %1",
+   "ru": "API перевода вернул HTTP %1"
+  },
+  {
+   "zh": "翻译请求失败，请检查连接",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "翻譯請求失敗，請檢查連線",
+   "en": "Translation request failed. Check the connection.",
+   "ja": "翻訳リクエストに失敗しました。接続を確認してください。",
+   "ko": "번역 요청에 실패했습니다. 연결을 확인하세요.",
+   "es": "Falló la solicitud de traducción. Revisa la conexión.",
+   "fr": "Échec de la requête de traduction. Vérifiez la connexion.",
+   "de": "Übersetzungsanfrage fehlgeschlagen. Verbindung prüfen.",
+   "pt-BR": "Falha na solicitação de tradução. Verifique a conexão.",
+   "ru": "Запрос перевода не выполнен. Проверьте соединение."
+  },
+  {
+   "zh": "翻译运行库校验失败",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "翻譯執行庫驗證失敗",
+   "en": "Translation runtime failed verification",
+   "ja": "翻訳ランタイムの検証に失敗しました",
+   "ko": "번역 런타임 검증 실패",
+   "es": "El entorno de traducción no se pudo verificar",
+   "fr": "Échec de la vérification du moteur de traduction",
+   "de": "Prüfung der Übersetzungslaufzeit fehlgeschlagen",
+   "pt-BR": "Falha ao verificar o runtime de tradução",
+   "ru": "Среда перевода не прошла проверку"
+  },
+  {
+   "zh": "翻译运行库正在使用，请稍后重试",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "翻譯執行庫正在使用，請稍後重試",
+   "en": "The runtime is in use. Try again later.",
+   "ja": "ランタイムが使用中です。後でもう一度お試しください。",
+   "ko": "런타임 사용 중입니다. 나중에 다시 시도하세요.",
+   "es": "El entorno está en uso. Inténtalo más tarde.",
+   "fr": "Le moteur est en cours d’utilisation. Réessayez plus tard.",
+   "de": "Laufzeit wird verwendet. Später erneut versuchen.",
+   "pt-BR": "O runtime está em uso. Tente novamente mais tarde.",
+   "ru": "Среда используется. Повторите попытку позже."
+  },
+  {
    "zh": "老片平淡",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "老片平淡",
@@ -30241,6 +30917,19 @@
    "ru": "Обнаружение ввода автоматически · Native BMD"
   },
   {
+   "zh": "自动识别原文",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "自動辨識原文",
+   "en": "Detect source language",
+   "ja": "原文の言語を検出",
+   "ko": "원문 언어 감지",
+   "es": "Detectar idioma de origen",
+   "fr": "Détecter la langue source",
+   "de": "Ausgangssprache erkennen",
+   "pt-BR": "Detectar idioma de origem",
+   "ru": "Определить исходный язык"
+  },
+  {
    "zh": "自动调控力度",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "自動調控力度",
@@ -30434,6 +31123,19 @@
    "de": "Benutzerdefiniert",
    "pt-BR": "Personalizado",
    "ru": "Свой"
+  },
+  {
+   "zh": "自定义 API（OpenAI 兼容）",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "自訂 API（OpenAI 相容）",
+   "en": "Custom API (OpenAI compatible)",
+   "ja": "カスタム API (OpenAI 互換)",
+   "ko": "사용자 지정 API (OpenAI 호환)",
+   "es": "API propia (compatible con OpenAI)",
+   "fr": "API personnalisée (compatible OpenAI)",
+   "de": "Eigene API (OpenAI-kompatibel)",
+   "pt-BR": "API personalizada (compatível com OpenAI)",
+   "ru": "Свой API (совместимый с OpenAI)"
   },
   {
    "zh": "自定义…",
@@ -32022,17 +32724,17 @@
    "ru": "Видео закончило играть"
   },
   {
-   "zh": "视频已编码，但保存文件名失败（Windows错误 {}）；可保留partial文件",
+   "zh": "视频已编码，但保存文件名失败（Windows错误 {}）；下面保留的临时文件就是完整视频",
    "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "影片已編碼，但儲存檔名失敗（Windows錯誤 {}）；可保留partial檔案",
-   "en": "The video was encoded, but saving the file name failed (Windows error {}); the partial file can be kept",
-   "ja": "動画はエンコードしましたが、ファイル名を付けて保存できませんでした（Windows エラー {}）。partial ファイルは残せます",
-   "ko": "영상 인코딩은 끝났지만 최종 파일명으로 저장하지 못했습니다 (Windows 오류 {}). 분할 파일은 유지됩니다.",
-   "es": "El vídeo fue codificado, pero guardar el nombre del archivo falló (Windows error {}); el archivo parcial se puede mantener",
-   "fr": "La vidéo a été encodée, mais l'enregistrement du nom du fichier a échoué (Windows erreur {}); le fichier partiel peut être conservé",
-   "de": "Das Video wurde codiert, aber das Speichern des Dateinamens ist fehlgeschlagen (Windows Fehler {}); die Teildatei kann beibehalten werden",
-   "pt-BR": "O vídeo foi codificado, mas salvar o nome do arquivo falhou (Windows erro {}); o arquivo parcial pode ser mantido",
-   "ru": "Видео было закодировано, но сохранение имени файла не удалось (Windows ошибка {}); частичный файл может быть сохранен."
+   "zh-TW": "影片已編碼，但無法儲存檔名（Windows 錯誤 {}）。下方的暫存檔是完整影片",
+   "en": "Video encoded. Windows error {} blocked renaming. The temporary file contains the complete video.",
+   "ja": "エンコードが完了しました。Windows エラー {} により名前変更できません。下記の一時ファイルが完全な動画です。",
+   "ko": "인코딩이 완료되었습니다. Windows 오류 {}로 이름을 바꿀 수 없습니다. 아래 임시 파일에 전체 영상이 있습니다.",
+   "es": "Vídeo codificado. El error {} de Windows impidió cambiar el nombre. El archivo temporal contiene el vídeo completo.",
+   "fr": "Vidéo encodée. L’erreur Windows {} a empêché le renommage. Le fichier temporaire contient la vidéo complète.",
+   "de": "Video codiert. Windows-Fehler {} hat das Umbenennen verhindert. Die temporäre Datei enthält das vollständige Video.",
+   "pt-BR": "Vídeo codificado. O erro {} do Windows impediu a renomeação. O arquivo temporário contém o vídeo completo.",
+   "ru": "Видео закодировано. Ошибка Windows {} помешала переименованию. Временный файл содержит полное видео."
   },
   {
    "zh": "视频恢复上次进度；采集卡沿用上次设备与设置",
@@ -32711,6 +33413,19 @@
    "ru": "Этот тип узла достиг своего предела (включая отключенные и неподключенные узлы)."
   },
   {
+   "zh": "语音识别",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "語音辨識",
+   "en": "Speech recognition",
+   "ja": "音声認識",
+   "ko": "음성 인식",
+   "es": "Reconocimiento de voz",
+   "fr": "Reconnaissance vocale",
+   "de": "Spracherkennung",
+   "pt-BR": "Reconhecimento de fala",
+   "ru": "Распознавание речи"
+  },
+  {
    "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
    "src": "src/ui/NvidiaVrrProfileController.cpp",
    "zh-TW": "請以系統管理員身分啟動本軟體後重試；完成設定後可恢復一般方式啟動。",
@@ -32748,6 +33463,19 @@
    "de": "Verwende eine direkte Medien-URL. MPEG-TS-Adressen über RTP oder UDP müssen einen Port enthalten.",
    "pt-BR": "Use a URL direta da mídia. Endereços MPEG-TS via RTP ou UDP precisam incluir uma porta.",
    "ru": "Используйте прямой URL медиа. В адресах MPEG-TS по RTP и UDP укажите порт."
+  },
+  {
+   "zh": "请先下载本地翻译模型",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "請先下載本機翻譯模型",
+   "en": "Download the local translation model first",
+   "ja": "先にローカル翻訳モデルをダウンロードしてください",
+   "ko": "먼저 로컬 번역 모델을 다운로드하세요",
+   "es": "Descarga primero el modelo de traducción local",
+   "fr": "Téléchargez d’abord le modèle local",
+   "de": "Zuerst das lokale Übersetzungsmodell herunterladen",
+   "pt-BR": "Baixe primeiro o modelo de tradução local",
+   "ru": "Сначала загрузите локальную модель перевода"
   },
   {
    "zh": "请先切换到要保存的编辑模式",
@@ -33010,6 +33738,19 @@
    "ru": "Выберите соответствие HDMI /SDI разъем в списке устройств. Водитель сохраняет текущий ввод драйвера. Используйте Авто на картах, поддерживающих обнаружение сигнала; разблокированный сигнал сообщается явно."
   },
   {
+   "zh": "请填写 HTTPS 接口地址和模型名，本机服务可使用 HTTP",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "請填寫 HTTPS 介面位址和模型名稱，本機服務可使用 HTTP",
+   "en": "Enter an HTTPS API address and model name. Local services can use HTTP.",
+   "ja": "HTTPS の API アドレスとモデル名を入力してください。ローカルサービスは HTTP を使用できます。",
+   "ko": "HTTPS API 주소와 모델 이름을 입력하세요. 로컬 서비스는 HTTP를 사용할 수 있습니다.",
+   "es": "Indica la dirección HTTPS y el modelo. Los servicios locales pueden usar HTTP.",
+   "fr": "Saisissez l’adresse HTTPS et le modèle. Les services locaux peuvent utiliser HTTP.",
+   "de": "HTTPS-Adresse und Modellname eingeben. Lokale Dienste können HTTP verwenden.",
+   "pt-BR": "Informe um endereço HTTPS e o modelo. Serviços locais podem usar HTTP.",
+   "ru": "Укажите HTTPS-адрес и имя модели. Для локальных служб допустим HTTP."
+  },
+  {
    "zh": "请填写主机的 IP 地址或名称，例如 192.168.1.20。",
    "src": "src/ui/MoonlightModel.cpp",
    "zh-TW": "請填寫主機的 IP 地址或名稱，例如 192.168.1.20。",
@@ -33036,6 +33777,19 @@
    "ru": "Enter действительный адрес хоста, идентификатор учетной записи и 8-значный код сопряжения."
   },
   {
+   "zh": "请打开 Windows 实时字幕",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "請開啟 Windows 即時字幕",
+   "en": "Open Windows Live Captions to continue",
+   "ja": "Windows のライブ キャプションを開いてください",
+   "ko": "Windows 라이브 캡션을 여세요",
+   "es": "Abre los subtítulos en directo de Windows",
+   "fr": "Ouvrez les sous-titres en direct de Windows",
+   "de": "Windows-Liveuntertitel zum Fortfahren öffnen",
+   "pt-BR": "Abra as legendas ao vivo do Windows",
+   "ru": "Откройте динамические субтитры Windows"
+  },
+  {
    "zh": "请打开视频或图片",
    "src": "include/veyra/engine/EngineController.h",
    "zh-TW": "請開啟影片或圖片",
@@ -33047,6 +33801,19 @@
    "de": "Video oder Bild öffnen",
    "pt-BR": "Abra um vídeo ou uma imagem",
    "ru": "Откройте видео или изображение"
+  },
+  {
+   "zh": "请按 Win + Ctrl + L 打开系统字幕",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "請按 Win + Ctrl + L 開啟系統字幕",
+   "en": "Press Win + Ctrl + L to open Live Captions",
+   "ja": "Win + Ctrl + L でライブ キャプションを開きます",
+   "ko": "Win + Ctrl + L을 눌러 라이브 캡션을 여세요",
+   "es": "Pulsa Win + Ctrl + L para abrir los subtítulos",
+   "fr": "Appuyez sur Win + Ctrl + L pour ouvrir les sous-titres",
+   "de": "Win + Strg + L öffnet die Liveuntertitel",
+   "pt-BR": "Pressione Win + Ctrl + L para abrir as legendas",
+   "ru": "Нажмите Win + Ctrl + L, чтобы открыть субтитры"
   },
   {
    "zh": "请检查软件数据目录是否可写。恢复记录保留在该目录的 driver-profiles 文件夹中。",
@@ -37170,6 +37937,19 @@
    "ru": "Клавиатура и мышь не захвачены · щелкните картинку для захвата"
   },
   {
+   "zh": "镜像失败时自动改用 GitHub 直连。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "鏡像失敗時自動改用 GitHub 直連。",
+   "en": "Veyra connects directly to GitHub if the mirror fails.",
+   "ja": "ミラーに接続できない場合は GitHub に直接接続します。",
+   "ko": "미러 사용에 실패하면 GitHub에 직접 연결합니다.",
+   "es": "Si falla el espejo, Veyra se conecta directamente a GitHub.",
+   "fr": "Si le miroir échoue, Veyra se connecte directement à GitHub.",
+   "de": "Wenn der Spiegelserver ausfällt, verbindet sich Veyra direkt mit GitHub.",
+   "pt-BR": "Se o espelho falhar, o Veyra se conecta diretamente ao GitHub.",
+   "ru": "При сбое зеркала Veyra подключится напрямую к GitHub."
+  },
+  {
    "zh": "长句自动缩小",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "長句自動縮小",
@@ -39328,6 +40108,19 @@
    "ru": "Насыщенность мин."
   },
   {
+   "zh": "首次使用需要在 Windows 中下载语音包，并把字幕语言设成原文语言。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "首次使用需要在 Windows 中下載語音套件，並將字幕語言設為原文語言。",
+   "en": "Download the speech pack in Windows on first use and set its caption language to the source language.",
+   "ja": "初回は Windows で音声パックをダウンロードし、字幕の言語を原文の言語に設定してください。",
+   "ko": "처음 사용할 때 Windows에서 음성 팩을 다운로드하고 자막 언어를 원문 언어로 설정하세요.",
+   "es": "La primera vez, descarga el paquete de voz en Windows y selecciona el idioma de origen en los subtítulos.",
+   "fr": "Au premier usage, téléchargez le pack vocal dans Windows et sélectionnez la langue source dans les sous-titres.",
+   "de": "Beim ersten Start das Sprachpaket in Windows herunterladen und die Untertitelsprache auf die Ausgangssprache stellen.",
+   "pt-BR": "No primeiro uso, baixe o pacote de fala no Windows e selecione o idioma de origem nas legendas.",
+   "ru": "При первом запуске загрузите речевой пакет Windows и выберите исходный язык для субтитров."
+  },
+  {
    "zh": "首次使用：PS5 设置 → 系统 → 远程游玩 → 关联设备，填写账号 ID 与 8 位配对码后配对。",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "首次使用：PS5 設定 → 系統 → 遠程遊玩 → 關聯裝置，填寫帳號 ID 與 8 位配對碼後配對。",
@@ -39534,6 +40327,19 @@
    "de": "Fahrereinstellung (kein Override)",
    "pt-BR": "Padrão do controlador (sem sobreposição)",
    "ru": "Водитель по умолчанию (без переопределения)"
+  },
+  {
+   "zh": "验证运行库",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "驗證執行庫",
+   "en": "Verify runtime",
+   "ja": "ランタイムを検証",
+   "ko": "런타임 검증",
+   "es": "Verificar entorno",
+   "fr": "Vérifier le moteur",
+   "de": "Laufzeit prüfen",
+   "pt-BR": "Verificar runtime",
+   "ru": "Проверить среду"
   },
   {
    "zh": "高",
@@ -40431,45 +41237,6 @@
    "de": "Hoch standardmäßig. Wenn ein Spiel oder ein anderes schweres Programm, das nebenbei läuft, langsamer wird, wählen Sie Normal",
    "pt-BR": "; Alta por padrão. Se um jogo ou outro programa pesado em execução ao lado desacelera, escolha Normal",
    "ru": "; высокий по умолчанию. Если игра или другая тяжелая программа, работающая рядом, замедляется, выберите Normal."
-  },
-  {
-   "zh": "下载线路",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "下載線路",
-   "en": "Download route",
-   "ja": "ダウンロード経路",
-   "ko": "다운로드 경로",
-   "es": "Ruta de descarga",
-   "fr": "Route de téléchargement",
-   "de": "Download-Verbindung",
-   "pt-BR": "Rota de download",
-   "ru": "Канал загрузки"
-  },
-  {
-   "zh": "镜像失败时自动改用 GitHub 直连。",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "鏡像失敗時自動改用 GitHub 直連。",
-   "en": "Veyra connects directly to GitHub if the mirror fails.",
-   "ja": "ミラーに接続できない場合は GitHub に直接接続します。",
-   "ko": "미러 사용에 실패하면 GitHub에 직접 연결합니다.",
-   "es": "Si falla el espejo, Veyra se conecta directamente a GitHub.",
-   "fr": "Si le miroir échoue, Veyra se connecte directement à GitHub.",
-   "de": "Wenn der Spiegelserver ausfällt, verbindet sich Veyra direkt mit GitHub.",
-   "pt-BR": "Se o espelho falhar, o Veyra se conecta diretamente ao GitHub.",
-   "ru": "При сбое зеркала Veyra подключится напрямую к GitHub."
-  },
-  {
-   "zh": "GitHub 直连",
-   "src": "qml/Veyra/SettingsPage.qml",
-   "zh-TW": "GitHub 直連",
-   "en": "GitHub direct",
-   "ja": "GitHub に直接接続",
-   "ko": "GitHub 직접 연결",
-   "es": "GitHub directo",
-   "fr": "GitHub en direct",
-   "de": "GitHub direkt",
-   "pt-BR": "Acesso direto ao GitHub",
-   "ru": "GitHub напрямую"
   }
  ]
 }

@@ -41,6 +41,7 @@ namespace veyra::ui {
 
 class MoonlightModel;
 class XboxModel;
+class LiveTranslation;
 
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
@@ -493,6 +494,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool variableRefresh READ variableRefresh WRITE setVariableRefresh NOTIFY presentationChanged)
     // Explicit per-application driver setup, independent of the presentation switch.
     Q_PROPERTY(QObject* nvidiaVrrProfile READ nvidiaVrrProfile CONSTANT)
+    Q_PROPERTY(QObject* liveTranslation READ liveTranslation CONSTANT)
     Q_PROPERTY(int vrrState READ vrrState NOTIFY perfChanged)
     Q_PROPERTY(QString vrrHint READ vrrHint NOTIFY perfChanged)
     // Display state of the shown monitor for the 信号 card: Windows HDR (-1
@@ -1189,6 +1191,7 @@ public:
     void setDisplaySync(int value);
     bool variableRefresh() const;
     QObject* nvidiaVrrProfile() const { return nvidiaVrrProfile_; }
+    QObject* liveTranslation() const;
     void setVariableRefresh(bool value);
     int vrrState() const;
     QString vrrHint() const;
@@ -1656,6 +1659,7 @@ private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
     QObject* nvidiaVrrProfile_ = nullptr;
+    LiveTranslation* liveTranslation_ = nullptr;
     QObject* updates_ = nullptr;
 };
 

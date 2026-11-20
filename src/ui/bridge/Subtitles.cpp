@@ -1,5 +1,6 @@
 // QML bridge: Subtitles responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "../LiveTranslation.h"
 
 namespace veyra::ui {
 // --- subtitles (P4-c) --------------------------------------------------------
@@ -124,6 +125,9 @@ void QmlPlayerBridge::tickSubtitles() {
     if (i.subAligning.load() != (i.subStatus.startsWith(tr("正在自动对齐")))) changed = true;
     if (changed) emit subtitlesChanged();
 
+    const auto& s = i.snapshot;
+    liveTranslation_->setPlayback(s.sessionId, s.running && !s.image &&
+        s.transport == engine::TransportState::Playing, false);
     // Draw. The overlay is a layered child of the video window: it moves with the
     // picture and is clipped by the same window region as the video itself.
     if (!i.videoWindow || !IsWindow(i.videoWindow)) return;
@@ -141,7 +145,6 @@ void QmlPlayerBridge::tickSubtitles() {
     RECT current{}; GetClientRect(i.subOverlay, &current);
     if (current.right != client.right || current.bottom != client.bottom)
         SetWindowPos(i.subOverlay, HWND_TOP, 0, 0, client.right, client.bottom, SWP_NOACTIVATE);
-    const auto& s = i.snapshot;
     std::vector<SubtitleLine> draw;
     const bool show = i.prefBool("subtitleEnabled", true) && (s.running && !s.image && !s.capture) && !i.subTracks.empty();
     if (show) {
@@ -194,7 +197,6 @@ void QmlPlayerBridge::tickSubtitles() {
     view.preview = i.engine.previewView();
     view.videoWidth = s.metrics.resolution.output.width;
     view.videoHeight = s.metrics.resolution.output.height;
-    updateSubtitleOverlay(i.subOverlay, draw, view);
     QString joined;
     for (const auto& line : draw) { if (line.text.empty()) continue; if (!joined.isEmpty()) joined += QStringLiteral(" | "); joined += QString::fromStdWString(line.text); }
     if (joined != i.subText) {
@@ -202,6 +204,20 @@ void QmlPlayerBridge::tickSubtitles() {
         if (!joined.isEmpty()) veyra::log::info("subtitle-overlay", "text=" + joined.toStdString());
         emit subtitleTextChanged();
     }
+    // Live text is never copied into subtitle diagnostics or the export graph.
+    const QString translated = liveTranslation_->translated();
+    const QString original = liveTranslation_->caption();
+    const bool showOriginal = liveTranslation_->showOriginal();
+    QString live = translated;
+    if (showOriginal && !original.isEmpty() && original != translated)
+        live = translated.isEmpty() ? original : original + QLatin1Char('\n') + translated;
+    if (!live.isEmpty()) {
+        SubtitleLine line;
+        line.text = live.toStdWString();
+        line.style.alignment = draw.empty() ? 2 : 8;
+        draw.push_back(std::move(line));
+    }
+    updateSubtitleOverlay(i.subOverlay, draw, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {
     QVariantList out;

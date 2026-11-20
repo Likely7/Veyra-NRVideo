@@ -636,6 +636,15 @@ VPage {
                             }
                         }
                         VRow {
+                            visible: (veyra.liveTranslation || null) !== null
+                            label: qsTr("实时翻译")
+                            VButton {
+                                objectName: "set-live-translation"
+                                text: qsTr("实时翻译设置…")
+                                onClicked: root.requestPage("translation")
+                            }
+                        }
+                        VRow {
                             label: qsTr("截图保存位置")
                             hint: veyra.screenshotDirectory + qsTr("（SDR 存 PNG，HDR 存 JPEG XR）")
                             RowLayout {

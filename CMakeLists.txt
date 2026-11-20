@@ -1346,6 +1346,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_link_libraries(veyra_update_checker PUBLIC Qt6::Core Qt6::Gui Qt6::Network veyra_portable_manifest)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
     src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
+    src/ui/LiveTranslation.cpp src/ui/LiveTranslation.h
+    src/ui/TranslationAssets.cpp src/ui/TranslationAssets.h
+    src/ui/WinCaptionReader.cpp src/ui/WinCaptionReader.h
     include/veyra/ui/QmlPlayerBridge.h include/veyra/ui/ThumbnailProvider.h
     # Custom: the start-up format badge, same layered-window construction.
     src/media/FormatBadgeWindow.cpp
@@ -1429,7 +1432,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Widgets is needed only for QFileDialog: the native file picker is the one
   # piece of the old shell worth keeping, and its own dialog is what users
   # expect from a desktop app. No QWidget UI is created.
-  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network PRIVATE shell32)
+  target_link_libraries(veyra_qml_bridge PUBLIC veyra_engine Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::Widgets Qt6::Network PRIVATE shell32 ole32 oleaut32 uiautomationcore iphlpapi ws2_32)
   add_executable(veyra_playlist_tests tests/unit/PlaylistModelTests.cpp src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h)
   set_target_properties(veyra_playlist_tests PROPERTIES AUTOMOC ON)
   target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)
@@ -1438,6 +1441,10 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_link_libraries(veyra_playlist_tests PRIVATE Qt6::Core)
   find_package(Qt6 COMPONENTS Test)
   if(TARGET Qt6::Test)
+    add_executable(veyra_live_translation_tests tests/integration/LiveTranslationTests.cpp)
+    target_compile_features(veyra_live_translation_tests PRIVATE cxx_std_20)
+    target_compile_options(veyra_live_translation_tests PRIVATE /utf-8)
+    target_link_libraries(veyra_live_translation_tests PRIVATE veyra_qml_bridge Qt6::Test)
     add_executable(veyra_audio_volume_bridge_tests tests/integration/AudioVolumeBridgeTests.cpp)
     target_compile_features(veyra_audio_volume_bridge_tests PRIVATE cxx_std_20)
     target_compile_options(veyra_audio_volume_bridge_tests PRIVATE /utf-8)

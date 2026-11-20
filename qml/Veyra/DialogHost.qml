@@ -119,6 +119,9 @@ Item {
         id: subtitleDialog
         dialogHost: host
     }
+    LiveTranslationDialog {
+        dialogHost: host
+    }
 
     // --- 音频设置 ---------------------------------------------------------
     AudioSettingsDialog {

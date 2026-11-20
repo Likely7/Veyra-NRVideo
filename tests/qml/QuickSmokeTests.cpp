@@ -58,6 +58,23 @@ QtObject {
     property string nrAutoStatus: ""
     property var nodeTimings: ({})
     property var preferences: ({exportStopsPlayback:false})
+    property QtObject liveTranslation: QtObject {
+        property bool supported: true
+        property bool enabled: false
+        property int provider: 0
+        property string sourceLanguage: ""
+        property string targetLanguage: "en"
+        property bool showOriginal: true
+        property bool modelInstalled: false
+        property bool downloading: false
+        property real downloadProgress: 0
+        property real downloadBytes: 1142252715
+        property string apiBase: ""
+        property string apiModel: ""
+        property string status: ""
+        function downloadModel() { downloading = true }
+        function cancelModelDownload() { downloading = false }
+    }
     property real playbackRate: 1
     property real volume: 1
     readonly property real maximumVolume: 3
