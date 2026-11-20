@@ -151,6 +151,10 @@ struct XboxSessionSource::Impl {
     OpusDecoder* opus = nullptr;
     std::vector<float> pcm;
     uint64_t audioSamples = 0;
+    // Opus RTP clock (48 kHz, RFC 7587) since the first packet, unwrapped.
+    int64_t audioRtpTicks = 0;
+    uint32_t lastAudioRtp = 0;
+    bool haveAudioRtp = false;
     bool audioDiscontinuity = true;
     bool audioReady = false;
 
@@ -276,12 +280,17 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
             q.queue.push_back({std::move(unit), rtp, arrival, lost>0&&q.queue.empty()});
             q.queueCv.notify_one();
         };
-        callbacks.audio = [this](const uint8_t* data, size_t size, uint32_t) {
+        callbacks.audio = [this](const uint8_t* data, size_t size, uint32_t rtp) {
             auto& q = *p_;
             if (!q.audioReady || !q.opus) return;
+            // Lost packets never reach this callback: time comes from RTP, not from
+            // counting decoded samples, so a loss leaves a gap instead of pulling audio ahead.
+            if (q.haveAudioRtp) q.audioRtpTicks += int32_t(rtp - q.lastAudioRtp);
+            q.lastAudioRtp = rtp;
+            q.haveAudioRtp = true;
             const int frames = opus_decode_float(q.opus, data, opus_int32(size), q.pcm.data(), 5760, 0);
             if (frames <= 0) { q.audioDiscontinuity = true; return; }
-            const double ptsMs = double(q.audioSamples) * 1000.0 / 48000.0;
+            const double ptsMs = double(q.audioRtpTicks) / 48.0;
             const bool accepted = audio_.push(q.pcm.data(), size_t(frames) * 2 * sizeof(float), ptsMs, q.audioDiscontinuity);
             if (!q.audioSamples) log::info("xbox-audio", std::format("first Opus block samples={} accepted={}", frames, accepted));
             q.audioDiscontinuity = false;
