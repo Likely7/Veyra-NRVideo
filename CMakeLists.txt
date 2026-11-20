@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.24)
 
-project(veyra VERSION 2.1.9 LANGUAGES C CXX)
+project(veyra VERSION 2.2.0 LANGUAGES C CXX)
 
 # The Windows runtime needs the resource compiler; Linux does not have one.
 if(WIN32)
@@ -9,7 +9,7 @@ endif()
 # Moonlight/Xbox have C sources independently of the optional PS5 backend.
 # Shown in the EXE's version resource and in the package name. CMake versions
 # must be numeric, so the beta marker lives here instead.
-set(VEYRA_DISPLAY_VERSION "2.1.9" CACHE STRING "Human-readable version string")
+set(VEYRA_DISPLAY_VERSION "${PROJECT_VERSION}" CACHE STRING "Human-readable version string")
 # The cache keeps the first value it ever saw, so a release that bumps
 # project(VERSION) used to ship an EXE still stamped with the previous display
 # string. Re-align it whenever the cached label does not start with the project
