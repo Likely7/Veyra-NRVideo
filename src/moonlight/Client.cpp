@@ -145,7 +145,9 @@ ServerInfo ServerClient::serverInfo(bool fastFail) {
             } catch (const StatusError& e) {
                 if (e.status != 401) throw;
             } catch (const TransportError& e) {
-                // Certificate mismatch or a client certificate the host does not know: fall back to HTTP.
+                // A client certificate the host does not know: fall back to HTTP. A server
+                // certificate other than the pinned one is not our host, so it cannot tell
+                // us we are unpaired: CertificateMismatch propagates.
                 if (e.kind != TransportError::Kind::Tls) throw;
             }
             // The host turned our certificate away: that is a real "not paired".

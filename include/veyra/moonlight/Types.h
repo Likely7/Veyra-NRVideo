@@ -70,8 +70,11 @@ struct StatusError : std::runtime_error {
 };
 
 // The request itself failed (connect, timeout, TLS, malformed HTTP).
+// CertificateMismatch: the TLS peer is not the host whose certificate was saved at
+// pairing. Unlike Tls (which includes the host turning our certificate away) it says
+// nothing about whether the real host still trusts us.
 struct TransportError : std::runtime_error {
-    enum class Kind { Connect, Timeout, Tls, Protocol, Cancelled };
+    enum class Kind { Connect, Timeout, Tls, CertificateMismatch, Protocol, Cancelled };
     Kind kind;
     TransportError(Kind k, const std::string& message) : std::runtime_error(message), kind(k) {}
 };

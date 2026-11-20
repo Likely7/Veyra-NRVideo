@@ -323,7 +323,7 @@ HttpResponse HttpClient::get(const HttpTarget& target, const std::string& pathAn
         std::unique_ptr<BIO, BioFree> pinBio(BIO_new_mem_buf(pinned_.data(), int(pinned_.size())));
         std::unique_ptr<X509, X509Free> pin(pinBio ? PEM_read_bio_X509(pinBio.get(), nullptr, nullptr, nullptr) : nullptr);
         if (!peer || !pin || X509_cmp(peer.get(), pin.get()) != 0)
-            throw TransportError(TransportError::Kind::Tls, "the server certificate does not match the paired one");
+            throw TransportError(TransportError::Kind::CertificateMismatch, "the server certificate does not match the paired one");
     }
 
     const bool defaultPort = (target.tls && target.port == 443) || (!target.tls && target.port == 80);
