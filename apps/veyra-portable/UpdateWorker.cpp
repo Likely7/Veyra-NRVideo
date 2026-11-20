@@ -46,10 +46,18 @@ bool checkWindowsAttachment(const fs::path& path, const QUrl& source) {
 }
 
 bool inspectExtractedTree(const fs::path& root, qint64 expectedSize) {
+    // The staging directory adds a level to the installation path. Qt assets
+    // can pass MAX_PATH here even when the same package runs after installation.
+    // Use an extended-length path for both enumeration and attribute checks.
+    auto name = root.lexically_normal().make_preferred().native();
+    if (!name.starts_with(LR"(\\?\)")) {
+        if (name.starts_with(LR"(\\)")) name = LR"(\\?\UNC\)" + name.substr(2);
+        else name = LR"(\\?\)" + name;
+    }
     qint64 bytes = 0;
     unsigned files = 0;
     std::error_code error;
-    fs::recursive_directory_iterator it(root, error), end;
+    fs::recursive_directory_iterator it(fs::path(name), error), end;
     for (; !error && it != end; it.increment(error)) {
         const auto& path = it->path();
         if (plainPath(path, true)) continue;
