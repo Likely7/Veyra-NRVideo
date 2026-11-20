@@ -72,16 +72,20 @@ void PortableUpdate::selectRelease(const QString& version) {
     package_.reset();
     manifest_.clear();
     selectedVersion_ = version;
-    if (!version.isEmpty()) {
-        request(assetUrl(version, QString::fromLatin1(manifestAsset)), int(maxManifestBytes + 1), 12000);
-        manifestDeadline_.start(12000);
-    }
+    if (!version.isEmpty()) requestManifest(route_);
     emit changed();
+}
+
+void PortableUpdate::requestManifest(DownloadRoute route) {
+    requestRoute_ = route;
+    request(assetUrl(selectedVersion_, QString::fromLatin1(manifestAsset), route), int(maxManifestBytes + 1), 12000);
+    manifestDeadline_.start(12000);
 }
 
 void PortableUpdate::request(const QUrl& url, int buffer, int idleMs) {
     cancelled_ = failed_ = false;
     response_.clear();
+    qInfo().noquote() << "[portable-update-request]" << (download_ ? "archive" : "manifest") << url.host();
     QNetworkRequest request(url);
     request.setRawHeader("User-Agent", "Veyra-Portable-Update");
     request.setRawHeader("Accept-Encoding", "identity");
@@ -118,16 +122,22 @@ void PortableUpdate::downloadAndSchedule() {
         emit notice(tr("磁盘空间不足，无法下载并解压更新"), true);
         return;
     }
-    download_ = std::make_unique<QSaveFile>(pathString(updates_ / L"download.zip"));
-    if (!download_->open(QIODevice::WriteOnly)) {
-        download_.reset();
+    if (!requestArchive(route_)) {
         emit notice(tr("无法写入更新目录"), true);
         return;
     }
+    emit changed();
+}
+
+bool PortableUpdate::requestArchive(DownloadRoute route) {
+    auto file = std::make_unique<QSaveFile>(pathString(updates_ / L"download.zip"));
+    if (!file->open(QIODevice::WriteOnly)) return false;
+    download_ = std::move(file);
     hash_.reset();
     received_ = 0;
-    request(assetUrl(package_->version, package_->asset), 512 * 1024, 30000);
-    emit changed();
+    requestRoute_ = route;
+    request(assetUrl(package_->version, package_->asset, route), 512 * 1024, 30000);
+    return true;
 }
 
 bool PortableUpdate::consume() {
@@ -159,14 +169,28 @@ void PortableUpdate::finish() {
     reply_ = nullptr;
     if (!download_) {
         package_ = ok ? readUpdateManifest(response_, flavor_, installed_, selectedVersion_, key_) : std::nullopt;
+        if (!package_ && requestRoute_ != DownloadRoute::GitHub) {
+            qInfo().noquote() << "[portable-update-manifest] mirror fallback";
+            requestManifest(DownloadRoute::GitHub);
+            return;
+        }
         manifest_ = package_ ? response_ : QByteArray{};
         qInfo().noquote() << "[portable-update-manifest]" << (package_ ? "verified" : "unavailable");
         emit changed();
         return;
     }
 
-    if (ok && received_ == package_->archiveBytes && hash_.result() == package_->digest
-        && download_->commit()) {
+    const bool verified = ok && received_ == package_->archiveBytes && hash_.result() == package_->digest;
+    if (!verified && !cancelled_ && requestRoute_ != DownloadRoute::GitHub) {
+        download_->cancelWriting();
+        download_.reset();
+        qInfo().noquote() << "[portable-update-archive] mirror fallback";
+        if (requestArchive(DownloadRoute::GitHub)) {
+            emit changed();
+            return;
+        }
+    }
+    if (verified && download_->commit()) {
         QSaveFile pending(pathString(updates_ / L"pending.json"));
         scheduled_ = pending.open(QIODevice::WriteOnly)
             && pending.write(manifest_) == manifest_.size() && pending.commit();

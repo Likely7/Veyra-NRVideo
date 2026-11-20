@@ -340,14 +340,16 @@ Window {
         z: 1100
         property var savedProView
         property real savedCaptureScroll
+        property real savedHomeScroll
         targetFor: key => {
-            if (key === "capture") return { item: homePage.captureCard() }
+            if (key === "capture") return { item: homePage.captureCard(), viewport: homePage.sourceViewport }
             if (dialogs.dialog === "capture") return dialogs.captureSettings.onboardingTarget(key)
             return proPage.onboardingTarget(key)
         }
         onAboutToShow: {
             savedProView = proPage.saveOnboardingView()
             savedCaptureScroll = dialogs.captureSettings.bodyViewport.contentY
+            savedHomeScroll = homePage.sourceViewport.contentY
         }
         onStepRequested: step => {
             // Only the displayed page changes. The player, remembered page and
@@ -364,6 +366,7 @@ Window {
         onAboutToHide: {
             dialogs.close()
             dialogs.captureSettings.bodyViewport.contentY = savedCaptureScroll
+            homePage.sourceViewport.contentY = savedHomeScroll
             root.shownPage = "home"
             proPage.restoreOnboardingView(savedProView)
         }

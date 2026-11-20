@@ -40431,6 +40431,45 @@
    "de": "Hoch standardmäßig. Wenn ein Spiel oder ein anderes schweres Programm, das nebenbei läuft, langsamer wird, wählen Sie Normal",
    "pt-BR": "; Alta por padrão. Se um jogo ou outro programa pesado em execução ao lado desacelera, escolha Normal",
    "ru": "; высокий по умолчанию. Если игра или другая тяжелая программа, работающая рядом, замедляется, выберите Normal."
+  },
+  {
+   "zh": "下载线路",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "下載線路",
+   "en": "Download route",
+   "ja": "ダウンロード経路",
+   "ko": "다운로드 경로",
+   "es": "Ruta de descarga",
+   "fr": "Route de téléchargement",
+   "de": "Download-Verbindung",
+   "pt-BR": "Rota de download",
+   "ru": "Канал загрузки"
+  },
+  {
+   "zh": "镜像失败时自动改用 GitHub 直连。",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "鏡像失敗時自動改用 GitHub 直連。",
+   "en": "Veyra connects directly to GitHub if the mirror fails.",
+   "ja": "ミラーに接続できない場合は GitHub に直接接続します。",
+   "ko": "미러 사용에 실패하면 GitHub에 직접 연결합니다.",
+   "es": "Si falla el espejo, Veyra se conecta directamente a GitHub.",
+   "fr": "Si le miroir échoue, Veyra se connecte directement à GitHub.",
+   "de": "Wenn der Spiegelserver ausfällt, verbindet sich Veyra direkt mit GitHub.",
+   "pt-BR": "Se o espelho falhar, o Veyra se conecta diretamente ao GitHub.",
+   "ru": "При сбое зеркала Veyra подключится напрямую к GitHub."
+  },
+  {
+   "zh": "GitHub 直连",
+   "src": "qml/Veyra/SettingsPage.qml",
+   "zh-TW": "GitHub 直連",
+   "en": "GitHub direct",
+   "ja": "GitHub に直接接続",
+   "ko": "GitHub 직접 연결",
+   "es": "GitHub directo",
+   "fr": "GitHub en direct",
+   "de": "GitHub direkt",
+   "pt-BR": "Acesso direto ao GitHub",
+   "ru": "GitHub напрямую"
   }
  ]
 }

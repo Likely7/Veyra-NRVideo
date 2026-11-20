@@ -41,8 +41,12 @@ VPage {
     signal videoHeightEdited(real height)
     // The status summary can wrap and the transport gains a row on narrow
     // windows. The native video host must use this same responsive geometry.
+    readonly property bool shortLayout: height < 400
+    readonly property real minimumVideoCardHeight: shortLayout ? statsBar.height + 44 : 180
+    readonly property real maximumVideoCardHeight:
+        Math.max(minimumVideoCardHeight, height - 28 - 10 - (shortLayout ? 110 : 200))
     readonly property real videoCardHeight: Math.max(statsBar.height + 1,
-        Math.min(root.videoHeight, Math.max(180, root.height - 28 - 10 - 200)))
+        Math.min(root.videoHeight, maximumVideoCardHeight))
     readonly property rect videoViewport: Qt.rect(14, 14, Math.max(1, root.width - 28),
         Math.max(1, root.videoCardHeight - statsBar.height))
     // Where a node picked from the add menu lands (world coordinates).
@@ -407,12 +411,13 @@ VPage {
             // .nv-bar: transport, then the stats strip.
             Rectangle {
                 id: statsBar
+                readonly property bool tight: width < 800
                 readonly property bool compact: width < nodeSourceBtn.implicitWidth + nodePresetBtn.implicitWidth
                     + nodeModeSwitch.implicitWidth + nodeOrbs.implicitWidth + 3 * 32 + 32 + 8 * 8 + 360
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
+                height: root.shortLayout ? 40 : (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
                 color: Theme.card
 
                 GridLayout {
@@ -451,6 +456,7 @@ VPage {
                     // .nv-stats: each entry separated by a hairline, mono numbers.
                     Flickable {
                         objectName: "node-stats-scroll"
+                        visible: !root.shortLayout
                         Layout.row: statsBar.compact ? 1 : 0
                         Layout.column: statsBar.compact ? 0 : 4
                         Layout.columnSpan: statsBar.compact ? 8 : 1
@@ -508,7 +514,16 @@ VPage {
                     }
 
                     // Total time / GPU / output-vs-target orbs (replace "已测增强 P95").
-                    ProPage.PerfOrbs { id: nodeOrbs; Layout.row: 0; Layout.column: statsBar.compact ? 4 : 5; objectName: "node-perf-orbs"; size: 32; showLabels: false; spacing: 6 }
+                    ProPage.PerfOrbs {
+                        id: nodeOrbs
+                        objectName: "node-perf-orbs"
+                        visible: !root.shortLayout && !statsBar.tight
+                        Layout.row: 0
+                        Layout.column: statsBar.compact ? 4 : 5
+                        size: 32
+                        showLabels: false
+                        spacing: 6
+                    }
                     VButton {
                         Layout.row: 0; Layout.column: statsBar.compact ? 5 : 6
                         objectName: "node-fullscreen"
@@ -535,12 +550,14 @@ VPage {
                         objectName: "node-preset-button"
                         iconName: "nodes"
                         trailingIcon: "down"
-                        maxTextWidth: 150
+                        maxTextWidth: statsBar.tight ? 90 : 150
                         text: qsTr("节点预设：") + veyra.currentPresetName
+                        tip: text
                         onClicked: nodePresetMenu.openAt(this, "down")
                     }
                     ProPage.StatusSummary {
                         id: nodeStatus
+                        visible: !root.shortLayout
                         Layout.row: statsBar.compact ? 2 : 1
                         Layout.column: 0
                         Layout.columnSpan: statsBar.compact ? 8 : 9
@@ -574,8 +591,8 @@ VPage {
                 property real origin: 0
                 onActiveChanged: if (active) origin = root.videoHeight
                 onActiveTranslationChanged: if (active) {
-                    const most = Math.max(180, root.height - 28 - 10 - 200)
-                    root.videoHeightEdited(Math.round(Math.max(180, Math.min(most, origin + activeTranslation.y))))
+                    const height = Math.min(root.maximumVideoCardHeight, origin + activeTranslation.y)
+                    root.videoHeightEdited(Math.round(Math.max(root.minimumVideoCardHeight, height)))
                 }
             }
         }
@@ -583,6 +600,7 @@ VPage {
         // --- canvas --------------------------------------------------------
         Rectangle {
             id: canvasCard
+            objectName: "node-canvas"
             // Over the fullscreen picture the canvas is a cover like any panel.
             readonly property bool videoCover: root.overlay
             property real coverRadius: radius
@@ -988,7 +1006,7 @@ VPage {
                 objectName: "node-canvas-tools"
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: 12 + 16 + 8
+                anchors.bottomMargin: root.shortLayout && !root.overlay ? 8 : 36
                 z: 4
                 width: toolsRow.implicitWidth + 8
                 height: toolsRow.implicitHeight + 8
@@ -1045,7 +1063,7 @@ VPage {
                 height: 18
                 radius: 5
                 color: Theme.shade(10, 10, 13, 0.85)
-                visible: segments.length > 0
+                visible: segments.length > 0 && (!root.shortLayout || root.overlay)
                 readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", aa: "#7FD4FF",
                                                "frame-generation": "#3DDC84", protection: "#E7B868" })
                 readonly property var segments: {

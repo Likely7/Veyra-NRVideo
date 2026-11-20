@@ -316,6 +316,7 @@ Popup {
                     font.pixelSize: 12
                 }
                 GuideButton {
+                    id: closeButton
                     objectName: "onboarding-close"
                     Layout.row: 0
                     Layout.column: 3
@@ -326,7 +327,7 @@ Popup {
                     iconName: "x"
                     ghost: true
                     tip: qsTr("退出引导")
-                    Accessible.name: tip
+                    Accessible.name: closeButton.tip
                     onClicked: guide.close()
                 }
 

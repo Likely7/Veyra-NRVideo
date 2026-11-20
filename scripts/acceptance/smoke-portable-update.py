@@ -25,7 +25,8 @@ def run(args):
     data = root / "runtime_local/user-data-2.0.0"
     data.mkdir(parents=True)
     preferences = data / "qml-preferences.v1.json"
-    preferences.write_text('{"introMusic":false,"uiScale":125}', encoding="utf-8")
+    preferences.write_text(json.dumps({"introMusic": False, "uiScale": 125, "updateDownloadRoute": args.route}),
+                           encoding="utf-8")
     luts = root / "runtime_local/luts"
     luts.mkdir()
     lut = luts / "smoke.cube"
@@ -39,6 +40,8 @@ def run(args):
     source = args.manifest.parent / row["asset"]
     received = []
     transfers = []
+    mirror_prefix = f"/mirror/{args.route}"
+    release_path = f"/Likely7/Veyra-NRVideo/releases/download/v{version}"
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *_):
@@ -52,26 +55,32 @@ def run(args):
 
         def do_GET(self):
             received.append(self.path)
-            if self.path.endswith("/releases/latest"):
+            mirrored = self.path.startswith(mirror_prefix + "/")
+            if mirrored and args.mirror_unavailable:
+                self.send_error(503)
+                return
+            path = self.path.removeprefix(mirror_prefix) if mirrored else self.path
+            if path.endswith("/releases/latest"):
                 page = f"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v{version}"
                 self.bytes_response(json.dumps(dict(tag_name=f"v{version}", html_url=page,
                                                     draft=False, prerelease=False)).encode())
-            elif self.path.endswith("/" + args.manifest.name):
+            elif path == release_path + "/" + args.manifest.name:
                 document = fixture.copy()
                 if args.scenario == "bad-signature":
                     document["signature"] = base64.b64encode(bytes(64)).decode()
                 self.bytes_response(json.dumps(document).encode())
-            elif self.path == f"/Likely7/Veyra-NRVideo/releases/download/v{version}/{row['asset']}":
+            elif path == release_path + "/" + row["asset"]:
                 self.send_response(302)
-                self.send_header("Location", f"http://127.0.0.1:{args.port}/download/{row['asset']}")
+                prefix = mirror_prefix if mirrored else ""
+                self.send_header("Location", f"http://127.0.0.1:{args.port}{prefix}/download/{row['asset']}")
                 self.send_header("Content-Length", "0")
                 self.end_headers()
-            elif self.path == "/download/" + row["asset"]:
+            elif path == "/download/" + row["asset"]:
                 self.send_response(200)
                 self.send_header("Content-Length", str(source.stat().st_size))
                 self.end_headers()
                 with source.open("rb") as payload:
-                    if args.scenario == "bad-archive":
+                    if args.scenario == "bad-archive" or (mirrored and args.mirror_corrupt_archive):
                         self.wfile.write(bytes([payload.read(1)[0] ^ 1]))
                     shutil.copyfileobj(payload, self.wfile, 1 << 20)
                 transfers.append(time.monotonic())
@@ -101,7 +110,8 @@ def run(args):
 
     active = (root / "current-version.txt").read_text(encoding="ascii").splitlines()
     assert lut.read_text(encoding="utf-8") == "LUT_3D_SIZE 2\n"
-    assert json.loads(preferences.read_text(encoding="utf-8"))["uiScale"] == 125
+    saved_preferences = json.loads(preferences.read_text(encoding="utf-8"))
+    assert saved_preferences["uiScale"] == 125 and saved_preferences["updateDownloadRoute"] == args.route
     result_file = root / ".veyra-update/result.txt"
     result = result_file.read_text(encoding="ascii").strip() if result_file.exists() else None
     if args.scenario == "success":
@@ -123,8 +133,24 @@ def run(args):
         assert not (root / ".veyra-update/pending.json").exists()
     else:
         assert active[0] == before and result == "startup-check-failed", (active, result)
+    if args.route != "github":
+        api = "/repos/Likely7/Veyra-NRVideo/releases/latest"
+        assert (mirror_prefix + api in received) == (args.route == "gh-proxy"), received
+        assert mirror_prefix + release_path + "/" + args.manifest.name in received, received
+        if args.scenario != "bad-signature":
+            assert mirror_prefix + release_path + download in received, received
+        if args.mirror_unavailable:
+            assert api in received and release_path + "/" + args.manifest.name in received, received
+        if args.mirror_unavailable or args.mirror_corrupt_archive:
+            assert release_path + download in received, received
+        if args.scenario == "success" and not args.mirror_unavailable:
+            assert (api in received) == (args.route == "ghfast"), received
+            assert release_path + "/" + args.manifest.name not in received, received
+            assert (release_path + download in received) == args.mirror_corrupt_archive, received
     print(json.dumps(dict(scenario=args.scenario, flavor=flavor, result=result,
                           rollback=args.rollback, prior=before, active=active, requests=received,
+                          route=args.route, mirrorUnavailable=args.mirror_unavailable,
+                          mirrorCorruptArchive=args.mirror_corrupt_archive,
                           wholeArchiveServed=bool(transfers)),
                      ensure_ascii=False, indent=2))
 
@@ -136,5 +162,11 @@ if __name__ == "__main__":
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--scenario", choices=("success", "bad-signature", "bad-archive", "probe-failure"), default="success")
+    parser.add_argument("--route", choices=("github", "gh-proxy", "ghfast"), default="github")
+    parser.add_argument("--mirror-unavailable", action="store_true")
+    parser.add_argument("--mirror-corrupt-archive", action="store_true")
     parser.add_argument("--rollback", action="store_true")
-    run(parser.parse_args())
+    parameters = parser.parse_args()
+    if parameters.route == "github" and (parameters.mirror_unavailable or parameters.mirror_corrupt_archive):
+        parser.error("mirror failures require --route gh-proxy or --route ghfast")
+    run(parameters)

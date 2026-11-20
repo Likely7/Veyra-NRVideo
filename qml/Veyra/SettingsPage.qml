@@ -21,6 +21,7 @@ VPage {
     property string capturingKey: ""
     onSectionChanged: {
         capturingKey = ""
+        if (settingsBodyScroll) settingsBodyScroll.contentY = settingsBodyScroll.originY
         if (section === "ps5") veyra.ps5Load()
         // M32: the section's groups redraw one after another (pages-b.js
         // render(true): 480 ms, i*40 ms, y 12).
@@ -70,9 +71,22 @@ VPage {
         border.width: 1
         border.color: Theme.stroke
 
-        ColumnLayout {
+        Flickable {
+            id: navScroll
+            objectName: "settings-navigation"
             anchors.fill: parent
             anchors.margins: 10
+            contentWidth: width
+            contentHeight: navColumn.implicitHeight
+            flickableDirection: Flickable.VerticalFlick
+            boundsBehavior: Flickable.StopAtBounds
+            clip: true
+            ScrollBar.vertical: VScrollBar { }
+        }
+        ColumnLayout {
+            id: navColumn
+            parent: navScroll.contentItem
+            width: navScroll.width - (navScroll.contentHeight > navScroll.height ? 8 : 0)
             spacing: 2
             VH2 { text: qsTr("设置"); Layout.margins: 8 }
             Item { implicitHeight: 6 }
@@ -87,20 +101,23 @@ VPage {
                          : navHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                     // .setnav button: icon, 10px, label.
-                    Row {
+                    RowLayout {
                         anchors.left: parent.left
+                        anchors.right: parent.right
                         anchors.leftMargin: 10
+                        anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: 10
                         VIcon {
-                            anchors.verticalCenter: parent.verticalCenter
                             name: modelData.icon
                             size: 15
                             color: modelData.tint !== undefined ? modelData.tint : navLabel.color
                         }
                         Text {
                             id: navLabel
-                            anchors.verticalCenter: parent.verticalCenter
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            elide: Text.ElideRight
                             text: modelData.label
                             color: root.section === modelData.id ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
@@ -108,11 +125,13 @@ VPage {
                             font.weight: Font.Medium
                         }
                     }
+                    ToolTip.visible: navHover.hovered && navLabel.truncated
+                    ToolTip.text: navLabel.text
+                    ToolTip.delay: 500
                     HoverHandler { id: navHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.section = modelData.id }
                 }
             }
-            Item { Layout.fillHeight: true }
         }
     }
 
@@ -134,6 +153,7 @@ VPage {
         clip: true
 
         Flickable {
+            id: settingsBodyScroll
             anchors.fill: parent
             contentHeight: body.implicitHeight + 44
             clip: true
@@ -1361,6 +1381,21 @@ VPage {
                         }
                     }
                     VGroup {
+                        VRow {
+                            label: qsTr("下载线路")
+                            hint: qsTr("镜像失败时自动改用 GitHub 直连。")
+                            VSelect {
+                                objectName: "set-update-download-route"
+                                options: [
+                                    { id: "github", label: qsTr("GitHub 直连") },
+                                    { id: "gh-proxy", label: "GH-Proxy · gh-proxy.com" },
+                                    { id: "ghfast", label: "GHFast · ghfast.top" }
+                                ]
+                                value: (options.find(option => option.id === veyra.preferences.updateDownloadRoute) || options[0]).label
+                                enabled: !veyra.updates.checking && !root.portableUpdate.downloading
+                                onPicked: id => veyra.setPreference("updateDownloadRoute", id)
+                            }
+                        }
                         VRow {
                             label: qsTr("检查更新")
                             hint: veyra.updates.latestVersion.length > 0

@@ -24,8 +24,10 @@ struct UpdatePackage {
 
 QByteArray updatePublicKey();
 QString releaseVersion(const QString& displayVersion);
-QUrl releaseApiUrl();
-QUrl assetUrl(const QString& version, const QString& asset);
+enum class DownloadRoute { GitHub, GhProxy, GhFast };
+std::optional<DownloadRoute> parseDownloadRoute(const QString& name);
+QUrl releaseApiUrl(DownloadRoute route = DownloadRoute::GitHub);
+QUrl assetUrl(const QString& version, const QString& asset, DownloadRoute route = DownloadRoute::GitHub);
 bool allowedRedirect(const QUrl& url);
 QString packageAssetName(const QString& version, const QString& flavor);
 std::optional<UpdatePackage> readUpdateManifest(

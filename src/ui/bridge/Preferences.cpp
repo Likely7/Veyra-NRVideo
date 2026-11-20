@@ -2,6 +2,7 @@
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/ui/UpdateChecker.h"
 
 namespace veyra::ui {
 // --- shell preferences -------------------------------------------------------
@@ -290,6 +291,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         stored = v;
     } else if (key == QLatin1String("rememberPosition") || key == QLatin1String("dockPinned")) {
         stored = value.toBool();
+    } else if (key == QLatin1String("updateDownloadRoute")) {
+        const auto name = value.toString();
+        if (!portable::parseDownloadRoute(name)) return false;
+        stored = name;
     } else if (key == QLatin1String("language")) {
         const QString v = value.toString();
         static const QStringList languages{"auto", "zh-CN", "zh-TW", "en", "ja", "ko", "es", "fr", "de", "pt-BR", "ru"};
@@ -321,6 +326,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if (key == QLatin1String("updateDownloadRoute")) {
+        const auto route = portable::parseDownloadRoute(impl_->prefString("updateDownloadRoute"));
+        static_cast<UpdateChecker*>(updates_)->setDownloadRoute(route.value_or(portable::DownloadRoute::GitHub));
+        return;
+    }
     if(key==QLatin1String("virtualCameraFps")&&virtualCameraEnabled())setVirtualCameraEnabled(true);
     if(key==QLatin1String("captureAudioMonitor"))
         impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));

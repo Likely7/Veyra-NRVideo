@@ -169,6 +169,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 #endif
     // Before anything opens: the renderer reads the output choice at start().
     applyPreference(QStringLiteral("language"));
+    applyPreference(QStringLiteral("updateDownloadRoute"));
     applyPreference(QStringLiteral("audioDevice"));
     applyPreference(QStringLiteral("audioForceStereo"));
     applyPreference(QStringLiteral("magewellLowLatency"));

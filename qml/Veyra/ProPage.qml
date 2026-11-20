@@ -286,7 +286,8 @@ VPage {
         anchors.right: parent.right
         anchors.top: parent.top
         anchors.margins: 14
-        readonly property bool compact: width < 972
+        readonly property bool compactActions: width < 850
+        readonly property bool compact: width < 972 || width - headActions.implicitWidth < 320
         height: compact ? 72 : 32
 
         RowLayout {
@@ -294,7 +295,7 @@ VPage {
             objectName: "pro-source-info"
             anchors.left: parent.left
             anchors.top: parent.top
-            width: head.compact ? head.width : Math.max(0, head.width - headActions.width - 16)
+            width: head.compact ? head.width : Math.max(0, head.width - actionViewport.width - 16)
             height: 32
             spacing: 8
 
@@ -326,12 +327,26 @@ VPage {
             Item { Layout.fillWidth: true }
         }
 
-        RowLayout {
-            id: headActions
+        Flickable {
+            id: actionViewport
             objectName: "pro-header-actions"
             anchors.right: parent.right
             y: head.compact ? 40 : 0
+            width: Math.min(head.width, headActions.implicitWidth)
             height: 32
+            contentWidth: headActions.implicitWidth
+            contentHeight: height
+            flickableDirection: Flickable.HorizontalFlick
+            interactive: contentWidth > width
+            boundsBehavior: Flickable.StopAtBounds
+            clip: interactive
+            ScrollBar.horizontal: VScrollBar { }
+        }
+        RowLayout {
+            id: headActions
+            parent: actionViewport.contentItem
+            width: implicitWidth
+            height: actionViewport.height
             spacing: 8
 
             // View toggle. Choosing 节点 asks first, because switching rebuilds the
@@ -347,7 +362,16 @@ VPage {
                     switchDialog.open()
                 }
             }
-            VButton { iconName: "camera"; text: qsTr("截图"); onClicked: veyra.takeScreenshot() }
+            VButton {
+                id: screenshotButton
+                objectName: "pro-screenshot"
+                iconName: "camera"
+                text: head.compactActions ? "" : qsTr("截图")
+                icon: head.compactActions
+                tip: qsTr("截图")
+                Accessible.name: screenshotButton.tip
+                onClicked: veyra.takeScreenshot()
+            }
             // Recording: the red dot pulses while the file is open, and a
             // three second countdown runs before the engine is asked to open
             // it. The countdown is an interface animation; the file itself is
@@ -395,6 +419,8 @@ VPage {
                     }
                     Text {
                         id: recordLabel
+                        width: head.compactActions ? Math.min(96, implicitWidth) : implicitWidth
+                        elide: Text.ElideRight
                         anchors.verticalCenter: parent.verticalCenter
                         text: recordControl.countdown > 0 ? qsTr("录制 %1 秒").arg(recordControl.countdown)
                               : veyra.recording ? qsTr("停止 %1").arg(recordControl.elapsed)
@@ -405,6 +431,8 @@ VPage {
                         font.weight: Font.Medium
                     }
                 }
+                ToolTip.visible: recordMouse.containsMouse && recordLabel.truncated
+                ToolTip.text: recordLabel.text
                 MouseArea {
                     id: recordMouse
                     objectName: "pro-record-mouse"
@@ -449,7 +477,9 @@ VPage {
                 objectName: "pro-virtual-camera-control"
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 6
+                VIcon { visible: head.compactActions; name: "video"; size: 14 }
                 Text {
+                    visible: !head.compactActions
                     text: qsTr("虚拟摄像机")
                     color: veyra.virtualCameraEnabled ? Theme.accent : Theme.t2
                     font.family: Theme.fontUi
@@ -460,12 +490,17 @@ VPage {
                     checked: veyra.virtualCameraEnabled
                     onToggled: enabled => veyra.setVirtualCameraEnabled(enabled)
                 }
+                HoverHandler { id: cameraHover }
+                ToolTip.visible: head.compactActions && cameraHover.hovered
+                ToolTip.text: qsTr("虚拟摄像机")
             }
             RowLayout {
                 objectName: "pro-replay-control"
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 6
+                VIcon { visible: head.compactActions; name: "clock"; size: 14 }
                 Text {
+                    visible: !head.compactActions
                     text: qsTr("即时回放")
                     color: Theme.t2
                     font.family: Theme.fontUi
@@ -476,6 +511,9 @@ VPage {
                     checked: veyra.replayEnabled
                     onToggled: checked => veyra.setPreference("replayEnabled", checked)
                 }
+                HoverHandler { id: replayHover }
+                ToolTip.visible: head.compactActions && replayHover.hovered
+                ToolTip.text: qsTr("即时回放")
             }
             // Instant replay (#103): while the buffer is on, the time it holds;
             // a click saves it, as the replay shortcut does.
@@ -489,6 +527,7 @@ VPage {
                 text: replay.saving ? qsTr("保存中…")
                       : qsTr("回放 %1").arg(Math.floor(held / 60) + ":" + (held % 60 < 10 ? "0" : "") + held % 60)
                 tip: qsTr("保存最近的画面和声音（%1）").arg(veyra.shortcuts.replay || qsTr("未设置快捷键"))
+                maxTextWidth: head.compactActions ? 84 : 0
                 enabled: !replay.saving && held > 0
                 onClicked: veyra.saveReplay("pro-button")
             }
@@ -498,7 +537,7 @@ VPage {
                 trailingIcon: "down"
                 text: qsTr("预设：") + veyra.currentPresetName
                 tip: text
-                maxTextWidth: 180
+                maxTextWidth: head.compactActions ? 110 : 180
                 onClicked: presetMenu.openAt(this, "down")
             }
         }
@@ -508,8 +547,10 @@ VPage {
     // These are available before the first layout pass when a source is opened.
     readonly property real videoColumnWidth: Math.max(1, root.width - root.inspectorWidth - 14 * 2 - 10)
     readonly property real metersHeight: Math.max(172, meter3Content.implicitHeight + 28, stageGrid.implicitHeight + 66)
+    readonly property real pictureSpace: root.height - 14 * 2 - head.height - 10 - transport.height
+    readonly property bool showMeters: root.onboardingActive || pictureSpace >= metersHeight + 10 + 80
     readonly property real videoCardHeight: Math.max(transport.height + 1,
-        root.height - 14 * 2 - head.height - 10 - root.metersHeight - 10)
+        pictureSpace + transport.height - (showMeters ? metersHeight + 10 : 0))
     readonly property rect videoViewport: Qt.rect(14, 14 + head.height + 10,
         root.videoColumnWidth, root.videoCardHeight - transport.height)
 
@@ -777,7 +818,7 @@ VPage {
     // --- meters (at least 172px, three cards) -----------------------------
     RowLayout {
         id: meters
-        visible: !root.overlay
+        visible: !root.overlay && root.showMeters
         anchors.left: vwrap.left
         anchors.top: vwrap.bottom
         anchors.topMargin: 10
@@ -1273,8 +1314,8 @@ VPage {
                 implicitHeight: chainCol.implicitHeight + 20
                 objectName: "pro-processing-order"
                 // The design draws the chain bar on the 画质 tab only.
-                // In a short walkthrough window, keep room for the highlighted control.
-                visible: root.tab === "quality" && (!root.onboardingActive || insp.height >= 240)
+                // Leave the controls a usable scroll area in short windows.
+                visible: root.tab === "quality" && insp.height >= 240
                 radius: 12
                 color: Qt.rgba(1, 1, 1, 0.03)
                 border.width: 1
@@ -2000,10 +2041,11 @@ VPage {
             RowLayout {
                 objectName: "pro-inspector-footer"
                 Layout.fillWidth: true
-                Layout.margins: 10
+                Layout.margins: insp.height < 240 ? 6 : 10
                 spacing: 8
                 VDot { Layout.alignment: Qt.AlignTop; Layout.topMargin: 5; off: !veyra.running; warn: veyra.captureRecovering; err: veyra.failed }
                 Text {
+                    id: inspectorStatus
                     objectName: "pro-inspector-status"
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
@@ -2012,6 +2054,11 @@ VPage {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsSmall
                     wrapMode: Text.Wrap
+                    maximumLineCount: insp.height < 240 ? 1 : 4
+                    elide: Text.ElideRight
+                    HoverHandler { id: inspectorStatusHover }
+                    ToolTip.visible: inspectorStatusHover.hovered && inspectorStatus.truncated
+                    ToolTip.text: inspectorStatus.text
                 }
                 VButton {
                     objectName: "pro-reset-current-page"

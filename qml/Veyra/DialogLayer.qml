@@ -10,6 +10,7 @@ Rectangle {
     property string sub: ""
     property string glyph: ""
     property int dialogWidth: 640
+    readonly property real bodyWidth: Math.max(1, width - 40)
     property var actions: []
     // dialogs.js `foot`: a quiet note at the left of the button row.
     property string foot: ""
@@ -83,12 +84,13 @@ Rectangle {
     // Centred by position, not anchors: the parent is null while closed.
     x: Math.round((dialogHost.width - width) / 2)
     y: Math.round((dialogHost.height - height) / 2)
-    width: dialogWidth
+    width: Math.max(1, Math.min(dialogWidth, dialogHost.width - 24))
     // Never taller than the window: the body scrolls instead of the panel
     // being cut off at the top and bottom of a small window.
     // Header and footer each carry 16px margins top and bottom (64 in all); the
     // old +40 left every body 24px short, so short dialogs hid their last row.
-    implicitHeight: Math.min(720, dialogHost.height - 24, header.height + bodyScroll.contentHeight + footer.height + 64)
+    implicitHeight: Math.min(720, dialogHost.height - 24,
+                             header.implicitHeight + bodyScroll.contentHeight + footer.implicitHeight + 64)
     height: implicitHeight
     // Swallow presses on the panel itself so they never reach the scrim
     // below (a passive tap on a control used to close the whole dialog).
@@ -146,13 +148,19 @@ Rectangle {
             Layout.fillHeight: true
             Layout.leftMargin: 20
             Layout.rightMargin: 20
-            contentHeight: bodyCol.implicitHeight
+            // Very narrow film windows still need access to fixed-width device
+            // address and format controls. Keep the header and actions in view.
+            contentWidth: dlg.width < 520 ? Math.max(dlg.bodyWidth, dlg.dialogWidth - 40) : dlg.bodyWidth
+            contentHeight: bodyCol.implicitHeight + (contentWidth > dlg.bodyWidth ? 12 : 0)
+            flickableDirection: Flickable.AutoFlickIfNeeded
+            boundsBehavior: Flickable.StopAtBounds
             clip: true
             ScrollBar.vertical: VScrollBar { }
+            ScrollBar.horizontal: VScrollBar { wide: true }
             ColumnLayout {
                 id: bodyCol
                 // Keep the groups clear of the overlaid scroll bar.
-                width: parent.width - (bodyScroll.contentHeight > bodyScroll.height ? 12 : 0)
+                width: Math.max(1, bodyScroll.contentWidth - 12)
                 spacing: 0
             }
         }
@@ -165,6 +173,7 @@ Rectangle {
             Text {
                 objectName: "dialog-foot"
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
                 visible: dlg.foot.length > 0
                 text: dlg.foot
                 color: Theme.t3
@@ -178,6 +187,8 @@ Rectangle {
                 model: dlg.actions
                 delegate: VButton {
                     required property var modelData
+                    Layout.maximumWidth: Math.max(0, (dlg.width - 32 - Math.max(0, actionButtons.count - 1) * footer.spacing)
+                        / Math.max(1, actionButtons.count))
                     text: modelData.label
                     iconName: modelData.icon || ""
                     primary: modelData.primary === true

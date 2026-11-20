@@ -29,6 +29,7 @@ public:
     int progress() const;
     QString sizeText() const;
     QString releaseNotes() const;
+    void setDownloadRoute(portable::DownloadRoute route) { route_ = route; }
     void selectRelease(const QString& version);
     Q_INVOKABLE void downloadAndSchedule();
     Q_INVOKABLE void cancel();
@@ -38,6 +39,8 @@ signals:
     void notice(const QString& message, bool error);
 
 private:
+    void requestManifest(portable::DownloadRoute route);
+    bool requestArchive(portable::DownloadRoute route);
     void request(const QUrl& url, int buffer, int idleMs);
     bool consume();
     void finish();
@@ -52,6 +55,8 @@ private:
     std::unique_ptr<QSaveFile> download_;
     QCryptographicHash hash_{QCryptographicHash::Sha256};
     qint64 received_ = 0;
+    portable::DownloadRoute route_ = portable::DownloadRoute::GitHub;
+    portable::DownloadRoute requestRoute_ = portable::DownloadRoute::GitHub;
     bool scheduled_ = false, cancelled_ = false, failed_ = false;
 };
 
