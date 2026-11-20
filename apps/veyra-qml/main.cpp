@@ -413,7 +413,7 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
 } // namespace
 
 namespace {
-// Last-chance handler, as in the Win32 shell (apps/veyra/main.cpp): provider and
+// Last-chance handler: provider and
 // driver faults are structured exceptions no C++ catch sees. The 2.0 beta had no
 // handler, so a field crash left neither a reason nor the last buffered log lines.
 std::wstring g_crashDumpDirectory;
