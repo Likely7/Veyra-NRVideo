@@ -1193,6 +1193,8 @@ private:
     uint32_t dlssgLiteState_ = 0;
     std::wstring dlssgDirectory_;
     uint32_t nrSeh_ = 0;
+    // Init1Ext succeeded: Shutdown1 is owed before the snippet DLL is unloaded.
+    bool nrSnippetInitialized_ = false;
     bool fgCapsAvailable_ = false;
     int fgMultiFrameMax_ = 0;
 

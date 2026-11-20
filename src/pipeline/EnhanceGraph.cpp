@@ -1748,6 +1748,7 @@ bool EnhanceGraph::initNgxFeatures()
         veyra::log::error("graph", std::format("NR snippet init failed 0x{:X}", nrResult_));
         return false;
     }
+    nrSnippetInitialized_ = true;
     }
     failedBackend_=engine::FailedBackend::NgxCore;
     ngxParams_ = coreHost_->allocateParameters(st);
@@ -4773,6 +4774,15 @@ void EnhanceGraph::shutdown()
         ngxParams_ = nullptr;
     }
     if (nrAdapter_) {
+        // Same order as nr_harness: features and parameter blocks are gone, so the
+        // snippet shuts down before its IAT shim is restored and the DLL is freed.
+        if (nrSnippetInitialized_) {
+            uint64_t result = 0;
+            uint32_t seh = 0;
+            if (!nrAdapter_->snippetShutdown1(context_.device(), result, seh) || result != uint64_t(NVSDK_NGX_Result_Success))
+                veyra::log::error("graph", std::format("NR snippet Shutdown1 failed result=0x{:X} seh=0x{:X}", result, seh));
+            nrSnippetInitialized_ = false;
+        }
         nrAdapter_->restoreCallerCompatibility();
         nrAdapter_->unload();
     }
