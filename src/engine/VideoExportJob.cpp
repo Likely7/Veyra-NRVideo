@@ -1,5 +1,6 @@
 #include "veyra/engine/VideoExportJob.h"
 #include "veyra/engine/ExportStreams.h"
+#include "veyra/engine/ExportTimeline.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/ResolutionPlan.h"
@@ -223,7 +224,7 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         muxResult=avformat_write_header(mux,nullptr);
         if(muxResult<0){failAv(L"写入封装文件头",muxResult);break;}headerWritten=true;
         uint64_t sourceCount=0,generatedCount=0,holdCount=0;int64_t outputIndex=0;bool error=false;std::shared_ptr<pipeline::FrameLease> lastReal;
-        double previousPts=0;int64_t lastOutputUs=-1;
+        double previousPts=0;int64_t lastOutputUs=-1;ContinuousTimeline timeline;
         uint64_t slowFrames=0;
         // Directed export measurements exclude feature/encoder creation, but include final drain.
         const auto pipelineStart=std::chrono::steady_clock::now();
@@ -319,11 +320,16 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
             if(rs==source::SourceReadStatus::Eos)break;if(rs!=source::SourceReadStatus::Frame){failureReason=source.errorMessage();error=true;break;}
             double sourcePts=packet.pts.toDouble();
             if(sourceCount==0)videoOriginSeconds=!packet.pts.isUnknown()&&std::isfinite(sourcePts)?sourcePts:0;
-            double pts=sourcePts-videoOriginSeconds;
-            if(requestedEnd>0&&sourcePts>=requestedEnd)break;
-            const bool repairPts=packet.pts.isUnknown()||!std::isfinite(pts)||(sourceCount&&pts<=previousPts);
+            // A splice that steps back realigns once and keeps its offset (one history reset);
+            // an unknown or single bad timestamp continues one interval after the last frame.
+            const bool unknownPts=packet.pts.isUnknown()||!std::isfinite(sourcePts-videoOriginSeconds);
+            bool steppedBack=false;
+            double pts=timeline.map(unknownPts?std::numeric_limits<double>::quiet_NaN():sourcePts-videoOriginSeconds,
+                                    sourceCount?previousPts+sourceInterval:0,&steppedBack);
+            if(requestedEnd>0&&sourcePts+timeline.offset>=requestedEnd)break;
+            const bool repairPts=unknownPts||steppedBack;
             if(repairPts){
-                pts=sourceCount?previousPts+sourceInterval:0;++repairedTimestamps;
+                ++repairedTimestamps;
                 if(repairedTimestamps<=5)veyra::log::warn("export-timeline",std::format("timestamp repaired source={} raw={} output={}",sourceCount,sourcePts,pts));
             }
             if(removeDeviceIndex>=0&&sourceCount==uint64_t(removeDeviceIndex)){
