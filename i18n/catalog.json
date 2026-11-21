@@ -22506,19 +22506,6 @@
    "ru": "Не удалось построить параметры захвата соединения"
   },
   {
-   "zh": "无法确认此 Veyra 配置是否已打开（Windows 错误 %1）。请关闭原窗口后重试。",
-   "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "無法確認此 Veyra 設定檔是否已開啟（Windows 錯誤 %1）。請關閉原視窗後再試一次。",
-   "en": "Could not check if this Veyra profile is already open (Windows error %1). Close its existing window and try again.",
-   "ja": "この Veyra プロファイルが開いているか確認できません（Windows エラー %1）。元のウィンドウを閉じてからやり直してください。",
-   "ko": "이 Veyra 프로필이 이미 열려 있는지 확인할 수 없습니다(Windows 오류 %1). 기존 창을 닫고 다시 시도하세요.",
-   "es": "No se pudo comprobar si este perfil de Veyra está abierto (error de Windows %1). Cierra su ventana y vuelve a intentarlo.",
-   "fr": "Impossible de vérifier si ce profil Veyra est ouvert (erreur Windows %1). Fermez sa fenêtre et réessayez.",
-   "de": "Für dieses Veyra-Profil konnte nicht geprüft werden, ob es geöffnet ist (Windows-Fehler %1). Schließe das vorhandene Fenster und versuche es erneut.",
-   "pt-BR": "Não foi possível verificar se este perfil do Veyra já está aberto (erro %1 do Windows). Feche a janela existente e tente novamente.",
-   "ru": "Не удалось проверить, открыт ли этот профиль Veyra (ошибка Windows %1). Закройте его окно и повторите попытку."
-  },
-  {
    "zh": "无法获取当前显卡",
    "src": "src/engine/LiveRecorder.cpp",
    "zh-TW": "無法取得目前顯示卡",
@@ -32724,6 +32711,19 @@
    "ru": "Выбор поколения кадров не был принят; предыдущая настройка сохранена. Проверьте множитель и возможность backend"
   },
   {
+   "zh": "补帧降档",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "補幀降檔",
+   "en": "Frame generation reduced",
+   "ja": "フレーム生成を縮小中",
+   "ko": "프레임 생성 단계 하향",
+   "es": "Generación de fotogramas reducida",
+   "fr": "Génération d’images réduite",
+   "de": "Frame-Generierung heruntergestuft",
+   "pt-BR": "Geração de quadros reduzida",
+   "ru": "Генерация кадров снижена"
+  },
+  {
    "zh": "裁剪范围超出画面",
    "src": "src/source/ScreenCaptureSource.cpp",
    "zh-TW": "裁剪範圍超出畫面",
@@ -33203,6 +33203,19 @@
    "de": "Gerätebildrate (FPS)",
    "pt-BR": "Taxa de quadros do dispositivo (FPS)",
    "ru": "Частота кадров устройства (FPS)"
+  },
+  {
+   "zh": "设备当前忙。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "裝置目前忙碌。另一個 Veyra（PID {}）可能正在使用擷取卡，請關閉後再試一次。",
+   "en": "The device is busy. Another Veyra (PID {}) may be using the capture card. Close it and try again.",
+   "ja": "デバイスは使用中です。別の Veyra（PID {}）がキャプチャーカードを使っている可能性があります。終了してから再試行してください。",
+   "ko": "장치가 사용 중입니다. 다른 Veyra(PID {})가 캡처 카드를 사용 중일 수 있습니다. 종료한 후 다시 시도하세요.",
+   "es": "El dispositivo está ocupado. Otra instancia de Veyra (PID {}) podría estar usando la capturadora. Ciérrala y vuelve a intentarlo.",
+   "fr": "Le périphérique est occupé. Une autre instance de Veyra (PID {}) utilise peut-être la carte d’acquisition. Fermez-la et réessayez.",
+   "de": "Das Gerät ist belegt. Eine andere Veyra-Instanz (PID {}) verwendet möglicherweise die Capture-Karte. Schließe sie und versuche es erneut.",
+   "pt-BR": "O dispositivo está ocupado. Outra instância do Veyra (PID {}) pode estar usando a placa de captura. Feche-a e tente novamente.",
+   "ru": "Устройство занято. Возможно, другой экземпляр Veyra (PID {}) использует карту захвата. Закройте его и повторите попытку."
   },
   {
    "zh": "设备当前忙。请关闭可能正在采集的应用后重试。",
@@ -40353,6 +40366,19 @@
    "de": "Home = die Seite für die Auswahl einer Quelle (Klick auf das Logo oben kehrt auch hier zurück)",
    "pt-BR": "Home = a página para escolher uma fonte (clique no logotipo no topo também retorna aqui)",
    "ru": "Home = страница для выбора источника (нажатие на логотип вверху также возвращается здесь)"
+  },
+  {
+   "zh": "驱动报告系统资源不足。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動程式回報系統資源不足。另一個 Veyra（PID {}）可能正在使用擷取卡，請關閉後再試一次。",
+   "en": "The driver reports insufficient system resources. Another Veyra (PID {}) may be using the capture card. Close it and try again.",
+   "ja": "ドライバーがシステム リソースの不足を報告しました。別の Veyra（PID {}）がキャプチャーカードを使っている可能性があります。終了してから再試行してください。",
+   "ko": "드라이버에서 시스템 리소스가 부족하다고 보고했습니다. 다른 Veyra(PID {})가 캡처 카드를 사용 중일 수 있습니다. 종료한 후 다시 시도하세요.",
+   "es": "El controlador indica que faltan recursos del sistema. Otra instancia de Veyra (PID {}) podría estar usando la capturadora. Ciérrala y vuelve a intentarlo.",
+   "fr": "Le pilote signale un manque de ressources système. Une autre instance de Veyra (PID {}) utilise peut-être la carte d’acquisition. Fermez-la et réessayez.",
+   "de": "Der Treiber meldet unzureichende Systemressourcen. Eine andere Veyra-Instanz (PID {}) verwendet möglicherweise die Capture-Karte. Schließe sie und versuche es erneut.",
+   "pt-BR": "O driver informa que os recursos do sistema são insuficientes. Outra instância do Veyra (PID {}) pode estar usando a placa de captura. Feche-a e tente novamente.",
+   "ru": "Драйвер сообщает о нехватке системных ресурсов. Возможно, другой экземпляр Veyra (PID {}) использует карту захвата. Закройте его и повторите попытку."
   },
   {
    "zh": "驱动报告系统资源不足。请关闭其他采集程序后重试，并检查设备连接和驱动。",

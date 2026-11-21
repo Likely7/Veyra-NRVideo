@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-21 采集占用审查修订
+
+在 `codex/capture-busy-status-20261120` 的 `ec187cfd` 上补齐交接审查。配置互斥量无法创建或等待时，已核实的活跃实例仍走原有唤起与退出确认。查无活跃实例时继续启动，日志记录 Windows 错误码。安装根目录的运行锁仍负责协调启动、更新和卸载。遇到 `0x800705AA` 或 `0x800700AA` 时，采集失败提示可显示另一个 Veyra 的 PID，并注明可能占用。输入帧率或时间线提示优先时，状态详情也列出实际补帧降档。在线更新仅替换版本目录，需下载完整安装包或便携包才能更新根启动器并获得新版恢复提示。见 [下一版发布说明](NEXT_RELEASE_NOTES.md)。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-capture-review-20261121 --build-dir E:/项目/Veyra/build/codex-capture-exit-20261121 --label 2.2.0-capture-exit-test --jobs 2` 构建播放器、根启动器及六个相关测试目标，77.4 秒通过。用同名事件制造 `CreateMutexW` 错误 6，直接和根启动器两种入口都成功播放私有视频。真实测试夹具进程验证两种 HRESULT 的动态 PID 和其他错误码的原有行为。17 项既有 Windows 原生回归通过，覆盖启动切换、根锁与进程退出等待。Qt Quick 279 项和 UI 合同、配置迁移及九语词库检查通过。
+
+本轮输出在 `E:/项目/Veyra/{logs,tests,tmp,reports}/codex-capture-review-20261121`，构建回执为 `logs/codex-capture-review-20261121/build-20261121-040346/receipt.json`。使用私有配置和模拟占用验证。#182 的实际采集卡及旧版驱动组合仍待现场复测。
+
 ## 2026-11-21 采集进程迟迟未退出时的启动恢复
 
 继续在 `codex/capture-busy-status-20261120` 的 `260f562a` 上处理 [#182](https://github.com/Likely7/Veyra-NRVideo/issues/182)。报告描述的是已经没有响应但进程仍持有采集设备的场景。Windows 的结束操作可能要等设备 I/O 完成。报告和本机测试都不足以确定具体驱动。

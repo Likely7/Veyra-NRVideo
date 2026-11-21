@@ -357,6 +357,7 @@ void QmlPlayerBridge::updateRunStatus() {
     const bool active = s.running && !s.image && s.transport == engine::TransportState::Playing;
     QString status = tr("待机"), level = QStringLiteral("idle");
     QString action, hint;
+    bool secondaryFgWarning = false;
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
     // Paused to buffer a network source (#48): no pictures are due, so the output rate is not judged.
@@ -368,6 +369,7 @@ void QmlPlayerBridge::updateRunStatus() {
         const std::wstring rateStatus = i.history.rateStatus(s);
         status = uiText(rateStatus);
         level = rateStatus == L"正常" ? QStringLiteral("ok") : QStringLiteral("warn");
+        secondaryFgWarning = rateStatus != L"补帧调度降档" && i.history.fgScheduleLimited(s);
         if (rateStatus == L"输入帧率不足" && sourceKind() == QLatin1String("capture")) {
             action = tr("请检查采集卡接口");
             hint = tr("采集卡送来的帧率低于信号帧率。USB 采集卡请直接插在主板背部的 USB 3.0 及以上接口，不要经过扩展坞、延长线或前置接口。同时确认主机输出帧率与所选采集格式一致。");
@@ -455,6 +457,7 @@ void QmlPlayerBridge::updateRunStatus() {
         else if(s.hudLockState==3)options<<tr("HUD 自动锁定 · 当前补帧方式不支持");
     }
     QStringList detail;
+    if (secondaryFgWarning) detail << tr("补帧降档");
     // Live output hint: also shown under the 倍率 control (fgDisplayHint).
     QString fgHint;
     if (s.running && !s.image && s.applied.multiplier > 1 && i.compareMode == 0 && s.displayFgSuggestion > 0 &&

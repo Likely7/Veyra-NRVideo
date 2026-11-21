@@ -40,7 +40,7 @@ struct CaptureFormatQueryInfo {
     size_t advertised=0,rejected=0;
     bool partial=false,fallback=false;
 };
-const wchar_t* captureFailureAdvice(long code);
+std::wstring captureFailureAdvice(long code);
 
 class CaptureCardSource final:public IFrameSource {
 public:

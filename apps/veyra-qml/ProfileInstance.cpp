@@ -17,23 +17,21 @@ bool ProfileInstance::acquire(const std::filesystem::path& profile, const std::f
     profile_ = instance::Profile(profile, logs);
     const auto& key = profile_.key();
     if (key.empty()) {
-        notify(instance::Notice::LockFailed, ERROR_INVALID_NAME, {});
-        return false;
-    }
-    mutex_ = CreateMutexW(nullptr, FALSE, key.c_str());
-    if (!mutex_) {
-        notify(instance::Notice::LockFailed, GetLastError(), {});
-        return false;
+        lockError_ = ERROR_INVALID_NAME;
+    } else {
+        mutex_ = CreateMutexW(nullptr, FALSE, key.c_str());
+        if (!mutex_) lockError_ = GetLastError();
     }
 
     auto deadline = GetTickCount64() + 3000;
     do {
-        if (!owns_) {
+        if (mutex_ && !owns_) {
             const auto result = WaitForSingleObject(mutex_, 0);
             owns_ = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
             if (result == WAIT_FAILED) {
-                notify(instance::Notice::LockFailed, GetLastError(), {});
-                return false;
+                lockError_ = GetLastError();
+                CloseHandle(mutex_);
+                mutex_ = nullptr;
             }
         }
         if (owns_ && !profile_.ownerAlive()) {
@@ -41,7 +39,11 @@ bool ProfileInstance::acquire(const std::filesystem::path& profile, const std::f
                 log::warn("app-instance", "could not record the profile owner PID");
             return true;
         }
-        if (const auto window = instance::findWindow(key)) {
+        const auto window = instance::findWindow(key);
+        // The mutex API may be unavailable in a sandbox. Known live owners
+        // still get the normal handoff, and capture has its own device lock.
+        if (!mutex_ && !window && !profile_.ownerAlive()) return true;
+        if (window) {
             std::wstring self(32768, L'\0');
             const auto size = GetModuleFileNameW(nullptr, self.data(), DWORD(self.size()));
             self.resize(size < self.size() ? size : 0);

@@ -3,6 +3,7 @@
 #include <windows.h>
 #include <vfwmsgs.h>
 #include <cstdio>
+#include <cstdlib>
 #include <format>
 #include <string_view>
 
@@ -17,7 +18,7 @@ void expect(bool ok, const char* description) {
 }
 }
 
-int main() {
+int main(int argc, char** argv) {
     using namespace veyra::source;
     expect(std::wstring_view(captureFailureAdvice(HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES)))
                .starts_with(L"驱动报告系统资源不足。"), "0x800705AA is a driver resource error");
@@ -29,6 +30,15 @@ int main() {
            "DirectShow format errors point to format selection");
     expect(std::wstring_view(captureFailureAdvice(E_FAIL)).starts_with(L"请检查设备连接与驱动"),
            "generic HRESULT gets generic diagnostics");
+    if (argc == 2) {
+        const auto expected = std::format(L"PID {}", std::strtoul(argv[1], nullptr, 10));
+        expect(captureFailureAdvice(HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES)).find(expected)!=std::wstring::npos,
+               "resource exhaustion includes the other Veyra PID");
+        expect(captureFailureAdvice(HRESULT_FROM_WIN32(ERROR_BUSY)).find(expected)!=std::wstring::npos,
+               "busy device includes the other Veyra PID");
+        expect(captureFailureAdvice(E_ACCESSDENIED).find(expected)==std::wstring::npos,
+               "access denied keeps the privacy advice");
+    }
 
     const HRESULT com = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
     if (FAILED(com)) return 2;

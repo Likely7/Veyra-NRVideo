@@ -587,9 +587,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const auto instanceNotice = [&](instance::Notice notice, DWORD value, const std::filesystem::path& dump) {
         const char* source = nullptr;
         switch (notice) {
-        case instance::Notice::LockFailed:
-            source = "无法确认此 Veyra 配置是否已打开（Windows 错误 %1）。请关闭原窗口后重试。";
-            break;
         case instance::Notice::StartingOrClosing:
             source = "Veyra 正在打开或退出。请稍候再试。";
             break;
@@ -658,6 +655,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
         anotherVeyraLogHolder = reportLogHolders(mainLog, openErrno);
     }
+    if (const DWORD error = profileInstance.lockError(); error != ERROR_SUCCESS)
+        log::warn("app-instance", std::format("profile mutex unavailable; startup continuing error={}", error));
     g_crashDumpDirectory = logPath.parent_path().wstring();
     veyra::engine::EngineWatchdog::setDumpDirectory(g_crashDumpDirectory);
     SetUnhandledExceptionFilter(crashFilter);

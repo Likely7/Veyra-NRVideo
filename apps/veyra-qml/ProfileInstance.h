@@ -22,6 +22,7 @@ public:
     // result means the request was handed off or an existing owner is still alive.
     bool acquire(const std::filesystem::path& profile, const std::filesystem::path& logs,
                  const std::wstring& target, const instance::Notify& notify);
+    DWORD lockError() const { return lockError_; }
     void listen(HWND window, Launch launch);
     void stopListening();
 
@@ -29,6 +30,7 @@ private:
     bool nativeEventFilter(const QByteArray& type, void* message, qintptr* result) override;
 
     HANDLE mutex_ = nullptr;
+    DWORD lockError_ = ERROR_SUCCESS;
     bool owns_ = false;
     instance::Profile profile_;
     HWND window_ = nullptr;

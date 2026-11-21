@@ -11,7 +11,7 @@ namespace veyra::instance {
 inline constexpr ULONG_PTR launchMessage = 0x56595201;
 inline constexpr size_t maxTargetChars = 32767;
 
-enum class Notice { LockFailed, StartingOrClosing, AlreadyOpen, Hung, ConfirmEnd, EndPending, EndFailed };
+enum class Notice { StartingOrClosing, AlreadyOpen, Hung, ConfirmEnd, EndPending, EndFailed };
 enum class Handoff { NoWindow, Done, Released };
 enum class ProcessExit { Exited, Pending, Failed };
 using Notify = std::function<bool(Notice, DWORD, const std::filesystem::path& dump)>;

@@ -373,7 +373,7 @@ void QmlPlayerBridge::tickCapture() {
         if(q.kind!=0&&q.kind!=4){i.captureFormatList.clear();++i.captureFormatGeneration;i.captureResolutionChoice.clear();i.captureRateChoice.clear();}
         i.captureStatus=tr("读取采集格式失败（%1，0x%2）。%3")
             .arg(utf8Of(q.info.stage), QString::number(quint32(q.info.code),16).toUpper().rightJustified(8,QLatin1Char('0')),
-                 uiText(std::wstring(source::captureFailureAdvice(q.info.code))));
+                 uiText(source::captureFailureAdvice(q.info.code)));
         emit notice(i.captureStatus,true);emit captureChanged();return;
     }
     if (q.kind == 0 || q.kind == 2) { i.captureVideo = std::move(q.video); i.captureAudio = std::move(q.audio); i.captureListed = true; }

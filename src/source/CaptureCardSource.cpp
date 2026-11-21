@@ -28,6 +28,7 @@
 #include "veyra/sink/BitstreamAudio.h"
 #include "veyra/sink/BitstreamAudioSink.h"
 #include <windows.h>
+#include <tlhelp32.h>
 #include <dshow.h>
 #include <dvdmedia.h>
 #include <ks.h>
@@ -61,11 +62,38 @@ extern "C" {
 namespace veyra::source {
 using Microsoft::WRL::ComPtr;
 
-const wchar_t* captureFailureAdvice(long code) {
+namespace {
+DWORD otherVeyraPid() {
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return 0;
+    const DWORD self = GetCurrentProcessId();
+    DWORD pid = 0;
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    for (BOOL ok = Process32FirstW(snapshot, &entry); ok; ok = Process32NextW(snapshot, &entry)) {
+        // Skip our own worker subprocesses. Existence of another process only
+        // makes contention possible. The device reservation verifies ownership.
+        if (entry.th32ProcessID != self && entry.th32ParentProcessID != self
+            && _wcsicmp(entry.szExeFile, L"veyra_qml_ui.exe") == 0) {
+            pid = entry.th32ProcessID;
+            break;
+        }
+    }
+    CloseHandle(snapshot);
+    return pid;
+}
+}
+
+std::wstring captureFailureAdvice(long code) {
     switch (code) {
     case HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES):
+        if (const auto pid = otherVeyraPid())
+            return std::format(L"驱动报告系统资源不足。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。", pid);
         return L"驱动报告系统资源不足。请关闭其他采集程序后重试，并检查设备连接和驱动。";
     case HRESULT_FROM_WIN32(ERROR_BUSY):
+        if (const auto pid = otherVeyraPid())
+            return std::format(L"设备当前忙。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。", pid);
+        return L"设备当前忙。请关闭可能正在采集的应用后重试。";
     case HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION):
         return L"设备当前忙。请关闭可能正在采集的应用后重试。";
     case E_ACCESSDENIED:
