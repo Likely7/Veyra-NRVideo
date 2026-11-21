@@ -43,14 +43,14 @@ function Get-ProjectSourceSnapshot {
             "VEYRA_PRODUCT_SPEC_V1.md",
             "VEYRA_AGENT_EXECUTION_PLAYBOOK_V1.md",
             "docs/COMPETITOR_AUDIT_2026-09-03.md",
-            "loop/LOOP_ENGINE.md",
-            "loop/REVIEW_PROMPT.md",
-            "loop/CONTROL_HASHES.json",
-            "loop/STATE.json",
-            "loop/BACKLOG.md",
-            "loop/JOURNAL.md",
-            "loop/EVIDENCE.md",
-            "loop/INBOX.md",
+            "docs/history/loop/LOOP_ENGINE.md",
+            "docs/history/loop/REVIEW_PROMPT.md",
+            "docs/history/loop/CONTROL_HASHES.json",
+            "docs/history/loop/STATE.json",
+            "docs/history/loop/BACKLOG.md",
+            "docs/history/loop/JOURNAL.md",
+            "docs/history/loop/EVIDENCE.md",
+            "docs/history/loop/INBOX.md",
             "docs/WORKLOG.md",
             "scripts/loop-gate.ps1",
             "scripts/gates/README.md"
@@ -139,14 +139,14 @@ $requiredFiles = @(
     "VEYRA_AGENT_EXECUTION_PLAYBOOK_V1.md",
     "docs/COMPETITOR_AUDIT_2026-09-03.md",
     ".gitignore",
-    "loop\LOOP_ENGINE.md",
-    "loop\REVIEW_PROMPT.md",
-    "loop\CONTROL_HASHES.json",
-    "loop\STATE.json",
-    "loop\BACKLOG.md",
-    "loop\JOURNAL.md",
-    "loop\EVIDENCE.md",
-    "loop\INBOX.md",
+    "docs\history\loop\LOOP_ENGINE.md",
+    "docs\history\loop\REVIEW_PROMPT.md",
+    "docs\history\loop\CONTROL_HASHES.json",
+    "docs\history\loop\STATE.json",
+    "docs\history\loop\BACKLOG.md",
+    "docs\history\loop\JOURNAL.md",
+    "docs\history\loop\EVIDENCE.md",
+    "docs\history\loop\INBOX.md",
     "scripts\gates\README.md"
 )
 
@@ -154,7 +154,7 @@ foreach ($requiredFile in $requiredFiles) {
     [void](Require-File $requiredFile)
 }
 
-$controlManifestPath = Join-Path $root "loop\CONTROL_HASHES.json"
+$controlManifestPath = Join-Path $root "docs\history\loop\CONTROL_HASHES.json"
 $expectedControlManifestHash = "547D8E6E11BF22FF44F88767FB0BF1A8410A70E7846681F4C63E7D998D9EB74C"
 if (Test-Path -LiteralPath $controlManifestPath -PathType Leaf) {
     $actualControlManifestHash = (Get-FileHash -LiteralPath $controlManifestPath -Algorithm SHA256).Hash.ToUpperInvariant()
@@ -173,8 +173,8 @@ if (Test-Path -LiteralPath $controlManifestPath -PathType Leaf) {
                 "VEYRA_PRODUCT_SPEC_V1.md",
                 "docs/COMPETITOR_AUDIT_2026-09-03.md",
                 "docs/ACTIVE_DELIVERY_PLAN.md",
-                "loop/LOOP_ENGINE.md",
-                "loop/REVIEW_PROMPT.md",
+                "docs/history/loop/LOOP_ENGINE.md",
+                "docs/history/loop/REVIEW_PROMPT.md",
                 "scripts/gates/README.md"
             ) | Sort-Object
             $actualControlPaths = @($manifestEntries | ForEach-Object { [string]$_.path } | Sort-Object)
@@ -217,7 +217,7 @@ if (Test-Path -LiteralPath $controlManifestPath -PathType Leaf) {
     }
 }
 
-$statePath = Join-Path $root "loop\STATE.json"
+$statePath = Join-Path $root "docs\history\loop\STATE.json"
 if (Test-Path -LiteralPath $statePath -PathType Leaf) {
     try {
         $state = Get-Content -Raw -Encoding UTF8 -LiteralPath $statePath | ConvertFrom-Json
