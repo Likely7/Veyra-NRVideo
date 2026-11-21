@@ -76,9 +76,8 @@ public:
     // Drops entries whose file no longer exists (checked lazily, not on every
     // poll: the list is short and the check is a filesystem call).
     void refreshRecentFiles();
-    // Drops every recent entry and persists the empty list. The UI offers
-    // this, so it has to actually clear rather than just re-scan.
-    void clearRecentFiles();
+    // Persists the empty list, keeping existing entries if saving fails.
+    bool clearRecentFiles();
 
     // --- shell preferences --------------------------------------------------
     // Reduced motion turns off the springs and transitions. Default page is what

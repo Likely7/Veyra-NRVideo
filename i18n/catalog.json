@@ -26965,17 +26965,30 @@
    "ru": "Очистить"
   },
   {
+   "zh": "清空历史",
+   "src": "qml/PlaylistWindow.qml",
+   "zh-TW": "清空歷史",
+   "en": "Clear history",
+   "ja": "履歴を消去",
+   "ko": "기록 지우기",
+   "es": "Borrar historial",
+   "fr": "Effacer l’historique",
+   "de": "Verlauf löschen",
+   "pt-BR": "Limpar histórico",
+   "ru": "Очистить историю"
+  },
+  {
    "zh": "清空最近播放记录？",
    "src": "qml/HomePage.qml",
    "zh-TW": "清空最近播放記錄？",
-   "en": "Clear the recent list?",
+   "en": "Clear recent playback history?",
    "ja": "最近再生した記録を消去しますか？",
-   "ko": "최근 재생 목록을 비우시겠습니까?",
-   "es": "¿Despejar la lista reciente?",
-   "fr": "Effacer la liste récente ?",
-   "de": "Löschen Sie die aktuelle Liste?",
-   "pt-BR": "Limpar a lista recente?",
-   "ru": "Очистить недавний список?"
+   "ko": "최근 재생 기록을 지우시겠습니까?",
+   "es": "¿Borrar el historial de reproducción reciente?",
+   "fr": "Effacer l’historique de lecture récent ?",
+   "de": "Wiedergabeverlauf löschen?",
+   "pt-BR": "Limpar o histórico de reprodução recente?",
+   "ru": "Очистить историю воспроизведения?"
   },
   {
    "zh": "清空等待",

@@ -1068,9 +1068,10 @@ void QmlPlayerBridge::refreshRecentFiles() {
     emit recentFilesChanged();
 }
 void QmlPlayerBridge::clearRecentFiles() {
-    // The facade owns the list; clearing it means dropping the entries it holds
-    // and re-persisting, which refreshRecentFiles already does after the fact.
-    impl_->facade.clearRecentFiles();
+    if (!impl_->facade.clearRecentFiles()) {
+        emit notice(uiText(impl_->facade.error()), true);
+        return;
+    }
     emit recentFilesChanged();
 }
 

@@ -792,8 +792,10 @@ Window {
         id: playlistWindow
         owner: root
         playlist: veyra.playlist
+        hasRecentFiles: veyra.recentFiles.length > 0
         onAddFiles: veyra.addPlaylistFilesDialog()
         onAddFolder: veyra.addPlaylistFolderDialog()
+        onClearRecentFiles: veyra.clearRecentFiles()
     }
     FullscreenBar {
         id: fullBar

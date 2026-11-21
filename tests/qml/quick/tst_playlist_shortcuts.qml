@@ -44,7 +44,8 @@ Item {
             compare(component.status, Component.Ready, component.errorString())
             root.playlistWindow = component.createObject(root, {
                 owner: ownerWindow,
-                playlist: playlist, selectedPath: "selected.mp4"
+                playlist: playlist, selectedPath: "selected.mp4",
+                hasRecentFiles: false
             })
             verify(root.playlistWindow !== null)
         }

@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-21 播放列表清空历史
+
+从 `main eb5fd6d0` 建立 `codex/playlist-clear-history-20261121`。播放列表右下角新增「清空历史」。确认后清空首页共用的最近播放记录并保存到 `ui-session.v1`。历史为空时按钮置灰。保存失败时恢复显示并提示错误。确认框接管 Escape、Delete 和 Enter，避免确认期间误关窗口、移除项目或触发播放。
+
+使用 `scripts/acceptance/build-recording-handoff.py --task codex-playlist-clear-history-20261121 --label 2.2.0-playlist-history-test --jobs 2`。依赖沿用已验证的 FFmpeg、Chiaki、libdovi 与 SDK 配置。引擎构建 255.3 秒，播放器及三个测试目标追加构建 115.1 秒。播放列表窗口 34 项、Qt Quick 238 项、语言和九语词库完整性检查通过。窗口测试覆盖 420×320 最小尺寸、取消、写入失败、清空后重读以及队列和文件保留。
+
+实测应用以法语私有配置载入两条历史与一项队列，通过播放列表确认后历史为 0，重启后按钮保持置灰，队列文件逐字节相同。测试版逐哈希核对 91 个着色器，并从独立启动入口成功打开、正常退出。产物与证据见 `E:/项目/Veyra/{build,logs,tests,tmp}/codex-playlist-clear-history-20261121`。手测入口为测试目录的 `启动播放历史测试.cmd`。测试使用私有配置与媒体夹具。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。
