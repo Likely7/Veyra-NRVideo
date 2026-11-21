@@ -1198,7 +1198,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("PSN 账号")
-                            hint: qsTr("在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。")
+                            hint: qsTr("按指南用索尼官方登录获取 Account ID，再到 PS5 串流窗口填写并配对。切勿向第三方网站提供 NPSSO。")
                             hintBelow: true
                             RowLayout {
                                 spacing: 6

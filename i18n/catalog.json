@@ -12612,17 +12612,17 @@
    "ru": "ЦП обрабатывает субтитры на этом устройстве."
   },
   {
-   "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
+   "zh": "按指南用索尼官方登录获取 Account ID，再到 PS5 串流窗口填写并配对。切勿向第三方网站提供 NPSSO。",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
-   "en": "Get your Account ID on PSNTools, then enter it in the PS5 streaming window to pair.",
-   "ja": "PSNTools で Account ID を取得し、PS5 ストリーミング画面に入力してペアリングします。",
-   "ko": "PSNTools에서 계정 ID를 얻은 다음 PS5 스트리밍 창에 입력하여 페어링하세요.",
-   "es": "Obtenga su ID de cuenta en PSNTools, y luego ingrese en la ventana de streaming PS5 a par.",
-   "fr": "Obtenez votre ID de compte sur PSNTools, puis entrez-le dans la fenêtre de diffusion PS5 à paire.",
-   "de": "Holen Sie sich Ihre Account-ID auf PSNTools und geben Sie sie dann in das Streaming-Fenster PS5 ein.",
-   "pt-BR": "Obtenha o ID da sua conta em PSNTools, em seguida, digite-o na janela de transmissão PS5 para emparelhar.",
-   "ru": "Установите номер своего аккаунта PSNTools, а затем введите его в PS5 окно потоковой передачи."
+   "zh-TW": "依指南使用索尼官方登入取得 Account ID，再到 PS5 串流視窗填入並配對。切勿向第三方網站提供 NPSSO。",
+   "en": "Follow the guide to get your Account ID through Sony's own sign-in, then enter it in the PS5 streaming window to pair. Never give your NPSSO to a third-party site.",
+   "ja": "ガイドに従いソニー公式のサインインで Account ID を取得し、PS5 ストリーミング画面に入力してペアリングします。NPSSO を第三者のサイトに渡さないでください。",
+   "ko": "가이드에 따라 소니 공식 로그인으로 Account ID를 얻은 다음 PS5 스트리밍 창에 입력하여 페어링하세요. NPSSO를 제3자 사이트에 절대 제공하지 마세요.",
+   "es": "Sigue la guía para obtener tu Account ID con el inicio de sesión oficial de Sony y luego introdúcelo en la ventana de streaming de PS5 para emparejar. Nunca des tu NPSSO a una web de terceros.",
+   "fr": "Suivez le guide pour obtenir votre Account ID via la connexion officielle de Sony, puis saisissez-le dans la fenêtre de streaming PS5 pour l'appairer. Ne donnez jamais votre NPSSO à un site tiers.",
+   "de": "Folgen Sie der Anleitung, um Ihre Account-ID über die offizielle Sony-Anmeldung zu erhalten, und geben Sie sie dann im PS5-Streaming-Fenster zum Koppeln ein. Geben Sie Ihr NPSSO niemals an Drittanbieter-Websites weiter.",
+   "pt-BR": "Siga o guia para obter seu Account ID pelo login oficial da Sony e depois insira-o na janela de transmissão do PS5 para parear. Nunca forneça seu NPSSO a sites de terceiros.",
+   "ru": "Следуйте инструкции, чтобы получить Account ID через официальный вход Sony, затем введите его в окне трансляции PS5 для сопряжения. Никогда не передавайте NPSSO сторонним сайтам."
   },
   {
    "zh": "在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。",
