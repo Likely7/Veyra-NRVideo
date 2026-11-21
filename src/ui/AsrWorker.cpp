@@ -3,6 +3,8 @@
 #include "AsrModels.h"
 #include "AsrProtocol.h"
 #include "../../third_party/sherpa-onnx/c-api.h"
+#include <objbase.h>
+#include "veyra/sink/RecordingAudioTap.h"
 
 #include <QDir>
 #include <QElapsedTimer>
@@ -14,9 +16,16 @@
 #include <windows.h>
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
 #include <cmath>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <span>
+#include <thread>
+#include <vector>
 
 namespace veyra::ui::asr {
 namespace {
@@ -99,6 +108,10 @@ class Recognizer {
 public:
     explicit Recognizer(HANDLE output) : output_(output) {}
     ~Recognizer() {
+        if (decoder_.joinable()) {
+            decoder_.request_stop();
+            decoder_.join();
+        }
         if (vad_) runtime_.SherpaOnnxDestroyVoiceActivityDetector(vad_);
         if (recognizer_) runtime_.SherpaOnnxDestroyOfflineRecognizer(recognizer_);
     }
@@ -157,13 +170,44 @@ public:
         runtime_.SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, silence.data(), int(silence.size()));
         if (!decode(silence).valid) return fail("self-test");
         reset(0);
-        return resultLine(output_, {{"type", "ready"}, {"model", model}, {"threads", threads},
+        return writeEvent({{"type", "ready"}, {"model", model}, {"threads", threads},
             {"version", QString::fromLatin1(runtimeVersion)}, {"loadMs", start.elapsed()}});
     }
 
+    void startRealtime(unsigned testDecodeDelayMs) {
+        decoder_ = std::jthread([this, testDecodeDelayMs](std::stop_token stop) {
+            while (!stop.stop_requested()) {
+                std::unique_lock lock(pendingLock_);
+                if (!pendingReady_.wait(lock, stop, [this] { return pending_.has_value(); }) ||
+                    stop.stop_requested()) return;
+                Segment segment = std::move(*pending_);
+                pending_.reset();
+                lock.unlock();
+                if (sink::recordingClockUs() - segment.endUs > maxPendingSegmentAgeUs) {
+                    ++skippedSegments_;
+                    continue;
+                }
+                if (!decodeSegment(segment, testDecodeDelayMs)) return;
+            }
+        });
+    }
+
+    bool consumed(uint32_t bytes, bool stalePcm) {
+        return writeEvent({{"type", "consumed"}, {"bytes", qint64(bytes)},
+            {"stalePcm", stalePcm}, {"skippedSegments", qint64(skippedSegments_.exchange(0))}});
+    }
+
     void reset(uint64_t epoch) {
+        {
+            std::lock_guard lock(pendingLock_);
+            epoch_.store(epoch);
+            pending_.reset();
+        }
+        gap();
+    }
+
+    void gap() {
         runtime_.SherpaOnnxVoiceActivityDetectorReset(vad_);
-        epoch_ = epoch;
         received_ = 0;
         originUs_ = 0;
         vadOriginUs_ = 0;
@@ -203,11 +247,36 @@ public:
     }
 
     bool fail(const char* reason, DWORD error = 0) const {
-        resultLine(output_, {{"type", "error"}, {"reason", QString::fromLatin1(reason)}, {"win32", qint64(error)}});
+        writeEvent({{"type", "error"}, {"reason", QString::fromLatin1(reason)}, {"win32", qint64(error)}});
         return false;
     }
 
 private:
+    struct Segment {
+        std::vector<float> samples;
+        int64_t beginUs;
+        int64_t endUs;
+        uint64_t epoch;
+    };
+
+    bool writeEvent(const QJsonObject& event) const {
+        std::lock_guard lock(outputLock_);
+        return resultLine(output_, event);
+    }
+
+    bool decodeSegment(const Segment& segment, unsigned testDecodeDelayMs) const {
+        QElapsedTimer time;
+        time.start();
+        if (testDecodeDelayMs) std::this_thread::sleep_for(std::chrono::milliseconds(testDecodeDelayMs));
+        const auto text = decode(segment.samples);
+        if (segment.epoch != epoch_.load()) return true;
+        const bool keep = text.valid && hasSpeechText(text.value);
+        return writeEvent({{"type", "final"}, {"epoch", qint64(segment.epoch)},
+            {"t0", segment.beginUs}, {"t1", segment.endUs},
+            {"audioMs", qint64(segment.samples.size()) * 1000 / sampleRate},
+            {"decodeMs", time.elapsed()}, {"text", keep ? text.value : QString{}}, {"lang", text.language}});
+    }
+
     struct Text {
         bool valid = false;
         QString value;
@@ -256,15 +325,21 @@ private:
                 runtime_.SherpaOnnxVoiceActivityDetectorFront(vad_), runtime_.SherpaOnnxDestroySpeechSegment);
             runtime_.SherpaOnnxVoiceActivityDetectorPop(vad_);
             if (!seg || seg->start < 0 || seg->n <= 0) continue;
-            QElapsedTimer time;
-            time.start();
-            const auto text = decode(std::span(seg->samples, size_t(seg->n)));
             const auto beginUs = vadOriginUs_ + seg->start * 1000000 / sampleRate;
-            const auto endUs = beginUs + int64_t(seg->n) * 1000000 / sampleRate;
-            const bool keep = text.valid && hasSpeechText(text.value);
-            if (!resultLine(output_, {{"type", "final"}, {"epoch", qint64(epoch_)},
-                {"t0", beginUs}, {"t1", endUs}, {"audioMs", int64_t(seg->n) * 1000 / sampleRate},
-                {"decodeMs", time.elapsed()}, {"text", keep ? text.value : QString{}}, {"lang", text.language}})) return false;
+            Segment segment{{seg->samples, seg->samples + seg->n}, beginUs,
+                beginUs + int64_t(seg->n) * 1000000 / sampleRate, epoch_.load()};
+            if (!decoder_.joinable()) {
+                if (!decodeSegment(segment, 0)) return false;
+                continue;
+            }
+            // One queued segment behind the one being decoded. Under load
+            // the reader still runs VAD and replaces only the waiting work.
+            {
+                std::lock_guard lock(pendingLock_);
+                if (pending_) ++skippedSegments_;
+                pending_ = std::move(segment);
+            }
+            pendingReady_.notify_one();
         }
         return true;
     }
@@ -275,7 +350,13 @@ private:
     const SherpaOnnxVoiceActivityDetector* vad_ = nullptr;
     int model_ = Parakeet;
     QString language_;
-    uint64_t epoch_ = 0;
+    std::atomic<uint64_t> epoch_{0};
+    std::atomic<unsigned> skippedSegments_{0};
+    mutable std::mutex outputLock_;
+    std::mutex pendingLock_;
+    std::condition_variable_any pendingReady_;
+    std::optional<Segment> pending_;
+    std::jthread decoder_;
     std::array<float, window> buffer_{};
     size_t fill_ = 0;
     int speechWindows_ = 0;
@@ -288,7 +369,7 @@ bool validHeader(const FrameHeader& header) {
 }
 }
 
-int runWorker() {
+int runWorker(unsigned testDecodeDelayMs) {
     const HANDLE input = GetStdHandle(STD_INPUT_HANDLE);
     const HANDLE output = GetStdHandle(STD_OUTPUT_HANDLE);
     if (GetFileType(input) != FILE_TYPE_PIPE || GetFileType(output) != FILE_TYPE_PIPE) return 2;
@@ -303,6 +384,8 @@ int runWorker() {
                            settings.value("language").toString(), settings.value("threads").toInt(1))) return 3;
     uint64_t epoch = header.epoch;
     worker.reset(epoch);
+    worker.startRealtime(testDecodeDelayMs);
+    bool waitingForFreshPcm = false;
     std::array<float, maxPayload / sizeof(float)> pcm{};
     while (readBytes(input, &header, sizeof(header))) {
         if (!validHeader(header)) return 2;
@@ -312,12 +395,27 @@ int runWorker() {
             if (header.bytes || header.epoch <= epoch) return 2;
             epoch = header.epoch;
             worker.reset(epoch);
+            waitingForFreshPcm = false;
             break;
-        case FrameType::Audio:
+        case FrameType::Gap:
+            if (header.bytes || header.epoch != epoch) return 2;
+            worker.gap();
+            waitingForFreshPcm = false;
+            break;
+        case FrameType::Audio: {
             if (!header.bytes || header.bytes % sizeof(float) || header.epoch != epoch) return 2;
             if (!readBytes(input, pcm.data(), header.bytes)) return 0;
-            if (!worker.accept(std::span(pcm.data(), header.bytes / sizeof(float)), header.playoutUs)) return 0;
+            const bool stale = header.playoutUs < sink::recordingClockUs() - maxAudioAgeUs;
+            if (stale) {
+                if (!waitingForFreshPcm) worker.gap();
+                waitingForFreshPcm = true;
+            } else {
+                waitingForFreshPcm = false;
+                if (!worker.accept(std::span(pcm.data(), header.bytes / sizeof(float)), header.playoutUs)) return 0;
+            }
+            if (!worker.consumed(header.bytes, stale)) return 0;
             break;
+        }
         default: return 2;
         }
     }

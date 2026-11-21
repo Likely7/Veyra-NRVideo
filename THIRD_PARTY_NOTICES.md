@@ -34,10 +34,20 @@ downloaded on demand into the user's data directory.
 - [OpenAI Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo),
   OpenAI, MIT. The sherpa-onnx int8 ONNX export supplies multilingual recognition.
 
-src/ui/AsrModels.cpp pins the archive and member names, byte counts, and
-SHA-256 digests. The ASR child verifies the files before loading the runtime
-or parsing the models. All DLLs and model weights remain outside source Git
-and the installer.
+src/ui/AsrModels.cpp pins the artifact identities. If a GitHub archive is
+unavailable, the downloader can fetch the same Parakeet members from
+[84b478d541cd](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/tree/84b478d541cdbf0c296a7ab5f1e20a6f8f998114)
+or the same Whisper members from
+[2ca6ff69fc87](https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/tree/2ca6ff69fc878651b770880507669577ac41c2ff).
+Hugging Face and hf-mirror use these same revisions and file digests.
+The sherpa-onnx runtime also has a same-digest GH-Proxy route. The VAD
+fallback is the MIT-licensed Silero V5 ONNX export from
+[5cd2ba54db05](https://github.com/snakers4/silero-vad/tree/5cd2ba54db059f961e7545d4f211b44f005a6dfb),
+pinned to its own SHA-256, available from GitHub Raw or jsDelivr.
+
+The ASR child verifies the files before loading the runtime or parsing the
+models. All speech recognition DLLs and weights are installed through the
+user data directory downloader.
 
 ## PushFPS frame generation and recording features (2026-11-19)
 

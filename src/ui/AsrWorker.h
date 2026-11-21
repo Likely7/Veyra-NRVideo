@@ -2,6 +2,6 @@
 #pragma once
 
 namespace veyra::ui::asr {
-int runWorker();
+int runWorker(unsigned testDecodeDelayMs = 0);
 int runFile(int argc, wchar_t** argv);
 }

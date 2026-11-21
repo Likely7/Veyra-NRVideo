@@ -26,9 +26,34 @@ bool endMark(QStringView text, qsizetype offset) {
     if (std::ranges::any_of(abbreviations, [&](QStringView abbr) {
             return abbr.compare(name, Qt::CaseInsensitive) == 0;
         })) return false;
-    if (name.size() == 1 && name[0].isUpper()) return false;
-    return !(name.size() > 2 && name.contains(u'.') && name.last(1)[0].isUpper() &&
-             std::all_of(name.begin(), name.end(), [](QChar c) { return c == u'.' || c.isUpper(); }));
+    const bool initial = name.size() == 1 && name[0].isUpper();
+    const bool acronym = name.size() > 2 && name.contains(u'.') && name.last(1)[0].isUpper() &&
+        std::all_of(name.begin(), name.end(), [](QChar c) { return c == u'.' || c.isUpper(); });
+    if (!initial && !acronym) return true;
+    if (name == QStringView(u"I") && word > 0) {
+        // "So am I." can end a sentence. "Dr. I. Brown" is an initial.
+        const auto prefix = text.first(word).trimmed();
+        qsizetype begin = prefix.size();
+        while (begin && prefix[begin - 1].isLetter()) --begin;
+        const auto previous = prefix.sliced(begin);
+        constexpr std::array auxiliaries{u"am", u"was", u"do", u"did", u"have", u"had", u"will", u"would",
+            u"can", u"could", u"may", u"might", u"must", u"should"};
+        if (std::ranges::any_of(auxiliaries, [&](QStringView auxiliary) {
+            return auxiliary.compare(previous, Qt::CaseInsensitive) == 0;
+        })) return true;
+    }
+
+    auto following = text.sliced(offset + 1);
+    while (!following.isEmpty() && QStringView(u"”’\"')」").contains(following[0])) following = following.sliced(1);
+    if (following.startsWith(u'\n')) return true;
+    following = following.trimmed();
+    if (following.isEmpty()) return true;
+    qsizetype length = 0;
+    while (length < following.size() && following[length].isLetter()) ++length;
+    const auto next = following.first(length);
+    constexpr std::array starters{u"I", u"We", u"You", u"He", u"She", u"It", u"They", u"The", u"This", u"That",
+        u"These", u"Those", u"Then", u"Next", u"However", u"But", u"Meanwhile"};
+    return std::ranges::any_of(starters, [&](QStringView starter) { return starter == next; });
 }
 
 qsizetype splitAt(QStringView text, bool unstableEnd) {

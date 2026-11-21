@@ -67,8 +67,13 @@ public:
     QString apiBase() const { return apiBase_; }
     QString apiModel() const { return apiModel_; }
     QString status() const;
-    QString caption() const;
-    QString translated() const;
+    struct DisplayCaption {
+        QString original;
+        QString translated;
+    };
+    DisplayCaption displayCaption() const;
+    QString caption() const { return displayCaption().original; }
+    QString translated() const { return displayCaption().translated; }
     bool modelInstalled() const { return assets_.downloads.installed(); }
     bool downloading() const { return assets_.downloads.downloading(); }
     double downloadProgress() const { return double(assets_.downloads.received()) / double(downloadBytes()); }
@@ -119,6 +124,7 @@ private:
     void displayTranslation(const Work& work, QString translation);
     void resetCaption();
     void cancelRequest();
+    void discardHiddenWork();
     void startLocal();
     void stopLocal();
     void requestTranslation(Work work);
@@ -140,7 +146,7 @@ private:
     int provider_ = Local;
     int recognitionSource_ = VeyraAudio, recognitionModel_ = asr::Parakeet, recognitionThreads_ = 0;
     quint16 serverPort_ = 0;
-    quint64 session_ = 0, nextSentence_ = 0;
+    quint64 session_ = 0, nextSentence_ = 0, requestSentence_ = 0;
     qint64 requestedAt_ = 0, serverStartedAt_ = 0, lastCaptionReadAt_ = 0, lastSummaryAt_ = 0;
     QByteArray captionBuffer_, serverKey_;
     QString raw_, status_;
@@ -152,7 +158,7 @@ private:
     QStringList context_;
     QCache<QString, QString> cache_{200};
     std::vector<qint64> requestTimes_, displayDelays_;
-    int sentenceCount_ = 0, requestedCount_ = 0, cacheHits_ = 0, stale_ = 0, overflow_ = 0, failures_ = 0;
+    int sentenceCount_ = 0, requestedCount_ = 0, cacheHits_ = 0, stale_ = 0, hidden_ = 0, failures_ = 0;
     int skippedSentences_ = 0;
     double averageTranslationMs_ = 0.0;
 };

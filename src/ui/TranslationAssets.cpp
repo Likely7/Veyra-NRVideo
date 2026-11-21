@@ -2,6 +2,7 @@
 #include "TranslationAssets.h"
 #include "WinCaptionReader.h"
 #include "veyra/Log.h"
+#include "veyra/FileIdentity.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -59,9 +60,11 @@ bool regularPath(const QString& path, bool directory) {
 bool verifyFile(const QString& path, qint64 bytes, const char* sha256, bool contents) {
     if (!regularPath(path, false) || (bytes >= 0 && QFileInfo(path).size() != bytes)) return false;
     if (!contents) return true;
-    QFile input(path);
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    return input.open(QIODevice::ReadOnly) && hash.addData(&input) && hash.result().toHex() == sha256;
+    std::string hash;
+    uint64_t hashedBytes = 0;
+    return computeFileSha256(QDir::toNativeSeparators(path).toStdWString(), hash, hashedBytes)
+        && (bytes < 0 || hashedBytes == uint64_t(bytes))
+        && QByteArray::fromStdString(hash).toLower() == sha256;
 }
 
 bool verifyMembers(const QString& directory, const ModelAsset& asset, bool contents) {
@@ -90,16 +93,14 @@ ModelAssets::ModelAssets(QString root, std::span<const ModelAsset> assets)
         args->flags |= CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
     });
     connect(&extract_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
-        if (downloading() && error == QProcess::FailedToStart) finish(tr("无法解压模型文件"));
+        if (downloading() && error == QProcess::FailedToStart) retry(tr("无法解压模型文件"));
     });
     connect(&extract_, &QProcess::finished, this, &ModelAssets::finishArchive);
+    refreshInstalled();
 }
 
 ModelAssets::~ModelAssets() {
-    if (reply_) {
-        reply_->disconnect(this);
-        reply_->abort();
-    }
+    clearReply();
     extract_.disconnect(this);
     if (extract_.state() != QProcess::NotRunning) {
         extract_.kill();
@@ -111,6 +112,7 @@ bool ModelAssets::setAssets(std::span<const ModelAsset> assets) {
     if (downloading()) return false;
     assets_ = assets;
     status_.clear();
+    refreshInstalled();
     return true;
 }
 
@@ -119,11 +121,15 @@ QString ModelAssets::path(const QString& root, const ModelAsset& asset) {
 }
 bool ModelAssets::verify(const QString& root, const ModelAsset& asset, bool contents) {
     const QString target = path(root, asset);
-    return asset.members.empty() ? verifyFile(target, asset.bytes, asset.sha256, contents)
-        : verifyMembers(target, asset, contents);
+    if (!asset.members.empty()) return verifyMembers(target, asset, contents);
+    if (verifyFile(target, asset.bytes, asset.sha256, contents)) return true;
+    return std::ranges::any_of(asset.fallbacks, [&](const ModelSource& source) {
+        return source.bytes >= 0 && source.sha256[0]
+            && verifyFile(target, source.bytes, source.sha256, contents);
+    });
 }
-bool ModelAssets::installed() const {
-    return std::ranges::all_of(assets_, [&](const ModelAsset& asset) { return verify(root_, asset, false); });
+void ModelAssets::refreshInstalled() {
+    installed_ = std::ranges::all_of(assets_, [&](const ModelAsset& asset) { return verify(root_, asset, false); });
 }
 qint64 ModelAssets::totalBytes() const {
     qint64 result = 0;
@@ -146,7 +152,9 @@ void ModelAssets::download() {
     qint64 required = 0;
     for (const auto& asset : assets_) {
         if (verify(root_, asset, asset.verifyExisting)) continue;
-        required += asset.bytes;
+        qint64 archiveBytes = asset.bytes;
+        for (const auto& source : asset.fallbacks) archiveBytes = std::max(archiveBytes, source.bytes);
+        required += archiveBytes;
         for (const auto& member : asset.members)
             required += member.bytes >= 0 ? member.bytes : asset.bytes / qint64(asset.members.size()) * 2;
     }
@@ -173,11 +181,58 @@ void ModelAssets::next() {
         finish(tr("本地模型已就绪"));
         return;
     }
+    source_ = 0;
+    startSource();
+}
+
+const ModelSource* ModelAssets::fallback() const {
+    return source_ ? &assets_[asset_].fallbacks[source_ - 1] : nullptr;
+}
+
+bool ModelAssets::downloadsMembers() const {
+    const auto* alternate = fallback();
+    return alternate && alternate->memberFiles;
+}
+
+void ModelAssets::startSource() {
     const auto& asset = assets_[asset_];
-    bytes_ = 0;
+    const auto* alternate = fallback();
+    transfer_ = std::make_unique<QTemporaryDir>(stage_->filePath(QStringLiteral("payload-XXXXXX")));
+    if (!transfer_->isValid()) {
+        finish(tr("无法创建模型下载目录"));
+        return;
+    }
+    member_ = 0;
+    verifiedBytes_ = 0;
+    sourceBytes_ = alternate && alternate->bytes >= 0 ? alternate->bytes : asset.bytes;
+    if (downloadsMembers()) {
+        sourceBytes_ = 0;
+        for (const auto& member : asset.members) sourceBytes_ += member.bytes;
+    }
     received_ = complete_;
+    startFile();
+}
+
+void ModelAssets::startFile() {
+    const auto& asset = assets_[asset_];
+    const auto* alternate = fallback();
+    auto url = QString::fromLatin1(alternate ? alternate->url : asset.url);
+    QString target;
+    expectedBytes_ = sourceBytes_;
+    expectedSha_ = alternate && alternate->sha256[0] ? alternate->sha256 : asset.sha256;
+    if (downloadsMembers()) {
+        const auto& member = asset.members[member_];
+        url += QString::fromLatin1(member.name);
+        target = transfer_->filePath(QStringLiteral("model/") + QString::fromLatin1(member.name));
+        expectedBytes_ = member.bytes;
+        expectedSha_ = member.sha256;
+    } else if (asset.members.empty()) {
+        target = path(root_, asset);
+    } else {
+        target = transfer_->filePath(QStringLiteral("archive"));
+    }
+    bytes_ = 0;
     hash_.reset();
-    const QString target = asset.members.empty() ? path(root_, asset) : stage_->filePath(QStringLiteral("archive"));
     if (!QDir().mkpath(QFileInfo(target).absolutePath())) {
         finish(tr("无法创建模型下载目录"));
         return;
@@ -187,24 +242,24 @@ void ModelAssets::next() {
         finish(tr("无法保存模型下载文件"));
         return;
     }
-    QNetworkRequest request(QUrl(QString::fromLatin1(asset.url)));
+    QNetworkRequest request{QUrl(url)};
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::NoLessSafeRedirectPolicy);
     request.setMaximumRedirectsAllowed(8);
-    request.setTransferTimeout(45000);
+    request.setTransferTimeout(asset.fallbacks.empty() ? 45000 : 25000);
     request.setRawHeader("Accept-Encoding", "identity");
     reply_ = network_.get(request);
     reply_->setReadBufferSize(1024 * 1024);
     connect(reply_, &QNetworkReply::readyRead, this, &ModelAssets::readFile);
     connect(reply_, &QNetworkReply::finished, this, &ModelAssets::finishFile);
-    status_ = tr("正在下载模型与运行库…");
+    status_ = tr("正在下载模型与运行库…") + QStringLiteral(" · ") + request.url().host();
     emit changed();
 }
 
 void ModelAssets::readFile() {
     if (!reply_ || !file_) return;
     const auto data = reply_->readAll();
-    if (data.size() > assets_[asset_].bytes - bytes_) {
-        finish(tr("下载文件的大小与预期不符"));
+    if (data.size() > expectedBytes_ - bytes_) {
+        retry(tr("下载文件的大小与预期不符"));
         return;
     }
     if (file_->write(data) != data.size()) {
@@ -213,7 +268,7 @@ void ModelAssets::readFile() {
     }
     hash_.addData(data);
     bytes_ += data.size();
-    const auto total = complete_ + bytes_;
+    const auto total = complete_ + assets_[asset_].bytes * (verifiedBytes_ + bytes_) / std::max<qint64>(1, sourceBytes_);
     if (total / (1024 * 1024) != received_ / (1024 * 1024)) {
         received_ = total;
         emit changed();
@@ -221,41 +276,60 @@ void ModelAssets::readFile() {
 }
 
 void ModelAssets::finishFile() {
+    auto* completed = reply_;
     readFile();
-    if (!reply_) return;
-    if (reply_->error() != QNetworkReply::NoError) {
+    if (!completed || reply_ != completed) return;
+    if (completed->error() != QNetworkReply::NoError) {
         log::warn("model-assets", std::format("download failed host={} http={} network={}",
-            QUrl(QString::fromLatin1(assets_[asset_].url)).host().toStdString(),
-            reply_->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), int(reply_->error())));
-        finish(tr("模型下载失败，请检查网络后重试"));
+            completed->request().url().host().toStdString(),
+            completed->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), int(completed->error())));
+        retry(tr("模型下载失败，请检查网络后重试"));
         return;
     }
-    reply_->deleteLater();
-    reply_ = nullptr;
-    const auto& asset = assets_[asset_];
-    if (bytes_ != asset.bytes || hash_.result().toHex() != asset.sha256) {
-        finish(tr("下载文件校验失败，请重新下载"));
+    if (bytes_ != expectedBytes_ || hash_.result().toHex() != expectedSha_) {
+        retry(tr("下载文件校验失败，请重新下载"));
         return;
     }
+    clearReply();
     if (!file_->commit()) {
         finish(tr("无法保存模型下载文件"));
         return;
     }
     file_.reset();
-    if (asset.members.empty()) {
+    const auto& asset = assets_[asset_];
+    if (downloadsMembers()) {
+        verifiedBytes_ += expectedBytes_;
+        if (++member_ < asset.members.size()) startFile();
+        else installDirectory();
+    } else if (asset.members.empty()) {
+        transfer_.reset();
         complete_ += assets_[asset_++].bytes;
         next();
-    } else extractArchive();
+    } else {
+        extractArchive();
+    }
+}
+
+void ModelAssets::retry(QString reason) {
+    if (source_ >= assets_[asset_].fallbacks.size()) {
+        finish(std::move(reason));
+        return;
+    }
+    clearReply();
+    file_.reset();
+    ++source_;
+    log::info("model-assets", std::format("trying fallback {} for {}", source_, assets_[asset_].destination));
+    startSource();
 }
 
 void ModelAssets::extractArchive() {
-    const QString target = stage_->filePath(QStringLiteral("unpacked"));
+    const QString target = transfer_->filePath(QStringLiteral("model"));
     if (!QDir().mkpath(target)) {
         finish(tr("无法解压模型文件"));
         return;
     }
     const auto& asset = assets_[asset_];
-    QStringList arguments{QStringLiteral("-xf"), stage_->filePath(QStringLiteral("archive")),
+    QStringList arguments{QStringLiteral("-xf"), transfer_->filePath(QStringLiteral("archive")),
                           QStringLiteral("-C"), target};
     if (asset.stripComponents)
         arguments << QStringLiteral("--strip-components") << QString::number(asset.stripComponents);
@@ -270,10 +344,18 @@ void ModelAssets::extractArchive() {
 void ModelAssets::finishArchive(int code, QProcess::ExitStatus exit) {
     if (!downloading() || !stage_) return;
     if (cancelled_) { finish(tr("模型下载已取消")); return; }
+    if (exit != QProcess::NormalExit || code != 0) {
+        retry(tr("解压后的模型文件校验失败"));
+        return;
+    }
+    installDirectory();
+}
+
+void ModelAssets::installDirectory() {
     const auto& asset = assets_[asset_];
-    const QString unpacked = stage_->filePath(QStringLiteral("unpacked"));
-    if (exit != QProcess::NormalExit || code != 0 || !verifyMembers(unpacked, asset, asset.verifyExisting)) {
-        finish(tr("解压后的模型文件校验失败"));
+    const QString unpacked = transfer_->filePath(QStringLiteral("model"));
+    if (!verifyMembers(unpacked, asset, asset.verifyExisting)) {
+        retry(tr("解压后的模型文件校验失败"));
         return;
     }
     const QString previous = stage_->filePath(QStringLiteral("previous-%1").arg(asset_));
@@ -292,22 +374,28 @@ void ModelAssets::finishArchive(int code, QProcess::ExitStatus exit) {
         finish(tr("无法保存模型下载文件"));
         return;
     }
-    QFile::remove(stage_->filePath(QStringLiteral("archive")));
+    transfer_.reset();
     complete_ += assets_[asset_++].bytes;
     next();
 }
 
-void ModelAssets::finish(QString status) {
+void ModelAssets::clearReply() {
     if (auto* reply = std::exchange(reply_, nullptr)) {
         reply->disconnect(this);
         reply->abort();
         reply->deleteLater();
     }
+}
+
+void ModelAssets::finish(QString status) {
+    clearReply();
     file_.reset();
+    transfer_.reset();
     stage_.reset();
     lock_.reset();
     received_ = 0;
     status_ = std::move(status);
+    refreshInstalled();
     emit changed();
 }
 
@@ -343,6 +431,7 @@ bool ModelAssets::remove(const ModelAsset& asset) {
         removed = false;
     }
     status_ = removed ? tr("识别模型已删除") : tr("无法完整删除模型文件");
+    refreshInstalled();
     emit changed();
     return removed;
 }

@@ -205,8 +205,7 @@ void QmlPlayerBridge::tickSubtitles() {
         emit subtitleTextChanged();
     }
     // Live text is never copied into subtitle diagnostics or the export graph.
-    const QString translated = liveTranslation_->translated();
-    const QString original = liveTranslation_->caption();
+    const auto [original, translated] = liveTranslation_->displayCaption();
     const int alignment = draw.empty() ? 2 : 8;
     const auto beginLive = draw.size();
     if (liveTranslation_->showOriginal() && !original.isEmpty() && original != translated) {

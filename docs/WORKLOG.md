@@ -1,5 +1,15 @@
 # 当前工作日志
 
+## 2026-11-20 实时翻译复审修复
+
+续做 `codex/live-asr-20261120`。Qt 6.8.3 的 Windows 管道确有 1 MiB 内核缓冲。应用按子进程确认控制未消费 PCM，硬上限为 8192 字节。Silero 读入和语音解码并行，解码时最多保留一个等待段，优先保留较新的完整语音段。丢失旧 PCM 只重置 VAD，真正的播放中断才推进 epoch。字幕从同一行取原文和译文，已离开显示窗口的请求随即移除。中文脚本转换走 Windows NLS，缩写断句覆盖 `I.`、`U.S.` 和人名首字母。模型下载期间下拉框和设置入口都保持当前模型。
+
+Parakeet 和 Whisper 异常下载会回退到固定提交的 Hugging Face 文件，或同一提交的 hf-mirror。GH-Proxy 提供相同运行库，VAD 有固定 Silero V5 备用。状态显示正在使用的下载域名。启动时利用已有 Windows CNG SHA-256，安装状态在设置和下载事件更新。用同一个测试目录各跑两轮，Parakeet 加载中位数约 5.0 → 2.2 秒，Whisper 约 7.1 → 2.8 秒。同尺寸 DLL 篡改夹具仍被拒绝。
+
+原生程序、实时翻译、字幕光栅和 Qt Quick 目标用 `build-recording-handoff.py --task codex-live-asr-review-20261120 --jobs 2` 构建，复用同源码树的 `build/codex-live-asr-20261120`。Qt Quick 238/0/0。Whisper 每段加 2300 ms 解码延迟，跑实时 PCM 测试 270 秒，得到 61 条识别结果，最长间隔 4850 ms，结果超龄为 0。实机文件播放 6/6 句译文，暂停和跳转恢复通过，样本从语音分段结束到叠加 750–926 ms。强制主源返回 503 后，实装并核对了 Parakeet 两套备用路径和 Whisper hf-mirror，备用 VAD 用英文和中文合成 PCM 验证。复跑采集送帧测试 362/0。T900 取舍引用此前实卡 A/B，到达至提交 P95 0.9 → 5.6 ms、提交 1% low 47 → 59。游戏音频、现场采集和主机串流待实测。
+
+本地测试入口 `E:/项目/Veyra/tests/codex-live-asr-review-20261120/启动实时翻译复审版.cmd`。构建、下载、压力和实播回执在同任务 `logs` 与 `reports/FINAL.json`。下载测试副本中相同 SHA-256 的大模型文件以硬链接复用。
+
 ## 2026-11-20 实时语音识别与逐句翻译
 
 从 main `eb5fd6d0` 建独立分支 `codex/live-asr-20261120`。按 Claude 交接先完成 Veyra 音频首期。音量和静音前的播放 PCM 由已有音频监听接口取样，经有界缓冲和 16 kHz 降混后进入低优先级 CPU 子进程。Parakeet 英语和 Whisper Turbo 多语言、Silero VAD 及 sherpa-onnx 2.0.2 运行库按需下载。已安装文件在用户数据目录按版本保存。打开实时翻译前音频路径沿用现有监听开关。

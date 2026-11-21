@@ -39,6 +39,7 @@ private:
     void detachTap();
     void attachTap();
     void resetStream();
+    bool sendStreamMarker();
     void fail(const QString& reason);
     void setStatus(QString value);
     void summarize(qint64 now);
@@ -58,6 +59,8 @@ private:
     qint64 startedAt_ = 0, lastAudioAt_ = 0, lastSummaryAt_ = 0, nextAssetCheckAt_ = 0;
     qint64 lastAudioEndUs_ = 0;
     uint64_t epoch_ = 1, sentEpoch_ = 0;
+    uint32_t inFlightBytes_ = 0, peakInFlightBytes_ = 0;
+    bool gapPending_ = false;
     const void* renderer_ = nullptr;
     sink::AudioFormat format_;
     std::shared_ptr<asr::AudioTap> tap_;
@@ -66,6 +69,7 @@ private:
     std::vector<qint64> decodeTimes_;
     std::vector<qint64> endToResults_;
     unsigned bufferDrops_ = 0, emptyResults_ = 0, staleResults_ = 0;
+    unsigned stalePcm_ = 0, skippedSegments_ = 0;
     qint64 audioMs_ = 0;
     double realTimeFactor_ = 0.0;
 };

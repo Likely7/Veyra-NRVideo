@@ -72,6 +72,28 @@ QUrl completionEndpoint(const QString& value) {
 
 int translationThreads() { return std::clamp(QThread::idealThreadCount() / 4, 1, 4); }
 
+QString sameLanguageCaption(const QString& text, const QString& source, const QString& target) {
+    if (!languageCode(source)) return {};
+    const QLocale from(source), to(target);
+    if (from.language() != to.language()) return {};
+    if (to.language() != QLocale::Chinese) return from.script() == to.script() ? text : QString{};
+
+    // Whisper returns "zh" even when its text uses either Chinese script.
+    // Preserve the wording and map the script locally for the target locale.
+    const bool traditional = to.script() == QLocale::TraditionalHanScript;
+    const DWORD flags = traditional ? LCMAP_TRADITIONAL_CHINESE : LCMAP_SIMPLIFIED_CHINESE;
+    const auto* input = reinterpret_cast<const wchar_t*>(text.utf16());
+    const int length = int(text.size());
+    const int size = LCMapStringEx(LOCALE_NAME_INVARIANT, flags, input, length, nullptr, 0, nullptr, nullptr, 0);
+    if (size <= 0) return text;
+    QString converted(size, Qt::Uninitialized);
+    const int written = LCMapStringEx(LOCALE_NAME_INVARIANT, flags, input, length,
+        reinterpret_cast<wchar_t*>(converted.data()), size, nullptr, nullptr, 0);
+    if (written <= 0) return text;
+    converted.resize(written);
+    return converted;
+}
+
 qint64 displayDuration(const QString& text) {
     return std::clamp<qint64>(text.size() * 1000 / 15, 2000, captionLifetimeMs);
 }
@@ -237,15 +259,12 @@ QString LiveTranslation::status() const {
     return status_;
 }
 
-QString LiveTranslation::caption() const {
-    return !rows_.empty() && clock_.elapsed() < rows_.back().originalUntil ? rows_.back().original : QString{};
-}
-
-QString LiveTranslation::translated() const {
+LiveTranslation::DisplayCaption LiveTranslation::displayCaption() const {
     const auto now = clock_.elapsed();
     for (auto row = rows_.rbegin(); row != rows_.rend(); ++row) {
-        if (!row->translated.isEmpty() && row->until > now) return row->translated;
+        if (!row->translated.isEmpty() && row->until > now) return {row->original, row->translated};
     }
+    if (!rows_.empty() && rows_.back().originalUntil > now) return {rows_.back().original, {}};
     return {};
 }
 
@@ -281,6 +300,7 @@ void LiveTranslation::setEnabled(bool value) {
     serverFailed_ = false;
     asr_.setEnabled(value && recognitionSource_ == VeyraAudio);
     if (value) {
+        assets_.downloads.refreshInstalled();
         lastSummaryAt_ = clock_.elapsed();
         status_ = recognitionSource_ == WindowsCaptions ? tr("请打开 Windows 实时字幕") : QString{};
         timer_.start();
@@ -448,7 +468,10 @@ void LiveTranslation::addSentences(std::vector<LiveSentence> sentences) {
         if (!languageCode(sentence.language)) sentence.language = sourceLanguage();
         const auto id = ++nextSentence_;
         rows_.push_back({id, now + captionLifetimeMs, now + displayDuration(sentence.text), sentence.text, {}});
-        if (rows_.size() > 2) rows_.pop_front();
+        if (rows_.size() > 2) {
+            rows_.pop_front();
+            discardHiddenWork();
+        }
 
         const QString cacheKey = QString::number(provider_) + u'\n' + sentence.language + u'\n'
             + targetLanguage_ + u'\n' + sentence.text;
@@ -457,18 +480,13 @@ void LiveTranslation::addSentences(std::vector<LiveSentence> sentences) {
         if (context_.size() > 2) context_.removeFirst();
         ++sentenceCount_;
 
-        if (!work.sentence.language.isEmpty() &&
-            work.sentence.language.compare(targetLanguage_, Qt::CaseInsensitive) == 0) {
-            displayTranslation(work, work.sentence.text);
+        const auto direct = sameLanguageCaption(work.sentence.text, work.sentence.language, targetLanguage_);
+        if (!direct.isEmpty()) {
+            displayTranslation(work, direct);
         } else if (const auto* cached = cache_.object(cacheKey)) {
             ++cacheHits_;
             displayTranslation(work, *cached);
         } else {
-            if (queue_.size() >= 3) {
-                queue_.dequeue();
-                ++overflow_;
-                ++skippedSentences_;
-            }
             queue_.enqueue(std::move(work));
         }
     }
@@ -494,13 +512,27 @@ void LiveTranslation::displayTranslation(const Work& work, QString translation) 
 void LiveTranslation::prune(qint64 now) {
     const auto old = rows_.size();
     std::erase_if(rows_, [now](const Row& row) { return row.until <= now; });
-    if (rows_.size() != old) emit captionChanged();
+    if (rows_.size() != old) {
+        discardHiddenWork();
+        emit captionChanged();
+    }
     const auto minimumUs = sink::recordingClockUs() - maxQueuedAgeUs;
     while (!queue_.isEmpty() && queue_.head().sentence.endUs < minimumUs) {
         queue_.dequeue();
         ++stale_;
         ++skippedSentences_;
     }
+}
+
+void LiveTranslation::discardHiddenWork() {
+    const auto hidden = [this](quint64 id) { return std::ranges::find(rows_, id, &Row::id) == rows_.end(); };
+    int discarded = int(queue_.removeIf([&](const Work& work) { return hidden(work.id); }));
+    if (requestSentence_ && hidden(requestSentence_)) {
+        cancelRequest();
+        ++discarded;
+    }
+    hidden_ += discarded;
+    skippedSentences_ += discarded;
 }
 
 void LiveTranslation::resetCaption() {
@@ -514,6 +546,7 @@ void LiveTranslation::resetCaption() {
 }
 
 void LiveTranslation::cancelRequest() {
+    requestSentence_ = 0;
     if (auto* reply = std::exchange(request_, nullptr)) {
         reply->disconnect(this);
         reply->abort();
@@ -652,6 +685,7 @@ void LiveTranslation::requestTranslation(Work work) {
         request_ = manager.post(request, payload);
     }
     ++requestedCount_;
+    requestSentence_ = work.id;
     auto* reply = request_;
     reply->setReadBufferSize(maxResponseBytes + 1);
     connect(reply, &QNetworkReply::readyRead, this, [reply] {
@@ -659,6 +693,7 @@ void LiveTranslation::requestTranslation(Work work) {
     });
     connect(reply, &QNetworkReply::finished, this, [this, reply, work = std::move(work)] {
         request_ = nullptr;
+        requestSentence_ = 0;
         receiveTranslation(reply, work);
         reply->deleteLater();
     });
@@ -668,8 +703,7 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
     if (!enabled_ || !active_) return;
     const auto code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (provider_ == Local && code == 503 && clock_.elapsed() - serverStartedAt_ < 20000) {
-        if (queue_.size() < 3) queue_.prepend(work);
-        else { ++overflow_; ++skippedSentences_; }
+        queue_.prepend(work);
         setStatus(tr("正在加载本地翻译模型…"));
         return;
     }
@@ -697,7 +731,7 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
         languageCode(work.sentence.language) &&
         QLocale(work.sentence.language).language() != QLocale(targetLanguage_).language() &&
         translation.compare(work.sentence.text, Qt::CaseInsensitive) == 0;
-    if (echoed && !work.context.isEmpty() && queue_.size() < 3 &&
+    if (echoed && !work.context.isEmpty() &&
         sink::recordingClockUs() - work.sentence.endUs < maxQueuedAgeUs) {
         Work retry = work;
         retry.context.clear();
@@ -724,12 +758,12 @@ void LiveTranslation::summarize(qint64 now) {
     }
     std::ranges::sort(requestTimes_);
     std::ranges::sort(displayDelays_);
-    log::info("live-translate", std::format("provider={} sentences={} requests={} cacheHits={} requestP50ms={} requestP95ms={} overlayP50ms={} overlayP95ms={} stale={} overflow={} failed={}",
+    log::info("live-translate", std::format("provider={} sentences={} requests={} cacheHits={} requestP50ms={} requestP95ms={} overlayP50ms={} overlayP95ms={} stale={} hidden={} failed={}",
         provider_, sentenceCount_, requestedCount_, cacheHits_, percentile(requestTimes_, 50), percentile(requestTimes_, 95),
-        percentile(displayDelays_, 50), percentile(displayDelays_, 95), stale_, overflow_, failures_));
+        percentile(displayDelays_, 50), percentile(displayDelays_, 95), stale_, hidden_, failures_));
     requestTimes_.clear();
     displayDelays_.clear();
-    sentenceCount_ = requestedCount_ = cacheHits_ = stale_ = overflow_ = failures_ = 0;
+    sentenceCount_ = requestedCount_ = cacheHits_ = stale_ = hidden_ = failures_ = 0;
     emit changed();
 }
 } // namespace veyra::ui
