@@ -5058,6 +5058,19 @@
    "ru": "Windows заблокировала обновление. Проверьте журнал защиты."
   },
   {
+   "zh": "Windows 无法确认 Veyra（PID %1）已退出。请在任务管理器中查看此进程。",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "Windows 無法確認 Veyra（PID %1）已結束。請在工作管理員中檢查此處理程序。",
+   "en": "Windows could not confirm that Veyra (PID %1) exited. Check the process in Task Manager.",
+   "ja": "Windows は Veyra（PID %1）の終了を確認できませんでした。タスク マネージャーでプロセスを確認してください。",
+   "ko": "Windows에서 Veyra(PID %1)의 종료를 확인하지 못했습니다. 작업 관리자에서 해당 프로세스를 확인하세요.",
+   "es": "Windows no pudo confirmar el cierre de Veyra (PID %1). Comprueba el proceso en el Administrador de tareas.",
+   "fr": "Windows n’a pas pu confirmer l’arrêt de Veyra (PID %1). Vérifiez le processus dans le Gestionnaire des tâches.",
+   "de": "Windows konnte nicht bestätigen, dass Veyra (PID %1) beendet wurde. Prüfe den Prozess im Task-Manager.",
+   "pt-BR": "O Windows não conseguiu confirmar o encerramento do Veyra (PID %1). Verifique o processo no Gerenciador de Tarefas.",
+   "ru": "Windows не удалось подтвердить завершение Veyra (PID %1). Проверьте процесс в Диспетчере задач."
+  },
+  {
    "zh": "X 为上限",
    "src": "qml/NodePage.qml",
    "zh-TW": "X 為上限",
@@ -11167,6 +11180,19 @@
    "de": "Nicht verwendet, während Double SR eingeschaltet ist; es kehrt zurück, wenn Double SR ausgeschaltet ist.",
    "pt-BR": "Não é usado enquanto o dobro SR está ligado; retorna quando o dobro SR é desligado.",
    "ru": "Не используется при включении двойного SR; он возвращается, когда двойной SR выключен."
+  },
+  {
+   "zh": "反馈时请附上以下转储文件。",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "回報時請附上以下傾印檔案。",
+   "en": "Attach this dump when reporting the issue.",
+   "ja": "問題を報告する際は、次のダンプファイルを添付してください。",
+   "ko": "문제를 신고할 때 다음 덤프 파일을 첨부하세요.",
+   "es": "Adjunta este archivo de volcado al informar del problema.",
+   "fr": "Joignez le fichier de vidage ci-dessous lors du signalement.",
+   "de": "Hänge diese Dump-Datei an den Fehlerbericht an.",
+   "pt-BR": "Anexe este arquivo de despejo ao relatar o problema.",
+   "ru": "Приложите этот файл дампа к отчёту о проблеме."
   },
   {
    "zh": "反馈问题",
@@ -22777,6 +22803,19 @@
    "de": "Alte Formatauswahl",
    "pt-BR": "Escolha de formato antiga",
    "ru": "Старый выбор формата"
+  },
+  {
+   "zh": "旧的 Veyra（PID %1）仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "舊的 Veyra（PID %1）仍未結束，Windows 可能還在等待裝置作業完成。如果使用 USB 擷取卡，請重新插拔後再開啟。問題仍然存在時，請重新啟動電腦。",
+   "en": "Veyra (PID %1) has not exited. Windows may still be waiting for a device operation. If you use a USB capture card, reconnect it and open Veyra again. Restart Windows if the problem persists.",
+   "ja": "以前の Veyra（PID %1）がまだ終了していません。Windows がデバイスの処理を待っている可能性があります。USB キャプチャーカードをお使いの場合は、抜き差ししてから起動し直してください。解決しない場合は PC を再起動してください。",
+   "ko": "이전 Veyra(PID %1)가 아직 종료되지 않았습니다. Windows가 장치 작업이 끝나기를 기다리고 있을 수 있습니다. USB 캡처 카드를 사용 중이라면 다시 연결한 후 Veyra를 여세요. 문제가 계속되면 컴퓨터를 다시 시작하세요.",
+   "es": "La instancia anterior de Veyra (PID %1) sigue en ejecución. Es posible que Windows esté esperando a que termine una operación del dispositivo. Si usas una capturadora USB, vuelve a conectarla y abre Veyra de nuevo. Si el problema continúa, reinicia el equipo.",
+   "fr": "L’instance précédente de Veyra (PID %1) est toujours active. Windows attend peut-être la fin d’une opération du périphérique. Si vous utilisez une carte d’acquisition USB, rebranchez-la puis relancez Veyra. Si le problème persiste, redémarrez le PC.",
+   "de": "Die vorherige Veyra-Instanz (PID %1) wurde noch nicht beendet. Windows wartet möglicherweise auf einen Gerätevorgang. Wenn du eine USB-Capture-Karte verwendest, stecke sie neu ein und öffne Veyra erneut. Starte den PC neu, falls das Problem bestehen bleibt.",
+   "pt-BR": "A instância anterior do Veyra (PID %1) continua em execução. O Windows pode estar aguardando uma operação do dispositivo. Se você usa uma placa de captura USB, reconecte-a e abra o Veyra novamente. Se o problema continuar, reinicie o computador.",
+   "ru": "Предыдущий процесс Veyra (PID %1) ещё не завершился. Возможно, Windows ждёт окончания операции с устройством. Если вы используете карту захвата USB, переподключите её и снова откройте Veyra. Если проблема остаётся, перезагрузите компьютер."
   },
   {
    "zh": "时域稳定",

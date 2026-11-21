@@ -12,44 +12,46 @@ ProfileInstance::~ProfileInstance() {
     if (mutex_) CloseHandle(mutex_);
 }
 
-bool ProfileInstance::acquire(const std::filesystem::path& profile, const std::wstring& target,
-                              const instance::Notify& notify) {
-    name_ = instance::profileKey(profile);
-    if (name_.empty()) {
-        notify(instance::Notice::LockFailed, ERROR_INVALID_NAME);
+bool ProfileInstance::acquire(const std::filesystem::path& profile, const std::filesystem::path& logs,
+                              const std::wstring& target, const instance::Notify& notify) {
+    profile_ = instance::Profile(profile, logs);
+    const auto& key = profile_.key();
+    if (key.empty()) {
+        notify(instance::Notice::LockFailed, ERROR_INVALID_NAME, {});
         return false;
     }
-    mutex_ = CreateMutexW(nullptr, FALSE, name_.c_str());
+    mutex_ = CreateMutexW(nullptr, FALSE, key.c_str());
     if (!mutex_) {
-        notify(instance::Notice::LockFailed, GetLastError());
+        notify(instance::Notice::LockFailed, GetLastError(), {});
         return false;
     }
 
-    const auto deadline = GetTickCount64() + 3000;
+    auto deadline = GetTickCount64() + 3000;
     do {
-        const auto result = WaitForSingleObject(mutex_, 0);
-        owns_ = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
-        if (owns_) return true;
-        if (result == WAIT_FAILED) {
-            notify(instance::Notice::LockFailed, GetLastError());
-            return false;
+        if (!owns_) {
+            const auto result = WaitForSingleObject(mutex_, 0);
+            owns_ = result == WAIT_OBJECT_0 || result == WAIT_ABANDONED;
+            if (result == WAIT_FAILED) {
+                notify(instance::Notice::LockFailed, GetLastError(), {});
+                return false;
+            }
         }
-        if (const auto window = instance::findWindow(name_)) {
+        if (owns_ && !profile_.ownerAlive()) {
+            if (!profile_.rememberOwner(false))
+                log::warn("app-instance", "could not record the profile owner PID");
+            return true;
+        }
+        if (const auto window = instance::findWindow(key)) {
             std::wstring self(32768, L'\0');
             const auto size = GetModuleFileNameW(nullptr, self.data(), DWORD(self.size()));
             self.resize(size < self.size() ? size : 0);
-            const auto outcome = instance::handoff(window, name_, target, self, notify);
+            const auto outcome = profile_.handoff(window, target, self, notify);
             if (outcome == instance::Handoff::Done) return false;
-            if (outcome == instance::Handoff::Released) {
-                const auto acquired = WaitForSingleObject(mutex_, 500);
-                owns_ = acquired == WAIT_OBJECT_0 || acquired == WAIT_ABANDONED;
-                if (owns_) return true;
-                break;
-            }
+            if (outcome == instance::Handoff::Released) deadline = GetTickCount64() + 3000;
         }
         Sleep(60);
     } while (GetTickCount64() < deadline);
-    notify(instance::Notice::StartingOrClosing, 0);
+    if (!profile_.reportStalledOwner(notify)) notify(instance::Notice::StartingOrClosing, 0, {});
     return false;
 }
 
@@ -58,13 +60,15 @@ void ProfileInstance::listen(HWND window, Launch launch) {
     launch_ = std::move(launch);
     QCoreApplication::instance()->installNativeEventFilter(this);
     window_ = window;
-    if (!SetPropW(window_, name_.c_str(), reinterpret_cast<HANDLE>(1)))
+    if (!SetPropW(window_, profile_.key().c_str(), reinterpret_cast<HANDLE>(1)))
         log::warn("app-instance", std::format("window registration failed error={}", GetLastError()));
+    if (!profile_.rememberOwner(true))
+        log::warn("app-instance", "could not record the profile owner window status");
 }
 
 void ProfileInstance::stopListening() {
     if (!window_) return;
-    RemovePropW(window_, name_.c_str());
+    RemovePropW(window_, profile_.key().c_str());
     QCoreApplication::instance()->removeNativeEventFilter(this);
     window_ = nullptr;
     launch_ = {};

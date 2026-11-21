@@ -130,6 +130,10 @@ target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 add_executable(veyra_logger_tests tests/unit/LoggerTests.cpp)
 target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
+
+add_executable(veyra_instance_recovery_tests tests/unit/InstanceRecoveryTests.cpp)
+target_compile_features(veyra_instance_recovery_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_instance_recovery_tests PRIVATE veyra_base user32)
 veyra_apply_warnings(veyra_logger_tests)
 
 add_executable(veyra_export_timeline_tests tests/unit/ExportTimelineTests.cpp)

@@ -20,7 +20,8 @@ public:
 
     // Runs before the logger, preference migration and capture engine. A false
     // result means the request was handed off or an existing owner is still alive.
-    bool acquire(const std::filesystem::path& profile, const std::wstring& target, const instance::Notify& notify);
+    bool acquire(const std::filesystem::path& profile, const std::filesystem::path& logs,
+                 const std::wstring& target, const instance::Notify& notify);
     void listen(HWND window, Launch launch);
     void stopListening();
 
@@ -29,7 +30,7 @@ private:
 
     HANDLE mutex_ = nullptr;
     bool owns_ = false;
-    std::wstring name_;
+    instance::Profile profile_;
     HWND window_ = nullptr;
     Launch launch_;
 };

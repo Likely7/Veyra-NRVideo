@@ -584,7 +584,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         prefFile.close();
     }
     ui::ProfileInstance profileInstance;
-    const auto instanceNotice = [&](instance::Notice notice, DWORD value) {
+    const auto instanceNotice = [&](instance::Notice notice, DWORD value, const std::filesystem::path& dump) {
         const char* source = nullptr;
         switch (notice) {
         case instance::Notice::LockFailed:
@@ -602,6 +602,12 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         case instance::Notice::ConfirmEnd:
             source = "Veyra（PID %1）未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？";
             break;
+        case instance::Notice::EndPending:
+            source = "旧的 Veyra（PID %1）仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。";
+            break;
+        case instance::Notice::EndFailed:
+            source = "Windows 无法确认 Veyra（PID %1）已退出。请在任务管理器中查看此进程。";
+            break;
         }
         if (!source) return false;
         // Only the duplicate needs a translator before QApplication exists.
@@ -609,26 +615,30 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         ui::i18n::apply(ui::i18n::resolve(saved.value(QStringLiteral("language")).toString()));
         auto message = ui::i18n::text(QString::fromUtf8(source));
         if (value) message = message.arg(value);
+        if (!dump.empty()) {
+            message += QStringLiteral("\n\n") + ui::i18n::text(QStringLiteral("反馈时请附上以下转储文件。"))
+                       + QStringLiteral("\n") + QString::fromStdWString(dump.wstring());
+        }
         ui::i18n::apply(QStringLiteral("zh-CN"));
         const UINT flags = notice == instance::Notice::ConfirmEnd
             ? MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING : MB_OK | MB_ICONINFORMATION;
         return MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(message.utf16()), L"Veyra", flags) == IDYES;
     };
-    if (!updateProbe && !profileInstance.acquire(dataDirectory, instance::launchTarget(launchArgs), instanceNotice))
-        return 0; // An already-open UI isn't a managed launcher crash or rollback condition.
-
-    struct CloseLog {
-        ~CloseLog() { Logger::instance().closeFile(); }
-    } closeLog;
-    // A log file has to be opened explicitly; without this the QML app produced
-    // no diagnostics at all, which made every failure look like a silent exit.
-    // Same path and override as the Win32 build, so support instructions do not
-    // change between the two front ends.
     wchar_t logOverride[32768]{};
     const auto overrideLength = GetEnvironmentVariableW(L"VEYRA_LOG_FILE", logOverride, 32768);
     auto logPath = overrideLength > 0 && overrideLength < 32768
                        ? std::filesystem::path(logOverride)
                        : veyra::runtime::logsDirectory() / L"veyra-qml.log";
+    std::error_code logPathError;
+    const auto absoluteLog = std::filesystem::absolute(logPath, logPathError);
+    if (!logPathError) logPath = absoluteLog.lexically_normal();
+    if (!updateProbe && !profileInstance.acquire(dataDirectory, logPath.parent_path(),
+                                                 instance::launchTarget(launchArgs), instanceNotice))
+        return 0; // An already-open UI isn't a managed launcher crash or rollback condition.
+
+    struct CloseLog {
+        ~CloseLog() { Logger::instance().closeFile(); }
+    } closeLog;
     // Bounded: earlier sessions move to veyra-qml.old.log once this file passes
     // 16 MB at start, and a session that alone reaches 64 MB (about five hours of
     // capture) continues in a fresh file (audit 2026-10-15 B3).

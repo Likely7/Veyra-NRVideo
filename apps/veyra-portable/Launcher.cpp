@@ -54,7 +54,7 @@ int showError(const wchar_t* message) {
     return 1;
 }
 
-bool instanceNotice(instance::Notice notice, DWORD pid) {
+bool instanceNotice(instance::Notice notice, DWORD pid, const fs::path& dump) {
     const auto identifier = L"Veyra (PID " + std::to_wstring(pid) + L")";
     if (notice == instance::Notice::ConfirmEnd) {
         const auto question = identifier
@@ -62,14 +62,26 @@ bool instanceNotice(instance::Notice notice, DWORD pid) {
             + identifier + L" is not responding. Ending it may lose an ongoing recording. End it and reopen Veyra?";
         return MessageBoxW(nullptr, question.c_str(), L"Veyra", MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING) == IDYES;
     }
-    if (notice == instance::Notice::Hung) {
-        const auto message = identifier
+    std::wstring message;
+    if (notice == instance::Notice::EndPending) {
+        message = identifier
+            + L" 仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。\n\n"
+            + identifier + L" has not exited. Windows may still be waiting for a device operation. "
+              L"If you use a USB capture card, reconnect it and open Veyra again. Restart Windows if the problem persists.";
+    } else if (notice == instance::Notice::EndFailed) {
+        message = L"Windows 无法确认 " + identifier + L" 已退出。请在任务管理器中查看此进程。\n\n"
+            + L"Windows could not confirm that " + identifier + L" exited. Check the process in Task Manager.";
+    } else if (notice == instance::Notice::Hung) {
+        message = identifier
             + L" 未响应。请在任务管理器中检查此进程。\n"
             + identifier + L" is not responding. Check the process in Task Manager.";
-        showError(message.c_str());
+    } else if (notice == instance::Notice::StartingOrClosing) {
+        message = L"Veyra 正在打开或退出。请稍候再试。\nVeyra is starting or closing. Wait a moment and try again.";
     } else {
-        showError(L"Veyra 已经打开。请切换到原窗口继续使用。\nVeyra is already open. Switch to its window to continue.");
+        message = L"Veyra 已经打开。请切换到原窗口继续使用。\nVeyra is already open. Switch to its window to continue.";
     }
+    if (!dump.empty()) message += L"\n\n反馈时请附上以下转储文件。\nAttach this dump when reporting the issue.\n" + dump.wstring();
+    showError(message.c_str());
     return false;
 }
 
@@ -110,14 +122,14 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
                 profile = versions / installedVersions(root).current / initialArgs[++i];
             }
         }
-        const auto key = instance::profileKey(profile);
+        const instance::Profile owner(std::move(profile), root / L"logs");
         const auto target = instance::launchTarget(initialArgs);
         auto deadline = GetTickCount64() + 3000;
         do {
-            if (const HWND existing = instance::findWindow(key)) {
+            if (const HWND existing = instance::findWindow(owner.key())) {
                 const auto state = installedVersions(root);
                 const auto player = state.current.empty() ? fs::path{} : versions / state.current / playerName;
-                const auto result = instance::handoff(existing, key, target, player, instanceNotice);
+                const auto result = owner.handoff(existing, target, player, instanceNotice);
                 if (result == instance::Handoff::Done) return 0;
                 if (result == instance::Handoff::Released) deadline = GetTickCount64() + 3000;
             }
@@ -125,6 +137,7 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
             lock.value = openRunLock(root);
             lockError = lock.value == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
         } while (lockError == ERROR_SHARING_VIOLATION && GetTickCount64() < deadline);
+        if (lockError == ERROR_SHARING_VIOLATION && owner.reportStalledOwner(instanceNotice)) return 0;
     }
     if (lockError == ERROR_SHARING_VIOLATION)
         return showError(L"这份 Veyra 正在运行或更新。\nThis copy of Veyra is running or updating.");
