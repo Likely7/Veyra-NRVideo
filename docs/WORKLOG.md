@@ -1,5 +1,15 @@
 # 当前工作日志
 
+## 2026-11-21 固定刷新送显时序提示
+
+从本地 `main` 的 `eb5fd6d0` 建立 `codex/tearing-diagnostics-20261121`。沿用每秒 DXGI 帧统计。在固定刷新计数正常、自动或垂直同步档下，连续观测至少 5 秒、中位数均低于 1 ms 且累计至少 30 个样本时，每次播放或采集会话最多提示一次。丢失计数、换屏、切档和显示状态变化会重新累计。可变刷新正在跟随或当前显示模式有可变刷新能力时跳过，避免把可变刷新下自然偏短的送显时间误报为撕裂。提示表述为可能的送显时序问题，记录本身无法确认驱动覆盖或屏幕撕裂。启动时后台读取全局及 Veyra 程序配置的 VSYNCMODE。沿用原有 DXGI 交换链标志。驱动读数使用 [NVIDIA 定义](https://github.com/NVIDIA/nvapi/blob/main/NvApiDriverSettings.h)，交换链行为见 [DXGI 可变刷新文档](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/variable-refresh-rate-displays)。
+
+复算现场 4K 120 Hz 固定刷新日志，自动档无遮挡送显 P50 为 0.24 ms，被菜单覆盖时为 10.25 ms。回放 488 个统计窗口，包含无样本的时间段。检测器只触发一次，累计 5.021 秒、51 个样本，最后一个窗口 P50 为 0.151 ms。`scripts/acceptance/build-recording-handoff.py --task codex-tearing-diagnostics-20261121 --label 2.2.0-display-diagnostics-test --jobs 2` 最后五目标 143.4 秒通过。检测器 14 项、Qt Quick 238 项、异步显示查询和九语词库检查全部通过。
+
+本机以独立配置播放移动画面，NVIDIA 全局读数为应用控制，Veyra 无独立驱动配置。320.002 Hz 显示器报告可请求 VRR。私有配置打开可变刷新后，Veyra 记录 `vrrSync=true` 并以 `Present(1,0)` 送显。驱动仍报告 `active=false`，两次播放均无撕裂提示。PresentMon 启动 ETW 会话时被 Windows 拒绝，需要管理员或 Performance Log Users 权限。本轮保留只读诊断，驱动强制关闭垂直同步的实机对照未执行。
+
+产物位于 `E:/项目/Veyra/{build,logs,tests,tmp,reports}/codex-tearing-diagnostics-20261121`。日志 `replay-and-policy.txt`、`monitor-evidence.json` 和 `monitor-vrr-request.json` 分别记录固定刷新回放、本机默认配置及私有 VRR 配置。构建回执为 `logs/codex-tearing-diagnostics-20261121/build-20261121-040516/receipt.json`。启动入口为 `tests/codex-tearing-diagnostics-20261121/启动送显诊断测试.cmd`。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。

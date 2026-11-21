@@ -3565,6 +3565,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.hdrInRollOffPercent=coverage.inRollOffPercent();
                     snapshot_.hdrInLiftPercent=coverage.inLiftPercent();
                     snapshot_.displayVrr=gfx::vrrLevel(presenter.displayVrr());snapshot_.presentationVrrSync=presenter.vrrSync();
+                    snapshot_.tearingHint=presenter.tearingHint();
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
                     snapshot_.nrAutoActive=graph->autoNrPoolReady();
                     snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;

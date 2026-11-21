@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/engine/PresentTearingDetector.h"
 #include "veyra/diagnostics/GpuTimer.h"
 #include "veyra/gfx/PresentSink.h"
 #include <dxgi1_6.h> // DXGI_HDR_METADATA_HDR10 (custom: HDR static metadata)
@@ -113,6 +114,7 @@ public:
         return requested.variableRefresh&&requested.display==DisplaySync::Automatic&&gfx::vrrLevel(vrr)>=3;
     }
     bool vrrSync()const{return vrrSync_;}
+    TearingHint tearingHint()const { return tearingHint_; }
     diagnostics::GpuSample blitTiming(ID3D12Fence* f,uint64_t revision=0,uint64_t epoch=0){gpuTimer_.collect(presentationFence_?presentationFence_.Get():f);if((revision&&gpuTimer_.last().identity.settingsRevision!=revision)||(epoch&&gpuTimer_.last().identity.epoch!=epoch)){diagnostics::GpuSample pending;pending.state=diagnostics::SampleState::Pending;return pending;}return gpuTimer_.last().gpu[size_t(diagnostics::GpuStage::Blit)];}
     // Application-side frame-generation timing for present-sink backends
     // (XeSS): the copies, barriers and provider prepare work recorded on
@@ -206,6 +208,11 @@ private:
     HMONITOR bufferMonitor_=nullptr;
     unsigned monitorWidth_=0,monitorHeight_=0;
     std::chrono::steady_clock::time_point nextCostLog_{};
+    std::chrono::steady_clock::time_point scanoutSampleAt_{};
+    PresentTearingDetector tearingDetector_;
+    TearingHint tearingHint_ = TearingHint::None;
+    DisplaySync scanoutSync_ = DisplaySync::Automatic;
+    bool scanoutFullscreen_ = false;
     std::chrono::steady_clock::time_point lastXessFrame_{};
     pipeline::FrameIdentity lastXessIdentity_{};
     int64_t lastXessPts100ns_=-1;
@@ -214,7 +221,7 @@ private:
     bool xessGenerationSuppressed_=false;
     HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
     DisplayStateService* displayStates_=nullptr;
-    uint64_t displayStateSerial_=0,displayGeneration_=0;
+    uint64_t displayStateSerial_=0,displayGeneration_=0,observedDisplayGeneration_=0;
     // VRR presentation may start or stop after it is requested or when the
     // window enters/leaves fullscreen: one forced query 3 s after that settles.
     std::optional<std::chrono::steady_clock::time_point> vrrConfirmAt_;
