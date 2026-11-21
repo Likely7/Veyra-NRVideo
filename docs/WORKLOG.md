@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-20 采集占用诊断、重复启动与帧率状态提示
+
+基于主线 2.2.0 的 `eb5fd6d0`，在 `codex/capture-busy-status-20261120` 接手 Claude 的两项排查。带 PID 的日志代表主日志打开失败。现在仅在退到 PID 日志时通过 Restart Manager 记录文件持有进程及 Veyra 身份。核实同安装的旧 Veyra 持有主日志时，默认配置跳过启动自动恢复采集。手动操作仍可用。
+
+播放器在创建引擎前以规范化配置目录取得单实例锁。重复启动恢复既有窗口，媒体和浏览器协议请求也交给该窗口处理。安装及便携启动器保留安装锁，持锁时联系对应配置的窗口。确认为同一可执行文件且窗口重复超时后，用户可选择结束该进程并重开。采集设备预约覆盖格式协商到关闭，匹配同一路径的其他 Veyra 会话会收到独立提示。驱动和 DirectShow 格式错误按实际 HRESULT 提示并带上阶段，`0x800705AA` 归为驱动报告系统资源不足。
+
+保留现有帧率判定条件。专业模式状态灯为采集卡输入不足和补帧调度降档提供短建议和悬停说明。说明优先换行，详细指标可在悬停框中查看。补齐九语提示与错误文案，修正原有状态译文。Windows 版本根启动器随完整安装包或便携包更新，旧版内更新只更换版本目录中的文件。
+
+使用 `scripts/acceptance/build-recording-handoff.py --task codex-capture-busy-status-20261120 --label 2.2.0-capture-status-test --jobs 2` 构建播放器、启动器和七个相关测试目标。原生复测发现安装入口原先在更新锁处直接退出，补上锁内窗口转交后通过。共享模块去除了 FFmpeg 头文件依赖，解决 MSVC 把依赖头警告当错误的构建失败。Qt Quick 279 项通过，含两种宽度、九种语言与两条状态的 36 个悬停布局用例。采集启动回归 9 项、DirectShow 格式发现 24 项、采集能力 25 项通过。另通过 UI 合同、语言、配置迁移测试和 `scripts/i18n/extract.py --check`。
+
+产物在 `E:/项目/Veyra/{build,logs,tests,tmp,reports}/codex-capture-busy-status-20261120`，手工入口为同任务测试目录的 `启动采集与状态提示测试.cmd`。原生测试使用独立配置、测试文件和可控的窗口阻塞。真实占用的采集卡、USB 带宽不足和 4K 高负载的现场触发仍需在对应硬件复测。完整命令、样本与证据见 `reports/codex-capture-busy-status-20261120/FINAL.json`。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。

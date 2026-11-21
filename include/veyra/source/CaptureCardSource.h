@@ -40,6 +40,8 @@ struct CaptureFormatQueryInfo {
     size_t advertised=0,rejected=0;
     bool partial=false,fallback=false;
 };
+const wchar_t* captureFailureAdvice(long code);
+
 class CaptureCardSource final:public IFrameSource {
 public:
     CaptureCardSource();~CaptureCardSource()override;
@@ -96,6 +98,7 @@ public:
     void close()noexcept override;
 private:
     std::wstring error_;
+    bool configureDevice(const SourceOpenDesc&);
     bool configureDeckLink(const SourceOpenDesc&);
     bool connectDirectShowAudio(const SourceOpenDesc&);
     // Starts AVerMedia's in-process audio graph; false means "use DirectShow".

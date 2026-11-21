@@ -16,6 +16,40 @@ Item {
     SignalSpy { id: swSpy; target: sw; signalName: "toggled" }
 
     Component {
+        id: statusLightFixture
+        ProStatusLight { x: 900; y: 100; width: 205 }
+    }
+    TestCase {
+        name: "StatusLight"
+        when: windowShown
+        function cleanup() {
+            veyra.runStatusLevel = "idle"
+            veyra.runStatus = ""
+            veyra.runStatusDetail = ""
+            veyra.runStatusAction = ""
+            veyra.runStatusHint = ""
+        }
+        function test_narrowWarningKeepsActionAndWrappedHint() {
+            const light = createTemporaryObject(statusLightFixture, root)
+            verify(light !== null)
+            const label = findChild(light, "run-status")
+            const tip = findChild(light, "run-status-tooltip")
+            verify(label && tip)
+            veyra.runStatusLevel = "warn"
+            veyra.runStatus = "Недостаточная частота кадров на входе"
+            veyra.runStatusAction = "Проверьте подключение карты захвата"
+            veyra.runStatusDetail = "Без генерации кадров · 60,00 кадр/с · Целевая частота 60,0 кадр/с"
+            veyra.runStatusHint = "Подключите USB-карту захвата напрямую к порту USB 3.0 или быстрее на задней панели материнской платы, без хаба и удлинителя."
+            tryCompare(label, "text", veyra.runStatus + " · " + veyra.runStatusAction)
+            tryVerify(() => !label.truncated && label.lineCount > 1 && label.contentWidth <= label.width + 1)
+            mouseMove(label, label.width / 2, label.height / 2)
+            tryCompare(tip, "opened", true)
+            verify(tip.text.endsWith(veyra.runStatusHint))
+            verify(tip.contentItem.lineCount > 1 && tip.contentItem.contentWidth <= tip.contentItem.width + 1)
+        }
+    }
+
+    Component {
         id: liveTranslationFixture
         Item {
             id: translationHost

@@ -412,9 +412,14 @@ void QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) 
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last source not saved");
     emit preferencesChanged();
 }
-void QmlPlayerBridge::autoResumeLastSource() {
+void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
     if(!impl_->prefBool("autoResume",false)||impl_->openingSource||impl_->snapshot.running)return;
-    if(lastSource().isEmpty())return;
+    const auto last = lastSource();
+    if(last.isEmpty())return;
+    if (!allowCapture && last.value(QStringLiteral("kind")).toString() == QLatin1String("capture")) {
+        veyra::log::info("ui-startup", "automatic capture skipped while another Veyra holds the primary log");
+        return;
+    }
     veyra::log::info("ui-startup","automatically resuming the last source");
     resumeLastSource();
 }

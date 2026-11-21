@@ -1,10 +1,12 @@
 #include "veyra/base/PortableFiles.h"
+#include "veyra/base/InstanceWindow.h"
 
 #include <shellapi.h>
 #include <vector>
 
 namespace {
 using namespace veyra::portable;
+namespace instance = veyra::instance;
 namespace fs = std::filesystem;
 
 struct Handle {
@@ -51,6 +53,30 @@ int showError(const wchar_t* message) {
     MessageBoxW(nullptr, message, L"Veyra", MB_OK | MB_ICONERROR);
     return 1;
 }
+
+bool instanceNotice(instance::Notice notice, DWORD pid) {
+    const auto identifier = L"Veyra (PID " + std::to_wstring(pid) + L")";
+    if (notice == instance::Notice::ConfirmEnd) {
+        const auto question = identifier
+            + L" 未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？\n\n"
+            + identifier + L" is not responding. Ending it may lose an ongoing recording. End it and reopen Veyra?";
+        return MessageBoxW(nullptr, question.c_str(), L"Veyra", MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING) == IDYES;
+    }
+    if (notice == instance::Notice::Hung) {
+        const auto message = identifier
+            + L" 未响应。请在任务管理器中检查此进程。\n"
+            + identifier + L" is not responding. Check the process in Task Manager.";
+        showError(message.c_str());
+    } else {
+        showError(L"Veyra 已经打开。请切换到原窗口继续使用。\nVeyra is already open. Switch to its window to continue.");
+    }
+    return false;
+}
+
+HANDLE openRunLock(const fs::path& root) {
+    return CreateFileW((root / L".veyra-running.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
+                       0, nullptr, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+}
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
@@ -63,14 +89,6 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         || !plainPath(root / versionState, false))
         return showError(L"便携包文件不完整，请重新解压。\nExtract the complete Veyra portable ZIP.");
 
-    Handle lock{CreateFileW((root / L".veyra-running.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
-                            0, nullptr, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, nullptr)};
-    if (lock.value == INVALID_HANDLE_VALUE) {
-        if (GetLastError() == ERROR_SHARING_VIOLATION)
-            return showError(L"这份 Veyra 正在运行或更新。\nThis copy of Veyra is running or updating.");
-        return showError(L"无法写入便携目录。\nCopy Veyra to a writable folder.");
-    }
-
     int count = 0;
     auto* wide = CommandLineToArgvW(GetCommandLineW(), &count);
     std::vector<std::wstring> initialArgs;
@@ -80,6 +98,39 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     const bool manualRollback = initialArgs.size() == 1 && initialArgs.front() == L"--rollback";
     if (manualRollback) initialArgs.clear();
+
+    Handle lock{openRunLock(root)};
+    DWORD lockError = lock.value == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
+    if (lockError == ERROR_SHARING_VIOLATION && !manualRollback) {
+        // The lock still serializes starts, installs and updates. While it is
+        // held, only contact a window that already advertises this profile.
+        auto profile = root / L"runtime_local" / L"user-data-2.0.0";
+        for (size_t i = 0; i + 1 < initialArgs.size(); ++i) {
+            if (initialArgs[i] == L"--data-dir") {
+                profile = versions / installedVersions(root).current / initialArgs[++i];
+            }
+        }
+        const auto key = instance::profileKey(profile);
+        const auto target = instance::launchTarget(initialArgs);
+        auto deadline = GetTickCount64() + 3000;
+        do {
+            if (const HWND existing = instance::findWindow(key)) {
+                const auto state = installedVersions(root);
+                const auto player = state.current.empty() ? fs::path{} : versions / state.current / playerName;
+                const auto result = instance::handoff(existing, key, target, player, instanceNotice);
+                if (result == instance::Handoff::Done) return 0;
+                if (result == instance::Handoff::Released) deadline = GetTickCount64() + 3000;
+            }
+            Sleep(60);
+            lock.value = openRunLock(root);
+            lockError = lock.value == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
+        } while (lockError == ERROR_SHARING_VIOLATION && GetTickCount64() < deadline);
+    }
+    if (lockError == ERROR_SHARING_VIOLATION)
+        return showError(L"这份 Veyra 正在运行或更新。\nThis copy of Veyra is running or updating.");
+    if (lockError != ERROR_SUCCESS)
+        return showError(L"无法写入便携目录。\nCopy Veyra to a writable folder.");
+
     auto state = installedVersions(root);
     if (state.current.empty()) return showError(L"便携包版本记录损坏。\nInvalid Veyra version record.");
 
