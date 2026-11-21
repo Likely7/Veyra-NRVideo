@@ -34,6 +34,7 @@ VSwitch 1.0 VSwitch.qml
 VTag 1.0 VTag.qml
 Main 1.0 Main.qml
 VMenu 1.0 VMenu.qml
+PlayerAudioMenu 1.0 PlayerAudioMenu.qml
 VPage 1.0 VPage.qml
 VRise 1.0 VRise.qml
 CineBar 1.0 CineBar.qml

@@ -804,6 +804,15 @@ VPage {
                             VSliderValue { slider: nodeVolume; text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; pixelSize: 10 }
                             VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: checked => veyra.muted = !checked }
                         }
+                        VRow {
+                            visible: veyra.sourceKind === "capture"
+                            label: qsTr("本机音频监听")
+                            VSwitch {
+                                objectName: "node-out-capture-monitor"
+                                checked: veyra.preferences.captureAudioMonitor !== false
+                                onToggled: value => veyra.setPreference("captureAudioMonitor", value)
+                            }
+                        }
                         VSeg {
                             objectName: "node-out-sync"
                             Layout.fillWidth: true
