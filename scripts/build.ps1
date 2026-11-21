@@ -116,7 +116,7 @@ Set-Content -LiteralPath $batchFile -Value $batchLines -Encoding ASCII
 
 & cmd.exe /c ('"{0}"' -f $batchFile)
 $exitCode = $LASTEXITCODE
-if ($exitCode -eq 0 -and (Test-Path -LiteralPath (Join-Path $buildDir 'veyra.exe'))) {
+if ($exitCode -eq 0 -and (Test-Path -LiteralPath (Join-Path $buildDir 'veyra_export_probe.exe'))) {
     foreach ($name in @('avcodec-63.dll','avformat-63.dll','avutil-61.dll','swresample-7.dll','swscale-10.dll')) {
         Copy-Item -LiteralPath (Join-Path $ffmpegRoot "bin/$name") -Destination $buildDir
     }
