@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-21 DirectShow 采集时钟失败诊断
+
+按用户选定的采集失败报告「程序侧建议」第 4 条，在 `codex/capture-busy-status-20261120` 的 `4138b97b` 上补齐诊断。创建系统时钟、查询 `IMediaFilter` 或调用 `SetSyncSource` 失败后，`[capture-clock]` 记录具体调用和原始 HRESULT。现有采集失败提示显示 `DirectShow clock` 阶段和相同错误码。保留时钟选择、原有调用顺序和失败清理。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-capture-clock-20261121 --build-dir E:/项目/Veyra/build/codex-capture-exit-20261121 --label 2.2.0-capture-exit-test --jobs 2` 构建播放器、采集启动测试和语言测试，10.3 秒通过。私有夹具编译实际时钟分支，模拟三处失败返回，核对日志、界面错误阶段与短路行为。正常设置时钟、成功但非零的 HRESULT、内嵌音频使用设备时钟三个对照也通过，共 6 项。采集启动回归 9 项、UI 语言测试及 3189 条词库的九语完整性检查通过。
+
+构建回执和测例结果位于 `E:/项目/Veyra/logs/codex-capture-clock-20261121`，夹具脚本位于 `tmp/codex-capture-clock-20261121/check-clock.py`。夹具未连接实体采集卡。现场哪一次调用失败仍待修订版日志确认。
+
 ## 2026-11-21 采集占用审查修订
 
 在 `codex/capture-busy-status-20261120` 的 `ec187cfd` 上补齐交接审查。配置互斥量无法创建或等待时，已核实的活跃实例仍走原有唤起与退出确认。查无活跃实例时继续启动，日志记录 Windows 错误码。安装根目录的运行锁仍负责协调启动、更新和卸载。遇到 `0x800705AA` 或 `0x800700AA` 时，采集失败提示可显示另一个 Veyra 的 PID，并注明可能占用。输入帧率或时间线提示优先时，状态详情也列出实际补帧降档。在线更新仅替换版本目录，需下载完整安装包或便携包才能更新根启动器并获得新版恢复提示。见 [下一版发布说明](NEXT_RELEASE_NOTES.md)。

@@ -1454,9 +1454,19 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
         // the system clock pinned, and video alone with the default clock.
         const bool embeddedAudio=audio==kCaptureAudioFromVideoDevice&&audioReady;
         if(!embeddedAudio||!embeddedAudioDeviceClock_){
+            const auto clockFailure = [&](std::string_view operation, HRESULT result) {
+                log::error("capture-clock", std::format("DirectShow clock failed: {} hr=0x{:08X}", operation, uint32_t(result)));
+                error_ = captureFailure(L"DirectShow clock", result);
+                return false;
+            };
+            HRESULT clockResult = CoCreateInstance(CLSID_SystemClock, nullptr, CLSCTX_INPROC_SERVER,
+                                                   IID_PPV_ARGS(&p.referenceClock));
+            if (FAILED(clockResult)) return clockFailure("CoCreateInstance(CLSID_SystemClock)", clockResult);
             ComPtr<IMediaFilter> mediaFilter;
-            if(FAILED(CoCreateInstance(CLSID_SystemClock,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.referenceClock)))||
-                FAILED(p.graph.As(&mediaFilter))||FAILED(mediaFilter->SetSyncSource(p.referenceClock.Get())))return false;
+            clockResult = p.graph.As(&mediaFilter);
+            if (FAILED(clockResult)) return clockFailure("QueryInterface(IMediaFilter)", clockResult);
+            clockResult = mediaFilter->SetSyncSource(p.referenceClock.Get());
+            if (FAILED(clockResult)) return clockFailure("IMediaFilter::SetSyncSource", clockResult);
         }
         log::info("capture-audio",std::format("graph clock={} embeddedAudio={}",embeddedAudio&&embeddedAudioDeviceClock_?"directshow-default":"system",embeddedAudio?1:0));
     }
