@@ -90,6 +90,9 @@ inline size_t exportBitrateIndex(uint32_t mbps){for(size_t i=0;i<kExportBitrateC
 // videoSrQuality values: 0 = DLSS SR, 1..4 = RTX video SR quality steps,
 // 5 = AMD FSR upscaling (vendor neutral; verified on an NVIDIA adapter).
 inline constexpr uint32_t kVideoSrFsr=5;
+inline constexpr uint32_t kVideoSrNis=24;
+inline constexpr uint32_t kVideoSrAmf10=25;
+inline constexpr uint32_t kVideoSrAmf11=26;
 // Fresh SR selections use RTX Video SR medium; explicit saved selections retain
 // their numeric IDs. The UI seeds FSR separately on AMD/Intel adapters.
 inline constexpr uint32_t kDefaultVideoSrQuality=2;
@@ -108,7 +111,13 @@ constexpr bool ngxVideoSr(uint32_t q){return q>=1&&q<=4;}
 constexpr bool vfxVideoSr(uint32_t q){return (q>=16&&q<=19)||q==21||q==23;}
 constexpr bool vfxVideoSrNeedsAmpere(uint32_t q){return q==21||q==23;}
 constexpr bool rtxVideoSr(uint32_t q){return ngxVideoSr(q)||vfxVideoSr(q);}
-constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q);}
+constexpr bool amdVideoSr(uint32_t q){return q==kVideoSrAmf10||q==kVideoSrAmf11;}
+constexpr bool spatialVideoSr(uint32_t q){return q==kVideoSrNis||amdVideoSr(q);}
+constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q);}
+constexpr bool videoSrRunsOn(uint32_t q,bool nvidia,bool amd){
+    if (amdVideoSr(q)) return amd;
+    return validVideoSrQuality(q) && (nvidia || q==kVideoSrFsr || q==kVideoSrNis);
+}
 // DLSS SR and FSR are temporal: they read the SR motion source. RTX Video SR is spatial.
 constexpr bool temporalVideoSr(uint32_t q){return q==0||q==kVideoSrFsr;}
 inline constexpr uint32_t kVfxVideoSrQualities[]={16,17,18,19,21,23};

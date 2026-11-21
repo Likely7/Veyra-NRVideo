@@ -339,7 +339,166 @@ void colorDeviceRemovalTest(){
     check(recovered.startColors(*settings)&&recovered.render(frame,after)&&before.pixels==after.pixels,
           "device-removal: a fresh device and graph reproduce the complete prior image");
 }
+// Exercise the shared graph with real D3D12 outputs, including SDR round
+// trips, a padded viewport, changing frame content, and HDR above SDR white.
+int spatialSrTests(unsigned vendor, const std::filesystem::path& frames) {
+    using namespace engine;
+    std::filesystem::create_directories(frames);
+    for (const bool hdr : {false,true}) {
+        Frame input;
+        if (hdr ? !input.makeHdr(false) : !input.makeRamp(40,200)) return 1;
+        if (hdr) {
+            // A saturated BT.2020 patch can be negative in linear Rec.709.
+            // Keep it away from the neutral high-luminance sample.
+            for (int y=kSize/3; y<kSize/2; ++y) {
+                auto* uv=reinterpret_cast<uint16_t*>(input.frame->data[1]+y*input.frame->linesize[1]);
+                for (int x=8; x<28; x+=2) {
+                    uv[x]=160<<6;
+                    uv[x+1]=850<<6;
+                }
+            }
+        }
+        Graph graph;
+        gfx::DeviceContextDesc device;
+        device.enableDebugLayer=true;
+        device.requiredVendorId=vendor;
+        Status status;
+        if (!graph.ctx.initialize(device,status) ||
+            !graph.ring.initialize(graph.ctx.device(),graph.ctx.directQueue(),graph.ctx.fence(),graph.ctx.fenceEvent(),6,status))
+            return 2;
+        graph.up=true;
+
+        auto render = [&](uint32_t quality, uint32_t second, bool resize, sink::RgbaImage& image,
+                          std::vector<uint8_t>& linear) {
+            graph.g.shutdown();
+            pipeline::EnhanceGraphDesc desc;
+            desc.sourceWidth=desc.sourceHeight=kSize;
+            desc.rgbInput=!hdr;
+            desc.hdrInput=desc.hdrOutput=hdr;
+            desc.hdrOutputMode=HdrOutputMode::ScRgb;
+            desc.enableNr=desc.enableFg=false;
+            desc.enableSr=resize;
+            desc.noNgx=true;
+            desc.videoSrQuality=quality;
+            desc.outputDitherStep=0.0f;
+            desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+            desc.workWidth=desc.srOutputWidth=137;
+            desc.workHeight=desc.srOutputHeight=141;
+            if (second) {
+                desc.dualSr=true;
+                desc.firstSrWidth=128;
+                desc.firstSrHeight=126;
+                desc.srInputWidth=96;
+                desc.srInputHeight=94;
+                desc.dualSrQuality=second;
+            }
+            if (!graph.g.initialize(desc) || !graph.g.createViews()) return false;
+            const auto evaluations=graph.g.metrics().srEvaluateCount;
+            pipeline::EnhanceGraph::FrameOutputs first, changed, restored;
+            // Read the changed frame after the next submission, using the
+            // graph's previous video slot. A stale frame has the wrong top band.
+            if (!graph.g.process(input.frame,0,true,first,1)) return false;
+            first={};
+            const auto bytes=size_t(input.frame->linesize[0])*(kSize/3);
+            auto* luma=input.frame->data[0];
+            std::vector<uint8_t> original(luma,luma+bytes);
+            if (hdr) {
+                auto* values=reinterpret_cast<uint16_t*>(luma);
+                std::fill_n(values,bytes/2,uint16_t(64<<6));
+            } else {
+                std::memset(luma,24,bytes);
+            }
+            const bool submitted=graph.g.process(input.frame,16.67,false,changed,2);
+            std::memcpy(luma,original.data(),bytes);
+            if (!submitted || !graph.g.process(input.frame,33.33,false,restored,3) ||
+                restored.videoSlot==changed.videoSlot) return false;
+            const auto changedFrame=graph.g.videoFrameResource(changed.videoSlot);
+            if (hdr) {
+                std::vector<uint8_t> raw;
+                if(!readReference(graph,changedFrame,raw)||raw.size()<=((137*15+130)*8+1))return false;
+                const auto offset=(137*15+130)*8;
+                if((uint16_t(raw[offset])|(uint16_t(raw[offset+1])<<8))>0x1800)return false;
+            } else {
+                sink::RgbaImage dark;
+                if(!sink::readRgba8(graph.ctx,graph.ring,changedFrame,dark)||dark.pixels.size()<=((137*15+130)*4)||
+                    dark.pixels[(137*15+130)*4]>32)return false;
+            }
+            if (graph.g.metrics().srEvaluateCount-evaluations != (resize ? (second ? 6 : 3) : 0)) return false;
+            auto* texture=graph.g.videoFrameResource(restored.videoSlot);
+            return hdr ? readReference(graph,texture,linear) :
+                sink::readRgba8(graph.ctx,graph.ring,texture,image);
+        };
+        sink::RgbaImage baseline;
+        std::vector<uint8_t> baselineHdr;
+        if (!render(0,0,false,baseline,baselineHdr)) return 1;
+        const bool amd=vendor==0x1002;
+        const auto cases = {std::pair{kVideoSrNis,0u}, {kVideoSrAmf10,0u}, {kVideoSrAmf11,0u},
+                            {kVideoSrNis,kVideoSrNis}, {kVideoSrAmf10,kVideoSrAmf11}};
+        std::vector<uint8_t> amf10;
+        for (const auto& [quality,second] : cases) {
+            if (!amd && (amdVideoSr(quality) || amdVideoSr(second))) continue;
+            sink::RgbaImage output;
+            std::vector<uint8_t> hdrOutput;
+            const bool rendered=render(quality,second,true,output,hdrOutput);
+            check(rendered,std::format("{} quality={} second={} processed three frames",
+                hdr?"HDR":"SDR",quality,second));
+            if (!rendered) continue;
+            if (hdr) {
+                auto value = [](const std::vector<uint8_t>& data, unsigned x, unsigned y) {
+                    const size_t offset=(size_t(y)*137+x)*8;
+                    return uint16_t(data[offset]) | (uint16_t(data[offset+1])<<8);
+                };
+                const auto highlight=value(hdrOutput,130,70), reference=value(baselineHdr,130,70);
+                check(hdrOutput.size()==baselineHdr.size() && hdrOutput!=baselineHdr &&
+                    highlight>0x3c00 && std::abs(highlight-reference)<0x100,
+                    std::format("P010 PQ preserves high values (FP16 0x{:04X} vs 0x{:04X}) and filters the image",
+                        highlight,reference));
+                unsigned nonFinite=0;
+                for(size_t i=0;i+1<hdrOutput.size();i+=2) {
+                    if(i%8==6)continue;
+                    const unsigned bits=hdrOutput[i] | (unsigned(hdrOutput[i+1])<<8);
+                    nonFinite+=(bits&0x7c00)==0x7c00;
+                }
+                check(nonFinite==0,std::format("HDR wide-gamut patch has {} non-finite channels",nonFinite));
+                if (quality==kVideoSrAmf10&&!second) amf10=hdrOutput;
+                if (quality==kVideoSrAmf11) check(hdrOutput!=amf10,"the AMD driver produced distinct VideoSR 1.0 and 1.1 outputs");
+            } else {
+                const int middle=center(output).r;
+                check(output.width==137 && output.height==141 && output.pixels!=baseline.pixels &&
+                    std::abs(middle-center(baseline).r)<=3,
+                    "SDR output is resized, filtered and retains its transfer");
+                const auto name=std::to_wstring(quality)+L"-"+std::to_wstring(second)+L".png";
+                check(sink::saveImage((frames/name).wstring(),output),"saved SDR frame for comparison");
+            }
+        }
+        Microsoft::WRL::ComPtr<ID3D12InfoQueue> info;
+        const bool debug=SUCCEEDED(graph.ctx.device()->QueryInterface(IID_PPV_ARGS(&info)));
+        graph.g.shutdown();
+        unsigned errors=0;
+        if(debug) for(UINT64 index=0;index<info->GetNumStoredMessagesAllowedByRetrievalFilter();++index){
+            SIZE_T size=0;
+            info->GetMessage(index,nullptr,&size);
+            std::vector<uint8_t> storage(size);
+            auto* message=reinterpret_cast<D3D12_MESSAGE*>(storage.data());
+            if(SUCCEEDED(info->GetMessage(index,message,&size))&&message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){
+                std::printf("D3D12_ERROR %s\n",message->pDescription);++errors;
+            }
+        }
+        check(debug&&errors==0,"D3D12 debug layer reports zero errors");
+    }
+    return failures?1:0;
+}
+
+
 int wmain(int argc,wchar_t** argv){
+    if(argc==4&&std::wstring_view(argv[1])==L"--spatial-sr"){
+        const std::wstring_view adapter=argv[2];
+        if(adapter!=L"amd"&&adapter!=L"nvidia")return 2;
+        if(FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
+        const int result=spatialSrTests(adapter==L"amd"?0x1002:0x10de,argv[3]);
+        CoUninitialize();
+        return result;
+    }
     if(argc>1){
         if(argc==2&&std::wstring_view(argv[1])==L"--lifecycle"){colorLifecycleTests();return failures?1:0;}
         if(argc==2&&std::wstring_view(argv[1])==L"--device-removal"){colorDeviceRemovalTest();return failures?1:0;}

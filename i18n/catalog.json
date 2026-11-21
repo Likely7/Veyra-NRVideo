@@ -1665,6 +1665,19 @@
    "ru": "AMD NR (экспериментальный): RX 7000 / 9000 используют отдельные среды выполнения и требуют HIP 7. Режим производительности выбирает Small; off выбирает Original. Внутренняя обработка поддерживает проценты в пределах бюджета 1080p пикселей. RX 7000 использует стиль по умолчанию; RX 9000 сохраняет конфигурацию времени выполнения. Родной HDR сохраняет свою основу и реконструирует SDR-прокси-усиление. Валидация оборудования RX 7000 все еще требуется."
   },
   {
+   "zh": "AMD VideoSR 需要在 AMD 显卡上处理",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "AMD VideoSR 需要在 AMD 顯示卡上處理",
+   "en": "AMD VideoSR requires processing on an AMD GPU.",
+   "ja": "AMD VideoSR の処理には AMD GPU が必要です。",
+   "ko": "AMD VideoSR을 처리하려면 AMD GPU가 필요합니다.",
+   "es": "AMD VideoSR requiere una GPU AMD.",
+   "fr": "AMD VideoSR nécessite un GPU AMD.",
+   "de": "AMD VideoSR benötigt eine AMD-GPU.",
+   "pt-BR": "O AMD VideoSR precisa de uma GPU AMD.",
+   "ru": "Для обработки AMD VideoSR требуется GPU AMD."
+  },
+  {
    "zh": "AMD 光流",
    "src": "src/ui/bridge/Chain.cpp",
    "zh-TW": "AMD 光流",
@@ -18007,32 +18020,6 @@
    "ru": "Текущая DLSS генерация кадров требует драйвера {}. {:02} или более новый (запрос NGX)"
   },
   {
-   "zh": "当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "當前 GPU 不支援 NVIDIA 增強；NR、超解析及 DLSS 已關閉，XeSS選擇保留",
-   "en": "This GPU does not support NVIDIA enhancements; NR, super resolution and DLSS are off, the XeSS choice is kept",
-   "ja": "この GPU は NVIDIA の補正機能に非対応です。NR、超解像、DLSS をオフにしました。XeSS の選択は保持します",
-   "ko": "이 GPU는 NVIDIA 보정 기능을 지원하지 않습니다. NR·초해상도·DLSS를 끄고 XeSS 선택은 유지합니다.",
-   "es": "Este GPU no apoya las mejoras NVIDIA; NR, super resolución y DLSS están apagados, se mantiene la opción XeSS",
-   "fr": "Cette GPU ne supporte pas les améliorations NVIDIA; NR, la super résolution et DLSS sont désactivés, le choix XeSS est maintenu",
-   "de": "Dies GPU unterstützt keine NVIDIA Erweiterungen; NR, Superauflösung und DLSS sind ausgeschaltet, die XeSS Wahl wird beibehalten",
-   "pt-BR": "Esta GPU não suporta melhorias NVIDIA; NR, super resolução e DLSS estão fora, a escolha XeSS é mantida",
-   "ru": "Это GPU не поддерживает NVIDIA улучшения; NR, супер разрешение и DLSS выключены, выбор XeSS сохранен"
-  },
-  {
-   "zh": "当前 GPU 不支持 NVIDIA 增强；超分及 DLSS 已关闭，NR 使用 AMD 运行库，XeSS选择保留",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "目前 GPU 不支援 NVIDIA 增強；超解析及 DLSS 已關閉，NR 使用 AMD 執行庫，XeSS 選擇保留",
-   "en": "This GPU does not support NVIDIA enhancements; upscaling and DLSS are off, NR uses the AMD runtime, and the XeSS choice is kept",
-   "ja": "この GPU は NVIDIA 拡張に対応していません。超解像と DLSS はオフ、NR は AMD ランタイムを使用し、XeSS の選択は維持します",
-   "ko": "이 GPU는 NVIDIA 보정 기능을 지원하지 않습니다. 초해상도·DLSS를 끄고 NR은 AMD 런타임을 사용합니다. XeSS 선택은 유지합니다.",
-   "es": "Este GPU no soporta las mejoras NVIDIA; el aumento y DLSS están apagados, NR utiliza el tiempo de ejecución AMD, y se mantiene la opción XeSS",
-   "fr": "Cette GPU ne supporte pas les améliorations NVIDIA; l'augmentation de l'échelle et DLSS sont désactivées, NR utilise le AMD runtime, et le choix XeSS est maintenu",
-   "de": "Dies GPU unterstützt keine NVIDIA Erweiterungen; Upscaling und DLSS sind ausgeschaltet, NR verwendet die AMD Laufzeit und die XeSS Auswahl wird beibehalten",
-   "pt-BR": "Este GPU não suporta NVIDIA melhorias; upscaling e DLSS estão desligados, NR utiliza o tempo de execução AMD, e a escolha XeSS é mantida",
-   "ru": "Это GPU не поддерживает NVIDIA улучшения; масштабирование и DLSS выключены, NR использует AMD время выполнения, и XeSS выбор сохранен."
-  },
-  {
    "zh": "当前 GPU 不支持所选 NVIDIA 增强",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前 GPU 不支援所選 NVIDIA 增強",
@@ -18044,6 +18031,19 @@
    "de": "Diese GPU unterstützt die ausgewählte NVIDIA Erweiterung nicht",
    "pt-BR": "Esta GPU não suporta a melhoria seleccionada NVIDIA",
    "ru": "Это GPU не поддерживает выбранное NVIDIA улучшение."
+  },
+  {
+   "zh": "当前 GPU 不支持部分所选增强，已关闭不兼容的效果",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前的 GPU 不支援部分選取的增強效果，已關閉不相容的效果",
+   "en": "The current GPU cannot run some selected enhancements. Incompatible effects were disabled.",
+   "ja": "現在の GPU は選択された拡張機能の一部に対応していません。対応していない効果を無効にしました。",
+   "ko": "현재 GPU에서 지원하지 않는 향상 효과를 껐습니다.",
+   "es": "La GPU actual no admite algunas mejoras seleccionadas. Se desactivaron los efectos incompatibles.",
+   "fr": "Le GPU actuel ne prend pas en charge certaines améliorations sélectionnées. Les effets incompatibles ont été désactivés.",
+   "de": "Die aktuelle GPU unterstützt einige der ausgewählten Verbesserungen nicht. Inkompatible Effekte wurden deaktiviert.",
+   "pt-BR": "A GPU atual não aceita alguns dos aprimoramentos selecionados. Os efeitos incompatíveis foram desativados.",
+   "ru": "Текущий GPU поддерживает не все выбранные улучшения. Несовместимые эффекты отключены."
   },
   {
    "zh": "当前 XeSS 模块未匹配 3X / 4X 解锁版本；2X 可用，请在组件页核对版本",
@@ -27470,6 +27470,19 @@
    "de": "Quellgröße",
    "pt-BR": "Tamanho de origem",
    "ru": "Размер источника"
+  },
+  {
+   "zh": "片源已达到目标尺寸。调高目标尺寸可启用此算法。",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "片源已達到目標尺寸。調高目標尺寸可啟用此演算法。",
+   "en": "The source already meets the target size. Choose a larger target to use this algorithm.",
+   "ja": "ソースはすでに目標サイズに達しています。このアルゴリズムを使うには目標サイズを上げてください。",
+   "ko": "원본이 이미 목표 크기에 도달했습니다. 이 알고리즘을 사용하려면 목표 크기를 높이세요.",
+   "es": "La fuente ya alcanza el tamaño de destino. Elige un tamaño mayor para usar este algoritmo.",
+   "fr": "La source atteint déjà la taille cible. Choisissez une taille plus grande pour utiliser cet algorithme.",
+   "de": "Die Quelle erreicht bereits die Zielgröße. Wähle eine größere Zielgröße, um den Algorithmus zu nutzen.",
+   "pt-BR": "A fonte já atingiu o tamanho de destino. Escolha um tamanho maior para usar este algoritmo.",
+   "ru": "Источник уже достиг целевого размера. Выберите больший размер, чтобы применить этот алгоритм."
   },
   {
    "zh": "片源最亮 %1 nit，曲线硬上限 %2 nit：%3",
@@ -41172,19 +41185,6 @@
    "de": "; die ausgeführten Teile werden aufbewahrt bei: ",
    "pt-BR": "; as partes exportadas são mantidas em: ",
    "ru": "Экспортируемые части хранятся в: "
-  },
-  {
-   "zh": "；当前显卡不能使用所选超分，本次导出关闭超分",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "；當前顯示卡不能使用所選超解析，本次匯出關閉超解析",
-   "en": "; this GPU cannot use the selected super resolution, it is off for this export",
-   "ja": "；この GPU では選択した超解像を使えないため、今回の書き出しではオフにします",
-   "ko": "; 이 GPU는 선택한 초해상도를 지원하지 않아 이번 내보내기에서는 끕니다.",
-   "es": "; este GPU no puede utilizar la super resolución seleccionada, está apagado para esta exportación",
-   "fr": "; ce GPU ne peut pas utiliser la super résolution sélectionnée, il est désactivé pour cette exportation",
-   "de": "; diese GPU kann die gewählte Superauflösung nicht verwenden, sie ist für diesen Export ausgeschaltet",
-   "pt-BR": "; este GPU não pode usar a super resolução seleccionada, está desligado para esta exportação",
-   "ru": "; это GPU не может использовать выбранное супер разрешение, оно выключено для этого экспорта."
   },
   {
    "zh": "；当前：",

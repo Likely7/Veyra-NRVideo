@@ -147,6 +147,7 @@ add_library(veyra_gfx STATIC
   src/gfx/XessPacing.cpp
   src/gfx/FsrFgPresenter.cpp
   src/gfx/AmfFrcBackend.cpp
+  src/gfx/AmfVideoSrBackend.cpp
   src/gfx/FsrSrBackend.cpp
 )
 veyra_apply_warnings(veyra_gfx)
@@ -168,6 +169,9 @@ set(VEYRA_AMF_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party_local/amd/AMF-SD
 if(EXISTS "${VEYRA_AMF_SDK_ROOT}/include/components/FRC.h")
   target_include_directories(veyra_gfx PRIVATE "${VEYRA_AMF_SDK_ROOT}/include")
   target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_AMF=1)
+  if(EXISTS "${VEYRA_AMF_SDK_ROOT}/include/components/HQScaler.h")
+    target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_AMF_HQ_SCALER=1)
+  endif()
   target_link_libraries(veyra_gfx PRIVATE ole32)
 else()
   message(STATUS "AMF SDK headers not found at ${VEYRA_AMF_SDK_ROOT}; AMD FRC is unavailable in this build")
@@ -351,6 +355,7 @@ veyra_add_compute_shader(veyra_shader_packed_capture PackedCaptureToLinear)
 add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 # ScaleBlit: working frame -> swapchain backbuffer (Phase 6 present path).
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
+veyra_add_nis_shaders(veyra_shader_nis)
 enable_testing()
 add_subdirectory(tests/screenshot-alpha)
 veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
@@ -642,12 +647,12 @@ endif()
 # EnhanceGraph (the real GPU chain) needs the NGX + NVOF backends; wire it
 # into veyra_pipeline only when both exist so bare contract builds still work.
 if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
-  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/HudLock.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
+  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NisScaler.cpp src/pipeline/HudLock.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
   target_include_directories(veyra_pipeline PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
     veyra_shader_yuv_to_rgb veyra_shader_rgb_to_linear veyra_shader_parity_encode
-    veyra_shader_parity_decode veyra_shader_scale_blit
+    veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_nis
     veyra_shader_hdr_amd_nr_encode veyra_shader_hdr_amd_nr_restore
     veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture)
 endif()

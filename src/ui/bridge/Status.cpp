@@ -38,6 +38,8 @@ QString QmlPlayerBridge::srStageNote() const {
     // Only the standard family restores a source already at the target size.
     if (s.applied.sr && engine::vfxVideoSr(s.applied.videoSrQuality) && !plan.srApplied)
         notes << tr("高码率和流媒体只做放大：片源已达到目标尺寸，所以没有运行；同尺寸修复请用标准。");
+    if (s.applied.sr && engine::spatialVideoSr(s.applied.videoSrQuality) && !plan.srApplied)
+        notes << tr("片源已达到目标尺寸。调高目标尺寸可启用此算法。");
     return notes.join(QStringLiteral("；"));
 }
 

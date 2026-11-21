@@ -1,5 +1,15 @@
 # 当前工作日志
 
+## 2026-11-21 NVIDIA NIS 与 AMD VideoSR
+
+独立分支 codex/amf-nis-video-sr-20261121，基线 eb5fd6d0。专业模式和节点模式的超分菜单增加 NVIDIA NIS、AMD VideoSR 1.0 及 AMD VideoSR 1.1（实验）。保存编号为 24、25、26，进入现有超分执行图。NIS 使用原版 NVScaler 的滤波核与系数，锐化设为 0.25。超过 2 倍的放大先在 GPU 把输入调至 NVScaler 支持的范围。SDR 以 sRGB 码值运行后转回线性工作纹理，HDR 使用线性 scRGB。AMD 在选定的 Radeon 上调用系统 AMF HQ Scaler，经 D3D12 fence 交换 RGBA16F，驱动初始化或处理失败交给已有后端恢复机制。
+
+用 py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-amf-nis-video-sr-20261121 --label 2.2.0-amf-nis-test --jobs 2 构建。依赖参数见同任务 tmp/build/configure.cmd。完整构建 284.7 秒，最后一次重建 37.8 秒。超分设置 292 项、效果链和 3172 条词库校验通过。GPU 验收用 veyra_color_grade_gpu_tests --spatial-sr amd|nvidia <绝对测试目录>。两个显卡核对了 SDR、P010 PQ 高光与宽色域、连续不同帧及双重超分。两卡均实跑 NIS FP16 和 FP32。D3D12 调试层零错误。首轮夹具未释放首帧租约，又把 HDR10 的 10 位打包输出当 FP16 读。修正夹具后重跑通过。复用 AMF 工厂后，现有 AMD FRC 在两卡的 48 帧测试也通过，45 个插值帧命中位置，零 D3D12 错误。
+
+私有配置实跑同一 640×360 图片至 2560×1440，三档输出像素各不相同。另用 1920×1080、59.94 FPS 文件播放，RTX 5070 的 NIS 至 4K 约 60 提交 FPS，Ryzen 7 9700X 核显上的 AMD VideoSR 1.0 至 1440p 约 60、1.1 约 45。切换档位后继续播放和截图。同尺寸时已验证界面提示提高目标尺寸。三个后端分别导出 12 帧的 1440p 成片，FFprobe 核对尺寸和帧数。AMD 实测为 Radeon 超分及系统 MFT 编码，本机在格式协商后选中了 NVIDIA HEVC MFT。播放读数限于本机和该片段。
+
+本地入口 E:/项目/Veyra/tests/codex-amf-nis-video-sr-20261121/启动超分测试.cmd。构建、脚本及原始日志位于 E:/项目/Veyra/{build,tmp,logs}/codex-amf-nis-video-sr-20261121。画面对照与像素数据位于同名 reports 目录。95 个测试版着色器与构建匹配，新 NIS 着色器合计 47464 字节。物理采集卡、Intel 和其他 Radeon 型号的实机验收待补。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。

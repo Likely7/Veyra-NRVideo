@@ -5,6 +5,7 @@
 #include "veyra/pipeline/VfxSrBackend.h"
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/gfx/AmfVideoSrBackend.h"
 
 namespace veyra::ui {
 
@@ -106,6 +107,13 @@ static QVariantMap scanEffectCapabilities() {
     for (int q : {16, 17, 18, 19}) add("sr" + QString::number(q), H::Nvidia, vfxSr, QObject::tr("需要 NVIDIA RTX 显卡"));
     for (int q : {21, 23}) add("sr" + QString::number(q), H::NvidiaAmpere, vfxSr, QObject::tr("需要 NVIDIA RTX 30 及更新显卡"));
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    const auto srId = [](uint32_t id) { return "sr" + QString::number(id); };
+    const auto shaders = runtime::shaderDirectory();
+    add(srId(engine::kVideoSrNis), H::CrossVendor, exists(shaders / "NisSdr.dxil") && exists(shaders / "NisHdr.dxil"),
+        QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    for (auto quality : {engine::kVideoSrAmf10, engine::kVideoSrAmf11})
+        add(srId(quality), H::AmdFrc, gfx::AmfVideoSrBackend::available(),
+            QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
     add("anr", H::CrossVendor, ngx::AnrProvider::available(nr.wstring()), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add("dlss", H::Nvidia, exists(nr / "nvngx_dlssg.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"));
@@ -247,7 +255,10 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
     struct Entry { QString id; int capability; QString label; };
     for (const auto& entry : std::initializer_list<Entry>{{"0", 0, "DLSS SR"}, {"rtx", 4, tr("RTX 视频超分 · 标准")},
             {"rtx-hb", 16, tr("RTX 视频超分 · 高码率")}, {"rtx-st", 21, tr("RTX 视频超分 · 流媒体")},
-            {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")}}) {
+            {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")},
+            {QString::number(engine::kVideoSrNis), engine::kVideoSrNis, "NVIDIA NIS"},
+            {QString::number(engine::kVideoSrAmf10), engine::kVideoSrAmf10, "AMD VideoSR 1.0"},
+            {QString::number(engine::kVideoSrAmf11), engine::kVideoSrAmf11, QStringLiteral("AMD VideoSR 1.1 · ") + tr("实验")}}) {
         const auto cap = caps.value("sr" + QString::number(entry.capability)).toMap();
         choices << QVariantMap{{"id", entry.id}, {"label", entry.label}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
     }

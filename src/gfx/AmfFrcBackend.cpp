@@ -9,11 +9,9 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
-#include <mutex>
 
 #ifdef VEYRA_HAS_AMF
-#include "core/Factory.h"
-#include "core/D3D12AMF.h"
+#include "AmfDx12Interop.h"
 #include "components/FRC.h"
 #endif
 
@@ -22,95 +20,7 @@ using Microsoft::WRL::ComPtr;
 
 #ifdef VEYRA_HAS_AMF
 namespace {
-// AMFInit hands out one factory per process; the runtime stays loaded with it.
-struct Runtime {
-    amf::AMFFactory* factory = nullptr;
-    std::string version;
-    std::wstring compiler;
-    bool systemCompiler = false;
-};
-const Runtime& runtime() {
-    static Runtime r;
-    static std::once_flag once;
-    std::call_once(once, [] {
-        // AMF reflects its D3D12 kernels with d3dcompiler_47.dll, loaded by name. The copy Qt
-        // deploys next to the program (6.3.9600, Windows 8.1) cannot reflect them: D3DReflect
-        // returns E_NOINTERFACE and FRC Init fails with AMF_DIRECTX_FAILED (AMF trace,
-        // 2026-11-14). Bind the name to the system copy before AMF asks for it.
-        HMODULE compiler = GetModuleHandleW(L"d3dcompiler_47.dll");
-        if (!compiler) compiler = LoadLibraryExW(L"d3dcompiler_47.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        wchar_t compilerPath[MAX_PATH]{}, systemPath[MAX_PATH]{};
-        if (compiler) GetModuleFileNameW(compiler, compilerPath, MAX_PATH);
-        GetSystemDirectoryW(systemPath, MAX_PATH);
-        r.compiler = compilerPath;
-        std::error_code ec;
-        r.systemCompiler = compiler && std::filesystem::equivalent(std::filesystem::path(compilerPath).parent_path(), systemPath, ec);
-        if (!r.systemCompiler)
-            log::warn("amf-frc", "d3dcompiler_47.dll is not the system copy; AMF FRC kernels may fail to load: " +
-                      std::filesystem::path(compilerPath).string());
-        // Only the driver's copy in System32, never one next to the program.
-        HMODULE module = LoadLibraryExW(AMF_DLL_NAME, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        if (!module) { log::warn("amf-frc", std::format("AMF runtime not loaded err={}", GetLastError())); return; }
-        auto query = reinterpret_cast<AMFQueryVersion_Fn>(GetProcAddress(module, AMF_QUERY_VERSION_FUNCTION_NAME));
-        auto init = reinterpret_cast<AMFInit_Fn>(GetProcAddress(module, AMF_INIT_FUNCTION_NAME));
-        amf_uint64 installed = 0;
-        if (query) query(&installed);
-        r.version = std::format("{}.{}.{}.{}", AMF_GET_MAJOR_VERSION(installed), AMF_GET_MINOR_VERSION(installed),
-                                AMF_GET_SUBMINOR_VERSION(installed), AMF_GET_BUILD_VERSION(installed));
-        // A runtime older than these headers is asked for its own version.
-        const amf_uint64 requested = installed && installed < AMF_FULL_VERSION ? installed : AMF_FULL_VERSION;
-        const AMF_RESULT result = init ? init(requested, &r.factory) : AMF_FAIL;
-        if (result != AMF_OK || !r.factory) {
-            r.factory = nullptr;
-            log::error("amf-frc", std::format("AMFInit failed result={} runtime={}", int(result), r.version));
-            return;
-        }
-        // Diagnostics only: VEYRA_AMF_TRACE=<file> writes AMF's own debug trace there.
-        wchar_t tracePath[MAX_PATH]{};
-        amf::AMFTrace* trace = nullptr;
-        if (GetEnvironmentVariableW(L"VEYRA_AMF_TRACE", tracePath, MAX_PATH) && r.factory->GetTrace(&trace) == AMF_OK && trace) {
-            trace->SetPath(tracePath);
-            trace->EnableWriter(AMF_TRACE_WRITER_FILE, true);
-            trace->SetGlobalLevel(AMF_TRACE_DEBUG);
-            trace->SetWriterLevel(AMF_TRACE_WRITER_FILE, AMF_TRACE_DEBUG);
-            log::info("amf-frc", "AMF trace enabled (VEYRA_AMF_TRACE)");
-        }
-    });
-    return r;
-}
-UINT64 fenceValue(ID3D12Fence* fence) {
-    UINT64 value = 0; UINT size = sizeof(value);
-    return SUCCEEDED(fence->GetPrivateData(AMFFenceValueGUID, &size, &value)) ? value : 0;
-}
-void setFenceValue(ID3D12Fence* fence, UINT64 value) { fence->SetPrivateData(AMFFenceValueGUID, sizeof(value), &value); }
-ComPtr<ID3D12Fence> resourceFence(ID3D12Resource* resource) {
-    IUnknown* unknown = nullptr; UINT size = sizeof(unknown);
-    ComPtr<ID3D12Fence> fence;
-    if (SUCCEEDED(resource->GetPrivateData(AMFFenceGUID, &size, &unknown)) && unknown) {
-        unknown->QueryInterface(IID_PPV_ARGS(&fence));
-        unknown->Release();
-    }
-    return fence;
-}
-D3D12_RESOURCE_STATES resourceState(ID3D12Resource* resource) {
-    UINT value = 0; UINT size = sizeof(value);
-    resource->GetPrivateData(AMFResourceStateGUID, &size, &value);
-    return D3D12_RESOURCE_STATES(value);
-}
-void setResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state) {
-    const UINT value = UINT(state);
-    resource->SetPrivateData(AMFResourceStateGUID, sizeof(value), &value);
-}
-void barrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
-    if (before == after) return;
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource = resource;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    b.Transition.StateBefore = before;
-    b.Transition.StateAfter = after;
-    list->ResourceBarrier(1, &b);
-}
+using namespace amfDx12;
 amf::AMF_SURFACE_FORMAT surfaceFormat(DXGI_FORMAT format) {
     switch (format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM: return amf::AMF_SURFACE_RGBA;
@@ -119,13 +29,6 @@ amf::AMF_SURFACE_FORMAT surfaceFormat(DXGI_FORMAT format) {
     case DXGI_FORMAT_R16G16B16A16_FLOAT: return amf::AMF_SURFACE_RGBA_F16;
     default: return amf::AMF_SURFACE_UNKNOWN;
     }
-}
-// Shutdown only: the textures may still be read on AMF's queue.
-void waitFence(ID3D12Fence* fence, UINT64 value) {
-    if (!fence || !value || fence->GetCompletedValue() >= value) return;
-    HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    if (event && SUCCEEDED(fence->SetEventOnCompletion(value, event))) WaitForSingleObject(event, 2000);
-    if (event) CloseHandle(event);
 }
 }
 #endif

@@ -178,6 +178,7 @@ if (Test-Path -LiteralPath $ffmpegLocalBuild) {
   Copy-Payload $ffmpegLocalBuild 'licenses/FFMPEG-VEYRA-BUILD.json'
 }
 Copy-Payload (Join-Path $resolvedRoot 'assets/icons/lucide/LICENSE') 'licenses/LUCIDE-LICENSE.txt'
+Copy-Payload (Join-Path $resolvedRoot 'third_party/nis/licence.txt') 'licenses/NVIDIA_NIS_MIT.txt'
 Copy-Payload (Join-Path $resolvedRoot 'licenses/WIN32_CAPTURE_SAMPLE_MIT.txt') 'licenses/WIN32_CAPTURE_SAMPLE_MIT.txt'
 Copy-Payload (Join-Path $resolvedRoot 'licenses/capture/ELGATO_NITLINK_MIT.txt') 'licenses/capture/ELGATO_NITLINK_MIT.txt'
 foreach ($name in @('RTX40MFG_LICENSE.txt','HDE_LICENSE.txt')) {

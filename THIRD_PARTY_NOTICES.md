@@ -1,5 +1,27 @@
 # Third-party dependencies
 
+## NVIDIA Image Scaling (NIS)
+
+NIS uses NVIDIA's MIT-licensed Image Scaling SDK v1.0.3 at
+[35e13ba316c98eeecf16f37eae70ce88019911f6](https://github.com/NVIDIAGameWorks/NVIDIAImageScaling/tree/35e13ba316c98eeecf16f37eae70ce88019911f6).
+Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. See
+[third_party/nis/licence.txt](third_party/nis/licence.txt) (distributed as
+licenses/NVIDIA_NIS_MIT.txt).
+
+- third_party/nis/NIS_Config.h retains the upstream parameter and coefficient tables.
+- third_party/nis/NIS_Scaler.h allows an application output-store transform and
+  excludes the first pixel outside each viewport edge.
+- shaders/Nis.hlsl adapts the HLSL example bindings to Veyra's D3D12 pass
+  and converts the SDR result back to linear working color.
+- src/pipeline/NisScaler.cpp uploads the stock coefficients and runs the shader
+  with SDR or linear HDR inputs on the selected graphics adapter.
+
+## AMD VideoSR
+
+src/gfx/AmfVideoSrBackend.cpp uses the public AMD AMF 1.5.3 HQ Scaler API with
+the AMF runtime from the installed graphics driver. AMD Advanced Media Framework
+headers are build-time dependencies. The AMD driver runtime is supplied by AMD.
+
 ## Live subtitle translation (2026-11-20)
 
 Veyra's native subtitle translation adapts the Live Captions integration and
