@@ -857,6 +857,19 @@ variable-refresh support and state, for diagnostics and to enable the 可变刷�
 switch; this monitor query never changes driver settings. Same loading rules and the same
 license as above.
 
+The same header (2026-11-22) adds an AMD FreeSync fallback for displays NVAPI
+does not answer: minimal renamed `AdapterInfo`, `ADLDisplayInfo` and
+`ADLFreeSyncCap` layouts, the `ADL_FREESYNC_CAP_*` and display-info bits and
+the ADL2 entry points `ADL2_Main_Control_Create`,
+`ADL2_Adapter_NumberOfAdapters_Get`, `ADL2_Adapter_AdapterInfo_Get`,
+`ADL2_Display_DisplayInfo_Get`, `ADL2_Display_FreeSync_Cap` and
+`ADL2_Display_FreeSyncState_Get`, checked against GPUOpen display-library
+(AMD Display Library SDK) commit `84c881cb2136f04287eb3af12de00a9e2867aa9e`
+(`include/adl_structures.h`, `include/adl_defines.h`, MIT). Only the System32
+`atiadlxx.dll` installed with the AMD driver is loaded and pinned; it is read
+only and never changes FreeSync settings. No ADL SDK file or AMD runtime is
+committed or bundled.
+
 `src/gfx/NvidiaVrrProfile.cpp` (2026-11-14) adds minimal renamed DRS v1
 application/profile/setting layouts, QueryInterface IDs and G-SYNC scope enums,
 checked against NVIDIA/nvapi commit

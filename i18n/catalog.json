@@ -16967,17 +16967,17 @@
    "ru": "Попросил хозяина выйти из игры."
   },
   {
-   "zh": "已请求可变刷新，驱动尚未确认生效；可检查窗口/全屏 G-SYNC 设置，当前状态不代表驱动已关闭",
+   "zh": "已请求可变刷新，驱动尚未确认生效（AMD 驱动不报告是否生效，可看显示器菜单中的刷新率）；可检查窗口/全屏 G-SYNC 或 FreeSync 设置，当前状态不代表驱动已关闭",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "已請求可變更新率，驅動尚未確認生效；可檢查視窗/全螢幕 G-SYNC 設定，目前狀態不代表驅動已關閉",
-   "en": "VRR presentation requested; the driver has not confirmed activation. Check windowed/fullscreen G-SYNC settings. This does not mean the driver setting is off.",
-   "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません。ウィンドウ/全画面の G-SYNC 設定を確認できます。この状態は設定がオフという意味ではありません。",
-   "ko": "VRR 표시를 요청했지만 드라이버에서 활성화를 확인하지 못했습니다. 창 모드·전체 화면 G-SYNC 설정을 확인하세요. 이 메시지가 드라이버 설정이 꺼졌다는 뜻은 아닙니다.",
-   "es": "VRR presentación solicitada; el controlador no ha confirmado la activación. Ver la ventana / pantalla llena G-SYNC configuración. Esto no significa que el ajuste del controlador esté apagado.",
-   "fr": "VRR présentation demandée; le pilote n'a pas confirmé l'activation. Cochez fenêtre/écran complet G-SYNC paramètres. Cela ne signifie pas que le réglage du pilote est désactivé.",
-   "de": "VRR Präsentation angefordert; der Treiber hat die Aktivierung nicht bestätigt. Fenster/Vollbild prüfen G-SYNC Einstellungen. Dies bedeutet nicht, dass die Einstellung des Treibers ausgeschaltet ist.",
-   "pt-BR": "VRR apresentação solicitada; o condutor não confirmou a activação. Verificar janela/tela cheia G-SYNC configurações. Isto não significa que o condutor esteja desligado.",
-   "ru": "VRR представление запрошено; драйвер не подтвердил активацию. Контрольное окно / Fullscreen G-SYNC Настройки. Это не означает, что драйвер выключен."
+   "zh-TW": "已請求可變更新率，驅動尚未確認生效（AMD 驅動不回報是否生效，可看顯示器選單中的更新率）；可檢查視窗/全螢幕 G-SYNC 或 FreeSync 設定，目前狀態不代表驅動已關閉",
+   "en": "VRR presentation requested; the driver has not confirmed activation (AMD drivers do not report it; check the refresh rate in the monitor's menu). Check windowed/fullscreen G-SYNC or FreeSync settings. This does not mean the driver setting is off.",
+   "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません（AMD ドライバーは報告しないため、モニターのメニューでリフレッシュレートを確認してください）。ウィンドウ/全画面の G-SYNC または FreeSync 設定を確認できます。この状態は設定がオフという意味ではありません。",
+   "ko": "VRR 표시를 요청했지만 드라이버에서 활성화를 확인하지 못했습니다(AMD 드라이버는 이를 알려 주지 않으므로 모니터 메뉴의 주사율을 확인하세요). 창 모드·전체 화면 G-SYNC 또는 FreeSync 설정을 확인하세요. 이 메시지가 드라이버 설정이 꺼졌다는 뜻은 아닙니다.",
+   "es": "Presentación VRR solicitada; el controlador no ha confirmado la activación (los controladores AMD no lo informan; consulte la frecuencia de actualización en el menú del monitor). Revise la configuración de G-SYNC o FreeSync en ventana/pantalla completa. Esto no significa que el ajuste del controlador esté desactivado.",
+   "fr": "Présentation VRR demandée ; le pilote n'a pas confirmé l'activation (les pilotes AMD ne la signalent pas ; vérifiez la fréquence dans le menu de l'écran). Vérifiez les réglages G-SYNC ou FreeSync en fenêtré/plein écran. Cela ne signifie pas que le réglage du pilote est désactivé.",
+   "de": "VRR-Darstellung angefordert; der Treiber hat die Aktivierung nicht bestätigt (AMD-Treiber melden dies nicht; prüfen Sie die Bildwiederholrate im Monitormenü). Prüfen Sie die G-SYNC- oder FreeSync-Einstellungen für Fenster/Vollbild. Dies bedeutet nicht, dass die Treibereinstellung ausgeschaltet ist.",
+   "pt-BR": "Apresentação VRR solicitada; o driver não confirmou a ativação (drivers AMD não informam isso; verifique a taxa de atualização no menu do monitor). Verifique as configurações de G-SYNC ou FreeSync em janela/tela cheia. Isso não significa que a configuração do driver esteja desligada.",
+   "ru": "Запрошен вывод с VRR; драйвер не подтвердил активацию (драйверы AMD об этом не сообщают; проверьте частоту обновления в меню монитора). Проверьте настройки G-SYNC или FreeSync для оконного/полноэкранного режима. Это не означает, что настройка драйвера выключена."
   },
   {
    "zh": "已请求，等待驱动确认",
@@ -22350,17 +22350,17 @@
    "ru": "Не удаётся определить"
   },
   {
-   "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
+   "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 和 AMD 显卡）",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
-   "en": "Cannot detect whether the display supports it (NVIDIA GPUs only for now)",
-   "ja": "ディスプレイの対応を検出できません（現在は NVIDIA GPU のみ）",
-   "ko": "디스플레이 지원 여부를 확인하지 못했습니다. 현재 NVIDIA GPU에서만 확인할 수 있습니다.",
-   "es": "No se puede detectar si la pantalla lo soporta (NVIDIA GPUs sólo por ahora)",
-   "fr": "Impossible de détecter si l'affichage le supporte (NVIDIA GPUs seulement pour le moment)",
-   "de": "Kann nicht erkennen, ob das Display es unterstützt (NVIDIA GPUs nur vorerst)",
-   "pt-BR": "Não é possível detectar se o ecrã o suporta (NVIDIA GPUs apenas por enquanto)",
-   "ru": "Невозможно определить, поддерживает ли дисплей (только на данный момент) графические процессоры NVIDIA"
+   "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 和 AMD 顯示卡）",
+   "en": "Cannot detect whether the display supports it (NVIDIA and AMD GPUs only for now)",
+   "ja": "ディスプレイの対応を検出できません（現在は NVIDIA と AMD の GPU のみ）",
+   "ko": "디스플레이 지원 여부를 확인하지 못했습니다. 현재 NVIDIA와 AMD GPU에서만 확인할 수 있습니다.",
+   "es": "No se puede detectar si la pantalla lo admite (por ahora solo GPU NVIDIA y AMD)",
+   "fr": "Impossible de détecter si l'écran le prend en charge (GPU NVIDIA et AMD uniquement pour le moment)",
+   "de": "Kann nicht erkennen, ob das Display es unterstützt (vorerst nur NVIDIA- und AMD-GPUs)",
+   "pt-BR": "Não é possível detectar se a tela oferece suporte (por enquanto, apenas GPUs NVIDIA e AMD)",
+   "ru": "Невозможно определить, поддерживает ли дисплей эту функцию (пока только для GPU NVIDIA и AMD)"
   },
   {
    "zh": "无法添加文件：%1",
