@@ -1285,6 +1285,12 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         applyCaptureColorOverride(p.layout.color,colorOverride);
         log::info("capture-color",std::format("manual space={} range={} effective transfer={} matrix={} primaries={} range={} (0=auto, space 1=PQ 2=HLG 3=709, range 1=limited 2=full)",space,captureColorRange(colorOverride),int(p.layout.color.transfer),int(p.layout.color.matrix),int(p.layout.color.primaries),int(p.layout.color.range)));
     }
+    // Planar 4:2:0 capture (NV12/P010/P016): interpolate chroma at its sited
+    // position (unknown siting resolves to MPEG-2 left in YuvToLinearRgb)
+    // instead of repeating one sample over a 2x2 block. Until now only PS5
+    // Remote Play asked for this; OBS filters capture chroma bilinearly too.
+    // Packed 4:2:2 formats interpolate in their own ingress shaders.
+    p.layout.color.reconstructChroma=true;
     p.info={};p.info.kind=pipeline::SourceKind::CaptureCard;p.info.width=p.layout.width;p.info.height=p.layout.height;p.info.displayAspect=p.layout.height>0?double(p.layout.width)/p.layout.height:0.0;p.info.averageFps=p.layout.duration>0?1e7/p.layout.duration:0;p.info.duration=pipeline::Rational::unknown();p.info.color=p.layout.color;
     if(expectedFps>0){
         const bool accepted=captureFrameRateMatches(expectedFps,p.layout.duration);
