@@ -662,6 +662,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/media/DemuxSession.cpp
     src/media/FFmpegVideoDecoder.cpp
     src/media/FFmpegDeinterlacer.cpp
+    src/media/FfmpegLog.cpp
   )
   veyra_apply_warnings(veyra_media)
   # FFmpeg headers are third-party; /WX stays off for this target
