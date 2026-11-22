@@ -7,6 +7,7 @@ namespace veyra::remoteplay {
 class StreamRecovery {
 public:
     enum class Action {Wait,Keyframe,Reconnect,Fail};
+    explicit StreamRecovery(int64_t startupTimeoutMs=30000):startupTimeoutMs_(startupTimeoutMs){}
     void beginAttempt(int64_t now){lastProgress_=now;healthySince_=-1;keyframes_=0;currentVideo_=false;}
     bool frame(int64_t now){
         if(!currentVideo_||healthySince_<0||now<lastProgress_||now-lastProgress_>=1000)healthySince_=now;
@@ -20,7 +21,7 @@ public:
         if(failed&&!retryAllowed)return Action::Fail;
         // Each rebuilt session needs its own handshake/first-frame allowance.
         // A previous session having video must not shorten a new handshake.
-        if(failed||silent>=(currentVideo_?6000:30000)){
+        if(failed||silent>=(currentVideo_?6000:startupTimeoutMs_)){
             if((!everVideo_&&!(failed&&startupRetryAllowed))||episodeRetries_>=3)return Action::Fail;
             ++episodeRetries_;++reconnects_;return Action::Reconnect;
         }
@@ -30,6 +31,7 @@ public:
     unsigned reconnects()const{return reconnects_;}
     unsigned episodeRetries()const{return episodeRetries_;}
 private:
+    int64_t startupTimeoutMs_=30000;
     int64_t lastProgress_=0,healthySince_=-1;unsigned keyframes_=0,reconnects_=0,episodeRetries_=0;
     bool everVideo_=false,currentVideo_=false;
 };

@@ -196,6 +196,9 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 
 ### Capture and streaming
 
+This fork also adds **PSN remote streaming for PS5 and the account's primary PS4**, including browser sign-in and first connection without LAN pairing. See the [setup and current validation record](docs/PSN_REMOTE_STREAMING.md).
+
+
 | Source | Setup |
 |---|---|
 | Capture card | Select device, resolution, rate, then a supported pixel format and audio input. Close competing apps. Match PQ/HLG/709 and Limited/Full to the signal. Magewell Pro Capture has a dedicated low-latency option. |

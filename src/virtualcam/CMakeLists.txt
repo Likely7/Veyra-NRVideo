@@ -36,8 +36,19 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_library(veyra_virtualcam_transport STATIC ${VCAM_IPC_SOURCES})
   target_include_directories(veyra_virtualcam_transport PUBLIC "${VCAM_VENDOR}/ipc")
   target_compile_definitions(veyra_virtualcam_transport PRIVATE UNICODE _UNICODE)
-  include(ExternalProject)
-  ExternalProject_Add(veyra_virtualcam_x86
+  set(VEYRA_VIRTUALCAM_X86_PAYLOAD "" CACHE FILEPATH "32-bit camera DLL built separately from this source (portable MSVC builds)")
+  if(VEYRA_VIRTUALCAM_X86_PAYLOAD)
+    if(NOT EXISTS "${VEYRA_VIRTUALCAM_X86_PAYLOAD}")
+      message(FATAL_ERROR "VEYRA_VIRTUALCAM_X86_PAYLOAD does not exist")
+    endif()
+    add_custom_target(veyra_virtualcam_x86
+      COMMAND "${CMAKE_COMMAND}" -E make_directory "${CMAKE_BINARY_DIR}/virtualcam"
+      COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${VEYRA_VIRTUALCAM_X86_PAYLOAD}"
+        "${CMAKE_BINARY_DIR}/virtualcam/veyra-virtualcam32.dll"
+      DEPENDS "${VEYRA_VIRTUALCAM_X86_PAYLOAD}" VERBATIM)
+  else()
+    include(ExternalProject)
+    ExternalProject_Add(veyra_virtualcam_x86
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}"
     BINARY_DIR "${CMAKE_BINARY_DIR}/virtualcam-x86"
     DOWNLOAD_COMMAND "" UPDATE_COMMAND ""
@@ -48,6 +59,7 @@ if(NOT CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     BUILD_COMMAND "${CMAKE_COMMAND}" --build <BINARY_DIR> --config Release --parallel 1 --target veyra_virtualcam_module
     INSTALL_COMMAND "${CMAKE_COMMAND}" -E copy_if_different
       <BINARY_DIR>/virtualcam/veyra-virtualcam32.dll "${CMAKE_BINARY_DIR}/virtualcam/veyra-virtualcam32.dll")
+  endif()
   set(VCAM_HASH_HEADER "${CMAKE_CURRENT_BINARY_DIR}/CameraPayloadHashes.h")
   add_custom_command(OUTPUT "${VCAM_HASH_HEADER}"
     COMMAND "${CMAKE_COMMAND}" "-DVCAM64=$<TARGET_FILE:veyra_virtualcam_module>"

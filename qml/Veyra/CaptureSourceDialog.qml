@@ -494,7 +494,7 @@ DialogLayer {
                 }
                 VButton {
                     objectName: "capture-ps5-restart"
-                    visible: captureDialog.pc.state === "failed"
+                    visible: captureDialog.pc.enabled === true && (captureDialog.pc.state === "failed" || captureDialog.pc.state === "off")
                     text: qsTr("重连"); ghost: true
                     onClicked: veyra.ps5ControlRestart()
                 }
@@ -504,16 +504,6 @@ DialogLayer {
                     ghost: true
                     onClicked: dialogHost.open("ps5")
                 }
-            }
-        }
-        VRow {
-            visible: captureDialog.pcOn && captureDialog.pc.state === "pin"
-            label: qsTr("登录 PIN")
-            hint: qsTr("PS5 提示时填写，不是 8 位配对码")
-            RowLayout {
-                spacing: 6
-                DialogTextField { id: controlPin; objectName: "capture-ps5-pin"; implicitWidth: 120 }
-                VButton { text: qsTr("提交"); ghost: true; onClicked: { veyra.ps5SendLoginPin(controlPin.text); controlPin.text = "" } }
             }
         }
         VRow {

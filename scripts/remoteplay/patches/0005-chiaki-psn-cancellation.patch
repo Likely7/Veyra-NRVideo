@@ -1,0 +1,312 @@
+diff --git a/lib/include/chiaki/remote/holepunch.h b/lib/include/chiaki/remote/holepunch.h
+index 407d5d8..9e344f6 100644
+--- a/lib/include/chiaki/remote/holepunch.h
++++ b/lib/include/chiaki/remote/holepunch.h
+@@ -45,6 +45,7 @@ extern "C" {
+ #define DUID_PREFIX "0000000700410080"
+ 
+ #define CHIAKI_DUID_STR_SIZE 49
++#define CHIAKI_VEYRA_PSN_CANCEL_API 1
+ 
+ /** Handle to holepunching session state */
+ typedef struct session_t* ChiakiHolepunchSession;
+diff --git a/lib/src/remote/holepunch.c b/lib/src/remote/holepunch.c
+index 6cf89d7..f2f9fc0 100644
+--- a/lib/src/remote/holepunch.c
++++ b/lib/src/remote/holepunch.c
+@@ -348,6 +348,8 @@ typedef struct session_t
+ 
+     char* ws_fqdn;
+     ChiakiThread ws_thread;
++    bool ws_thread_started;
++    bool ws_thread_finished; /* state_mutex */
+     NotificationQueue* ws_notification_queue;
+     bool ws_thread_should_stop;
+     bool ws_open;
+@@ -384,6 +386,7 @@ static ChiakiErrorCode hex_to_bytes(const char* hex_str, uint8_t* bytes, size_t
+ static void bytes_to_hex(const uint8_t* bytes, size_t len, char* hex_str, size_t max_len);
+ static void random_uuidv4(char* out);
+ static void *websocket_thread_func(void *user);
++static void curl_session_cancelable(CURL *curl, Session *session);
+ static NotificationType parse_notification_type(ChiakiLog *log, json_object* json);
+ static ChiakiErrorCode send_offer(Session *session);
+ static ChiakiErrorCode send_accept(Session *session, int req_id, Candidate *selected_candidate);
+@@ -751,6 +754,8 @@ CHIAKI_EXPORT Session* chiaki_holepunch_session_init(
+     session->local_candidates = NULL;
+     session->our_offer_msg = NULL;
+     session->ws_open = false;
++    session->ws_thread_started = false;
++    session->ws_thread_finished = false;
+     session->online_id = NULL;
+     memset(&session->session_id, 0, sizeof(session->session_id));
+     memset(&session->console_uid, 0, sizeof(session->console_uid));
+@@ -912,14 +917,28 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_session_create(Session* session)
+     if (err != CHIAKI_ERR_SUCCESS)
+         return err;
+     chiaki_thread_set_name(&session->ws_thread, "Chiaki Holepunch WS");
++    session->ws_thread_started = true;
+     CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: Created websocket thread");
+ 
+     chiaki_mutex_lock(&session->state_mutex);
++    const uint64_t ws_deadline = chiaki_time_now_monotonic_us() + SESSION_CREATION_TIMEOUT_SEC * 1000000ULL;
+     while (!(session->state & SESSION_STATE_WS_OPEN))
+     {
+-        CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: Waiting for websocket to open...");
+-        err = chiaki_cond_wait(&session->state_cond, &session->state_mutex);
+-        assert(err == CHIAKI_ERR_SUCCESS);
++        chiaki_mutex_lock(&session->stop_mutex);
++        const bool canceled = session->main_should_stop || session->ws_thread_should_stop;
++        chiaki_mutex_unlock(&session->stop_mutex);
++        if(canceled || session->ws_thread_finished || chiaki_time_now_monotonic_us() >= ws_deadline)
++        {
++            err = canceled ? CHIAKI_ERR_CANCELED : session->ws_thread_finished ? CHIAKI_ERR_NETWORK : CHIAKI_ERR_TIMEOUT;
++            chiaki_mutex_unlock(&session->state_mutex);
++            return err;
++        }
++        err = chiaki_cond_timedwait(&session->state_cond, &session->state_mutex, 100);
++        if(err != CHIAKI_ERR_SUCCESS && err != CHIAKI_ERR_TIMEOUT)
++        {
++            chiaki_mutex_unlock(&session->state_mutex);
++            return err;
++        }
+     }
+     chiaki_mutex_unlock(&session->state_mutex);
+ 
+@@ -1267,6 +1286,7 @@ static ChiakiErrorCode http_ps4_session_wakeup(Session *session)
+         CHIAKI_LOGW(session->log, "http_ps4_session_wakeup: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
+     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     CHIAKI_LOGV(session->log, "http_ps4_session_wakeup: Received JSON:\n%.*s", (int)response_data.size, response_data.data);
+@@ -1417,6 +1437,7 @@ static ChiakiErrorCode http_ps4_session_wakeup(Session *session)
+ 
+     CHIAKI_LOGV(session->log, "http_ps4_session_wakeup: Sending JSON:\n%s", envelope_buf);
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     CHIAKI_LOGV(session->log, "http_ps4_session_wakeup: Received JSON:\n%.*s", (int)response_data.size, response_data.data);
+@@ -1733,7 +1754,13 @@ CHIAKI_EXPORT void chiaki_holepunch_session_set_port_guessing_socks(Session* ses
+ 
+ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+ {
+-    if(session->ws_open)
++    chiaki_mutex_lock(&session->state_mutex);
++    const bool ws_open = session->ws_open;
++    chiaki_mutex_unlock(&session->state_mutex);
++    chiaki_mutex_lock(&session->stop_mutex);
++    const bool canceled = session->main_should_stop || session->ws_thread_should_stop;
++    chiaki_mutex_unlock(&session->stop_mutex);
++    if(session->session_id[0])
+     {
+         ChiakiErrorCode err = deleteSession(session);
+         if(err != CHIAKI_ERR_SUCCESS)
+@@ -1741,7 +1768,7 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+         bool finished = false;
+         Notification *notif = NULL;
+         int notif_query = NOTIFICATION_TYPE_MEMBER_DELETED | NOTIFICATION_TYPE_SESSION_DELETED;
+-        while (!finished)
++        while (!finished && ws_open && !canceled)
+         {
+             err = wait_for_notification(session, &notif, notif_query, SESSION_DELETION_TIMEOUT_SEC * 1000);
+             if (err == CHIAKI_ERR_TIMEOUT)
+@@ -1772,11 +1799,16 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+             }
+             clear_notification(session, notif);
+         }
++    }
++    // A failed or canceled websocket handshake still owns a joinable thread.
++    if(session->ws_thread_started)
++    {
+         chiaki_mutex_lock(&session->stop_mutex);
+         session->ws_thread_should_stop = true;
+         chiaki_mutex_unlock(&session->stop_mutex);
+         chiaki_stop_pipe_stop(&session->select_pipe);
+         chiaki_thread_join(&session->ws_thread, NULL);
++        session->ws_thread_started = false;
+     }
+     if(session->upnp_thread_running)
+     {
+@@ -1803,8 +1835,21 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+         free(session->gw.data);
+         free(session->gw.urls);
+     }
++    // An offer can be canceled before punch_hole reaches its cleanup labels.
++    if(session->our_offer_msg)
++        session_message_free(session->our_offer_msg);
++    free(session->local_candidates);
++    if(!CHIAKI_SOCKET_IS_INVALID(session->ipv4_sock))
++        CHIAKI_SOCKET_CLOSE(session->ipv4_sock);
++    if(!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock))
++        CHIAKI_SOCKET_CLOSE(session->ipv6_sock);
+     if (session->oauth_header)
++    {
++        volatile char *secret = session->oauth_header;
++        size_t length = strlen(session->oauth_header);
++        while(length--) *secret++ = 0;
+         free(session->oauth_header);
++    }
+     if(session->session_id_header)
+         free(session->session_id_header);
+     if (session->online_id)
+@@ -1817,6 +1862,7 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+     {
+         chiaki_mutex_lock(&session->notif_mutex);
+         notification_queue_free(session->ws_notification_queue);
++        free(session->ws_notification_queue);
+         chiaki_mutex_unlock(&session->notif_mutex);
+     }
+     for(int i=0; i < session->num_stun_servers; i++)
+@@ -1833,6 +1879,8 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+     chiaki_cond_fini(&session->notif_cond);
+     chiaki_mutex_fini(&session->state_mutex);
+     chiaki_cond_fini(&session->state_cond);
++    chiaki_mutex_fini(&session->stop_mutex);
++    free(session);
+ }
+ 
+ CHIAKI_EXPORT void chiaki_holepunch_main_thread_cancel(Session *session, bool stop_thread)
+@@ -1926,6 +1974,7 @@ static ChiakiErrorCode get_websocket_fqdn(Session *session, char **fqdn)
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "get_websocket_fqdn: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
+@@ -2062,6 +2111,24 @@ static void random_uuidv4(char* out)
+  *
+  * @param user Pointer to the session context
+ */
++static int curl_session_canceled(void *user, curl_off_t dltotal, curl_off_t dlnow,
++        curl_off_t ultotal, curl_off_t ulnow)
++{
++    (void)dltotal; (void)dlnow; (void)ultotal; (void)ulnow;
++    Session *session = (Session *)user;
++    chiaki_mutex_lock(&session->stop_mutex);
++    const bool canceled = session->main_should_stop || session->ws_thread_should_stop;
++    chiaki_mutex_unlock(&session->stop_mutex);
++    return canceled ? 1 : 0;
++}
++
++static void curl_session_cancelable(CURL *curl, Session *session)
++{
++    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
++    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curl_session_canceled);
++    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, session);
++}
++
+ static void* websocket_thread_func(void *user) {
+     Session* session = (Session*) user;
+     chiaki_thread_set_affinity(CHIAKI_THREAD_NAME_HOLEPUNCH);
+@@ -2073,6 +2140,10 @@ static void* websocket_thread_func(void *user) {
+     if(!curl)
+     {
+         CHIAKI_LOGE(session->log, "Curl could not init");
++        chiaki_mutex_lock(&session->state_mutex);
++        session->ws_thread_finished = true;
++        chiaki_cond_signal(&session->state_cond);
++        chiaki_mutex_unlock(&session->state_mutex);
+         return NULL;
+     }
+     struct curl_slist *headers = NULL;
+@@ -2095,7 +2166,7 @@ static void* websocket_thread_func(void *user) {
+     res = curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "websocket_thread_func: CURL setopt CURLOPT_FAILONERROR failed with CURL error %s", curl_easy_strerror(res));
+-    res = curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);
++    res = curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "websocket_thread_func: CURL setopt CURLOPT_TIMEOUT failed with CURL error %s", curl_easy_strerror(res));
+     res = curl_easy_setopt(curl, CURLOPT_URL, ws_url);
+@@ -2105,6 +2176,7 @@ static void* websocket_thread_func(void *user) {
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "websocket_thread_func: CURL setopt CURLOPT_CONNECT_ONLY failed with CURL error %s", curl_easy_strerror(res));
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     if (res != CURLE_OK)
+@@ -2119,10 +2191,10 @@ static void* websocket_thread_func(void *user) {
+         }
+         goto cleanup;
+     }
+-    session->ws_open = true;
+     CHIAKI_LOGV(session->log, "websocket_thread_func: Connected to push notification WebSocket %s", ws_url);
+     ChiakiErrorCode err = chiaki_mutex_lock(&session->state_mutex);
+     assert(err == CHIAKI_ERR_SUCCESS);
++    session->ws_open = true;
+     session->state |= SESSION_STATE_WS_OPEN;
+     log_session_state(session);
+     err = chiaki_cond_signal(&session->state_cond);
+@@ -2316,7 +2388,11 @@ cleanup_json:
+     free(buf);
+ cleanup:
+     curl_easy_cleanup(curl);
++    chiaki_mutex_lock(&session->state_mutex);
+     session->ws_open = false;
++    session->ws_thread_finished = true;
++    chiaki_cond_signal(&session->state_cond);
++    chiaki_mutex_unlock(&session->state_mutex);
+ 
+     return NULL;
+ }
+@@ -2953,6 +3029,7 @@ static ChiakiErrorCode http_create_session(Session *session)
+         CHIAKI_LOGW(session->log, "http_create_session: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
+     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     if (res != CURLE_OK)
+@@ -3075,6 +3152,7 @@ static ChiakiErrorCode http_check_session(Session *session, bool viewurl)
+         CHIAKI_LOGW(session->log, "http_check_session: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
+     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     if (res != CURLE_OK)
+@@ -3201,6 +3279,7 @@ static ChiakiErrorCode http_start_session(Session *session)
+ 
+     CHIAKI_LOGV(session->log, "http_start_session: Sending JSON:\n%s", envelope_buf);
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     CHIAKI_LOGV(session->log, "http_start_session: Received JSON:\n%.*s", (int)response_data.size, response_data.data);
+@@ -3343,6 +3422,7 @@ static ChiakiErrorCode http_send_session_message(Session *session, SessionMessag
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "http_send_session_message: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     curl_slist_free_all(headers);
+     if (res != CURLE_OK)
+@@ -3408,7 +3488,7 @@ static ChiakiErrorCode deleteSession(Session *session)
+     res = curl_easy_setopt(curl, CURLOPT_URL, url);
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "delete_session: CURL setopt CURLOPT_URL failed with CURL error %s", curl_easy_strerror(res));
+-    res = curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
++    res = curl_easy_setopt(curl, CURLOPT_TIMEOUT, 3L);
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "delete_session: CURL setopt CURLOPT_TIMEOUT failed with CURL error %s", curl_easy_strerror(res));
+     res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+@@ -5800,6 +5880,7 @@ static ChiakiErrorCode get_stun_servers(Session *session)
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "get_stun_servers: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     if (res != CURLE_OK)
+     {
+@@ -5883,6 +5964,7 @@ static ChiakiErrorCode get_stun_servers(Session *session)
+     if(res != CURLE_OK)
+         CHIAKI_LOGW(session->log, "get_stun_servers: CURL setopt CURLOPT_WRITEDATA failed with CURL error %s", curl_easy_strerror(res));
+ 
++    curl_session_cancelable(curl, session);
+     res = curl_easy_perform(curl);
+     if (res != CURLE_OK)
+     {

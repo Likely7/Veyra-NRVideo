@@ -13,7 +13,8 @@ namespace veyra::source {
 class RemotePlaySessionSource final : public IFrameSource {
 public:
     ~RemotePlaySessionSource() override { close(); }
-    bool connect(RemotePlayConnectDesc desc);
+    // cancelFlag belongs to the caller and is observed only while connect waits.
+    bool connect(RemotePlayConnectDesc desc,std::stop_token stop={},const std::atomic<bool>* cancelFlag=nullptr);
     // True while the owner loop, including its reconnect retries, still runs.
     bool alive() const { return alive_.load(); }
     bool failed() const { std::lock_guard lock(mutex_); return failed_; }
@@ -23,7 +24,14 @@ public:
     bool seek(const pipeline::Rational&) override { return false; }
     void close() noexcept override;
     void controller(remoteplay::ControllerState state);
-    void loginPin(std::string pin);
+    bool loginPin(std::string pin,remoteplay::HostTime expectedOrigin=0,unsigned expectedRequest=0);
+    struct StopStatus {
+        bool requested=false,finished=false,standby=false,commandSent=false,disconnected=false;
+        int error=0;unsigned attempt=0;
+    };
+    // Enqueue a user choice. Standby failure leaves the connection alive.
+    bool stopStreaming(bool standby);
+    StopStatus stopStatus()const {std::lock_guard lock(mutex_);return stopStatus_;}
     remoteplay::ControllerFeedback takeFeedback();
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;
     uint64_t skipped() const;
@@ -40,6 +48,7 @@ private:
     friend struct RemotePlaySessionSourceTestAccess;
     void publishDecoded(const AVFrame*,pipeline::FramePacket,const SourceInfo&);
     void run(std::stop_token, RemotePlayConnectDesc);
+    bool processStopRequest(RemotePlaySource&,std::stop_token);
     remoteplay::ControllerState takeControllerLocked(remoteplay::HostTime now);
     struct Frame { std::shared_ptr<AVFrame> frame; pipeline::FramePacket packet; SourceInfo info; };
     mutable std::mutex mutex_;
@@ -59,6 +68,7 @@ private:
     uint64_t skipped_=0;
     Rates rates_;
     RecoveryStatus recovery_;
+    StopStatus stopStatus_;
     uint64_t publishedSequence_=0;
     remoteplay::ControllerFeedback feedback_;
     sink::CaptureAudioSession audio_;

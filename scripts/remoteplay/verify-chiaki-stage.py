@@ -12,6 +12,13 @@ PATCHES = (
     "0002-chiaki-video-metadata.patch",
     "0003-chiaki-feedback-history.patch",
     "0004-chiaki-pad-proc-no.patch",
+    "0005-chiaki-psn-cancellation.patch",
+    "0006-chiaki-stun-cancellation.patch",
+    "0007-chiaki-psn-socket-ownership.patch",
+    "0008-chiaki-psn-notification-locks.patch",
+    "0009-chiaki-psn-notification-lifecycle.patch",
+    "0010-chiaki-psn-websocket-deadline.patch",
+    "0011-chiaki-standby-send-result.patch",
 )
 
 

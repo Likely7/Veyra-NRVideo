@@ -10,6 +10,9 @@ singleton Theme 1.0 Theme.qml
 VAccordion 1.0 VAccordion.qml
 VSubGroup 1.0 VSubGroup.qml
 DialogHost 1.0 DialogHost.qml
+Ps5LoginPinDialog 1.0 Ps5LoginPinDialog.qml
+Ps5StopDialog 1.0 Ps5StopDialog.qml
+Ps5StreamStopButton 1.0 Ps5StreamStopButton.qml
 StreamHud 1.0 StreamHud.qml
 VBackdrop 1.0 VBackdrop.qml
 VAccentFill 1.0 VAccentFill.qml

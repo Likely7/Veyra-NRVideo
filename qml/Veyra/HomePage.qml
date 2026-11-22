@@ -214,8 +214,8 @@ VPage {
             readonly property int cardWidth: root.compact
                 ? Math.max(1, Math.min(164, Math.floor((Layout.preferredWidth - 5 * spacing) / 6))) : 164
             readonly property int cardHeight: root.compact ? 80 : 124
-            // Subtitles name what is really there: the device of the last capture
-            // session and the saved PS5 host; generic wording when there is none.
+            // Capture subtitles name the last device. Remote Play always names
+            // both supported transports, including before a console is saved.
             // Only the subtitle follows the live state. The cards themselves are a fixed
             // list: when the whole array was one binding, every Xbox / PC state change
             // (polling after sign-in) destroyed and rebuilt all six cards, and a click
@@ -224,7 +224,7 @@ VPage {
                 switch (act) {
                 case "file": return qsTr("MP4 · MKV · 图片")
                 case "capture": return veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : qsTr("HDMI 采集设备")
-                case "ps5": return veyra.remotePlayHost.length > 0 ? qsTr("已保存主机 ") + veyra.remotePlayHost : qsTr("局域网串流")
+                case "ps5": return qsTr("PSN 远程 / 局域网")
                 case "moonlight": return veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : qsTr("Sunshine 主机")
                 case "xbox": return veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : qsTr("账号登录 · 实验")
                 default: return qsTr("窗口或显示器")
@@ -235,7 +235,7 @@ VPage {
                 model: [
                     { glyph: "folder", title: qsTr("打开视频"), act: "file" },
                     { glyph: "video", title: qsTr("采集卡"), act: "capture" },
-                    { glyph: "gamepad", title: qsTr("PS5 串流"), act: "ps5" },
+                    { glyph: "gamepad", title: qsTr("PS5 / PS4 串流"), act: "ps5" },
                     { glyph: "cast", title: qsTr("PC 串流"), act: "moonlight" },
                     { glyph: "gamepad", title: qsTr("Xbox 串流"), act: "xbox" },
                     { glyph: "monitor", title: qsTr("屏幕捕获"), act: "screen" }

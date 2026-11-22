@@ -4,10 +4,29 @@
 #include <array>
 #include <chrono>
 #include <memory>
+#include <optional>
 #include <stop_token>
 #include <string>
+#include <vector>
 
 namespace veyra::remoteplay {
+// Ephemeral bearer token. Deliberately move-only, with no serialization support.
+class SecretString {
+public:
+    SecretString()=default;
+    SecretString(const SecretString&)=delete;
+    SecretString& operator=(const SecretString&)=delete;
+    SecretString(SecretString&&) noexcept;
+    SecretString& operator=(SecretString&&) noexcept;
+    ~SecretString();
+    void assign(std::string_view);
+    void clear() noexcept;
+    std::string_view view() const noexcept;
+    const char* c_str() const noexcept;
+    bool empty() const noexcept { return view().empty(); }
+private:
+    std::vector<char> bytes_;
+};
 // No serialization/ostream support: never put registration/session keys into
 // command lines, logs, fixtures or source control. DPAPI storage is NOT in patch 01.
 struct PairingCredentials {
@@ -26,13 +45,20 @@ struct BackendResult {
     int code=0;
     // One of our fixed operation names, never an unfiltered server string.
     std::string operation;
+    // Locally formatted phase timings and numeric flags only; never server text.
+    std::string diagnostics{};
 };
 struct NativeConnectRequest {
+    bool ps5=true;
+    bool psn=false;
     std::string host;
     std::string consoleId; // Stable discovery host_id / registration MAC, normalized hex.
+    std::string psnDuid; // 64 hex digits for PS5; 64 zeroes select the account's main PS4.
+    SecretString psnToken; // Access token only; never stored in a pairing profile.
     VideoProfile video;
     bool viewOnly=false;
     PairingCredentials credentials;
+    std::optional<std::string> validate() const;
 };
 struct NativeSnapshot {
     bool started=false,connected=false;
@@ -58,11 +84,14 @@ public:
     // a copy, audio goes to a no-op sink, so Chiaki keeps its reference-frame
     // bookkeeping and never reports a dropped sample to the console as a
     // corrupt frame. The DualSense channel is forced on; feedback is unchanged.
-    BackendResult start(const NativeConnectRequest&,SessionInbox::Token,bool discardMedia=false);
+    BackendResult start(const NativeConnectRequest&,SessionInbox::Token,bool discardMedia=false,std::stop_token stop={});
     BackendResult stop(); // Does not call PS5 goto_bed; must precede inbox.finishStop().
     BackendResult requestIdr();
     BackendResult submitController(const ControllerState&);
     BackendResult submitLoginPin(std::string_view);
+    // User-triggered only. Waits on the session owner for the control sender,
+    // never treats queue insertion as a sent command. stop() itself never sleeps a console.
+    BackendResult requestStandby(std::stop_token stop={});
     NativeSnapshot snapshot() const;
     ControllerFeedback takeFeedback();
 private:

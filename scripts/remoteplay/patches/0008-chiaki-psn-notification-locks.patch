@@ -1,0 +1,422 @@
+diff --git a/lib/src/remote/holepunch.c b/lib/src/remote/holepunch.c
+--- a/lib/src/remote/holepunch.c
++++ b/lib/src/remote/holepunch.c
+@@ -897,6 +897,75 @@
+     return CHIAKI_ERR_SUCCESS;
+ }
+ 
++// Own the state lock across notification validation and cancellation. Every
++// exit releases it before the caller clears the notification or performs I/O.
++static ChiakiErrorCode process_create_notification(Session *session, Notification *notif, bool *finished)
++{
++    ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
++    *finished = false;
++    chiaki_mutex_lock(&session->state_mutex);
++    if (notif->type == NOTIFICATION_TYPE_SESSION_CREATED)
++    {
++        session->state |= SESSION_STATE_CREATED;
++        CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: Holepunch session created.");
++        // Get the user's online id
++        json_object *online_id_json = NULL;
++        json_pointer_get(notif->json, "/to/onlineId", &online_id_json);
++        if (!online_id_json || !json_object_is_type(online_id_json, json_type_string))
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: JSON does not contain member with online Id of user");
++            const char *json_str = json_object_to_json_string_ext(notif->json, JSON_C_TO_STRING_PRETTY);
++            CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: JSON was:\n%s", json_str);
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++        const char *online_id = json_object_get_string(online_id_json);
++        if (!online_id)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: could not extra PSN online id string.");
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++        char *online_id_copy = malloc(strlen(online_id) + 1);
++        if(!online_id_copy)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: could not allocate space for PSN online id string.");
++            err = CHIAKI_ERR_MEMORY;
++            goto unlock;
++        }
++        strcpy(online_id_copy, online_id);
++        free(session->online_id);
++        session->online_id = online_id_copy;
++    }
++    else if (notif->type == NOTIFICATION_TYPE_MEMBER_CREATED)
++    {
++        session->state |= SESSION_STATE_CLIENT_JOINED;
++        CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: Client joined.");
++    }
++    else
++    {
++        CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: Got unexpected notification of type %d", notif->type);
++        err = CHIAKI_ERR_UNKNOWN;
++        goto unlock;
++    }
++    chiaki_mutex_lock(&session->stop_mutex);
++    if(session->main_should_stop)
++    {
++        session->main_should_stop = false;
++        chiaki_mutex_unlock(&session->stop_mutex);
++        CHIAKI_LOGI(session->log, "chiaki_holepunch_session_create: canceled");
++        err = CHIAKI_ERR_CANCELED;
++        goto unlock;
++    }
++    chiaki_mutex_unlock(&session->stop_mutex);
++    log_session_state(session);
++    *finished = (session->state & SESSION_STATE_CREATED) &&
++                    (session->state & SESSION_STATE_CLIENT_JOINED);
++    unlock:
++    chiaki_mutex_unlock(&session->state_mutex);
++    return err;
++}
++
+ CHIAKI_EXPORT ChiakiErrorCode chiaki_holepunch_session_create(Session* session)
+ {
+     ChiakiErrorCode err = get_websocket_fqdn(session, &session->ws_fqdn);
+@@ -992,66 +1061,109 @@
+             CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: Failed to wait for holepunch session creation notifications.");
+             return err;
+         }
+-        chiaki_mutex_lock(&session->state_mutex);
+-        if (notif->type == NOTIFICATION_TYPE_SESSION_CREATED)
+-        {
+-            session->state |= SESSION_STATE_CREATED;
+-            CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: Holepunch session created.");
+-            // Get the user's online id
+-            json_object *online_id_json = NULL;
+-            json_pointer_get(notif->json, "/to/onlineId", &online_id_json);
+-            if (!online_id_json || !json_object_is_type(online_id_json, json_type_string))
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: JSON does not contain member with online Id of user");
+-                const char *json_str = json_object_to_json_string_ext(notif->json, JSON_C_TO_STRING_PRETTY);
+-                CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: JSON was:\n%s", json_str);
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-            const char *online_id = json_object_get_string(online_id_json);
+-            if (!online_id_json)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: could not extra PSN online id string.");
+-                err = CHIAKI_ERR_UNKNOWN;
+-                return err;
+-            }
+-            session->online_id = malloc((strlen(online_id) + 1) * sizeof(char));
+-            if(!session->online_id)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: could not allocate space for PSN online id string.");
+-                err = CHIAKI_ERR_MEMORY;
+-                return err;
+-            }
+-            strcpy(session->online_id, online_id);
+-        }
+-        else if (notif->type == NOTIFICATION_TYPE_MEMBER_CREATED)
+-        {
+-            session->state |= SESSION_STATE_CLIENT_JOINED;
+-            CHIAKI_LOGV(session->log, "chiaki_holepunch_session_create: Client joined.");
+-        }
+-        else
+-        {
+-            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_create: Got unexpected notification of type %d", notif->type);
++        err = process_create_notification(session, notif, &finished);
++        clear_notification(session, notif);
++        if(err != CHIAKI_ERR_SUCCESS)
++            return err;
++        http_check_session(session, true);
++    }
++    return err;
++}
++
++static ChiakiErrorCode process_start_notification(Session *session, Notification *notif,
++    ChiakiHolepunchConsoleType console_type, bool *finished)
++{
++    ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
++    *finished = false;
++    chiaki_mutex_lock(&session->state_mutex);
++    if (notif->type == NOTIFICATION_TYPE_MEMBER_CREATED)
++    {
++        // Check if the session now contains the console we requested
++        json_object *member_duid_json = NULL;
++        json_pointer_get(notif->json, "/body/data/members/0/deviceUniqueId", &member_duid_json);
++        if (!member_duid_json || !json_object_is_type(member_duid_json, json_type_string))
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: JSON does not contain member with a deviceUniqueId string field!");
++            const char *json_str = json_object_to_json_string_ext(notif->json, JSON_C_TO_STRING_PRETTY);
++            CHIAKI_LOGV(session->log, "chiaki_holepunch_session_start: JSON was:\n%s", json_str);
+             err = CHIAKI_ERR_UNKNOWN;
+-            return err;
+-        }
+-        chiaki_mutex_lock(&session->stop_mutex);
+-        if(session->main_should_stop)
+-        {
+-            session->main_should_stop = false;
+-            chiaki_mutex_unlock(&session->stop_mutex);
+-            CHIAKI_LOGI(session->log, "chiaki_holepunch_session_create: canceled");
+-            err = CHIAKI_ERR_CANCELED;
+-            return err;
+-        }
++            goto unlock;
++        }
++        const char *member_duid = json_object_get_string(member_duid_json);
++        if (strlen(member_duid) != 64)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: \"deviceUniqueId\" has unexpected length, got %zu, expected 64", strlen(member_duid));
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++
++        uint8_t duid_bytes[32];
++        err = hex_to_bytes(member_duid, duid_bytes, sizeof(duid_bytes));
++        if(err != CHIAKI_ERR_SUCCESS)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Could not convert member duid to bytes");
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++        // We don't have duid beforehand for PS4
++        if(console_type == CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4)
++            memcpy(session->console_uid, duid_bytes, sizeof(duid_bytes));
++        else if (memcmp(duid_bytes, session->console_uid, sizeof(session->console_uid)) != 0)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: holepunch session does not contain console");
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++
++        session->state |= SESSION_STATE_CONSOLE_JOINED;
++    } else if (notif->type == NOTIFICATION_TYPE_CUSTOM_DATA1_UPDATED)
++    {
++        json_object *custom_data1_json = NULL;
++        json_pointer_get(notif->json, "/body/data/customData1", &custom_data1_json);
++        if (!custom_data1_json || !json_object_is_type(custom_data1_json, json_type_string))
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: JSON does not contain \"customData1\" string field");
++            const char *json_str = json_object_to_json_string_ext(notif->json, JSON_C_TO_STRING_PRETTY);
++            CHIAKI_LOGV(session->log, "chiaki_holepunch_session_start: JSON was:\n%s", json_str);
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++        const char *custom_data1 = json_object_get_string(custom_data1_json);
++        if (strlen(custom_data1) != 32)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: \"customData1\" has unexpected length, got %zu, expected 32", strlen(custom_data1));
++            err = CHIAKI_ERR_UNKNOWN;
++            goto unlock;
++        }
++        err = decode_customdata1(session->log, custom_data1, session->custom_data1, sizeof(session->custom_data1));
++        if (err != CHIAKI_ERR_SUCCESS)
++        {
++            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Failed to decode \"customData1\": '%s' with error %s", custom_data1, chiaki_error_string(err));
++            goto unlock;
++        }
++        session->state |= SESSION_STATE_CUSTOMDATA1_RECEIVED;
++    }
++    else
++    {
++        CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Got unexpected notification of type %d", notif->type);
++        err = CHIAKI_ERR_UNKNOWN;
++        goto unlock;
++    }
++    chiaki_mutex_lock(&session->stop_mutex);
++    if(session->main_should_stop)
++    {
++        session->main_should_stop = false;
+         chiaki_mutex_unlock(&session->stop_mutex);
+-        http_check_session(session, true);
+-        log_session_state(session);
+-        finished = (session->state & SESSION_STATE_CREATED) &&
+-                        (session->state & SESSION_STATE_CLIENT_JOINED);
+-        chiaki_mutex_unlock(&session->state_mutex);
+-        clear_notification(session, notif);
+-    }
++        CHIAKI_LOGI(session->log, "chiaki_holepunch_session_start: canceled");
++        err = CHIAKI_ERR_CANCELED;
++        goto unlock;
++    }
++    chiaki_mutex_unlock(&session->stop_mutex);
++    *finished = (session->state & SESSION_STATE_CONSOLE_JOINED) &&
++               (session->state & SESSION_STATE_CUSTOMDATA1_RECEIVED);
++    log_session_state(session);
++    unlock:
++    chiaki_mutex_unlock(&session->state_mutex);
+     return err;
+ }
+ 
+@@ -1137,98 +1249,12 @@
+ 
+         assert(notif != NULL);
+ 
+-        chiaki_mutex_lock(&session->state_mutex);
+-        if (notif->type == NOTIFICATION_TYPE_MEMBER_CREATED)
+-        {
+-            // Check if the session now contains the console we requested
+-            json_object *member_duid_json = NULL;
+-            json_pointer_get(notif->json, "/body/data/members/0/deviceUniqueId", &member_duid_json);
+-            if (!member_duid_json || !json_object_is_type(member_duid_json, json_type_string))
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: JSON does not contain member with a deviceUniqueId string field!");
+-                const char *json_str = json_object_to_json_string_ext(notif->json, JSON_C_TO_STRING_PRETTY);
+-                CHIAKI_LOGV(session->log, "chiaki_holepunch_session_start: JSON was:\n%s", json_str);
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-            const char *member_duid = json_object_get_string(member_duid_json);
+-            if (strlen(member_duid) != 64)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: \"deviceUniqueId\" has unexpected length, got %zu, expected 64", strlen(member_duid));
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-
+-            uint8_t duid_bytes[32];
+-            ChiakiErrorCode err = hex_to_bytes(member_duid, duid_bytes, sizeof(duid_bytes));
+-            if(err != CHIAKI_ERR_SUCCESS)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Could not convert member duid to bytes");
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-            // We don't have duid beforehand for PS4
+-            if(console_type == CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4)
+-                memcpy(session->console_uid, duid_bytes, sizeof(duid_bytes));
+-            else if (memcmp(duid_bytes, session->console_uid, sizeof(session->console_uid)) != 0)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: holepunch session does not contain console");
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-
+-            session->state |= SESSION_STATE_CONSOLE_JOINED;
+-        } else if (notif->type == NOTIFICATION_TYPE_CUSTOM_DATA1_UPDATED)
+-        {
+-            json_object *custom_data1_json = NULL;
+-            json_pointer_get(notif->json, "/body/data/customData1", &custom_data1_json);
+-            if (!custom_data1_json || !json_object_is_type(custom_data1_json, json_type_string))
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: JSON does not contain \"customData1\" string field");
+-                const char *json_str = json_object_to_json_string_ext(notif->json, JSON_C_TO_STRING_PRETTY);
+-                CHIAKI_LOGV(session->log, "chiaki_holepunch_session_start: JSON was:\n%s", json_str);
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-            const char *custom_data1 = json_object_get_string(custom_data1_json);
+-            if (strlen(custom_data1) != 32)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: \"customData1\" has unexpected length, got %zu, expected 32", strlen(custom_data1));
+-                err = CHIAKI_ERR_UNKNOWN;
+-                break;
+-            }
+-            err = decode_customdata1(session->log, custom_data1, session->custom_data1, sizeof(session->custom_data1));
+-            if (err != CHIAKI_ERR_SUCCESS)
+-            {
+-                CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Failed to decode \"customData1\": '%s' with error %s", custom_data1, chiaki_error_string(err));
+-                break;
+-            }
+-            session->state |= SESSION_STATE_CUSTOMDATA1_RECEIVED;
+-        }
+-        else
+-        {
+-            CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Got unexpected notification of type %d", notif->type);
+-            err = CHIAKI_ERR_UNKNOWN;
+-            break;
+-        }
++        err = process_start_notification(session, notif, console_type, &finished);
+         clear_notification(session, notif);
+-        chiaki_mutex_lock(&session->stop_mutex);
+-        if(session->main_should_stop)
+-        {
+-            session->main_should_stop = false;
+-            chiaki_mutex_unlock(&session->stop_mutex);
+-            CHIAKI_LOGI(session->log, "chiaki_holepunch_session_start: canceled");
+-            err = CHIAKI_ERR_CANCELED;
++        if(err != CHIAKI_ERR_SUCCESS)
+             return err;
+-        }
+-        chiaki_mutex_unlock(&session->stop_mutex);
+         http_check_session(session, false);
+-        finished = (session->state & SESSION_STATE_CONSOLE_JOINED) &&
+-                   (session->state & SESSION_STATE_CUSTOMDATA1_RECEIVED);
+-        log_session_state(session);
+-        chiaki_mutex_unlock(&session->state_mutex);
+-    }
+-    chiaki_mutex_unlock(&session->state_mutex);
++    }
+     return err;
+ }
+ 
+@@ -5165,42 +5191,42 @@
+     Session *session, Notification** out,
+     uint16_t types, uint64_t timeout_ms)
+ {
+-    uint64_t waiting_since = chiaki_time_now_monotonic_us();
+-    uint64_t now = waiting_since;
++    const uint64_t waiting_since = chiaki_time_now_monotonic_us();
+     Notification *last_known = NULL;
+-
+     ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
+     chiaki_mutex_lock(&session->notif_mutex);
+-    while (true) {
+-        while (session->ws_notification_queue->rear == last_known || session->ws_notification_queue->rear == NULL)
+-        {
+-            err = chiaki_cond_timedwait(&session->notif_cond, &session->notif_mutex, timeout_ms);
+-            if (err == CHIAKI_ERR_TIMEOUT)
++    while (true)
++    {
++        // Cancellation may precede the wait, and condition signals are not
++        // retained. The websocket stop flag remains set after main consumes it.
++        chiaki_mutex_lock(&session->stop_mutex);
++        const bool canceled = session->main_should_stop || session->ws_thread_should_stop;
++        if(canceled)
++            session->main_should_stop = false;
++        chiaki_mutex_unlock(&session->stop_mutex);
++        if(canceled)
++        {
++            err = CHIAKI_ERR_CANCELED;
++            goto cleanup;
++        }
++        if (session->ws_notification_queue->rear == last_known || session->ws_notification_queue->rear == NULL)
++        {
++            const uint64_t elapsed_ms = (chiaki_time_now_monotonic_us() - waiting_since) / MILLISECONDS_US;
++            if(elapsed_ms >= timeout_ms)
+             {
+-                now = chiaki_time_now_monotonic_us();
+-                if ((now - waiting_since) > (timeout_ms * MILLISECONDS_US))
+-                {
+-                    CHIAKI_LOGE(session->log, "wait_for_notification: Timed out waiting for holepunch session messages");
+-                    err = CHIAKI_ERR_TIMEOUT;
+-                    goto cleanup;
+-                }
+-            }
+-            assert(err == CHIAKI_ERR_SUCCESS || err == CHIAKI_ERR_TIMEOUT);
+-            chiaki_mutex_lock(&session->stop_mutex);
+-            if(session->main_should_stop)
+-            {
+-                session->main_should_stop = false;
+-                chiaki_mutex_unlock(&session->stop_mutex);
+-                err = CHIAKI_ERR_CANCELED;
++                CHIAKI_LOGE(session->log, "wait_for_notification: Timed out waiting for holepunch session messages");
++                err = CHIAKI_ERR_TIMEOUT;
+                 goto cleanup;
+             }
+-            chiaki_mutex_unlock(&session->stop_mutex);
+-        }
+-        Notification *notif;
+-        if(last_known)
+-            notif = last_known->next;
+-        else
+-            notif = session->ws_notification_queue->front;
++            const uint64_t remaining_ms = timeout_ms - elapsed_ms;
++            // Bound a signal arriving between the cancellation check and wait.
++            err = chiaki_cond_timedwait(&session->notif_cond, &session->notif_mutex,
++                remaining_ms < 100 ? remaining_ms : 100);
++            if(err != CHIAKI_ERR_SUCCESS && err != CHIAKI_ERR_TIMEOUT)
++                goto cleanup;
++            continue;
++        }
++        Notification *notif = last_known ? last_known->next : session->ws_notification_queue->front;
+         while (notif != NULL && notif != last_known)
+         {
+             if (notif->type & types)

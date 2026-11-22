@@ -1,6 +1,7 @@
 // QML bridge: View responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/ui/MaskGeometry.h"
+#include "veyra/ui/RemotePlayResume.h"
 
 namespace veyra::ui {
 // --- NR protection regions drawn on the picture (#8) ------------------------
@@ -403,14 +404,25 @@ QVariantMap QmlPlayerBridge::lastSource() const {
     } else return {};
     return saved;
 }
-void QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) {
-    if(kind!=QLatin1String("file")){impl_->liveKind = kind;impl_->liveLabel = label;}
+bool QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) {
+    const auto rememberLive = [&] { if (kind != QLatin1String("file")) { impl_->liveKind = kind; impl_->liveLabel = label; } };
     QVariantMap value{{"kind", kind}, {"label", label}};
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    if (kind == QLatin1String("ps5"))
+        value[QStringLiteral("remotePlay")] = remotePlayResumeForm(impl_->ps5Form, impl_->psn ? impl_->psn->accountId() : QString{});
+#endif
     if (kind == QLatin1String("screen")) value[QStringLiteral("screenKind")] = screenOptions().value(QStringLiteral("kind")).toInt();
-    if (impl_->prefs.value(QStringLiteral("lastSource")).toMap() == value) return;
+    if (impl_->prefs.value(QStringLiteral("lastSource")).toMap() == value) { rememberLive(); return true; }
+    const auto previous = impl_->prefs.value(QStringLiteral("lastSource"));
     impl_->prefs[QStringLiteral("lastSource")] = value;
-    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last source not saved");
+    if (!impl_->savePrefs()) {
+        impl_->prefs[QStringLiteral("lastSource")] = previous;
+        veyra::log::warn("ui-prefs", "last source not saved");
+        return false;
+    }
     emit preferencesChanged();
+    rememberLive();
+    return true;
 }
 void QmlPlayerBridge::autoResumeLastSource() {
     if(!impl_->prefBool("autoResume",false)||impl_->openingSource||impl_->snapshot.running)return;
@@ -431,7 +443,17 @@ void QmlPlayerBridge::resumeLastSource() {
     if (kind == QLatin1String("ps5")) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
         ps5Load();
-        if (!ps5Connect()) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
+        if (!applyRemotePlayResume(last.value(QStringLiteral("remotePlay")).toMap(), impl_->ps5Form,
+                                  impl_->psn ? impl_->psn->accountId() : QString{})) {
+            emit notice(tr("上次的 PlayStation 连接信息不完整或账号已更换，请重新选择主机后连接。"), true);
+            emit navigate(QStringLiteral("ps5"));
+            return;
+        }
+        emit ps5Changed();
+        if (!ps5Connect()) {
+            emit notice(tr("没能继续上次的 PlayStation 串流：%1").arg(impl_->ps5Status), true);
+            emit navigate(QStringLiteral("ps5"));
+        }
 #else
         emit notice(tr("此版本不含 PS5 串流"), true);
 #endif

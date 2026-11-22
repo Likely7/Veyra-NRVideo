@@ -49,9 +49,10 @@ public:
     // IFrameSource::open cannot carry credentials.  Product callers use
     // connect() and then read(); open() deliberately fails closed.
     bool open(const SourceOpenDesc& desc) override;
-    bool connect(const RemotePlayConnectDesc& desc);
+    bool connect(const RemotePlayConnectDesc& desc,std::stop_token stop={});
     remoteplay::BackendResult submitController(const remoteplay::ControllerState& state) { return backend_.submitController(state); }
     remoteplay::BackendResult submitLoginPin(std::string_view pin) { return backend_.submitLoginPin(pin); }
+    remoteplay::BackendResult requestStandby(std::stop_token stop={}) { return backend_.requestStandby(stop); }
     remoteplay::ControllerFeedback takeFeedback(){return backend_.takeFeedback();}
     remoteplay::NativeSnapshot nativeSnapshot()const{return backend_.snapshot();} // session owner only
     remoteplay::BackendResult disconnectTransportForTest(){return backend_.stop();}

@@ -94,19 +94,25 @@ void RemotePlaySource::initializeColorContract(remoteplay::Codec codec, bool hig
     }
 }
 
-bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
+bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc,std::stop_token stop)
 {
     close();
     if (stopFailed_) {
         veyra::log::error("remoteplay", "connect refused: previous session did not stop successfully");
         return false;
     }
-    if (desc.request.video.validate() || !remoteplay::validHost(desc.request.host)) {
-        veyra::log::error("remoteplay", "connect rejected: invalid host or video profile");
+    if (stop.stop_requested()) return false;
+    if (const auto error=desc.request.validate()) {
+        veyra::log::error("remoteplay", *error);
         return false;
     }
     request_ = remoteplay::NativeConnectRequest{};
+    request_.ps5 = desc.request.ps5;
+    request_.psn = desc.request.psn;
     request_.host = desc.request.host;
+    request_.consoleId = desc.request.consoleId;
+    request_.psnDuid = desc.request.psnDuid;
+    request_.psnToken.assign(desc.request.psnToken.view());
     request_.video = desc.request.video;
     request_.viewOnly = desc.request.viewOnly;
     request_.credentials.accountId = desc.request.credentials.accountId;
@@ -119,14 +125,17 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     try {
         inbox_ = std::make_shared<remoteplay::SessionInbox>(desc.queueLimits);
     } catch (...) {
-        request_.credentials = remoteplay::PairingCredentials{};
+        request_ = remoteplay::NativeConnectRequest{};
         veyra::log::error("remoteplay", "invalid queue limits");
         return false;
     }
     auto token = inbox_->begin(static_cast<remoteplay::HostTime>(origin100ns_));
     inbox_->streamProfile(request_.video);
     token_ = token; // Keep a second weak token; backend owns the moved copy.
-    const auto started = backend_.start(request_, token, discardMedia_);
+    const auto started = backend_.start(request_, token, discardMedia_,stop);
+    if(!started.diagnostics.empty())
+        veyra::log::info("remoteplay-psn",started.operation+" code="+std::to_string(started.code)+" "+started.diagnostics);
+    request_.psnToken.clear(); // Backend copied it into its owned PSN session.
     if (!started.ok) {
         veyra::log::error("remoteplay", std::format("{} failed code={}", started.operation, started.code));
         close();
@@ -154,7 +163,7 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     waitingForFirstFrame_ = true;
     pendingOpenFlag_ = true;
     veyra::log::info("remoteplay", std::format("session started host={} profile={}x{}@{} codec={} requestedBitrateKbps={} (bandwidth request, not measured throughput)",
-        request_.host, request_.video.width, request_.video.height, request_.video.fps,
+        request_.psn ? "PSN" : request_.host, request_.video.width, request_.video.height, request_.video.fps,
         request_.video.codec == remoteplay::Codec::H264 ? "H264" : request_.video.codec == remoteplay::Codec::H265Hdr ? "H265_HDR" : "H265",request_.video.bitrateKbps));
     return true;
 }
@@ -541,7 +550,7 @@ void RemotePlaySource::close() noexcept
     decodeDevice_.reset();
     audioBlock_.reset(); audioAnchorSample_.reset(); audioOffset_ = 0;
     audioNextSample_ = 0; audioRate_ = 0; wireSequence_.reset();
-    request_.credentials = remoteplay::PairingCredentials{};
+    request_ = remoteplay::NativeConnectRequest{};
     info_ = SourceInfo{};
 }
 

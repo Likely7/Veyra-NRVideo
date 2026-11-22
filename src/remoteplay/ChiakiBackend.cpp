@@ -2,7 +2,12 @@
 // Uses chiaki-ng's AGPL-3.0-only + OpenSSL-exception APIs; retain both licenses.
 // Windows native initialization and source regression evidence: see execution log.
 #include "veyra/remoteplay/ChiakiBackend.h"
+#include "veyra/remoteplay/PsnDiagnostics.h"
 #include <chiaki/session.h>
+#include <chiaki/remote/holepunch.h>
+#if !defined(CHIAKI_VEYRA_PSN_CANCEL_API) || CHIAKI_VEYRA_PSN_CANCEL_API != 1
+#error The reviewed Chiaki PSN cancellation patch is required
+#endif
 #if !defined(CHIAKI_VEYRA_VIDEO_METADATA_API) || CHIAKI_VEYRA_VIDEO_METADATA_API != 1
 #error The reviewed Chiaki video metadata patch is required
 #endif
@@ -19,6 +24,7 @@
 #include <thread>
 #include <cstdio>
 #include <cstdlib>
+#include <sstream>
 namespace veyra::remoteplay {
 static_assert(CHIAKI_PSN_ACCOUNT_ID_SIZE == 8);
 static_assert(CHIAKI_SESSION_AUTH_SIZE == 16);
@@ -30,6 +36,36 @@ void wipe(void* ptr,std::size_t n) noexcept {
 BackendResult result(ChiakiErrorCode code,const char* operation) {
     return {code==CHIAKI_ERR_SUCCESS,static_cast<int>(code),operation};
 }
+}
+SecretString::SecretString(SecretString&& other) noexcept { bytes_.swap(other.bytes_); }
+SecretString& SecretString::operator=(SecretString&& other) noexcept {
+    if(this!=&other){clear();bytes_.swap(other.bytes_);}return *this;
+}
+SecretString::~SecretString(){clear();}
+void SecretString::clear() noexcept {wipe(bytes_.data(),bytes_.size());bytes_.clear();}
+void SecretString::assign(std::string_view value){
+    // Allocate before wiping: assign(view()) is safe, and allocation failure preserves the old value.
+    std::vector<char> replacement(value.size()+1,'\0');
+    std::copy(value.begin(),value.end(),replacement.begin());
+    clear();bytes_.swap(replacement);
+}
+std::string_view SecretString::view() const noexcept {return bytes_.empty()?std::string_view{}:std::string_view(bytes_.data(),bytes_.size()-1);}
+const char* SecretString::c_str() const noexcept {return bytes_.empty()?"":bytes_.data();}
+std::optional<std::string> NativeConnectRequest::validate() const {
+    if(auto error=video.validate())return error;
+    if(!psn){
+        if(!ps5)return "Local PS4 pairing is not supported";
+        if(!validHost(host))return "Invalid console host";
+        if(!psnToken.empty()||!psnDuid.empty())return "PSN credentials require PSN transport";
+        return {};
+    }
+    if(psnDuid.size()!=64||!std::all_of(psnDuid.begin(),psnDuid.end(),[](char c){return (c>='0'&&c<='9')||(c>='a'&&c<='f')||(c>='A'&&c<='F');}))return "Invalid PSN console identifier";
+    if(!ps5&&(video.codec!=Codec::H264||psnDuid!=std::string(64,'0')))return "PS4 requires H264 and the main-console identifier";
+    if(ps5&&psnDuid==std::string(64,'0'))return "Select a PS5 console";
+    const auto token=psnToken.view();
+    if(token.empty()||token.size()>8192||!std::all_of(token.begin(),token.end(),[](unsigned char c){return c>32&&c<127;}))return "Invalid PSN access token";
+    if(std::all_of(credentials.accountId.begin(),credentials.accountId.end(),[](auto v){return v==0;}))return "Missing PSN account identifier";
+    return {};
 }
 PairingCredentials::PairingCredentials(PairingCredentials&& other) noexcept { *this=std::move(other); }
 PairingCredentials& PairingCredentials::operator=(PairingCredentials&& other) noexcept {
@@ -56,9 +92,16 @@ struct ChiakiBackend::Impl {
     VideoProfile profile;
     std::string host;
     bool initialized=false,opusInitialized=false;
+    ChiakiHolepunchSession holepunch=nullptr; // Owned by session after chiaki_session_init.
     std::atomic<bool> active=false,started=false,connected=false;
     std::atomic<std::uint64_t> warnings=0,errors=0,videoCallbacks=0,audioCallbacks=0;
     std::atomic<int> quitReason=0,apiError=0;
+    std::atomic<unsigned> psnEvents=0,psnState=0,psnHttp=0;
+    std::atomic<unsigned> psnWsError=0; // operation and CURL code in one snapshot
+    std::array<int64_t,4> psnPhaseMs{-1,-1,-1,-1};
+    bool psnDiagnostics=false;
+    bool standbyRequested=false; // Owner thread only; one control command per session.
+    std::atomic<int> standbyResult=-1;
     std::atomic<uint64_t> callbackRejected=0,transportErrors=0,assemblyErrors=0;
     std::atomic<int64_t> serverTargetBitrate=-1;
     std::atomic<uint64_t> qualityReports=0;
@@ -74,6 +117,27 @@ struct ChiakiBackend::Impl {
 
     static void logCallback(ChiakiLogLevel level,const char* message,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
+        if(message&&level==CHIAKI_LOG_INFO&&self.active.load()){
+            const std::string_view text=message;
+            if(text=="VEYRA_STANDBY_SENT")self.standbyResult.store(CHIAKI_ERR_SUCCESS);
+            else if(text=="VEYRA_STANDBY_FAILED")self.standbyResult.store(CHIAKI_ERR_NETWORK);
+            if(text=="Session received entered Login PIN, forwarding to Ctrl")self.token.loginPinNativeProgress(3);
+            else if(text=="Ctrl received entered Login PIN, sending to console")self.token.loginPinNativeProgress(4);
+            else if(text=="Ctrl received Login message: success")self.token.loginPinAccepted();
+        }
+        if(self.psnDiagnostics&&message){
+            if(const auto event=parsePsnDiagnostic(message)){
+                self.psnEvents.fetch_or(1u<<(event->event-1));
+                // Progress flags are monotonic; concurrent callbacks can arrive
+                // in a different order from their native snapshots.
+                self.psnState.fetch_or(event->state);
+                if(event->http)self.psnHttp.store(event->http);
+            }
+            if(const auto error=parsePsnWebsocketError(message))
+                self.psnWsError.store((error->operation<<10)|error->curl);
+            // This upstream error is a fixed literal, not server content.
+            if(std::string_view(message)=="websocket_thread_func: Did not receive PONG in time.")self.psnEvents.fetch_or(1u<<10);
+        }
         if(message&&level==CHIAKI_LOG_VERBOSE){
             int target=-1;
             if(std::sscanf(message,"StreamConnection received connection quality: target_bitrate=%d,",&target)==1&&target>=0){self.serverTargetBitrate=target;++self.qualityReports;}
@@ -93,7 +157,8 @@ struct ChiakiBackend::Impl {
         if(!event||!self.active.load())return;
         switch(event->type){
         case CHIAKI_EVENT_CONNECTED:self.connected=true;self.token.connected();break;
-        case CHIAKI_EVENT_LOGIN_PIN_REQUEST:self.token.loginPinRequired();break;
+        case CHIAKI_EVENT_LOGIN_PIN_REQUEST:self.token.loginPinRequired(event->login_pin_request.pin_incorrect);break;
+        case CHIAKI_EVENT_HOLEPUNCH:self.token.dataChannelConnecting(!event->data_holepunch.finished);break;
         case CHIAKI_EVENT_QUIT:
             self.connected=false;self.quitReason=static_cast<int>(event->quit.reason);
             // A remote termination is not a successful decoded EOF.
@@ -163,7 +228,21 @@ struct ChiakiBackend::Impl {
             if(self.token.audio(std::move(block))) self.audioDiscontinuity=false;
         }catch(...){self.apiError=-1002;self.token.failed(-1002);}
     }
-    BackendResult record(ChiakiErrorCode code,const char* name){apiError=static_cast<int>(code);return result(code,name);}
+    BackendResult record(ChiakiErrorCode code,const char* name,bool includePsn=false){
+        apiError=static_cast<int>(code);auto out=result(code,name);
+        if(psnDiagnostics&&includePsn){
+            const auto events=psnEvents.load(),state=psnState.load();
+            const auto wsError=psnWsError.load();
+            std::ostringstream text;
+            text<<"create_ms="<<psnPhaseMs[0]<<" offer_ms="<<psnPhaseMs[1]<<" start_ms="<<psnPhaseMs[2]<<" ctrl_ms="<<psnPhaseMs[3]
+                <<" events="<<events<<" state="<<state<<" last_http="<<psnHttp.load()
+                <<" console_joined="<<bool(state&(1u<<6))<<" custom_data="<<bool(state&(1u<<7))
+                <<" ws_finished="<<bool(events&(1u<<9))<<" ws_pong_timeout="<<bool(events&(1u<<10))
+                <<" ws_op="<<(wsError>>10)<<" ws_curl="<<(wsError&1023u);
+            out.diagnostics=text.str();
+        }
+        return out;
+    }
     bool onOwner()const noexcept{return owner==std::this_thread::get_id();}
 };
 ChiakiBackend::ChiakiBackend()=default;
@@ -179,17 +258,49 @@ ChiakiBackend::~ChiakiBackend(){
         }
     }catch(...){if(p_){p_->active=false;(void)p_.release();}}
 }
-BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionInbox::Token token,bool discardMedia){
+BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionInbox::Token token,bool discardMedia,std::stop_token cancel){
     if(p_)return {false,-1100,"already_initialized"};
-    if(!validHost(request.host)||request.video.validate()||token.generation()==0)return {false,-1101,"validate_connect"};
+    if(request.validate()||token.generation()==0)return {false,-1101,"validate_connect"};
+    if(cancel.stop_requested())return result(CHIAKI_ERR_CANCELED,"connect_canceled");
     auto init=initializeChiaki();if(!init.ok)return init;
     p_=std::make_unique<Impl>(std::move(token));auto& s=*p_;s.host=request.host;s.profile=request.video;
     s.discardMedia=discardMedia;
+    s.psnDiagnostics=request.psn;
     // Verbose formatting has per-packet overhead: enable only for explicit diagnostics.
     // Callback above whitelists numeric quality fields and never forwards raw text.
     const bool qualityTrace=std::getenv("VEYRA_TEST_PS5_QUALITY_TRACE")!=nullptr;
-    chiaki_log_init(&s.log,CHIAKI_LOG_WARNING|CHIAKI_LOG_ERROR|(qualityTrace?CHIAKI_LOG_VERBOSE:0),Impl::logCallback,&s);
-    ChiakiConnectInfo info{};info.ps5=true;info.host=s.host.c_str();
+    // INFO carries fixed PIN acknowledgements for LAN as well as PSN. Raw log
+    // text remains filtered by logCallback; no payload/hexdump is forwarded.
+    chiaki_log_init(&s.log,CHIAKI_LOG_WARNING|CHIAKI_LOG_ERROR|CHIAKI_LOG_INFO|(qualityTrace?CHIAKI_LOG_VERBOSE:0),Impl::logCallback,&s);
+    if(request.psn){
+        // STUN/candidate negotiation works without changing router mappings.
+        // UPnP discovery is optional and is deliberately not needed for PSN login.
+        s.holepunch=chiaki_holepunch_session_init(request.psnToken.c_str(),&s.log);
+        if(!s.holepunch){p_.reset();return result(CHIAKI_ERR_MEMORY,"psn_session_init");}
+        ChiakiErrorCode code=CHIAKI_ERR_SUCCESS;const char* operation="psn_session_create";
+        {
+            // The callback is destroyed before session_init takes ownership (and may free it).
+            std::stop_callback interrupt(cancel,[&s]{chiaki_holepunch_main_thread_cancel(s.holepunch,true);});
+            std::array<uint8_t,32> duid{};
+            const auto hex=[](char c)->unsigned{return c<='9'?c-'0':(c|32)-'a'+10;};
+            for(size_t i=0;i<duid.size();++i)duid[i]=uint8_t(hex(request.psnDuid[i*2])*16+hex(request.psnDuid[i*2+1]));
+            const auto timed=[&](size_t phase,auto call){
+                const auto begin=std::chrono::steady_clock::now();const auto value=call();
+                s.psnPhaseMs[phase]=std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now()-begin).count();return value;
+            };
+            if(!cancel.stop_requested())code=timed(0,[&]{return chiaki_holepunch_session_create(s.holepunch);});else code=CHIAKI_ERR_CANCELED;
+            if(code==CHIAKI_ERR_SUCCESS&&!cancel.stop_requested()){operation="psn_create_offer";code=timed(1,[&]{return holepunch_session_create_offer(s.holepunch);});}
+            if(code==CHIAKI_ERR_SUCCESS&&!cancel.stop_requested()){operation="psn_session_start";code=timed(2,[&]{return chiaki_holepunch_session_start(s.holepunch,duid.data(),request.ps5?CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS5:CHIAKI_HOLEPUNCH_CONSOLE_TYPE_PS4);});}
+            if(code==CHIAKI_ERR_SUCCESS&&!cancel.stop_requested()){operation="psn_punch_control";code=timed(3,[&]{return chiaki_holepunch_session_punch_hole(s.holepunch,CHIAKI_HOLEPUNCH_PORT_TYPE_CTRL);});}
+        }
+        if(cancel.stop_requested())code=CHIAKI_ERR_CANCELED;
+        if(code!=CHIAKI_ERR_SUCCESS){
+            auto out=s.record(code,operation,true);s.token.failed(out.code);
+            chiaki_holepunch_main_thread_cancel(s.holepunch,true);chiaki_holepunch_session_fini(s.holepunch);s.holepunch=nullptr;
+            p_.reset();return out;
+        }
+    }
+    ChiakiConnectInfo info{};info.ps5=request.ps5;info.host=s.host.c_str();info.holepunch_session=s.holepunch;
     std::memcpy(info.regist_key,request.credentials.registrationKey.data(),request.credentials.registrationKey.size());
     std::memcpy(info.morning,request.credentials.sessionKey.data(),request.credentials.sessionKey.size());
     std::memcpy(info.psn_account_id,request.credentials.accountId.data(),request.credentials.accountId.size());
@@ -198,12 +309,15 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
         request.video.fps==30?CHIAKI_VIDEO_FPS_PRESET_30:CHIAKI_VIDEO_FPS_PRESET_60);
     info.video_profile.codec=request.video.codec==Codec::H264?CHIAKI_CODEC_H264:request.video.codec==Codec::H265Hdr?CHIAKI_CODEC_H265_HDR:CHIAKI_CODEC_H265;
     info.video_profile.bitrate=request.video.bitrateKbps;
-    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;info.enable_dualsense=!request.viewOnly||discardMedia;
+    // Base PS4 only offers 720p; the upstream console-type response selects that
+    // profile while PS4 Pro can retain 1080p. Decoded dimensions remain authoritative.
+    info.video_profile_auto_downgrade=!request.ps5;info.enable_keyboard=false;info.enable_dualsense=request.ps5&&(!request.viewOnly||discardMedia);
     info.auto_regist=false;info.packet_loss_max=0.05;info.enable_idr_on_fec_failure=true;
     const auto code=chiaki_session_init(&s.session,&info,&s.log);
     wipe(info.regist_key,sizeof(info.regist_key));wipe(info.morning,sizeof(info.morning));wipe(info.psn_account_id,sizeof(info.psn_account_id));
-    if(code!=CHIAKI_ERR_SUCCESS){auto out=s.record(code,"chiaki_session_init");s.token.failed(out.code);p_.reset();return out;}
+    if(code!=CHIAKI_ERR_SUCCESS){auto out=s.record(code,"chiaki_session_init",true);s.token.failed(out.code);p_.reset();return out;}
     s.initialized=true;
+    if(cancel.stop_requested()){(void)stop();return result(CHIAKI_ERR_CANCELED,"connect_canceled");}
     if(discardMedia){ChiakiAudioSink sink{};sink.user=&s;sink.frame_cb=Impl::discardAudio;chiaki_session_set_audio_sink(&s.session,&sink);}
     else{
         chiaki_opus_decoder_init(&s.opus,&s.log);s.opusInitialized=true;
@@ -216,14 +330,15 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
     chiaki_session_set_veyra_video_sample_cb(&s.session,Impl::videoCallback,&s);
     s.active=true;
     const auto startCode=chiaki_session_start(&s.session);
-    if(startCode!=CHIAKI_ERR_SUCCESS){auto out=s.record(startCode,"chiaki_session_start");s.active=false;s.token.failed(out.code);(void)stop();return out;}
-    s.started=true;return s.record(startCode,"chiaki_session_start");
+    if(startCode!=CHIAKI_ERR_SUCCESS){auto out=s.record(startCode,"chiaki_session_start",true);s.active=false;s.token.failed(out.code);(void)stop();return out;}
+    s.started=true;return s.record(startCode,"chiaki_session_start",true);
 }
 BackendResult ChiakiBackend::stop(){
     if(!p_)return {true,0,"already_stopped"};
     auto& s=*p_;
     if(!s.onOwner())return {false,-1102,"wrong_owner_thread"};
     s.active=false;
+    if(s.holepunch)chiaki_holepunch_main_thread_cancel(s.holepunch,true);
     ChiakiErrorCode stopResult=CHIAKI_ERR_SUCCESS;
     if(s.started){
         ChiakiControllerState idle;chiaki_controller_state_set_idle(&idle);
@@ -238,6 +353,8 @@ BackendResult ChiakiBackend::stop(){
     }
     if(s.opusInitialized){chiaki_opus_decoder_fini(&s.opus);s.opusInitialized=false;}
     if(s.initialized){chiaki_session_fini(&s.session);s.initialized=false;}
+    else if(s.holepunch)chiaki_holepunch_session_fini(s.holepunch);
+    s.holepunch=nullptr;
     wipe(&s.session,sizeof(s.session));
     p_.reset();return result(stopResult,"stop_join_fini");
 }
@@ -248,7 +365,30 @@ BackendResult ChiakiBackend::requestIdr(){
 BackendResult ChiakiBackend::submitLoginPin(std::string_view pin){
     if(!p_||!p_->onOwner()||!p_->started)return {false,-1104,"pin_without_session"};
     if(pin.empty()||pin.size()>8||!std::all_of(pin.begin(),pin.end(),[](char c){return c>='0'&&c<='9';}))return {false,-1105,"invalid_login_pin"};
-    return p_->record(chiaki_session_set_login_pin(&p_->session,reinterpret_cast<const std::uint8_t*>(pin.data()),pin.size()),"chiaki_session_set_login_pin");
+    if(!p_->token.loginPinSubmitting())return {false,-1107,"pin_not_requested"};
+    const auto code=chiaki_session_set_login_pin(&p_->session,reinterpret_cast<const std::uint8_t*>(pin.data()),pin.size());
+    p_->token.loginPinSubmissionResult(static_cast<int>(code));
+    return p_->record(code,"chiaki_session_set_login_pin");
+}
+BackendResult ChiakiBackend::requestStandby(std::stop_token stop){
+    if(!p_||!p_->onOwner()||!p_->started||!p_->connected)return {false,-1110,"standby_without_connected_session"};
+    if(stop.stop_requested())return result(CHIAKI_ERR_CANCELED,"standby_canceled");
+    auto& s=*p_;
+    if(!s.standbyRequested){
+        s.standbyResult.store(-1);
+        s.standbyRequested=true;
+        const auto code=chiaki_session_goto_bed(&s.session);
+        if(code!=CHIAKI_ERR_SUCCESS){s.standbyRequested=false;return s.record(code,"standby_queue");}
+    }
+    const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(3);
+    while(s.standbyResult.load()<0){
+        if(stop.stop_requested())return result(CHIAKI_ERR_CANCELED,"standby_canceled");
+        if(std::chrono::steady_clock::now()>=deadline)return result(CHIAKI_ERR_TIMEOUT,"standby_send_timeout");
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    const auto code=static_cast<ChiakiErrorCode>(s.standbyResult.load());
+    if(code!=CHIAKI_ERR_SUCCESS)s.standbyRequested=false; // The completed failure is safe to retry; an unconfirmed timeout is not.
+    return s.record(code,"standby_send");
 }
 BackendResult ChiakiBackend::submitController(const ControllerState& state){
     if(!p_||!p_->onOwner()||!p_->started)return {false,-1106,"controller_without_session"};

@@ -21,13 +21,22 @@ public:
         bool ratesReady=false;
         bool hardwareDecode=false,decodeFallback=false,decodeConfirmed=false;
         VideoProfile requestedProfile;
+        LoginPinStatus loginPinStatus=LoginPinStatus::None;
+        int loginPinError=0;
+        unsigned loginPinRequests=0,loginPinStage=0;
+        bool dataConnecting=false;
     };
     class Token {
     public:
         bool video(VideoSample sample) const noexcept;
         bool audio(PcmBlock block) const noexcept;
         void connected() const noexcept;
-        void loginPinRequired() const noexcept;
+        void loginPinRequired(bool incorrect=false) const noexcept;
+        bool loginPinSubmitting() const noexcept;
+        void loginPinSubmissionResult(int error) const noexcept;
+        void loginPinNativeProgress(unsigned stage) const noexcept; // 3: session forwards; 4: ctrl attempts send.
+        void loginPinAccepted() const noexcept;
+        void dataChannelConnecting(bool connecting) const noexcept;
         void failed(int code) const noexcept;
         Generation generation()const noexcept{return generation_;}
     private:

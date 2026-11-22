@@ -23,6 +23,7 @@ Item {
     }
 
     function open(key) {
+        if (ps5PinDialog.promptActive && key !== "ps5-pin") return
         if (key === "save") saveDialog.resetForOpen()
         if (key === "manage") {
             manageDialog.mode = veyra.nodeMode === 1 ? "node" : "list"
@@ -31,7 +32,10 @@ Item {
         veyra.logUi("ui-dialog", "open " + key + " (was " + (host.dialog || "none") + ")")
         host.dialog = key
     }
-    function close() { host.dialog = "" }
+    function close() {
+        if (host.dialog === "ps5-pin") { ps5PinDialog.cancel(); return }
+        host.dialog = ""
+    }
 
     signal startPs5()
     signal startMoonlight()
@@ -92,6 +96,12 @@ Item {
     Ps5SourceDialog {
         id: ps5Dialog
         dialogHost: host    }
+    Ps5LoginPinDialog {
+        id: ps5PinDialog
+        dialogHost: host
+        backend: veyra
+    }
+    Ps5StopDialog { dialogHost: host; backend: veyra }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
     // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once

@@ -433,7 +433,7 @@ FRUC was evaluated during development and has been removed from the product. No 
 
 The optional `VEYRA_ENABLE_REMOTEPLAY` build compiles chiaki-ng at
 `0e16950165f06e5c3291537c2eeba6e852be7120` from https://github.com/streetpea/chiaki-ng,
-with the two reviewed patches in `scripts/remoteplay/patches/`. Chiaki code and
+with the reviewed patches listed in `scripts/remoteplay/dependency-lock.json`. Chiaki code and
 these derived patches retain AGPL-3.0-only with the upstream OpenSSL exception;
 see `licenses/remoteplay/CHIAKI_AGPL3_OPENSSL.txt`. The metadata patch was adapted
 from the user-supplied Code 01 change description and checked against this pin.
@@ -451,7 +451,7 @@ Veyra calls the pinned Chiaki orientation tracker API (AGPL-3.0-only with OpenSS
 
 ### PSN browser authorization adapter (2026-09-12)
 
-Historical attribution: this adapter was removed on 2026-11-11. Current Veyra opens the user-selected PSNTools website for manual Account ID lookup; it does not implement the old OAuth/token flow. Existing Chiaki protocol and dependency notices below still apply.
+Historical attribution: the original adapter was removed upstream on 2026-11-11. This fork adds a new browser authorization and PSN remote connection implementation described below; manual PSNTools Account ID lookup remains available for LAN pairing.
 
 `src/remoteplay/PsnAuth.cpp` adapts the OAuth request contract and public client identifiers from chiaki-ng, commit `0e16950165f06e5c3291537c2eeba6e852be7120`, `gui/src/psnaccountid.cpp`, `gui/include/psnaccountid.h`, and `gui/src/psntoken.cpp`. Upstream credits the Account ID script to grill2010. License: AGPL-3.0-only with the upstream OpenSSL exception. The Windows HTTP, protected storage and UI integration are Veyra code. This is an unofficial client, not Sony endorsement. json-c remains an existing Chiaki dependency; its license/notice must remain in binary distributions.
 
@@ -1235,3 +1235,7 @@ Linux OBS filter work is adopted from andreanjoes PR #96 at
 validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
 centres and preserves premultiplied transparency. OBS's public colour-filter
 shader was consulted for the alpha contract; no OBS DLL is bundled here.
+
+### PSN remote streaming adapter in dreamgyf/Veyra-NRVideo (2026-11-21)
+
+`src/ui/PsnService.cpp` uses the public client identity, OAuth scopes, authorization/token endpoints and device-list JSON contract from chiaki-ng at `0e16950165f06e5c3291537c2eeba6e852be7120` (`gui/include/psnaccountid.h`, `gui/src/psnaccountid.cpp`, `gui/src/psntoken.cpp`, `lib/src/remote/holepunch.c`). Upstream credits the Account ID script to grill2010. Authentication state validation, Qt asynchronous requests, Windows DPAPI storage and Veyra UI integration were implemented for this fork. The existing Chiaki AGPL-3.0-only/OpenSSL-exception attribution applies to the combined program and derived protocol work. Additional cancellation patches under `scripts/remoteplay/patches/` retain that same license; exact pins and patch provenance are recorded in `dependency-lock.json`. No user credential, NVIDIA SDK or runtime binary is included in the Git changes.

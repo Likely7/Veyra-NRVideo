@@ -1,0 +1,97 @@
+diff --git a/lib/include/chiaki/remote/rudp.h b/lib/include/chiaki/remote/rudp.h
+index 8ff4d01..767dc7d 100644
+--- a/lib/include/chiaki/remote/rudp.h
++++ b/lib/include/chiaki/remote/rudp.h
+@@ -63,7 +63,7 @@ struct rudp_message_t
+ /**
+  * Create rudp instance
+  *
+- * @param[in] sock Pointer to a sock to use for Rudp messages
++ * @param[in,out] sock Socket to use for RUDP messages; invalidated on successful ownership transfer.
+  * @param[in] log The ChiakiLog to use for log messages
+  * @return The initialized rudp instance
+ */
+diff --git a/lib/src/remote/holepunch.c b/lib/src/remote/holepunch.c
+index 0035c05..781917a 100644
+--- a/lib/src/remote/holepunch.c
++++ b/lib/src/remote/holepunch.c
+@@ -1808,6 +1808,9 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+         chiaki_mutex_unlock(&session->stop_mutex);
+         chiaki_stop_pipe_stop(&session->select_pipe);
+         chiaki_thread_join(&session->ws_thread, NULL);
++#ifdef _WIN32
++        CloseHandle(session->ws_thread.thread);
++#endif
+         session->ws_thread_started = false;
+     }
+     if(session->upnp_thread_running)
+@@ -1843,6 +1846,12 @@ CHIAKI_EXPORT void chiaki_holepunch_session_fini(Session* session)
+         CHIAKI_SOCKET_CLOSE(session->ipv4_sock);
+     if(!CHIAKI_SOCKET_IS_INVALID(session->ipv6_sock))
+         CHIAKI_SOCKET_CLOSE(session->ipv6_sock);
++    // RUDP/Takion invalidate these slots when they take ownership. Until then
++    // cancellation or session-init failure leaves the sockets with holepunch.
++    if(!CHIAKI_SOCKET_IS_INVALID(session->ctrl_sock))
++        CHIAKI_SOCKET_CLOSE(session->ctrl_sock);
++    if(!CHIAKI_SOCKET_IS_INVALID(session->data_sock))
++        CHIAKI_SOCKET_CLOSE(session->data_sock);
+     if (session->oauth_header)
+     {
+         volatile char *secret = session->oauth_header;
+diff --git a/lib/src/remote/rudp.c b/lib/src/remote/rudp.c
+index a4f5067..43a1c75 100644
+--- a/lib/src/remote/rudp.c
++++ b/lib/src/remote/rudp.c
+@@ -61,6 +61,7 @@ CHIAKI_EXPORT RudpInstance *chiaki_rudp_init(chiaki_socket_t *sock, ChiakiLog *l
+         CHIAKI_LOGE(rudp->log, "Rudp failed initializing, failed creating send buffer");
+         goto cleanup_stop_pipe;
+     }
++    *sock = CHIAKI_INVALID_SOCKET; // Ownership transfers only after successful initialization.
+     return rudp;
+ 
+ cleanup_stop_pipe:
+diff --git a/lib/src/takion.c b/lib/src/takion.c
+index 4e653a2..1b4c46e 100644
+--- a/lib/src/takion.c
++++ b/lib/src/takion.c
+@@ -245,16 +245,20 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, Chiaki
+ 	if(err != CHIAKI_ERR_SUCCESS)
+ 	{
+ 		CHIAKI_LOGE(takion->log, "Takion failed to create stop pipe");
++        ret = err;
+ 		goto error_seq_num_local_mutex;
+ 	}
+ 
+ 	if(sock)
+ 	{
+ 		takion->sock = *sock;
++		if(info->close_socket)
++			*sock = CHIAKI_INVALID_SOCKET; // Own on success and on all subsequent error paths.
+ 		err = takion_read_extra_sock_messages(takion);
+ 		if(err != CHIAKI_ERR_SUCCESS && err != CHIAKI_ERR_TIMEOUT)
+ 		{
+ 			CHIAKI_LOGE(takion->log, "Takion had problem reading extra messages from socket using PSN Connection with error: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
++			ret = err;
+ 			goto error_sock;
+ 		}
+ 		const int rcvbuf_val = takion->a_rwnd;
+@@ -438,13 +442,18 @@ CHIAKI_EXPORT ChiakiErrorCode chiaki_takion_connect(ChiakiTakion *takion, Chiaki
+ 	}
+ 
+ 	err = chiaki_thread_create(&takion->thread, takion_thread_func, takion);
++	if(err != CHIAKI_ERR_SUCCESS)
++	{
++		ret = err;
++		goto error_sock;
++	}
+ 
+ 	chiaki_thread_set_name(&takion->thread, "Chiaki Takion");
+ 
+ 	return CHIAKI_ERR_SUCCESS;
+ 
+ error_sock:
+-	if(!CHIAKI_SOCKET_IS_INVALID(takion->sock))
++	if((!sock || info->close_socket) && !CHIAKI_SOCKET_IS_INVALID(takion->sock))
+ 	{
+ 		CHIAKI_SOCKET_CLOSE(takion->sock);
+ 		takion->sock = CHIAKI_INVALID_SOCKET;

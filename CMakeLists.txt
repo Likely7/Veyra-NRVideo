@@ -1291,6 +1291,9 @@ endif()
 # separate small library rather than into veyra_engine: the product build must
 # never depend on Qt being installed.
 if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
+  if(VEYRA_ENABLE_REMOTEPLAY)
+    include(cmake/VeyraPsnService.cmake)
+  endif()
   # The 日落 palette's startup music (StartupMusic.h): Media Foundation's media engine.
   add_library(veyra_startup_music STATIC src/ui/StartupMusic.cpp include/veyra/ui/StartupMusic.h)
   set_target_properties(veyra_startup_music PROPERTIES AUTOMOC ON)
@@ -1969,6 +1972,7 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
       target_sources(veyra_qml_bridge PRIVATE src/remoteplay/ControllerInput.cpp)
       target_link_libraries(veyra_qml_bridge PUBLIC $<TARGET_LINKER_FILE:SDL3::SDL3-static>)
       target_link_libraries(veyra_qml_bridge PRIVATE SDL3::Headers)
+      target_link_libraries(veyra_qml_bridge PUBLIC veyra_psn_service)
     endif()
     add_executable(veyra_remoteplay_source_tests tests/remoteplay/SourceTests.cpp)
     target_compile_features(veyra_remoteplay_source_tests PRIVATE cxx_std_20)

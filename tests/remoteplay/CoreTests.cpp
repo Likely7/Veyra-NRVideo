@@ -7,6 +7,7 @@
 #include "veyra/remoteplay/InputGate.h"
 #include "veyra/remoteplay/SessionInbox.h"
 #include "veyra/remoteplay/StreamRecovery.h"
+#include "veyra/remoteplay/PsnDiagnostics.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/FgRecoveryBudget.h"
 #include <atomic>
@@ -204,6 +205,89 @@ TEST(recovery_intermittent_frames_do_not_renew_budget){
     StreamRecovery r;using A=StreamRecovery::Action;r.beginAttempt(0);r.frame(100);CHECK(r.poll(6100,false,false)==A::Reconnect);r.beginAttempt(7000);
     for(int64_t t=7100;t<150000;t+=1000)CHECK(!r.frame(t));
     CHECK(r.episodeRetries()==1);CHECK(r.reconnects()==1);
+}
+TEST(recovery_psn_handshake_grace_does_not_relax_stream_outages){
+    StreamRecovery remote(120000);using A=StreamRecovery::Action;remote.beginAttempt(0);
+    CHECK(remote.poll(30000,false,false)==A::Wait);CHECK(remote.poll(119999,false,false)==A::Wait);
+    CHECK(remote.poll(120000,false,false)==A::Fail);
+    remote.beginAttempt(200000);remote.frame(201000);
+    CHECK(remote.poll(202000,false,false)==A::Keyframe);
+    CHECK(remote.poll(207000,false,false)==A::Reconnect);
+    StreamRecovery rejected(120000);rejected.beginAttempt(0);
+    CHECK(rejected.poll(1,false,true,false)==A::Fail);
+}
+TEST(psn_diagnostics_accept_only_complete_bounded_numeric_markers){
+    const auto event=parsePsnDiagnostic("VEYRA_PSN_DIAG event=9 state=214 http=200");
+    CHECK(event&&event->event==9&&event->state==214&&event->http==200);
+    CHECK(parsePsnDiagnostic("VEYRA_PSN_DIAG event=10 state=524287 http=0"));
+    for(const auto* bad:{"Bearer synthetic-secret","Response Body: VEYRA_PSN_DIAG event=9 state=1 http=200",
+            "VEYRA_PSN_DIAG event=9 state=1 http=200 token=synthetic-secret","VEYRA_PSN_DIAG event=11 state=1 http=200",
+            "VEYRA_PSN_DIAG event=9 state=524288 http=200","VEYRA_PSN_DIAG event=9 state=1 http=600",
+            "VEYRA_PSN_DIAG event=-1 state=1 http=0","VEYRA_PSN_DIAG event=99999999999999999999999 state=1 http=200"})
+        CHECK(!parsePsnDiagnostic(bad));
+    const auto ws=parsePsnWebsocketError("VEYRA_PSN_WS op=3 curl=28");
+    CHECK(ws&&ws->operation==3&&ws->curl==28);
+    CHECK(parsePsnWebsocketError("VEYRA_PSN_WS op=6 curl=999"));
+    for(const auto* bad:{"Response Body: VEYRA_PSN_WS op=3 curl=28","VEYRA_PSN_WS op=3 curl=28 token=synthetic-secret",
+            "VEYRA_PSN_WS op=0 curl=28","VEYRA_PSN_WS op=7 curl=28","VEYRA_PSN_WS op=-1 curl=28",
+            "VEYRA_PSN_WS op=3 curl=0","VEYRA_PSN_WS op=3 curl=1000","VEYRA_PSN_WS op=3 curl=-1",
+            "VEYRA_PSN_WS op=3 curl=999999999999999999999999","VEYRA_PSN_WS op=3 curl=28\n"})
+        CHECK(!parsePsnWebsocketError(bad));
+}
+TEST(login_pin_requires_pending_request_and_prevents_duplicate_send){
+    SessionInbox q;auto t=q.begin(monotonic100ns());
+    CHECK(!t.loginPinSubmitting());CHECK(q.snapshot().loginPinStatus==LoginPinStatus::None);
+    t.loginPinRequired();CHECK(q.snapshot().loginPinRequests==1);
+    CHECK(q.snapshot().loginPinStatus==LoginPinStatus::Required);
+    CHECK(t.loginPinSubmitting());CHECK(!t.loginPinSubmitting());
+    t.loginPinNativeProgress(3);t.loginPinNativeProgress(4);t.loginPinNativeProgress(3);
+    t.loginPinSubmissionResult(0);
+    auto s=q.snapshot();CHECK(s.loginPinStatus==LoginPinStatus::Sent&&s.loginPinStage==4);
+    CHECK(s.state==SessionState::LoginPinRequired);CHECK(!t.loginPinSubmitting());
+    t.loginPinAccepted();s=q.snapshot();
+    CHECK(s.loginPinStatus==LoginPinStatus::Accepted&&s.loginPinStage==5);
+    CHECK(s.state==SessionState::Connecting);CHECK(!t.loginPinSubmitting());
+}
+TEST(login_pin_passwordless_login_has_no_pin_acceptance){
+    SessionInbox q;auto t=q.begin(monotonic100ns());t.loginPinAccepted();
+    const auto s=q.snapshot();CHECK(s.state==SessionState::Connecting);
+    CHECK(s.loginPinStatus==LoginPinStatus::None&&s.loginPinStage==0&&s.loginPinRequests==0);
+}
+TEST(login_pin_local_failure_can_retry_without_new_console_request){
+    SessionInbox q;auto t=q.begin(monotonic100ns());t.loginPinRequired();CHECK(t.loginPinSubmitting());
+    t.loginPinSubmissionResult(12);auto s=q.snapshot();
+    CHECK(s.loginPinStatus==LoginPinStatus::SendFailed&&s.loginPinError==12);
+    CHECK(t.loginPinSubmitting());CHECK(q.snapshot().loginPinError==0);
+    t.loginPinSubmissionResult(0);CHECK(q.snapshot().loginPinStatus==LoginPinStatus::Sent);
+    CHECK(q.snapshot().loginPinRequests==1);
+}
+TEST(login_pin_callback_result_survives_late_submission_return){
+    SessionInbox q;auto t=q.begin(monotonic100ns());t.loginPinRequired();CHECK(t.loginPinSubmitting());
+    t.loginPinRequired(true);t.loginPinSubmissionResult(0);auto s=q.snapshot();
+    CHECK(s.loginPinStatus==LoginPinStatus::Incorrect&&s.loginPinStage==6&&s.loginPinRequests==2);
+    t.loginPinNativeProgress(4);CHECK(q.snapshot().loginPinStatus==LoginPinStatus::Incorrect);
+    CHECK(t.loginPinSubmitting());t.loginPinAccepted();t.loginPinSubmissionResult(12);
+    s=q.snapshot();CHECK(s.loginPinStatus==LoginPinStatus::Accepted&&s.loginPinError==0);
+    CHECK(s.state==SessionState::Connecting);
+}
+TEST(login_pin_data_handshake_does_not_claim_console_acceptance){
+    SessionInbox q;auto t=q.begin(monotonic100ns());t.loginPinRequired();CHECK(t.loginPinSubmitting());
+    t.dataChannelConnecting(true);t.loginPinSubmissionResult(0);auto s=q.snapshot();
+    CHECK(s.state==SessionState::Connecting&&s.dataConnecting);
+    CHECK(s.loginPinStatus==LoginPinStatus::Sent);CHECK(!t.loginPinSubmitting());
+    t.dataChannelConnecting(false);CHECK(!q.snapshot().dataConnecting);
+    CHECK(q.snapshot().loginPinStatus==LoginPinStatus::Sent);
+    t.connected();CHECK(q.snapshot().state==SessionState::WaitingFirstFrame);
+}
+TEST(login_pin_stale_callbacks_cannot_change_new_session){
+    SessionInbox q;auto old=q.begin(monotonic100ns());old.loginPinRequired();CHECK(old.loginPinSubmitting());
+    q.invalidate();old.loginPinAccepted();CHECK(q.snapshot().state==SessionState::Stopping);
+    q.finishStop();auto current=q.begin(monotonic100ns());
+    old.loginPinRequired(true);old.loginPinSubmissionResult(12);old.loginPinNativeProgress(4);
+    old.loginPinAccepted();old.dataChannelConnecting(true);CHECK(!old.loginPinSubmitting());
+    auto s=q.snapshot();CHECK(s.generation==current.generation());
+    CHECK(s.loginPinStatus==LoginPinStatus::None&&s.loginPinRequests==0&&s.loginPinStage==0);
+    CHECK(s.loginPinError==0&&!s.dataConnecting&&s.state==SessionState::Connecting);
 }
 int main(int argc,char**argv){
     std::string filter;

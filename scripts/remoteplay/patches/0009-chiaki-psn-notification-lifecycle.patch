@@ -1,0 +1,245 @@
+diff --git a/lib/src/remote/holepunch.c b/lib/src/remote/holepunch.c
+--- a/lib/src/remote/holepunch.c
++++ b/lib/src/remote/holepunch.c
+@@ -350,6 +350,7 @@
+     ChiakiThread ws_thread;
+     bool ws_thread_started;
+     bool ws_thread_finished; /* state_mutex */
++    bool ws_notifications_finished; /* notif_mutex */
+     NotificationQueue* ws_notification_queue;
+     bool ws_thread_should_stop;
+     bool ws_open;
+@@ -393,6 +394,8 @@
+ static ChiakiErrorCode http_create_session(Session *session);
+ static ChiakiErrorCode http_check_session(Session *session, bool viewurl);
+ static ChiakiErrorCode http_start_session(Session *session);
++static void psn_diagnostic(Session *session, unsigned event, unsigned http_status);
++static void psn_http_accepted(Session *session, CURL *curl, unsigned event);
+ static ChiakiErrorCode http_send_session_message(Session *session, SessionMessage *msg, bool short_msg);
+ static ChiakiErrorCode http_ps4_session_wakeup(Session *session);
+ static ChiakiErrorCode get_client_addr_local(Session *session, Candidate *local_console_candidate, char *out, size_t out_len);
+@@ -756,6 +759,7 @@
+     session->ws_open = false;
+     session->ws_thread_started = false;
+     session->ws_thread_finished = false;
++    session->ws_notifications_finished = false;
+     session->online_id = NULL;
+     memset(&session->session_id, 0, sizeof(session->session_id));
+     memset(&session->console_uid, 0, sizeof(session->console_uid));
+@@ -1116,6 +1120,7 @@
+         }
+ 
+         session->state |= SESSION_STATE_CONSOLE_JOINED;
++        CHIAKI_LOGI(session->log, "VEYRA_PSN_DIAG event=%u state=%u http=%u", 3u, (unsigned)session->state, 0u);
+     } else if (notif->type == NOTIFICATION_TYPE_CUSTOM_DATA1_UPDATED)
+     {
+         json_object *custom_data1_json = NULL;
+@@ -1142,6 +1147,7 @@
+             goto unlock;
+         }
+         session->state |= SESSION_STATE_CUSTOMDATA1_RECEIVED;
++        CHIAKI_LOGI(session->log, "VEYRA_PSN_DIAG event=%u state=%u http=%u", 4u, (unsigned)session->state, 0u);
+     }
+     else
+     {
+@@ -1234,6 +1240,7 @@
+         if (err == CHIAKI_ERR_TIMEOUT)
+         {
+             CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Timed out waiting for holepunch session start notifications.");
++            psn_diagnostic(session, 9, 0);
+             return CHIAKI_ERR_HOST_DOWN;
+         }
+         else if (err == CHIAKI_ERR_CANCELED)
+@@ -1244,7 +1251,7 @@
+         else if (err != CHIAKI_ERR_SUCCESS)
+         {
+             CHIAKI_LOGE(session->log, "chiaki_holepunch_session_start: Failed to wait for holepunch session start notifications.");
+-            return CHIAKI_ERR_UNKNOWN;
++            return err;
+         }
+ 
+         assert(notif != NULL);
+@@ -1490,6 +1497,7 @@
+     session->state |= SESSION_STATE_DATA_SENT;
+     log_session_state(session);
+     chiaki_mutex_unlock(&session->state_mutex);
++    psn_http_accepted(session, curl, 2);
+ 
+ cleanup_json:
+     json_object_put(json);
+@@ -2164,6 +2172,63 @@
+     curl_easy_setopt(curl, CURLOPT_XFERINFODATA, session);
+ }
+ 
++static void psn_diagnostic(Session *session, unsigned event, unsigned http_status)
++{
++    chiaki_mutex_lock(&session->state_mutex);
++    const unsigned state = (unsigned)session->state;
++    chiaki_mutex_unlock(&session->state_mutex);
++    CHIAKI_LOGI(session->log, "VEYRA_PSN_DIAG event=%u state=%u http=%u",
++        event, state, http_status >= 100 && http_status <= 599 ? http_status : 0u);
++}
++
++static void psn_http_accepted(Session *session, CURL *curl, unsigned event)
++{
++    long status = 0;
++    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
++    psn_diagnostic(session, event, status >= 100 && status <= 599 ? (unsigned)status : 0u);
++}
++
++// Compute the terminal decision before publishing: the waiter owns and may free
++// notif immediately after notif_mutex is released. Match the upstream fix from
++// 1625cd640146fd25f2cce65eea3a33df79748757 without logging session identifiers.
++static bool publish_notification(Session *session, Notification *notif)
++{
++    bool session_deleted = false;
++    if(notif->type == NOTIFICATION_TYPE_SESSION_DELETED)
++    {
++        json_object *sid_json = NULL;
++        json_pointer_get(notif->json, "/body/data/sessionId", &sid_json);
++        const char *deleted_id = sid_json && json_object_is_type(sid_json, json_type_string)
++            ? json_object_get_string(sid_json) : NULL;
++        chiaki_mutex_lock(&session->state_mutex);
++        session_deleted = !deleted_id || !session->session_id[0]
++            || strcmp(deleted_id, session->session_id) == 0;
++        chiaki_mutex_unlock(&session->state_mutex);
++        psn_diagnostic(session, session_deleted ? 7 : 8, 0);
++    }
++    chiaki_mutex_lock(&session->notif_mutex);
++    enqueueNq(session->ws_notification_queue, notif);
++    chiaki_cond_signal(&session->notif_cond);
++    chiaki_mutex_unlock(&session->notif_mutex);
++    return session_deleted;
++}
++
++static void websocket_finished(Session *session)
++{
++    chiaki_mutex_lock(&session->state_mutex);
++    session->ws_open = false;
++    session->ws_thread_finished = true;
++    CHIAKI_LOGI(session->log, "VEYRA_PSN_DIAG event=%u state=%u http=%u", 10u, (unsigned)session->state, 0u);
++    chiaki_cond_signal(&session->state_cond);
++    chiaki_mutex_unlock(&session->state_mutex);
++    // Never nest state_mutex and notif_mutex. The waiter only needs its own
++    // condition predicate; a close before waiting must not lose the wakeup.
++    chiaki_mutex_lock(&session->notif_mutex);
++    session->ws_notifications_finished = true;
++    chiaki_cond_signal(&session->notif_cond);
++    chiaki_mutex_unlock(&session->notif_mutex);
++}
++
+ static void* websocket_thread_func(void *user) {
+     Session* session = (Session*) user;
+     chiaki_thread_set_affinity(CHIAKI_THREAD_NAME_HOLEPUNCH);
+@@ -2175,10 +2240,7 @@
+     if(!curl)
+     {
+         CHIAKI_LOGE(session->log, "Curl could not init");
+-        chiaki_mutex_lock(&session->state_mutex);
+-        session->ws_thread_finished = true;
+-        chiaki_cond_signal(&session->state_cond);
+-        chiaki_mutex_unlock(&session->state_mutex);
++        websocket_finished(session);
+         return NULL;
+     }
+     struct curl_slist *headers = NULL;
+@@ -2282,6 +2344,7 @@
+ 
+         if (expecting_pong && now - last_ping_sent > 5LL * SECOND_US)
+         {
++            psn_diagnostic(session, 6, 0);
+             CHIAKI_LOGE(session->log, "websocket_thread_func: Did not receive PONG in time.");
+             goto cleanup_json;
+         }
+@@ -2292,6 +2355,7 @@
+             if (res != CURLE_OK)
+             {
+                 CHIAKI_LOGE(session->log, "websocket_thread_func: Sending WebSocket PING failed with CURL error %s.", curl_easy_strerror(res));
++                psn_diagnostic(session, 6, 0);
+                 goto cleanup_json;
+             }
+             CHIAKI_LOGV(session->log, "websocket_thread_func: PING.");
+@@ -2321,6 +2385,7 @@
+             } else
+             {
+                 CHIAKI_LOGE(session->log, "websocket_thread_func: Receiving WebSocket frame failed with CURL error %s", curl_easy_strerror(res));
++                psn_diagnostic(session, 6, 0);
+                 goto cleanup_json;
+             }
+         }
+@@ -2345,6 +2410,7 @@
+         if (meta->flags & CURLWS_CLOSE)
+         {
+             CHIAKI_LOGE(session->log, "websocket_thread_func: WebSocket closed");
++            psn_diagnostic(session, 5, 0);
+             goto cleanup_json;
+         }
+         if (meta->flags & CURLWS_TEXT || meta->flags & CURLWS_BINARY)
+@@ -2405,12 +2471,7 @@
+                 }
+                 session_message_free(msg);
+             }
+-            ChiakiErrorCode mutex_err = chiaki_mutex_lock(&session->notif_mutex);
+-            assert(mutex_err == CHIAKI_ERR_SUCCESS);
+-            enqueueNq(session->ws_notification_queue, notif);
+-            chiaki_cond_signal(&session->notif_cond);
+-            chiaki_mutex_unlock(&session->notif_mutex);
+-            if (notif->type == NOTIFICATION_TYPE_SESSION_DELETED)
++            if (publish_notification(session, notif))
+             {
+                 CHIAKI_LOGI(session->log, "websocket_thread_func: Holepunch session was deleted on PSN server, exiting....");
+                 goto cleanup_json;
+@@ -2423,11 +2484,7 @@
+     free(buf);
+ cleanup:
+     curl_easy_cleanup(curl);
+-    chiaki_mutex_lock(&session->state_mutex);
+-    session->ws_open = false;
+-    session->ws_thread_finished = true;
+-    chiaki_cond_signal(&session->state_cond);
+-    chiaki_mutex_unlock(&session->state_mutex);
++    websocket_finished(session);
+ 
+     return NULL;
+ }
+@@ -3089,6 +3146,7 @@
+         goto cleanup;
+     }
+     CHIAKI_LOGV(session->log, "http_create_session: Received JSON:\n%s", response_data.data);
++    psn_http_accepted(session, curl, 1);
+     json_object *json = json_tokener_parse_ex(tok, response_data.data, response_data.size);
+     if (json == NULL)
+     {
+@@ -3123,7 +3181,9 @@
+         err = CHIAKI_ERR_UNKNOWN;
+         goto cleanup_json;
+     }
++    chiaki_mutex_lock(&session->state_mutex);
+     memcpy(session->session_id, json_object_get_string(session_id_json), 36);
++    chiaki_mutex_unlock(&session->state_mutex);
+     make_session_id_header(&session->session_id_header, session->session_id);
+ 
+     session->account_id = json_object_get_int64(account_id_json);
+@@ -3339,6 +3399,7 @@
+     session->state |= SESSION_STATE_DATA_SENT;
+     log_session_state(session);
+     chiaki_mutex_unlock(&session->state_mutex);
++    psn_http_accepted(session, curl, 2);
+ 
+ cleanup:
+     curl_easy_cleanup(curl);
+@@ -5211,6 +5272,14 @@
+         }
+         if (session->ws_notification_queue->rear == last_known || session->ws_notification_queue->rear == NULL)
+         {
++            // Drain already queued matches first, including graceful deletion.
++            // A closed notification channel is not evidence the console is off.
++            if(session->ws_notifications_finished)
++            {
++                CHIAKI_LOGE(session->log, "wait_for_notification: WebSocket notification channel ended");
++                err = CHIAKI_ERR_NETWORK;
++                goto cleanup;
++            }
+             const uint64_t elapsed_ms = (chiaki_time_now_monotonic_us() - waiting_since) / MILLISECONDS_US;
+             if(elapsed_ms >= timeout_ms)
+             {

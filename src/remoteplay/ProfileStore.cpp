@@ -9,6 +9,18 @@
 #include <vector>
 namespace veyra::remoteplay {
 std::filesystem::path profileDirectory(){
+    constexpr auto overrideName=L"VEYRA_REMOTEPLAY_PROFILE_DIR";
+    const DWORD size=GetEnvironmentVariableW(overrideName,nullptr,0);
+    if(size){
+        if(size>32768)throw std::runtime_error("Remote Play profile override is too long");
+        std::wstring value(size,L'\0');
+        const DWORD written=GetEnvironmentVariableW(overrideName,value.data(),size);
+        if(!written||written>=size)throw std::runtime_error("Cannot read Remote Play profile override");
+        value.resize(written);
+        std::filesystem::path result(value);
+        if(!result.is_absolute())throw std::runtime_error("Remote Play profile override must be absolute");
+        return result.lexically_normal();
+    }
     PWSTR raw=nullptr;
     const auto hr=SHGetKnownFolderPath(FOLDERID_LocalAppData,0,nullptr,&raw);
     if(FAILED(hr))throw std::runtime_error("Cannot resolve Remote Play user data directory");
@@ -53,7 +65,9 @@ void append32(std::vector<uint8_t>& b,uint32_t n){for(unsigned i=0;i<4;++i)b.pus
 uint32_t read32(const uint8_t* p){return uint32_t(p[0])|(uint32_t(p[1])<<8)|(uint32_t(p[2])<<16)|(uint32_t(p[3])<<24);}
 }
 bool saveProfile(const std::filesystem::path& path,const NativeConnectRequest& request){
-    if(!validHost(request.host)||request.video.validate())return false;
+    // This existing schema stores local pairing only. PSN endpoint metadata is
+    // managed separately, and bearer tokens must never enter this payload.
+    if(request.psn||request.validate())return false;
     if(!request.consoleId.empty()&&(request.consoleId.size()!=12||!std::all_of(request.consoleId.begin(),request.consoleId.end(),[](char c){return(c>='0'&&c<='9')||(c>='a'&&c<='f');})))return false;
     SecretBytes plain;
     auto& b=plain.data;b.insert(b.end(),{'V','R','P',2});
