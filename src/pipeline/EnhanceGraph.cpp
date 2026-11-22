@@ -769,12 +769,14 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if(!desc.videoHdr.valid()||(desc.hdrOutput&&!desc.hdrInput&&!desc.convertVideoHdr())){veyra::log::error("hdr","HDR output requires native HDR input or explicit Video HDR conversion");return false;}
     const bool videoRestore=!desc.stillImage&&desc.videoSrQuality>=1&&desc.videoSrQuality<=4;
     srEnabled_ = desc.enableSr && (srcW_ != workW_ || srcH_ != workH_ || videoRestore || srPrescaleActive() || srResolveActive());
-    // Smart SR: a single RTX Video SR (NGX) on SDR without the double SR reduction or
-    // the supersample shrink. The detected render extent is descaled and enlarged;
-    // until a verdict settles, and for native frames, SR keeps the whole source.
+    // Smart SR: a single RTX Video SR (NGX) without the double SR reduction or the
+    // supersample shrink, on SDR or on HDR10 kept as HDR (SmartSrCoding per frame).
+    // The detected render extent is descaled and enlarged; until a verdict settles,
+    // and for native frames, SR keeps the whole source. HDR tone-mapped at ingest is
+    // no longer what the source's scaler enlarged.
     smartSrAuto_=smartSrSettled_=false;smartSrX_={};smartSrY_={};smartSrW_=smartSrH_=0;smartSrProbeAxes_.clear();
     smartSrProbeFrames_=0;smartSrProbeTarget_=smartSrProbeStreak_=0;smartSrVerdict_={};
-    if(srEnabled_&&desc.smartSr&&!desc.dualSr&&!desc.hdrWorking()&&!srPrescaleActive()&&!srResolveActive()&&
+    if(srEnabled_&&desc.smartSr&&!desc.dualSr&&!(desc.hdrInput&&!desc.hdrWorking())&&!srPrescaleActive()&&!srResolveActive()&&
        engine::ngxVideoSr(finalVideoSrQuality(desc_))){
         smartSrAuto_=true;
         uint32_t candidates=0;
@@ -783,8 +785,8 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
             smartSrProbeAxes_.push_back(e.valid()?smartSrInverseAxis(srcW_,e.width):SmartSrAxis{});
             candidates+=e.valid();
         }
-        veyra::log::info("smart-sr",std::format("auto: {} candidate heights, {} rows every {} frames, source={}x{} work={}x{}; {} until {} equal verdicts",
-            candidates,kSmartSrProbeRows,kSmartSrProbeInterval,srcW_,srcH_,workW_,workH_,
+        veyra::log::info("smart-sr",std::format("auto: {} candidate heights, {} rows every {} frames, source={}x{} work={}x{} coding={}; {} until {} equal verdicts",
+            candidates,kSmartSrProbeRows,kSmartSrProbeInterval,srcW_,srcH_,workW_,workH_,desc.hdrInput?"PQ (HDR10)":"sRGB",
             desc.smartSrNativeCopy?"pass-through":"whole-source SR",kSmartSrProbeStreak));
     }
     lmxxfNr_ = context_.adapter().vendorId == 0x1002 || desc.nrRuntime == engine::NrRuntime::LmxxfAmd;
@@ -3474,10 +3476,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }
         return true;
     };
+    // Smart SR coding of this frame (SmartSr.h): sRGB for SDR, PQ for HDR10; HLG and
+    // linear float sources keep the ordinary path.
+    const auto smartCoding=smartSrAuto_?smartSrCoding(desc_.hdrInput,desc_.hdrWorking(),
+        lastSourceColor_.transfer==TransferFunction::PQ,lastSourceColor_.scRgb):SmartSrCoding::None;
+    const bool smartRuns=smartCoding!=SmartSrCoding::None;
+    const uint32_t smartDomain=smartCoding==SmartSrCoding::Pq?1u:0u;
     // Double SR reduces the first AI result before the second pass (exact area, linear light).
     auto reduceFirstSr=[&]{
         if(!srPrescaled_)return;
-        if(smartSrAuto_&&smartSrProbeFrames_++%kSmartSrProbeInterval==0&&slot<smartSrProbePending_.size()&&!smartSrProbePending_[slot]){
+        if(smartRuns&&smartSrProbeFrames_++%kSmartSrProbeInterval==0&&slot<smartSrProbePending_.size()&&!smartSrProbePending_[slot]){
             // Render detection on the linear source: per candidate, reduce the probed rows,
             // then re-upscale and sum the residuals; the ring slot's readback is collected
             // when the slot comes round again (collectSmartSrProbe).
@@ -3489,7 +3497,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 tracker_.transition(list,smartSrProbeReduced_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
                 for(uint32_t phase=0;phase<axis.q;++phase){
                     std::array<uint32_t,kSmartSrConstants> k{};
-                    k[0]=srcW_;k[1]=kSmartSrProbeRows;k[2]=axis.lowLength;k[3]=rowBase;k[4]=phase;k[5]=axis.q;k[6]=axis.p;k[7]=rowSpan;
+                    k[0]=srcW_;k[1]=kSmartSrProbeRows;k[2]=axis.lowLength;k[3]=rowBase;k[4]=phase;k[5]=axis.q;k[6]=axis.p;k[7]=rowSpan;k[8]=smartDomain;
                     std::memcpy(&k[12],axis.taps[phase].data(),sizeof(float)*kSmartSrTaps);
                     smartSrProbeReducePass_.bind(list,reinterpret_cast<const float*>(k.data()),gpuHandleOf(smartSrProbeReducePass_,0).ptr,gpuHandleOf(smartSrProbeReducePass_,1).ptr);
                     const uint32_t count=(axis.lowLength-phase+axis.q-1)/axis.q;
@@ -3498,7 +3506,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 tracker_.uavBarrier(list,smartSrProbeReduced_.Get());
                 tracker_.transition(list,smartSrProbeReduced_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 tracker_.transition(list,smartSrProbeStats_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                const uint32_t r[8]={srcW_,kSmartSrProbeRows,axis.lowLength,rowBase,rowSpan,uint32_t(c),0,0};
+                const uint32_t r[8]={srcW_,kSmartSrProbeRows,axis.lowLength,rowBase,rowSpan,uint32_t(c),smartDomain,0};
                 smartSrProbeResidualPass_.bind(list,reinterpret_cast<const float*>(r),gpuHandleOf(smartSrProbeResidualPass_,0).ptr,gpuHandleOf(smartSrProbeResidualPass_,2).ptr);
                 list->Dispatch(kSmartSrProbeRows,1,1);
             }
@@ -3507,14 +3515,14 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             list->CopyBufferRegion(smartSrProbeReadback_[slot].Get(),0,smartSrProbeStats_.Get(),0,kSmartSrCandidates.size()*kSmartSrProbeRows*16);
             smartSrProbePending_[slot]=1;
         }
-        if(smartSrAuto_&&!smartSrW_)return;  // no render extent: finalVideoSr reads the whole source
+        if(smartSrAuto_&&(!smartSrW_||!smartRuns))return;  // no render extent: finalVideoSr reads the whole source
         if(smartSrAuto_){
             // Smart SR descale: rows code and invert into smartSrMid_, columns invert and
             // decode into srPrescaled_. One dispatch per tap phase (SmartSrReduce.hlsl).
             auto descale=[&](const SmartSrAxis& axis,bool vertical,uint32_t across,UINT srv,UINT uav){
                 for(uint32_t phase=0;phase<axis.q;++phase){
                     std::array<uint32_t,kSmartSrConstants> c{};
-                    c[0]=axis.highLength;c[1]=across;c[2]=axis.lowLength;c[3]=vertical;c[4]=phase;c[5]=axis.q;c[6]=axis.p;c[7]=vertical?2u:1u;
+                    c[0]=axis.highLength;c[1]=across;c[2]=axis.lowLength;c[3]=vertical;c[4]=phase;c[5]=axis.q;c[6]=axis.p;c[7]=(vertical?2u:1u)|(smartDomain?4u:0u);
                     std::memcpy(&c[12],axis.taps[phase].data(),sizeof(float)*kSmartSrTaps);
                     smartSrPass_.bind(list,reinterpret_cast<const float*>(c.data()),gpuHandleOf(smartSrPass_,srv).ptr,gpuHandleOf(smartSrPass_,uav).ptr);
                     const uint32_t count=(axis.lowLength-phase+axis.q-1)/axis.q;
@@ -3539,9 +3547,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     };
     // RTX Video SR into the work texture: the single pass, or the second of a double SR.
     auto finalVideoSr=[&]()->bool{
-        if(smartSrAuto_&&!smartSrW_&&desc_.smartSrNativeCopy){
-            // Smart SR found no render extent (native, reconstructed or not settled) in a raw
-            // frame at the work size: copy it, as such a source skips SR without smart SR.
+        if(desc_.smartSr&&desc_.smartSrNativeCopy&&!(smartSrAuto_&&smartRuns&&smartSrW_)){
+            // Smart SR found no render extent (native, reconstructed or not settled), or cannot
+            // run on this source, in a raw frame at the work size: copy it, as such a source
+            // skips SR without smart SR.
             tracker_.transition(list,srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const float copy[8]={uintBits(srcW_),uintBits(srcH_),uintBits(workW_),uintBits(workH_),0,0,0,0};
@@ -3552,7 +3561,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }
         // Smart SR reads only the detected render extent (top-left of the source-sized
         // inputs); without one it encodes the whole source as the ordinary pass does.
-        const bool smartExtent=smartSrAuto_&&smartSrW_;
+        const bool smartExtent=smartSrAuto_&&smartRuns&&smartSrW_;
         const bool prescaled=srPrescaled_!=nullptr&&(!smartSrAuto_||smartExtent);
         const uint32_t inW=smartExtent?smartSrW_:srInW_,inH=smartExtent?smartSrH_:srInH_;
         tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -3572,8 +3581,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }else{
             const float dec[8]={uintBits(workW_),uintBits(workH_),uintBits(workW_),uintBits(workH_),-1,0,0,0};
             if(desc_.hdrWorking()){
+                // Smart SR: the HDR base and the proxy input hold the render extent only.
+                const float hdrDec[8]={dec[0],dec[1],dec[2],dec[3],dec[4],smartExtent?uintBits(inW):0.0f,smartExtent?uintBits(inH):0.0f,0};
                 tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                hdrVideoSrPass_.bind(list,dec,gpuHandleOf(hdrVideoSrPass_,restoreSet).ptr,gpuHandleOf(hdrVideoSrPass_,3).ptr);
+                hdrVideoSrPass_.bind(list,hdrDec,gpuHandleOf(hdrVideoSrPass_,restoreSet).ptr,gpuHandleOf(hdrVideoSrPass_,3).ptr);
             }else blitPass_.bind(list,dec,gpuHandleOf(blitPass_,17).ptr,gpuHandleOf(blitPass_,1).ptr);
         }
         list->Dispatch((workW_+15)/16,(workH_+15)/16,1);tracker_.uavBarrier(list,workRgba_.Get());tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -4867,8 +4878,11 @@ void EnhanceGraph::collectSmartSrProbe(uint32_t slot){
         errors[c]=smartSrProbeAxes_[c].taps.empty()?std::numeric_limits<double>::quiet_NaN():residual/energy;
     }
     smartSrVerdict_=smartSrDecide(errors);
-    // Only a spatial upscale is re-rendered; native and reconstructed frames keep the ordinary SR.
-    const uint32_t target=smartSrVerdict_.spatial?smartSrVerdict_.height:0;
+    // Only a spatial upscale is re-rendered; native and reconstructed frames keep the ordinary
+    // SR. A verdict without evidence (a dark or flat picture) leaves the height in use alone.
+    const int64_t vote=smartSrVote(smartSrVerdict_,smartSrH_);
+    if(vote<0)return;
+    const uint32_t target=uint32_t(vote);
     smartSrProbeStreak_=target==smartSrProbeTarget_?smartSrProbeStreak_+1:1;
     smartSrProbeTarget_=target;
     if(smartSrProbeStreak_!=kSmartSrProbeStreak)return;  // act, and log, once per settled verdict

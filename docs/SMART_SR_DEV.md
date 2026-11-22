@@ -40,19 +40,29 @@ Smart SR is therefore its own switch on the single SR pass.
   heights below the source height); per ring slot the 22 x 96 stats are copied
   to a readback buffer and read when the ring hands the slot out again, so
   nothing waits on the GPU and no pixels are read back. A flat frame (black,
-  fade) is no evidence and keeps the current extent. Three equal verdicts set
-  the render extent: SmartSrReduce descales rows (linear to sRGB) and columns
-  (back to linear) into the top-left of the source-sized `srPrescaled_`, the
+  fade) is no evidence and keeps the current extent; with a render extent in
+  use, a verdict without a knee that is not clearly smooth (dark, low detail)
+  keeps it too (`smartSrVote`). Three equal votes set the render extent:
+  SmartSrReduce descales rows (linear to coded) and columns (back to linear)
+  into the top-left of the source-sized `srPrescaled_`, the
   encode blit and the VSR input rect follow it, and VSR writes the full output.
   Single-pass VSR is created without fixed dimensions, so the rect may change
   per evaluate; nothing is rebuilt when the render extent changes.
+- HDR10 (PQ): the coded domain is chosen per frame (`smartSrCoding`,
+  `shaders/SmartSrCoding.hlsli`): sRGB codes for SDR, PQ codes of BT.2020 with
+  BT.2020 luma weights for an HDR10 source kept as HDR. HLG, linear float
+  (scRGB) sources and HDR tone-mapped to SDR at ingest keep the ordinary path.
+  HdrVideoSrRestore takes the extent of its base and proxy input from root
+  constants [5]/[6] (0: whole texture, as every other caller binds), so the HDR
+  restore samples only the render extent. If smart SR cannot run on a raw frame
+  at the work size, the frame is copied as without smart SR.
 - Status: `PlayerSnapshot::smartSr*` -> `QmlPlayerBridge::smartSrStatus`
   ("正在检测…" / "检测到渲染分辨率 WxH…" / "画面不是放大输出…") under the switch.
 - Storage: PresetStore v38 (field after the v37 layout), preset library v23 and
   mode session v18, each in a `.smart-sr` sidecar so older files keep their
   bytes (as `.sr-stage` / `.dual-sr` do). Export worker ABI version 16 (the
   settings struct grew; exports do not run smart SR).
-- i18n: 7 new strings in all 9 catalogue languages (`extract.py --check`:
+- i18n: 7 new strings (hint says "SDR 与 HDR10") in all 9 catalogue languages (`extract.py --check`:
   missing 0, placeholder problems 0).
 - Tests: `veyra_effect_chain_tests` (math, verdict rules incl. unmeasured
   heights, normalization, rebuild, graph description),
@@ -70,7 +80,25 @@ Smart SR is therefore its own switch on the single SR pass.
   (compressed) -> `whole-source SR (knee x1.6)`, i.e. the same-size repair.
 - Earlier env-var build on main, same engine path: output on the Switch 2 clip
   gradient 4.933 / high-frequency 0.374%, as the 2.1.1 build (4.941 / 0.373%).
-- Unit tests here: effect chain 506 PASS / 0 FAIL, preset library 646 PASS /
+- HDR evidence (Switch 2 TV mode, HDR on, GC573 P010 4K60 with HDR-PQ input,
+  Veyra HDR screenshots = lossless scRGB FP16 JXR, analysed with
+  `res-probe/hdr/hdr_probe.py` outside this repo; synthetic check: the domain
+  that was upscaled fits at 145 dB, the other one fails to detect):
+  - PQ codes: `spatial 1440 knee x32.6-35.1 notch x20.4-21.2`, descale and
+    re-upscale fit 51.1-52.8 dB PQ PSNR; linear light: no detection; sRGB of a
+    203-nit reference: weak (x8.9) and 46 dB. The console scales PQ codes.
+  - Live with this build: `coding=PQ (HDR10)`, `render 2560x1440 (knee x35.1
+    notch x21.2)` 1.3 s after the graph; output (PQ luma mean gradient /
+    high-frequency share) 22.3-23.4e-3 / 3.0% against 16.4e-3 / 1.3% for the
+    console's 4K; 60.00 fps, GPU ready P95 12.3 ms (SR stage 11.8 ms, 34
+    one-second samples, RTX 5070 Ti).
+  - A dimmed, almost black picture (peak 2-15 nits) voted pass-through and 1440
+    in turn (knee x2.8-3.1) before `smartSrVote`; the unit tests replay those
+    verdicts. Not re-run live on a dimmed picture.
+  - SDR after the HDR change: clips unchanged (`render 1920x1080 knee x5.3`,
+    `render 2560x1440 knee x21.7`, `whole-source SR knee x1.6`); the Switch 2
+    clip screenshot is byte-identical to the one before.
+- Unit tests here: effect chain 516 PASS / 0 FAIL, preset library 646 PASS /
   0 FAIL, ui i18n 0 failures; repair presets: every itemized line (smart SR v38
   included) is 1, but the overall line is 0 - the same overall 0 as upstream
   c663312 built from its own sources in this environment.
@@ -153,9 +181,11 @@ inverse. Measured on the 1080p input itself: exact inverse 7.71 / box 5.17.
 
 - Dynamic-resolution games change their render height from scene to scene; the
   three-probe streak (~1.5 s at 60 fps) follows settled changes only.
-- HDR sources, the Video Effects SR families (high bitrate / streaming), DLSS SR
-  and FSR are not covered; neither are exports and still images.
-- Not measured on main yet: live GC573 capture and the probe's GPU cost alone.
+- HLG and scRGB sources, HDR shown on an SDR display (tone-mapped at ingest),
+  the Video Effects SR families (high bitrate / streaming), DLSS SR and FSR are
+  not covered; neither are exports and still images.
+- Not measured: the probe's GPU cost alone; live SDR GC573 capture on main (the
+  2.1.1-based build was measured live).
 
 Build: reduced local configuration, see `deps/build-veyra.cmd` outside this
 repo (MSVC 14.44, Qt 6.8.3, vcpkg FFmpeg 9.0.1, DLSS SDK 310.7, NVOF 5.0.7).

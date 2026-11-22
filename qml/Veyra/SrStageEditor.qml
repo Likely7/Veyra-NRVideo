@@ -56,7 +56,7 @@ ColumnLayout {
         label: qsTr("智能超分")
         hint: !editor.smartSrSupported ? qsTr("智能超分目前仅支持 RTX 视频超分（标准）")
             : veyra.dualSrEnabled || veyra.srOutput !== 0 ? qsTr("双重超分或超分后缩回开启时不使用。")
-            : qsTr("游戏机常把 1080p、1440p 的画面放大成 4K 输出。开启后自动检测实际渲染分辨率，精确还原后再超分；原生画面照常处理。只用于实时 SDR 视频。")
+            : qsTr("游戏机常把 1080p、1440p 的画面放大成 4K 输出。开启后自动检测实际渲染分辨率，精确还原后再超分；原生画面照常处理。用于实时视频，支持 SDR 与 HDR10。")
         enabled: editor.smartSrSupported && !veyra.dualSrEnabled && veyra.srOutput === 0
         opacity: enabled ? 1 : 0.4
         VSwitch { objectName: editor.namePrefix+"-smart-sr-toggle"; checked: veyra.smartSr; onToggled: checked => veyra.smartSr=checked }

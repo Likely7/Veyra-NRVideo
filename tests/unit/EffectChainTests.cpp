@@ -1653,6 +1653,26 @@ static void testSmartSr(){
         std::array<double,n> flat{};flat.fill(1.0);
         check(!pipeline::smartSrDecide(flat).height,"smart SR: no fit under 2 % gives no render height");
     }
+    {
+        using pipeline::SmartSrVerdict;using pipeline::smartSrVote;
+        const SmartSrVerdict spatial1080{1080,1000.0,6.0,true},dark{0,2.9,1.0,false},native{0,1.6,1.0,false};
+        const SmartSrVerdict weak1440{1440,3.1,1.9,false},reconstructed1080{1080,8.0,1.2,false};
+        check(smartSrVote(spatial1080,0)==1080&&smartSrVote(dark,0)==0&&smartSrVote(weak1440,0)==0,
+              "smart SR: without a height in use only a spatial upscale votes for one");
+        check(smartSrVote(dark,1440)==-1,"smart SR: a dark picture without a knee leaves the height in use alone");
+        check(smartSrVote(weak1440,1440)==1440,"smart SR: a weak fit at the height in use counts for it");
+        check(smartSrVote(native,1440)==0,"smart SR: a smooth (native) picture turns it off");
+        check(smartSrVote(reconstructed1080,1440)==0&&smartSrVote(spatial1080,1440)==1080,
+              "smart SR: a fit at another height counts against the height in use");
+    }
+    {
+        using pipeline::SmartSrCoding;using pipeline::smartSrCoding;
+        check(smartSrCoding(false,false,false,false)==SmartSrCoding::Srgb,"smart SR: SDR filters sRGB codes");
+        check(smartSrCoding(true,true,true,false)==SmartSrCoding::Pq,"smart SR: HDR10 kept as HDR filters PQ codes");
+        check(smartSrCoding(true,true,false,false)==SmartSrCoding::None,"smart SR: HLG keeps the ordinary path");
+        check(smartSrCoding(true,false,true,false)==SmartSrCoding::None,"smart SR: HDR tone-mapped at ingest keeps the ordinary path");
+        check(smartSrCoding(true,true,false,true)==SmartSrCoding::None,"smart SR: linear float (scRGB) sources keep the ordinary path");
+    }
     EnhancementSettings s;s.nr=false;s.sr=true;s.multiplier=1;s.videoSrQuality=4;s.srTarget=SrTarget::Uhd4K;
     check(!s.smartSr&&s.validate().empty(),"smart SR: off by default");
     auto on=s;on.smartSr=true;

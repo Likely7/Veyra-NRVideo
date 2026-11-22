@@ -3,9 +3,14 @@ Texture2D<float4> hdrBase:register(t0);
 Texture2D<float4> proxyInput:register(t1);
 Texture2D<float4> proxyOutput:register(t2);
 RWTexture2D<float4> outputTex:register(u0);
+// Root constants as the callers bind them: [4] a float, [5]/[6] the extent of
+// hdrBase/proxyInput the SR read (smart SR: its render extent, the top-left of
+// source-sized textures); 0 uses the whole texture.
+cbuffer RestoreConstants:register(b0){uint4 extents;float mode;uint baseWidth,baseHeight,pad;};
 float3 Decode(float3 c){return select(c<=.04045,c/12.92,pow((c+.055)/1.055,2.4));}
 [numthreads(16,16,1)]void main(uint3 id:SV_DispatchThreadID){
     uint w,h,sw,sh;outputTex.GetDimensions(w,h);hdrBase.GetDimensions(sw,sh);
+    if(baseWidth&&baseHeight){sw=min(sw,baseWidth);sh=min(sh,baseHeight);}
     if(id.x>=w||id.y>=h)return;
     float2 pos=(float2(id.xy)+.5)*float2(sw,sh)/float2(w,h)-.5;
     int2 q=int2(floor(pos)),last=int2(sw,sh)-1;float2 f=frac(pos);

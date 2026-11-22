@@ -431,8 +431,8 @@ struct EnhancementSettings {
     // ignores it.
     pipeline::SrPrescale srPrescale=pipeline::SrPrescale::Off;
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
-    // Smart SR (pipeline/SmartSr.h): a single standard RTX Video SR on live SDR
-    // video measures the render extent of a source that upscaled itself (console
+    // Smart SR (pipeline/SmartSr.h): a single standard RTX Video SR on live SDR or
+    // HDR10 video measures the render extent of a source that upscaled itself (console
     // 4K output of a 1080p/1440p game), inverts that upscale and enlarges the
     // render instead. Native frames keep the ordinary SR. Off by default.
     bool smartSr=false;

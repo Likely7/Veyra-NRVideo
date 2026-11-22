@@ -13,6 +13,16 @@ namespace veyra::pipeline {
 // reduced back to it by inverting the upscale ("descale"), and the single RTX
 // Video SR pass enlarges it again in place of the console's scaler. Native and
 // reconstructed frames keep the ordinary SR path.
+// The coded domain the source's own scaler enlarged in (shaders/SmartSrCoding.hlsli):
+// sRGB codes for SDR, PQ codes for an HDR10 source kept as HDR (Switch 2 TV mode:
+// 51.1-51.7 dB fit in PQ, no fit in linear light). HLG, linear float (scRGB)
+// sources and HDR tone-mapped to SDR at ingest are not descaled.
+enum class SmartSrCoding : uint32_t { Srgb = 0, Pq = 1, None = 2 };
+constexpr SmartSrCoding smartSrCoding(bool hdrInput,bool hdrWorking,bool pq,bool scRgb){
+    if(scRgb)return SmartSrCoding::None;
+    if(!hdrInput)return SmartSrCoding::Srgb;
+    return hdrWorking&&pq?SmartSrCoding::Pq:SmartSrCoding::None;
+}
 // Render extent of this source at the given height, same aspect and even
 // sizes, or an empty extent when that is not a reduction.
 inline Extent smartSrRenderExtent(Extent source,uint32_t height){
@@ -113,6 +123,19 @@ inline SmartSrVerdict smartSrDecide(const std::array<double,kSmartSrCandidates.s
     v.notch=at+2<n&&std::isfinite(errors[at+2])?errors[at+2]/std::max(errors[at+1],1e-9):1.0;
     v.spatial=v.knee>=20.0||v.notch>=2.0;
     return v;
+}
+// The render height a probe votes for, given the height in use (0: none);
+// -1: no evidence, the streak is left alone. Live Switch 2 HDR (2026-11-22): a
+// dimmed, almost black picture has no knee (x2.8-3.1, still the best fit at the
+// height in use) and flipped smart SR on and off every few seconds. So with a
+// height in use, a verdict without a knee that is not clearly smooth keeps it,
+// and a fit at that same height counts for it even below the start rules.
+// Native frames are smooth (knee about x1.6) and still turn it off.
+inline constexpr double kSmartSrKeepKnee=2.0;
+inline int64_t smartSrVote(const SmartSrVerdict& v,uint32_t current){
+    if(current&&v.height==current)return current;
+    if(current&&!v.height&&v.knee>=kSmartSrKeepKnee)return -1;
+    return v.spatial?int64_t(v.height):0;
 }
 // Source row probed for row r (both probe shaders use the same formula).
 inline uint32_t smartSrProbeRow(uint32_t r,uint32_t height){
