@@ -52,6 +52,14 @@ void main(uint3 p : SV_DispatchThreadID) {
         float y, cb, cr;
         if (packing == 4) { y = second ? pair.w : pair.y; cb = pair.x; cr = pair.z; }
         else { y = second ? pair.z : pair.x; cb = pair.w; cr = pair.y; }
+        // Co-sited 4:2:2 chroma: the odd pixel averages its pair's chroma with
+        // the next pair's, as in Yuy2ToLinear.hlsl (and OBS), instead of
+        // repeating it, so coloured edges do not step in two-pixel blocks.
+        if (second) {
+            const float4 next = packedBytes[uint2(min(p.x / 2 + 1, width / 2 - 1), p.y)];
+            cb = 0.5 * (cb + (packing == 4 ? next.x : next.w));
+            cr = 0.5 * (cr + (packing == 4 ? next.z : next.y));
+        }
         float2 uv = float2(cb, cr) - 128.0 / 255.0;
         if (limited > 0.5) { y = (y - 16.0 / 255.0) * (255.0 / 219.0); uv *= 255.0 / 224.0; }
         rgb = matrix709 > 0.5 ? float3(y + 1.5748 * uv.y, y - 0.187324 * uv.x - 0.468124 * uv.y, y + 1.8556 * uv.x)

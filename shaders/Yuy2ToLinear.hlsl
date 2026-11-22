@@ -20,7 +20,16 @@ void main(uint3 p : SV_DispatchThreadID) {
     if(p.x>=width||p.y>=height)return;
     const float4 pair=packedYuy2[uint2(p.x/2,p.y)];
     float y=(p.x&1)?pair.z:pair.x;
-    float2 uv=pair.yw-128.0/255.0;
+    // 4:2:2 chroma is co-sited with the even luma sample (BT.601/709, MPEG-2
+    // siting). The odd pixel lies halfway to the next pair's chroma, so it gets
+    // their average instead of a copy of its own pair's sample. Copying it made
+    // every coloured edge a two-pixel step, which reads as blocky small text
+    // and HUD detail at 1:1. OBS reconstructs the same way: a bilinear chroma
+    // fetch at the left-sited position (libobs format_conversion.effect,
+    // PSYUY2_Reverse with VSPacked422Left_Reverse).
+    float2 cbcr=pair.yw;
+    if(p.x&1)cbcr=0.5*(cbcr+packedYuy2[uint2(min(p.x/2+1,width/2-1),p.y)].yw);
+    float2 uv=cbcr-128.0/255.0;
     if(limited>0.5){y=(y-16.0/255.0)*(255.0/219.0);uv*=255.0/224.0;}
     // Preserve head/footroom until the final RGB gamut clamp. Clipping Y
     // before the matrix changes saturated pixels with below-black luma.
