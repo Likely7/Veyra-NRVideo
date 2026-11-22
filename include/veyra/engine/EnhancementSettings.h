@@ -44,7 +44,8 @@ inline bool validNrReuseMode(NrReuseMode v) {
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
 // AmdFrc: AMD AMF FRC, the video frame interpolation of the AMD driver (gfx::AmfFrcBackend).
-// Rife: RIFE through ONNX Runtime DirectML from runtimeife (gfx::RifeDmlBackend).
+// Rife: RIFE through ONNX Runtime DirectML from runtime
+ife (gfx::RifeDmlBackend).
 enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5, AmdFrc = 6, Rife = 7 };
 constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
@@ -557,6 +558,7 @@ struct EnhancementSettings {
     // frame and kept out of graph frame generation. Its passes exist only when on.
     bool hudLock=false;
     HudProtectMode hudProtect=HudProtectMode::Off;
+    bool dynamicHud=false;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -636,7 +638,10 @@ struct EnhancementSettings {
         if(!(multiplier>2))active.fgAdaptive=defaults.fgAdaptive;
         if(!(multiplier>1))active.pacingRepair=defaults.pacingRepair;
         // XeSS generates inside its own presenter; HUD Lock works on graph frame generation.
-        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS))active.hudLock=defaults.hudLock;
+        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS)){
+            active.hudLock=defaults.hudLock;
+            active.dynamicHud=defaults.dynamicHud;
+        }
         if(multiplier<=1)active.hudProtect=defaults.hudProtect;
         return active;
     }

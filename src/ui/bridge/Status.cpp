@@ -459,6 +459,11 @@ void QmlPlayerBridge::updateRunStatus() {
         else if(s.hudLockState==2)options<<tr("HUD 自动锁定 · 无法启用");
         else if(s.hudLockState==3)options<<tr("HUD 自动锁定 · 当前补帧方式不支持");
     }
+    if (s.running && !s.image && s.applied.multiplier > 1 && s.applied.dynamicHud) {
+        if (s.dynamicHudState == 1) options << tr("动态 HUD 保护");
+        else if (s.dynamicHudState == 2) options << tr("动态 HUD 保护 · 无法启用");
+        else if (s.dynamicHudState == 3) options << tr("动态 HUD 保护 · 当前补帧方式不支持");
+    }
     QStringList detail;
     if (secondaryFgWarning) detail << tr("补帧降档");
     // Live output hint: also shown under the 倍率 control (fgDisplayHint).

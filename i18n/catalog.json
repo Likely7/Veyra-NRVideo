@@ -1509,6 +1509,19 @@
    "ru": "60→30 (адаптивное удаление дублей)"
   },
   {
+   "zh": "60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：偵測並跳過重複畫面。",
+   "en": "60→30 keeps every other frame and skips repeated images when the game runs below 30 fps. Automatic removal detects and skips duplicate images.",
+   "ja": "60→30 は2フレームに1枚を保持し、ゲームが30fpsを下回るときは重複した映像をスキップします。自動除去は重複した映像を検出してスキップします。",
+   "ko": "60→30은 두 프레임마다 한 프레임을 남기고, 게임이 30fps 아래로 떨어지면 반복된 화면을 건너뜁니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다.",
+   "es": "60→30 conserva un fotograma de cada dos y omite los duplicados cuando el juego baja de 30 FPS. La eliminación automática detecta y omite fotogramas repetidos.",
+   "fr": "60→30 conserve une image sur deux et ignore les doublons lorsque le jeu passe sous 30 i/s. La suppression automatique détecte et ignore les images répétées.",
+   "de": "60→30 behält jedes zweite Bild und überspringt Duplikate, wenn das Spiel unter 30 FPS fällt. Die automatische Entfernung erkennt und überspringt doppelte Bilder.",
+   "pt-BR": "60→30 mantém um quadro a cada dois e pula os repetidos quando o jogo fica abaixo de 30 FPS. A remoção automática detecta e pula quadros duplicados.",
+   "ru": "60→30 оставляет каждый второй кадр и пропускает повторы, когда частота игры падает ниже 30 FPS. Автоматическое удаление находит и пропускает повторяющиеся кадры."
+  },
+  {
    "zh": "8 位 4:2:0 · SDR，所需带宽较低。",
    "src": "qml/OnboardingGuide.qml",
    "zh-TW": "8 位元 4:2:0 · SDR，所需頻寬較低。",
@@ -10688,6 +10701,58 @@
    "ru": "Загрузить файл…"
   },
   {
+   "zh": "动态 HUD 保护",
+   "src": "qml/DynamicHudRow.qml",
+   "zh-TW": "動態 HUD 保護",
+   "en": "Dynamic HUD protection",
+   "ja": "動的 HUD 保護",
+   "ko": "동적 HUD 보호",
+   "es": "Protección dinámica del HUD",
+   "fr": "Protection dynamique du HUD",
+   "de": "Dynamischer HUD-Schutz",
+   "pt-BR": "Proteção dinâmica do HUD",
+   "ru": "Динамическая защита HUD"
+  },
+  {
+   "zh": "动态 HUD 保护 · 当前补帧方式不支持",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "動態 HUD 保護 · 目前的補幀方式不支援",
+   "en": "Dynamic HUD protection · Unsupported by the current frame generation method",
+   "ja": "動的 HUD 保護 · 現在のフレーム生成方式では非対応",
+   "ko": "동적 HUD 보호 · 현재 프레임 생성 방식에서 지원되지 않음",
+   "es": "Protección dinámica del HUD · Incompatible con el método de interpolación actual",
+   "fr": "Protection dynamique du HUD · Non prise en charge par le mode d’interpolation actuel",
+   "de": "Dynamischer HUD-Schutz · Von der aktuellen Zwischenbildmethode nicht unterstützt",
+   "pt-BR": "Proteção dinâmica do HUD · Incompatível com o método atual de geração de quadros",
+   "ru": "Динамическая защита HUD · Текущий способ генерации кадров не поддерживает защиту"
+  },
+  {
+   "zh": "动态 HUD 保护 · 无法启用",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "動態 HUD 保護 · 無法啟用",
+   "en": "Dynamic HUD protection · Unavailable",
+   "ja": "動的 HUD 保護 · 利用不可",
+   "ko": "동적 HUD 보호 · 사용할 수 없음",
+   "es": "Protección dinámica del HUD · No disponible",
+   "fr": "Protection dynamique du HUD · Indisponible",
+   "de": "Dynamischer HUD-Schutz · Nicht verfügbar",
+   "pt-BR": "Proteção dinâmica do HUD · Indisponível",
+   "ru": "Динамическая защита HUD · Недоступна"
+  },
+  {
+   "zh": "动态 HUD 保护设置未生效",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "動態 HUD 保護設定未生效",
+   "en": "The dynamic HUD protection setting could not be applied",
+   "ja": "動的 HUD 保護の設定を適用できませんでした",
+   "ko": "동적 HUD 보호 설정을 적용하지 못했습니다",
+   "es": "No se pudo aplicar el ajuste de protección dinámica del HUD",
+   "fr": "Impossible d’appliquer le réglage de protection dynamique du HUD",
+   "de": "Die Einstellung für den dynamischen HUD-Schutz konnte nicht übernommen werden",
+   "pt-BR": "Não foi possível aplicar a configuração de proteção dinâmica do HUD",
+   "ru": "Не удалось применить настройку динамической защиты HUD"
+  },
+  {
    "zh": "勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "勾選後，高光起點同時參考每幀的平均亮度：暗場多的片子壓得更積極，亮場多的保留更多高光；取消則只看峰值",
@@ -10738,6 +10803,19 @@
    "de": "Wiederherstellen von Quellbild und Frame-Kadenz innerhalb der Regionen",
    "pt-BR": "Restaurar cadência de imagens e quadros de origem dentro das regiões",
    "ru": "Восстановление исходного изображения и каденции кадров внутри регионов"
+  },
+  {
+   "zh": "区域内恢复原始画面，补帧也不参与，按原始帧节奏更新。最多 4 个区域。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "區域內恢復原始畫面，補幀也不參與，按原始幀節奏更新。最多 4 個區域。",
+   "en": "Restore the source picture inside each region, updating only at the source frame cadence. Up to 4 regions.",
+   "ja": "領域内を元の映像に戻し、元のフレーム周期で更新します。最大 4 領域。",
+   "ko": "선택 영역에 원본 화면을 표시하고 원본 프레임 간격으로만 갱신합니다. 최대 4개 영역을 지정할 수 있습니다.",
+   "es": "Restaurar el cuadro fuente dentro de cada región, actualizando sólo en la cadencia del fotograma fuente. Hasta 4 regiones.",
+   "fr": "Restaurer l'image source à l'intérieur de chaque région, en ne mettant à jour qu'à la cadence de l’image source. Jusqu'à 4 régions.",
+   "de": "Stellen Sie das Quellbild in jeder Region wieder her und aktualisieren Sie nur in der Quellrahmen-Kadenz. Bis zu 4 Regionen.",
+   "pt-BR": "Restaurar a imagem de origem dentro de cada região, atualizando apenas na cadência de quadros de origem. Até 4 regiões.",
+   "ru": "Восстановление исходного изображения внутри каждой области, обновление только по каденции кадра источника. До 4 регионов."
   },
   {
    "zh": "区域内排除 NR 处理。最多 4 个区域。",
@@ -11063,6 +11141,19 @@
    "de": "Lichter schützen",
    "pt-BR": "Proteger realces",
    "ru": "Защищать света"
+  },
+  {
+   "zh": "压缩采集使用码流颜色信息；手动颜色和范围请选择原生采集格式。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "壓縮擷取使用碼流顏色資訊；手動顏色和範圍請選擇原生擷取格式。",
+   "en": "Compressed capture uses the stream's color information; for manual color and range choose a native capture format.",
+   "ja": "圧縮キャプチャーはストリームの色情報を使います。手動の色や範囲を使うにはネイティブのキャプチャーフォーマットを選んでください。",
+   "ko": "압축 캡처는 영상 스트림의 색상 정보를 사용합니다. 색상·범위를 직접 지정하려면 장치의 비압축 캡처 형식을 선택하세요.",
+   "es": "La captura comprimida utiliza la información de color del flujo; para el color manual y el rango elige un formato de captura nativo.",
+   "fr": "La capture compressée utilise l'information de couleur du flux; pour la couleur manuelle et la plage choisir un format de capture natif.",
+   "de": "Compressed capture verwendet die farbinformationen des streams; für manuelle farbe und reichweite wählen sie ein natives aufnahmeformat.",
+   "pt-BR": "Captura compacta usa a informação de cor do fluxo; para cor manual e intervalo escolha um formato de captura nativo.",
+   "ru": "Сжатый захват использует цветовую информацию потока; для ручного цвета и диапазона выберите нативный формат захвата."
   },
   {
    "zh": "压缩采集的色彩空间由码流决定。可以单独指定色彩范围。",
@@ -13117,6 +13208,19 @@
    "de": "Kreis ",
    "pt-BR": "Círculo ",
    "ru": "Круг "
+  },
+  {
+   "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
+   "en": "Get your Account ID on PSNTools, then enter it in the PS5 streaming window to pair.",
+   "ja": "PSNTools で Account ID を取得し、PS5 ストリーミング画面に入力してペアリングします。",
+   "ko": "PSNTools에서 계정 ID를 얻은 다음 PS5 스트리밍 창에 입력하여 페어링하세요.",
+   "es": "Obtenga su ID de cuenta en PSNTools, y luego ingrese en la ventana de streaming PS5 a par.",
+   "fr": "Obtenez votre ID de compte sur PSNTools, puis entrez-le dans la fenêtre de diffusion PS5 à paire.",
+   "de": "Holen Sie sich Ihre Account-ID auf PSNTools und geben Sie sie dann in das Streaming-Fenster PS5 ein.",
+   "pt-BR": "Obtenha o ID da sua conta em PSNTools, em seguida, digite-o na janela de transmissão PS5 para emparelhar.",
+   "ru": "Установите номер своего аккаунта PSNTools, а затем введите его в PS5 окно потоковой передачи."
   },
   {
    "zh": "在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。",
@@ -17513,6 +17617,19 @@
    "ru": "Запрошен вывод с VRR; драйвер не подтвердил активацию (драйверы AMD об этом не сообщают; проверьте частоту обновления в меню монитора). Проверьте настройки G-SYNC или FreeSync для оконного/полноэкранного режима. Это не означает, что настройка драйвера выключена."
   },
   {
+   "zh": "已请求可变刷新，驱动尚未确认生效；可检查窗口/全屏 G-SYNC 设置，当前状态不代表驱动已关闭",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "已請求可變更新率，驅動尚未確認生效；可檢查視窗/全螢幕 G-SYNC 設定，目前狀態不代表驅動已關閉",
+   "en": "VRR presentation requested; the driver has not confirmed activation. Check windowed/fullscreen G-SYNC settings. This does not mean the driver setting is off.",
+   "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません。ウィンドウ/全画面の G-SYNC 設定を確認できます。この状態は設定がオフという意味ではありません。",
+   "ko": "VRR 표시를 요청했지만 드라이버에서 활성화를 확인하지 못했습니다. 창 모드·전체 화면 G-SYNC 설정을 확인하세요. 이 메시지가 드라이버 설정이 꺼졌다는 뜻은 아닙니다.",
+   "es": "VRR presentación solicitada; el controlador no ha confirmado la activación. Ver la ventana / pantalla llena G-SYNC configuración. Esto no significa que el ajuste del controlador esté apagado.",
+   "fr": "VRR présentation demandée; le pilote n'a pas confirmé l'activation. Cochez fenêtre/écran complet G-SYNC paramètres. Cela ne signifie pas que le réglage du pilote est désactivé.",
+   "de": "VRR Präsentation angefordert; der Treiber hat die Aktivierung nicht bestätigt. Fenster/Vollbild prüfen G-SYNC Einstellungen. Dies bedeutet nicht, dass die Einstellung des Treibers ausgeschaltet ist.",
+   "pt-BR": "VRR apresentação solicitada; o condutor não confirmou a activação. Verificar janela/tela cheia G-SYNC configurações. Isto não significa que o condutor esteja desligado.",
+   "ru": "VRR представление запрошено; драйвер не подтвердил активацию. Контрольное окно / Fullscreen G-SYNC Настройки. Это не означает, что драйвер выключен."
+  },
+  {
    "zh": "已请求，等待驱动确认",
    "src": "src/engine/VideoPresenter.cpp",
    "zh-TW": "已請求，等待驅動確認",
@@ -18564,6 +18681,32 @@
    "de": "Die aktuelle DLSS Frame Generation Runtime benötigt Treiber {}.{:02} oder neuer (NGX-Fähigkeitsabfrage)",
    "pt-BR": "O driver atual de geração de frame DLSS precisa de execução {}. {:02} ou mais recente (NGX consulta de capacidade)",
    "ru": "Текущая DLSS генерация кадров требует драйвера {}. {:02} или более новый (запрос NGX)"
+  },
+  {
+   "zh": "当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "當前 GPU 不支援 NVIDIA 增強；NR、超解析及 DLSS 已關閉，XeSS選擇保留",
+   "en": "This GPU does not support NVIDIA enhancements; NR, super resolution and DLSS are off, the XeSS choice is kept",
+   "ja": "この GPU は NVIDIA の補正機能に非対応です。NR、超解像、DLSS をオフにしました。XeSS の選択は保持します",
+   "ko": "이 GPU는 NVIDIA 보정 기능을 지원하지 않습니다. NR·초해상도·DLSS를 끄고 XeSS 선택은 유지합니다.",
+   "es": "Este GPU no apoya las mejoras NVIDIA; NR, super resolución y DLSS están apagados, se mantiene la opción XeSS",
+   "fr": "Cette GPU ne supporte pas les améliorations NVIDIA; NR, la super résolution et DLSS sont désactivés, le choix XeSS est maintenu",
+   "de": "Dies GPU unterstützt keine NVIDIA Erweiterungen; NR, Superauflösung und DLSS sind ausgeschaltet, die XeSS Wahl wird beibehalten",
+   "pt-BR": "Esta GPU não suporta melhorias NVIDIA; NR, super resolução e DLSS estão fora, a escolha XeSS é mantida",
+   "ru": "Это GPU не поддерживает NVIDIA улучшения; NR, супер разрешение и DLSS выключены, выбор XeSS сохранен"
+  },
+  {
+   "zh": "当前 GPU 不支持 NVIDIA 增强；超分及 DLSS 已关闭，NR 使用 AMD 运行库，XeSS选择保留",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前 GPU 不支援 NVIDIA 增強；超解析及 DLSS 已關閉，NR 使用 AMD 執行庫，XeSS 選擇保留",
+   "en": "This GPU does not support NVIDIA enhancements; upscaling and DLSS are off, NR uses the AMD runtime, and the XeSS choice is kept",
+   "ja": "この GPU は NVIDIA 拡張に対応していません。超解像と DLSS はオフ、NR は AMD ランタイムを使用し、XeSS の選択は維持します",
+   "ko": "이 GPU는 NVIDIA 보정 기능을 지원하지 않습니다. 초해상도·DLSS를 끄고 NR은 AMD 런타임을 사용합니다. XeSS 선택은 유지합니다.",
+   "es": "Este GPU no soporta las mejoras NVIDIA; el aumento y DLSS están apagados, NR utiliza el tiempo de ejecución AMD, y se mantiene la opción XeSS",
+   "fr": "Cette GPU ne supporte pas les améliorations NVIDIA; l'augmentation de l'échelle et DLSS sont désactivées, NR utilise le AMD runtime, et le choix XeSS est maintenu",
+   "de": "Dies GPU unterstützt keine NVIDIA Erweiterungen; Upscaling und DLSS sind ausgeschaltet, NR verwendet die AMD Laufzeit und die XeSS Auswahl wird beibehalten",
+   "pt-BR": "Este GPU não suporta NVIDIA melhorias; upscaling e DLSS estão desligados, NR utiliza o tempo de execução AMD, e a escolha XeSS é mantida",
+   "ru": "Это GPU не поддерживает NVIDIA улучшения; масштабирование и DLSS выключены, NR использует AMD время выполнения, и XeSS выбор сохранен."
   },
   {
    "zh": "当前 GPU 不支持所选 NVIDIA 增强",
@@ -23024,6 +23167,19 @@
    "de": "Kann nicht erkennen, ob das Display es unterstützt (vorerst nur NVIDIA- und AMD-GPUs)",
    "pt-BR": "Não é possível detectar se a tela oferece suporte (por enquanto, apenas GPUs NVIDIA e AMD)",
    "ru": "Невозможно определить, поддерживает ли дисплей эту функцию (пока только для GPU NVIDIA и AMD)"
+  },
+  {
+   "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
+   "en": "Cannot detect whether the display supports it (NVIDIA GPUs only for now)",
+   "ja": "ディスプレイの対応を検出できません（現在は NVIDIA GPU のみ）",
+   "ko": "디스플레이 지원 여부를 확인하지 못했습니다. 현재 NVIDIA GPU에서만 확인할 수 있습니다.",
+   "es": "No se puede detectar si la pantalla lo soporta (NVIDIA GPUs sólo por ahora)",
+   "fr": "Impossible de détecter si l'affichage le supporte (NVIDIA GPUs seulement pour le moment)",
+   "de": "Kann nicht erkennen, ob das Display es unterstützt (NVIDIA GPUs nur vorerst)",
+   "pt-BR": "Não é possível detectar se o ecrã o suporta (NVIDIA GPUs apenas por enquanto)",
+   "ru": "Невозможно определить, поддерживает ли дисплей (только на данный момент) графические процессоры NVIDIA"
   },
   {
    "zh": "无法添加文件：%1",
@@ -33725,6 +33881,19 @@
    "ru": "Видео закодировано. Ошибка Windows {} помешала переименованию. Временный файл содержит полное видео."
   },
   {
+   "zh": "视频已编码，但保存文件名失败（Windows错误 {}）；可保留partial文件",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "影片已編碼，但儲存檔名失敗（Windows錯誤 {}）；可保留partial檔案",
+   "en": "The video was encoded, but saving the file name failed (Windows error {}); the partial file can be kept",
+   "ja": "動画はエンコードしましたが、ファイル名を付けて保存できませんでした（Windows エラー {}）。partial ファイルは残せます",
+   "ko": "영상 인코딩은 끝났지만 최종 파일명으로 저장하지 못했습니다 (Windows 오류 {}). 분할 파일은 유지됩니다.",
+   "es": "El vídeo fue codificado, pero guardar el nombre del archivo falló (Windows error {}); el archivo parcial se puede mantener",
+   "fr": "La vidéo a été encodée, mais l'enregistrement du nom du fichier a échoué (Windows erreur {}); le fichier partiel peut être conservé",
+   "de": "Das Video wurde codiert, aber das Speichern des Dateinamens ist fehlgeschlagen (Windows Fehler {}); die Teildatei kann beibehalten werden",
+   "pt-BR": "O vídeo foi codificado, mas salvar o nome do arquivo falhou (Windows erro {}); o arquivo parcial pode ser mantido",
+   "ru": "Видео было закодировано, но сохранение имени файла не удалось (Windows ошибка {}); частичный файл может быть сохранен."
+  },
+  {
    "zh": "视频恢复上次进度；采集卡沿用上次设备与设置",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "影片恢復上次進度；擷取卡沿用上次裝置與設定",
@@ -34334,6 +34503,19 @@
    "de": "Erkennt und schützt das Fadenkreuz, während die Frame-Generierung für den Hintergrund weiterläuft",
    "pt-BR": "Detecta e protege a mira e continua gerando quadros para o fundo",
    "ru": "Обнаруживает и защищает прицел, сохраняя генерацию кадров для фона"
+  },
+  {
+   "zh": "识别有固定边框的数字和状态条，补帧时保留真实画面中的内容 · 实验 · 默认关闭",
+   "src": "qml/DynamicHudRow.qml",
+   "zh-TW": "辨識具有固定邊框的數字和狀態條，補幀時保留原始畫面中的內容 · 實驗 · 預設關閉",
+   "en": "Detects counters and status bars within stable borders and preserves their original content during frame generation · Experimental · Off by default",
+   "ja": "固定枠のある数値やゲージを検出し、フレーム生成時に元の表示を維持します · 実験的 · デフォルトはオフ",
+   "ko": "고정 테두리 안의 숫자와 상태 표시줄을 감지하고 프레임 생성 중 원본 표시를 유지합니다 · 실험 기능 · 기본값 끔",
+   "es": "Detecta contadores y barras de estado con bordes fijos y conserva su contenido original durante la interpolación · Experimental · Desactivada por defecto",
+   "fr": "Détecte les compteurs et les jauges avec des bordures fixes et préserve leur contenu original pendant l’interpolation · Expérimental · Désactivé par défaut",
+   "de": "Erkennt Zähler und Statusleisten mit festen Rahmen und erhält ihren Originalinhalt bei der Zwischenbildberechnung · Experimentell · Standardmäßig aus",
+   "pt-BR": "Detecta contadores e barras de status com bordas fixas e preserva o conteúdo original durante a geração de quadros · Experimental · Desativada por padrão",
+   "ru": "Распознаёт счётчики и индикаторы с неподвижными рамками и сохраняет исходное содержимое при генерации кадров · Экспериментально · По умолчанию выключено"
   },
   {
    "zh": "识别档位",
@@ -35272,6 +35454,19 @@
    "ru": "Не удалось прочитать форматы захвата (%1, 0x%2). %3"
   },
   {
+   "zh": "读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "讀取擷取格式失敗：%1（0x%2）。請檢查裝置占用與驅動後重試。",
+   "en": "Failed to read capture formats: %1 (0x%2). Check whether the device is in use and check its driver, then retry.",
+   "ja": "キャプチャ形式を読み取れません：%1（0x%2）。デバイスの使用状況とドライバーを確認して再試行してください。",
+   "ko": "캡처 형식을 읽지 못했습니다: %1 (0x%2). 장치가 사용 중인지 확인하고 드라이버를 확인한 후 다시 시도하십시오.",
+   "es": "No se puede leer los formatos de captura: %1 (0x%2). Compruebe si el dispositivo está en uso y verifique su controlador, luego vuelva a entrar.",
+   "fr": "Impossible de lire les formats de capture: %1 (0x %2). Vérifiez si l'appareil est utilisé et vérifiez son pilote, puis réessayez.",
+   "de": "Gescheitert, um Aufnahmeformate zu lesen: %1 (0x %2). Überprüfen Sie, ob das Gerät in Gebrauch ist, und überprüfen Sie den Treiber, und versuchen Sie es erneut.",
+   "pt-BR": "Não foi possível ler os formatos de captura: %1 (0x %2). Verifique se o dispositivo está em uso e verifique seu driver, em seguida, tente novamente.",
+   "ru": "Не удалось прочитать форматы захвата: %1 (0x %2). Проверьте, используется ли устройство, и проверьте его драйвер, а затем повторите попытку."
+  },
+  {
    "zh": "读取附属轨道",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "讀取附屬軌道",
@@ -35335,6 +35530,19 @@
    "de": "Planungswarte P95: %1 ms",
    "pt-BR": "Esperar agendamento P95: %1 ms",
    "ru": "Расписание ожидания P95: %1ms"
+  },
+  {
+   "zh": "调度降档",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "調度降檔",
+   "en": "Scheduling stepped down",
+   "ja": "スケジュールを段階的に下げました",
+   "ko": "처리 단계 하향",
+   "es": "Planificación reducida",
+   "fr": "Planification réduite",
+   "de": "Planung heruntergestuft",
+   "pt-BR": "Agendamento reduzido",
+   "ru": "Планирование снижено"
   },
   {
    "zh": "调控方式",
@@ -38379,6 +38587,19 @@
    "ru": "Карта захвата * %1"
   },
   {
+   "zh": "采集卡上游输入连接失败（0x{:08X}），请检查驱动与输入选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡上游輸入連接失敗（0x{:08X}），請檢查驅動與輸入選擇。",
+   "en": "Capture card upstream input connection failed (0x{:08X}). Check the driver and selected input.",
+   "ja": "キャプチャカードの上流入力への接続に失敗しました（0x{:08X}）。ドライバーと入力の選択を確認してください。",
+   "ko": "캡처 카드 업스트림 입력 연결에 실패했습니다(0x{:08X}). 드라이버와 선택된 입력을 확인하십시오.",
+   "es": "Capture card upstream input connection failed (0x{:08X}). Compruebe el controlador y la entrada seleccionada.",
+   "fr": "La connexion en amont de la carte de saisie a échoué (0x {:08X}). Vérifiez le pilote et l'entrée sélectionnée.",
+   "de": "Capture Card Upstream-Eingangsverbindung fehlgeschlagen (0x {:08X}. Überprüfen Sie den Treiber und wählen Sie die Eingabe.",
+   "pt-BR": "A conexão de entrada da placa de captura a montante falhou (0x {:08X}). Verifique o driver e a entrada selecionada.",
+   "ru": "Захват карты вверх по течению входного соединения не удался (0x {:08X}). Проверьте драйвера и выбранный вход."
+  },
+  {
    "zh": "采集卡可能已断开或 USB 连接不稳定。请直连电脑的 USB 3 接口，避开扩展坞和延长线，尝试换线。笔记本请接上电源，也可检查 USB 选择性暂停设置。若问题仍在，请用厂商软件或 OBS 对照。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "擷取卡可能已斷線或 USB 連線不穩定。請直連電腦的 USB 3 連接埠，避開擴充座與延長線，並試換線材。筆電請接上電源，也可檢查 USB 選擇性暫停設定。若問題仍在，請用原廠軟體或 OBS 對照。",
@@ -38403,6 +38624,32 @@
    "de": "Auswahl der Aufnahmekarte",
    "pt-BR": "Como escolher a placa de captura",
    "ru": "Как выбрать карту захвата"
+  },
+  {
+   "zh": "采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡無法連接所選壓縮格式（0x{:08X}），請重新選擇。",
+   "en": "The selected compressed capture format could not connect (0x{:08X}). Choose another format.",
+   "ja": "選択した圧縮キャプチャ形式を接続できませんでした（0x{:08X}）。形式を選び直してください。",
+   "ko": "선택한 압축 캡처 형식을 연결할 수 없습니다(0x{:08X}). 다른 형식을 선택하세요.",
+   "es": "El formato de captura comprimido seleccionado no podía conectarse (0x {:08X}). Elige otro formato.",
+   "fr": "Le format de capture compressé sélectionné ne pouvait pas se connecter (0x {:08X}). Choisissez un autre format.",
+   "de": "Das ausgewählte komprimierte Aufnahmeformat konnte keine Verbindung herstellen (0x {:08X}. Wählen Sie ein anderes Format.",
+   "pt-BR": "O formato de captura comprimido selecionado não pôde conectar (0x {:08X}). Escolha outro formato.",
+   "ru": "Выбранный формат сжатого захвата не мог соединяться (0x {:08X}). Выберите другой формат."
+  },
+  {
+   "zh": "采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡無法連接所選格式（0x{:08X}），請檢查裝置占用並重新選擇。",
+   "en": "The selected capture format could not connect (0x{:08X}). Check whether another app is using the device and choose the format again.",
+   "ja": "選択したキャプチャ形式を接続できませんでした（0x{:08X}）。他のアプリによるデバイス使用を確認し、形式を選び直してください。",
+   "ko": "선택한 캡처 형식을 연결할 수 없습니다(0x{:08X}). 다른 앱이 해당 기기를 사용하고 있는지 확인하고 형식을 다시 선택하세요.",
+   "es": "El formato de captura seleccionado no podía conectarse (0x {:08X}). Compruebe si otra aplicación está utilizando el dispositivo y elegir el formato de nuevo.",
+   "fr": "Le format de capture sélectionné ne pouvait pas se connecter (0x {:08X}). Vérifiez si une autre application utilise l'appareil et choisissez à nouveau le format.",
+   "de": "Das ausgewählte Aufnahmeformat konnte keine Verbindung herstellen (0x {:08X}. Überprüfen Sie, ob eine andere App das Gerät verwendet und wählen Sie das Format erneut aus.",
+   "pt-BR": "O formato de captura selecionado não pôde conectar (0x {:08X}). Verifique se outro aplicativo está usando o dispositivo e escolha o formato novamente.",
+   "ru": "Выбранный формат захвата не мог соединяться (0x {:08X}). Проверьте, использует ли другое приложение устройство, и снова выберите формат."
   },
   {
    "zh": "采集卡设置",
@@ -41447,6 +41694,19 @@
    "ru": "Драйвер сообщает о нехватке системных ресурсов. Закройте OBS, «Камеру Windows» или программу производителя. Проверьте подключение и драйвер."
   },
   {
+   "zh": "驱动拒绝所选采集格式（0x{:08X}），请重新选择。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "驅動拒絕所選擷取格式（0x{:08X}），請重新選擇。",
+   "en": "The driver rejected the selected capture format (0x{:08X}). Select another mode.",
+   "ja": "ドライバーが選択したキャプチャ形式を拒否しました（0x{:08X}）。選び直してください。",
+   "ko": "드라이버가 선택한 캡처 형식(0x{:08X})을 거부했습니다. 다른 모드를 선택하세요.",
+   "es": "El controlador rechazó el formato de captura seleccionado (0x {:08X}). Seleccione otro modo.",
+   "fr": "Le pilote a rejeté le format de capture sélectionné (0x {:08X}). Sélectionnez un autre mode.",
+   "de": "Der Treiber hat das ausgewählte Erfassungsformat (0x {:08X}) abgelehnt. Wählen Sie einen anderen Modus.",
+   "pt-BR": "O driver rejeitou o formato de captura selecionado (0x {:08X}). Selecione outro modo.",
+   "ru": "Водитель отклонил выбранный формат захвата (0x {:08X}). Выберите другой режим."
+  },
+  {
    "zh": "驱动无法连接所选格式。请刷新并选择与输入信号匹配的采集格式。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "驅動程式無法連接所選格式。請重新整理並選擇與輸入訊號相符的擷取格式。",
@@ -42446,6 +42706,19 @@
    "de": "; die ausgeführten Teile werden aufbewahrt bei: ",
    "pt-BR": "; as partes exportadas são mantidas em: ",
    "ru": "Экспортируемые части хранятся в: "
+  },
+  {
+   "zh": "；当前显卡不能使用所选超分，本次导出关闭超分",
+   "src": "src/engine/VideoExportJob.cpp",
+   "zh-TW": "；當前顯示卡不能使用所選超解析，本次匯出關閉超解析",
+   "en": "; this GPU cannot use the selected super resolution, it is off for this export",
+   "ja": "；この GPU では選択した超解像を使えないため、今回の書き出しではオフにします",
+   "ko": "; 이 GPU는 선택한 초해상도를 지원하지 않아 이번 내보내기에서는 끕니다.",
+   "es": "; este GPU no puede utilizar la super resolución seleccionada, está apagado para esta exportación",
+   "fr": "; ce GPU ne peut pas utiliser la super résolution sélectionnée, il est désactivé pour cette exportation",
+   "de": "; diese GPU kann die gewählte Superauflösung nicht verwenden, sie ist für diesen Export ausgeschaltet",
+   "pt-BR": "; este GPU não pode usar a super resolução seleccionada, está desligado para esta exportação",
+   "ru": "; это GPU не может использовать выбранное супер разрешение, оно выключено для этого экспорта."
   },
   {
    "zh": "；当前：",

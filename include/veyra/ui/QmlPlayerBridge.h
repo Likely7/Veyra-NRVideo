@@ -480,6 +480,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
     Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
     Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
+    Q_PROPERTY(bool dynamicHud READ dynamicHud WRITE setDynamicHud NOTIFY settingsChanged)
     Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
     Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
@@ -1191,6 +1192,8 @@ public:
     void setHudLock(bool value);
     int hudProtect() const;
     void setHudProtect(int value);
+    bool dynamicHud() const;
+    void setDynamicHud(bool value);
     bool dlssgLiteAvailable() const;
     QString dlssgLiteHint() const;
     int contentRate() const;

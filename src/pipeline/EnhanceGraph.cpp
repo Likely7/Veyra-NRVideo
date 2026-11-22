@@ -1685,17 +1685,18 @@ void EnhanceGraph::composeHudProtect(ID3D12GraphicsCommandList* list,unsigned sl
 
 bool EnhanceGraph::initHudLock() {
     hudLock_.reset();
-    if(!desc_.hudLock||!fgEnabled_||presentSinkFg())return true;
+    if((!desc_.hudLock&&!desc_.dynamicHud)||!fgEnabled_||presentSinkFg())return true;
     auto pass=std::make_unique<HudLock>();
-    if(!pass->initialize(context_.device(),workW_,workH_,outputFormat(),hdr10Output()?2u:desc_.hdrOutput?1u:0u)){
+    if(!pass->initialize(context_.device(),workW_,workH_,outputFormat(),
+                         hdr10Output()?2u:desc_.hdrOutput?1u:0u,desc_.hudLock,desc_.dynamicHud)){
         veyra::log::error("hud-lock",std::format("Live HUD Lock unavailable at {}x{}; frame generation runs without it",workW_,workH_));
         return true;
     }
     hudLock_=std::move(pass);
     return true;
 }
-void EnhanceGraph::composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity){
-    if(hudLock_&&!hudLock_->compose(list,tracker_,generatedSlot,heldParity))
+void EnhanceGraph::composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity,bool useNewerHud){
+    if(hudLock_&&!hudLock_->compose(list,tracker_,generatedSlot,heldParity,useNewerHud))
         veyra::log::warn("hud-lock",std::format("compose skipped slot={} held={}",generatedSlot,heldParity));
 }
 
@@ -4521,6 +4522,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if (runFg && fgCreated()) {
       for(uint32_t sub=1;sub<=fgCalls;++sub){
         const uint32_t generatedSlot=parity+(sub-1)*2;
+        const bool useNewerHud=!resetFg&&sub*2>outputMultiplier;
         if(amfFrc_){
             // GPU producer -> AMF FRC on its own queue -> GPU consumer, ordered by
             // AMF's texture fences (queue waits, no CPU wait). One frame per pair.
@@ -4529,8 +4531,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
             const bool copied=amfFrc_->copyOutput(flist,genFrame_[generatedSlot].Get());
             if(!copied&&!resetFg){veyra::log::error("amf-frc","AMF returned no interpolated frame for this pair");failedBackend_=engine::FailedBackend::Fg;return false;}
+            composeHudLock(flist,generatedSlot,resetFg?parity:1-parity,useNewerHud);
             if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-            composeHudLock(flist,generatedSlot,resetFg?parity:1-parity);
             composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             gpuTimer_.mark(flist,GpuStage::Fg1,true);gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);
@@ -4557,8 +4559,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto* flist=ring_.acquireNext(slot,st);if(!flist)return false;
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             if(!rife_->copyOutput(flist,genFrame_[generatedSlot].Get(),sub,outputMultiplier)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            composeHudLock(flist,generatedSlot,1-parity,useNewerHud);
             if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-            composeHudLock(flist,generatedSlot,1-parity);
             composeExclusion(flist,generatedSlot+2,1-parity,false,true);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             const bool last=sub==fgCalls;
@@ -4583,8 +4585,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto* flist=ring_.acquireNext(slot,st);if(!flist)return false;
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COPY_DEST);
             if(!vfgBackend_->copyOutput(flist,genFrame_[generatedSlot].Get(),generatedSlot)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            composeHudLock(flist,generatedSlot,resetFg?parity:1-parity,useNewerHud);
             if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-            composeHudLock(flist,generatedSlot,resetFg?parity:1-parity);
             composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             const auto timingStage=GpuStage(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage,true);
@@ -4667,8 +4669,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(flist,fgDisable_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         flist->CopyBufferRegion(fgDisableReadback_[generatedSlot].Get(),0,fgDisable_[parity].Get(),0,4);
         }
+        composeHudLock(flist,generatedSlot,resetFg?parity:1-parity,useNewerHud);
         if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-        composeHudLock(flist,generatedSlot,resetFg?parity:1-parity);
         composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true);
         tracker_.transition(flist,fgFrame,D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);

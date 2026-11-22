@@ -191,6 +191,7 @@ struct PlayerSnapshot {
     uint64_t pacingFrames=0,pacingRepaired=0;
     // Live HUD Lock (EnhanceGraph::hudLockState): 0 off, 1 running, 2 unavailable, 3 not with this frame generation.
     int hudLockState=0;
+    int dynamicHudState=0;
     // Live FG output hint (DisplayFgBudget.h), never applied automatically:
     // 0 = the output fits the panel, 1 = suggest turning generation off,
     // otherwise the suggested lower multiplier. Refresh and content rate are

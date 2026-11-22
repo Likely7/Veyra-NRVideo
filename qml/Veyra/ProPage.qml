@@ -1955,6 +1955,7 @@ VPage {
                                 }
                             }
                             HudProtectControl { objectName: "list-hud-protect" }
+                            DynamicHudRow { backend: veyra; namePrefix: "list" }
                             VSubGroup {
                                 id: fgFlowGroup
                                 objectName: "list-fg-flow-group"

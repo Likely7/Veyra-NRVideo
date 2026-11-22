@@ -1718,6 +1718,7 @@ VPage {
                     VSwitch { objectName: "node-hud-lock"; checked: veyra.hudLock; onToggled: checked => veyra.hudLock = checked }
                 }
                 HudProtectControl { objectName: "node-hud-protect" }
+                DynamicHudRow { backend: veyra; namePrefix: "node" }
                 VRow {
                     label: qsTr("补帧运动来源")
                     visible: veyra.fgBackendName !== "vfg"

@@ -17,6 +17,7 @@ int wmain(int argc,wchar_t** argv) {
     if(argc!=3&&argc!=4)return 2;
     const bool probeFailure=argc==4&&std::wstring_view(argv[3])==L"probe-failure";
     const bool backendSwitch=argc==4&&std::wstring_view(argv[3])==L"backend-switch";
+    const bool dynamicHud=argc==4&&std::wstring_view(argv[3])==L"dynamic-hud";
     // FSR 4 ML on an adapter whose provider does not offer it (any non-RX 9000,
     // such as this NVIDIA test machine): the engine switches to FSR 3.1 at 2X.
     const bool fsr4Fallback=argc==4&&std::wstring_view(argv[3])==L"fsr4-fallback";
@@ -25,7 +26,7 @@ int wmain(int argc,wchar_t** argv) {
     // driver's AMF runtime may drive that GPU too) or turns FG off with a notice.
     const bool amdFrc=argc==4&&std::wstring_view(argv[3])==L"amdfrc";
     const bool amdFrcRefused=argc==4&&std::wstring_view(argv[3])==L"amdfrc-other";
-    if(argc==4&&!probeFailure&&!backendSwitch&&!fsr4Fallback&&!amdFrc&&!amdFrcRefused)return 2;
+    if(argc==4&&!probeFailure&&!backendSwitch&&!fsr4Fallback&&!amdFrc&&!amdFrcRefused&&!dynamicHud)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
     std::filesystem::create_directories(argv[2]);
@@ -143,8 +144,30 @@ int wmain(int argc,wchar_t** argv) {
                     <<L" generated="<<s.generated<<L" warning="<<s.backendWarning.size()<<std::endl;
             }
         }
+        if (dynamicHud && !failures) {
+            struct HudMode { bool dynamic; bool staticLock; };
+            for (const auto mode : {HudMode{false,false}, HudMode{true,false},
+                                    HudMode{true,true}, HudMode{false,true}, HudMode{false,false}}) {
+                const auto before = engine.snapshot();
+                auto settings = before.desired;
+                settings.nr = settings.sr = false;
+                settings.frameGenerationBackend = FrameGenerationBackend::Vfg;
+                settings.multiplier = 2;
+                settings.dynamicHud = mode.dynamic;
+                settings.hudLock = mode.staticLock;
+                if (!check(engine.requestSettings(settings), "request VFG HUD mode")) break;
+                const auto revision = engine.snapshot().desired.revision;
+                if (!check(wait([&](const auto& s) {
+                    return !s.applying && s.applied.revision == revision && s.fgActive &&
+                        s.applied.frameGenerationBackend == FrameGenerationBackend::Vfg &&
+                        s.dynamicHudState == int(mode.dynamic) && s.hudLockState == int(mode.staticLock) &&
+                        s.frames >= before.frames + 20 && s.generated >= before.generated + 12;
+                }, 20), "VFG applies both switches and keeps producing frames")) break;
+                std::cout << "HUD dynamic=" << mode.dynamic << " static=" << mode.staticLock << std::endl;
+            }
+        }
         for(const unsigned multiplier:{2u,6u,1u,6u}){
-            if(probeFailure||backendSwitch||fsr4Fallback||amdFrc||amdFrcRefused)break;
+            if(probeFailure||backendSwitch||fsr4Fallback||amdFrc||amdFrcRefused||dynamicHud)break;
             if(failures)break;
             const auto beforeSwitch=engine.snapshot();
             auto settings=beforeSwitch.desired;
