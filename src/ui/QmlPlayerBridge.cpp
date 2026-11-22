@@ -320,6 +320,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("hudLock")).toBool();
             if (s.hudLock != on) { s.hudLock = on; changed = true; }
         }
+        if(p.contains(QStringLiteral("hudProtect"))){
+            const int mode=p.value(QStringLiteral("hudProtect"),-1).toInt();
+            if(mode>=0&&mode<=int(engine::HudProtectMode::Regions)&&int(s.hudProtect)!=mode){
+                s.hudProtect=engine::HudProtectMode(mode);
+                changed=true;
+            }
+        }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
             if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){

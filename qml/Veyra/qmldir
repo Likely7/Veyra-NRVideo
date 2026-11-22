@@ -46,6 +46,7 @@ VScrollBar 1.0 VScrollBar.qml
 VConfirm 1.0 VConfirm.qml
 NrLayerEditor 1.0 NrLayerEditor.qml
 MaskEditor 1.0 MaskEditor.qml
+HudProtectControl 1.0 HudProtectControl.qml
 DedupModeRow 1.0 DedupModeRow.qml
 NrWebPad 1.0 NrWebPad.qml
 SrStageEditor 1.0 SrStageEditor.qml

@@ -270,10 +270,14 @@ struct NrLayerSettings {
     bool operator==(const NrLayerSettings&) const = default;
     bool usesTemporal() const {return residual.correction.enabled?residual.correction.usesHistory():temporal;}
 };
+enum class ExclusionContent : uint8_t { All, FrameGeneration, Hud };
+enum class HudProtectMode : uint8_t { Off, Center, Regions };
+
 struct ProtectionRect {
     float left=0,top=0,right=0,bottom=0;
     // The ellipse inscribed in the rectangle instead of the rectangle itself.
     bool ellipse=false;
+    ExclusionContent content=ExclusionContent::All;
     bool empty()const{return left==right||top==bottom;}
     bool operator==(const ProtectionRect&)const=default;
 };
@@ -296,16 +300,32 @@ struct ProtectionSettings {
         // tile space without clipping, since clipping would change its shape.
         for(auto r:regions){const float low=r.ellipse?-64.0f:0.0f,high=r.ellipse?65.0f:1.0f;
             for(float v:{r.left,r.top,r.right,r.bottom})if(!std::isfinite(v)||v<low||v>high)return "invalid protection rectangle";
-            if(r.left>r.right||r.top>r.bottom)return "inverted protection rectangle";}
+            if(r.left>r.right||r.top>r.bottom)return "inverted protection rectangle";
+            if(r.content>ExclusionContent::Hud)return "invalid exclusion content";
+        }
         return {};
     }
 };
+using HudProtectRegions = std::array<ProtectionRect,5>;
+inline HudProtectRegions hudProtectRegions(HudProtectMode mode,const ProtectionSettings& exclusion) {
+    HudProtectRegions result{};
+    if(mode==HudProtectMode::Center)result[0]={0.44f,0.40f,0.56f,0.60f};
+    for(size_t i=0;i<exclusion.regions.size();++i){
+        const auto& r=exclusion.regions[i];
+        const bool taggedHud=exclusion.enabled&&r.content==ExclusionContent::Hud;
+        if(r.empty()||(!taggedHud&&mode!=HudProtectMode::Regions))continue;
+        result[i+1]=r;
+        result[i+1].content=ExclusionContent::All;
+    }
+    return result;
+}
+
 struct EnhancementSettings {
     uint64_t revision=1;
     NrSettings model;
     ResidualSettings residual;
     ProtectionSettings protection;
-    ProtectionSettings exclusion; // final raw-source mask, including generated frames
+    ProtectionSettings exclusion; // per-region raw, frame generation or HUD protection
     bool nr=false,sr=false;
     bool lowLatency=false; // preview only: NR before SR, opt-in
     NrRuntime nrRuntime=NrRuntime::Ampere;
@@ -510,6 +530,7 @@ struct EnhancementSettings {
     // UI "HUD 自动锁定" (pipeline/HudLock.h, from PushFPS): a per-pixel HUD mask found every
     // frame and kept out of graph frame generation. Its passes exist only when on.
     bool hudLock=false;
+    HudProtectMode hudProtect=HudProtectMode::Off;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -590,6 +611,7 @@ struct EnhancementSettings {
         if(!(multiplier>1))active.pacingRepair=defaults.pacingRepair;
         // XeSS generates inside its own presenter; HUD Lock works on graph frame generation.
         if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS))active.hudLock=defaults.hudLock;
+        if(multiplier<=1)active.hudProtect=defaults.hudProtect;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {
@@ -657,6 +679,7 @@ struct EnhancementSettings {
         if(!hdrMetadata.valid())return "invalid HDR metadata parameters";
         auto range=[](float v,float hi){return std::isfinite(v)&&v>=0&&v<=hi;};
         if(auto error=protection.validate();!error.empty())return error;
+        if(hudProtect>HudProtectMode::Regions)return "invalid HUD protection mode";
         if(auto error=exclusion.validate();!error.empty())return error;
         if(!revision)return "settingsRevision must be nonzero";
         if(!validNrRuntime(nrRuntime))return "invalid NR runtime";

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <d3d12sdklayers.h>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 extern "C" {
 #include <libavutil/frame.h>
@@ -89,10 +90,12 @@ static bool readImage(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlo
     D3D12_RANGE written{0,0};rb->Unmap(0,&written);return true;
 }
 #include "EffectExclusionCases.h"
+#include "HudProtectCases.h"
 int wmain(int argc,wchar_t** argv){
     const std::wstring modeWide=argc>1?argv[1]:L"off";
     const std::string mode(modeWide.begin(),modeWide.end());
     if(mode.starts_with("exclusion"))return effectExclusionCases(argc,argv);
+    if(mode.starts_with("hud-protect"))return hudProtectCases(argc,argv);
     using namespace veyra;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;pipeline::EnhanceGraph graph(ctx,ring);
     Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;dd.enableDebugLayer=mode.find("-debug")!=std::string::npos;bool ok=ctx.initialize(dd,st)&&ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st);

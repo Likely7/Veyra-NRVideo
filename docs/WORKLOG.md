@@ -1658,3 +1658,11 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+## 2026-11-21 补帧准心/HUD 保护与剔除区域模式
+
+从本地 main \`eb5fd6d0\` 起独立分支 \`codex/fg-hud-protect-20261121\`。新增默认关闭的独立 HUD 保护，将局部位移估计、置信度、背景修补、补帧专用流向量和生成帧恢复接入共享图。XeSS 收到无 HUD 的输入和预乘 UI。每个剔除区支持全部效果、仅补帧和准心/HUD，旧预设及新画框默认全部效果。仅补帧保留增强真实帧的超分、NR 和 HDR。编辑、几何和模式随预设及会话保存。
+
+\`scripts/acceptance/build-recording-handoff.py --task codex-fg-hud-protect-20261121 --label 2.2.0-hud-protect-test --jobs 2\` 构建主程序及相关目标。日志在 \`E:/项目/Veyra/logs/codex-fg-hud-protect-20261121\`，构建与私有测试版分别在 E 盘同名 build、tests 目录。实际回归和完整命令见 [验收记录](<E:/项目/Veyra/reports/codex-fg-hud-protect-20261121/RESULTS.md>)。修正初次探针漏选生产导出设置、旧测试枚举和测试运行库路径后重测。
+
+RTX 5070 同帧对照，DLSS 2X/4X 拖影 7/13、19/39 → 0，FSR 3.1 和 ANR 2X 各 13/13 → 0，启用时真准心误差 0。真实 HDR 录屏里「仅补帧」框内外亮度差 39.52% → 2.87%，DLSS 2X HEVC 导出 96 帧/60 FPS、64 帧样本的拖影 10 → 0。XeSS HDR10 从真实软件跑过三组配置。1440p/4K 每张真实帧新增 GPU 阶段中位数之和约 0.13/0.21 ms，每张生成帧合成约 0.007/0.009 ms。DLSS 框外逐像素一致性仍有误差，FSR 4 ML、采集卡和真实游戏待实机验收。独立测试版仅本地，用户配置及运行库身份保持。

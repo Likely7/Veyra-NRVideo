@@ -268,5 +268,36 @@ int wmain(int argc,wchar_t** argv){
         check(anyReader.load(*anyRestored)&&*anySession==*anyRestored,"session restart restores the DLSS SR second pass");
     }
 
+    {
+        const auto path=root/L"exclusion-modes.session";
+        EnhancementSettings settings;
+        settings.exclusion.enabled=true;
+        settings.exclusion.regions[0]={.1f,.2f,.3f,.4f};
+        settings.exclusion.regions[1]={.4f,.2f,.6f,.4f,true};
+        auto initial=std::make_unique<ChainSession>(ChainSession::initial(settings));
+        ChainSessionStore writer(path);
+        check(writer.save(*initial),"legacy exclusion session saved");
+        const auto old=files(path);
+        settings.exclusion.regions[0].content=ExclusionContent::FrameGeneration;
+        settings.exclusion.regions[1].content=ExclusionContent::Hud;
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(settings));
+        check(session->select(ChainMode::Node),"exclusion node session initializes");
+        auto editor=std::make_shared<NodeEditorDocument>();
+        editor->nodes=session->configurations[1].chain;
+        check(editor->layout.initialize(editor->nodes).accepted,"exclusion editor layout");
+        session->configurations[1].editor=editor;
+        check(writer.save(*session),"mixed exclusion session saved");
+        auto loaded=std::make_unique<ChainSession>();ChainSessionStore reader(path);
+        check(kept(old,files(path))&&reader.load(*loaded)&&*loaded==*session,"modes persist through the session and editor while old data stays readable");
+
+        const auto libraryPath=root/L"exclusion.preset";
+        PresetLibrary library(libraryPath);library.setIncludeBuiltins(false);
+        auto entry=std::make_unique<PresetEntry>();entry->name=L"Exclusion";entry->chain=toChain(settings);
+        check(library.load()&&library.put(*entry),"mixed exclusion library saved");
+        PresetLibrary restored(libraryPath);restored.setIncludeBuiltins(false);
+        check(restored.load()&&restored.entries().size()==1&&restored.entries()[0].chain==entry->chain,
+              "preset library restores both exclusion modes and both shapes");
+    }
+
     std::cout<<"Video AI settings "<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;
 }

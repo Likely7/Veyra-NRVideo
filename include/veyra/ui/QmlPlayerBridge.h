@@ -477,6 +477,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool fgAdaptive READ fgAdaptive WRITE setFgAdaptive NOTIFY settingsChanged)
     Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
     Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
+    Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
     Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
     Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
@@ -1140,6 +1141,7 @@ public:
     Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
     Q_INVOKABLE bool removeMaskRegion(bool allEffects,int index);
     Q_INVOKABLE bool clearMaskRegions(bool allEffects);
+    Q_INVOKABLE bool setExclusionRegionMode(int index,int mode);
     Q_INVOKABLE bool setStabilizerParameter(int index,const QString& key,double value);
     Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
@@ -1183,6 +1185,8 @@ public:
     void setPacingRepair(bool value);
     bool hudLock() const;
     void setHudLock(bool value);
+    int hudProtect() const;
+    void setHudProtect(int value);
     bool dlssgLiteAvailable() const;
     QString dlssgLiteHint() const;
     int contentRate() const;

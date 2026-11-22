@@ -93,7 +93,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     if(!reuse&&!sink_.initialize(ctx.device(),queue,d,st))return false;
     if(reuse)veyra::log::info("present-reuse",std::format("retained native swapchain generation={} format={} fg={} output={}x{}; rebinding drained graph descriptors",generation_,unsigned(graph.outputFormat()),graph.fgEnabled(),graph.workWidth(),graph.workHeight()));
     pass_={};rtvs_.Reset();compositeTarget_.Reset();exclusionUiTarget_.Reset();exclusionHudlessTarget_.Reset();
-    exclusionUiEnabled_=graph.xessEnabled()&&graph.exclusionEnabled();
+    exclusionUiEnabled_=graph.xessEnabled()&&graph.exclusionUi(0)!=nullptr;
     std::vector<uint8_t> vs,ps;
     // The output pool contains both parities of every generated subframe.
     // Comparison references follow it; derive offsets to cover VFG through 8X.
@@ -128,7 +128,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         pipeline::makeSrv(ctx.device(),graph.exclusionUi(i),graph.outputFormat(),
             {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+4+i)*pass_.increment});
     if(exclusionUiEnabled_)for(unsigned i=0;i<2;++i)
-        pipeline::makeSrv(ctx.device(),graph.unmaskedVideo(i),graph.outputFormat(),
+        pipeline::makeSrv(ctx.device(),graph.fgInput(i),graph.outputFormat(),
             {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+6+i)*pass_.increment});
     if(!reuse)startDisplayState();
     return true;
@@ -582,7 +582,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
                 uiState.transition(list,sourceUi,D3D12_RESOURCE_STATE_COMMON);
                 uiState.transition(list,ui,D3D12_RESOURCE_STATE_COMMON);
                 hudless=exclusionHudlessTarget_.Get();
-                auto* sourceHudless=graph.unmaskedVideo(slot);
+                auto* sourceHudless=graph.fgInput(slot);
                 uiState.transition(list,sourceHudless,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 uiState.transition(list,hudless,D3D12_RESOURCE_STATE_RENDER_TARGET);
                 const D3D12_CPU_DESCRIPTOR_HANDLE hudlessRtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(5)*inc_};
