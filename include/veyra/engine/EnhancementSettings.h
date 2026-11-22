@@ -44,8 +44,7 @@ inline bool validNrReuseMode(NrReuseMode v) {
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
 // AmdFrc: AMD AMF FRC, the video frame interpolation of the AMD driver (gfx::AmfFrcBackend).
-// Rife: RIFE through ONNX Runtime DirectML from runtime
-ife (gfx::RifeDmlBackend).
+// Rife: RIFE through ONNX Runtime DirectML from runtime/rife (gfx::RifeDmlBackend).
 enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5, AmdFrc = 6, Rife = 7 };
 constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
