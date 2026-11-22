@@ -16,7 +16,7 @@ void require(bool condition, const char* name) {
     else ++failed;
 }
 
-ScanoutWindow fixed() { return {1, 120, .24, 120, 60, DisplaySync::Automatic, true, false}; }
+ScanoutWindow fixed() { return {1, 120, .24, 120, 60, 60, DisplaySync::Automatic, true, false, false}; }
 
 bool detects(ScanoutWindow window, int count) {
     PresentTearingDetector detector;
@@ -47,10 +47,12 @@ void replay(const char* filename) {
         ScanoutWindow window;
         unsigned mode = 0;
         if (!(columns >> time >> window.seconds >> window.refreshHz >> window.medianMs
-            >> window.refreshes >> window.samples >> mode >> window.countersValid >> window.vrrPossible)) {
+            >> window.refreshes >> window.samples >> mode >> window.countersValid >> window.vrrCapable)) {
             require(false, "captured window is readable");
             return;
         }
+        // Older replay receipts have no separate submission count or active flag.
+        if (!(columns >> window.presentCalls >> window.vrrActive)) window.presentCalls = window.samples;
         window.sync = static_cast<DisplaySync>(mode);
         if (detector.sample(window)) {
             ++warnings;
@@ -71,8 +73,14 @@ int main(int argc, char** argv) {
     require(detects(window, 5), "explicit VSync is eligible");
     window.sync = DisplaySync::Tearing;
     require(!detects(window, 10), "explicit Tearing suppresses the hint");
-    window = fixed(); window.vrrPossible = true;
-    require(!detects(window, 10), "VRR suppresses the hint even at the nominal refresh ceiling");
+    window = fixed(); window.vrrCapable = true;
+    require(!detects(window, 4) && detects(window, 5), "a capable monitor running at fixed refresh can warn");
+    window.vrrActive = true;
+    require(!detects(window, 10), "active VRR suppresses the hint");
+    window.vrrActive = false; window.presentCalls = 108;
+    require(!detects(window, 10), "90% submission rate is ambiguous on a VRR capable monitor");
+    window.presentCalls = 107;
+    require(detects(window, 5), "submission rate below the ceiling remains eligible");
     window = fixed(); window.samples = 5;
     require(!detects(window, 5) && detects(window, 6), "thirty samples are required");
     window = fixed(); window.medianMs = 1;

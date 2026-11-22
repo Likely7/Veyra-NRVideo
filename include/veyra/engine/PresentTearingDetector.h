@@ -8,9 +8,9 @@ enum class TearingHint { None, Driver, Nvidia };
 
 struct ScanoutWindow {
     double seconds = 0, refreshHz = 0, medianMs = 0;
-    uint64_t refreshes = 0, samples = 0;
+    uint64_t refreshes = 0, samples = 0, presentCalls = 0;
     DisplaySync sync = DisplaySync::Automatic;
-    bool countersValid = false, vrrPossible = false;
+    bool countersValid = false, vrrCapable = false, vrrActive = false;
 };
 
 // A sustained short DXGI timing is a hint. It cannot establish the actual
@@ -22,8 +22,11 @@ public:
         const bool validWindow = window.countersValid && window.seconds > 0 && window.seconds <= 1.6
             && std::isfinite(window.refreshHz) && window.refreshHz > 1 && window.samples
             && window.medianMs >= 0 && window.medianMs < 1;
-        if (!validWindow || window.vrrPossible || presentationModeChanged(window.sync)
-            || window.sync == DisplaySync::Tearing) {
+        const bool modeChanged = presentationModeChanged(window.sync);
+        const bool nearVrrCeiling = window.vrrCapable &&
+            double(window.presentCalls) >= window.refreshHz * window.seconds * 0.9;
+        if (!validWindow || window.vrrActive || nearVrrCeiling || modeChanged ||
+            window.sync == DisplaySync::Tearing) {
             resetWindow();
             return false;
         }

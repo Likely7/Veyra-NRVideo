@@ -1569,6 +1569,7 @@ signals:
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);
+    void warningNotice(const QString& text);
     // A presentation-hooking overlay appeared in a run whose interface draws on the GPU
     // ("rtss": its OSD is kept out of this process; "nvidia": NVIDIA's in-game overlay and
     // "gamepp": GamePP, which cannot be kept out); a restart draws the interface in software.

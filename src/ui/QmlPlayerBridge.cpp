@@ -470,9 +470,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if (displayed.running && !displayed.image && displayed.tearingHint != engine::TearingHint::None
             && displayed.sessionId != impl_->tearingNoticeSession) {
             impl_->tearingNoticeSession = displayed.sessionId;
-            emit notice(displayed.tearingHint == engine::TearingHint::Nvidia
+            emit warningNotice(displayed.tearingHint == engine::TearingHint::Nvidia
                 ? tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请在 NVIDIA 控制面板的程序设置中，将 veyra_qml_ui.exe 的垂直同步设为“使用 3D 应用程序设置”。")
-                : tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请检查显卡驱动中的垂直同步设置。"), true);
+                : tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请检查显卡驱动中的垂直同步设置。"));
         }
         updateMaskOverlay();
         tickSubtitles();

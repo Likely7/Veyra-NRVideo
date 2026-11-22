@@ -1668,3 +1668,9 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+### 2026-11-21 撕裂提示复审
+
+在 \`codex/tearing-diagnostics-20261121\` 分开判断 VRR 能力与实际状态。已生效或应用使用 VRR 时跳过，可用 VRR 且送帧率达到刷新率的 90% 时也跳过。其余在固定刷新、持续五秒和有足够样本时可以提示。送帧数用 DXGI 统计差值。提示改成琥珀色并停留 6.5 秒。
+
+构建 \`veyra_tearing_detector_tests\` 和 \`veyra_qml_ui\`，并发 2，记录在 \`E:/项目/Veyra/logs/codex-tearing-diagnostics-20261121/build-20261121-231937\`。单测含现场统计复放共 17 项通过，488 个窗口复放只报告一次。RTX 5070 接 320 Hz 显示器，在实跑窗口和全屏时均检测到可用 VRR、实际未开启。每组 11 个样本，窗口各窗中位数 3.688–4.644 ms，全屏 4.735–7.639 ms，共 0 次误报。私有 UI 探针确认琥珀色提示及原有红色错误样式。全屏样本合成模式未知，独立翻转及驱动强制关闭垂直同步的实机正对照待测。日志在 \`E:/项目/Veyra/logs/codex-batch-review-20261121/tearing\`，手测版在 \`E:/项目/Veyra/tests/codex-tearing-diagnostics-20261121\`。
