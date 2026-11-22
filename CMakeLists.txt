@@ -1934,18 +1934,6 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_hdr_color_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_hdr_color_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_hdr_color_tests PRIVATE veyra_engine)
-  add_executable(veyra WIN32 apps/veyra/main.cpp apps/veyra/ui/AppShell.cpp apps/veyra/ui/CapturePanel.cpp apps/veyra/ui/SubtitleOverlay.cpp apps/veyra/SettingsWindow.cpp apps/veyra/TelemetryWindow.cpp)
-  target_sources(veyra PRIVATE apps/veyra/ui/ScreenCapturePanel.cpp)
-  target_link_options(veyra PRIVATE /STACK:8388608) # same 32-node chain frames as veyra_qml_ui
-  add_executable(veyra_slider_reset_tests tests/integration/SliderResetTests.cpp apps/veyra/SettingsWindow.cpp)
-  target_compile_features(veyra_slider_reset_tests PRIVATE cxx_std_20)
-  target_compile_options(veyra_slider_reset_tests PRIVATE /utf-8)
-  target_link_libraries(veyra_slider_reset_tests PRIVATE veyra_engine comctl32 comdlg32 shell32)
-  add_executable(veyra_settings_layout_tests tests/integration/SettingsPageLayoutTests.cpp apps/veyra/SettingsWindow.cpp)
-  target_compile_features(veyra_settings_layout_tests PRIVATE cxx_std_20)
-  target_compile_options(veyra_settings_layout_tests PRIVATE /utf-8)
-  target_compile_definitions(veyra_settings_layout_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-  target_link_libraries(veyra_settings_layout_tests PRIVATE veyra_engine comctl32 comdlg32 shell32)
   if(VEYRA_ENABLE_REMOTEPLAY)
     add_executable(veyra_ps5_hw_image_tests tests/integration/Ps5HardwareImageTests.cpp)
     add_executable(veyra_ps5_quality_tests tests/integration/Ps5SourceQualityTests.cpp)
@@ -1956,8 +1944,6 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
     target_compile_definitions(veyra_ps5_hw_image_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(veyra_ps5_hw_image_tests PRIVATE veyra_engine)
     find_package(SDL3 3.4.14 EXACT CONFIG REQUIRED)
-    target_sources(veyra PRIVATE apps/veyra/ui/RemotePlayPanel.cpp src/remoteplay/ControllerInput.cpp)
-    target_link_libraries(veyra PRIVATE SDL3::SDL3)
     # P4-e: the QML front end forwards the PC controller to the PS5 the same way.
     # Only the SDL library file and headers: SDL3::SDL3's own system-library list
     # pushed the veyra_qml_ui link line over CMake's response-file threshold, and
@@ -1986,10 +1972,6 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
     target_compile_definitions(veyra_remoteplay_profile_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(veyra_remoteplay_profile_tests PRIVATE veyra_remoteplay_chiaki)
   endif()
-  target_compile_features(veyra PRIVATE cxx_std_20)
-  target_compile_options(veyra PRIVATE /utf-8)
-  target_link_libraries(veyra PRIVATE veyra_engine comctl32 comdlg32 shell32 dbghelp)
-  add_dependencies(veyra veyra_shader_present_blit)
 
   # matrix executes through the shared product libraries only.
   add_executable(veyra_quality_probe
@@ -2073,8 +2055,6 @@ if(VEYRA_CLIP_TOOLS_ROOT AND EXISTS "${VEYRA_CLIP_TOOLS_ROOT}/include/libavcodec
 endif()
 
 # Layered child subtitle windows require a modern-Windows compatibility manifest.
-set(VEYRA_RESOURCE_FILENAME "Veyra.exe")
-configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc @ONLY)
 if(TARGET veyra_qml_ui)
   set(VEYRA_RESOURCE_FILENAME "veyra_qml_ui.exe")
   configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc @ONLY)
@@ -2088,18 +2068,9 @@ if(TARGET veyra_qml_ui)
 endif()
 configure_file(apps/veyra/resource.h ${CMAKE_CURRENT_BINARY_DIR}/veyra-resource.h COPYONLY)
 configure_file(assets/veyra.ico ${CMAKE_CURRENT_BINARY_DIR}/veyra.ico COPYONLY)
-# The legacy executable is available only when the media targets are built.
-if(TARGET veyra)
-  target_sources(veyra PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc)
-  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-version.rc PROPERTIES
-    OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
-endif()
 if(TARGET veyra_qml_ui)
   set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
-endif()
-if(TARGET veyra)
-  target_link_options(veyra PRIVATE "/MANIFESTINPUT:${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/veyra.manifest")
 endif()
 # P4-c: the QML front end hosts the same layered child subtitle window.
 if(TARGET veyra_qml_ui)
