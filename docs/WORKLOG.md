@@ -1712,3 +1712,11 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 `veyra_live_presentation_tests --capture-no-video` 用视频回放和假采集重开验证真实计时与状态。45.055 秒完成 5 次重开和无帧超时，进入手动重试提示。采集启动测试 23 项通过，包括 3 个 HRESULT、收到视频后清零、10 分钟限制和独立夹具进程的 PID 建议。其余执行的 7 个套件通过，Qt Quick 为 241 通过、0 失败，色彩面板夹具的已知 `groupBypassMask` 警告次数仍为 7。真实 Veyra Qt 进程以 `VEYRA_TEST_ENGINE_HANG_MS=9000` 和 `VEYRA_TEST_CAPTURE_DRIVER_STALLS=1` 测试两次相同驱动等待，中文和英文均两次出现正确提示，每会话只有 1 份转储。普通引擎等待的负对照继续使用原提示。窗口操作、配置及截图探针限于私有夹具，部署的 QML 最后核对与源码一致。
 
 未连接实体采集卡，实卡正常取流、换格式、拔插、厂商驱动行为及安全软件实际隔离场景未复测。仅本地提交，未合并 main、推送或发布。
+
+### 2026-11-22 PS5 高码率 UDP 接收缓存
+
+Windows 有线局域网下，请求 100 Mbps 时周期性卡顿，降到 15/20 Mbps 后改善。固定 Chiaki 的两个 SO_RCVBUF 初始化分支都复用了 0x19000（100 KiB）的协议窗口；新增 0005 补丁，独立请求 4 MiB socket 接收缓存，保留协议窗口和握手不变。同步 build-native.ps1、完整来源验证器、依赖锁与开发文档；新增真实 loopback socket 回归，覆盖新建及传入 socket 两条路径。相同容量的既有社区方案见 [CrisBuen/NLFork](https://github.com/CrisBuen/NLFork)。
+
+本次从 PR 源码配置 services/remoteplay-probe，Release/MSVC 19.33，构建并发 2。复用已核验的固定 Chiaki stage 与 /MD 静态依赖；本机 probe 对已有 sscanf/getenv 报 C4996，私有 CMake 配置补充 _CRT_SECURE_NO_WARNINGS 并保留 /EHsc，未修改产品编译选项。构建目标为 veyra_remoteplay_udp_buffer_tests、veyra_remoteplay_feedback_wire_tests、veyra_remoteplay_native_probe、veyra_remoteplay_core_tests；ctest --test-dir <build-native> -V -E "rp[.]dpapi_profile" --timeout 30 --output-on-failure：82/82 通过（79 个 offline-core、native 初始化、UDP buffer、feedback wire）。两条路径均读回 SO_RCVBUF=4194304、a_rwnd=102400；feedback wire 为 8 个加密 history 报文和 1 个 state 报文。未构建的 DPAPI profile 测试明确排除。完整命令、失败日志和通过记录保留在本次私有验证目录。
+
+此前包含同一 UDP 补丁的 2.2.0 本地产品测试包已编译并完成启动检查，用户反馈 100 Mbps 已流畅；该包另含本机编译适配，不将其视为严格单变量对照。本 PR 本次仅重建上述原生目标，没有重新构建完整 GUI，也没有自动连接 PS5。未测修改后丢包率、端到端延迟或其他机器效果；本次提交仅包含 UDP 修复、构建接线、回归与记录。

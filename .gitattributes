@@ -1,6 +1,7 @@
 
 # Unified dependency patches must remain applicable after a Windows checkout.
-scripts/remoteplay/patches/*.patch text eol=lf
+# Unified context prefixes can precede blank lines or tab-indented source.
+scripts/remoteplay/patches/*.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab
 # A single space is a required empty context line in unified diff syntax.
 scripts/ffmpeg/*.patch text eol=lf whitespace=-blank-at-eol
 third_party/lmxxf/*.patch text eol=lf whitespace=-blank-at-eol
