@@ -1,5 +1,24 @@
 # 当前工作日志
 
+## 2026-11-21 NVIDIA NIS 与 AMD VideoSR
+
+独立分支 codex/amf-nis-video-sr-20261121，基线 eb5fd6d0。专业模式和节点模式的超分菜单增加 NVIDIA NIS、AMD VideoSR 1.0 及 AMD VideoSR 1.1（实验）。保存编号为 24、25、26，进入现有超分执行图。NIS 使用原版 NVScaler 的滤波核与系数，锐化设为 0.25。超过 2 倍的放大先在 GPU 把输入调至 NVScaler 支持的范围。SDR 以 sRGB 码值运行后转回线性工作纹理，HDR 使用线性 scRGB。AMD 在选定的 Radeon 上调用系统 AMF HQ Scaler，经 D3D12 fence 交换 RGBA16F，驱动初始化或处理失败交给已有后端恢复机制。
+
+用 py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-amf-nis-video-sr-20261121 --label 2.2.0-amf-nis-test --jobs 2 构建。依赖参数见同任务 tmp/build/configure.cmd。完整构建 284.7 秒，最后一次重建 37.8 秒。超分设置 292 项、效果链和 3172 条词库校验通过。GPU 验收用 veyra_color_grade_gpu_tests --spatial-sr amd|nvidia <绝对测试目录>。两个显卡核对了 SDR、P010 PQ 高光与宽色域、连续不同帧及双重超分。两卡均实跑 NIS FP16 和 FP32。D3D12 调试层零错误。首轮夹具未释放首帧租约，又把 HDR10 的 10 位打包输出当 FP16 读。修正夹具后重跑通过。复用 AMF 工厂后，现有 AMD FRC 在两卡的 48 帧测试也通过，45 个插值帧命中位置，零 D3D12 错误。
+
+私有配置实跑同一 640×360 图片至 2560×1440，三档输出像素各不相同。另用 1920×1080、59.94 FPS 文件播放，RTX 5070 的 NIS 至 4K 约 60 提交 FPS，Ryzen 7 9700X 核显上的 AMD VideoSR 1.0 至 1440p 约 60、1.1 约 45。切换档位后继续播放和截图。同尺寸时已验证界面提示提高目标尺寸。三个后端分别导出 12 帧的 1440p 成片，FFprobe 核对尺寸和帧数。AMD 实测为 Radeon 超分及系统 MFT 编码，本机在格式协商后选中了 NVIDIA HEVC MFT。播放读数限于本机和该片段。
+
+本地入口 E:/项目/Veyra/tests/codex-amf-nis-video-sr-20261121/启动超分测试.cmd。构建、脚本及原始日志位于 E:/项目/Veyra/{build,tmp,logs}/codex-amf-nis-video-sr-20261121。画面对照与像素数据位于同名 reports 目录。95 个测试版着色器与构建匹配，新 NIS 着色器合计 47464 字节。物理采集卡、Intel 和其他 Radeon 型号的实机验收待补。
+
+
+### 2026-11-21 AMD VideoSR 画质复审
+
+在 \`codex/amf-nis-video-sr-20261121\` 保留 AMD VideoSR 1.0。SDR 输入转成 FP16 sRGB 码值，缩放后转回线性工作空间。HDR 保持线性 FP16。菜单暂藏 1.1，旧选择在预览、导出和界面解析为 1.0。修复 AMF 成功后清空失败归属的问题。
+
+使用 Radeon 核显、驱动 32.0.21042.62、AMF 1.4.37.0，把同一张原生 1440p 图下采样后做 2× 和 4×。DX12 的三种 FP16 值域试验中，1.1 的最好 PSNR 约 31.23/27.78 dB，BGRA8 和 RGBA8 同样有伪影。DX11 的 FFmpeg 1.1 对照为 41.72/35.73 dB。用 FFmpeg 强制派生 DX12 时，滤镜仍初始化 DX11，不能用作独立 DX12 结果。1.0 的显式 sRGB 相比原线性为 41.31/35.67 对 40.98/35.48 dB。4× 加线性预放大后 1.0 的 PSNR 更低，采用直缩放。
+
+实程序 1.0 截图的 PSNR 为 41.25/35.65 dB，边缘差 RMSE 2.63/3.71。NIS 为 39.93/35.11 dB，边缘差 RMSE 2.44/3.50。指标反映该帧的还原与锐化取舍。GPU 回归另外对已知图形断言 PSNR 和边缘指标，2×、4× 达 46.24/44.03 dB，P010、双超分及旧选择映射通过。RTX 5070 的 NIS、设置 292 项、效果链和实程序 2×/4× 截图均通过。首次报告脚本失败于 NumPy 数字序列化，FFmpeg 首轮漏下载 GPU 帧，修正后重跑。图和完整表见 \`E:/项目/Veyra/reports/codex-batch-review-20261121\`。构建目标 \`veyra_qml_ui veyra_color_grade_gpu_tests veyra_video_ai_settings_tests veyra_effect_chain_tests\`，日志在 \`E:/项目/Veyra/logs/codex-amf-nis-video-sr-20261121/build-20261121-232922\`。AMD 独显、多种真实动态素材与长时性能待测。
+
 ## 2026-11-20 T900 原速采集稳帧与 HDR 角标
 
 从已发行 2.2.0 对应的 main eb5fd6d0 开隔离树。原速无补帧采集同时满足稳定设备时间戳和明显到帧抖动后，按跟踪后的源时钟调度真实帧。沿用现有两批呈现队列和原始媒体时间戳，最大额外持有为半帧或 8 ms 中较小者。断点和掉帧重新建锚。无补帧的手动 60→30 保留原帧网格。补帧模式仍过滤短暂重复画面，避免把相同画面作为插值对。采集角标使用图实际采用的输入色彩，首帧或输入格式变动时显示。

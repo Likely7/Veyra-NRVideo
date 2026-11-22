@@ -64,19 +64,18 @@ struct StageRequest {
     // Raw capture-card or screen frames: nothing compressed for native-size RTX Video SR to repair.
     bool uncompressedSource=false;
     const ChainRuntimeOrder* nodeOrder=nullptr; // paired with this settings transaction
+    bool amdAdapter=false;
 };
 
-// Double SR (user 2026-11-08): each pass uses DLSS SR, FSR or any RTX Video SR
-// family. It runs where both passes' backends exist - FSR on every adapter, the
-// others on NVIDIA - and not on a still image with an FSR pass (FSR skips still
-// images). Otherwise the base keeps its single pass, saved second fields intact.
-inline bool dualSrRuns(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false){
-    const auto runs=[nvidiaAdapter](uint32_t quality){return nvidiaAdapter||quality==kVideoSrFsr;};
-    return s.dualSrEnabled&&runs(s.videoSrQuality)&&runs(s.dualSrQuality)&&
+// Both passes must be supported by the graph adapter. FSR still requires a
+// video source. An inactive second pass keeps its saved settings.
+inline bool dualSrRuns(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false,bool amdAdapter=false){
+    return s.dualSrEnabled&&videoSrRunsOn(s.videoSrQuality,nvidiaAdapter,amdAdapter)&&
+        videoSrRunsOn(s.dualSrQuality,nvidiaAdapter,amdAdapter)&&
         !(stillImage&&(s.videoSrQuality==kVideoSrFsr||s.dualSrQuality==kVideoSrFsr));
 }
-inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false){
-    return dualSrRuns(s,nvidiaAdapter,stillImage)?s.srPrescale:pipeline::SrPrescale::Off;
+inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false,bool amdAdapter=false){
+    return dualSrRuns(s,nvidiaAdapter,stillImage,amdAdapter)?s.srPrescale:pipeline::SrPrescale::Off;
 }
 // Supersampling (user 2026-10-28): one RTX Video SR pass evaluates at its target
 // and the result is area-shrunk into srOutput before every later effect. Double
@@ -119,7 +118,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     const bool boundedAmd=request.exportJob&&!request.stillImage&&request.amdNr&&
         currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd;
     const auto policy=request.exportJob?exportNrSizePolicy(settings.nrRuntime,settings.nrPolicy):settings.nrPolicy;
-    const auto srPrescale=runningSrPrescale(settings,request.nvidiaAdapter,request.stillImage);
+    const auto srPrescale=runningSrPrescale(settings,request.nvidiaAdapter,request.stillImage,request.amdAdapter);
     const auto srOutput=runningSrOutput(settings,request.nvidiaAdapter);
     if(!pipeline::Extent{request.width,request.height}.valid()||!pipeline::validSrTarget(settings.srTarget)||
        !pipeline::validNrSizePolicy(policy)||!pipeline::validSrPrescale(srPrescale)||!pipeline::validSrOutput(srOutput)){
@@ -134,14 +133,14 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
         request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
-        dualSrRuns(settings,request.nvidiaAdapter,request.stillImage),settings.dualSrTarget);
+        dualSrRuns(settings,request.nvidiaAdapter,request.stillImage,request.amdAdapter),settings.dualSrTarget);
     if(request.exportJob&&!request.stillImage)
         plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
     desc.sourceWidth=request.width;desc.sourceHeight=request.height;
     desc.workWidth=plan.base.width;desc.workHeight=plan.base.height;
     desc.srInputWidth=plan.srInput.width;desc.srInputHeight=plan.srInput.height;
     desc.srOutputWidth=plan.srOutput.width;desc.srOutputHeight=plan.srOutput.height;
-    desc.dualSr=plan.dualSrApplied;desc.dualSrQuality=settings.dualSrQuality;
+    desc.dualSr=plan.dualSrApplied;desc.dualSrQuality=currentVideoSrQuality(settings.dualSrQuality);
     desc.firstSrWidth=plan.firstSrOutput.width;desc.firstSrHeight=plan.firstSrOutput.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
     // Standard RTX Video SR can restore compressed video at its original resolution
@@ -151,7 +150,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // (5090 field log 57: 4K->4K VSR cost ~8.7 ms a frame and pushed 60 fps over budget).
     const bool nativeVideoRestore=request.sr&&!request.stillImage&&!request.uncompressedSource&&request.nvidiaAdapter&&
         ngxVideoSr(settings.videoSrQuality);
-    desc.enableSr=(plan.srApplied||nativeVideoRestore)&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
+    desc.enableSr=(plan.srApplied||nativeVideoRestore)&&videoSrRunsOn(settings.videoSrQuality,request.nvidiaAdapter,request.amdAdapter);
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
     if(!desc.enableNr||!request.nvidiaAdapter||settings.opticalFlowBackend!=OpticalFlowBackend::Nvidia)
         plan.flow=plan.source;
@@ -164,7 +163,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         ? exportFrameGenerationSupported(settings.frameGenerationBackend,request.nvidiaAdapter)
         : request.nvidiaAdapter||crossVendorFrameGeneration(settings.frameGenerationBackend));
     desc.fgMultiplier=request.fgMultiplier;
-    desc.videoSrQuality=settings.videoSrQuality;
+    desc.videoSrQuality=currentVideoSrQuality(settings.videoSrQuality);
     desc.dlssSrModel=settings.dlssSrModel;
     describeNrLayers(settings,desc);
     desc.frameGenerationBackend=settings.frameGenerationBackend;

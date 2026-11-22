@@ -25,7 +25,7 @@ namespace veyra::ui {
         emit settingsChanged();                                              \
     }
 
-int QmlPlayerBridge::videoSrQuality() const { return int(settings().videoSrQuality); }
+int QmlPlayerBridge::videoSrQuality() const { return int(engine::currentVideoSrQuality(settings().videoSrQuality)); }
 int QmlPlayerBridge::dlssSrModel() const { return int(settings().dlssSrModel); }
 QVariantList QmlPlayerBridge::dlssSrModelChoices() const {
     return {QVariantMap{{"id", "0"}, {"label", "DLSS 4 · K"}},
@@ -65,11 +65,12 @@ void QmlPlayerBridge::setDualSrTargetIndex(int index){
     const pipeline::SrTarget targets[]={pipeline::SrTarget::Qhd,pipeline::SrTarget::Uhd4K,pipeline::SrTarget::Uhd8K,pipeline::SrTarget::Uhd5K,pipeline::SrTarget::Uhd6K,pipeline::SrTarget::Uhd7K};
     auto s=settings();s.dualSrTarget=targets[index-1];if(impl_->commit(s))emit settingsChanged();
 }
-int QmlPlayerBridge::dualSrQuality() const {return int(settings().dualSrQuality);}
+int QmlPlayerBridge::dualSrQuality() const { return int(engine::currentVideoSrQuality(settings().dualSrQuality)); }
 // The second pass may use any SR backend - DLSS SR, an RTX Video SR family and
 // tier, or FSR - independent of the base.
 void QmlPlayerBridge::setDualSrQuality(int quality){
     if(quality<0||!engine::validVideoSrQuality(unsigned(quality)))return;
+    quality=int(engine::currentVideoSrQuality(unsigned(quality)));
     const auto cap=effectCapabilities().value("sr"+QString::number(quality)).toMap();
     if(!cap.value("available").toBool()){emit notice(cap.value("reason").toString(),true);return;}
     auto s=settings();if(int(s.dualSrQuality)==quality)return;
@@ -79,6 +80,7 @@ void QmlPlayerBridge::setDualSrQuality(int quality){
 // "rtx-st" streaming RTX Video SR (each with tiers 1 low .. 4 ultra); DLSS SR
 // and FSR keep their numeric ids.
 QString QmlPlayerBridge::srAlgorithmOf(int quality) const {
+    if(quality>=0)quality=int(engine::currentVideoSrQuality(unsigned(quality)));
     if(quality<0||!engine::rtxVideoSr(unsigned(quality)))return QString::number(quality);
     switch(engine::videoSrFamily(unsigned(quality))){
     case engine::VideoSrFamily::HighBitrate:return QStringLiteral("rtx-hb");
@@ -97,7 +99,7 @@ int QmlPlayerBridge::srQualityFor(const QString& algorithm,int tier) const {
         algorithm==QLatin1String("rtx-st")?std::optional(engine::VideoSrFamily::Streaming):std::nullopt;
     if(family)return int(engine::videoSrQualityFor(*family,tier>=1&&tier<=4?unsigned(tier):engine::kDefaultVideoSrQuality));
     bool ok=false;const int value=algorithm.toInt(&ok);
-    return ok&&value>=0&&engine::validVideoSrQuality(unsigned(value))?value:-1;
+    return ok&&value>=0&&engine::validVideoSrQuality(unsigned(value))?int(engine::currentVideoSrQuality(unsigned(value))):-1;
 }
 // Streaming has only the medium and ultra tiers.
 QVariantList QmlPlayerBridge::srTierChoices(int quality) const {
@@ -138,6 +140,7 @@ void QmlPlayerBridge::setSrOutput(int value) {
 }
 void QmlPlayerBridge::setVideoSrQuality(int value) {
     if (value < 0 || !engine::validVideoSrQuality(unsigned(value))) return;
+    value=int(engine::currentVideoSrQuality(unsigned(value)));
     const auto cap = effectCapabilities().value("sr" + QString::number(value)).toMap();
     if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return; }
     auto s = settings();

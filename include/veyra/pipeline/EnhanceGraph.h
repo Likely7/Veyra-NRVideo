@@ -52,12 +52,13 @@ struct SwsContext;
 struct NVSDK_NGX_Parameter;
 struct NVSDK_NGX_Handle;
 namespace veyra::guidance { class AmdOpticalFlow; class GpuDisOpticalFlow; }
-namespace veyra::pipeline { class VfgBackend; class VfxSrBackend; }
+namespace veyra::pipeline { class VfgBackend; class VfxSrBackend; class NisScaler; }
 
 namespace veyra::gfx {
 class D3D12DeviceContext;
 class CommandSlotRing;
 class FsrSrBackend;
+class AmfVideoSrBackend;
 class FsrFgPresenter;
 class AmfFrcBackend;
 class RifeDmlBackend;
@@ -898,6 +899,7 @@ private:
     bool initNvof();
     bool initNgxFeatures();
     bool initFsrSr();
+    bool initSpatialSr();
     bool initFsrFg();
     bool initVfg();
     bool initAmfFrc();
@@ -1204,6 +1206,13 @@ private:
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
     std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
     std::unique_ptr<gfx::FsrSrBackend> firstFsrSrBackend_;
+    // Index 0 is the optional first pass, index 1 is the final or only pass.
+    std::array<std::unique_ptr<NisScaler>, 2> nisSr_;
+    std::array<std::unique_ptr<gfx::AmfVideoSrBackend>, 2> amfSr_;
+    std::array<ComPtr<ID3D12Resource>, 2> amfSrCodedInput_, amfSrCodedOutput_;
+    ComputePass amfSrTransfer_;
+    void transferAmfSdr(ID3D12GraphicsCommandList*,unsigned slot,ID3D12Resource* source,
+                        ID3D12Resource* destination,bool encode);
     SignedHdrRestore srHdrRestore_,firstSrHdrRestore_;
     // Constant far depth and zero motion for the temporal SR passes. The source
     // extent for a single FSR pass; under double SR the largest render/motion

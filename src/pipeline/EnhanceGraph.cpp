@@ -38,6 +38,8 @@
 #include "veyra/ngx/AmpereMfgUnlock.h"
 #include "veyra/ngx/NvapiArchSpoof.h"
 #include "veyra/gfx/FsrSrBackend.h"
+#include "veyra/gfx/AmfVideoSrBackend.h"
+#include "NisScaler.h"
 #include "veyra/gfx/FsrFgPresenter.h"
 #include "veyra/gfx/AmfFrcBackend.h"
 #include "veyra/gfx/RifeDmlBackend.h"
@@ -101,7 +103,14 @@ bool mixedDualSr(const EnhanceGraphDesc& d){
     return d.dualSr&&(!engine::rtxVideoSr(d.videoSrQuality)||!engine::rtxVideoSr(d.dualSrQuality));
 }
 const char* srRuntimeName(uint32_t quality){
-    return quality==0?"dlss":quality==engine::kVideoSrFsr?"fsr":engine::vfxVideoSr(quality)?"video-effects":"ngx";
+    switch(quality){
+    case 0:return "dlss";
+    case engine::kVideoSrFsr:return "fsr";
+    case engine::kVideoSrNis:return "nis";
+    case engine::kVideoSrAmf10:return "amf-video-sr-1.0";
+    case engine::kVideoSrAmf11:return "amf-video-sr-1.1";
+    default:return engine::vfxVideoSr(quality)?"video-effects":"ngx";
+    }
 }
 
 // N1 packed capture ingress helpers. Codes match pipeline::packedInputCode:
@@ -717,7 +726,10 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         }
         veyra::log::info("graph","diagnostic SR motion override active; no product entry point enables this");
     }
-    desc_ = desc;lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
+    desc_ = desc;
+    desc_.videoSrQuality=engine::currentVideoSrQuality(desc.videoSrQuality);
+    desc_.dualSrQuality=engine::currentVideoSrQuality(desc.dualSrQuality);
+    lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
     if(!engine::validVideoSrQuality(desc.videoSrQuality)){veyra::log::error("graph",std::format("invalid video SR quality value={}",desc.videoSrQuality));return false;}
     srcW_ = desc.sourceWidth;
     srcH_ = desc.sourceHeight;
@@ -867,7 +879,21 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         uint64_t(workW_)*workH_*(2*outputBytes+(desc_.fgUsesFlow()?4u:0u)+
             (presentSinkFg()?(desc_.exclusion.enabled?0u:4*outputBytes):0u))+
         uint64_t(hudBounds.right-hudBounds.left)*(hudBounds.bottom-hudBounds.top)*(4u+(presentSinkFg()?0u:outputBytes)):0;
-    const uint64_t estimate=hudBytes+reuseBytes+temporalHdrBytes+dlaaBytes+vfxSrBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
+    const auto spatialBytes = [&](uint32_t quality, Extent input, Extent output) -> uint64_t {
+        if (!srEnabled_) return 0;
+        if (quality == engine::kVideoSrNis) {
+            const auto prepared = NisScaler::inputExtent(input, output);
+            return !desc_.hdrWorking() || prepared != input ? uint64_t(prepared.width) * prepared.height * 8 : 0;
+        }
+        if (engine::amdVideoSr(quality))
+            return (uint64_t(input.width) * input.height + uint64_t(output.width) * output.height) * (desc_.hdrWorking()?8u:16u);
+        return 0;
+    };
+    const uint64_t spatialSrBytes =
+        spatialBytes(desc_.finalSrQuality(), {srInW_, srInH_}, {srOutW_, srOutH_}) +
+        (desc_.dualSr && desc_.firstSrEnlarges() ?
+            spatialBytes(desc_.videoSrQuality, {srcW_, srcH_}, {desc_.firstSrWidth, desc_.firstSrHeight}) : 0);
+    const uint64_t estimate=hudBytes+spatialSrBytes+reuseBytes+temporalHdrBytes+dlaaBytes+vfxSrBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
         +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0)
@@ -912,6 +938,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if (!initZeroAndDepthTextures()) return false;
     if (!initNvof()) { failedBackend_=engine::FailedBackend::OpticalFlow; return false; }
     if (!initFsrSr()) return false;
+    if (!initSpatialSr()) return false;
     if (!initFsrFg()) return false;
     if (!initVfg()) return false;
     if (!initAmfFrc()) return false;
@@ -1509,6 +1536,62 @@ HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
                                                state.programFatbins + state.networkFatbins + state.auxFatbins,
                                                state.leaSites, state.archGateSites,
                                                std::string(state.detail.begin(), state.detail.end())));
+}
+
+bool EnhanceGraph::initSpatialSr()
+{
+    if (!srEnabled_ || desc_.noFeatures) return true;
+    const auto create = [&](unsigned index, uint32_t quality, Extent input, Extent output) {
+        if (quality == engine::kVideoSrNis) {
+            nisSr_[index] = std::make_unique<NisScaler>();
+            return nisSr_[index]->initialize(context_.device(), ring_, input, output, desc_.hdrWorking());
+        }
+        if (engine::amdVideoSr(quality)) {
+            if (context_.adapter().vendorId != 0x1002) {
+                veyra::log::error("amf-video-sr", "the graph must run on an AMD adapter");
+                return false;
+            }
+            auto* device=context_.device();
+            amfSr_[index] = std::make_unique<gfx::AmfVideoSrBackend>();
+            if(!amfSr_[index]->initialize(device,ring_.queue(),input.width,input.height,output.width,output.height,false))
+                return false;
+            // AMF VideoSR SDR filtering works on sRGB codes. Retain FP16
+            // storage to preserve precision through the paired transfers.
+            if(desc_.hdrWorking())return true;
+            constexpr auto format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+            amfSrCodedInput_[index]=makeTexture(device,input.width,input.height,format,true);
+            amfSrCodedOutput_[index]=makeTexture(device,output.width,output.height,format,false);
+            if(!amfSrCodedInput_[index]||!amfSrCodedOutput_[index])return false;
+            if(amfSrTransfer_.heap)return true;
+            std::vector<uint8_t> bytes;
+            return amfSrTransfer_.loadShader("ScaleBlit.dxil",bytes)&&
+                   amfSrTransfer_.create(device,bytes,ring_.slotCount()*4,1,1);
+        }
+        return true;
+    };
+    if ((desc_.dualSr && desc_.firstSrEnlarges() &&
+         !create(0, desc_.videoSrQuality, {srcW_, srcH_}, {desc_.firstSrWidth, desc_.firstSrHeight})) ||
+        !create(1, desc_.finalSrQuality(), {srInW_, srInH_}, {srOutW_, srOutH_})) {
+        failedBackend_ = engine::FailedBackend::Sr;
+        return false;
+    }
+    return true;
+}
+
+void EnhanceGraph::transferAmfSdr(ID3D12GraphicsCommandList* list,unsigned slot,
+                                  ID3D12Resource* source,ID3D12Resource* destination,bool encode) {
+    // A list may decode stage 1 and then encode stage 2 before submission.
+    const unsigned table=slot*4+(encode?0:2);
+    stager_.stageSrv(source,nullptr,amfSrTransfer_.heap.Get(),table);
+    makeUav(context_.device(),destination,destination->GetDesc().Format,cpuHandleOf(amfSrTransfer_,table+1));
+    tracker_.transition(list,source,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    tracker_.transition(list,destination,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    const auto extent=destination->GetDesc();
+    const float w=uintBits(uint32_t(extent.Width)),h=uintBits(extent.Height);
+    const float constants[8]={w,h,w,h,encode?1.f:-1.f,0,0,0};
+    amfSrTransfer_.bind(list,constants,gpuHandleOf(amfSrTransfer_,table).ptr,gpuHandleOf(amfSrTransfer_,table+1).ptr);
+    list->Dispatch((uint32_t(extent.Width)+15)/16,(extent.Height+15)/16,1);
+    tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool EnhanceGraph::initFsrSr()
@@ -2339,6 +2422,7 @@ bool EnhanceGraph::createComputePasses()
 
 bool EnhanceGraph::submitGraph(uint32_t slot) {
     if(!ring_.submitAndSignal(slot))return false;
+    for(auto& backend:amfSr_)if(backend&&!backend->retireSubmitted()){failedBackend_=engine::FailedBackend::Sr;return false;}
     for(auto& layer:nrInstances_)if(layer->amd && !layer->amd->retireSubmitted()) { failedBackend_=engine::FailedBackend::Nr; return false; }
     return true;
 }
@@ -3764,6 +3848,34 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // the linear first result, its exact-area reduction feeds the second pass, and
     // each temporal pass takes motion at its own extents with the constant far
     // depth; zero motion where the user chose it or this frame has no flow.
+    auto runSpatialSr = [&](unsigned index, ID3D12Resource* input, ID3D12Resource* output) {
+        if (auto& nis = nisSr_[index]) {
+            nis->dispatch(list, slot, tracker_, input, output);
+            return true;
+        }
+        auto& amf = amfSr_[index];
+        const auto failureBeforeSr = failedBackend_;
+        failedBackend_ = engine::FailedBackend::Sr;
+        auto* codedInput=amfSrCodedInput_[index].Get();
+        auto* codedOutput=amfSrCodedOutput_[index].Get();
+        if(codedInput){
+            transferAmfSdr(list,slot,input,codedInput,true);
+            input=codedInput;
+        }
+        tracker_.transition(list, input, D3D12_RESOURCE_STATE_COPY_SOURCE);
+        if (!amf->copyIn(list, input)) return false;
+        tracker_.transition(list, input, D3D12_RESOURCE_STATE_COMMON);
+        if (!submitGraph(slot) || !amf->evaluate()) return false;
+        list = ring_.acquireNext(slot, st);
+        if (!list) return false;
+        auto* scaled=codedOutput?codedOutput:output;
+        tracker_.transition(list,scaled,D3D12_RESOURCE_STATE_COPY_DEST);
+        if (!amf->copyOut(list,scaled)) return false;
+        if(codedOutput)transferAmfSdr(list,slot,codedOutput,output,false);
+        else tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        failedBackend_ = failureBeforeSr;
+        return true;
+    };
     auto runMixedDualSr=[&]()->bool{
         gpuTimer_.mark(list,GpuStage::Sr);
         const bool validMotion=desc_.srUsesFlow()&&haveFlow;
@@ -3806,6 +3918,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 if(!dlss(*firstDlssSrBackend_,input,validMotion?firstSrFlow_.Get():zero,firstSrLinear_.Get()))return false;
             }else if(firstFsrSrBackend_&&firstFsrSrBackend_->created()){
                 if(!fsr(*firstFsrSrBackend_,input,validMotion?flowTex_.Get():zero,firstSrLinear_.Get(),srcW_,srcH_,desc_.firstSrWidth,desc_.firstSrHeight))return false;
+            }else if(nisSr_[0]||amfSr_[0]){
+                if(!runSpatialSr(0,input,firstSrLinear_.Get()))return false;
             }else{failedBackend_=engine::FailedBackend::Sr;veyra::log::error("dual-sr","first SR pass has no backend");return false;}
             ++metrics_.srEvaluateCount;
         }
@@ -3818,6 +3932,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 if(!dlss(*srBackend_,srPrescaled_.Get(),validMotion?baseFlow_.Get():zero,workRgba_.Get()))return false;
             }else if(desc_.dualSrQuality==engine::kVideoSrFsr&&fsrSrBackend_&&fsrSrBackend_->created()){
                 if(!fsr(*fsrSrBackend_,srPrescaled_.Get(),validMotion?secondSrFlow_.Get():zero,workRgba_.Get(),srInW_,srInH_,workW_,workH_))return false;
+            }else if(nisSr_[1]||amfSr_[1]){
+                if(!runSpatialSr(1,srPrescaled_.Get(),workRgba_.Get()))return false;
             }else{failedBackend_=engine::FailedBackend::Sr;veyra::log::error("dual-sr","second SR pass has no backend");return false;}
             ++metrics_.srEvaluateCount;
         }
@@ -3828,6 +3944,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // diagnostics); a first pass with nothing to enlarge is a copy.
     auto dualPassReady=[&](uint32_t quality,bool first)->bool{
         if(first&&!desc_.firstSrEnlarges()&&!engine::ngxVideoSr(quality))return true;
+        if(engine::spatialVideoSr(quality))return first?(nisSr_[0]||amfSr_[0]):(nisSr_[1]||amfSr_[1]);
         if(quality==0)return first?(firstDlssSrBackend_&&firstDlssSrBackend_->created()):(srBackend_&&srBackend_->created());
         if(quality==engine::kVideoSrFsr)return first?(firstFsrSrBackend_&&firstFsrSrBackend_->created()):(fsrSrBackend_&&fsrSrBackend_->created());
         if(engine::vfxVideoSr(quality))return first?firstVfxSrBackend_!=nullptr:vfxSrBackend_!=nullptr;
@@ -3840,6 +3957,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     const bool mixed=srEnabled_&&mixedDualSr(desc_);
     if(mixed&&dualPassReady(desc_.videoSrQuality,true)&&dualPassReady(desc_.dualSrQuality,false)){
         if(!runMixedDualSr())return false;
+    } else if(!mixed&&srEnabled_&&(nisSr_[1]||amfSr_[1])){
+        gpuTimer_.mark(list,GpuStage::Sr);
+        if(!runSpatialSr(1,srStageInput(),workRgba_.Get()))return false;
+        ++metrics_.srEvaluateCount;
+        gpuTimer_.mark(list,GpuStage::Sr,true);
     } else if(!mixed&&srEnabled_&&fsrSrEnabled()){
         // AMD FSR upscaling: FidelityFX effect, render-extent color + guidance
         // motion (previous = current + motion, same convention as the frame
@@ -4700,7 +4822,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
        (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
         (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&(s.vfgQuality!=desc_.vfgQuality||s.vfgAutoRegulate!=desc_.vfgAutoRegulate))))||
-       (desc_.enableSr&&(s.videoSrQuality!=desc_.videoSrQuality||
+       (desc_.enableSr&&(engine::currentVideoSrQuality(s.videoSrQuality)!=desc_.videoSrQuality||
          ((desc_.videoSrQuality==0||(desc_.dualSr&&desc_.dualSrQuality==0))&&s.dlssSrModel!=desc_.dlssSrModel)))||
        (dlaaRequested()&&s.dlssSrModel!=desc_.dlssSrModel)||
        (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
@@ -4928,6 +5050,8 @@ void EnhanceGraph::shutdown()
     vfgBackend_.reset();
     amfFrc_.reset();
     rife_.reset();
+    amfSr_={};amfSrCodedInput_={};amfSrCodedOutput_={};amfSrTransfer_={};
+    nisSr_={};
     if (fgBackend_) featuresReleased=fgBackend_->release()&&featuresReleased;
     if(firstVideoSrBackend_){featuresReleased=firstVideoSrBackend_->release()&&featuresReleased;firstVideoSrBackend_.reset();}
     if(videoSrBackend_){featuresReleased=videoSrBackend_->release()&&featuresReleased;videoSrBackend_.reset();}
