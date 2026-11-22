@@ -1015,6 +1015,19 @@
    "ru": "%1 работает. Он подключает как интерфейс, так и видео, что может заморозить Veyra. Перезагрузите Veyra для обеспечения совместимого рендеринга: интерфейс затем рисуется в программном обеспечении и %1 влияет только на видео. Перезагрузите сейчас? Текущее воспроизведение или потоковая передача прекратится."
   },
   {
+   "zh": "%1 码流直通",
+   "src": "src/ui/bridge/Preferences.cpp",
+   "zh-TW": "%1 位元流直通",
+   "en": "%1 passthrough",
+   "ja": "%1 パススルー",
+   "ko": "%1 패스스루",
+   "es": "Paso directo de %1",
+   "fr": "Transmission directe %1",
+   "de": "%1-Passthrough",
+   "pt-BR": "Passagem direta de %1",
+   "ru": "Сквозная передача %1"
+  },
+  {
    "zh": "%1 秒",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "%1 秒",
@@ -2703,6 +2716,19 @@
    "de": "GitHub direkt",
    "pt-BR": "Acesso direto ao GitHub",
    "ru": "GitHub напрямую"
+  },
+  {
+   "zh": "HDMI 码流直通",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "HDMI 位元流直通",
+   "en": "HDMI bitstream passthrough",
+   "ja": "HDMI ビットストリームのパススルー",
+   "ko": "HDMI 비트스트림 패스스루",
+   "es": "Paso directo de audio HDMI",
+   "fr": "Transmission directe du flux HDMI",
+   "de": "HDMI-Bitstream-Passthrough",
+   "pt-BR": "Passagem direta do fluxo HDMI",
+   "ru": "Сквозная передача битового потока HDMI"
   },
   {
    "zh": "HDMI 采集设备",
@@ -10805,17 +10831,17 @@
    "ru": "Защищать света"
   },
   {
-   "zh": "压缩采集使用码流颜色信息；手动颜色和范围请选择原生采集格式。",
+   "zh": "压缩采集的色彩空间由码流决定。可以单独指定色彩范围。",
    "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "壓縮擷取使用碼流顏色資訊；手動顏色和範圍請選擇原生擷取格式。",
-   "en": "Compressed capture uses the stream's color information; for manual color and range choose a native capture format.",
-   "ja": "圧縮キャプチャーはストリームの色情報を使います。手動の色や範囲を使うにはネイティブのキャプチャーフォーマットを選んでください。",
-   "ko": "압축 캡처는 영상 스트림의 색상 정보를 사용합니다. 색상·범위를 직접 지정하려면 장치의 비압축 캡처 형식을 선택하세요.",
-   "es": "La captura comprimida utiliza la información de color del flujo; para el color manual y el rango elige un formato de captura nativo.",
-   "fr": "La capture compressée utilise l'information de couleur du flux; pour la couleur manuelle et la plage choisir un format de capture natif.",
-   "de": "Compressed capture verwendet die farbinformationen des streams; für manuelle farbe und reichweite wählen sie ein natives aufnahmeformat.",
-   "pt-BR": "Captura compacta usa a informação de cor do fluxo; para cor manual e intervalo escolha um formato de captura nativo.",
-   "ru": "Сжатый захват использует цветовую информацию потока; для ручного цвета и диапазона выберите нативный формат захвата."
+   "zh-TW": "壓縮擷取的色彩空間由位元流決定。可以單獨指定色彩範圍。",
+   "en": "Compressed capture takes its color space from the bitstream. The color range can be set separately.",
+   "ja": "圧縮キャプチャーの色空間はビットストリームで決まります。色範囲は個別に指定できます。",
+   "ko": "압축 캡처의 색 공간은 비트스트림을 따릅니다. 색 범위는 따로 지정할 수 있습니다.",
+   "es": "El espacio de color de la captura comprimida lo determina el flujo. El rango de color se puede ajustar por separado.",
+   "fr": "L’espace colorimétrique de la capture compressée est défini par le flux. La plage de couleurs peut être réglée séparément.",
+   "de": "Der Farbraum bei komprimierter Aufnahme folgt dem Bitstream. Der Wertebereich lässt sich separat einstellen.",
+   "pt-BR": "O espaço de cor da captura comprimida vem do fluxo. A faixa de cor pode ser definida separadamente.",
+   "ru": "Цветовое пространство сжатого захвата определяется потоком. Цветовой диапазон можно задать отдельно."
   },
   {
    "zh": "原图色彩保留",
@@ -15639,6 +15665,19 @@
    "de": "Die Capture Card wird einmal automatisch wieder angeschlossen",
    "pt-BR": "o cartão de captura será reconectado uma vez automaticamente",
    "ru": "Карта захвата будет восстановлена после автоматического подключения"
+  },
+  {
+   "zh": "将采集的 AC-3 / DTS 送到功放。直通期间会独占所选输出设备，其他程序无法在该设备播放声音。",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "將擷取的 AC-3 / DTS 送到擴大機。直通期間會獨佔所選輸出裝置，其他程式無法在該裝置播放聲音。",
+   "en": "Send captured AC-3 / DTS to your receiver. Passthrough takes exclusive control of the output, so other apps cannot play audio through it.",
+   "ja": "キャプチャーした AC-3 / DTS を AV アンプに送ります。パススルー中は出力を占有するため、他のアプリはその出力から音を再生できません。",
+   "ko": "캡처한 AC-3 / DTS를 리시버로 전송합니다. 패스스루는 출력 장치를 독점하므로 다른 앱에서 해당 장치로 소리를 재생할 수 없습니다.",
+   "es": "Envía el AC-3 / DTS capturado al receptor. Durante el paso directo, otras aplicaciones no pueden usar esa salida de audio.",
+   "fr": "Envoie le flux AC-3 / DTS capturé à l’amplificateur. La sortie audio est réservée et les autres applications ne peuvent pas l’utiliser.",
+   "de": "Sendet aufgenommenes AC-3 / DTS an den Receiver. Die Ausgabe wird exklusiv belegt und steht anderen Apps in dieser Zeit nicht zur Verfügung.",
+   "pt-BR": "Envia o AC-3 / DTS capturado ao receiver. A saída fica em uso exclusivo e outros aplicativos não podem reproduzir áudio nela.",
+   "ru": "Передаёт захваченный звук AC-3 / DTS на ресивер. Выход используется монопольно, поэтому другие приложения не могут воспроизводить через него звук."
   },
   {
    "zh": "小",
@@ -37755,6 +37794,19 @@
    "ru": "Подключается к PS5 после подключения карты захвата"
   },
   {
+   "zh": "采集卡连续两次重连未出画面，正在释放设备后重试",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "擷取卡連續兩次重新連線未出畫面，正在釋放裝置後再試",
+   "en": "No video after two reconnects. Releasing the device before retrying.",
+   "ja": "2 回再接続しても映像がありません。デバイスを解放して再試行しています。",
+   "ko": "두 번 다시 연결했지만 영상이 없습니다. 장치를 해제한 후 다시 시도합니다.",
+   "es": "Dos reconexiones sin vídeo. Liberando el dispositivo antes de reintentar.",
+   "fr": "Aucune image après deux reconnexions. Le périphérique est libéré avant un nouvel essai.",
+   "de": "Kein Bild nach zwei erneuten Verbindungen. Das Gerät wird vor dem nächsten Versuch freigegeben.",
+   "pt-BR": "Sem vídeo após duas reconexões. Liberando o dispositivo antes de tentar novamente.",
+   "ru": "Изображения нет после двух переподключений. Устройство освобождается перед повторной попыткой."
+  },
+  {
    "zh": "采集卡送来的帧率低于信号帧率。USB 采集卡请直接插在主板背部的 USB 3.0 及以上接口，不要经过扩展坞、延长线或前置接口。同时确认主机输出帧率与所选采集格式一致。",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "擷取卡送出的幀率低於訊號幀率。USB 擷取卡請直接插在主機板背面的 USB 3.0 以上連接埠，不要經過擴充座、延長線或前置連接埠。同時確認主機輸出幀率與所選擷取格式一致。",
@@ -37766,6 +37818,19 @@
    "de": "Die Capture-Karte liefert weniger Bilder als das Signal. Schließe eine USB-Capture-Karte direkt an einen USB-3.0-Anschluss oder schneller auf der Rückseite des Mainboards an, ohne Hub, Verlängerung oder Frontanschluss, und prüfe, ob die Ausgabebildrate der Konsole zum gewählten Aufnahmeformat passt.",
    "pt-BR": "A placa de captura está entregando menos quadros que o sinal. Conecte a placa USB diretamente a uma porta USB 3.0 ou superior na traseira da placa-mãe, sem hub, extensão ou portas frontais, e confira se a taxa de saída do console corresponde ao formato de captura escolhido.",
    "ru": "Карта захвата выдаёт меньше кадров, чем частота сигнала. Подключите USB-карту захвата напрямую к порту USB 3.0 или быстрее на задней панели материнской платы, без хаба, удлинителя и передних портов, и проверьте, что частота вывода консоли совпадает с выбранным форматом захвата."
+  },
+  {
+   "zh": "采集卡音频启动失败（0x{:08X}），画面继续。请改用该采集卡的 WASAPI 音频端点。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡音訊啟動失敗（0x{:08X}），畫面繼續。請改用該擷取卡的 WASAPI 音訊端點。",
+   "en": "Capture card audio could not start (0x{:08X}). Video continues. Use the card’s WASAPI audio endpoint.",
+   "ja": "キャプチャーカードの音声が開始できませんでした（0x{:08X}）。映像は続行します。カードの WASAPI オーディオエンドポイントを選んでください。",
+   "ko": "캡처 카드 오디오를 시작할 수 없습니다(0x{:08X}). 영상은 계속됩니다. 카드의 WASAPI 오디오 엔드포인트를 사용하세요.",
+   "es": "No se pudo iniciar el audio de la capturadora (0x{:08X}). El vídeo sigue. Usa su dispositivo de audio WASAPI.",
+   "fr": "Le son de la carte de capture n’a pas démarré (0x{:08X}). La vidéo continue. Sélectionnez le périphérique audio WASAPI de la carte.",
+   "de": "Audio der Aufnahmekarte konnte nicht starten (0x{:08X}). Das Video läuft weiter. Wähle den WASAPI-Audioendpunkt der Karte.",
+   "pt-BR": "Não foi possível iniciar o áudio da placa de captura (0x{:08X}). O vídeo continua. Use o dispositivo de áudio WASAPI da placa.",
+   "ru": "Не удалось запустить звук карты захвата (0x{:08X}). Видео продолжается. Используйте аудиоустройство WASAPI этой карты."
   },
   {
    "zh": "采集卡驱动响应缓慢（已等待 %1 秒）。若频繁出现，请重新插拔采集卡并检查 USB 连接。",
@@ -38182,6 +38247,19 @@
    "de": "Weiter von der letzten Position, wenn die gleiche Datei wieder geöffnet wird",
    "pt-BR": "Continuar da última posição quando o mesmo ficheiro for reaberto",
    "ru": "Продолжить с последней позиции, когда тот же файл снова открыт"
+  },
+  {
+   "zh": "重新打开采集设备后仍没有画面。请重新插拔采集卡或重启 Veyra 后重试。",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "重新開啟擷取裝置後仍無畫面。請重新插拔擷取卡或重新啟動 Veyra 後再試。",
+   "en": "No video after reopening the capture device. Reconnect the card or restart Veyra and try again.",
+   "ja": "キャプチャーデバイスを開き直しても映像がありません。カードを挿し直すか Veyra を再起動して再試行してください。",
+   "ko": "캡처 장치를 다시 열었지만 영상이 없습니다. 카드를 다시 연결하거나 Veyra를 재시작한 후 다시 시도하세요.",
+   "es": "Sigue sin haber vídeo tras reabrir la capturadora. Reconéctala o reinicia Veyra y vuelve a intentarlo.",
+   "fr": "Toujours aucune image après réouverture du périphérique. Rebranchez la carte ou redémarrez Veyra et réessayez.",
+   "de": "Auch nach dem erneuten Öffnen des Aufnahmegeräts fehlt das Bild. Verbinde die Karte neu oder starte Veyra erneut.",
+   "pt-BR": "Ainda sem vídeo após reabrir a placa. Reconecte a placa ou reinicie o Veyra e tente novamente.",
+   "ru": "После повторного открытия устройства изображения всё ещё нет. Переподключите карту или перезапустите Veyra и повторите попытку."
   },
   {
    "zh": "重置",
@@ -40628,17 +40706,17 @@
    "ru": "Драйвер сообщает о нехватке системных ресурсов. Возможно, другой экземпляр Veyra (PID {}) использует карту захвата. Закройте его и повторите попытку."
   },
   {
-   "zh": "驱动报告系统资源不足。请关闭其他采集程序后重试，并检查设备连接和驱动。",
+   "zh": "驱动报告系统资源不足。请退出 OBS、Windows 相机或采集卡厂商软件后重试，并检查设备连接和驱动。",
    "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "驅動程式回報系統資源不足。請關閉其他擷取程式後再試一次，並檢查裝置連線和驅動程式。",
-   "en": "The driver reports insufficient system resources. Close other capture apps, check the device connection and driver, then try again.",
-   "ja": "ドライバーがシステム リソースの不足を報告しました。他のキャプチャーアプリを閉じ、接続とドライバーを確認してからやり直してください。",
-   "ko": "드라이버에서 시스템 리소스가 부족하다고 보고했습니다. 다른 캡처 앱을 닫고 장치 연결과 드라이버를 확인한 후 다시 시도하세요.",
-   "es": "El controlador indica que faltan recursos del sistema. Cierra otras aplicaciones de captura, comprueba la conexión y el controlador y vuelve a intentarlo.",
-   "fr": "Le pilote signale un manque de ressources système. Fermez les autres applications de capture, vérifiez la connexion et le pilote, puis réessayez.",
-   "de": "Der Treiber meldet unzureichende Systemressourcen. Schließe andere Aufnahmeprogramme, prüfe Verbindung und Treiber und versuche es erneut.",
-   "pt-BR": "O driver informa que os recursos do sistema são insuficientes. Feche outros aplicativos de captura, verifique a conexão e o driver e tente novamente.",
-   "ru": "Драйвер сообщает о нехватке системных ресурсов. Закройте другие приложения захвата, проверьте подключение и драйвер и повторите попытку."
+   "zh-TW": "驅動程式回報系統資源不足。請結束 OBS、Windows 相機或擷取卡原廠軟體後重試，並檢查裝置連線和驅動程式。",
+   "en": "The driver reports insufficient system resources. Close OBS, Windows Camera, or the capture card vendor's app before retrying. Check the connection and driver.",
+   "ja": "ドライバーがシステムリソース不足を報告しました。OBS、Windows カメラ、キャプチャーカードのメーカーアプリを終了して再試行し、接続とドライバーを確認してください。",
+   "ko": "드라이버가 시스템 리소스 부족을 보고했습니다. OBS, Windows 카메라 또는 캡처 카드 제조사 앱을 종료하고 연결과 드라이버를 확인한 후 다시 시도하세요.",
+   "es": "El controlador indica que faltan recursos del sistema. Cierra OBS, Cámara de Windows o el programa del fabricante antes de reintentar. Comprueba la conexión y el controlador.",
+   "fr": "Le pilote signale un manque de ressources système. Fermez OBS, Caméra Windows ou le logiciel du fabricant avant de réessayer. Vérifiez la connexion et le pilote.",
+   "de": "Der Treiber meldet unzureichende Systemressourcen. Schließe OBS, Windows-Kamera oder die Software des Herstellers und prüfe Verbindung und Treiber.",
+   "pt-BR": "O driver informa que os recursos do sistema são insuficientes. Feche o OBS, a Câmera do Windows ou o aplicativo do fabricante e confira a conexão e o driver.",
+   "ru": "Драйвер сообщает о нехватке системных ресурсов. Закройте OBS, «Камеру Windows» или программу производителя. Проверьте подключение и драйвер."
   },
   {
    "zh": "驱动无法连接所选格式。请刷新并选择与输入信号匹配的采集格式。",

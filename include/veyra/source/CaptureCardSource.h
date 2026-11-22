@@ -64,6 +64,8 @@ public:
     bool configure(const SourceOpenDesc&);
     bool start();
     bool reconnect(float gain,unsigned syncMode,int offsetMs);
+    void releaseForRetry();
+    bool noVideoAfterRun() const { return noVideoAfterRun_; }
     void setDriverStageObserver(std::function<void(CaptureDriverStage)> observer);
     // Owner-thread recovery of DirectShow audio pins; same video filter retained.
     void recoverAudio(float gain,unsigned syncMode,int offsetMs);
@@ -111,6 +113,7 @@ private:
     std::wstring error_;
     long lastFailureCode_ = 0;
     bool deviceRemoved_ = false;
+    bool noVideoAfterRun_ = false;
     void clearFailure();
     void setFailure(const wchar_t* stage, long code);
     void closeGraph(bool stopped = false) noexcept;

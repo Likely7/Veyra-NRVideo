@@ -334,7 +334,8 @@ int wmain(int argc,wchar_t**argv){
 #endif
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",L"1");
     const bool settingsRebuild=argc==4&&wcscmp(argv[3],L"--settings-rebuild")==0;
-    const bool captureNoVideo=argc==4&&wcscmp(argv[3],L"--capture-no-video")==0;
+    const bool captureRelease=argc==4&&wcscmp(argv[3],L"--capture-release")==0;
+    const bool captureNoVideo=captureRelease||(argc==4&&wcscmp(argv[3],L"--capture-no-video")==0);
     if(!settingsRebuild&&!captureNoVideo&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0||std::wstring(argv[3]).rfind(L"--dedup-",0)==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     std::filesystem::create_directories(argv[2]);Logger::instance().startAsync();Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
     HWND window=CreateWindowExW(0,L"STATIC",L"Live scheduler replay",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
@@ -395,6 +396,7 @@ int wmain(int argc,wchar_t**argv){
     int failures=0;auto check=[&](bool pass,const char* s){std::cout<<(pass?"PASS ":"FAIL ")<<s<<std::endl;if(!pass)++failures;};
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
     if(captureNoVideo)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_NO_VIDEO",L"1");
+    if(captureRelease)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_RELEASE",L"1");
     engine.open(window,argv[1],options);
     if(captureNoVideo){
         bool recovering=false, startConfirmed=false;
@@ -411,8 +413,10 @@ int wmain(int argc,wchar_t**argv){
         }
         const auto end=engine.snapshot();
         check(startConfirmed,"video was presented before the injected disconnect");
-        check(recovering&&lastAttempt==5,"five reopened graphs each timed out waiting for video");
-        check(end.failed&&!end.captureRecovering&&end.status.starts_with(L"自动重连已停止")
+        check(recovering&&lastAttempt==(captureRelease?3u:5u),"no-frame reopen count matches the recovery policy");
+        const bool correctStatus=captureRelease?end.status.starts_with(L"重新打开采集设备后仍没有画面"):
+                                               end.status.starts_with(L"自动重连已停止");
+        check(end.failed&&!end.captureRecovering&&correctStatus
               &&end.status.find(L"USB 3")!=std::wstring::npos,"recovery stops and leaves a manual retry with USB details");
         engine.stop();
         DestroyWindow(window);CoUninitialize();

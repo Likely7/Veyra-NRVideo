@@ -207,7 +207,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         // Instant replay (#103): seconds the buffer keeps.
         {"replaySeconds", {15, 600}}};
     static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
-                                   "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "holdCompare",
+                                   "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "captureHdmiPassthrough", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
                                    // 设置 → 外观 → 启动动画 / 启动音乐 / 剔除遮罩（2.1.9）
                                    "introAnimation", "introMusic", "exclusionOverlay"};
@@ -327,11 +327,11 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == "audioDevice") sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
-    if (key == "audioForceStereo" || key == "audioDevice" || key == "captureAudioMonitor") {
+    if (key == "audioForceStereo" || key == "audioDevice" || key == "captureAudioMonitor" || key == "captureHdmiPassthrough") {
         const bool downmix = impl_->prefBool("audioForceStereo", false);
         sink::setForceStereoDownmix(downmix);
         impl_->engine.hdmiBitstream().configure({
-            !downmix && impl_->prefBool("captureAudioMonitor", true),
+            impl_->prefBool("captureHdmiPassthrough", false) && !downmix && impl_->prefBool("captureAudioMonitor", true),
             impl_->prefString("audioDevice").toStdWString()});
         emit audioDevicesChanged();
     }
@@ -493,7 +493,7 @@ QVariantList QmlPlayerBridge::audioDevices() const {
 QString QmlPlayerBridge::audioOutputStatus() const {
     const auto bitstream = impl_->engine.hdmiBitstream().state();
     if (bitstream.status == sink::HdmiBitstreamStatus::Active) {
-        const auto format = tr("%1 passthrough").arg(QString::fromLatin1(sink::bitstreamKindName(bitstream.codec)));
+        const auto format = tr("%1 码流直通").arg(QString::fromLatin1(sink::bitstreamKindName(bitstream.codec)));
         return bitstream.endpoint.empty() ? format : QString::fromStdWString(bitstream.endpoint) + " · " + format;
     }
     const auto& a = impl_->audioActive;

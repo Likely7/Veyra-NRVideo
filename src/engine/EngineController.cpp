@@ -1809,6 +1809,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // successful opens that never deliver video. It never calls the driver.
             const bool testCaptureNoVideo=options.captureReplayForTest
                 &&GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_NO_VIDEO",nullptr,0);
+            const bool testCaptureRelease=testCaptureNoVideo
+                &&GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_RELEASE",nullptr,0);
             auto testCaptureFrameDeadline=Clock::time_point::min();
             auto readSource=[&](pipeline::FramePacket& packet,const AVFrame** frame){
                 if(testCaptureNoVideo&&frames>=120)
@@ -1821,9 +1823,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const auto code=testRemoval?HRESULT_FROM_WIN32(ERROR_NO_SUCH_DEVICE):captureSource.lastFailureCode();
                 const auto detail=testRemoval?source::captureFailureAdvice(code):captureSource.errorMessage();
                 if(source::isCaptureDisconnect(code))captureDisconnectReason=detail;
-                const auto decision=captureRetries.afterFailure(now,testRemoval||captureSource.deviceRemoved());
+                const auto decision=captureRetries.afterFailure(now,testRemoval||captureSource.deviceRemoved(),testCaptureRelease||captureSource.noVideoAfterRun());
                 const bool exhausted=decision.limit!=CaptureReconnectBudget::Limit::None;
                 const char* limit=decision.limit==CaptureReconnectBudget::Limit::DeviceRemovals?"device-removals":
+                    decision.limit==CaptureReconnectBudget::Limit::NoVideoAfterRelease?"no-video-after-release":
                     exhausted?"no-frames":"none";
                 log::warn("capture-reconnect",std::format("attempts={} delaySec={} removals10min={} limit={} hr=0x{:08X} reason={}",
                     captureRetries.attempts(),decision.delay.count(),captureRetries.recentRemovals(),limit,uint32_t(code),
@@ -1836,13 +1839,22 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 if(exhausted){
                     const auto& reason=captureDisconnectReason.empty()?detail:captureDisconnectReason;
-                    std::wstring message=L"自动重连已停止。请检查采集设备和输入信号，然后手动重试。";
+                    std::wstring message=decision.limit==CaptureReconnectBudget::Limit::NoVideoAfterRelease
+                        ?L"重新打开采集设备后仍没有画面。请重新插拔采集卡或重启 Veyra 后重试。"
+                        :L"自动重连已停止。请检查采集设备和输入信号，然后手动重试。";
                     if(!reason.empty())message+=L"\n"+reason;
                     status(message,true);
                     return false;
                 }
-                captureRetryAt=now+decision.delay;
-                status(detail.empty()?L"采集信号中断，等待原设备恢复":detail);
+                if(decision.releaseDevice){
+                    status(L"采集卡连续两次重连未出画面，正在释放设备后重试");
+                    log::warn("capture-reconnect","releasing video, DirectShow audio and WASAPI before the last attempt");
+                    captureSource.releaseForRetry();
+                    if(stop_)return false;
+                }else{
+                    status(detail.empty()?L"采集信号中断，等待原设备恢复":detail);
+                }
+                captureRetryAt=Clock::now()+decision.delay;
                 return true;
             };
             bool xessPresentationRecovery=false;

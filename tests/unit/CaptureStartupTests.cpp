@@ -1,6 +1,7 @@
 #include "veyra/FileIdentity.h"
 #include "veyra/engine/CaptureReconnectBudget.h"
 #include "veyra/source/CaptureCardSource.h"
+#include "veyra/source/CaptureStartFallback.h"
 #include <windows.h>
 #include <vfwmsgs.h>
 #include <cstdio>
@@ -39,6 +40,20 @@ void testReconnectBudget() {
            noFrames.attempts() == 5, "five reopened graphs without a frame stop automatic reconnect");
     expect(now.time_since_epoch() == 45s, "backoff plus the five no-frame timeouts is 45 seconds in the fixture");
 
+    Budget hungDevice;
+    hungDevice.attemptStarted();
+    const auto first= hungDevice.afterFailure(now,false,true);
+    hungDevice.attemptStarted();
+    const auto afterTwo=hungDevice.afterFailure(now,false,true);
+    expect(!first.releaseDevice && afterTwo.releaseDevice && afterTwo.delay==2s,
+           "two successful opens with no video request a full device release and cooldown");
+    hungDevice.attemptStarted();
+    expect(hungDevice.afterFailure(now,false,true).limit==Budget::Limit::NoVideoAfterRelease,
+           "one attempt after the full release can still terminate recovery");
+    hungDevice.frameDelivered();
+    expect(hungDevice.afterFailure(now,false).delay==1s,
+           "a delivered frame clears the release escalation for the next outage");
+
     Budget recovered;
     recovered.attemptStarted();
     recovered.attemptStarted();
@@ -67,6 +82,16 @@ void testReconnectBudget() {
 int main(int argc, char** argv) {
     using namespace veyra::source;
     testReconnectBudget();
+    int runs = 0, detaches = 0;
+    auto audioFallback = startCaptureGraph(true, [&] { return ++runs == 1 ? E_FAIL : S_OK; },
+                                           [&] { ++detaches; return true; });
+    expect(audioFallback.retried && audioFallback.initial == E_FAIL && audioFallback.result == S_OK &&
+           runs == 2 && detaches == 1, "video runs after a shared DirectShow audio graph failure");
+    const auto videoFailure = startCaptureGraph(false, [] { return E_FAIL; }, [&] { ++detaches; return true; });
+    expect(!videoFailure.retried && videoFailure.result == E_FAIL && detaches == 1,
+           "an existing video-only failure is reported as video");
+    const auto failedStop = startCaptureGraph(true, [] { return E_FAIL; }, [] { return false; });
+    expect(!failedStop.retried && failedStop.result == E_FAIL, "no second Run before safe audio removal");
     for (const DWORD code : {ERROR_NO_SUCH_DEVICE, ERROR_GEN_FAILURE, ERROR_OPERATION_ABORTED}) {
         const auto hr = HRESULT_FROM_WIN32(code);
         expect(isCaptureDisconnect(hr) && captureFailureAdvice(hr).find(L"USB 3") != std::wstring::npos,

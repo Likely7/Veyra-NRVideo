@@ -37,6 +37,12 @@ int wmain(int argc,wchar_t**argv){
     for(unsigned index=0;index<(temporal?8u:nr?2u:4u);++index){
         const bool full=!temporal&&(nr?index>0:index>=2),hd=temporal||(!nr&&(index%2));
         if(!remoteYuv)for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;x+=2){auto* p=f->data[0]+ptrdiff_t(y)*f->linesize[0]+x*2;p[0]=uint8_t((x+(temporal?index*2:0))%256);p[2]=uint8_t((x+1+(temporal?index*2:0))%256);p[1]=y%4==0?128:y%4==1?16:y%4==2?240:90;p[3]=y%4==0?128:y%4==1?240:y%4==2?16:180;}
+        if(!remoteYuv&&!rgb&&!nr)
+            for(unsigned y=h/2;y<h;++y)for(unsigned x=0;x<w;x+=2){
+                auto* p=f->data[0]+ptrdiff_t(y)*f->linesize[0]+x*2;
+                p[1]=((x/2)&1)?224:32;
+                p[3]=((x/2)&1)?48:208;
+            }
         if(remoteYuv){
             for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)f->data[0][ptrdiff_t(y)*f->linesize[0]+x]=uint8_t(x%256);
             for(unsigned y=0;y<h/2;++y)for(unsigned x=0;x<w/2;++x){f->data[1][ptrdiff_t(y)*f->linesize[1]+x]=y%4==0?128:y%4==1?16:y%4==2?240:90;f->data[2][ptrdiff_t(y)*f->linesize[2]+x]=y%4==0?128:y%4==1?240:y%4==2?16:180;}
@@ -55,7 +61,8 @@ int wmain(int argc,wchar_t**argv){
         const double ptsMs=frameId*100.0;++frameId;
         bool ok=graph.process(f,ptsMs,!temporal||index==0,out,frameId,&color)&&sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),image);
         int error=0,displayError=0;uint64_t sum=0;
-        if(ok){for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){uint8_t neutral[4]={0,128,0,128};auto* p=remoteYuv?neutral:f->data[0]+ptrdiff_t(y)*f->linesize[0]+(x/2)*4;const double Y=(double(p[(x&1)?2:0])-(full?0:16))/(full?255:219);const double U=(double(p[1])-128)/(full?255:224),V=(double(p[3])-128)/(full?255:224);const double kr=hd?.2126:.299,kb=hd?.0722:.114;double expected[3]={Y+2*(1-kr)*V,0,Y+2*(1-kb)*U};expected[1]=(Y-kr*expected[0]-kb*expected[2])/(1-kr-kb);
+        if(ok){for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){uint8_t neutral[4]={0,128,0,128};auto* p=remoteYuv?neutral:f->data[0]+ptrdiff_t(y)*f->linesize[0]+(x/2)*4;const double Y=(double(p[(x&1)?2:0])-(full?0:16))/(full?255:219);const auto* next=!remoteYuv&&(x&1)&&x+1<w?p+4:p;
+                const double U=(0.5*(p[1]+next[1])-128)/(full?255:224),V=(0.5*(p[3]+next[3])-128)/(full?255:224);const double kr=hd?.2126:.299,kb=hd?.0722:.114;double expected[3]={Y+2*(1-kr)*V,0,Y+2*(1-kb)*U};expected[1]=(Y-kr*expected[0]-kb*expected[2])/(1-kr-kb);
                 if(remoteYuv){const double luma=(double(x%256)-(full?0:16))/(full?255:219);
                     const double u=(double(f->data[1][ptrdiff_t(y/2)*f->linesize[1]+x/2])-128)/(full?255:224),v=(double(f->data[2][ptrdiff_t(y/2)*f->linesize[2]+x/2])-128)/(full?255:224);
                     const double normalized=std::clamp(luma,0.0,1.0);expected[0]=normalized+2*(1-kr)*v;expected[2]=normalized+2*(1-kb)*u;expected[1]=(normalized-kr*expected[0]-kb*expected[2])/(1-kr-kb);
