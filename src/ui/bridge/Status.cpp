@@ -554,10 +554,9 @@ void QmlPlayerBridge::updateRunStatus() {
 
 
 void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
-    // 临时停用：格式徽章窗口在开符号构建下必崩（见 FormatBadgeWindow::show），
-    // 它把真正的崩溃信号盖住了。只停调用，代码留着。
+    if (!impl_->videoWindow) return;
     impl_->formatBadgeSession = s.sessionId;
-    if (impl_->videoWindow == nullptr) return;
+    impl_->formatBadgeLabel = s.sourceHdrLabel;
     if (!impl_->formatBadge) {
         impl_->formatBadge = std::make_unique<media::FormatBadgeWindow>();
         if (!impl_->formatBadge->create(impl_->videoWindow)) {
@@ -565,8 +564,7 @@ void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
             return;
         }
     }
-    const QString label = uiText(s.sourceHdrLabel);
-    const QString title = label.isEmpty() ? QStringLiteral("SDR") : label;
+    const QString title = uiText(s.sourceHdrLabel);
     QStringList detailParts;
     const QString rate = sourceRateText();
     if (!rate.isEmpty()) detailParts << rate;
@@ -576,8 +574,9 @@ void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
     impl_->formatBadge->show(impl_->videoWindow, title.toStdWString(), detail.toStdWString());
     veyra::log::info("format-badge", std::format("shown title={} detail={} session={}",
         title.toStdString(), detail.toStdString(), s.sessionId));
-    QTimer::singleShot(3200, this, [this]() {
-        if (impl_->formatBadge) impl_->formatBadge->hide();
+    const auto serial = ++impl_->formatBadgeSerial;
+    QTimer::singleShot(3200, this, [this, serial]() {
+        if (impl_->formatBadge && serial == impl_->formatBadgeSerial) impl_->formatBadge->hide();
     });
 }
 

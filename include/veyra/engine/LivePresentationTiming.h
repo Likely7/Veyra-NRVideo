@@ -25,9 +25,9 @@ inline int64_t capturePairInterval100ns(pipeline::Rational duration,double nomin
     return liveSourceInterval100ns(duration,nominalFps);
 }
 // File replay has no arrival clock and keeps its PTS anchor; FG keeps the A/B
-// pair phase; streams re-anchor every frame. Physical and screen capture without
-// FG present when ready: one PTS anchor per epoch turned the first sample's late
-// read into a hold on every later frame (60 fps window capture: 3-52 ms per run).
+// pair phase; streams re-anchor every frame. The default for physical and screen
+// capture without FG is ready-driven. A first-sample anchor would carry a late
+// read into every later frame (60 fps window capture: 3-52 ms per run).
 inline bool livePacesSourcePts(bool fg,bool physicalCapture,bool screenCapture){return fg||!(physicalCapture||screenCapture);}
 // Live capture never waits on an absolute source PTS. Once B is available,
 // display generated(A,B), then B up to half an input interval later. Anchor
@@ -89,6 +89,67 @@ public:
     double driftPpm(int64_t interval)const{return interval>0?drift_/double(interval)*1e6:0;}
     uint64_t snaps()const{return snaps_;}
 };
+// Smooth ready-driven capture only when the PTS clock is regular and delivery
+// is jittery. Return zero for the original ready-driven path. The deadline
+// follows the clock gradually and can hold a real frame for at most half of
+// its sample period (up to 8 ms). It never schedules another copy of a frame.
+class LiveCapturePacer {
+public:
+    static constexpr int64_t kMaxHold100ns = 80000;
+    static constexpr unsigned kWarmupFrames = 24;
+
+    void reset() { *this = {}; }
+
+    int64_t deadline(int64_t pts, int64_t arrival, int64_t period) {
+        if (arrival <= 0 || period <= 0) {
+            reset();
+            return 0;
+        }
+
+        const int64_t ptsDelta = pts - lastPts_;
+        const int64_t arrivalDelta = arrival - lastArrival_;
+        if (lastArrival_) {
+            if (std::abs(ptsDelta - period) > period / 10 ||
+                arrivalDelta <= 0 || arrivalDelta > 2 * period || period != period_) {
+                reset();
+            } else {
+                jitter_ += 0.04 * (std::abs(double(arrivalDelta - ptsDelta)) - jitter_);
+                samples_ = std::min(samples_ + 1, kWarmupFrames);
+            }
+        }
+        lastPts_ = pts;
+        lastArrival_ = arrival;
+        period_ = period;
+        const auto anchor = clock_.anchor(pts, arrival, period) + LiveArrivalSmoother::kLead100ns;
+
+        // Hysteresis keeps a running stream from adding and removing the
+        // reserve every time its delivery jitter crosses the entry threshold.
+        if (samples_ < kWarmupFrames || jitter_ < (target_ ? 4500 : 10000)) {
+            target_ = 0;
+            return 0;
+        }
+
+        const auto maxHold = std::min(kMaxHold100ns, period / 2);
+        const auto reserve = std::min(maxHold, int64_t(std::llround(15000 + 2 * jitter_)));
+        auto due = anchor + reserve;
+        if (target_) {
+            const auto next = target_ + ptsDelta;
+            const auto slew = std::max<int64_t>(1, period / 200); // 5000 ppm
+            due = std::clamp(due, next - slew, next + slew);
+        }
+        target_ = due;
+        return std::clamp(due, arrival, arrival + maxHold);
+    }
+
+    double jitterMs() const { return jitter_ / 10000; }
+
+private:
+    LiveArrivalSmoother clock_;
+    int64_t lastPts_ = 0, lastArrival_ = 0, period_ = 0, target_ = 0;
+    double jitter_ = 0;
+    unsigned samples_ = 0;
+};
+
 // How late a live generated frame is still worth showing: 10 ms, the bound the
 // FG budget admits against, from the later of its smoothed due time and the one
 // its own callback gives. A late callback must not expire more frames than it did.

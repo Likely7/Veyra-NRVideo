@@ -1323,6 +1323,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // A/B: the capacity wait before it followed the measured callback jitter.
             static const bool fixedCapacityWait=GetEnvironmentVariableW(L"VEYRA_TEST_FIXED_CAPACITY_WAIT",nullptr,0)>0;
             LiveArrivalSmoother liveArrival;int64_t liveGeneratedGrace=kLiveGeneratedGrace100ns,nextLiveAnchorLog=0;
+            LiveCapturePacer capturePacer;
+            bool capturePacerActive=false;
             FgCostSettling vfgCostSettling;
             double vfgChosenFgMs=0,vfgFastFgMs=0;uint64_t vfgFastPairs=0,vfgFastBudgetPairs=0,vfgChosenPairs=0;int64_t vfgChosenAt=0,nextVfgFastLog=0;
             uint64_t generatedDropDeadline=0,generatedDropCapacity=0,generatedDropCap=0;
@@ -3261,10 +3263,27 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     veyra::log::info("capture-rate",std::format("revision={} requested60To30={} mode={} active={} transportFps={} originalPtsPreserved={}",options.settings.revision,halfRateRequested,halfRateMode,halfRate,isCapture?activeSource->info().averageFps:0,!captureClockCorrected));
                 }
                 const bool pairPacing=pairAnchoredLive&&options.fg;
-                // File replay has no device pacing and still needs its PTS clock.
-                // Physical and screen capture without FG present as soon as ready.
-                const bool paceSourcePts=livePacesSourcePts(options.fg,physicalCapture,isScreen);
-                if(isCapture&&!rereadCached&&(isStream||pairPacing||!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts))){
+                // A regular raw capture clock can absorb delivery jitter before
+                // the real frame is presented. The job still uses the original
+                // media PTS and the existing two-batch scheduler.
+                const bool smoothCapture=cardTiming&&!options.fg&&!dedupActive&&!legacyLivePacing&&
+                    !captureClockCorrected&&!pkt.pts.isUnknown()&&pkt.arrivalHost100ns>0&&
+                    (!physicalCapture||(!nativeCapture&&!captureSource.compressedVideo()));
+                if(!smoothCapture||historyReset||captureDropped)capturePacer.reset();
+                const auto captureDue=smoothCapture&&!rereadCached?
+                    capturePacer.deadline(samplePts100ns,captureArrival,halfRate?2*capturePeriod:capturePeriod):0;
+                if(!rereadCached&&bool(captureDue)!=capturePacerActive){
+                    capturePacerActive=bool(captureDue);
+                    veyra::log::info("capture-pacing",std::format("active={} revision={} source={} jitterMs={:.3f} holdMs={:.3f}",
+                        capturePacerActive,options.settings.revision,pkt.sequence,capturePacer.jitterMs(),
+                        capturePacerActive?double(captureDue-captureArrival)/10000:0));
+                }
+                // File playback replay without a simulated card clock still
+                // needs its continuous PTS anchor.
+                const bool paceSourcePts=livePacesSourcePts(options.fg,cardTiming,isScreen);
+                if(captureDue){
+                    liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,captureDue,0);
+                }else if(isCapture&&!rereadCached&&(isStream||pairPacing||!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts))){
                     const auto duration100ns=liveSourceInterval100ns(pkt.duration,activeSource->info().averageFps);
                     if(!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts)||(pairPacing&&frames==0))veyra::log::info("capture-timeline",std::format("interval100ns={} packetDurationKnown={} packetDurationPositive={} nominalFps={} FG={} pacing={}",duration100ns,!pkt.duration.isUnknown(),pkt.duration.num>0,activeSource->info().averageFps,options.fg,pairPacing?(isRemote?"decoded-pair":"capture-pair"):paceSourcePts?"source-pts":"capture-ready"));
                     if(pairPacing||isStream){
@@ -3661,8 +3680,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // first, then the dynamic-metadata HDR formats, then the static
                     // ones. Identification only: every case maps on the static curve.
                     const auto sourceHdrLabel = [&]() -> std::wstring {
-                        if (isCapture || isImage || activeSource == nullptr) return {};
+                        if (isImage || activeSource == nullptr) return {};
                         const auto& si = activeSource->info();
+                        // Capture info carries the negotiated color after a
+                        // device InfoFrame or explicit user override is applied.
+                        if (isCapture && !gd.hdrInput) return L"SDR";
                         if (si.dolbyVision.present) {
                             if (si.dolbyVision.profile == 5) return L"Dolby Vision P5";
                             if (si.dolbyVision.profile == 7) return L"Dolby Vision P7";
@@ -3680,6 +3702,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if (si.hdr10Plus.present) return L"HDR10+";
                         if (si.color.transfer == pipeline::TransferFunction::PQ) return L"HDR10";
                         if (si.color.transfer == pipeline::TransferFunction::HLG) return L"HLG";
+                        if (si.color.scRgb) return L"scRGB";
                         return L"SDR";
                     }();
                     const std::wstring hdrSource = (gd.hdrInput && !sourceHdrLabel.empty()) ? sourceHdrLabel : L"HDR";

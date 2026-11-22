@@ -108,7 +108,7 @@ struct PlayerSnapshot {
     std::wstring colorStatus;
     // Custom (format label): the source's HDR format as one word ("Dolby Vision
     // P7", "HDR Vivid", "HDR10+", "HDR10", "HLG", "SDR"). The start-up badge and
-    // the player bar both read it; empty for captures and images.
+    // the player bar both read it; empty until a video format is known.
     std::wstring sourceHdrLabel;
     std::wstring videoHdrStatus;
     // Beauty nodes: whether the graph runs any, the faces the shared tracker saw a
