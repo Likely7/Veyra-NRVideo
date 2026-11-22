@@ -36,6 +36,10 @@ namespace {
 constexpr auto localAlias = "veyra-translation";
 constexpr qint64 captionLifetimeMs = 7000;
 constexpr qint64 maxQueuedAgeUs = 4000000;
+constexpr qint64 maxSpeechAgeUs = 6000000;
+constexpr qint64 minSpeechShowMs = 1500;
+constexpr qsizetype maxSpeechQueue = 24;
+constexpr qsizetype maxJoinedSpeech = 96;
 constexpr qint64 maxResponseBytes = 128 * 1024;
 constexpr int localScreenTimeoutMs = 30000, screenRetryDelayMs = 1500, maxScreenRetries = 2;
 constexpr qint64 screenClearMs = 800;
@@ -207,12 +211,25 @@ LiveTranslation::LiveTranslation(const QString& directory, QObject* parent)
     };
     reader_.setCreateProcessArgumentsModifier(childFlags);
     server_.setCreateProcessArgumentsModifier(childFlags);
-    connect(&assets_.downloads, &ModelAssets::changed, this, &LiveTranslation::changed);
+    connect(&assets_.downloads, &ModelAssets::changed, this, [this] {
+        if (provider_ == Local && recognitionSource_ == VeyraAudio && !serverPort_) configureAsr();
+        emit changed();
+    });
     connect(&asr_, &LiveAsr::changed, this, &LiveTranslation::changed);
     connect(&asr_, &LiveAsr::audioDiscontinuity, this, &LiveTranslation::resetCaption);
-    connect(&asr_, &LiveAsr::finalText, this, [this](const QString& text, const QString& language, qint64 endUs) {
+    connect(&asr_, &LiveAsr::finalText, this, [this](const QString& text, const QString& language, qint64 endUs,
+                                                   const std::vector<SpeechMark>& marks, bool early) {
         if (!enabled_ || recognitionSource_ != VeyraAudio || !active_) return;
-        addSentences(sentences_.appendFinal(text, language, endUs, clock_.elapsed()));
+        auto completed = sentences_.appendFinal(text, language, endUs, clock_.elapsed(), marks);
+        if (early) earlySentences_ += int(completed.size());
+        addSentences(std::move(completed));
+    });
+    connect(&asr_, &LiveAsr::draftText, this, [this](const QString& text) {
+        if (recognitionSource_ != VeyraAudio) return;
+        draftHideAt_ = text.isEmpty() ? 0 : clock_.elapsed() + 2500;
+        if (text == speechDraft_) return;
+        speechDraft_ = text;
+        if (showOriginal_) emit captionChanged();
     });
     connect(&reader_, &QProcess::readyReadStandardOutput, this, &LiveTranslation::readCaptions);
     connect(&reader_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
@@ -245,6 +262,7 @@ LiveTranslation::LiveTranslation(const QString& directory, QObject* parent)
             if (usingGpu()) {
                 gpuFailed_ = true;
                 stopLocal();
+                configureAsr();
                 log::warn("live-translate", "Vulkan translation server exited, retrying on CPU");
                 return;
             }
@@ -327,6 +345,12 @@ LiveTranslation::DisplayCaption LiveTranslation::displayCaption() const {
     if (recognitionSource_ == ScreenText)
         return screenPresenter_.shown() ? *screenPresenter_.shown() : DisplayCaption{};
     const auto now = clock_.elapsed();
+    if (recognitionSource_ == VeyraAudio) {
+        const auto draft = showOriginal_ ? speechDraft_ : QString{};
+        if (speechShown_ && now < speechHideAt_)
+            return {speechShown_->work.sentence.text, speechShown_->translated, draft};
+        return {{}, {}, draft};
+    }
     for (auto row = rows_.rbegin(); row != rows_.rend(); ++row) {
         if (!row->translated.isEmpty() && row->until > now) return {row->original, row->translated};
     }
@@ -342,9 +366,10 @@ void LiveTranslation::setStatus(QString status) {
 
 void LiveTranslation::configureAsr() {
     const int cores = QThread::idealThreadCount();
-    const int available = std::max(1, cores / 2 - (provider_ == Local ? translationThreads() : 0) - 1);
+    const bool cpuTranslation = provider_ == Local && !usingGpu();
+    const int available = std::max(1, cores / 2 - (cpuTranslation ? translationThreads() : 0) - 1);
     const int threads = recognitionThreads_ ? recognitionThreads_ : std::clamp(cores / 4, 1, 4);
-    asr_.configure(recognitionModel_, sourceLanguage(), std::min(threads, available));
+    asr_.configure(recognitionModel_, sourceLanguage(), std::min(threads, available), recognitionThreads_);
 }
 
 void LiveTranslation::setEnabled(bool value) {
@@ -372,9 +397,12 @@ void LiveTranslation::setEnabled(bool value) {
         screenWords_ = 0;
         emit previewChanged();
     }
-    asr_.setEnabled(value && recognitionSource_ == VeyraAudio);
     if (value) {
         assets_.refreshInstalled();
+        configureAsr();
+    }
+    asr_.setEnabled(value && recognitionSource_ == VeyraAudio);
+    if (value) {
         lastSummaryAt_ = clock_.elapsed();
         status_ = recognitionSource_ == WindowsCaptions ? tr("请打开 Windows 实时字幕")
             : recognitionSource_ == ScreenText ? tr("正在启动画面文字识别…") : QString{};
@@ -467,6 +495,7 @@ void LiveTranslation::setUseGpu(bool value) {
         serverFailed_ = false;
         gpuFailed_ = false;
     }
+    configureAsr();
     emit changed();
 }
 
@@ -511,6 +540,7 @@ void LiveTranslation::setShowOriginal(bool value) {
     showOriginal_ = value;
     settings_.setValue(QStringLiteral("original"), value);
     emit changed();
+    emit captionChanged();
 }
 
 void LiveTranslation::setApiBase(QString value) {
@@ -633,6 +663,10 @@ void LiveTranslation::stepScreenPresenter() {
 
 void LiveTranslation::addSentences(std::vector<LiveSentence> sentences) {
     if (sentences.empty()) return;
+    if (recognitionSource_ == VeyraAudio) {
+        addSpeech(std::move(sentences));
+        return;
+    }
     const auto now = clock_.elapsed();
     for (auto& sentence : sentences) {
         if (!languageCode(sentence.language)) sentence.language = sourceLanguage();
@@ -662,12 +696,142 @@ void LiveTranslation::addSentences(std::vector<LiveSentence> sentences) {
     emit captionChanged();
 }
 
+void LiveTranslation::addSpeech(std::vector<LiveSentence> sentences) {
+    for (auto& sentence : sentences)
+        if (!languageCode(sentence.language)) sentence.language = sourceLanguage();
+    for (size_t i = 0; i < sentences.size();) {
+        Work work;
+        work.id = ++nextSentence_;
+        // The small local model can translate the earlier dialogue instead
+        // of the current caption when both are in the prompt.
+        if (provider_ != Local) work.context = context_;
+        work.sentence = std::move(sentences[i++]);
+        if (work.sentence.wordEndUs) work.wordEnds.push_back(work.sentence.wordEndUs);
+        // Neighbouring short phrases from one recognition result fit in the
+        // same subtitle and can share a translation request.
+        for (; i < sentences.size(); ++i) {
+            const auto& next = sentences[i];
+            if (next.language != work.sentence.language ||
+                work.sentence.text.size() + 1 + next.text.size() > maxJoinedSpeech) break;
+            work.sentence.text += u' ' + next.text;
+            work.sentence.endUs = next.endUs;
+            if (next.wordEndUs) work.wordEnds.push_back(next.wordEndUs);
+            ++work.phrases;
+        }
+        sentenceCount_ += work.phrases;
+        work.cacheKey = cacheKey(work.sentence.language, work.sentence.text);
+        if (provider_ != Local) {
+            context_ << work.sentence.text;
+            if (context_.size() > 2) context_.removeFirst();
+        }
+        if (queue_.size() >= maxSpeechQueue) skipSpeech(queue_.dequeue(), true);
+        queue_.enqueue(std::move(work));
+    }
+}
+
+bool LiveTranslation::resolveSpeech(const Work& work) {
+    auto translation = sameLanguageCaption(work.sentence.text, work.sentence.language, targetLanguage_);
+    if (translation.isEmpty()) {
+        const auto* cached = cache_.object(work.cacheKey);
+        if (!cached) return false;
+        ++cacheHits_;
+        translation = *cached;
+    }
+    queueSpeechResult(work, std::move(translation));
+    return true;
+}
+
+void LiveTranslation::queueSpeechResult(const Work& work, QString translation) {
+    const auto now = clock_.elapsed();
+    if (speechReady_.size() >= size_t(maxSpeechQueue)) {
+        const auto& evicted = speechReady_.front();
+        if (!evicted.translated.isEmpty()) {
+            stale_ += evicted.work.phrases;
+            skippedSentences_ += evicted.work.phrases;
+        }
+        speechReady_.pop_front();
+    }
+    const auto after = std::ranges::upper_bound(speechReady_, work.id, {},
+        [](const SpeechRow& row) { return row.work.id; });
+    speechReady_.insert(after, SpeechRow{work, std::move(translation), now});
+    advanceSpeech(now);
+}
+
+void LiveTranslation::skipSpeech(const Work& work, bool stale) {
+    if (stale) stale_ += work.phrases;
+    skippedSentences_ += work.phrases;
+    if (showOriginal_) queueSpeechResult(work, {});
+}
+
+void LiveTranslation::pruneSpeech(qint64 now) {
+    if (draftHideAt_ && now >= draftHideAt_) {
+        draftHideAt_ = 0;
+        speechDraft_.clear();
+        if (showOriginal_) emit captionChanged();
+    }
+    const auto expired = sink::recordingClockUs() - maxSpeechAgeUs;
+    if (speechRequest_ && speechRequest_->sentence.endUs < expired) {
+        auto work = std::move(*speechRequest_);
+        cancelRequest();
+        skipSpeech(work, true);
+    }
+    while (!queue_.isEmpty() && queue_.head().sentence.endUs < expired) skipSpeech(queue_.dequeue(), true);
+    advanceSpeech(now);
+}
+
+void LiveTranslation::advanceSpeech(qint64 now) {
+    if (speechShown_ && now < speechSwapAt_) return;
+    while (!speechReady_.empty()) {
+        // A fallback created under backlog pressure must not jump over an
+        // older in-flight translation.
+        const auto id = speechReady_.front().work.id;
+        if ((speechRequest_ && speechRequest_->id < id) ||
+            (!queue_.isEmpty() && queue_.head().id < id)) break;
+        auto row = std::move(speechReady_.front());
+        speechReady_.pop_front();
+        if (!row.translated.isEmpty() && sink::recordingClockUs() - row.work.sentence.endUs > maxSpeechAgeUs) {
+            stale_ += row.work.phrases;
+            skippedSentences_ += row.work.phrases;
+            row.translated.clear();
+        }
+        const bool fallback = row.translated.isEmpty();
+        if (fallback && (!showOriginal_ || now - row.readyAt > minSpeechShowMs)) continue;
+        const auto& line = fallback ? row.work.sentence.text : row.translated;
+        speechSwapAt_ = now + (fallback ? minSpeechShowMs
+            : std::clamp<qint64>(line.size() * 1000 / 32, minSpeechShowMs, 2500));
+        speechHideAt_ = now + (fallback ? minSpeechShowMs : displayDuration(line));
+        if (!fallback) {
+            const auto clockUs = sink::recordingClockUs();
+            const auto delayMs = std::max<qint64>(0, (clockUs - row.work.sentence.endUs) / 1000);
+            if (displayDelays_.size() < 256) displayDelays_.push_back(delayMs);
+            for (const auto end : row.work.wordEnds)
+                if (spokenDelays_.size() < 256) spokenDelays_.push_back(std::max<qint64>(0, (clockUs - end) / 1000));
+            displayedSentences_ += row.work.phrases;
+            if (qEnvironmentVariableIntValue("VEYRA_TEST_LIVE_TEXT_LOG") == 1)
+                log::info("live-translate", std::format("test-id={} delayMs={} text={}", row.work.id, delayMs,
+                    row.translated.toStdString()));
+            setStatus(tr("实时翻译运行中"));
+        }
+        speechShown_ = std::move(row);
+        emit captionChanged();
+        return;
+    }
+    if (speechShown_ && now >= speechHideAt_) {
+        speechShown_.reset();
+        emit captionChanged();
+    }
+}
+
 void LiveTranslation::displayTranslation(const Work& work, QString translation) {
     const auto now = clock_.elapsed();
     if (work.screenStart >= 0) {
         const auto readMs = std::clamp<qint64>(1000 + 40 * std::max(work.sentence.text.size(), translation.size()), 1200, 3500);
         screenPresenter_.ready(work.id, work.screenStart, {work.sentence.text, std::move(translation)}, now, readMs);
         stepScreenPresenter();
+        return;
+    }
+    if (recognitionSource_ == VeyraAudio) {
+        queueSpeechResult(work, std::move(translation));
         return;
     }
     const auto row = std::ranges::find(rows_, work.id, &Row::id);
@@ -720,13 +884,18 @@ void LiveTranslation::resetCaption() {
     screenRetries_ = 0;
     screenRetryAt_ = 0;
     const bool screenWasShown = screenPresenter_.clear(screenLine_);
-    if (rows_.empty() && !screenWasShown) return;
+    const bool wasShown = !rows_.empty() || screenWasShown || speechShown_ || !speechDraft_.isEmpty();
     rows_.clear();
-    emit captionChanged();
+    speechReady_.clear();
+    speechShown_.reset();
+    speechSwapAt_ = speechHideAt_ = draftHideAt_ = 0;
+    speechDraft_.clear();
+    if (wasShown) emit captionChanged();
 }
 
 void LiveTranslation::cancelRequest() {
     requestSentence_ = 0;
+    speechRequest_.reset();
     if (auto* reply = std::exchange(request_, nullptr)) {
         reply->disconnect(this);
         reply->abort();
@@ -766,8 +935,11 @@ void LiveTranslation::tick() {
         }
         stepScreenPresenter();
     } else {
-        prune(now);
+        if (recognitionSource_ == VeyraAudio) pruneSpeech(now);
+        else prune(now);
         addSentences(sentences_.flush(now));
+        if (recognitionSource_ == VeyraAudio && !request_)
+            while (!queue_.isEmpty() && resolveSpeech(queue_.head())) queue_.dequeue();
     }
     if (provider_ == Local) {
         if (downloading()) return;
@@ -813,6 +985,7 @@ void LiveTranslation::serverNotListening(qint64 now) {
     stopLocal();
     if (gpu) {
         gpuFailed_ = true;
+        configureAsr();
         log::warn("live-translate", "Vulkan translation server startup timed out, retrying on CPU");
         return;
     }
@@ -865,13 +1038,15 @@ void LiveTranslation::stopLocal() {
 void LiveTranslation::requestTranslation(Work work) {
     const auto& text = work.sentence.text;
     const auto& source = work.sentence.language;
+    const bool speech = recognitionSource_ == VeyraAudio;
     requestedAt_ = clock_.elapsed();
     QUrl url;
     QByteArray token, payload;
     if (provider_ == MyMemory) {
         if (!languageCode(source)) {
             ++failures_;
-            ++skippedSentences_;
+            if (speech) skipSpeech(work, false);
+            else ++skippedSentences_;
             setStatus(tr("MyMemory 需要选择原文语言"));
             return;
         }
@@ -907,6 +1082,7 @@ void LiveTranslation::requestTranslation(Work work) {
     }
     ++requestedCount_;
     requestSentence_ = work.id;
+    if (speech) speechRequest_ = work;
     auto* reply = request_;
     reply->setReadBufferSize(maxResponseBytes + 1);
     connect(reply, &QNetworkReply::readyRead, this, [reply] {
@@ -915,6 +1091,7 @@ void LiveTranslation::requestTranslation(Work work) {
     connect(reply, &QNetworkReply::finished, this, [this, reply, work = std::move(work)] {
         request_ = nullptr;
         requestSentence_ = 0;
+        speechRequest_.reset();
         receiveTranslation(reply, work);
         reply->deleteLater();
     });
@@ -924,6 +1101,11 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
     if (!enabled_ || !active_) return;
     const auto code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const bool screen = work.screenStart >= 0;
+    const bool speech = recognitionSource_ == VeyraAudio;
+    if (speech && sink::recordingClockUs() - work.sentence.endUs > maxSpeechAgeUs) {
+        skipSpeech(work, true);
+        return;
+    }
     const auto now = clock_.elapsed();
     if (provider_ == Local && code == 503 && now - serverStartedAt_ < (usingGpu() ? 45000 : 20000)) {
         if (!screen) queue_.prepend(work);
@@ -944,7 +1126,8 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
     if (requestTimes_.size() < 256) requestTimes_.push_back(now - requestedAt_);
     if (code < 200 || code >= 300 || reply->error() != QNetworkReply::NoError) {
         ++failures_;
-        ++skippedSentences_;
+        if (speech) skipSpeech(work, false);
+        else ++skippedSentences_;
         retryScreen();
         log::warn("live-translate", std::format("request failed provider={} http={} network={}",
             provider_, code, int(reply->error())));
@@ -967,7 +1150,7 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
         QLocale(work.sentence.language).language() != QLocale(targetLanguage_).language() &&
         translation.compare(work.sentence.text, Qt::CaseInsensitive) == 0;
     if (echoed && !work.context.isEmpty() &&
-        sink::recordingClockUs() - work.sentence.endUs < maxQueuedAgeUs) {
+        sink::recordingClockUs() - work.sentence.endUs < (speech ? maxSpeechAgeUs : maxQueuedAgeUs)) {
         Work retry = work;
         retry.context.clear();
         queue_.prepend(std::move(retry));
@@ -976,7 +1159,8 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
     }
     if (translation.isEmpty() || echoed) {
         ++failures_;
-        ++skippedSentences_;
+        if (speech) skipSpeech(work, false);
+        else ++skippedSentences_;
         retryScreen();
         setStatus(tr("翻译服务未返回译文"));
         return;
@@ -987,18 +1171,22 @@ void LiveTranslation::receiveTranslation(QNetworkReply* reply, const Work& work)
 
 void LiveTranslation::summarize(qint64 now) {
     lastSummaryAt_ = now;
-    if (!sentenceCount_ && !requestedCount_ && !failures_) return;
+    if (!sentenceCount_ && !requestedCount_ && !displayedSentences_ && !stale_ && !failures_) return;
     if (!requestTimes_.empty()) {
         const auto total = std::accumulate(requestTimes_.begin(), requestTimes_.end(), qint64{0});
         averageTranslationMs_ = double(total) / double(requestTimes_.size());
     }
     std::ranges::sort(requestTimes_);
     std::ranges::sort(displayDelays_);
-    log::info("live-translate", std::format("provider={} sentences={} requests={} cacheHits={} requestP50ms={} requestP95ms={} overlayP50ms={} overlayP95ms={} stale={} hidden={} failed={}",
+    std::ranges::sort(spokenDelays_);
+    log::info("live-translate", std::format("provider={} sentences={} requests={} cacheHits={} requestP50ms={} requestP95ms={} overlayP50ms={} overlayP95ms={} stale={} hidden={} failed={} shownSentences={} earlySentences={} wordTimeSamples={} wordEndP50ms={} wordEndP95ms={}",
         provider_, sentenceCount_, requestedCount_, cacheHits_, percentile(requestTimes_, 50), percentile(requestTimes_, 95),
-        percentile(displayDelays_, 50), percentile(displayDelays_, 95), stale_, hidden_, failures_));
+        percentile(displayDelays_, 50), percentile(displayDelays_, 95), stale_, hidden_, failures_,
+        displayedSentences_, earlySentences_, spokenDelays_.size(), percentile(spokenDelays_, 50), percentile(spokenDelays_, 95)));
     requestTimes_.clear();
     displayDelays_.clear();
+    spokenDelays_.clear();
+    earlySentences_ = displayedSentences_ = 0;
     sentenceCount_ = requestedCount_ = cacheHits_ = stale_ = hidden_ = failures_ = 0;
     emit changed();
 }

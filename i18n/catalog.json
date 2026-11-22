@@ -3641,6 +3641,19 @@
    "ru": "Настройка NVIDIA G-SYNC"
   },
   {
+   "zh": "NVIDIA Parakeet · 仅识别英语 · CC BY 4.0",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "NVIDIA Parakeet · 僅辨識英語 · CC BY 4.0",
+   "en": "NVIDIA Parakeet · English speech only · CC BY 4.0",
+   "ja": "NVIDIA Parakeet · 英語音声のみ認識 · CC BY 4.0",
+   "ko": "NVIDIA Parakeet · 영어 음성만 인식 · CC BY 4.0",
+   "es": "NVIDIA Parakeet · Solo reconoce inglés · CC BY 4.0",
+   "fr": "NVIDIA Parakeet · Reconnaissance de l’anglais uniquement · CC BY 4.0",
+   "de": "NVIDIA Parakeet · Nur englische Sprache · CC BY 4.0",
+   "pt-BR": "NVIDIA Parakeet · Reconhece apenas inglês · CC BY 4.0",
+   "ru": "NVIDIA Parakeet · Только английская речь · CC BY 4.0"
+  },
+  {
    "zh": "NVIDIA RTX 补帧；倍率以运行库实际能力为准",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "NVIDIA RTX 補幀；倍率以執行庫實際能力為準",
@@ -15184,6 +15197,19 @@
    "de": "Solid: current · Dashed: default. Äußerlich erhöht sich der Wert; höher ist nicht immer besser.",
    "pt-BR": "Solid: current · Dashed: default. Fora aumenta o valor; maior nem sempre é melhor.",
    "ru": "Solid: current · Dashed: default. Внешне ценность возрастает, но выше не всегда лучше."
+  },
+  {
+   "zh": "实际使用 %1 个线程",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "實際使用 %1 個執行緒",
+   "en": "Using %1 threads",
+   "ja": "使用中のスレッド数 %1",
+   "ko": "실제 사용 스레드 %1개",
+   "es": "Hilos en uso: %1",
+   "fr": "Threads utilisés : %1",
+   "de": "Verwendete Threads: %1",
+   "pt-BR": "Threads em uso: %1",
+   "ru": "Используется потоков: %1"
   },
   {
    "zh": "实际运行：FSR %1 · 2X",

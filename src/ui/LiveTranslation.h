@@ -12,6 +12,7 @@
 #include <QStringList>
 #include <QTimer>
 #include <deque>
+#include <optional>
 
 namespace veyra::ui {
 class LiveTranslation final : public QObject {
@@ -29,6 +30,7 @@ class LiveTranslation final : public QObject {
     Q_PROPERTY(int recognitionSource READ recognitionSource WRITE setRecognitionSource NOTIFY changed)
     Q_PROPERTY(int recognitionModel READ recognitionModel WRITE setRecognitionModel NOTIFY changed)
     Q_PROPERTY(int recognitionThreads READ recognitionThreads WRITE setRecognitionThreads NOTIFY changed)
+    Q_PROPERTY(int recognitionEffectiveThreads READ recognitionEffectiveThreads NOTIFY changed)
     Q_PROPERTY(QString recognitionStatus READ recognitionStatus NOTIFY changed)
     Q_PROPERTY(bool recognitionInstalled READ recognitionInstalled NOTIFY changed)
     Q_PROPERTY(bool recognitionDownloading READ recognitionDownloading NOTIFY changed)
@@ -73,6 +75,7 @@ public:
     int recognitionSource() const { return recognitionSource_; }
     int recognitionModel() const { return recognitionModel_; }
     int recognitionThreads() const { return recognitionThreads_; }
+    int recognitionEffectiveThreads() const { return asr_.threads(); }
     QString recognitionStatus() const { return asr_.status(); }
     bool recognitionInstalled() const { return asr_.installed(); }
     bool recognitionDownloading() const { return asr_.downloading(); }
@@ -90,6 +93,7 @@ public:
     struct DisplayCaption {
         QString original;
         QString translated;
+        QString draft;
     };
     DisplayCaption displayCaption() const;
     QString caption() const { return displayCaption().original; }
@@ -133,6 +137,8 @@ private:
         QStringList context;
         QString cacheKey;
         qint64 screenStart = -1;
+        int phrases = 1;
+        std::vector<qint64> wordEnds;
     };
     struct Row {
         quint64 id = 0;
@@ -140,6 +146,12 @@ private:
         qint64 originalUntil = 0;
         QString original;
         QString translated;
+    };
+
+    struct SpeechRow {
+        Work work;
+        QString translated;
+        qint64 readyAt = 0;
     };
 
     void setStatus(QString status);
@@ -158,6 +170,12 @@ private:
     void resetCaption();
     void cancelRequest();
     void discardHiddenWork();
+    void addSpeech(std::vector<LiveSentence> sentences);
+    bool resolveSpeech(const Work& work);
+    void queueSpeechResult(const Work& work, QString translation);
+    void skipSpeech(const Work& work, bool stale);
+    void pruneSpeech(qint64 now);
+    void advanceSpeech(qint64 now);
     void startLocal();
     void stopLocal();
     void requestTranslation(Work work);
@@ -194,11 +212,17 @@ private:
     LiveSentences sentences_;
     QQueue<Work> queue_;
     std::deque<Row> rows_;
+    std::deque<SpeechRow> speechReady_;
+    std::optional<SpeechRow> speechShown_;
+    std::optional<Work> speechRequest_;
+    QString speechDraft_;
+    qint64 speechSwapAt_ = 0, speechHideAt_ = 0, draftHideAt_ = 0;
     QStringList context_;
     QCache<QString, QString> cache_{200};
-    std::vector<qint64> requestTimes_, displayDelays_;
+    std::vector<qint64> requestTimes_, displayDelays_, spokenDelays_;
     int sentenceCount_ = 0, requestedCount_ = 0, cacheHits_ = 0, stale_ = 0, hidden_ = 0, failures_ = 0;
     int skippedSentences_ = 0;
+    int earlySentences_ = 0, displayedSentences_ = 0;
     double averageTranslationMs_ = 0.0;
 };
 }

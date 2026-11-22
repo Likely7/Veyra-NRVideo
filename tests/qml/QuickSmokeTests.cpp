@@ -69,6 +69,7 @@ QtObject {
         property int recognitionSource: 0
         property int recognitionModel: 0
         property int recognitionThreads: 0
+        property int recognitionEffectiveThreads: 3
         property string recognitionStatus: ""
         property bool recognitionInstalled: false
         property bool recognitionDownloading: false

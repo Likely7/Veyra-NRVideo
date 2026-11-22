@@ -5,6 +5,7 @@
 #include "veyra/Log.h"
 
 #include <QCoreApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <algorithm>
@@ -69,7 +70,8 @@ LiveAsr::~LiveAsr() {
     if (process_.state() != QProcess::NotRunning) process_.waitForFinished(1500);
 }
 
-void LiveAsr::configure(int model, const QString& language, int threads) {
+void LiveAsr::configure(int model, const QString& language, int threads, int requestedThreads) {
+    requestedThreads_ = requestedThreads;
     if (asr::assets(model).empty() || (model_ == model && language_ == language && threads_ == threads)) return;
     if (model_ != model && !assets_.setAssets(asr::assets(model))) return;
     model_ = model;
@@ -168,6 +170,8 @@ void LiveAsr::detachTap() {
 
 void LiveAsr::resetStream() {
     ++epoch_;
+    speechText_.reset();
+    emit draftText({});
     resampler_.reset();
     renderer_ = nullptr;
     lastAudioEndUs_ = 0;
@@ -231,12 +235,9 @@ void LiveAsr::tick() {
         }
         const bool changed = renderer_ != block.renderer || block.format != format_;
         const bool gap = lastAudioEndUs_ && std::abs(block.playoutUs - lastAudioEndUs_) > 150000;
-        if (renderer_ && changed) {
+        if ((renderer_ && changed) || gap || gapPending_) {
             resetStream();
             emit audioDiscontinuity();
-        } else if (gap || gapPending_) {
-            resampler_.reset();
-            gapPending_ = true;
         }
         if (changed || !renderer_) {
             log::info("live-asr-audio", std::format("pcm rate={} channels={} layout=0x{:x} queuedMs={}",
@@ -272,7 +273,9 @@ void LiveAsr::readOutput() {
         const auto type = event.value("type").toString();
         if (type == QLatin1String("ready")) {
             ready_ = true;
-            log::info("live-asr", std::format("ready model={} threads={} runtime={} loadMs={}", model_, threads_,
+            workerCpuMs_ = previousWorkerCpuMs_ = event.value("cpuMs").toInteger();
+            log::info("live-asr", std::format("ready model={} threads={} requestedThreads={} runtime={} loadMs={}", model_,
+                event.value("threads").toInt(), requestedThreads_,
                 event.value("version").toString().toStdString(), event.value("loadMs").toInteger()));
             continue;
         }
@@ -289,40 +292,75 @@ void LiveAsr::readOutput() {
             skippedSegments_ += unsigned(event.value("skippedSegments").toInt());
             continue;
         }
-        if (!active_ || !ready_ || type != QLatin1String("final") || event.value("epoch").toInteger() != qint64(epoch_))
+        if (!active_ || !ready_ || event.value("epoch").toInteger() != qint64(epoch_)) continue;
+        if (type == QLatin1String("language")) {
+            log::info("live-asr", std::format("language candidate={} locked={}",
+                event.value("candidate").toString().toStdString(), event.value("locked").toString().toStdString()));
             continue;
-        if (decodeTimes_.size() < 256) decodeTimes_.push_back(event.value("decodeMs").toInteger());
-        audioMs_ += event.value("audioMs").toInteger();
+        }
+        const bool final = type == QLatin1String("final");
+        if (!final && type != QLatin1String("partial")) continue;
+        const auto decodeMs = event.value("decodeMs").toInteger();
+        workerCpuMs_ = event.value("cpuMs").toInteger();
+        if (final) {
+            if (decodeTimes_.size() < 256) decodeTimes_.push_back(decodeMs);
+            audioMs_ += event.value("audioMs").toInteger();
+        } else {
+            ++partials_;
+            partialDecodeMs_ += decodeMs;
+        }
+        const auto beginUs = event.value("t0").toInteger();
         const auto endUs = event.value("t1").toInteger();
         const auto ageUs = sink::recordingClockUs() - endUs;
-        if (ageUs > asr::maxResultAgeUs) { ++staleResults_; continue; }
+        if (ageUs > asr::maxResultAgeUs) {
+            if (final) { ++staleResults_; speechText_.reset(); emit draftText({}); }
+            continue;
+        }
         const auto text = event.value("text").toString();
-        if (text.isEmpty()) { ++emptyResults_; continue; }
-        if (endToResults_.size() < 256) endToResults_.push_back(ageUs / 1000);
+        if (final && text.isEmpty()) ++emptyResults_;
+        auto update = speechText_.update(event.value("segment").toInteger(), beginUs, endUs, text, final);
+        emit draftText(update.draft);
+        if (update.committed.isEmpty()) continue;
+        if (final && endToResults_.size() < 256) endToResults_.push_back(ageUs / 1000);
+        std::vector<SpeechMark> marks;
+        const auto tokenEnds = event.value("tokenEnds").toArray();
+        for (const auto& entry : tokenEnds) {
+            const auto pair = entry.toArray();
+            if (pair.size() != 2) continue;
+            const auto offset = qsizetype(pair.at(0).toInt()) - update.offset;
+            const auto wordEnd = beginUs + pair.at(1).toInteger() * 1000;
+            if (offset > 0 && offset <= update.committed.size() && wordEnd >= beginUs && wordEnd <= endUs)
+                marks.push_back({offset, wordEnd});
+        }
+        const auto language = event.value("lang").toString();
         if (qEnvironmentVariableIntValue("VEYRA_TEST_LIVE_TEXT_LOG") == 1)
-            log::info("live-asr", std::format("test-text={} endUs={} delayMs={}", text.toStdString(), endUs, ageUs / 1000));
-        emit finalText(text, event.value("lang").toString(), endUs);
+            log::info("live-asr", std::format("test-text={} endUs={} delayMs={} early={} lang={}",
+                update.committed.toStdString(), endUs, ageUs / 1000, !final, language.toStdString()));
+        emit finalText(std::move(update.committed), language, endUs, marks, !final);
     }
 }
 
 void LiveAsr::summarize(qint64 now) {
     lastSummaryAt_ = now;
-    if (decodeTimes_.empty() && !bufferDrops_ && !emptyResults_ && !staleResults_ && !skippedSegments_ && !stalePcm_) return;
+    if (decodeTimes_.empty() && !partials_ && !bufferDrops_ && !emptyResults_ && !staleResults_ && !skippedSegments_ && !stalePcm_) return;
     qint64 decodeMs = 0;
     for (const auto ms : decodeTimes_) decodeMs += ms;
     realTimeFactor_ = audioMs_ ? double(decodeMs) / double(audioMs_) : 0.0;
     std::ranges::sort(decodeTimes_);
     std::ranges::sort(endToResults_);
     log::info("live-asr", std::format(
-        "segments={} audioMs={} decodeP50ms={} decodeP95ms={} resultP95ms={} rtf={:.3f} empty={} stale={} skippedSegments={} stalePcm={} peakPcmBytes={}",
+        "segments={} audioMs={} decodeP50ms={} decodeP95ms={} resultP95ms={} rtf={:.3f} empty={} stale={} skippedSegments={} stalePcm={} peakPcmBytes={} partials={} partialDecodeMs={} workerCpuMs={}",
         decodeTimes_.size(), audioMs_, percentile(decodeTimes_, 50), percentile(decodeTimes_, 95),
-        percentile(endToResults_, 95), realTimeFactor_, emptyResults_, staleResults_, skippedSegments_, stalePcm_, peakInFlightBytes_));
+        percentile(endToResults_, 95), realTimeFactor_, emptyResults_, staleResults_, skippedSegments_, stalePcm_,
+        peakInFlightBytes_, partials_, partialDecodeMs_, workerCpuMs_ - previousWorkerCpuMs_));
     if (bufferDrops_) log::warn("live-asr-audio", std::format("discardedBlocks={}", bufferDrops_));
     decodeTimes_.clear();
     endToResults_.clear();
     bufferDrops_ = emptyResults_ = staleResults_ = skippedSegments_ = stalePcm_ = 0;
     peakInFlightBytes_ = inFlightBytes_;
-    audioMs_ = 0;
+    audioMs_ = partialDecodeMs_ = 0;
+    partials_ = 0;
+    previousWorkerCpuMs_ = workerCpuMs_;
     emit changed();
 }
 }

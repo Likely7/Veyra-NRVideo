@@ -229,7 +229,7 @@ void QmlPlayerBridge::tickSubtitles() {
         emit subtitleTextChanged();
     }
     // Live text is never copied into subtitle diagnostics or the export graph.
-    const auto [original, translated] = liveTranslation_->displayCaption();
+    const auto [original, translated, draft] = liveTranslation_->displayCaption();
     const int alignment = draw.empty() ? 2 : 8;
     const auto beginLive = draw.size();
     if (liveTranslation_->showOriginal() && !original.isEmpty() && original != translated) {
@@ -250,6 +250,16 @@ void QmlPlayerBridge::tickSubtitles() {
     }
     if (alignment == 8 && draw.size() - beginLive == 2)
         std::swap(draw[beginLive], draw[beginLive + 1]);
+    if (!draft.isEmpty()) {
+        SubtitleLine line;
+        line.text = draft.toStdWString();
+        line.style.alignment = alignment;
+        line.style.size *= 0.75;
+        line.style.italic = true;
+        line.style.primary = 0x99ffffff;
+        line.maximumLines = 1;
+        draw.push_back(std::move(line));
+    }
     updateSubtitleOverlay(i.subOverlay, draw, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {

@@ -95,6 +95,43 @@ void sentenceChecks() {
 }
 
 
+void speechHypothesisChecks() {
+    using veyra::ui::LiveSpeechText;
+    LiveSpeechText speech;
+    auto result = speech.update(1, 1000000, 2000000, QStringLiteral("The bridge is closed."), false);
+    check(result.committed.isEmpty() && result.draft == QStringLiteral("The bridge is closed."),
+          "first interim hypothesis stays on the draft line");
+    result = speech.update(1, 1000000, 3000000, QStringLiteral("The bridge is closed. Take the next"), false);
+    check(result.committed == QStringLiteral("The bridge is closed.") && result.draft == QStringLiteral("Take the next"),
+          "confirmed punctuation submits the first sentence before the final result");
+    result = speech.update(1, 1000000, 3750000, QStringLiteral("The bridges are closed. Take the next exit."), true);
+    check(result.committed == QStringLiteral("Take the next exit.") && result.draft.isEmpty(),
+          "a final revision does not resend the early translation and replaces the draft");
+    result = speech.update(2, 3450000, 6000000, QStringLiteral("next exit, then keep left."), true);
+    check(result.committed == QStringLiteral("then keep left."), "audio replay at a cut drops matched duplicate words");
+    result = speech.update(3, 6100000, 7000000, QStringLiteral("Keep left."), true);
+    check(result.committed == QStringLiteral("Keep left."), "a repeat spoken outside the overlap is retained");
+
+    speech.reset();
+    speech.update(1, 1000000, 2000000, QStringLiteral("沿着这条路走到出口"), true);
+    result = speech.update(2, 1800000, 3000000, QStringLiteral("到出口，然后左转。"), true);
+    check(result.committed == QStringLiteral("然后左转。"), "overlap can align text without spaces");
+
+    speech.reset();
+    speech.update(1, 1000000, 2000000, QStringLiteral("Hold."), false);
+    result = speech.update(1, 1000000, 3000000, QStringLiteral("Hold on. Try that door."), false);
+    check(result.committed.isEmpty(), "interim punctuation that changes is not published");
+    speech.reset();
+    result = speech.update(2, 5000000, 6500000, QStringLiteral("Try that door."), true);
+    check(result.committed == QStringLiteral("Try that door."), "stream reset clears interim history");
+
+    veyra::ui::LiveSentences sentences;
+    const auto timed = sentences.appendFinal(QStringLiteral("Go now. Wait here."), QStringLiteral("en"), 4500000, 100,
+        {{6, 2300000}, {17, 3550000}});
+    check(timed.size() == 2 && timed[0].wordEndUs == 2300000 && timed[1].wordEndUs == 3550000,
+          "sentence end time follows its own final token within a recognition result");
+}
+
 void fallbackDownloadChecks(const QString& root, bool domestic, int model) {
     using namespace veyra::ui;
     QTcpServer unavailable;
@@ -531,6 +568,7 @@ int main(int argc, char** argv) {
         return failures ? 1 : 0;
     }
     sentenceChecks();
+    speechHypothesisChecks();
     audioTapChecks();
     if (args.contains(QStringLiteral("--asr-fallback"))) {
         fallbackDownloadChecks(args.at(1), args.contains(QStringLiteral("--domestic")),

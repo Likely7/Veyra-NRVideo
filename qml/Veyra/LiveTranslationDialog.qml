@@ -261,7 +261,7 @@ DialogLayer {
             label: root.translation && root.translation.recognitionInstalled ? qsTr("识别模型已就绪") : qsTr("识别模型按需下载")
             hintBelow: true
             hint: (root.englishOnly
-                ? qsTr("NVIDIA Parakeet · CC BY 4.0")
+                ? qsTr("NVIDIA Parakeet · 仅识别英语 · CC BY 4.0")
                 : qsTr("OpenAI Whisper · MIT · 建议性能较强的 CPU"))
                 + qsTr(" · 首次下载 %1 MB").arg(root.translation ? Math.ceil(root.translation.recognitionBytes / 1000000) : 0)
             RowLayout {
@@ -290,7 +290,12 @@ DialogLayer {
             value: root.translation ? root.translation.recognitionProgress : 0
         }
         VRow {
+            objectName: "live-translation-recognition-threads"
             label: qsTr("识别线程")
+            hintBelow: true
+            hint: root.translation && root.translation.recognitionEffectiveThreads > 0
+                && root.translation.recognitionEffectiveThreads !== root.translation.recognitionThreads
+                ? qsTr("实际使用 %1 个线程").arg(root.translation.recognitionEffectiveThreads) : ""
             VSelect {
                 options: root.recognitionThreadOptions
                 value: root.translation ? root.languageLabel(options, String(root.translation.recognitionThreads)) : ""

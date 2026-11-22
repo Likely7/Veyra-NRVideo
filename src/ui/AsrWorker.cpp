@@ -9,10 +9,11 @@
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
 #include <QThread>
-#include <QVector>
 #include <windows.h>
 #include <algorithm>
 #include <array>
@@ -20,6 +21,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cmath>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -30,13 +32,30 @@
 namespace veyra::ui::asr {
 namespace {
 constexpr int window = 512;
-constexpr int maxSpeechWindows = 7 * sampleRate / window;
+constexpr int previewIntervalMs = 1000;
+constexpr int previewBudgetMs = previewIntervalMs * 3 / 10;
+constexpr int previewPadding = 10 * window;
+constexpr int cutLookbackWindows = sampleRate / window;
+constexpr int cutOverlapWindows = 6; // 192 ms on each side of the cut.
+constexpr int noiseTrackingWindows = 96;
+constexpr int quietPauseWindows = 6;
+constexpr int languageSilenceUs = 10000000;
+
+qint64 processCpuMs() {
+    FILETIME created, exited, kernel, user;
+    if (!GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user)) return 0;
+    const auto ticks = [](FILETIME time) {
+        return (uint64_t(time.dwHighDateTime) << 32) | time.dwLowDateTime;
+    };
+    return qint64((ticks(kernel) + ticks(user)) / 10000);
+}
 
 #define VEYRA_ASR_SYMBOLS(F) \
     F(SherpaOnnxGetVersionStr) \
     F(SherpaOnnxCreateOfflineRecognizer) \
     F(SherpaOnnxDestroyOfflineRecognizer) \
     F(SherpaOnnxCreateOfflineStream) \
+    F(SherpaOnnxOfflineStreamSetOption) \
     F(SherpaOnnxDestroyOfflineStream) \
     F(SherpaOnnxAcceptWaveformOffline) \
     F(SherpaOnnxDecodeOfflineStream) \
@@ -127,6 +146,8 @@ public:
 
         threads = std::clamp(threads, 1, 8);
         model_ = model;
+        maxSpeechWindows_ = (model == Whisper ? 3800 : 6500) * sampleRate / (1000 * window);
+        previewSamples_.reserve(size_t(maxSpeechWindows_ * window + previewPadding));
         language_ = model == Parakeet ? QStringLiteral("en") : whisperLanguage(language);
         const QDir dir(ModelAssets::path(folder, bundle[2]));
         const auto& files = bundle[2].members;
@@ -150,6 +171,10 @@ public:
             config.model_config.whisper.decoder = decoder.constData();
             config.model_config.whisper.language = languageId.constData();
             config.model_config.whisper.task = "transcribe";
+            // The pinned dynamic encoder otherwise processes ten seconds of
+            // padding per utterance. Retain an end-of-text margin.
+            config.model_config.whisper.tail_paddings = 300;
+            config.model_config.whisper.enable_segment_timestamps = 1;
             config.model_config.model_type = "whisper";
         }
         recognizer_ = runtime_.SherpaOnnxCreateOfflineRecognizer(&config);
@@ -157,7 +182,8 @@ public:
 
         const auto vadPath = ModelAssets::path(folder, bundle[1]).toUtf8();
         SherpaOnnxVadModelConfig vadConfig{};
-        vadConfig.silero_vad = {vadPath.constData(), 0.5f, 0.35f, 0.25f, window, 7.0f};
+        vadConfig.silero_vad = {vadPath.constData(), 0.5f, model == Whisper ? 0.20f : 0.25f, 0.20f, window,
+            model == Whisper ? 4.5f : 7.0f};
         vadConfig.sample_rate = sampleRate;
         vadConfig.num_threads = 1;
         vadConfig.provider = "cpu";
@@ -168,26 +194,35 @@ public:
         // returned to the parent as a recognized sentence.
         const std::array<float, sampleRate / 2> silence{};
         runtime_.SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, silence.data(), int(silence.size()));
+        QElapsedTimer warmup;
+        warmup.start();
         if (!decode(silence).valid) return fail("self-test");
+        lastDecodeMs_ = warmup.elapsed();
         reset(0);
         return writeEvent({{"type", "ready"}, {"model", model}, {"threads", threads},
-            {"version", QString::fromLatin1(runtimeVersion)}, {"loadMs", start.elapsed()}});
+            {"version", QString::fromLatin1(runtimeVersion)}, {"loadMs", start.elapsed()}, {"cpuMs", processCpuMs()}});
     }
 
     void startRealtime(unsigned testDecodeDelayMs) {
         decoder_ = std::jthread([this, testDecodeDelayMs](std::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::unique_lock lock(pendingLock_);
-                if (!pendingReady_.wait(lock, stop, [this] { return pending_.has_value(); }) ||
+                if (!pendingReady_.wait(lock, stop, [this] { return pending_ || preview_; }) ||
                     stop.stop_requested()) return;
-                Segment segment = std::move(*pending_);
-                pending_.reset();
+                auto& next = pending_ ? pending_ : preview_;
+                Segment segment = std::move(*next);
+                next.reset();
+                decoderBusy_ = true;
                 lock.unlock();
-                if (sink::recordingClockUs() - segment.endUs > maxPendingSegmentAgeUs) {
+                bool ok = true;
+                if (sink::recordingClockUs() - segment.endUs <= maxPendingSegmentAgeUs) {
+                    ok = decodeSegment(segment, testDecodeDelayMs);
+                } else if (!segment.partial) {
                     ++skippedSegments_;
-                    continue;
                 }
-                if (!decodeSegment(segment, testDecodeDelayMs)) return;
+                lock.lock();
+                decoderBusy_ = false;
+                if (!ok) return;
             }
         });
     }
@@ -198,29 +233,35 @@ public:
     }
 
     void reset(uint64_t epoch) {
-        {
-            std::lock_guard lock(pendingLock_);
-            epoch_.store(epoch);
-            pending_.reset();
-        }
+        epoch_ = epoch;
         gap();
     }
 
     void gap() {
+        {
+            std::lock_guard lock(pendingLock_);
+            ++streamGeneration_;
+            pending_.reset();
+            preview_.reset();
+        }
         runtime_.SherpaOnnxVoiceActivityDetectorReset(vad_);
-        received_ = 0;
-        originUs_ = 0;
+        vadInputSamples_ = 0;
         vadOriginUs_ = 0;
+        haveOrigin_ = false;
         fill_ = 0;
-        speechWindows_ = 0;
-        speechPower_ = 0.0f;
+        resetSegment();
+        noisePowers_.fill(0.0f);
+        noiseWindows_ = 0;
+        noiseFloor_ = voicePower_ = 0.0f;
     }
 
     bool accept(std::span<const float> samples, int64_t playoutUs) {
-        if (!received_) originUs_ = vadOriginUs_ = playoutUs;
+        if (!haveOrigin_) {
+            haveOrigin_ = true;
+            vadOriginUs_ = playoutUs;
+        }
         for (float pcm : samples) {
             buffer_[fill_++] = std::isfinite(pcm) ? std::clamp(pcm, -1.0f, 1.0f) : 0.0f;
-            ++received_;
             if (fill_ == buffer_.size()) {
                 fill_ = 0;
                 if (!acceptWindow()) return false;
@@ -257,6 +298,10 @@ private:
         int64_t beginUs;
         int64_t endUs;
         uint64_t epoch;
+        uint64_t generation;
+        uint64_t id;
+        bool partial = false;
+        bool forced = false;
     };
 
     bool writeEvent(const QJsonObject& event) const {
@@ -264,82 +309,260 @@ private:
         return resultLine(output_, event);
     }
 
-    bool decodeSegment(const Segment& segment, unsigned testDecodeDelayMs) const {
+    bool decodeSegment(const Segment& segment, unsigned testDecodeDelayMs) {
         QElapsedTimer time;
         time.start();
         if (testDecodeDelayMs) std::this_thread::sleep_for(std::chrono::milliseconds(testDecodeDelayMs));
-        const auto text = decode(segment.samples);
-        if (segment.epoch != epoch_.load()) return true;
+        if (languageGeneration_ != segment.generation ||
+            (lastSpeechEndUs_ && segment.beginUs - lastSpeechEndUs_ > languageSilenceUs)) {
+            languageGeneration_ = segment.generation;
+            languageVotes_.clear();
+            detectedLanguage_.clear();
+        }
+        const auto text = decode(segment.samples, detectedLanguage_);
+        const auto decodeMs = time.elapsed();
+        lastDecodeMs_ = decodeMs;
+        if (segment.generation != streamGeneration_.load()) return true;
         const bool keep = text.valid && hasSpeechText(text.value);
-        return writeEvent({{"type", "final"}, {"epoch", qint64(segment.epoch)},
-            {"t0", segment.beginUs}, {"t1", segment.endUs},
+        if (keep && !segment.partial) {
+            lastSpeechEndUs_ = segment.endUs;
+            if (!voteLanguage(text.language, segment.epoch)) return false;
+        }
+        QJsonObject event{{"type", segment.partial ? "partial" : "final"}, {"epoch", qint64(segment.epoch)},
+            {"segment", qint64(segment.id)}, {"t0", segment.beginUs}, {"t1", segment.endUs},
             {"audioMs", qint64(segment.samples.size()) * 1000 / sampleRate},
-            {"decodeMs", time.elapsed()}, {"text", keep ? text.value : QString{}}, {"lang", text.language}});
+            {"decodeMs", decodeMs}, {"cpuMs", processCpuMs()}, {"forced", segment.forced},
+            {"text", keep ? text.value : QString{}}, {"lang", text.language}};
+        if (keep && !text.tokenEnds.isEmpty()) event.insert("tokenEnds", text.tokenEnds);
+        return writeEvent(event);
+    }
+
+    bool voteLanguage(const QString& language, uint64_t epoch) {
+        if (model_ != Whisper || !language_.isEmpty() || !detectedLanguage_.isEmpty() || language.isEmpty())
+            return true;
+        languageVotes_ << language;
+        if (languageVotes_.size() == 3) {
+            for (const auto& vote : languageVotes_) {
+                if (languageVotes_.count(vote) < 2) continue;
+                detectedLanguage_ = vote;
+                break;
+            }
+            languageVotes_.removeFirst();
+        }
+        return writeEvent({{"type", "language"}, {"epoch", qint64(epoch)}, {"candidate", language},
+            {"locked", detectedLanguage_}});
     }
 
     struct Text {
         bool valid = false;
         QString value;
         QString language;
+        QJsonArray tokenEnds;
     };
 
-    Text decode(std::span<const float> samples) const {
+    Text decode(std::span<const float> samples, const QString& detected = {}) const {
         std::unique_ptr<const SherpaOnnxOfflineStream, decltype(runtime_.SherpaOnnxDestroyOfflineStream)> stream(
             runtime_.SherpaOnnxCreateOfflineStream(recognizer_), runtime_.SherpaOnnxDestroyOfflineStream);
         if (!stream) return {};
+        if (!detected.isEmpty()) runtime_.SherpaOnnxOfflineStreamSetOption(stream.get(), "language", detected.toUtf8().constData());
         runtime_.SherpaOnnxAcceptWaveformOffline(stream.get(), sampleRate, samples.data(), int32_t(samples.size()));
         runtime_.SherpaOnnxDecodeOfflineStream(recognizer_, stream.get());
         std::unique_ptr<const SherpaOnnxOfflineRecognizerResult, decltype(runtime_.SherpaOnnxDestroyOfflineRecognizerResult)> text(
             runtime_.SherpaOnnxGetOfflineStreamResult(stream.get()), runtime_.SherpaOnnxDestroyOfflineRecognizerResult);
         if (!text) return {};
-        QString language = language_;
+        QString language = language_.isEmpty() ? detected : language_;
         if (language.isEmpty() && text->lang) {
             language = QString::fromUtf8(text->lang).remove(QStringLiteral("<|")).remove(QStringLiteral("|>"));
         }
-        return {true, QString::fromUtf8(text->text).simplified().left(2048), language.left(15)};
+        auto value = QString::fromUtf8(text->text).simplified().left(2048);
+        const auto seconds = float(samples.size()) / sampleRate;
+        auto ends = model_ == Parakeet ? tokenEnds(*text, value, seconds) : segmentEnds(*text, value, seconds);
+        return {true, value, language.left(15), std::move(ends)};
+    }
+
+    static QJsonArray tokenEnds(const SherpaOnnxOfflineRecognizerResult& text, const QString& value, float seconds) {
+        if (!text.timestamps || !text.durations || !text.tokens_arr || text.count <= 0 || text.count > 256)
+            return {};
+        QJsonArray ends;
+        QString formed;
+        for (int i = 0; i < text.count; ++i) {
+            auto token = QString::fromUtf8(text.tokens_arr[i]).replace(u'▁', u' ');
+            formed += token;
+            if (std::none_of(token.begin(), token.end(), [](QChar ch) { return ch.isLetterOrNumber(); })) continue;
+            const auto end = text.timestamps[i] + text.durations[i];
+            if (std::isfinite(end) && end > 0 && end < seconds + 0.1f)
+                ends.append(QJsonArray{int(formed.simplified().size()), int(std::min(end, seconds) * 1000)});
+        }
+        return formed.simplified() == value ? ends : QJsonArray{};
+    }
+
+    static QJsonArray segmentEnds(const SherpaOnnxOfflineRecognizerResult& text, const QString& value, float seconds) {
+        if (!text.segment_timestamps || !text.segment_durations || !text.segment_texts_arr ||
+            text.segment_count <= 0 || text.segment_count > 32) return {};
+        qsizetype from = 0;
+        QJsonArray ends;
+        for (int i = 0; i < text.segment_count; ++i) {
+            const auto line = QString::fromUtf8(text.segment_texts_arr[i]).simplified();
+            if (line.isEmpty()) continue;
+            const auto at = value.indexOf(line, from);
+            if (at < 0) return {};
+            from = at + line.size();
+            qsizetype wordEnd = line.size();
+            while (wordEnd > 0 && !line[wordEnd - 1].isLetterOrNumber()) --wordEnd;
+            const auto time = text.segment_timestamps[i] + text.segment_durations[i];
+            if (wordEnd && std::isfinite(time) && time > 0 && time <= seconds + 0.10f)
+                ends.append(QJsonArray{int(at + wordEnd), int(std::min(seconds, time) * 1000)});
+        }
+        return ends;
+    }
+
+    bool quietPause() {
+        const auto power = windowPower(buffer_);
+        noisePowers_[noiseWindows_ % noiseTrackingWindows] = power;
+        ++noiseWindows_;
+        if (noiseWindows_ >= 24 && noiseWindows_ % 4 == 0) {
+            auto sorted = noisePowers_;
+            const auto count = std::min<size_t>(noiseWindows_, sorted.size());
+            std::sort(sorted.begin(), sorted.begin() + count);
+            noiseFloor_ = sorted[count / 8];
+            voicePower_ = sorted[count * 9 / 10];
+        }
+        // Only cut on an energy valley when the recent signal has distinct
+        // foreground peaks over the learned bed. Keep low-contrast speech
+        // and transient effects on the Silero path.
+        const bool quiet = noiseFloor_ > 0.0f && voicePower_ > noiseFloor_ * 12.0f &&
+            power <= noiseFloor_ * 3.0f;
+        quietWindows_ = quiet ? quietWindows_ + 1 : 0;
+        // The faster model already sends partials. Its pause detector can
+        // wait for more useful context before freezing a whole utterance.
+        const int minUtteranceMs = model_ == Whisper ? 1150 : 2200;
+        const int pauseWindows = model_ == Whisper ? quietPauseWindows : quietPauseWindows + 1;
+        return speechWindows_ >= minUtteranceMs * sampleRate / (1000 * window) && quietWindows_ >= pauseWindows;
+    }
+
+    static float windowPower(std::span<const float> samples) {
+        float power = 0.0f;
+        for (const auto pcm : samples) power += pcm * pcm;
+        return power;
+    }
+
+    void resetSegment() {
+        speechWindows_ = 0;
+        quietWindows_ = 0;
+        nextPreviewAt_ = 0;
+        previewSamples_.clear();
+        ++segmentId_;
+    }
+
+    static int64_t sampleUs(int64_t samples) { return samples * 1000000 / sampleRate; }
+
+    void trackPreview(std::span<const float> samples, bool speech) {
+        if (model_ != Parakeet) return;
+        previewSamples_.insert(previewSamples_.end(), samples.begin(), samples.end());
+        if (!speech && previewSamples_.size() > previewPadding)
+            previewSamples_.erase(previewSamples_.begin(), previewSamples_.end() - previewPadding);
+    }
+
+    void enqueuePreview() {
+        if (model_ != Parakeet || !decoder_.joinable() || lastDecodeMs_.load() > previewBudgetMs) return;
+        const auto end = vadOriginUs_ + sampleUs(vadInputSamples_);
+        if (!nextPreviewAt_) nextPreviewAt_ = end + previewIntervalMs * 1000;
+        if (end < nextPreviewAt_) return;
+        nextPreviewAt_ = end + previewIntervalMs * 1000;
+        {
+            std::lock_guard lock(pendingLock_);
+            if (decoderBusy_ || pending_ || preview_) return;
+            preview_ = Segment{previewSamples_, end - sampleUs(previewSamples_.size()), end,
+                epoch_, streamGeneration_.load(), segmentId_, true};
+        }
+        pendingReady_.notify_one();
     }
 
     bool acceptWindow() {
         runtime_.SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, buffer_.data(), int(buffer_.size()));
-        if (runtime_.SherpaOnnxVoiceActivityDetectorDetected(vad_)) {
-            ++speechWindows_;
-            float power = 0.0f;
-            for (float pcm : buffer_) power += pcm * pcm;
-            const bool quiet = speechWindows_ > (6 * sampleRate / window) && power < speechPower_ * 0.4f;
-            speechPower_ = speechWindows_ == 1 ? power : speechPower_ * 0.95f + power * 0.05f;
-            if (quiet || speechWindows_ >= maxSpeechWindows) {
-                runtime_.SherpaOnnxVoiceActivityDetectorFlush(vad_);
-                if (!drain()) return false;
-                runtime_.SherpaOnnxVoiceActivityDetectorReset(vad_);
-                vadOriginUs_ = originUs_ + received_ * 1000000 / sampleRate;
-                speechWindows_ = 0;
-                return true;
-            }
-        } else speechWindows_ = 0;
-        return drain();
+        vadInputSamples_ += buffer_.size();
+        const bool speech = runtime_.SherpaOnnxVoiceActivityDetectorDetected(vad_);
+        speechWindows_ = speech ? speechWindows_ + 1 : 0;
+        const bool pause = quietPause();
+        if (pause || speechWindows_ >= maxSpeechWindows_) {
+            runtime_.SherpaOnnxVoiceActivityDetectorFlush(vad_);
+            return drain(true, pause);
+        }
+        if (!drain()) return false;
+        trackPreview(buffer_, speech);
+        if (speech) enqueuePreview();
+        return true;
     }
 
-    bool drain() {
+    bool submit(Segment segment) {
+        if (!decoder_.joinable()) return decodeSegment(segment, 0);
+        // Finals take precedence. Bounded latest waiting work under overload
+        // keeps the reader consuming PCM while a decode is in progress.
+        {
+            std::lock_guard lock(pendingLock_);
+            preview_.reset();
+            if (pending_) ++skippedSegments_;
+            pending_ = std::move(segment);
+        }
+        pendingReady_.notify_one();
+        return true;
+    }
+
+    static int forceCut(std::span<const float> samples) {
+        int cut = int(samples.size()) - cutOverlapWindows * window;
+        float minimum = std::numeric_limits<float>::max();
+        // Test full 32-ms windows in the last second, leaving some audio on
+        // both sides of the boundary so the next decode can recover a word.
+        for (int back = cutOverlapWindows + 2; back <= cutLookbackWindows; ++back) {
+            const int offset = int(samples.size()) - back * window;
+            if (offset < cutOverlapWindows * window) break;
+            const auto power = windowPower(samples.subspan(offset - window, 3 * window));
+            if (power < minimum) {
+                minimum = power;
+                cut = offset;
+            }
+        }
+        return cut;
+    }
+
+    void restartAt(int64_t startUs, std::span<const float> replay) {
+        runtime_.SherpaOnnxVoiceActivityDetectorReset(vad_);
+        vadOriginUs_ = startUs;
+        vadInputSamples_ = 0;
+        for (size_t i = 0; i < replay.size(); i += window) {
+            const auto part = replay.subspan(i, std::min<size_t>(window, replay.size() - i));
+            runtime_.SherpaOnnxVoiceActivityDetectorAcceptWaveform(vad_, part.data(), int(part.size()));
+            vadInputSamples_ += part.size();
+            const bool speech = runtime_.SherpaOnnxVoiceActivityDetectorDetected(vad_);
+            speechWindows_ = speech ? speechWindows_ + 1 : 0;
+            trackPreview(part, speech);
+        }
+    }
+
+    bool drain(bool flush = false, bool pause = false) {
         while (!runtime_.SherpaOnnxVoiceActivityDetectorEmpty(vad_)) {
             std::unique_ptr<const SherpaOnnxSpeechSegment, decltype(runtime_.SherpaOnnxDestroySpeechSegment)> seg(
                 runtime_.SherpaOnnxVoiceActivityDetectorFront(vad_), runtime_.SherpaOnnxDestroySpeechSegment);
             runtime_.SherpaOnnxVoiceActivityDetectorPop(vad_);
             if (!seg || seg->start < 0 || seg->n <= 0) continue;
-            const auto beginUs = vadOriginUs_ + seg->start * 1000000 / sampleRate;
-            Segment segment{{seg->samples, seg->samples + seg->n}, beginUs,
-                beginUs + int64_t(seg->n) * 1000000 / sampleRate, epoch_.load()};
-            if (!decoder_.joinable()) {
-                if (!decodeSegment(segment, 0)) return false;
-                continue;
+            const auto beginUs = vadOriginUs_ + sampleUs(seg->start);
+            const std::span samples(seg->samples, size_t(seg->n));
+            const bool split = flush && !pause && seg->n > 2 * cutLookbackWindows * window;
+            const int cut = split ? forceCut(samples) : seg->n;
+            const int end = split ? cut + cutOverlapWindows * window : seg->n;
+            Segment segment{{samples.begin(), samples.begin() + end}, beginUs,
+                beginUs + sampleUs(end), epoch_, streamGeneration_.load(), segmentId_, false, split};
+            if (!submit(std::move(segment))) return false;
+            resetSegment();
+            if (split) {
+                const int next = cut - cutOverlapWindows * window;
+                restartAt(beginUs + sampleUs(next), samples.subspan(next));
+            } else if (flush) {
+                // Adaptive pauses are inferred from the mixed signal. Replay
+                // their quiet tail in case it contains a soft consonant.
+                const int next = pause ? std::max(0, seg->n - cutOverlapWindows * window) : seg->n;
+                restartAt(beginUs + sampleUs(next), samples.subspan(next));
             }
-            // One queued segment behind the one being decoded. Under load
-            // the reader still runs VAD and replaces only the waiting work.
-            {
-                std::lock_guard lock(pendingLock_);
-                if (pending_) ++skippedSegments_;
-                pending_ = std::move(segment);
-            }
-            pendingReady_.notify_one();
         }
         return true;
     }
@@ -350,18 +573,29 @@ private:
     const SherpaOnnxVoiceActivityDetector* vad_ = nullptr;
     int model_ = Parakeet;
     QString language_;
-    std::atomic<uint64_t> epoch_{0};
+    uint64_t epoch_ = 0, segmentId_ = 0;
+    std::atomic<uint64_t> streamGeneration_{0};
     std::atomic<unsigned> skippedSegments_{0};
+    std::atomic<qint64> lastDecodeMs_{0};
+    uint64_t languageGeneration_ = 0;
+    qint64 lastSpeechEndUs_ = 0;
+    QStringList languageVotes_;
+    QString detectedLanguage_;
     mutable std::mutex outputLock_;
     std::mutex pendingLock_;
     std::condition_variable_any pendingReady_;
-    std::optional<Segment> pending_;
+    std::optional<Segment> pending_, preview_;
+    bool decoderBusy_ = false;
     std::jthread decoder_;
     std::array<float, window> buffer_{};
     size_t fill_ = 0;
-    int speechWindows_ = 0;
-    float speechPower_ = 0.0f;
-    int64_t received_ = 0, originUs_ = 0, vadOriginUs_ = 0;
+    int speechWindows_ = 0, maxSpeechWindows_ = 0, quietWindows_ = 0;
+    size_t noiseWindows_ = 0;
+    std::array<float, noiseTrackingWindows> noisePowers_{};
+    float noiseFloor_ = 0.0f, voicePower_ = 0.0f;
+    qint64 vadInputSamples_ = 0, vadOriginUs_ = 0, nextPreviewAt_ = 0;
+    bool haveOrigin_ = false;
+    std::vector<float> previewSamples_;
 };
 
 bool validHeader(const FrameHeader& header) {

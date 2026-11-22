@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "LiveSentences.h"
 
+#include <QRegularExpression>
 #include <QStringList>
 #include <algorithm>
 #include <array>
@@ -78,6 +79,81 @@ qsizetype commonPrefix(QStringView a, QStringView b) {
     return i;
 }
 
+// Compare words without punctuation when matching only the audio that was
+// deliberately replayed on both sides of a cut. In scripts without spaces,
+// compare individual letters to keep the overlap local.
+struct Word {
+    QString key;
+    qsizetype end;
+};
+
+std::vector<Word> words(QStringView text) {
+    static const QRegularExpression pattern(QStringLiteral(
+        R"([\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]|(?:(?![\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}])[\p{L}\p{N}'’])+)"
+    ));
+    std::vector<Word> result;
+    auto match = pattern.globalMatchView(text);
+    while (match.hasNext()) {
+        const auto word = match.next();
+        const auto key = word.capturedView().toString().toCaseFolded().replace(u'’', u'\'');
+        result.push_back({key, word.capturedEnd()});
+    }
+    return result;
+}
+
+qsizetype skipPunctuation(QStringView text, qsizetype from) {
+    while (from < text.size() && (text[from].isSpace() || QStringView(u"!?.,…。？！、，:;；”’）)]").contains(text[from])))
+        ++from;
+    return from;
+}
+
+qsizetype overlapOffset(QStringView oldText, QStringView newText) {
+    const auto old = words(oldText), next = words(newText);
+    for (size_t count = std::min({size_t{5}, old.size(), next.size()}); count >= 2; --count) {
+        const auto start = old.end() - count;
+        if (std::equal(start, old.end(), next.begin(), [](const Word& a, const Word& b) { return a.key == b.key; }))
+            return skipPunctuation(newText, next[count - 1].end);
+    }
+    if (!old.empty() && !next.empty() && old.back().key == next.front().key &&
+        !oldText.isEmpty() && oldText.back().isLetterOrNumber())
+        return skipPunctuation(newText, next.front().end);
+    return 0;
+}
+
+qsizetype committedOffset(QStringView committed, QStringView next) {
+    if (committed.isEmpty()) return 0;
+    if (next.startsWith(committed)) return skipPunctuation(next, committed.size());
+    const auto old = words(committed), revised = words(next);
+    if (old.empty()) return 0;
+    if (revised.empty()) return next.size();
+    // Preserve an already translated sentence if the final decode revises its
+    // wording, using the last two words to recover an inserted/deleted word.
+    const size_t expected = old.size();
+    if (expected >= 2) {
+        const auto lower = std::max<size_t>(2, expected - 1);
+        for (size_t end = lower; end <= std::min(revised.size(), expected + 2); ++end) {
+            if (old[expected - 2].key == revised[end - 2].key && old.back().key == revised[end - 1].key)
+                return skipPunctuation(next, revised[end - 1].end);
+        }
+    }
+    return skipPunctuation(next, revised[std::min(expected, revised.size()) - 1].end);
+}
+
+qsizetype stableEnd(QStringView previous, QStringView next, qsizetype from) {
+    const auto limit = commonPrefix(previous, next);
+    qsizetype stable = from;
+    for (qsizetype i = from; i < limit; ++i) {
+        if (!endMark(next, i)) continue;
+        qsizetype end = i + 1;
+        while (end < limit && QStringView(u".!?…。？！\"”’')」").contains(next[end])) ++end;
+        // The new pass must preserve the punctuation after hearing more
+        // speech. A period guessed at the cropped audio edge can disappear.
+        if (next.sliced(end).trimmed().size() >= 4) stable = end;
+        i = end - 1;
+    }
+    return stable;
+}
+
 // Live Captions retains a rolling set of lines. Windows may rewrite the
 // trailing words or remove the oldest lines without giving events or IDs.
 qsizetype retainedOffset(const QString& previous, const QString& next, qsizetype committed) {
@@ -99,12 +175,49 @@ qsizetype retainedOffset(const QString& previous, const QString& next, qsizetype
 }
 }
 
-std::vector<LiveSentence> LiveSentences::appendFinal(const QString& text, const QString& language, qint64 endUs, qint64 nowMs) {
+LiveSpeechText::Update LiveSpeechText::update(quint64 segment, qint64 beginUs, qint64 endUs,
+                                            const QString& text, bool final) {
+    if (segment < segment_) return {};
+    if (segment != segment_) {
+        segment_ = segment;
+        previous_.clear();
+        committed_.clear();
+    }
+    const auto overlap = beginUs < previousFinalEndUs_ ? overlapOffset(previousFinal_, text) : 0;
+    const auto next = QStringView(text).sliced(overlap);
+    const auto from = committedOffset(committed_, next);
+    const auto until = final ? next.size() : stableEnd(previous_, next, from);
+    Update update{next.sliced(from, until - from).toString(), {}, overlap + from};
+    if (final) {
+        previousFinal_ = text;
+        previousFinalEndUs_ = endUs;
+        previous_.clear();
+        committed_.clear();
+    } else {
+        previous_ = next.toString();
+        if (until > from) committed_ = next.first(until).toString();
+        update.draft = next.sliced(until).trimmed().toString();
+    }
+    return update;
+}
+
+void LiveSpeechText::reset() {
+    *this = {};
+}
+
+std::vector<LiveSentence> LiveSentences::appendFinal(const QString& text, const QString& language, qint64 endUs,
+                                                      qint64 nowMs, const std::vector<SpeechMark>& marks) {
     std::vector<LiveSentence> sentences;
     if (!pending_.isEmpty() && language_ != language) sentences = take(true, false);
     fromSnapshot_ = false;
     if (!pending_.isEmpty()) pending_ += u' ';
-    pending_ += text.trimmed();
+    const auto trimmed = QStringView(text).trimmed();
+    if (!marks.empty() && !trimmed.isEmpty()) {
+        const auto leading = trimmed.data() - text.constData();
+        for (const auto& mark : marks)
+            if (mark.offset > leading) pendingMarks_.push_back({pending_.size() + mark.offset - leading, mark.endUs});
+    }
+    pending_ += trimmed;
     language_ = language;
     endUs_ = endUs;
     changedAt_ = nowMs;
@@ -118,6 +231,7 @@ std::vector<LiveSentence> LiveSentences::updateSnapshot(const QString& text, con
     consumed_ = retainedOffset(snapshot_, text, consumed_);
     snapshot_ = text;
     pending_ = text.mid(consumed_);
+    pendingMarks_.clear();
     language_ = language;
     endUs_ = endUs;
     changedAt_ = nowMs;
@@ -133,6 +247,7 @@ void LiveSentences::reset(const QString& baseline) {
     snapshot_ = baseline;
     consumed_ = baseline.size();
     pending_.clear();
+    pendingMarks_.clear();
     language_.clear();
     changedAt_ = 0;
     endUs_ = 0;
@@ -147,11 +262,19 @@ std::vector<LiveSentence> LiveSentences::take(bool flushTail, bool unstableEnd) 
             if (!flushTail) break;
             end = pending_.size();
         }
-        const QString phrase = pending_.first(end).simplified();
+        const QStringView part = QStringView(pending_).first(end);
+        const QString phrase = part.toString().simplified();
+        qsizetype lastWord = end;
+        while (lastWord > 0 && !part[lastWord - 1].isLetterOrNumber()) --lastWord;
+        qint64 wordEndUs = 0;
+        for (const auto& mark : pendingMarks_)
+            if (mark.offset == lastWord) wordEndUs = mark.endUs;
+        std::erase_if(pendingMarks_, [end](const SpeechMark& mark) { return mark.offset <= end; });
+        for (auto& mark : pendingMarks_) mark.offset -= end;
         pending_.remove(0, end);
         if (fromSnapshot_) consumed_ += end;
         if (std::any_of(phrase.begin(), phrase.end(), [](QChar ch) { return ch.isLetterOrNumber(); }))
-            result.push_back({phrase, language_, endUs_});
+            result.push_back({phrase, language_, endUs_, wordEndUs});
     }
     return result;
 }

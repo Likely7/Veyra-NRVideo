@@ -207,6 +207,14 @@ Item {
             verify(dialog.width <= host.width && dialog.height <= host.height)
             verify(dialog.bodyViewport.contentHeight > dialog.bodyViewport.height)
             compare(power.checked, false)
+            const threads = findChild(dialog, "live-translation-recognition-threads")
+            verify(threads !== null)
+            dialog.translation.recognitionThreads = 4
+            tryCompare(threads, "hint", "实际使用 3 个线程")
+            dialog.translation.recognitionEffectiveThreads = 4
+            tryCompare(threads, "hint", "")
+            dialog.translation.recognitionThreads = 0
+            dialog.translation.recognitionEffectiveThreads = 3
             download.clicked()
             compare(dialog.translation.downloading, true)
             download.clicked()
