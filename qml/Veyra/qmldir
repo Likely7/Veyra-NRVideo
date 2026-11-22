@@ -1,4 +1,6 @@
 module Veyra
+FullscreenBackground 1.0 FullscreenBackground.qml
+PortraitBackgroundSettings 1.0 PortraitBackgroundSettings.qml
 CaptureLegacyPicker 1.0 CaptureLegacyPicker.qml
 ScreenCropEditor 1.0 ScreenCropEditor.qml
 FullscreenTimingPanel 1.0 FullscreenTimingPanel.qml

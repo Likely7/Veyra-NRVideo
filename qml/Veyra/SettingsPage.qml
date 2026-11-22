@@ -14,6 +14,7 @@ import QtQuick.Layouts
 VPage {
     id: root
     signal requestPage(string page)
+    property Item fullscreenBackground
 
     property string section: "look"
     property bool hdrAdvancedExpanded: false
@@ -181,6 +182,13 @@ VPage {
                         font.pixelSize: Theme.fsBody
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        active: !!root.fullscreenBackground && root.section === "look"
+                        sourceComponent: Component {
+                            PortraitBackgroundSettings { controller: root.fullscreenBackground }
+                        }
                     }
                     VGroup {
                         // 日落 (the default) or the original black-grey 经典 palette.
