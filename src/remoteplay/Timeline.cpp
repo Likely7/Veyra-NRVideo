@@ -49,9 +49,9 @@ std::optional<EstimatedStamp> RemotePlayClock::video(std::uint64_t index,HostTim
     // rate: a field log (2026-11-22) measured ~29.85 index/s on a 30 profile
     // for minutes at a time, just past the 0.5% slew, so the estimate fell
     // 1.7 s behind arrival and live audio sync followed it. Once the error
-    // exceeds one frame, slew at 5% until the lower envelope is reached.
+    // exceeds half a frame, slew at 5% until the lower envelope is reached.
     const auto phaseError=phaseWindow_.front().error-phase_;
-    const auto maxSlew=std::llabs(phaseError)>step?step/20:step/200;
+    const auto maxSlew=std::llabs(phaseError)>step/2?step/20:step/200;
     phase_+=std::clamp(phaseError,-maxSlew,maxSlew);
     if(phase_>0&&nominal>std::numeric_limits<std::int64_t>::max()-phase_)return {};
     auto pts=nominal+phase_;
