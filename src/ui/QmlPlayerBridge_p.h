@@ -364,6 +364,9 @@ struct QmlPlayerBridge::Impl {
     int subBottomInset = 0;
     HWND subOverlay = nullptr;
     bool subOverlayFailed = false;
+    // Live translation's on-screen text source: what the engine was last told.
+    bool screenTextOn = false;
+    engine::ScreenTextOptions screenTextOptions;
     std::wstring subMedia;
     std::atomic<bool> subAligning{false}, subAlignReady{false};
     std::atomic<int> subAlignOffset{0};

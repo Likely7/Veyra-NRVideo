@@ -128,6 +128,29 @@ void QmlPlayerBridge::tickSubtitles() {
     const auto& s = i.snapshot;
     liveTranslation_->setPlayback(s.sessionId, s.running && !s.image &&
         s.transport == engine::TransportState::Playing, false);
+    // On-screen text (capture card, PS5/Xbox/PC streaming, video): the engine reads the
+    // chosen region of the presented picture only while this source is on.
+    const bool screenText = liveTranslation_->screenTextWanted();
+    engine::ScreenTextOptions screenOptions;
+    if (screenText) {
+        const QRectF r = liveTranslation_->screenTextRect();
+        screenOptions.x = float(r.x()); screenOptions.y = float(r.y());
+        screenOptions.w = float(r.width()); screenOptions.h = float(r.height());
+        screenOptions.centeredOnly = liveTranslation_->screenTextCentered();
+        screenOptions.language = liveTranslation_->screenTextLanguage().toStdWString();
+        screenOptions.intervalMs = uint32_t(liveTranslation_->screenTextIntervalMs());
+    }
+    if (screenText != i.screenTextOn || (screenText && !(screenOptions == i.screenTextOptions))) {
+        i.engine.setScreenText(screenText, screenOptions);
+        i.screenTextOn = screenText;
+        i.screenTextOptions = screenOptions;
+    }
+    if (screenText) {
+        const auto onScreen = i.engine.screenTextSnapshot();
+        liveTranslation_->acceptScreenText(QString::fromStdWString(onScreen.text), onScreen.ready,
+                                           onScreen.error.empty() ? QString() : uiText(onScreen.error),
+                                           QString::fromStdWString(onScreen.reading), int(onScreen.words));
+    }
     // Draw. The overlay is a layered child of the video window: it moves with the
     // picture and is clipped by the same window region as the video itself.
     if (!i.videoWindow || !IsWindow(i.videoWindow)) return;

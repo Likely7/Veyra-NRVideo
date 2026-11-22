@@ -60,15 +60,23 @@ QtObject {
     property var preferences: ({exportStopsPlayback:false})
     property QtObject liveTranslation: QtObject {
         property bool supported: true
+        property bool liveCaptionsSupported: true
+        property bool screenTextSupported: true
+        property int captionSource: 0
+        property int screenRegion: 0
+        property rect customRegion: Qt.rect(0.08, 0.70, 0.84, 0.27)
+        property string screenReading: ""
+        property int screenWords: 0
         property bool enabled: false
         property int provider: 0
         property string sourceLanguage: ""
         property string targetLanguage: "en"
         property bool showOriginal: true
+        property bool useGpu: true
         property bool modelInstalled: false
         property bool downloading: false
         property real downloadProgress: 0
-        property real downloadBytes: 1142252715
+        property real downloadBytes: 1155212906
         property string apiBase: ""
         property string apiModel: ""
         property string status: ""
