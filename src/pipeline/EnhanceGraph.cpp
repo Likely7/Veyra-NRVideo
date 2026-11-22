@@ -1585,6 +1585,10 @@ ID3D12Resource* EnhanceGraph::fgInput(unsigned slot) const {
     return hudProtect_?hudProtect_->input(slot%2):unmaskedVideo(slot);
 }
 
+ID3D12Resource* EnhanceGraph::hudBackgroundMotion(unsigned slot) const {
+    return hudProtect_?hudProtect_->motion(slot%2):nullptr;
+}
+
 void EnhanceGraph::composeHudProtect(ID3D12GraphicsCommandList* list,unsigned slot,unsigned parity,
                                      unsigned subframe,unsigned multiplier) {
     if(!hudProtect_)return;
@@ -2329,7 +2333,8 @@ bool EnhanceGraph::createViews()
         std::array<ID3D12Resource*,kGeneratedPoolSlots> generated{};
         for(size_t i=0;i<kGeneratedPoolSlots;++i)generated[i]=genFrame_[i].Get();
         if(hudLock_)hudLock_->createViews(context_.device(),stager_,real,generated.data(),unsigned(generated.size()));
-        if(hudProtect_)hudProtect_->createViews(context_.device(),stager_,real,generated.data());
+        if(hudProtect_)hudProtect_->createViews(context_.device(),stager_,real,generated.data(),
+            desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nullptr);
     }
     // Descriptor initialization is DEFAULT ON since the RAW-upload-SRV removal
     // (2026-09-06): texture SRV/UAV views keep the device alive and NVOF
@@ -2684,7 +2689,7 @@ bool EnhanceGraph::createViews()
                     stagedSrv(enhanced,outputFormat(),exclusionPass_,base);
                     stagedSrv(sourceReferences_[raw].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,exclusionPass_,base+1);
                     stagedSrv(videoFrame_[output<2?1-raw:raw].Get(),outputFormat(),exclusionPass_,base+2);
-                    stagedSrv(hudProtect_?hudProtect_->mask(raw):nullptr,DXGI_FORMAT_R8_UNORM,exclusionPass_,base+3);
+                    stagedSrv(hudProtect_?hudProtect_->mask(raw):nullptr,DXGI_FORMAT_R8G8B8A8_UNORM,exclusionPass_,base+3);
                 }
                 if(viewsUav){
                     auto* ui=exclusionUi_[raw]?exclusionUi_[raw].Get():destination;
@@ -4247,8 +4252,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     auto* fgMotion=desc_.fgMotionProbe?desc_.fgMotionProbe:
         haveFlow&&desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nrZeroMotion_.Get();
     if(hudProtect_){
-        hudProtect_->prepare(list,tracker_,gpuTimer_,parity,reset||!prevValid_);
-        if(!reset&&prevValid_&&haveFlow&&desc_.fgUsesFlow()&&!desc_.fgMotionProbe)
+        const bool useFgFlow=haveFlow&&desc_.fgUsesFlow()&&!desc_.fgMotionProbe;
+        hudProtect_->prepare(list,tracker_,gpuTimer_,parity,reset||!prevValid_,useFgFlow);
+        if(!reset&&prevValid_&&useFgFlow)
             fgMotion=hudProtect_->fixMotion(list,tracker_,gpuTimer_,parity,fgMotion);
     }
     auto* fgFrame=fgInput(parity);

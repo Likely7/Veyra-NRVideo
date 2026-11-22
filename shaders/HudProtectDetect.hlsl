@@ -24,6 +24,34 @@ bool thinStroke(int2 p,int2 shift,float3 center) {
     }
     return false;
 }
+// A just-exposed stroke can inherit screen-space evidence from a nearby
+// established stroke of the same appearance, even if the background stops.
+bool thinContrast(int2 p,float3 color,int step,bool previous) {
+    const int2 directions[4]={int2(step,0),int2(0,step),int2(step,step),int2(step,-step)};
+    [unroll] for(int i=0;i<4;++i) {
+        const int2 a=p+directions[i],b=p-directions[i];
+        if(!frameContains(a)||!frameContains(b))continue;
+        const float3 left=previous?previousAt(a):currentAt(a);
+        const float3 right=previous?previousAt(b):currentAt(b);
+        if(colorError(color,left)>0.066&&colorError(color,right)>0.066)return true;
+    }
+    return false;
+}
+bool trackedAppearance(int2 p,float3 color,int region,bool previous=false) {
+    const int step=clamp(int(round(float(frameSize.y)/180)),3,14);
+    if(!thinContrast(p,color,step,previous))return false;
+    const int2 directions[8]={int2(1,0),int2(-1,0),int2(0,1),int2(0,-1),
+                              int2(1,1),int2(-1,1),int2(1,-1),int2(-1,-1)};
+    [loop] for(int distance=1;distance<=3*step;distance+=max(1,step/4)) {
+        [unroll] for(int i=0;i<8;++i) {
+            const int2 q=p+distance*directions[i],local=q-int2(roiOrigin);
+            if(!roiContains(local))continue;
+            const float known=previousConfidence.Load(int3(local,0));
+            if(known>=0.61&&known<0.998&&colorError(color,previousAt(q))<0.11&&hudRegion(q)==region)return true;
+        }
+    }
+    return false;
+}
 // Paired, stationary rails delimit a panel with a common inset colour. A
 // changing glyph or bar is protected when it covers or uncovers that inset.
 // This is restricted to explicit regions and uses the same per-pair mask as
@@ -83,15 +111,25 @@ void main(uint3 id : SV_DispatchThreadID) {
             if(confidence>0.998)confidence=0;
             if(!haveMotion)confidence*=0.998;
         }
-        if(haveMotion||region>0) {
+        if(motion.w==0||region>0) {
             const float3 a=previousAt(p),b=currentAt(p);
             const float still=colorError(b,a);
-            if(haveMotion) {
-                const float moving=colorError(b,previousAt(p+shift));
-                if(moving<0.039&&still>0.048)confidence-=0.72;
-                else if(still<0.038&&moving>0.075&&thinStroke(p,shift,b))confidence+=0.44;
+            if(motion.w==0) {
+                const float moving=haveMotion?colorError(b,previousAt(p+shift)):0;
+                if(haveMotion&&moving<0.039&&still>0.048)confidence-=0.72;
+                else if(haveMotion&&still<0.038&&moving>0.075&&thinStroke(p,shift,b)) {
+                    const bool symmetric=frameContains(p-shift)&&colorError(a,currentAt(p-shift))>0.075;
+                    confidence+=symmetric?0.66:0.44;
+                } else if(!haveMotion&&still>0.065)confidence=0;
+                const bool appearanceCandidate=haveMotion?moving>0.095:motion.z<0||still>0.05;
+                if(confidence<0.61&&appearanceCandidate&&trackedAppearance(p,b,region))
+                    confidence=0.78;
             }
             confidence=clamp(confidence,0.0,0.992);
+            // On a verified still scene an established stroke can disappear
+            // between A and B. Keep that change with the chosen real frame.
+            if(motion.z<0&&still>0.095&&confidence<0.61&&trackedAppearance(p,a,region,true))
+                confidence=1;
             // Two stable rails provide their own screen-space evidence, even
             // if the scene behind the panel has jumped or cannot be matched.
             if(region>0&&still>0.075&&

@@ -6,6 +6,7 @@ cbuffer HudProtectConstants : register(b0) {
     uint2 roiSize;
     uint resetHistory, outputMode; // 0 sRGB, 1 scRGB, 2 PQ
     float4 hudRegions[5];          // left > right encodes an ellipse
+    uint readDenseFlow;
 };
 int2 boundPixel(int2 pixel) {
     return clamp(pixel, int2(0,0), int2(frameSize)-1);

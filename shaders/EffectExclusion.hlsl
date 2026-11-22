@@ -6,7 +6,7 @@
 Texture2D<float4> enhancedTex : register(t0);
 Texture2D<float4> originalTex : register(t1);
 Texture2D<float4> heldTex : register(t2);
-Texture2D<float> hudMask : register(t3);
+Texture2D<float4> hudMask : register(t3);
 RWTexture2D<float4> outputTex : register(u0);
 RWTexture2D<float4> uiTex : register(u1);
 SamplerState linearClamp : register(s1);
@@ -67,7 +67,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     if(writeUi) {
         float4 layer=0;
         if((flags&HasHud)!=0&&all(id.xy>=hudBounds.xy)&&all(id.xy<hudBounds.zw)) {
-            const float alpha=hudMask.Load(int3(id.xy-hudBounds.xy,0));
+            const float4 mask=hudMask.Load(int3(id.xy-hudBounds.xy,0));
+            const float alpha=max(mask.r,mask.b);
             layer=float4(enhanced.rgb*alpha,alpha);
         }
         layer=layer*(1-fgWeight)+float4(held,1)*fgWeight;

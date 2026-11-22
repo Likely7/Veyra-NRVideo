@@ -717,6 +717,8 @@ public:
     ID3D12Resource* exclusionUi(unsigned slot)const{return exclusionUi_[slot%2].Get();}
     ID3D12Resource* unmaskedVideo(unsigned slot)const{return videoFrame_[slot%2].Get();}
     ID3D12Resource* fgInput(unsigned slot) const;
+    // Diagnostic SRV: xy current-to-previous pixels, z trusted, w cut.
+    ID3D12Resource* hudBackgroundMotion(unsigned slot) const;
     bool srEnabled() const { return srEnabled_; }
     bool nrEnabled() const { return nrEnabled_; }
     bool fgEnabled() const { return fgEnabled_; }

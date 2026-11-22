@@ -1,13 +1,17 @@
-// Included by RepairFgTests.cpp. The input is 1280x720 RGBA from the
-// panning-crosshair test clip, starting at any frame in its steady pan.
+// Included by RepairFgTests.cpp. Input is 1280x720 RGBA. The smooth fixture
+// has one mask row per frame:
+// dx dy check_motion body_count pixel_count flat_pixel_indices...
+// Body indices come first, followed by any transient hit-marker pixels.
+// Offsets are integer current-to-previous work pixels at 1280x720.
 static int hudProtectCases(int argc,wchar_t** argv) {
     using namespace veyra;
     using diagnostics::GpuStage;
-    if(argc!=6)return 2;
+    if(argc<6)return 2;
     const std::wstring mode=argv[1],provider=argv[4];
     const auto has=[&](std::wstring_view token){return mode.find(token)!=std::wstring::npos;};
     const bool enabled=!has(L"-off"),square=has(L"-square"),perf=has(L"-perf");
-    const bool dynamic=has(L"-dynamic");
+    const bool dynamic=has(L"-dynamic"),smooth=has(L"-smooth");
+    if(argc!=(smooth?7:6))return 2;
     constexpr unsigned panelLeft=248,panelTop=164,panelRight=476,panelBottom=190;
     const unsigned mult=has(L"-4x")?4u:2u;
     constexpr unsigned srcWidth=1280,srcHeight=720;
@@ -17,6 +21,11 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     std::filesystem::create_directories(artifacts);
     std::ifstream input(std::filesystem::path{argv[5]},std::ios::binary);
     if(!input)return 2;
+    std::ifstream masks;
+    if(smooth){
+        masks.open(std::filesystem::path{argv[6]});
+        if(!masks)return 2;
+    }
     if(FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
     gfx::D3D12DeviceContext ctx;
     gfx::CommandSlotRing ring;
@@ -62,7 +71,25 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     unsigned dynamicChecks=0,dynamicError=0;
     std::array<std::vector<double>,unsigned(GpuStage::Count)> timings;
     sink::RgbaImage previous;
-    for(unsigned i=0;ok&&i<(perf?44u:18u);++i){
+    std::vector<unsigned> body,previousBody;
+    std::vector<uint8_t> rawMotion;
+    std::ofstream crops;
+    if(smooth&&!perf)crops.open(artifacts/"generated-crops.rgba",std::ios::binary);
+    unsigned motionSamples=0,trustedSamples=0,untrustedChanged=0,minimumBody=~0u,missedBody=0,missedHit=0;
+    unsigned bodySize=0,previousBodySize=0;
+    double maxMotionError=0;
+    const unsigned frames=perf?44u:smooth?124u:18u;
+    for(unsigned i=0;ok&&i<frames;++i){
+        unsigned strictMotion=0;
+        float trueDx=0,trueDy=0;
+        if(smooth){
+            unsigned count=0;
+            if(!(masks>>trueDx>>trueDy>>strictMotion>>bodySize>>count)||bodySize==0||
+               bodySize>count||count>srcWidth*srcHeight)return 2;
+            body.resize(count);
+            for(auto& index:body)
+                if(!(masks>>index)||index>=srcWidth*srcHeight)return 2;
+        }
         for(unsigned y=0;y<srcHeight;++y)
             input.read(reinterpret_cast<char*>(frame->data[0]+size_t(y)*frame->linesize[0]),srcWidth*4);
         if(!input){ok=false;break;}
@@ -105,15 +132,35 @@ static int hudProtectCases(int argc,wchar_t** argv) {
            readImage(ctx,ring,graph.fgInput(out.videoSlot),clean)&&
            readImage(ctx,ring,graph.videoFrameResource(out.videoSlot),video);
         if(!ok)break;
+        bool trusted=false;
+        if(smooth&&enabled){
+            ok=readTexture(ctx,ring,graph.hudBackgroundMotion(out.videoSlot),
+                           D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,16,rawMotion);
+            if(!ok)break;
+            std::array<float,4> measured{};
+            std::memcpy(measured.data(),rawMotion.data(),sizeof(measured));
+            trusted=measured[2]>0.5f;
+            if(strictMotion){
+                ++motionSamples;
+                trustedSamples+=trusted;
+                if(trusted)maxMotionError=std::max(maxMotionError,std::hypot(double(measured[0]-trueDx),double(measured[1]-trueDy)));
+            }
+            std::cout<<"HUD_SHIFT frame="<<i<<" dx="<<measured[0]<<" dy="<<measured[1]<<" trusted="<<trusted
+                     <<" truth="<<trueDx<<','<<trueDy<<" strict="<<strictMotion<<'\n';
+        }
         for(size_t a=0;a<real.pixels.size();a+=4){
             const unsigned x=unsigned((a/4)%workWidth),y=unsigned((a/4)/workWidth);
             const bool changedPixel=!std::equal(real.pixels.begin()+a,real.pixels.begin()+a+3,clean.pixels.begin()+a);
             if(changedPixel)++cleanChanges;
+            if(changedPixel&&smooth&&!trusted)++untrustedChanged;
             if(changedPixel&&x>=621&&x<=658&&y>=341&&y<=378)++ownChanged;
             for(unsigned c=0;c<3;++c)realError=std::max(realError,unsigned(std::abs(int(real.pixels[a+c])-int(video.pixels[a+c]))));
         }
-        if(i==4){previous=std::move(real);continue;}
-        if(i==8){
+        if(i==4){
+            previous=std::move(real);previousBody=body;previousBodySize=bodySize;
+            continue;
+        }
+        if(i==8||(smooth&&i==32)){
             sink::saveImage((artifacts/"real.png").wstring(),real);
             sink::saveImage((artifacts/"previous.png").wstring(),previous);
             sink::saveImage((artifacts/"clean.png").wstring(),clean);
@@ -145,9 +192,31 @@ static int hudProtectCases(int argc,wchar_t** argv) {
                 }
             }
             unsigned ghosts=0,preserved=0;
+            if(smooth){
+                constexpr unsigned crop=320,cropX=(srcWidth-crop)/2,cropY=(srcHeight-crop)/2;
+                for(unsigned y=cropY;y<cropY+crop;++y)
+                    crops.write(reinterpret_cast<const char*>(generated.pixels.data()+
+                                (size_t(y)*srcWidth+cropX)*4),crop*4);
+                const auto& expected=item.subframe*2<=mult?previousBody:body;
+                const auto coreSize=item.subframe*2<=mult?previousBodySize:bodySize;
+                for(size_t k=0;k<expected.size();++k){
+                    const auto* p=generated.pixels.data()+size_t(expected[k])*4;
+                    const bool painted=int(p[0])-p[1]>12&&int(p[2])-p[1]>12;
+                    if(k<coreSize)preserved+=painted;
+                    else missedHit+=!painted;
+                }
+                minimumBody=std::min(minimumBody,preserved);
+                missedBody+=coreSize-preserved;
+            }
             for(unsigned y=260;y<460;++y)for(unsigned x=440;x<840;++x){
                 const size_t a=(size_t(y)*workWidth+x)*4;
                 const bool own=x>=621&&x<=658&&y>=341&&y<=378;
+                if(smooth){
+                    const auto* p=generated.pixels.data()+a;
+                    const bool outside=std::abs(int(x)-640)>27||std::abs(int(y)-360)>27;
+                    ghosts+=outside&&int(p[0])-p[1]>12&&int(p[2])-p[1]>12;
+                    continue;
+                }
                 if(!own&&std::min({generated.pixels[a],generated.pixels[a+1],generated.pixels[a+2]})>=150)++ghosts;
                 // Source drawbox geometry, independent of H.264 halo and background colours.
                 const bool vertical=x>=639&&x<641&&((y>=344&&y<354)||(y>=359&&y<361)||(y>=366&&y<376));
@@ -171,6 +240,8 @@ static int hudProtectCases(int argc,wchar_t** argv) {
             if(i==8)sink::saveImage((artifacts/("generated-"+std::to_string(item.subframe)+".png")).wstring(),generated);
         }
         previous=std::move(real);
+        previousBody=body;
+        previousBodySize=bodySize;
     }
     av_frame_free(&frame);
     for(size_t stage=size_t(GpuStage::HudMask);stage<size_t(GpuStage::Count);++stage){
@@ -188,7 +259,13 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     // A baseline can legitimately have no ghosts on a particular provider.
     // The matched baseline/feature runs provide the effectiveness comparison.
     ok=ok&&realError==0&&(provider==L"xess"||count>0);
-    if(dynamic)ok=ok&&dynamicChecks>0&&(!enabled||dynamicError<=2);
+    if(smooth&&!perf){
+        std::cout<<"HUD_MASK_RESULTS motion_samples="<<motionSamples<<" trusted="<<trustedSamples
+                 <<" largest_shift_error="<<maxMotionError<<" untrusted_cleaned="<<untrustedChanged
+                 <<" min_body="<<(count?minimumBody:0)<<" missing_body="<<missedBody<<" missing_hit="<<missedHit<<'\n';
+        ok=ok&&crops.good()&&(!enabled||(motionSamples>0&&trustedSamples==motionSamples&&
+               maxMotionError<=2&&untrustedChanged==0&&missedBody==0&&ownChanged>0));
+    }else if(dynamic)ok=ok&&dynamicChecks>0&&(!enabled||dynamicError<=2);
     else {
         ok=ok&&(square?cleanChanges==0:!enabled||perf||ownChanged>0);
         if(enabled&&!square&&!perf&&provider!=L"xess")ok=ok&&hudError<=2;
