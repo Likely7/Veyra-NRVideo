@@ -9,8 +9,10 @@ Window {
     objectName: "playlistWindow"
     required property Window owner
     required property var playlist
+    required property bool hasRecentFiles
     signal addFiles()
     signal addFolder()
+    signal clearRecentFiles()
     transientParent: owner
     flags: Qt.Tool | Qt.FramelessWindowHint
     color: "transparent"
@@ -58,7 +60,10 @@ Window {
         dragging = false; dragPath = ""
     }
     onClosing: event => { event.accepted = false; hide() }
-    onVisibleChanged: if (!visible) finishDrag(false)
+    onVisibleChanged: if (!visible) {
+        finishDrag(false)
+        clearHistoryConfirm.close()
+    }
     Connections {
         target: win.playlist
         function onError(text) { win.failure = text; errorTimer.restart() }
@@ -81,11 +86,14 @@ Window {
         }
         Keys.onPressed: event => {
             if (!win.visible) return
-            if (event.key === Qt.Key_Escape) win.hide()
-            else if (event.key === Qt.Key_Delete) win.removeSelected()
-            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                win.playlist.play(win.playlist.indexOfPath(win.selectedPath))
-            else return
+            if (event.key === Qt.Key_Escape) {
+                if (clearHistoryConfirm.shown) clearHistoryConfirm.close()
+                else win.hide()
+            } else if (event.key === Qt.Key_Delete) {
+                if (!clearHistoryConfirm.shown) win.removeSelected()
+            } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                if (!clearHistoryConfirm.shown) win.playlist.play(win.playlist.indexOfPath(win.selectedPath))
+            } else return
             event.accepted = true
         }
     Rectangle {
@@ -271,11 +279,24 @@ Window {
                 VSwitch { objectName: "playlist-auto-advance"; checked: win.playlist.autoAdvance; onToggled: checked => win.playlist.autoAdvance = checked }
                 Item { Layout.fillWidth: true }
             }
-            Text {
-                objectName: "playlist-status"
-                Layout.fillWidth: true
-                text: win.failure || win.playlist.status || qsTr("拖入只追加列表，不打断当前播放")
-                color: win.failure ? Theme.err : Theme.t3; elide: Text.ElideRight; font.pixelSize: 10
+            RowLayout {
+                Layout.fillWidth: true; spacing: 8
+                Text {
+                    objectName: "playlist-status"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    text: win.failure || win.playlist.status || qsTr("拖入只追加列表，不打断当前播放")
+                    color: win.failure ? Theme.err : Theme.t3; elide: Text.ElideRight; font.pixelSize: 10
+                }
+                VButton {
+                    id: clearHistory
+                    objectName: "playlist-clear-history"
+                    text: qsTr("清空历史")
+                    iconName: "trash"
+                    ghost: true
+                    enabled: win.hasRecentFiles
+                    onClicked: clearHistoryConfirm.open()
+                }
             }
         }
     }
@@ -283,6 +304,7 @@ Window {
         id: filesDrop
         objectName: "playlist-drop"
         anchors.fill: parent
+        enabled: !clearHistoryConfirm.shown
         onDropped: drop => {
             console.log("playlist-drop", "hasUrls=" + drop.hasUrls, "count=" + drop.urls.length)
             if (!drop.hasUrls || !drop.urls.length) return
@@ -318,6 +340,15 @@ Window {
             cursorShape: modelData.c
             onPressed: win.startSystemResize(modelData.e)
         }
+    }
+    VConfirm {
+        id: clearHistoryConfirm
+        objectName: "playlist-clear-history-confirm"
+        glyph: "trash"
+        title: qsTr("清空最近播放记录？")
+        acceptText: clearHistory.text
+        acceptEnabled: win.hasRecentFiles
+        onAccepted: win.clearRecentFiles()
     }
     }
 }

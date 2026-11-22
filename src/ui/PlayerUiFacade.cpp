@@ -246,9 +246,13 @@ void PlayerUiFacade::refreshRecentFiles() {
     for (auto& entry : recent_) entry.exists = std::filesystem::exists(entry.path);
 }
 
-void PlayerUiFacade::clearRecentFiles() {
-    recent_.clear();
-    savePreferences();
+bool PlayerUiFacade::clearRecentFiles() {
+    if (recent_.empty()) return true;
+    std::vector<RecentEntry> previous;
+    recent_.swap(previous);
+    if (savePreferences()) return true;
+    recent_.swap(previous);
+    return false;
 }
 
 void PlayerUiFacade::noteCaptureSession(const CaptureSession& session) {

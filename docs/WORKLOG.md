@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-21 播放列表清空历史
+
+从 `main eb5fd6d0` 建立 `codex/playlist-clear-history-20261121`。播放列表右下角新增「清空历史」。确认后清空首页共用的最近播放记录并保存到 `ui-session.v1`。历史为空时按钮置灰。保存失败时恢复显示并提示错误。确认框接管 Escape、Delete 和 Enter，避免确认期间误关窗口、移除项目或触发播放。
+
+使用 `scripts/acceptance/build-recording-handoff.py --task codex-playlist-clear-history-20261121 --label 2.2.0-playlist-history-test --jobs 2`。依赖沿用已验证的 FFmpeg、Chiaki、libdovi 与 SDK 配置。引擎构建 255.3 秒，播放器及三个测试目标追加构建 115.1 秒。播放列表窗口 34 项、Qt Quick 238 项、语言和九语词库完整性检查通过。窗口测试覆盖 420×320 最小尺寸、取消、写入失败、清空后重读以及队列和文件保留。
+
+实测应用以法语私有配置载入两条历史与一项队列，通过播放列表确认后历史为 0，重启后按钮保持置灰，队列文件逐字节相同。测试版逐哈希核对 91 个着色器，并从独立启动入口成功打开、正常退出。产物与证据见 `E:/项目/Veyra/{build,logs,tests,tmp}/codex-playlist-clear-history-20261121`。手测入口为测试目录的 `启动播放历史测试.cmd`。测试使用私有配置与媒体夹具。
+
 ## 2026-11-22 GitHub 社区 PR 与问题交接
 
 在 `codex/github-prs-20261122` 以 `nrvideo/main` 的 `c6633121` 为基线，逐个核验交接锁定的 17 个 PR head，再用 `git merge --no-ff` 合入。整合采集启动与看门狗、固定刷新撕裂诊断、HUD 保护和两档 60→30。保留旧版可读的预设和会话，RIFE、HUD 和原版半速的组合使用独立 v25/v20 文件。HDMI 码流直通默认关闭，两侧背景默认黑色，PSN 指南优先列 chiaki-ng。
