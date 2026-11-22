@@ -813,6 +813,7 @@ struct QmlPlayerBridge::Impl {
 
     engine::ChainSession currentSession() const {
         auto current = session;
+        current.originalHalfRate = facade.pendingSettings().content == engine::ContentRate::Capture60To30Original;
         current.active = chain.mode;
         current.initialized[size_t(chain.mode)] = true;
         current.configurations[size_t(chain.mode)] = engine::ChainConfiguration::capture(

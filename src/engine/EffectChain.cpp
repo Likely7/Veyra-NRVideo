@@ -725,6 +725,7 @@ bool ChainConfiguration::valid() const {
 
 ChainSession ChainSession::initial(const EnhancementSettings& settings) {
     ChainSession result;
+    result.originalHalfRate = settings.content == ContentRate::Capture60To30Original;
     result.configurations[0] = ChainConfiguration::capture(toChain(settings), settings);
     result.configurations[1].chain.mode = ChainMode::Node;
     return result;

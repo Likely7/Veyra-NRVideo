@@ -373,7 +373,8 @@ void QmlPlayerBridge::updateRunStatus() {
     const auto chosen=settings();
     const auto content=engine::currentContentRate(chosen.content);
     if(content!=engine::ContentRate::Transport){
-        const auto cadence=content==engine::ContentRate::Capture60To30?QStringLiteral("60→30"):tr("自动去除");
+        const auto cadence=content==engine::ContentRate::Capture60To30?tr("60→30（兼容自动去重）"):
+            engine::isCaptureHalfRate(content)?QStringLiteral("60→30"):tr("自动去除");
         if(s.running&&rate.halfRate)options<<tr("%1 · 当前约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
         else if(s.running&&rate.deduplicating)options<<tr("%1 · 去重后约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
         else if(s.running&&!s.capture)options<<tr("%1 · 当前来源未去重").arg(cadence);

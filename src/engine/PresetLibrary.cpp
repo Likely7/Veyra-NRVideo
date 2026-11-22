@@ -101,6 +101,7 @@ void PresetLibrary::addBuiltins() {
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directHalfRate=std::filesystem::path(path_).concat(L".half-rate-variants");
     const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -167,6 +168,9 @@ bool PresetLibrary::load() {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
+    const auto halfRatePath=std::filesystem::path(path_).concat(L".half-rate-variants");
+    if(std::filesystem::exists(directHalfRate))path_=directHalfRate;
+    else if(std::filesystem::exists(halfRatePath))path_=halfRatePath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -259,6 +263,9 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
+    const bool halfRateFile=path_.wstring().ends_with(L".half-rate-variants");
+    const bool newHalfRateFile=!halfRateFile&&data.starts_with("VEYRA_PRESET_LIBRARY 24\n");
+    if(!halfRateFile&&!newHalfRateFile){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 22")&&!path_.wstring().ends_with(L".auto-fg"))path_=std::filesystem::path(path_).concat(L".auto-fg");
     if(data.starts_with("VEYRA_PRESET_LIBRARY 21")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".auto-fg")&&!path_.wstring().ends_with(L".output-controls")){
@@ -304,20 +311,24 @@ bool PresetLibrary::save() {
     }
     }
     }
-    } // .auto-fg / .output-controls own every subsequent edit, even after deleting the new nodes.
+    } // .auto-fg / .output-controls own subsequent edits.
+    }
+    auto destination=path_;
+    if(newHalfRateFile)destination+=L".half-rate-variants";
     std::error_code ec;
-    std::filesystem::create_directories(path_.parent_path(), ec);
-    const auto temporary = std::filesystem::path(path_).concat(L".tmp");
+    std::filesystem::create_directories(destination.parent_path(), ec);
+    const auto temporary=std::filesystem::path(destination).concat(L".tmp");
     HANDLE file = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) { error_ = L"预设库写入失败"; return false; }
     DWORD written = 0;
     const bool ok = WriteFile(file, data.data(), DWORD(data.size()), &written, nullptr) && written == data.size() && FlushFileBuffers(file);
     CloseHandle(file);
-    if (!ok || !MoveFileExW(temporary.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    if (!ok || !MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::filesystem::remove(temporary, ec);
         error_ = ok ? L"预设库替换失败" : L"预设库写入失败";
         return false;
     }
+    path_=std::move(destination);
     return true;
 }
 
@@ -795,7 +806,10 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return hasOutputControls(e.chain)||(e.nodeConfiguration&&(hasOutputControls(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&hasOutputControls(e.nodeConfiguration->editor->nodes))));
     });
-    const int version=std::max(minimumVersion, autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool originalHalfRate=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return e.flow&&e.flow->content==ContentRate::Capture60To30Original;
+    });
+    const int version=std::max(minimumVersion, originalHalfRate?24:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -871,12 +885,13 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
-    // keep the hard ceiling in step with it or encode->decode self-check rejects our file.
-    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
-    // the ceiling must include it or encode->decode self-check rejects our own file.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,22):22;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
+    // v23 is reserved for the HUD exclusion codec. v24 retains the v22
+    // record layout and allows cadence value 6 in the existing flow record.
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,24):24;
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" ||
+        version < 1 || version == 23 || version > allowedVersion) {
+        error=L"预设库格式或版本不支持"; return false;
+    }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -1008,6 +1023,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){
                 int backend,quality,half,content;
                 if(!(in>>backend>>quality>>half>>content)||half<0||half>1){error=L"预设光流字段损坏";return false;}
+                if(!validContentRate(ContentRate(content))||
+                   (version<24&&ContentRate(content)==ContentRate::Capture60To30Original)){
+                    error=L"预设去除重复帧档位与文件版本不匹配"; return false;
+                }
                 PresetFlowSettings f{OpticalFlowBackend(backend),FlowQuality(quality),half!=0,ContentRate(content)};
                 EnhancementSettings contract;f.apply(contract);
                 if(!contract.validate().empty()){error=L"预设光流或去除重复帧设置无效";return false;}
@@ -1074,7 +1093,9 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const bool outputControls=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return hasOutputControls(c.chain)||(c.editor&&hasOutputControls(c.editor->nodes));
     });
-    const int version = autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    // v18 belongs to the HUD exclusion branch. v19 uses the v17 body
+    // layout; the envelope version carries the opt-in original cadence.
+    const int version = session.originalHalfRate?19:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -1128,10 +1149,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 17) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v17 = local auto-multiplier session
+        (version < 1 || version == 18 || version > 19) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
+    parsed.originalHalfRate=version==19;
     for (auto& c : parsed.configurations) {
         int target, backend, flow, optical, half, policy;
         if (!(in >> target >> c.videoSrQuality >> backend >> flow >> optical >> half >> policy >> c.selectedNr >> c.selectedColour) ||
@@ -1193,6 +1215,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directHalfRate=std::filesystem::path(path_).concat(L".half-rate-variants");
     const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -1257,6 +1280,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
+    const auto halfRatePath=std::filesystem::path(path_).concat(L".half-rate-variants");
+    if(std::filesystem::exists(directHalfRate,ec))path_=directHalfRate;
+    else if(std::filesystem::exists(halfRatePath,ec))path_=halfRatePath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1281,6 +1307,9 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    const bool halfRateFile=path_.wstring().ends_with(L".half-rate-variants");
+    const bool newHalfRateFile=!halfRateFile&&session.originalHalfRate;
+    if(!halfRateFile&&!newHalfRateFile){
     if(data.starts_with("VEYRA_CHAIN_SESSION 16")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".output-controls")){
 
@@ -1327,27 +1356,31 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
     }
     } // Keep upgraded sessions in their own sidecar after disabling/removing controls.
+    }
 
+    auto destination=path_;
+    if(newHalfRateFile)destination+=L".half-rate-variants";
     std::error_code ec;
-    if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path(), ec);
+    if (!destination.parent_path().empty()) std::filesystem::create_directories(destination.parent_path(), ec);
     if (ec) {
         // Put the path and the OS reason into the message that already reaches the
         // log: "cannot create directory" alone gives nobody anything to act on.
         const std::string reason = ec.message();
-        error_ = std::format(L"模式会话目录无法创建: {} ({}）", path_.wstring(),
+        error_ = std::format(L"模式会话目录无法创建: {} ({}）", destination.wstring(),
             std::wstring(reason.begin(), reason.end()));
         return false;
     }
-    const auto temporary = std::filesystem::path(path_).concat(L".tmp");
+    const auto temporary=std::filesystem::path(destination).concat(L".tmp");
     bool written = false;
     {
         std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
         if (file) { file << data; file.flush(); written = bool(file); file.close(); written = written && !file.fail(); }
     }
-    if (!written || !MoveFileExW(temporary.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    if (!written || !MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::filesystem::remove(temporary, ec);
         error_ = L"模式会话写入或替换失败，原存档保留"; return false;
     }
+    path_=std::move(destination);
     return true;
 }
 }

@@ -165,7 +165,16 @@ enum class FlowQuality { Performance, Balanced, Quality };
 enum class OpticalFlowBackend { Nvidia, AmdFidelityFx, GpuDis };
 // Persisted IDs must stay stable. 2..4 are legacy identification hints, no longer
 // offered by the UI; importing/applying one uses automatic duplicate removal.
-enum class ContentRate { Transport=0, Auto=1, Fps30=2, Fps50=3, Fps60=4, Capture60To30=5 };
+enum class ContentRate {
+    Transport=0, Auto=1, Fps30=2, Fps50=3, Fps60=4,
+    Capture60To30=5, Capture60To30Original=6
+};
+constexpr bool isCaptureHalfRate(ContentRate mode) {
+    return mode==ContentRate::Capture60To30||mode==ContentRate::Capture60To30Original;
+}
+constexpr bool validContentRate(ContentRate mode) {
+    return mode>=ContentRate::Transport&&mode<=ContentRate::Capture60To30Original;
+}
 constexpr ContentRate currentContentRate(ContentRate mode) {
     return mode>=ContentRate::Fps30&&mode<=ContentRate::Fps60?ContentRate::Auto:mode;
 }
@@ -598,6 +607,7 @@ struct EnhancementSettings {
         active.captureFlipVertical=target.captureFlipVertical;active.exportBitrateMbps=target.exportBitrateMbps;
         // Read by the engine loop each pair; no graph update or NR history reset.
         active.fgAdaptive=target.fgAdaptive;active.pacingRepair=target.pacingRepair;
+        if(isCaptureHalfRate(active.content)&&isCaptureHalfRate(target.content))active.content=target.content;
         return active==target;
     }
     bool sameVideoConfiguration(const EnhancementSettings& other) const {
@@ -614,6 +624,8 @@ struct EnhancementSettings {
         // Adaptive multiplier and pacing repair: chosen per pair inside the running graph.
         video.fgAdaptive=target.fgAdaptive;
         video.pacingRepair=target.pacingRepair;
+        // Half-rate variants use the same graph and differ only at sample admission.
+        if(isCaptureHalfRate(video.content)&&isCaptureHalfRate(target.content))video.content=target.content;
         // Colour grade: parameters are uniform-only (never a rebuild), but the
         // master switch changes the graph shape, so it stays in the comparison.
         const auto oldColor=video.color;const auto oldAdditional=video.additionalColors;
@@ -725,7 +737,7 @@ struct EnhancementSettings {
             if(auto error=additionalBeauty[i].validate();!error.empty())return error;
         if(auto error=beautyDetection.validate();!error.empty())return error;
         if(!pipeline::validNrSizePolicy(nrPolicy))return "invalid NR size policy";
-        if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||content<ContentRate::Transport||content>ContentRate::Capture60To30)return "invalid flow/content mode";
+        if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||!validContentRate(content))return "invalid flow/content mode";
         return {};
     }
 };

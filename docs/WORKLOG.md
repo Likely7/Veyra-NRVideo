@@ -1658,3 +1658,9 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+### 2026-11-22 两档 60→30 采样
+
+从本地 main `eb5fd6d0` 建立 `codex/half-rate-variants-20261121`。兼容自动去重保留 ID 5 与 #156 行为，原版用 ID 6。保留首份相位、PTS 和半速送显策略。两档实时切换只重置采样器。新档的预设 v24 / 会话 v19 在 `.half-rate-variants` 保存，HUD 的预设 v23 / 会话 v18 保留。列表、节点、预设摘要和状态统一显示九语档位名。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-half-rate-variants-20261121 --jobs 2` 构建主程序和相关测试，91 个 shader 校验一致。时序 506 项通过，1,048,576 项对拍差异 0。生产引擎回放菜单原版/兼容档每秒保留 30/20 张，锁 30 时均取首份。来回切换只创建一次图，revision 保持 2。真应用中英文 320 px 界面、老偏好、两档存档与旧应用的版本错误提示通过。历史预设负对照改用未分配后端号，QA stage 补齐 QtQuick 测试依赖后重跑，控件 7 项和全量 238 项通过。命令、诊断和截图见 [验收](<E:/项目/Veyra/reports/codex-half-rate-variants-20261121/RESULTS.md>)。临时文件和日志位于 E 盘同任务目录。实际采集卡和实体主机待测。本地测试分支。

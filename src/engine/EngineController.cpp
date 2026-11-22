@@ -1212,15 +1212,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             double playbackSpeedLastPts=0;Clock::time_point playbackSpeedLastWall{};
             CaptureHalfRate captureSampler;
             CapturePreviewClock capturePreviewClock;
-            // Content cadence for live sources (ContentDedup.h): in the auto / 30 / 50 /
-            // 60 fps content modes, repeated pictures (every component within the
-            // capture-noise band, PictureCompare.h) are dropped before any GPU work and
-            // kept frames get content timestamps. "60->30" is the plain
-            // every-second-sample CaptureHalfRate again (user 2026-10-12); since
-            // 2026-10-27 the callback's picture numbers move its phase onto the
-            // first copies of a 30 fps game, and since 2026-11-18 (issue #152) a due
-            // sample repeating the last kept picture waits for the next new one, so a
-            // game below 30 is not fed repeats (CaptureHalfRate.h).
+            // Auto removal follows picture changes and keeps content timestamps.
+            // Both half-rate variants sample before the graph and align to
+            // first copies at 30 fps. Only the compatible variant waits for
+            // a new picture when a scheduled sample repeats the last one.
             // VEYRA_TEST_CONTENT_DEDUP_LEGACY=1 restores the report-only content modes
             // for A/B runs.
             ContentDedup contentDedup;uint64_t dedupRevision=0;
@@ -1229,7 +1224,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             FramePacingRepair pacingRepair;int64_t pacingLastPts=0;bool pacingHaveLast=false;int64_t nextPacingLog=0;
             ContentDedup::Stats dedupLogged{};
             static const bool legacyCadence=GetEnvironmentVariableW(L"VEYRA_TEST_CONTENT_DEDUP_LEGACY",nullptr,0)>0;
-            const auto dedupContent=[](ContentRate content){return content!=ContentRate::Transport&&content!=ContentRate::Capture60To30;};
+            const auto dedupContent=[](ContentRate content){return content!=ContentRate::Transport&&!isCaptureHalfRate(content);};
             // CPU frames are compared here; capture-card frames arrive numbered by the callback.
             pipeline::PictureReference enginePictures{2};
             unsigned dedupRepeatMax8=0;uint64_t dedupRepeatMaxOver=0,dedupNewMinOver=UINT64_MAX;
@@ -2465,8 +2460,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(testReplayDropPending){pkt.flags|=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Drop);testReplayDropPending=false;}
                 }
                 if(!isImage&&!isCapture&&seekSeconds_>=0)continue;
-                const bool halfRate=isCapture&&options.settings.content==ContentRate::Capture60To30&&
-                    CaptureHalfRate::supported(activeSource->info().averageFps);
+                const auto contentRate=options.settings.content;
+                const bool halfRateRequested=isCaptureHalfRate(contentRate);
+                const bool halfRate=isCapture&&halfRateRequested&&CaptureHalfRate::supported(activeSource->info().averageFps);
+                const bool skipHalfRateRepeats=contentRate==ContentRate::Capture60To30;
+                const auto halfRateMode=!halfRateRequested?"off":skipHalfRateRepeats?"compatible":"original";
+                if(halfRate&&captureSampler.setSkipRepeats(skipHalfRateRepeats))
+                    veyra::log::info("capture-rate",std::format("revision={} mode={} samplerReset=1",
+                        options.settings.revision,halfRateMode));
                 const bool dedupActive=isCapture&&!isImage&&!legacyCadence&&dedupContent(options.settings.content);
                 // The callback compares whole pictures only while dedup or the 60->30 phase needs them.
                 if(physicalCapture)captureSource.setPictureCompare(dedupActive||halfRate);
@@ -2533,20 +2534,25 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     pkt.pts={contentPts,10000000};
                     if(contentInterval>0)pkt.duration={contentInterval,10000000};
                 }else if(halfRate&&!rereadCached){
-                    // 60->30: every second sample on the effective capture clock; a due
-                    // repeat of the last kept picture waits for the next new picture.
-                    // Only a number the capture callback already computed is used, so the
-                    // engine thread never compares a whole picture for this.
                     const auto interval=capturePeriod;
                     const auto* upload=pipeline::captureUploadFrame(frame);
                     const uint64_t* picture=upload&&upload->pictureValid?&upload->pictureId:nullptr;
+                    // Replay exercises the same selector using decoded file
+                    // pictures. Real capture still uses the callback's ID.
+                    pipeline::PictureReference::Result replayPicture;
+                    if(options.captureReplayForTest&&!picture&&pipeline::captureFramePicture(frame,enginePictures,false,replayPicture))
+                        picture=&replayPicture.id;
                     const auto shifts=captureSampler.shifts();
-                    if(!pkt.pts.isUnknown()&&!captureSampler.accept(pkt.pts.to100ns(),interval,false,picture,pkt.sequence)){
+                    const bool keep=pkt.pts.isUnknown()||captureSampler.accept(pkt.pts.to100ns(),interval,false,picture,pkt.sequence);
+                    if(veyra::log::verboseFrameLogs())
+                        veyra::log::info("capture-rate-sample",std::format("mode={} source={} pts100ns={} keep={} pictureValid={} picture={}",
+                            halfRateMode,pkt.sequence,pkt.pts.isUnknown()?0:pkt.pts.to100ns(),keep,picture!=nullptr,picture?*picture:0));
+                    if(!keep){
                         std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;
                     }
                     if(captureSampler.shifts()!=shifts||(picture&&captureSampler.gridKept()%600==0))
-                        veyra::log::info("capture-rate",std::format("60->30 phase: shifts={} keptOnGrid={} secondCopiesKept={} repeatsSkipped={} repeatsHeld={} (a 30 fps game moves onto first copies; below 30 a due repeat waits for the next picture; 60 fps content never repeats)",
-                            captureSampler.shifts(),captureSampler.gridKept(),captureSampler.secondCopiesKept(),captureSampler.repeatsSkipped(),captureSampler.repeatsHeld()));
+                        veyra::log::info("capture-rate",std::format("60->30 phase: mode={} shifts={} keptOnGrid={} secondCopiesKept={} repeatsSkipped={} repeatsHeld={}",
+                            halfRateMode,captureSampler.shifts(),captureSampler.gridKept(),captureSampler.secondCopiesKept(),captureSampler.repeatsSkipped(),captureSampler.repeatsHeld()));
                     pkt.duration={interval*2,10000000};
                 }
                 if(!halfRate)captureSampler.reset();
@@ -3108,7 +3114,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 previewSkippedSinceSubmit=0;
                 if(transaction||frames==0){
                     std::lock_guard lock(mutex_);snapshot_.captureHalfRate=halfRate;
-                    veyra::log::info("capture-rate",std::format("revision={} requested60To30={} active={} transportFps={} originalPtsPreserved={}",options.settings.revision,options.settings.content==ContentRate::Capture60To30,halfRate,isCapture?activeSource->info().averageFps:0,!captureClockCorrected));
+                    veyra::log::info("capture-rate",std::format("revision={} requested60To30={} mode={} active={} transportFps={} originalPtsPreserved={}",options.settings.revision,halfRateRequested,halfRateMode,halfRate,isCapture?activeSource->info().averageFps:0,!captureClockCorrected));
                 }
                 const bool pairPacing=pairAnchoredLive&&options.fg;
                 // File replay has no device pacing and still needs its PTS clock.

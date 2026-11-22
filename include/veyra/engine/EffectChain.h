@@ -266,6 +266,7 @@ struct ChainSession {
     std::array<ChainConfiguration, 2> configurations{};
     std::array<bool, 2> initialized{true, false};
     ChainMode active = ChainMode::List;
+    bool originalHalfRate = false;
     static ChainSession initial(const EnhancementSettings&);
     // Work on a copy until the caller has accepted the engine transaction.
     bool select(ChainMode);

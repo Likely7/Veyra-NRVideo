@@ -212,7 +212,7 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  ok=ok&&b.put(L"FSR 4 ML 2X",fsr4);PresetStore fsr4Reload(p);
  ok=ok&&fsr4Reload.load()&&fsr4Reload.entries().back().settings==fsr4&&b.erase(1);
  fsr4.multiplier=4;ok=ok&&!b.put(L"FSR 4 ML 4X rejected",fsr4);
- auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(5);ok=ok&&!b.put(L"invalid backend",badBackend);
+ auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(99);ok=ok&&!b.put(L"invalid backend",badBackend);
  auto dis=s;dis.opticalFlowBackend=OpticalFlowBackend::GpuDis;ok=ok&&b.put(L"GPU DIS",dis)&&b.save();PresetStore disReload(p);ok=ok&&disReload.load()&&disReload.entries().back().settings==dis&&b.erase(1);
  
  auto badFlow=s;badFlow.opticalFlowBackend=static_cast<OpticalFlowBackend>(3);ok=ok&&!b.put(L"invalid flow backend",badFlow);

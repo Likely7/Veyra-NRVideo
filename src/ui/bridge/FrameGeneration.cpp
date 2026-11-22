@@ -292,7 +292,7 @@ QString QmlPlayerBridge::dlssgLiteHint() const {
 }
 int QmlPlayerBridge::contentRate() const { return int(engine::currentContentRate(settings().content)); }
 void QmlPlayerBridge::setContentRate(int value) {
-    if (value < 0 || value > int(engine::ContentRate::Capture60To30)) return;
+    if (!engine::validContentRate(static_cast<engine::ContentRate>(value))) return;
     value=int(engine::currentContentRate(static_cast<engine::ContentRate>(value)));
     auto s = settings();
     if (int(s.content) == value) return;
