@@ -9,6 +9,7 @@
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
+#include "veyra/gfx/AmfVideoSrBackend.h"
 #include "veyra/sink/ImageExportSink.h"
 #include "veyra/engine/EnhancementSettings.h"
 #include "veyra/engine/GraphDescription.h"
@@ -171,8 +172,8 @@ bool readReference(Graph& graph,ID3D12Resource* texture,std::vector<uint8_t>& pi
                    D3D12_RESOURCE_STATES initialState=D3D12_RESOURCE_STATE_COMMON){
     if(!texture)return false;
     const auto desc=texture->GetDesc();
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};UINT64 bytes=0;
-    graph.ctx.device()->GetCopyableFootprints(&desc,0,1,0,&fp,nullptr,nullptr,&bytes);
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};UINT64 bytes=0, rowBytes=0;
+    graph.ctx.device()->GetCopyableFootprints(&desc,0,1,0,&fp,nullptr,&rowBytes,&bytes);
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_READBACK;
     D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=bytes;
     buffer.Height=1;buffer.DepthOrArraySize=1;buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -188,8 +189,8 @@ bool readReference(Graph& graph,ID3D12Resource* texture,std::vector<uint8_t>& pi
     std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
     if(!graph.ring.submitAndSignal(slot)||!graph.ring.waitIdle())return false;
     void* data=nullptr;D3D12_RANGE range{0,SIZE_T(bytes)};if(FAILED(readback->Map(0,&range,&data)))return false;
-    pixels.resize(size_t(desc.Width)*desc.Height*8);
-    for(unsigned y=0;y<desc.Height;++y)memcpy(pixels.data()+size_t(y)*desc.Width*8,static_cast<uint8_t*>(data)+fp.Offset+size_t(y)*fp.Footprint.RowPitch,size_t(desc.Width)*8);
+    pixels.resize(size_t(rowBytes)*desc.Height);
+    for(unsigned y=0;y<desc.Height;++y)memcpy(pixels.data()+size_t(y)*rowBytes,static_cast<uint8_t*>(data)+fp.Offset+size_t(y)*fp.Footprint.RowPitch,size_t(rowBytes));
     D3D12_RANGE empty{};readback->Unmap(0,&empty);return true;
 }
 // Keep this separate from the legacy large wmain stack frame.
@@ -341,6 +342,126 @@ void colorDeviceRemovalTest(){
 }
 // Exercise the shared graph with real D3D12 outputs, including SDR round
 // trips, a padded viewport, changing frame content, and HDR above SDR white.
+// Isolate the AMD scaler from presentation. The probe reads and writes
+// packed texture rows for transfer and DXGI format comparisons.
+bool measureAmfSr(unsigned w,unsigned h,unsigned outW,unsigned outH,bool version11,bool convert,DXGI_FORMAT format,
+                  const std::filesystem::path& inputPath,const std::filesystem::path& outputPath) {
+    Graph graph;
+    gfx::DeviceContextDesc device;
+    device.requiredVendorId=0x1002;
+    device.enableDebugLayer=true;
+    Status status;
+    if(!graph.ctx.initialize(device,status)||
+       !graph.ring.initialize(graph.ctx.device(),graph.ctx.directQueue(),graph.ctx.fence(),graph.ctx.fenceEvent(),4,status))
+        return false;
+    graph.up=true;
+    auto* gpu=graph.ctx.device();
+    const unsigned pixelBytes=format==DXGI_FORMAT_R16G16B16A16_FLOAT?8:4;
+    auto input=pipeline::makeTexture(gpu,w,h,format,false);
+    auto output=pipeline::makeTexture(gpu,outW,outH,format,false);
+    if(!input||!output)return false;
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT layout{};
+    UINT64 bytes=0;
+    const auto inputDesc=input->GetDesc();
+    gpu->GetCopyableFootprints(&inputDesc,0,1,0,&layout,nullptr,nullptr,&bytes);
+    auto upload=pipeline::makeUploadBuffer(gpu,size_t(bytes));
+    std::ifstream file(inputPath,std::ios::binary);
+    void* mapped=nullptr;
+    const D3D12_RANGE none{};
+    if(!file||!upload||FAILED(upload->Map(0,&none,&mapped)))return false;
+    for(unsigned y=0;y<h;++y)
+        file.read(static_cast<char*>(mapped)+layout.Offset+size_t(y)*layout.Footprint.RowPitch,size_t(w)*pixelBytes);
+    upload->Unmap(0,nullptr);
+    if(!file||file.peek()!=std::char_traits<char>::eof())return false;
+
+    gfx::AmfVideoSrBackend scaler;
+    if(!scaler.initialize(gpu,graph.ring.queue(),w,h,outW,outH,version11,convert,format))return false;
+    pipeline::StateTracker states;
+    unsigned slot=0;
+    auto* list=graph.ring.acquireNext(slot,status);
+    if(!list)return false;
+    states.transition(list,input.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+    D3D12_TEXTURE_COPY_LOCATION src{},dst{};
+    src.pResource=upload.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;src.PlacedFootprint=layout;
+    dst.pResource=input.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
+    states.transition(list,input.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+    if(!scaler.copyIn(list,input.Get())||!graph.ring.submitAndSignal(slot)||!scaler.evaluate())return false;
+    list=graph.ring.acquireNext(slot,status);
+    if(!list)return false;
+    states.transition(list,output.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+    if(!scaler.copyOut(list,output.Get()))return false;
+    states.transition(list,output.Get(),D3D12_RESOURCE_STATE_COMMON);
+    if(!graph.ring.submitAndSignal(slot)||!scaler.retireSubmitted()||!graph.ring.drainQueue())return false;
+    std::vector<uint8_t> pixels;
+    if(!readReference(graph,output.Get(),pixels)||pixels.size()!=size_t(outW)*outH*pixelBytes)return false;
+    std::ofstream result(outputPath,std::ios::binary);
+    return bool(result.write(reinterpret_cast<const char*>(pixels.data()),pixels.size()));
+}
+
+// A higher-resolution analytic chart provides a reference independent of the
+// scaler. Colour gradients cover dark tones and the sloped edges expose blocks.
+void amfSpatialFidelity(Graph& graph,const std::filesystem::path& frames) {
+    constexpr int width=512,height=288;
+    std::vector<uint8_t> reference(width*height*3);
+    for(int y=0;y<height;++y)for(int x=0;x<width;++x){
+        const double edge=std::clamp((x-0.62*y-122.0)/5.0+0.5,0.0,1.0);
+        const double grid=std::sin(x*0.13)*std::sin(y*0.17);
+        const int r=int(35+64.0*x/width+91*edge+17*grid);
+        const int g=int(57+78.0*y/height+62*edge+11*grid);
+        const int b=int(41+44.0*x/width+105*edge+18*grid);
+        const auto i=(y*width+x)*3;
+        reference[i]=uint8_t(r);reference[i+1]=uint8_t(g);reference[i+2]=uint8_t(b);
+    }
+    for(int scale:{2,4}){
+        Frame input;
+        input.frame=av_frame_alloc();
+        check(input.frame!=nullptr,"allocate the SR quality input frame");
+        if(!input.frame)return;
+        input.frame->width=width/scale;input.frame->height=height/scale;
+        input.frame->format=AV_PIX_FMT_BGR0;
+        input.frame->color_range=AVCOL_RANGE_JPEG;
+        input.frame->color_trc=AVCOL_TRC_IEC61966_2_1;
+        input.frame->colorspace=AVCOL_SPC_RGB;
+        if(av_frame_get_buffer(input.frame,32)<0){check(false,"allocate SR quality chart");return;}
+        for(int y=0;y<input.frame->height;++y)for(int x=0;x<input.frame->width;++x){
+            unsigned rgb[3]{};
+            for(int dy=0;dy<scale;++dy)for(int dx=0;dx<scale;++dx){
+                const auto i=((y*scale+dy)*width+x*scale+dx)*3;
+                for(int c=0;c<3;++c)rgb[c]+=reference[i+c];
+            }
+            auto* p=input.frame->data[0]+size_t(y)*input.frame->linesize[0]+4*x;
+            for(int c=0;c<3;++c)p[2-c]=uint8_t((rgb[c]+scale*scale/2)/(scale*scale));
+            p[3]=255;
+        }
+        graph.g.shutdown();
+        pipeline::EnhanceGraphDesc desc;
+        desc.sourceWidth=input.frame->width;desc.sourceHeight=input.frame->height;
+        desc.workWidth=desc.srOutputWidth=width;desc.workHeight=desc.srOutputHeight=height;
+        desc.rgbInput=true;desc.noNgx=true;desc.enableNr=desc.enableFg=false;
+        desc.enableSr=true;desc.videoSrQuality=engine::kVideoSrAmf10;desc.outputDitherStep=0;
+        sink::RgbaImage output;
+        const bool rendered=graph.g.initialize(desc)&&graph.g.createViews()&&graph.render(input,output)&&
+            output.width==width&&output.height==height;
+        check(rendered,std::format("AMD VideoSR {}X known chart rendered",scale));
+        if(!rendered)continue;
+        double squares=0,edgeSquares=0;
+        unsigned edgeCount=0;
+        const auto error=[&](int i,int c){return int(output.pixels[i*4+c])-int(reference[i*3+c]);};
+        for(int y=0;y<height;++y)for(int x=0;x<width;++x)for(int c=0;c<3;++c){
+            const int i=y*width+x,d=error(i,c);
+            squares+=d*d;
+            if(x){const int step=d-error(i-1,c);edgeSquares+=step*step;++edgeCount;}
+            if(y){const int step=d-error(i-width,c);edgeSquares+=step*step;++edgeCount;}
+        }
+        const double psnr=10*std::log10(255.0*255.0/std::max(1e-12,squares/reference.size()));
+        const double edgeRmse=std::sqrt(edgeSquares/edgeCount);
+        check(psnr>=(scale==2?38:33)&&edgeRmse<=(scale==2?2.8:4.5),
+              std::format("AMD VideoSR {}X chart psnr={:.2f} dB edgeRMSE={:.2f}",scale,psnr,edgeRmse));
+        check(sink::saveImage((frames/(std::format(L"quality-{}x.png",scale))).wstring(),output),"save chart output");
+    }
+}
+
 int spatialSrTests(unsigned vendor, const std::filesystem::path& frames) {
     using namespace engine;
     std::filesystem::create_directories(frames);
@@ -435,6 +556,7 @@ int spatialSrTests(unsigned vendor, const std::filesystem::path& frames) {
         const auto cases = {std::pair{kVideoSrNis,0u}, {kVideoSrAmf10,0u}, {kVideoSrAmf11,0u},
                             {kVideoSrNis,kVideoSrNis}, {kVideoSrAmf10,kVideoSrAmf11}};
         std::vector<uint8_t> amf10;
+        sink::RgbaImage amf10Sdr;
         for (const auto& [quality,second] : cases) {
             if (!amd && (amdVideoSr(quality) || amdVideoSr(second))) continue;
             sink::RgbaImage output;
@@ -461,16 +583,19 @@ int spatialSrTests(unsigned vendor, const std::filesystem::path& frames) {
                 }
                 check(nonFinite==0,std::format("HDR wide-gamut patch has {} non-finite channels",nonFinite));
                 if (quality==kVideoSrAmf10&&!second) amf10=hdrOutput;
-                if (quality==kVideoSrAmf11) check(hdrOutput!=amf10,"the AMD driver produced distinct VideoSR 1.0 and 1.1 outputs");
+                if (quality==kVideoSrAmf11) check(hdrOutput==amf10,"legacy 1.1 selections resolve to the validated HDR route");
             } else {
                 const int middle=center(output).r;
                 check(output.width==137 && output.height==141 && output.pixels!=baseline.pixels &&
                     std::abs(middle-center(baseline).r)<=3,
                     "SDR output is resized, filtered and retains its transfer");
+                if(quality==kVideoSrAmf10&&!second)amf10Sdr=output;
+                if(quality==kVideoSrAmf11)check(output.pixels==amf10Sdr.pixels,"legacy 1.1 uses the same SDR route");
                 const auto name=std::to_wstring(quality)+L"-"+std::to_wstring(second)+L".png";
                 check(sink::saveImage((frames/name).wstring(),output),"saved SDR frame for comparison");
             }
         }
+        if(amd&&!hdr)amfSpatialFidelity(graph,frames);
         Microsoft::WRL::ComPtr<ID3D12InfoQueue> info;
         const bool debug=SUCCEEDED(graph.ctx.device()->QueryInterface(IID_PPV_ARGS(&info)));
         graph.g.shutdown();
@@ -491,6 +616,21 @@ int spatialSrTests(unsigned vendor, const std::filesystem::path& frames) {
 
 
 int wmain(int argc,wchar_t** argv){
+    if(argc==10&&std::wstring_view(argv[1])==L"--measure-amf-sr"){
+        const auto dimension=[](const wchar_t* in){
+            const auto value=std::wcstoul(in,nullptr,10);
+            return value>0&&value<=4096?unsigned(value):0;
+        };
+        const auto w=dimension(argv[2]),h=dimension(argv[3]),outW=dimension(argv[4]),outH=dimension(argv[5]);
+        if(!w||!h||!outW||!outH||FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
+        const std::wstring_view input=argv[7];
+        const auto format=input==L"rgba8"?DXGI_FORMAT_R8G8B8A8_UNORM:
+                          input==L"bgra8"?DXGI_FORMAT_B8G8R8A8_UNORM:DXGI_FORMAT_R16G16B16A16_FLOAT;
+        const bool ok=measureAmfSr(w,h,outW,outH,std::wstring_view(argv[6])==L"1.1",
+                                   input==L"convert",format,argv[8],argv[9]);
+        CoUninitialize();
+        return ok&&!failures?0:1;
+    }
     if(argc==4&&std::wstring_view(argv[1])==L"--spatial-sr"){
         const std::wstring_view adapter=argv[2];
         if(adapter!=L"amd"&&adapter!=L"nvidia")return 2;

@@ -1668,3 +1668,11 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+### 2026-11-21 AMD VideoSR 画质复审
+
+在 \`codex/amf-nis-video-sr-20261121\` 保留 AMD VideoSR 1.0。SDR 输入转成 FP16 sRGB 码值，缩放后转回线性工作空间。HDR 保持线性 FP16。菜单暂藏 1.1，旧选择在预览、导出和界面解析为 1.0。修复 AMF 成功后清空失败归属的问题。
+
+使用 Radeon 核显、驱动 32.0.21042.62、AMF 1.4.37.0，把同一张原生 1440p 图下采样后做 2× 和 4×。DX12 的三种 FP16 值域试验中，1.1 的最好 PSNR 约 31.23/27.78 dB，BGRA8 和 RGBA8 同样有伪影。DX11 的 FFmpeg 1.1 对照为 41.72/35.73 dB。用 FFmpeg 强制派生 DX12 时，滤镜仍初始化 DX11，不能用作独立 DX12 结果。1.0 的显式 sRGB 相比原线性为 41.31/35.67 对 40.98/35.48 dB。4× 加线性预放大后 1.0 的 PSNR 更低，采用直缩放。
+
+实程序 1.0 截图的 PSNR 为 41.25/35.65 dB，边缘差 RMSE 2.63/3.71。NIS 为 39.93/35.11 dB，边缘差 RMSE 2.44/3.50。指标反映该帧的还原与锐化取舍。GPU 回归另外对已知图形断言 PSNR 和边缘指标，2×、4× 达 46.24/44.03 dB，P010、双超分及旧选择映射通过。RTX 5070 的 NIS、设置 292 项、效果链和实程序 2×/4× 截图均通过。首次报告脚本失败于 NumPy 数字序列化，FFmpeg 首轮漏下载 GPU 帧，修正后重跑。图和完整表见 \`E:/项目/Veyra/reports/codex-batch-review-20261121\`。构建目标 \`veyra_qml_ui veyra_color_grade_gpu_tests veyra_video_ai_settings_tests veyra_effect_chain_tests\`，日志在 \`E:/项目/Veyra/logs/codex-amf-nis-video-sr-20261121/build-20261121-232922\`。AMD 独显、多种真实动态素材与长时性能待测。

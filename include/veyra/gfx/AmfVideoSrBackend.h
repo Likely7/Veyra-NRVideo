@@ -14,7 +14,8 @@ public:
     static bool available();
 
     bool initialize(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned inWidth, unsigned inHeight,
-                    unsigned outWidth, unsigned outHeight, bool version11);
+                    unsigned outWidth, unsigned outHeight, bool version11, bool fromLinearToSrgb = false,
+                    DXGI_FORMAT format = DXGI_FORMAT_R16G16B16A16_FLOAT);
     bool copyIn(ID3D12GraphicsCommandList* list, ID3D12Resource* input);
     bool evaluate();
     bool copyOut(ID3D12GraphicsCommandList* list, ID3D12Resource* output);

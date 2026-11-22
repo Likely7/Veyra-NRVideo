@@ -1192,6 +1192,10 @@ private:
     // Index 0 is the optional first pass, index 1 is the final or only pass.
     std::array<std::unique_ptr<NisScaler>, 2> nisSr_;
     std::array<std::unique_ptr<gfx::AmfVideoSrBackend>, 2> amfSr_;
+    std::array<ComPtr<ID3D12Resource>, 2> amfSrCodedInput_, amfSrCodedOutput_;
+    ComputePass amfSrTransfer_;
+    void transferAmfSdr(ID3D12GraphicsCommandList*,unsigned slot,ID3D12Resource* source,
+                        ID3D12Resource* destination,bool encode);
     SignedHdrRestore srHdrRestore_,firstSrHdrRestore_;
     // Constant far depth and zero motion for the temporal SR passes. The source
     // extent for a single FSR pass; under double SR the largest render/motion

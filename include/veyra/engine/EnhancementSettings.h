@@ -111,6 +111,11 @@ constexpr bool ngxVideoSr(uint32_t q){return q>=1&&q<=4;}
 constexpr bool vfxVideoSr(uint32_t q){return (q>=16&&q<=19)||q==21||q==23;}
 constexpr bool vfxVideoSrNeedsAmpere(uint32_t q){return q==21||q==23;}
 constexpr bool rtxVideoSr(uint32_t q){return ngxVideoSr(q)||vfxVideoSr(q);}
+// Keep the experimental preset ID readable. The D3D12 provider currently
+// uses the verified VideoSR 1.0 path for both stored AMD IDs.
+constexpr uint32_t currentVideoSrQuality(uint32_t quality) {
+    return quality==kVideoSrAmf11?kVideoSrAmf10:quality;
+}
 constexpr bool amdVideoSr(uint32_t q){return q==kVideoSrAmf10||q==kVideoSrAmf11;}
 constexpr bool spatialVideoSr(uint32_t q){return q==kVideoSrNis||amdVideoSr(q);}
 constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q);}

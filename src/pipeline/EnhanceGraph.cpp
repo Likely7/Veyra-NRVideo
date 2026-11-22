@@ -722,7 +722,10 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         }
         veyra::log::info("graph","diagnostic SR motion override active; no product entry point enables this");
     }
-    desc_ = desc;lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
+    desc_ = desc;
+    desc_.videoSrQuality=engine::currentVideoSrQuality(desc.videoSrQuality);
+    desc_.dualSrQuality=engine::currentVideoSrQuality(desc.dualSrQuality);
+    lastSourceColor_={};tracker_={};prevValid_=false;fgHistorySkipped_=false;cadence_.reset();scene_.reset();sceneLastSourceId_=0;previousLuma_.clear();
     if(!engine::validVideoSrQuality(desc.videoSrQuality)){veyra::log::error("graph",std::format("invalid video SR quality value={}",desc.videoSrQuality));return false;}
     srcW_ = desc.sourceWidth;
     srcH_ = desc.sourceHeight;
@@ -872,7 +875,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
             return !desc_.hdrWorking() || prepared != input ? uint64_t(prepared.width) * prepared.height * 8 : 0;
         }
         if (engine::amdVideoSr(quality))
-            return (uint64_t(input.width) * input.height + uint64_t(output.width) * output.height) * 8;
+            return (uint64_t(input.width) * input.height + uint64_t(output.width) * output.height) * (desc_.hdrWorking()?8u:16u);
         return 0;
     };
     const uint64_t spatialSrBytes =
@@ -1530,9 +1533,21 @@ bool EnhanceGraph::initSpatialSr()
                 veyra::log::error("amf-video-sr", "the graph must run on an AMD adapter");
                 return false;
             }
+            auto* device=context_.device();
             amfSr_[index] = std::make_unique<gfx::AmfVideoSrBackend>();
-            return amfSr_[index]->initialize(context_.device(), ring_.queue(), input.width, input.height,
-                output.width, output.height, quality == engine::kVideoSrAmf11);
+            if(!amfSr_[index]->initialize(device,ring_.queue(),input.width,input.height,output.width,output.height,false))
+                return false;
+            // AMF VideoSR SDR filtering works on sRGB codes. Retain FP16
+            // storage to preserve precision through the paired transfers.
+            if(desc_.hdrWorking())return true;
+            constexpr auto format=DXGI_FORMAT_R16G16B16A16_FLOAT;
+            amfSrCodedInput_[index]=makeTexture(device,input.width,input.height,format,true);
+            amfSrCodedOutput_[index]=makeTexture(device,output.width,output.height,format,false);
+            if(!amfSrCodedInput_[index]||!amfSrCodedOutput_[index])return false;
+            if(amfSrTransfer_.heap)return true;
+            std::vector<uint8_t> bytes;
+            return amfSrTransfer_.loadShader("ScaleBlit.dxil",bytes)&&
+                   amfSrTransfer_.create(device,bytes,ring_.slotCount()*4,1,1);
         }
         return true;
     };
@@ -1543,6 +1558,22 @@ bool EnhanceGraph::initSpatialSr()
         return false;
     }
     return true;
+}
+
+void EnhanceGraph::transferAmfSdr(ID3D12GraphicsCommandList* list,unsigned slot,
+                                  ID3D12Resource* source,ID3D12Resource* destination,bool encode) {
+    // A list may decode stage 1 and then encode stage 2 before submission.
+    const unsigned table=slot*4+(encode?0:2);
+    stager_.stageSrv(source,nullptr,amfSrTransfer_.heap.Get(),table);
+    makeUav(context_.device(),destination,destination->GetDesc().Format,cpuHandleOf(amfSrTransfer_,table+1));
+    tracker_.transition(list,source,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    tracker_.transition(list,destination,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    const auto extent=destination->GetDesc();
+    const float w=uintBits(uint32_t(extent.Width)),h=uintBits(extent.Height);
+    const float constants[8]={w,h,w,h,encode?1.f:-1.f,0,0,0};
+    amfSrTransfer_.bind(list,constants,gpuHandleOf(amfSrTransfer_,table).ptr,gpuHandleOf(amfSrTransfer_,table+1).ptr);
+    list->Dispatch((uint32_t(extent.Width)+15)/16,(extent.Height+15)/16,1);
+    tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool EnhanceGraph::initFsrSr()
@@ -3710,17 +3741,26 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             return true;
         }
         auto& amf = amfSr_[index];
+        const auto failureBeforeSr = failedBackend_;
         failedBackend_ = engine::FailedBackend::Sr;
+        auto* codedInput=amfSrCodedInput_[index].Get();
+        auto* codedOutput=amfSrCodedOutput_[index].Get();
+        if(codedInput){
+            transferAmfSdr(list,slot,input,codedInput,true);
+            input=codedInput;
+        }
         tracker_.transition(list, input, D3D12_RESOURCE_STATE_COPY_SOURCE);
         if (!amf->copyIn(list, input)) return false;
         tracker_.transition(list, input, D3D12_RESOURCE_STATE_COMMON);
         if (!submitGraph(slot) || !amf->evaluate()) return false;
         list = ring_.acquireNext(slot, st);
         if (!list) return false;
-        tracker_.transition(list, output, D3D12_RESOURCE_STATE_COPY_DEST);
-        if (!amf->copyOut(list, output)) return false;
-        tracker_.transition(list, output, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        failedBackend_ = engine::FailedBackend::None;
+        auto* scaled=codedOutput?codedOutput:output;
+        tracker_.transition(list,scaled,D3D12_RESOURCE_STATE_COPY_DEST);
+        if (!amf->copyOut(list,scaled)) return false;
+        if(codedOutput)transferAmfSdr(list,slot,codedOutput,output,false);
+        else tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        failedBackend_ = failureBeforeSr;
         return true;
     };
     auto runMixedDualSr=[&]()->bool{
@@ -4612,7 +4652,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
        (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
         (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&(s.vfgQuality!=desc_.vfgQuality||s.vfgAutoRegulate!=desc_.vfgAutoRegulate))))||
-       (desc_.enableSr&&(s.videoSrQuality!=desc_.videoSrQuality||
+       (desc_.enableSr&&(engine::currentVideoSrQuality(s.videoSrQuality)!=desc_.videoSrQuality||
          ((desc_.videoSrQuality==0||(desc_.dualSr&&desc_.dualSrQuality==0))&&s.dlssSrModel!=desc_.dlssSrModel)))||
        (dlaaRequested()&&s.dlssSrModel!=desc_.dlssSrModel)||
        (s.multiplier>1&&s.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&(!fgCapsAvailable_||s.multiplier-1>uint32_t(fgMultiFrameMax_))))return false;
@@ -4836,7 +4876,7 @@ void EnhanceGraph::shutdown()
     fsrFgBackend_.reset();
     vfgBackend_.reset();
     amfFrc_.reset();
-    amfSr_={};
+    amfSr_={};amfSrCodedInput_={};amfSrCodedOutput_={};amfSrTransfer_={};
     nisSr_={};
     if (fgBackend_) featuresReleased=fgBackend_->release()&&featuresReleased;
     if(firstVideoSrBackend_){featuresReleased=firstVideoSrBackend_->release()&&featuresReleased;firstVideoSrBackend_.reset();}

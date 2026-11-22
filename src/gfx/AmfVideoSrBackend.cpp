@@ -39,6 +39,7 @@ struct AmfVideoSrBackend::Impl {
     ComPtr<ID3D12Fence> outputFence;
     uint64_t sequence = 0;
     unsigned width = 0, height = 0;
+    amf::AMF_SURFACE_FORMAT format = amf::AMF_SURFACE_UNKNOWN;
     bool recordedOutput = false;
 
     ~Impl() {
@@ -64,9 +65,15 @@ bool AmfVideoSrBackend::available() {
 }
 
 bool AmfVideoSrBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* queue, unsigned inWidth, unsigned inHeight,
-                                  unsigned outWidth, unsigned outHeight, bool version11) {
+                                  unsigned outWidth, unsigned outHeight, bool version11, bool fromLinearToSrgb, DXGI_FORMAT format) {
 #ifdef VEYRA_HAS_AMF_HQ_SCALER
     auto& p = *p_;
+    switch (format) {
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: p.format = amf::AMF_SURFACE_RGBA_F16; break;
+    case DXGI_FORMAT_R8G8B8A8_UNORM: p.format = amf::AMF_SURFACE_RGBA; break;
+    case DXGI_FORMAT_B8G8R8A8_UNORM: p.format = amf::AMF_SURFACE_BGRA; break;
+    default: return false;
+    }
     const auto& rt = amfDx12::runtime();
     if (!rt.factory) return false;
     amf::AMFContextPtr context;
@@ -80,8 +87,8 @@ bool AmfVideoSrBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* que
         !amfOk("algorithm", p.scaler->SetProperty(AMF_HQ_SCALER_ALGORITHM, algorithm)) ||
         !amfOk("output size", p.scaler->SetProperty(AMF_HQ_SCALER_OUTPUT_SIZE, AMFConstructSize(outWidth, outHeight))) ||
         !amfOk("exact output extent", p.scaler->SetProperty(AMF_HQ_SCALER_KEEP_ASPECT_RATIO, false)) ||
-        !amfOk("linear input", p.scaler->SetProperty(AMF_HQ_SCALER_FROM_SRGB, false)) ||
-        !amfOk("Init", p.scaler->Init(amf::AMF_SURFACE_RGBA_F16, inWidth, inHeight))) return false;
+        !amfOk("input transfer", p.scaler->SetProperty(AMF_HQ_SCALER_FROM_SRGB, fromLinearToSrgb)) ||
+        !amfOk("Init", p.scaler->Init(p.format, inWidth, inHeight))) return false;
     amf_int64 selected = -1;
     if (!amfOk("read algorithm", p.scaler->GetProperty(AMF_HQ_SCALER_ALGORITHM, &selected)) || selected != algorithm) {
         log::error("amf-video-sr", "the driver did not retain the requested VideoSR algorithm");
@@ -94,7 +101,7 @@ bool AmfVideoSrBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* que
     texture.Width = inWidth;
     texture.Height = inHeight;
     texture.DepthOrArraySize = texture.MipLevels = 1;
-    texture.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    texture.Format = format;
     texture.SampleDesc.Count = 1;
     if (!dxOk("create input", device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &texture,
                  D3D12_RESOURCE_STATE_COMMON, nullptr, IID_PPV_ARGS(&p.input))) ||
@@ -106,11 +113,11 @@ bool AmfVideoSrBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* que
     p.queue = queue;
     p.width = outWidth;
     p.height = outHeight;
-    log::info("amf-video-sr", std::format("ready algorithm={} runtime={} {}x{} -> {}x{} linear RGBA16F",
-        version11 ? "1.1" : "1.0", rt.version, inWidth, inHeight, outWidth, outHeight));
+    log::info("amf-video-sr", std::format("ready algorithm={} runtime={} {}x{} -> {}x{} dxgiFormat={} fromLinearToSrgb={}",
+        version11 ? "1.1" : "1.0", rt.version, inWidth, inHeight, outWidth, outHeight, unsigned(format), fromLinearToSrgb));
     return true;
 #else
-    (void)device; (void)queue; (void)inWidth; (void)inHeight; (void)outWidth; (void)outHeight; (void)version11;
+    (void)device; (void)queue; (void)inWidth; (void)inHeight; (void)outWidth; (void)outHeight; (void)version11; (void)fromLinearToSrgb; (void)format;
     log::error("amf-video-sr", "this build has no AMD HQ Scaler headers");
     return false;
 #endif
@@ -148,7 +155,7 @@ bool AmfVideoSrBackend::evaluate() {
     if (!amfOk("QueryOutput", p.scaler->QueryOutput(&data))) return false;
     p.output = amf::AMFSurfacePtr(data);
     if (!p.output || p.output->GetPts() != surface->GetPts() ||
-        p.output->GetMemoryType() != amf::AMF_MEMORY_DX12 || p.output->GetFormat() != amf::AMF_SURFACE_RGBA_F16) {
+        p.output->GetMemoryType() != amf::AMF_MEMORY_DX12 || p.output->GetFormat() != p.format) {
         log::error("amf-video-sr", "driver returned a different frame, memory type or format");
         return false;
     }
