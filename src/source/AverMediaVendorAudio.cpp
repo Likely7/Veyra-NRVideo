@@ -73,6 +73,7 @@ struct AverMediaVendorAudio::Impl {
     std::unique_ptr<AverMediaAudioCarrier> carrier;
     AverMediaAudioSwitch nonPcmSwitch;
     PcmCallback onPcm;
+    AverMediaAudioCarrier::BurstCallback onBurst;
     struct Dealer final:avermedia::AudioDealer {
         Impl* owner=nullptr;
         int onAudioData(avermedia::SampleInfo info,unsigned char* data,long length) override {
@@ -121,7 +122,7 @@ struct AverMediaVendorAudio::Impl {
     }
     bool setup(){
         {std::lock_guard lock(mutex);state.starting=true;state.error.clear();}
-        {std::lock_guard lock(decodeMutex);tearingDown=false;carrier=std::make_unique<AverMediaAudioCarrier>(onPcm);}
+        {std::lock_guard lock(decodeMutex);tearingDown=false;carrier=std::make_unique<AverMediaAudioCarrier>(onPcm,onBurst);}
         storage.fill(0);constructed=call(Ctor,nullptr,nullptr,false);
         if(!constructed){recordError("vendor AudioDevice constructor failed");return false;}
         std::vector<avermedia::DeviceInfo> devices;if(!call(DeviceList,&devices,nullptr,false))return false;
@@ -148,7 +149,7 @@ struct AverMediaVendorAudio::Impl {
     }
     void teardown(){
         // Stop joins the vendor callback; never hold decodeMutex across it.
-        {std::lock_guard lock(decodeMutex);tearingDown=true;carrier.reset();}
+        {std::lock_guard lock(decodeMutex);tearingDown=true;if(carrier)carrier->reset();carrier.reset();}
         if(constructed){
             // A failed external Stop cannot prove its callback thread joined.
             // Retain this one opaque graph/module until process exit instead
@@ -209,12 +210,12 @@ AverMediaVendorAudio::AverMediaVendorAudio(unsigned stallMs,unsigned maxRestarts
     p_->stallMs=std::max(50u,stallMs);p_->maxRestarts=maxRestarts;
 }
 AverMediaVendorAudio::~AverMediaVendorAudio(){stop();if(p_->quarantine)p_.release();}
-bool AverMediaVendorAudio::start(PcmCallback callback,const std::wstring& name,const std::wstring& path){
+bool AverMediaVendorAudio::start(PcmCallback callback,const std::wstring& name,const std::wstring& path,AverMediaAudioCarrier::BurstCallback burst){
     if(p_->worker.joinable()){const auto s=state();return !s.failed&&(s.starting||s.running);}
     if(p_->quarantine)return false;
     if(!avermedia::eligible(name,path,0)){p_->recordError("selected input is not an AVerMedia capture device");return false;}
     if(AverMediaAudioSwitch::locateComponentRoot().empty()){p_->recordError("AVerMedia Multichannel Audio component not installed");return false;}
-    p_->onPcm=std::move(callback);p_->preferName=name;p_->preferPath=path;p_->stopRequested=false;p_->restartRequested=false;
+    p_->onPcm=std::move(callback);p_->onBurst=std::move(burst);p_->preferName=name;p_->preferPath=path;p_->stopRequested=false;p_->restartRequested=false;
     if(p_->stopEvent)ResetEvent(p_->stopEvent);
     {std::lock_guard lock(p_->mutex);p_->state={};p_->state.starting=true;}
     try{p_->worker=std::thread([this]{p_->run();});}

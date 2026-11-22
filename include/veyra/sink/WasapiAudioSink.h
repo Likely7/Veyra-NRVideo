@@ -71,6 +71,9 @@ bool forceStereoDownmix();
 struct ActiveRenderEndpoint { std::wstring id, name; bool fallback = false; unsigned channels = 0; bool downmix = false; bool valid = false; };
 ActiveRenderEndpoint activeRenderEndpoint();
 uint64_t renderEndpointGeneration();
+void setBitstreamRenderEndpoint(const std::wstring& id);
+bool bitstreamRenderEndpointReserved();
+inline constexpr HRESULT kRenderReservedForBitstream = HRESULT_FROM_WIN32(ERROR_BUSY);
 
 class AudioRenderer; // forward: pipeline thread needs the renderer
 enum class AudioFadeResult { NotPlaying, Drained, Cancelled, TimedOut, Failed };
@@ -330,6 +333,7 @@ class AudioRenderer {
 public:
     ~AudioRenderer(){shutdown();}
     bool start(AudioFormat input = {},double requestedBufferMs=10.0,std::wstring_view excludedEndpoint={});
+    void recordPcm(const float* samples,size_t frames,const AudioFormat& format,int64_t estimatedUs,bool withoutOutput);
     AudioFormat outputFormat()const{std::lock_guard lock(endpointMutex_);return outputFormat_;}
     void setGain(float value){gain_.store(value);}
 
@@ -408,6 +412,8 @@ private:
     std::atomic<bool> fading_{false};bool pausedEndpoint_=false;
     size_t fadeInRemaining_=0;
     LiveAudioGapTracker liveGap_;
+    int64_t lastTapUs_=0, lastTapEndUs_=0;
+    bool lastTapWithoutOutput_=false;
     int64_t tapLatencyUs_=0;   // live recording: device-clock playout minus the queued-frame estimate
     std::vector<float> lastRaw_=std::vector<float>(2,0);
     AudioFormat inputFormat_,outputFormat_;

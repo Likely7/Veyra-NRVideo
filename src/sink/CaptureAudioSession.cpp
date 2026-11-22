@@ -1,6 +1,7 @@
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
+#include "veyra/sink/RecordingAudioTap.h"
 #include "veyra/sink/ArrivalClockMapping.h"
 #include "veyra/sink/CaptureAudioDsp.h"
 #include "veyra/sink/CaptureSyncTarget.h"
@@ -83,7 +84,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
     void observeRenderedPcm(const float* samples,size_t frames,unsigned channels,unsigned padding)override{recording.rendered(samples,frames,channels,padding);}
     void run(){
         AudioRenderer renderer;
-        bool endpointReady=false;int64_t retryAt=0;
+        bool endpointReady=false,tapOnly=false;int64_t retryAt=0;
+        uint64_t tapGeneration=0;
         const bool injectEndpointLoss=GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_ENDPOINT_LOSS",nullptr,0)>0;
         const bool injectSlowStart=GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_SLOW_START",nullptr,0)>0;
         bool startupDelayed=false;
@@ -133,7 +135,9 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             std::lock_guard lock(mutex);state.driftCorrectionPpm=0;return true;
         };
         auto recoverEndpoint=[&]{
-            const auto error=renderer.lastError();renderer.shutdown();endpointReady=false;retryAt=hostTime()+5000000;
+            const auto error=renderer.lastError();renderer.shutdown();endpointReady=false;
+            const bool handoff=error==AUDCLNT_E_DEVICE_INVALIDATED&&bitstreamRenderEndpointReserved();
+            retryAt=hostTime()+(handoff?0:5000000);
             if(injectEndpointLoss&&GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_LONG_OUTAGE",nullptr,0)>0)
                 retryAt=hostTime()+40000000;
             clearPcm();swr_close(swr);if(swr_init(swr)<0){fail(L"音频重采样重置失败");return false;}
@@ -147,7 +151,11 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 : L"音频输出断开，正在重连（"+std::to_wstring(unsigned(error))+L"）";queueChanged();return true;
         };
         while(!stop){
-            if(!endpointReady){
+            if(tapOnly&&renderEndpointGeneration()!=tapGeneration){
+                tapOnly=false;
+                retryAt=0;
+            }
+            if(!endpointReady&&!tapOnly){
                 const auto time=hostTime();
                 if(time<retryAt){std::unique_lock lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(20),[&]{return stop.load();});continue;}
                 {std::lock_guard lock(mutex);++state.endpointRetries;}
@@ -156,16 +164,26 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                     std::unique_lock lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(650),[&]{return stop.load();});
                     if(stop)break;
                 }
-                if(!renderer.start(layout,20.0,excludedEndpoint)){if(!recoverEndpoint())break;continue;}
-                endpointReady=true;lastUnderruns=renderer.underruns();
+                const auto generation=renderEndpointGeneration();
+                endpointReady=renderer.start(layout,20.0,excludedEndpoint);
+                if(!endpointReady&&renderer.lastError()!=kRenderReservedForBitstream){
+                    if(!recoverEndpoint())break;
+                    continue;
+                }
+                tapOnly=!endpointReady;
+                if(tapOnly){
+                    tapGeneration=generation;
+                    renderer.shutdown();
+                }
+                lastUnderruns=renderer.underruns();
                 lastUnderrunFrames=renderer.underrunFrames();lastSilenceFrames=renderer.silenceFrames();starvationSince=0;
-                {std::lock_guard lock(mutex);state.error.clear();state.outputRecovering=false;state.inputChannels=layout.channels;state.inputChannelMask=layout.mask;const auto output=renderer.outputFormat();state.outputChannels=output.channels;state.outputChannelMask=output.mask;pendingReset=true;}
+                {std::lock_guard lock(mutex);state.error.clear();state.outputRecovering=false;state.inputChannels=layout.channels;state.inputChannelMask=layout.mask;const auto output=renderer.outputFormat();state.outputChannels=tapOnly?0:output.channels;state.outputChannelMask=tapOnly?0:output.mask;pendingReset=true;}
             }
             // Preference changes invalidate the renderer's endpoint generation
             // without making WASAPI event waits or buffer fills fail. Observe
             // that state on the audio owner, just as file playback does, so
             // capture/streaming can reopen the selected output without a restart.
-            if(FAILED(renderer.lastError())){if(!recoverEndpoint())break;continue;}
+            if(!tapOnly&&FAILED(renderer.lastError())){if(!recoverEndpoint())break;continue;}
             renderer.setGain(gain);
             // Wait before collecting callbacks, so PCM arriving during the
             // endpoint wait is available for this fill instead of padded silence.
@@ -189,7 +207,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             if(syncChanged&&!clearCorrection()){fail(L"音频同步补偿重置失败");break;}
             if(reset||chunk.discontinuity){
                 syncTarget.reset();syncEstimate={};lastVideoObservation=0;
-                renderer.fadeAndReset(*this,stop);clearPcm();swr_close(swr);
+                if(!tapOnly)renderer.fadeAndReset(*this,stop);
+                clearPcm();swr_close(swr);
                 if(swr_init(swr)<0){fail(L"音频重采样重置失败");break;}
                 const int prepared=rateCorrection.prepare(swr,appliedMode==0);
                 if(prepared<0){log::error("capture-audio",std::format("prepare compensation failed code={}",prepared));fail(L"音频补偿初始化失败");break;}
@@ -265,6 +284,28 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 const double start=chunk.pts-1000.0*delay/format.nSamplesPerSec;
                 const double end=chunk.pts+1000.0*(inputFrames-swr_get_delay(swr,format.nSamplesPerSec))/format.nSamplesPerSec;
                 if(reset||chunk.discontinuity)log::info("capture-audio-reset",std::format("mode={} pts={} delayBefore={} delayAfter={} input={} output={}",appliedMode,chunk.pts,delay,swr_get_delay(swr,format.nSamplesPerSec),inputFrames,count));
+                if(tapOnly){
+                    const double now=double(hostTime())/10000;
+                    const bool fresh=video&&now>=vHost&&now-vHost<500;
+                    if(appliedMode==0&&fresh&&observation!=lastVideoObservation){
+                        syncEstimate=syncTarget.observe(vHost-vPts-ingress,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
+                        lastVideoObservation=observation;
+                    }
+                    const double target=appliedMode==0?std::clamp(syncEstimate.targetMs,0.0,maxAutoDelayMs):
+                        appliedMode==1?std::max(0,appliedOffset):0;
+                    if(count&&recordingAudioActive())
+                        renderer.recordPcm(converted.data(),size_t(count),layout,
+                                           int64_t(std::llround((start+ingress+target)*1000.0)),true);
+                    std::lock_guard lock(mutex);
+                    convertingBytes=0;
+                    state.available=true;
+                    state.running=false;
+                    state.skewMs.reset();
+                    state.compensationMs=target;
+                    state.endpointBufferedMs=0;
+                    queueChanged();
+                    continue;
+                }
                 if(haveHead&&std::abs(start-pcmTimeline.at(double(pcmTail)).value_or(start))>50){
                     renderer.fadeAndReset(*this,stop);clearPcm();
                     std::lock_guard lock(mutex);++state.resets;
@@ -282,6 +323,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                     queueChanged();
                 }
             }
+            if(tapOnly)continue;
             {
                 std::lock_guard lock(mutex);
                 // Drain callback blocks already available before waiting for

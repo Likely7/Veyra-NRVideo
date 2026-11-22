@@ -7,6 +7,7 @@
 #include <vector>
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/source/AudioInputRecovery.h"
+namespace veyra::sink { class HdmiBitstreamOutput; }
 namespace veyra::source {
 constexpr int kCaptureAudioDisabled=-1;
 constexpr int kCaptureAudioFromVideoDevice=-2;
@@ -64,6 +65,7 @@ public:
     // 0 automatic, 1 PCM only, 2 bitstream preferred. Takes effect on the next
     // connect/reconnect because the audio media type is negotiated there.
     void setAudioIngress(unsigned mode);
+    void setHdmiBitstream(std::shared_ptr<sink::HdmiBitstreamOutput> output);
     // 0 auto, 1 minimum, 2 driver default (see CaptureBuffer.h). Applied on the
     // next connect: the allocator is created while the graph is built.
     void setBufferMode(unsigned mode);

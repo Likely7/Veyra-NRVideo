@@ -1,5 +1,6 @@
 #include "veyra/source/AverMediaAudioCarrier.h"
 #include "veyra/source/CaptureAudioDeliveryPolicy.h"
+#include "veyra/sink/HdmiBitstreamOutput.h"
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -18,7 +19,10 @@ struct Output {unsigned channels;uint32_t rate,mask;bool discontinuity;std::stri
 std::vector<std::vector<uint8_t>> encode(AVCodecID id,uint64_t mask,int rate){
     const auto* codec=avcodec_find_encoder(id);require(codec!=nullptr,"encoder available");
     auto* c=avcodec_alloc_context3(codec);require(c!=nullptr,"encoder context");
-    c->sample_rate=rate;c->sample_fmt=AV_SAMPLE_FMT_FLTP;c->bit_rate=mask==3?192000:448000;
+    const bool dts=id==AV_CODEC_ID_DTS;
+    c->sample_rate=rate;c->sample_fmt=dts?AV_SAMPLE_FMT_S32:AV_SAMPLE_FMT_FLTP;
+    c->bit_rate=dts?768000:mask==3?192000:448000;
+    if(dts)c->strict_std_compliance=FF_COMPLIANCE_EXPERIMENTAL;
     av_channel_layout_from_mask(&c->ch_layout,mask);
     require(avcodec_open2(c,codec,nullptr)>=0,"open real encoder");
     AVFrame* f=av_frame_alloc();AVPacket* packet=av_packet_alloc();
@@ -28,8 +32,13 @@ std::vector<std::vector<uint8_t>> encode(AVCodecID id,uint64_t mask,int rate){
     auto drain=[&]{while(avcodec_receive_packet(c,packet)>=0){packets.emplace_back(packet->data,packet->data+packet->size);av_packet_unref(packet);}};
     for(int n=0;n<12;++n){
         av_frame_make_writable(f);f->pts=int64_t(n)*f->nb_samples;
-        for(int ch=0;ch<c->ch_layout.nb_channels;++ch){auto* values=reinterpret_cast<float*>(f->extended_data[ch]);
-            for(int i=0;i<f->nb_samples;++i)values[i]=float(0.05*std::sin((i+f->pts)*6.28318530718*(180+ch*70)/rate));}
+        for(int ch=0;ch<c->ch_layout.nb_channels;++ch){
+            for(int i=0;i<f->nb_samples;++i){
+                const auto value=0.05*std::sin((i+f->pts)*6.28318530718*(180+ch*70)/rate);
+                if(dts)reinterpret_cast<int32_t*>(f->data[0])[i*c->ch_layout.nb_channels+ch]=int32_t(value*INT32_MAX);
+                else reinterpret_cast<float*>(f->extended_data[ch])[i]=float(value);
+            }
+        }
         require(avcodec_send_frame(c,f)>=0,"encode frame");drain();
     }
     avcodec_send_frame(c,nullptr);drain();av_packet_free(&packet);av_frame_free(&f);avcodec_free_context(&c);
@@ -104,6 +113,43 @@ int main(){try{
         outputs.push_back({b.channels,b.rate,b.mask,b.discontinuity,std::string(b.codec),{b.samples,b.samples+b.frames*b.channels}});return true;
     });
     const source::avermedia::SampleInfo stereo{2,16,48000};
+    {
+        uint64_t pcmFrames=0;
+        unsigned resets=0;
+        std::vector<std::pair<uint16_t,std::vector<uint8_t>>> forwarded;
+        source::AverMediaAudioCarrier splitter([&](const source::VendorPcmBlock& b){
+            require(b.channels==6&&b.rate==48000,"splitter continues to supply decoded 5.1 PCM");
+            pcmFrames+=b.frames;
+            return true;
+        },[&](uint16_t pc,uint16_t pd,unsigned rate,std::span<const uint8_t> words){
+            if(!rate){++resets;return;}
+            require(rate==48000,"carrier metadata preserved");
+            forwarded.emplace_back(pc,sink::makeIecBurst(pc,pd,words));
+        });
+        for(const auto codec:{AV_CODEC_ID_AC3,AV_CODEC_ID_DTS,AV_CODEC_ID_AC3}){
+            const unsigned type=codec==AV_CODEC_ID_DTS?0x0b:1;
+            const auto packets=encode(codec,0x60f,48000);
+            const auto first=forwarded.size();
+            const auto initialPcm=pcmFrames;
+            for(const auto& packet:packets){
+                auto wire=burst(packet,type);
+                wire.resize(sink::iecBurstFrames(uint16_t(type))*4);
+                require(splitter.feed(std::span(wire).first(13),stereo,1),"first fragment");
+                require(splitter.feed(std::span(wire).subspan(13),stereo,1),"second fragment");
+            }
+            require(forwarded.size()-first==packets.size()-1,"all confirmed compressed frames forwarded");
+            require(pcmFrames-initialPcm==(packets.size()-1)*sink::iecBurstFrames(uint16_t(type)),
+                    "decoded PCM and forwarded burst timing agree across codec transitions");
+            for(size_t n=1;n<packets.size();++n){
+                auto expected=burst(packets[n],type);
+                expected.resize(sink::iecBurstFrames(uint16_t(type))*4);
+                require(forwarded[first+n-1].first==type&&forwarded[first+n-1].second==expected,
+                        "original compressed payload preserved byte for byte");
+            }
+        }
+        splitter.reset();
+        require(resets==2,"initial input epoch and explicit reset signalled");
+    }
     std::vector<uint8_t> pcm(1920*4,0);for(size_t i=0;i<pcm.size();i+=2){pcm[i]=0x00;pcm[i+1]=0x20;}
     require(carrier.feed(pcm,stereo,0),"initial PCM");require(!outputs.empty(),"PCM delivered without four-second preroll");
     require(outputs.front().discontinuity&&outputs.front().pcm.front()==0.25f,"PCM value and initial discontinuity");

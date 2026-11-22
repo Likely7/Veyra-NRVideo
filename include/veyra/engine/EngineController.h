@@ -15,6 +15,7 @@
 #include "veyra/engine/PreviewView.h"
 #include "veyra/engine/EngineWatchdog.h"
 #include "veyra/sink/CaptureAudioSession.h"
+#include "veyra/sink/HdmiBitstreamOutput.h"
 #include "veyra/remoteplay/SessionInbox.h"
 #ifdef VEYRA_ENABLE_MOONLIGHT
 #include "veyra/source/MoonlightSessionSource.h"
@@ -280,6 +281,7 @@ public:
     remoteplay::ControllerFeedback xboxFeedback();
 #endif
     void stop();
+    sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}
     void pause(bool p);
     bool setPlaybackRate(double rate);
@@ -370,6 +372,7 @@ private:
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_
     std::atomic<bool> stop_{false},paused_{false},muted_{false};
     std::atomic<bool> captureAudioMonitoring_{true};
+    std::shared_ptr<sink::HdmiBitstreamOutput> hdmiBitstream_;
     std::atomic<float> volume_{1};uint64_t sessionId_=0;
     std::atomic<double> seekSeconds_{-1};
     std::atomic<double> requestedPlaybackRate_{1};
