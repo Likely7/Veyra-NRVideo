@@ -42,6 +42,16 @@ if local_build:
         raise SystemExit('Select the matching Veyra-patched FFmpeg source tree')
     if hashlib.sha256((patches / 'ps5-h264-slices.patch').read_bytes()).hexdigest() != local_build['patchSha256'].lower():
         raise SystemExit('FFmpeg patch identity mismatch')
+    for item in local_build.get('additionalPatches', []):
+        name = Path(item['name'])
+        source = Path(item['source'])
+        if name.name != item['name'] or name.suffix != '.patch' or source.anchor or '..' in source.parts:
+            raise SystemExit('Invalid additional FFmpeg patch path')
+        patch = (patches / name).read_text(encoding='utf-8').encode('utf-8')
+        if hashlib.sha256(patch).hexdigest() != item['sha256'].lower():
+            raise SystemExit(f'FFmpeg patch identity mismatch: {name}')
+        if hashlib.sha256((args.source / source).read_bytes()).hexdigest() != item['sourceSha256'].lower():
+            raise SystemExit(f'FFmpeg patched source mismatch: {source}')
 with os.add_dll_directory(str((args.prefix / 'bin').resolve())):
     lib = ctypes.CDLL(str((args.prefix / 'bin/avcodec-63.dll').resolve()))
     lib.avcodec_configuration.restype = ctypes.c_char_p
@@ -94,8 +104,8 @@ with zipfile.ZipFile(args.output, 'x', compression=zipfile.ZIP_DEFLATED, compres
         f'FFmpeg 9.0.1#1 corresponding-source material for Veyra {args.version}.\n'
         'Not needed to run the application. No NVIDIA SDK or runtime is included.\n'
         'ffmpeg-patched is the matching patched n9.0.1 source tree.\n'
-        'When FFMPEG-VEYRA-BUILD.json exists, also apply the recorded Veyra patch\n'
-        'after the vcpkg port patches; see veyra-patches/README.md for rebuild instructions.\n'
+        'FFMPEG-VEYRA-BUILD.json lists the Veyra patches included in ffmpeg-patched.\n'
+        'When starting from an unpatched copy, see veyra-patches/README.md for rebuild steps.\n'
         'vcpkg-port contains the build recipe and patches, verified against the shipped SPDX.\n'
         'binary-configuration.txt is queried from the actual distributed avcodec DLL,\n'
         'not copied from a potentially newer build cache.\n'

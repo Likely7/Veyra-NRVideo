@@ -84,7 +84,7 @@ Item {
                 : "file:///" + encoded.replace(/^([A-Za-z])%3A/, '$1:')
             return directory + "/fullscreen-background.ini"
         }
-        property string mode: "slideshow"
+        property string mode: "black"
         property int brightness: 60
         property string builtInLeft: Gallery.files[0] || ""
         property string builtInRight: Gallery.files[1] || Gallery.files[0] || ""

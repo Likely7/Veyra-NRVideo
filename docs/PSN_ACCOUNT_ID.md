@@ -7,13 +7,10 @@
 Pairing Veyra with a PS5 needs the **Account ID** of a PSN user who has signed in on that console, plus the 8-digit code the PS5 shows under **Settings → System → Remote Play → Link Device**. The Account ID is a number, usually written in Base64 (12 characters, e.g. `FYHpffQQIhE=`). It is not a password, and you only need it once: it never changes.
 
 ### Get it with Sony's own sign-in, never a third-party site
-Pick one. Both sign you in on Sony's page (`my.account.sony.com`), so your password and session never pass through anyone else.
+Enter your password only on Sony's sign-in page (`my.account.sony.com`).
 
-1. **psn-account-id** (open source, standard library only, English/Español): https://github.com/metalito/psn-account-id
-   - Windows: download `psn-account-id-windows-amd64.exe` from its Releases page and double-click it. A PowerShell script and a Python script are also available if you prefer to read the code first.
-   - Sign in on Sony's page, paste the address you land on, and copy the **Base64** line it prints.
-2. **chiaki-ng** (the open-source Remote Play client that Veyra's PS5 streaming is built on): https://github.com/chiaki-ng/chiaki-ng
-   - Its console registration dialog has a built-in PlayStation sign-in that fills in the Account ID. Copy it from there.
+1. **chiaki-ng** is the open-source Remote Play client Veyra's PS5 streaming is built on. In its console registration dialog, sign in to PlayStation and copy the Account ID. [chiaki-ng repository](https://github.com/chiaki-ng/chiaki-ng)
+2. **psn-account-id** is an independent, recently launched open-source project. Review its PowerShell or Python source before running it locally. The tool asks for the redirect URL after Sony sign-in and prints the ID in Base64. Keep the redirect URL private. [psn-account-id repository](https://github.com/metalito/psn-account-id)
 
 Then paste the ID into Veyra's **PSN Account ID** field and enter the 8-digit code.
 
@@ -25,13 +22,10 @@ Some Account ID lookup websites ask for your **NPSSO** cookie (from `ca.account.
 Veyra 与 PS5 配对需要在该主机上登录过的 PSN 用户的 **Account ID**，以及 PS5 在 **设置 → 系统 → 远程游玩 → 关联设备** 中显示的 8 位配对码。Account ID 是一个数字，通常写成 Base64（12 个字符，例如 `FYHpffQQIhE=`）。它不是密码，只需获取一次：它永远不会改变。
 
 ### 只用索尼官方登录获取，不要用第三方网站
-任选其一。两种方式都在索尼自己的页面（`my.account.sony.com`）登录，密码和登录会话不会经过任何第三方。
+请仅在索尼登录页（`my.account.sony.com`）输入密码。
 
-1. **psn-account-id**（开源，仅用标准库）：https://github.com/metalito/psn-account-id
-   - Windows：在其 Releases 页面下载 `psn-account-id-windows-amd64.exe` 并双击运行。如果想先阅读代码，也有 PowerShell 和 Python 脚本版本。
-   - 在索尼页面登录，把跳转后的完整地址粘贴回工具，复制输出的 **Base64** 那一行。
-2. **chiaki-ng**（Veyra 的 PS5 串流所基于的开源远程游玩客户端）：https://github.com/chiaki-ng/chiaki-ng
-   - 它的主机注册对话框内置 PlayStation 登录，会自动填好 Account ID，从那里复制即可。
+1. **chiaki-ng** 是 Veyra 的 PS5 串流所基于的开源客户端。在它的主机注册窗口登录 PlayStation，再复制自动填好的 Account ID。[chiaki-ng 项目页](https://github.com/chiaki-ng/chiaki-ng)
+2. **psn-account-id** 是近期发布的第三方开源项目。可以先查看其 PowerShell 或 Python 源码，再在本机运行。它读取索尼登录后跳转的完整地址并输出 Base64 ID。请妥善保管跳转地址。[psn-account-id 项目页](https://github.com/metalito/psn-account-id)
 
 然后把 ID 粘贴到 Veyra 的 **PSN Account ID** 栏，再输入 8 位配对码。
 

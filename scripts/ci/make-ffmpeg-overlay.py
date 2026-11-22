@@ -1,5 +1,5 @@
 """Create a vcpkg overlay port: the stock vcpkg ffmpeg 9.0.1#1 port plus
-Veyra's two FFmpeg source patches, each pinned by SHA-256.
+Veyra's FFmpeg source patches, each pinned by SHA-256.
 
 usage: make-ffmpeg-overlay.py <vcpkg-root> <veyra-root> <overlay-dir>
 """
@@ -13,6 +13,8 @@ PATCHES = {
     'ps5-h264-slices.patch': 'e7d138926873faf479ebdb17b59cecfd654086f5062220ba45ab08ccee9fae26',
     # D3D12 deinterlace filter: per-slot allocators/fences, PTS fix
     'deinterlace-d3d12-async.patch': 'e93c2c40877a19d2da0319056ff19cf70c1ca5fc5386b06b3cc48cfe9fb6f461',
+    # D3D12VA reference-only resource slots (PS5 H.264/HEVC on affected drivers).
+    'd3d12va-reference-only-pool.patch': '85c3ba4a730b10cd2d217224a7fda6d2bd0b705c5bb515250dbbc09ade3289ed',
 }
 ANCHOR = '        0052-fix-disable-unstable-swscale-link.patch\n'
 
@@ -28,7 +30,7 @@ if dest.exists():
 shutil.copytree(port, dest)
 
 for name, expected in PATCHES.items():
-    data = (veyra / 'scripts' / 'ffmpeg' / name).read_bytes()
+    data = (veyra / 'scripts' / 'ffmpeg' / name).read_text(encoding='utf-8').encode('utf-8')
     got = hashlib.sha256(data).hexdigest()
     if got != expected:
         sys.exit(f'{name}: sha256 {got} != pinned {expected}')

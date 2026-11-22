@@ -115,7 +115,7 @@ jobs:
           path: C:\vcache
           key: vcpkg-${{ env.VCPKG_COMMIT }}-${{ env.OVERLAY_HASH }}-v1
 
-      - name: Build FFmpeg 9.0.1 (+ slices256 / D3D12 deinterlace patches), dav1d, zlib and libass
+      - name: Build FFmpeg 9.0.1 (slices256, deinterlace, D3D12VA reference pool), dav1d, zlib and libass
         env:
           VCPKG_BINARY_SOURCES: clear;files,C:\vcache,readwrite
           VCPKG_DISABLE_METRICS: '1'
@@ -156,7 +156,7 @@ jobs:
 
       - name: Stage portable package
         run: |
-          $name = "Veyra-$($env:GITHUB_SHA.Substring(0, 10))-win64-portable-ci"
+          $name = "Veyra-$($env:GITHUB_SHA.Substring(0, 10))-win64-ci-no-gpu-runtimes"
           $stage = "C:\out\$name"
           New-Item -ItemType Directory -Force $stage, "$stage\qml", "$stage\licenses" | Out-Null
           Copy-Item C:\b\veyra_qml_ui.exe $stage
@@ -178,6 +178,11 @@ jobs:
             --skip-plugin-types qmltooling,generic "$stage\veyra_qml_ui.exe"
           Copy-Item "$env:VCToolsRedistDir\x64\Microsoft.VC143.CRT\*.dll" $stage
           foreach ($f in 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.md', 'README_EN.md') { Copy-Item $f $stage }
+          @'
+          Veyra Windows CI build for development testing.
+          The official release packages are on the project's GitHub Releases page.
+          DLSS, XeSS and other proprietary GPU runtimes, RIFE models, and optional audio packages are absent.
+          '@ | Set-Content -Encoding utf8 "$stage\CI-BUILD.txt"
           Copy-Item licenses\* "$stage\licenses" -Recurse
           Copy-Item C:\v\installed\x64-windows\share\ffmpeg\copyright "$stage\licenses\FFMPEG-COPYRIGHT.txt"
           Copy-Item C:\v\installed\x64-windows\share\dav1d\copyright "$stage\licenses\DAV1D-COPYRIGHT.txt"
@@ -207,7 +212,7 @@ jobs:
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: veyra-windows-portable
+          name: veyra-windows-ci-no-gpu-runtimes
           path: |
             C:\out\*.zip
             C:\out\SHA256SUMS.txt
