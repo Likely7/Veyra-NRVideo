@@ -39,7 +39,7 @@ public:
     void stop();
     bool push(const void* data,size_t bytes,double ptsMs,bool discontinuity);
     // Arrival is the matching original capture frame, not the latest callback.
-    // Omit only for sources with their own existing timestamp contract (PS5).
+    // Omit only for sources with their own existing timestamp contract.
     void videoPresented(double ptsMs,int64_t host100ns,std::optional<int64_t> arrival100ns={});
     // Invalidate software presentation.  A video graph rebuild can preserve
     // the audio clock; callers that are actually pausing the transport may

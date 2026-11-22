@@ -86,6 +86,19 @@ TEST(clock_long_session_drift_and_fg){
         CHECK(admitted>measured*98/100);
     }
 }
+TEST(clock_tracks_index_rate_below_nominal){
+    // Field log 2026-11-22: a 30 profile delivered ~29.85 index/s; the old
+    // 0.5% slew left the estimate 1.7 s behind arrival.
+    for(unsigned fps:{30u,60u})for(double rate:{.9949,.99,.98,1.02}){
+        RemotePlayClock c;c.reset(0,fps);int64_t previous=-1;
+        for(uint64_t i=0;i<fps*600u;++i){
+            const auto arrival=int64_t(double(i)*10000000.0/(fps*rate))+int64_t(i%7)*1000;
+            const auto stamp=c.video(i,arrival);
+            CHECK(stamp&&!stamp->discontinuity&&stamp->pts100ns>previous);previous=stamp->pts100ns;
+            if(i>fps*30u)CHECK(std::llabs(arrival-stamp->pts100ns)<500000);
+        }
+    }
+}
 TEST(clock_reject_invalid){RemotePlayClock c;CHECK(!c.video(0,0));THROWS(c.reset(0,120));THROWS(c.reset(-1,60));c.reset(10,60);CHECK(!c.video(0,9));CHECK(c.video(1,20));CHECK(!c.video(1,20));CHECK(!c.video(2,19));CHECK(!c.audioPts(0,0,10));CHECK(!c.audioPts(std::numeric_limits<std::uint64_t>::max(),8000,10));}
 TEST(queue_limits_validation){QueueLimits l;l.maxFrames=0;THROWS(VideoIngress{l});l={};l.maxConfigBytes=l.maxBytes+1;THROWS(VideoIngress{l});l={};l.maxAge100ns=0;THROWS(VideoIngress{l});}
 TEST(config_not_counted_as_picture){VideoIngress q;q.begin(1);CHECK(q.push(config(),0)==PushStatus::ConfigStored);CHECK(q.stats().accessUnits==0);CHECK(q.stats().depth==0);CHECK(!q.tryPop(0));}
