@@ -18,12 +18,13 @@ Item {
         function init() { fakeBridge.contentRate=0;list.lastMode=1;node.lastMode=1;fixture.width=420;wait(30) }
         function selectRow(prefix) { return findChild(fixture,"fixture-"+prefix+"-content-rate") }
         function toggle(prefix) { mouseClick(findChild(fixture,"fixture-"+prefix+"-dedup-enabled")) }
-        function test_only_two_modes_are_offered() {
+        function test_three_modes_are_offered() {
             for(const editor of [list,node]) {
                 compare(editor.label,"去除重复帧")
-                compare(editor.modes.length,2)
-                compare(editor.modes[0].id,"5");compare(editor.modes[0].label,"60→30")
-                compare(editor.modes[1].id,"1");compare(editor.modes[1].label,"自动去除")
+                compare(editor.modes.length,3)
+                compare(editor.modes[0].id,"6");compare(editor.modes[0].label,"60→30")
+                compare(editor.modes[1].id,"5");compare(editor.modes[1].label,"60→30（兼容自动去重）")
+                compare(editor.modes[2].id,"1");compare(editor.modes[2].label,"自动去除")
             }
         }
         function test_default_stays_off_until_enabled() {
@@ -37,6 +38,10 @@ Item {
             fakeBridge.contentRate=1
             selectRow("list").picked("5")
             compare(fakeBridge.contentRate,5)
+            compare(selectRow("list").value,"60→30（兼容自动去重）")
+            compare(selectRow("node").value,"60→30（兼容自动去重）")
+            selectRow("node").picked("6")
+            compare(fakeBridge.contentRate,6)
             compare(selectRow("list").value,"60→30")
             compare(selectRow("node").value,"60→30")
             fakeBridge.contentRate=1
@@ -45,17 +50,21 @@ Item {
             compare(fakeBridge.contentRate,1)
         }
         function test_turning_off_and_on_keeps_the_chosen_mode() {
-            fakeBridge.contentRate=5
-            toggle("list");compare(fakeBridge.contentRate,0)
-            compare(selectRow("node").enabled,false)
-            toggle("node");compare(fakeBridge.contentRate,5)
+            for(const mode of [5,6]) {
+                fakeBridge.contentRate=mode
+                toggle("list");compare(fakeBridge.contentRate,0)
+                compare(selectRow("node").enabled,false)
+                toggle("node");compare(fakeBridge.contentRate,mode)
+            }
         }
         function test_legacy_label_and_narrow_layout() {
             for(const legacy of [2,3,4]){
                 fakeBridge.contentRate=legacy
                 compare(selectRow("list").value,"自动去除")
             }
-            fixture.width=240;wait(50)
+            fixture.width=240
+            fakeBridge.contentRate=5
+            wait(50)
             const control=selectRow("node"),point=control.mapToItem(node,0,0)
             verify(point.x>=0&&point.x+control.width<=node.width+1)
         }

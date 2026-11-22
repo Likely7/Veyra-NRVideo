@@ -4,6 +4,7 @@
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
+#include "CaptureHalfRate219.h"
 #include "veyra/engine/CapturePreviewClock.h"
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/pipeline/PictureCompare.h"
@@ -20,6 +21,7 @@
 #include <cmath>
 #include <chrono>
 #include <limits>
+#include <random>
 #include <cstdio>
 int main(){
     using veyra::engine::livePairHoldMs;
@@ -137,6 +139,100 @@ int main(){
             check(repeats==std::vector<int>{45,47}&&sampler.repeatsSkipped()==3&&sampler.repeatsHeld()==2,
                   "a freeze longer than the hitch window is held on the grid");
         }
+    }
+    {
+        using namespace veyra::engine;
+        constexpr int64_t dt=166667;
+        CaptureHalfRate original;
+        original.setSkipRepeats(false);
+        unsigned kept=0;
+        for(int i=0;i<720;++i){
+            const uint64_t id=i<240?uint64_t(i/2):i<421?1000:uint64_t(1000+i-420);
+            kept+=original.accept(i*dt,dt,false,&id);
+        }
+        check(kept==360&&original.repeatsSkipped()==0&&original.repeatsHeld()>0,
+              "original half-rate keeps 360 samples through still-to-60 transition");
+        for(unsigned fps:{29,28,26,24,20})for(bool sequenced:{false,true}){
+            CaptureHalfRate compatible;
+            original.reset();
+            unsigned legacyCount=0,compatibleCount=0;
+            for(uint64_t i=0;i<1200;++i){
+                const uint64_t picture=i*fps/60,sequence=sequenced?i+1:0;
+                const int64_t pts=int64_t(i)*dt;
+                legacyCount+=original.accept(pts,dt,false,&picture,sequence);
+                compatibleCount+=compatible.accept(pts,dt,false,&picture,sequence);
+            }
+            check(legacyCount>=600&&original.repeatsHeld()>0&&original.repeatsSkipped()==0,
+                  "original half-rate admits repeats on its grid below 30 fps");
+            check(compatibleCount==fps*20&&compatible.repeatsHeld()==0,
+                  "compatible half-rate retains the changing pictures below 30 fps");
+        }
+        for(bool skip:{false,true}){
+            CaptureHalfRate sampler;sampler.setSkipRepeats(skip);
+            unsigned chosen=0;
+            bool firsts=true;
+            for(uint64_t i=1;i<541;++i){
+                const uint64_t picture=i/2;
+                if(sampler.accept(int64_t(i)*dt,dt,false,&picture,i+1)){
+                    ++chosen;
+                    if(i>14)firsts&=(i%2==0);
+                }
+            }
+            check(sampler.shifts()==1&&firsts&&chosen>=269&&chosen<=271,
+                  "both selectors move onto the first copy of a locked 30 fps stream");
+        }
+        CaptureHalfRate switcher;
+        const uint64_t repeated=9;
+        switcher.accept(0,dt,false,&repeated,1);
+        switcher.accept(dt,dt,false,&repeated,2);
+        check(!switcher.accept(2*dt,dt,false,&repeated,3),"compatible mode waits on a due repeat");
+        check(switcher.setSkipRepeats(false)&&switcher.accept(3*dt,dt,false,&repeated,4)&&
+              !switcher.setSkipRepeats(false)&&!switcher.accept(4*dt,dt,false,&repeated,5)&&
+              switcher.accept(5*dt,dt,false,&repeated,6),"switch clears pending repeat wait and reanchors once");
+        EnhancementSettings newer,previous;
+        previous.content=ContentRate::Capture60To30;
+        newer.content=ContentRate::Capture60To30Original;
+        check(previous.sameVideoConfiguration(newer)&&previous.sameActiveVideoParameters(newer),
+              "switching half-rate variants retains graph revision and active parameters");
+    }
+    {
+        // Deterministic mixed input with repeat runs, absent metadata, missing
+        // callbacks, restarts, jitter, invalid periods and transport changes.
+        using veyra::engine::test::CaptureHalfRate219;
+        std::mt19937 rng{219220};
+        unsigned samples=0,disagreements=0;
+        for(unsigned run=0;run<128;++run){
+            CaptureHalfRate219 reference;
+            CaptureHalfRate original;
+            original.setSkipRepeats(false);
+            int64_t pts=1000000;
+            uint64_t sequence=15,picture=0;
+            unsigned periodIndex=0;
+            for(unsigned n=0;n<8192;++n){
+                if(n%121==0){reference.reset();original.reset();}
+                const auto flags=rng();
+                if(flags%257==0)periodIndex=(periodIndex+1)%3;
+                const auto period=std::array<int64_t,3>{166667,166833,0}[periodIndex];
+                const auto nominal=std::max<int64_t>(period,166667);
+                const unsigned skip=flags%41==0?2+flags%8:1;
+                pts+=int64_t(skip)*nominal+int(rng()%20001)-10000;
+                if(flags%67==0)pts-=3*nominal;
+                if(flags%139==0)sequence=1;
+                else sequence+=skip;
+                if(flags%7<2)++picture;
+                const auto* pictureArg=flags%19==0?nullptr:&picture;
+                const uint64_t sequenceArg=flags%5==0||run%4==0?0:sequence;
+                const bool boundary=flags%313==0;
+                const bool before=reference.accept(pts,period,boundary,pictureArg,sequenceArg);
+                const bool after=original.accept(pts,period,boundary,pictureArg,sequenceArg);
+                ++samples;
+                disagreements+=before!=after;
+            }
+            check(reference.shifts()==original.shifts()&&reference.gridKept()==original.gridKept()&&
+                  reference.secondCopiesKept()==original.secondCopiesKept(),"v2.1.9 diagnostics agree on the random sequence");
+        }
+        std::printf("HALF_RATE_PARITY samples=%u disagreements=%u\n",samples,disagreements);
+        check(disagreements==0,"original half-rate chooses exactly the same samples as v2.1.9");
     }
     check(!CaptureHalfRate::supported(30)&&!CaptureHalfRate::supported(18)&&!CaptureHalfRate::supported(120)&&CaptureHalfRate::supported(59.94),"60-to-30 setting does not halve other transport modes");
     {

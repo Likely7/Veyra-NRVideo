@@ -59,10 +59,15 @@ std::string PresetStore::serialize()const{
     // (implying the v35 layout).
     // v37 carries the final mask and the shape bit for either kind of mask.
     // v38 appends the individual content modes to each v37 region block.
-    const bool individualModes=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
+    // v39 accepts the original capture cadence and RIFE in existing fields.
+    const bool newFrameOptions=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
+        return p.settings.content==ContentRate::Capture60To30Original||
+            p.settings.frameGenerationBackend==FrameGenerationBackend::Rife;
+    });
+    const bool individualModes=newFrameOptions||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
         return exclusionModes(p.settings.exclusion)!=0;
     });
-    const bool exclusion=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
+    const bool exclusion=individualModes||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
         return p.settings.exclusion!=ProtectionSettings{}||std::any_of(p.settings.protection.regions.begin(),
             p.settings.protection.regions.end(),[](const auto& region){return region.ellipse;});
     });
@@ -75,7 +80,7 @@ std::string PresetStore::serialize()const{
         for(unsigned i=0;i<p.settings.nrLayerCount;++i)if(p.settings.nrLayers[i].residual.correction.extendedControls())return true;
         return false;});
     // v26 introduces appended resolution IDs; old readers reject this schema.
-    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(individualModes?38:exclusion?37:anySr?36:videoAi?35:dual?34:srStage?33:nrModel?32:dlss?31:correctionExtended?30:correction?29:vfg?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
+    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(newFrameOptions?39:individualModes?38:exclusion?37:anySr?36:videoAi?35:dual?34:srStage?33:nrModel?32:dlss?31:correctionExtended?30:correction?29:vfg?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
     for(auto& p:entries_){const auto& s=p.settings;const auto& m=s.model;const auto& r=s.residual;o<<std::quoted(utf8(p.name))<<' '<<m.intensity<<' '<<m.tone<<' '<<m.structure<<' '<<m.skin<<' '<<m.style<<' '<<m.autoMask<<' '<<m.uiCorrection<<' '<<r.total<<' '<<r.darken<<' '<<r.brighten<<' '<<r.color<<' '<<r.luminance<<' '<<s.nr<<' '<<s.sr<<' '<<s.multiplier<<' '<<int(s.nrPolicy)<<' '<<int(s.flow)<<' '<<int(s.content)<<' '<<s.protection.enabled<<' '<<s.protection.featherPixels;for(auto q:s.protection.regions){const auto box=protectionConstants(q);for(float coordinate:box)o<<' '<<coordinate;}o<<' '<<s.videoSrQuality<<' '<<int(s.frameGenerationBackend)<<' '<<int(s.srTarget)<<' '<<int(s.opticalFlowBackend)<<' '<<s.amdFlowHalfResolution<<' '<<int(s.audioSync)<<' '<<s.audioOffsetMs<<' '<<int(s.nrRuntime)<<' '<<s.captureCompatible<<' '<<s.lowLatency<<' '<<s.forceSdrPreview<<' '<<int(s.captureAudio)<<' '<<s.exportBitrateMbps<<' '<<s.captureFlipVertical<<' '<<int(s.captureBuffer)<<' ';writeColorSettings(o,s.color,utf8(s.color.lutNameString()));o<<' '<<s.videoHdr.enabled<<' '<<s.videoHdr.contrast<<' '<<s.videoHdr.saturation<<' '<<s.videoHdr.middleGray<<' '<<s.videoHdr.peakNits<<' '<<s.nrTemporal;
         if(multi||fullSchema){o<<' '<<s.additionalColorCount;for(unsigned i=0;i<s.additionalColorCount;++i){o<<' ';writeColorSettings(o,s.additionalColors[i],utf8(s.additionalColors[i].lutNameString()));}}
         if(stack||fullSchema){
@@ -112,7 +117,7 @@ std::string PresetStore::serialize()const{
 }
 bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std::wstring& def){
     if(data.size()>kMaxPresetBytes)return false;std::istringstream in(data);in.imbue(std::locale::classic());std::string magic,d;int version=0;size_t count=0;
-    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>38)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
+    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>39)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
     for(size_t i=0;i<count;++i){UserPreset p;std::string n;int policy,flow,content,nr,sr;auto& s=p.settings;auto& m=s.model;auto& r=s.residual;
         if(!(in>>std::quoted(n)>>m.intensity>>m.tone>>m.structure>>m.skin>>m.style>>m.autoMask>>m.uiCorrection>>r.total>>r.darken>>r.brighten>>r.color>>r.luminance>>nr>>sr>>s.multiplier>>policy>>flow>>content))return false;
         if(version>=2){int enabled;if(!(in>>enabled>>s.protection.featherPixels)||enabled<0||enabled>1)return false;s.protection.enabled=enabled!=0;
@@ -123,7 +128,7 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
         if(version>=3&&!(in>>s.videoSrQuality))return false;
         // Retired local FSR4 mode: keep the preset, use RTX Video SR high.
         if(version==20&&s.videoSrQuality==6)s.videoSrQuality=3;
-        if(version>=4){int backend;if(!(in>>backend)||backend<0||backend>(version>=28?7:version>=25?3:version>=13?2:(version>=6&&version<=7?2:1)))return false;
+        if(version>=4){int backend;if(!(in>>backend)||backend<0||backend>(version>=39?7:version>=28?6:version>=25?3:version>=13?2:(version>=6&&version<=7?2:1)))return false;
             // Before v8, 1 meant removed FRUC and 2 meant XeSS. New writes use v10.
             s.frameGenerationBackend=version<8
                 ?(backend==2?FrameGenerationBackend::XeSS:FrameGenerationBackend::Dlss)
@@ -189,6 +194,7 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
         if(version>=34){int enabled=0;uint32_t target=0;if(!(in>>enabled>>target>>s.dualSrQuality)||enabled<0||enabled>1)return false;s.dualSrEnabled=enabled!=0;s.dualSrTarget=pipeline::SrTarget(target);}
         p.name=wide(n);if(!nameOk(p.name)||std::any_of(out.begin(),out.end(),[&](auto& a){return a.name==p.name;})||nr<0||nr>1||sr<0||sr>1)return false;
         s.nr=nr;s.sr=sr;s.nrPolicy=static_cast<pipeline::NrSizePolicy>(policy);s.flow=static_cast<FlowQuality>(flow);s.content=static_cast<ContentRate>(content);
+        if(version<39&&s.content==ContentRate::Capture60To30Original)return false;
         if(version>=37&&!readProtection(in,s.exclusion))return false;
         if(version>=38&&!readExclusionModes(in,s.exclusion))return false;
         if(!s.validate().empty())return false;out.push_back(std::move(p));

@@ -1032,7 +1032,8 @@ QVariantList QmlPlayerBridge::presetSaveParts() const {
     const QStringList qualityNames{tr("性能"), tr("平衡"), tr("质量")};
     const auto content=engine::currentContentRate(s.content);
     const auto cadenceName=content==engine::ContentRate::Transport?tr("去重关闭"):
-        content==engine::ContentRate::Capture60To30?QStringLiteral("60→30"):tr("自动去除");
+        content==engine::ContentRate::Capture60To30?tr("60→30（兼容自动去重）"):
+        engine::isCaptureHalfRate(content)?QStringLiteral("60→30"):tr("自动去除");
     QString flowSummary = flowNames.value(int(s.opticalFlowBackend)) + QStringLiteral(" · ") +
         qualityNames.value(int(s.flow)) + QStringLiteral(" · ") + cadenceName;
     if (s.opticalFlowBackend == engine::OpticalFlowBackend::AmdFidelityFx && s.amdFlowHalfResolution)

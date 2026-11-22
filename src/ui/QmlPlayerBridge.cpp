@@ -208,6 +208,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         auto settings = impl_->facade.pendingSettings();
         const auto& configuration = restored.configurations[size_t(restored.active)];
         configuration.apply(settings);
+        if (restored.originalHalfRate) settings.content = engine::ContentRate::Capture60To30Original;
         const auto previous = impl_->facade.pendingSettings();
         if (settings.validate().empty() && impl_->facade.applySettings(settings,engine::runtimeOrder(configuration.chain))) {
             impl_->session = restored;
@@ -262,6 +263,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                                                     engine::runtimeOrder(candidate.configurations[size_t(candidate.active)].chain))) {
                 error = tr("引擎未接受默认预设，已保留恢复会话");
             } else {
+                candidate.originalHalfRate = settings.content == engine::ContentRate::Capture60To30Original;
                 impl_->session = candidate;
                 impl_->restoreConfiguration(candidate.configurations[size_t(candidate.active)]);
                 impl_->revalidate();
@@ -329,7 +331,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
-            if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){
+            if(engine::validContentRate(static_cast<engine::ContentRate>(rate))){
                 const auto mode=engine::currentContentRate(static_cast<engine::ContentRate>(rate));
                 if(s.content!=mode){s.content=mode;changed=true;}
                 if(rate!=int(mode)){

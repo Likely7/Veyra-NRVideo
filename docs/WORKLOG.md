@@ -1758,3 +1758,9 @@ RTX 5070 同帧对照，DLSS 2X/4X 拖影 7/13、19/39 → 0，FSR 3.1 和 ANR 2
 同一 HUD 分支在 `c9a8b3a3` 上加强背景位移验证、保守修补和柔边合成。可用的外部光流中位数作为候选，仍须通过图像验证。VFG 独立匹配。不可信时当前补帧输入和流保持原样。动态细框 HUD 仍保留同一对帧内的变化。
 
 `scripts/acceptance/build-recording-handoff.py --task codex-hud-review-20261121 --jobs 2` 构建 UI 与 GPU 测试，96 个着色器校验一致。RTX 5070 的 58 个连续匀速配对最大误差 2 px，开启时两后端 119 张生成帧均保住 84 个准心本体像素，原噪点素材开启时强拖影为 0。命中短标记和 VFG 切镜仍见残留。首次录制误带整框剔除，最终关闭后重跑。八段录屏、1440p/4K GPU 耗时、原始日志和未验边界见 [复审验收](<E:/项目/Veyra/reports/codex-hud-review-20261121/RESULTS.md>)。本轮日志、测试程序、录像和临时文件位于 E 盘同名任务目录。本地隔离测试分支。
+
+### 2026-11-22 两档 60→30 采样
+
+从本地 main `eb5fd6d0` 建立 `codex/half-rate-variants-20261121`。兼容自动去重保留 ID 5 与 #156 行为，原版用 ID 6。保留首份相位、PTS 和半速送显策略。两档实时切换只重置采样器。新档的预设 v24 / 会话 v19 在 `.half-rate-variants` 保存，HUD 的预设 v23 / 会话 v18 保留。列表、节点、预设摘要和状态统一显示九语档位名。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-half-rate-variants-20261121 --jobs 2` 构建主程序和相关测试，91 个 shader 校验一致。时序 506 项通过，1,048,576 项对拍差异 0。生产引擎回放菜单原版/兼容档每秒保留 30/20 张，锁 30 时均取首份。来回切换只创建一次图，revision 保持 2。真应用中英文 320 px 界面、老偏好、两档存档与旧应用的版本错误提示通过。历史预设负对照改用未分配后端号，QA stage 补齐 QtQuick 测试依赖后重跑，控件 7 项和全量 238 项通过。命令、诊断和截图见 [验收](<E:/项目/Veyra/reports/codex-half-rate-variants-20261121/RESULTS.md>)。临时文件和日志位于 E 盘同任务目录。实际采集卡和实体主机待测。本地测试分支。

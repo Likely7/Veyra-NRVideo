@@ -1460,6 +1460,64 @@ __declspec(noinline) void testDedupModeMigration() {
               "dedup migration: an unknown mode is refused without overwriting the valid preset");
     }
 }
+__declspec(noinline) void testHalfRateVariants() {
+    const auto path=scratch(L"half-rate-library.v1");
+    PresetLibrary library(path);library.setIncludeBuiltins(false);
+    check(library.load(),"half-rate variants: load empty library");
+    PresetEntry entry;entry.name=L"existing compatibility";entry.chain=toChain({});
+    entry.contents=presetContentMask(PresetContent::Flow);
+    entry.flow=PresetFlowSettings{OpticalFlowBackend::Nvidia,FlowQuality::Balanced,false,ContentRate::Capture60To30};
+    check(library.put(entry),"half-rate variants: old library writes value 5");
+    const auto oldPath=std::filesystem::path(path).concat(L".flow");
+    const auto oldBytes=readBytes(oldPath);
+    auto original=entry;original.name=L"original cadence";original.flow->content=ContentRate::Capture60To30Original;
+    auto frameOptions=fromChain(original.chain,{});
+    frameOptions.frameGenerationBackend=FrameGenerationBackend::Rife;
+    frameOptions.exclusion.enabled=true;
+    frameOptions.exclusion.regions[0]={.1f,.2f,.6f,.8f,true};
+    frameOptions.exclusion.regions[0].content=ExclusionContent::Hud;
+    original.chain=toChain(frameOptions);
+    original.fg.backend=FrameGenerationBackend::Rife;
+    original.contents|=presetContentMask(PresetContent::Chain)|presetContentMask(PresetContent::FrameGeneration);
+    check(!oldBytes.empty()&&library.put(original),"half-rate variants: store original alongside value 5");
+    const auto sidePath=std::filesystem::path(oldPath).concat(L".fg-options");
+    check(readBytes(sidePath).starts_with("VEYRA_PRESET_LIBRARY 25\n")&&readBytes(oldPath)==oldBytes,
+          "half-rate variants: library v25 sidecar preserves rollback copy");
+    PresetLibrary reopened(path);reopened.setIncludeBuiltins(false);
+    check(reopened.load()&&reopened.entries().size()==2&&reopened.entries()[0]==entry&&reopened.entries()[1]==original,
+          "half-rate variants: both entries survive library reopen");
+    const auto exported=scratch(L"original-cadence.vpreset");
+    check(reopened.exportEntry(1,exported),"half-rate variants: original cadence exports");
+    auto importedPath=scratch(L"half-import.v1");
+    PresetLibrary imported(importedPath);imported.setIncludeBuiltins(false);
+    std::wstring name;
+    check(imported.load()&&imported.importFile(exported,name)&&imported.entries().size()==1&&imported.entries()[0]==original,
+          "half-rate variants: .vpreset imports its original cadence");
+    check(reopened.erase(1),"half-rate variants: delete original-only preset");
+    PresetLibrary finalReader(path);finalReader.setIncludeBuiltins(false);
+    check(finalReader.load()&&finalReader.entries().size()==1&&finalReader.entries()[0]==entry&&
+          readBytes(oldPath)==oldBytes,"half-rate variants: subsequent edits keep using sidecar");
+
+    const auto sessionPath=scratch(L"half-rate-session.v1");
+    auto session=std::make_unique<ChainSession>(ChainSession::initial({}));
+    ChainSessionStore writer(sessionPath);
+    check(writer.save(*session),"half-rate variants: save legacy mode session");
+    const auto oldSession=readBytes(sessionPath);
+    session->originalHalfRate=true;
+    session->configurations[0].chain=original.chain;
+    session->configurations[0].fgBackend=FrameGenerationBackend::Rife;
+    check(!oldSession.empty()&&writer.save(*session),"half-rate variants: save v20 session with RIFE and HUD");
+    const auto sessionSide=std::filesystem::path(sessionPath).concat(L".fg-options");
+    check(readBytes(sessionPath)==oldSession&&readBytes(sessionSide).starts_with("VEYRA_CHAIN_SESSION 20\n"),
+          "half-rate variants: separate session leaves old session intact");
+    ChainSessionStore reader(sessionPath);
+    auto restored=std::make_unique<ChainSession>();
+    check(reader.load(*restored)&&*restored==*session,"half-rate variants: original session round trip");
+    session->originalHalfRate=false;
+    check(writer.save(*session)&&readBytes(sessionPath)==oldSession,"half-rate variants: leave original mode");
+    ChainSessionStore switched(sessionPath);
+    check(switched.load(*restored)&&*restored==*session,"half-rate variants: restart after leaving original mode");
+}
 __declspec(noinline) void testAutomaticMultiplierCompatibility() {
     auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
     check(session->select(ChainMode::Node), "auto FG: initialize editor mode");
@@ -1482,9 +1540,10 @@ __declspec(noinline) void testAutomaticMultiplierCompatibility() {
 }
 int main(int argc,char** argv) {
     if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
-        testDedupModeMigration();testFlowStorage();testFlowApplication();return failures?1:0;
+        testDedupModeMigration();testHalfRateVariants();testFlowStorage();testFlowApplication();return failures?1:0;
     }
     testDedupModeMigration();
+    testHalfRateVariants();
     testAutomaticMultiplierCompatibility();
     testOutputControlStorage();
     testEffectNodeStorage();

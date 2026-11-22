@@ -1483,17 +1483,30 @@
    "ru": "Захват с частотой 60 кадров/с"
   },
   {
-   "zh": "60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。",
+   "zh": "60→30 每两帧取一帧，保持约 30 帧的节奏，游戏低于 30 帧时可能顿卡。兼容自动去重会跳过短时间重复的画面，菜单可能低于 30 帧。自动去除按画面变化识别帧率。",
    "src": "qml/DedupModeRow.qml",
-   "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：偵測並跳過重複畫面。",
-   "en": "60→30 keeps every other frame and skips repeated images when the game runs below 30 fps. Automatic removal detects and skips duplicate images.",
-   "ja": "60→30 は2フレームに1枚を保持し、ゲームが30fpsを下回るときは重複した映像をスキップします。自動除去は重複した映像を検出してスキップします。",
-   "ko": "60→30은 두 프레임마다 한 프레임을 남기고, 게임이 30fps 아래로 떨어지면 반복된 화면을 건너뜁니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다.",
-   "es": "60→30 conserva un fotograma de cada dos y omite los duplicados cuando el juego baja de 30 FPS. La eliminación automática detecta y omite fotogramas repetidos.",
-   "fr": "60→30 conserve une image sur deux et ignore les doublons lorsque le jeu passe sous 30 i/s. La suppression automatique détecte et ignore les images répétées.",
-   "de": "60→30 behält jedes zweite Bild und überspringt Duplikate, wenn das Spiel unter 30 FPS fällt. Die automatische Entfernung erkennt und überspringt doppelte Bilder.",
-   "pt-BR": "60→30 mantém um quadro a cada dois e pula os repetidos quando o jogo fica abaixo de 30 FPS. A remoção automática detecta e pula quadros duplicados.",
-   "ru": "60→30 оставляет каждый второй кадр и пропускает повторы, когда частота игры падает ниже 30 FPS. Автоматическое удаление находит и пропускает повторяющиеся кадры."
+   "zh-TW": "60→30 每兩幀取一幀，保持約 30 幀的節奏，遊戲低於 30 幀時可能頓挫。相容自動去重會跳過短時間重複的畫面，選單可能低於 30 幀。自動去除按畫面變化辨識幀率。",
+   "en": "60→30 keeps every other frame at about 30 fps. Games below 30 fps may stutter. Adaptive Dedup skips brief repeats, so menus can drop below 30 fps. Auto Removal detects the frame rate from picture changes.",
+   "ja": "60→30 は2フレームに1枚を残し、約30fpsの間隔を維持します。ゲームが30fps未満になると映像が引っかかることがあります。自動重複除去対応では短時間の重複をスキップするため、メニューで30fpsを下回る場合があります。自動除去は映像の変化からフレームレートを判定します。",
+   "ko": "60→30은 두 프레임마다 하나를 남겨 약 30fps의 간격을 유지합니다. 게임이 30fps 아래로 떨어지면 끊길 수 있습니다. 자동 중복 제거 호환은 짧게 반복되는 화면을 건너뛰므로 메뉴에서 30fps 아래로 내려갈 수 있습니다. 자동 제거는 화면 변화로 프레임 속도를 판별합니다.",
+   "es": "60→30 conserva un fotograma de cada dos y mantiene unos 30 FPS. Si el juego baja de 30 FPS, puede haber tirones. La deduplicación adaptativa omite repeticiones breves y puede bajar de 30 FPS en los menús. La eliminación automática detecta la frecuencia a partir de los cambios de imagen.",
+   "fr": "60→30 garde une image sur deux pour maintenir environ 30 i/s. Des saccades sont possibles si le jeu descend sous 30 i/s. La suppression adaptative ignore les brèves répétitions et peut descendre sous 30 i/s dans les menus. Le mode automatique détermine la cadence à partir des changements d’image.",
+   "de": "60→30 behält jedes zweite Bild und hält etwa 30 FPS. Spiele unter 30 FPS können ruckeln. Die adaptive Duplikaterkennung überspringt kurze Wiederholungen, sodass Menüs unter 30 FPS fallen können. Die Automatik ermittelt die Bildrate aus Bildänderungen.",
+   "pt-BR": "60→30 mantém um quadro a cada dois, com cadência de cerca de 30 FPS. Jogos abaixo de 30 FPS podem engasgar. A remoção adaptativa ignora repetições breves, então menus podem ficar abaixo de 30 FPS. A remoção automática detecta a taxa de quadros pelas mudanças na imagem.",
+   "ru": "60→30 оставляет каждый второй кадр, сохраняя темп около 30 FPS. При частоте игры ниже 30 FPS возможны рывки. Адаптивный режим пропускает короткие повторы, поэтому в меню частота может быть ниже 30 FPS. Автоматический режим определяет частоту по изменениям изображения."
+  },
+  {
+   "zh": "60→30（兼容自动去重）",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "60→30（相容自動去重）",
+   "en": "60→30 (Adaptive Dedup)",
+   "ja": "60→30（自動重複除去対応）",
+   "ko": "60→30 (자동 중복 제거 호환)",
+   "es": "60→30 (deduplicación adaptativa)",
+   "fr": "60→30 (suppression adaptative des doublons)",
+   "de": "60→30 (adaptive Duplikaterkennung)",
+   "pt-BR": "60→30 (remoção adaptativa de duplicados)",
+   "ru": "60→30 (адаптивное удаление дублей)"
   },
   {
    "zh": "8 位 4:2:0 · SDR，所需带宽较低。",
@@ -40301,6 +40314,19 @@
    "de": "Atomic Save des Presets ist fehlgeschlagen; die ursprüngliche Datei wurde nicht ersetzt und die temporäre Datei wird beibehalten",
    "pt-BR": "A gravação atómica da predefinição falhou; o ficheiro original não foi substituído e o ficheiro temporário é mantido",
    "ru": "Атомное сохранение предустановленного файла не удалось; исходный файл не был заменен и временный файл сохранен."
+  },
+  {
+   "zh": "预设去除重复帧档位与文件版本不匹配",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設的去除重複幀模式與檔案版本不符",
+   "en": "The preset’s duplicate-removal mode is incompatible with its file version",
+   "ja": "プリセットの重複除去モードとファイルのバージョンが一致しません",
+   "ko": "프리셋의 중복 제거 모드가 파일 버전과 호환되지 않습니다",
+   "es": "El modo de eliminación de duplicados del preajuste no es compatible con la versión del archivo",
+   "fr": "Le mode de suppression des doublons du préréglage est incompatible avec la version du fichier",
+   "de": "Der Modus zur Duplikatentfernung ist mit der Dateiversion der Voreinstellung inkompatibel",
+   "pt-BR": "O modo de remoção de duplicados da predefinição é incompatível com a versão do arquivo",
+   "ru": "Режим удаления дублей в пресете несовместим с версией файла"
   },
   {
    "zh": "预设参数无效",

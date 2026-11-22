@@ -224,6 +224,25 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
     std::unique_ptr<engine::PlayerSnapshot> start,end;
     const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&(!fg||start->fgActive)&&(!requireNr||start->nrActive)&&(!requireSr||start->srActive);},25s);
     std::cout<<(started?"PASS ":"FAIL ")<<(fg?"replay starts with frame generation":"replay starts without frame generation")<<std::endl;
+    if(mode==L"half-switch"){
+        bool ok=started;
+        for(auto next:{engine::ContentRate::Capture60To30Original,engine::ContentRate::Capture60To30}){
+            const auto before=std::make_unique<engine::PlayerSnapshot>(engine.snapshot());
+            auto requested=before->applied;
+            requested.content=next;
+            ok=ok&&engine.requestSettings(requested)&&pumpUntil([&]{
+                end=std::make_unique<engine::PlayerSnapshot>(engine.snapshot());
+                return end->applied.content==next&&end->frames>=before->frames+5;
+            },8s);
+            ok=ok&&end&&end->captureHalfRate&&end->applied.revision==before->applied.revision;
+            if(!ok)break;
+        }
+        engine.stop();
+        const bool drained=pumpUntil([&]{return engine.idle();},8s);
+        std::cout<<(ok&&drained?"PASS ":"FAIL ")<<"half-rate switch keeps source, graph revision and half-rate scheduling"<<std::endl;
+        Logger::instance().flush();
+        return ok&&drained?0:1;
+    }
     const auto begin=std::chrono::steady_clock::now();
     wchar_t durationText[16]{};
     const int sampleSeconds=GetEnvironmentVariableW(L"VEYRA_TEST_CADENCE_SECONDS",durationText,16)?std::clamp(_wtoi(durationText),5,75):20;
@@ -234,7 +253,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
              <<" generatedPresented="<<end->metrics.flow.counters.generatedPresented-start->metrics.flow.counters.generatedPresented
              <<" fgInvalid="<<end->metrics.flow.counters.fgInvalid-start->metrics.flow.counters.fgInvalid
              <<" submit1PercentLow="<<end->submissionLow1Fps.value_or(0)<<std::endl;
-    const bool ran=started&&!end->failed&&end->frames>start->frames+300;
+    const auto minimumFrames=engine::isCaptureHalfRate(start->applied.content)?sampleSeconds*15:300;
+    const bool ran=started&&!end->failed&&end->frames>start->frames+minimumFrames;
     std::cout<<(ran?"PASS ":"FAIL ")<<"content-cadence replay runs"<<std::endl;
     engine.stop();const bool drained=pumpUntil([&]{return engine.idle();},8s);
     std::cout<<(drained?"PASS ":"FAIL ")<<"content-cadence replay drains"<<std::endl;
@@ -388,7 +408,9 @@ int wmain(int argc,wchar_t**argv){
         else if(dedupMode.starts_with(L"vfg-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;dedupMode.erase(0,4);}
         else if(dedupMode.starts_with(L"xess-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;dedupMode.erase(0,5);}
         else if(dedupMode.starts_with(L"fsr-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;dedupMode.erase(0,4);}
-        options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:dedupMode==L"half"?engine::ContentRate::Capture60To30:
+        options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:
+            dedupMode==L"half"||dedupMode==L"half-switch"?engine::ContentRate::Capture60To30:
+            dedupMode==L"half-original"?engine::ContentRate::Capture60To30Original:
             dedupMode==L"fps30"?engine::ContentRate::Fps30:engine::ContentRate::Transport;
         engine.setVolume(0,true);ShowWindow(window,SW_SHOWNOACTIVATE);
     }
