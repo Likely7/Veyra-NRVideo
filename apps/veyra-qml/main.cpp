@@ -441,11 +441,22 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
         void* frames[32]{};
         const USHORT count = CaptureStackBackTrace(0, 32, frames, nullptr);
         std::string trace;
-        const auto base = module ? reinterpret_cast<uintptr_t>(module) : uintptr_t(0);
         for (USHORT k = 0; k < count; ++k) {
             const auto frame = reinterpret_cast<uintptr_t>(frames[k]);
             if (!trace.empty()) trace += ' ';
-            trace += std::format("{:X}", base && frame >= base ? frame - base : frame);
+            HMODULE frameModule = nullptr;
+            wchar_t framePath[MAX_PATH]{};
+            const bool named = GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                                      GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                                  reinterpret_cast<LPCWSTR>(frames[k]), &frameModule)
+                && GetModuleFileNameW(frameModule, framePath, MAX_PATH);
+            if (named) {
+                trace += std::format("{}+0x{:X}",
+                    QString::fromStdWString(std::filesystem::path(framePath).filename().wstring()).toStdString(),
+                    frame - reinterpret_cast<uintptr_t>(frameModule));
+            } else {
+                trace += std::format("0x{:X}", frame);
+            }
         }
         veyra::log::error("crash", std::format("stack(module offsets): {}", trace));
     }
