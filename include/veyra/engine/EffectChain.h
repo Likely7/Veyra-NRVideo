@@ -223,6 +223,7 @@ struct ChainGlobalSettings {
     uint32_t dlssSrModel = 0;   // EnhancementSettings::dlssSrModel
     pipeline::SrPrescale srPrescale = pipeline::SrPrescale::Off;   // EnhancementSettings::srPrescale
     pipeline::SrOutput srOutput = pipeline::SrOutput::Target;      // EnhancementSettings::srOutput
+    bool smartSr = false;                                           // EnhancementSettings::smartSr
     bool dualSrEnabled = false;
     pipeline::SrTarget dualSrTarget = pipeline::SrTarget::Uhd4K;
     uint32_t dualSrQuality = kDefaultVideoSrQuality;

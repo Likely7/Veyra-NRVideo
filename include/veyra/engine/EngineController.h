@@ -89,6 +89,10 @@ struct PlayerSnapshot {
     bool nrActive=false,srActive=false,fgActive=false;
     bool nrAutoActive=false;
     uint32_t nrAutoPercent=0,nrAutoWidth=0,nrAutoHeight=0;
+    // Smart SR: the preview graph detects the render extent; settled once a verdict
+    // held for three probes; the extent SR enlarges (zero: the ordinary SR path).
+    bool smartSrActive=false,smartSrSettled=false;
+    uint32_t smartSrWidth=0,smartSrHeight=0;
     std::wstring nrAutoStatus;
     // NR inference reuse: whether the preview graph runs it, whether Auto
     // chooses the level, the level (0 infers every frame, 1/2/3 reuse one

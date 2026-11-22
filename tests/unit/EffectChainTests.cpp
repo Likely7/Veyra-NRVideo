@@ -1606,6 +1606,93 @@ static void testSupersampleSr(){
     }
 }
 
+// Smart SR (2026-11-22): render extent math, the detection verdict, settings
+// normalization and the graph description.
+static void testSmartSr(){
+    using namespace veyra;using pipeline::Extent;using pipeline::SrOutput;using pipeline::SrTarget;
+    {
+        check(pipeline::smartSrRenderExtent({3840,2160},1080)==Extent{1920,1080}&&pipeline::smartSrRenderExtent({1920,1080},721)==Extent{1280,720}&&
+              !pipeline::smartSrRenderExtent({3840,2160},2160).valid()&&!pipeline::smartSrRenderExtent({1920,1080},1440).valid(),
+              "smart SR: a render extent keeps the aspect, is even and only reduces");
+        const auto x2=pipeline::smartSrInverseAxis(3840,1920),x15=pipeline::smartSrInverseAxis(3840,2560);
+        check(x2.p==2&&x2.q==1&&x2.taps.size()==1&&x15.p==3&&x15.q==2&&x15.taps.size()==2&&pipeline::smartSrInverseAxis(1080,1080).taps.empty(),
+              "smart SR: one tap row per phase of the scale ratio");
+        check(pipeline::smartSrSelfCheck(x2)<1e-3&&pipeline::smartSrSelfCheck(x15)<1e-3,"smart SR: the inverse recovers a 2x and a 1.5x bilinear upscale");
+        bool phases=true;double worst=0.0;
+        for(const uint32_t h:pipeline::kSmartSrCandidates){
+            const auto e=pipeline::smartSrRenderExtent({3840,2160},h);
+            const auto ax=pipeline::smartSrInverseAxis(3840,e.width),ay=pipeline::smartSrInverseAxis(2160,e.height);
+            phases=phases&&e.width*9==e.height*16&&ax.q&&ax.q<=pipeline::kSmartSrMaxPhases&&ay.q==ax.q;
+            worst=std::max({worst,pipeline::smartSrSelfCheck(ax),pipeline::smartSrSelfCheck(ay)});
+        }
+        check(phases,"smart SR: every 4K candidate is exact 16:9 within the phase limit");
+        std::printf("smart SR: largest candidate inverse error %.3e\n",worst);
+        check(worst<2e-2,"smart SR: every 4K candidate inverts its bilinear upscale");
+    }
+    {
+        constexpr size_t n=pipeline::kSmartSrCandidates.size();
+        const auto at=[](uint32_t h){return size_t(std::find(pipeline::kSmartSrCandidates.begin(),pipeline::kSmartSrCandidates.end(),h)-pipeline::kSmartSrCandidates.begin());};
+        std::array<double,n> upscaled{};
+        for(size_t i=0;i<n;++i)upscaled[i]=i<at(1080)?0.1:1e-4*(1.0+double(i-at(1080)));
+        upscaled[at(1152)]=6e-4;
+        auto v=pipeline::smartSrDecide(upscaled);
+        check(v.height==1080&&v.spatial&&v.knee>100&&v.notch>2,"smart SR: a bilinear 1080p upscale settles at 1080");
+        std::array<double,n> native{};
+        for(size_t i=0;i<n;++i)native[i]=0.05*std::pow(0.85,double(i));
+        v=pipeline::smartSrDecide(native);
+        check(!v.height&&!v.spatial,"smart SR: a smooth error curve (native 4K) gives no render height");
+        std::array<double,n> fhd{};
+        const double nan=std::numeric_limits<double>::quiet_NaN();
+        for(size_t i=0;i<n;++i)fhd[i]=pipeline::kSmartSrCandidates[i]>=1080?nan:i<at(720)?0.08:2e-4*(1.0+double(i-at(720)));
+        fhd[at(810)]=1.2e-3;
+        v=pipeline::smartSrDecide(fhd);
+        check(v.height==720&&v.spatial,"smart SR: unmeasured heights of a 1080p source are skipped (720p render)");
+        for(size_t i=0;i<n;++i)fhd[i]=pipeline::kSmartSrCandidates[i]>=1080?nan:i<at(1008)?0.08:1e-4;
+        v=pipeline::smartSrDecide(fhd);
+        check(v.height==1008&&v.notch==1.0&&v.spatial,"smart SR: the top measured height needs no notch past the source");
+        std::array<double,n> flat{};flat.fill(1.0);
+        check(!pipeline::smartSrDecide(flat).height,"smart SR: no fit under 2 % gives no render height");
+    }
+    EnhancementSettings s;s.nr=false;s.sr=true;s.multiplier=1;s.videoSrQuality=4;s.srTarget=SrTarget::Uhd4K;
+    check(!s.smartSr&&s.validate().empty(),"smart SR: off by default");
+    auto on=s;on.smartSr=true;
+    {
+        check(on.validate().empty()&&on.activeVideoSettings().smartSr,"smart SR: standard RTX Video SR keeps the switch");
+        for(const unsigned q:{0u,kVideoSrFsr,16u,23u}){auto other=on;other.videoSrQuality=q;check(!other.activeVideoSettings().smartSr,"smart SR: other SR families leave it inactive");}
+        auto dual=on;dual.dualSrEnabled=true;dual.srPrescale=pipeline::SrPrescale::P1080;
+        auto shrink=on;shrink.srTarget=SrTarget::Uhd8K;shrink.srOutput=SrOutput::Uhd4K;
+        auto off=on;off.sr=false;
+        check(!dual.activeVideoSettings().smartSr&&!shrink.activeVideoSettings().smartSr&&!off.activeVideoSettings().smartSr,
+              "smart SR: double SR, the supersample shrink and SR off leave it inactive");
+        check(requiresGraphRebuild(s,on),"smart SR: the switch rebuilds the graph");
+        auto dlss=s;dlss.videoSrQuality=0;auto dlssOn=dlss;dlssOn.smartSr=true;
+        check(!requiresGraphRebuild(dlss,dlssOn),"smart SR: an inactive switch does not rebuild");
+        EnhancementSettings restored;ChainGlobalSettings::capture(on).apply(restored);
+        check(restored.smartSr,"smart SR: chain globals carry the switch");
+    }
+    {
+        StageRequest r;r.sr=true;r.width=3840;r.height=2160;r.nvidiaAdapter=true;r.uncompressedSource=true;
+        pipeline::EnhanceGraphDesc d;describeStages(r,s,d);
+        check(!d.enableSr&&!d.smartSr,"smart SR: off, raw 4K capture at a 4K target still skips SR");
+        describeStages(r,on,d);
+        check(d.enableSr&&d.smartSr&&d.smartSrNativeCopy&&d.srInputWidth==3840&&d.workWidth==3840&&d.validateFixedExecutionPlan().empty(),
+              "smart SR: raw 4K capture keeps the SR stage and copies until a render extent is found");
+        r.uncompressedSource=false;describeStages(r,on,d);
+        check(d.enableSr&&d.smartSr&&!d.smartSrNativeCopy,"smart SR: compressed 4K keeps the same-size repair without a render extent");
+        r.uncompressedSource=true;r.width=1920;r.height=1080;describeStages(r,on,d);
+        check(d.enableSr&&d.smartSr&&!d.smartSrNativeCopy&&d.srInputWidth==1920&&d.workWidth==3840,"smart SR: raw 1080p capture keeps its upscale to 4K");
+        r.width=3840;r.height=2160;
+        auto q=r;q.stillImage=true;describeStages(q,on,d);check(!d.smartSr,"smart SR: still images do not detect");
+        q=r;q.exportJob=true;describeStages(q,on,d);check(!d.smartSr,"smart SR: exports do not detect");
+        q=r;q.nvidiaAdapter=false;describeStages(q,on,d);check(!d.smartSr,"smart SR: other adapters do not detect");
+        auto dlss=on;dlss.videoSrQuality=0;describeStages(r,dlss,d);check(!d.enableSr&&!d.smartSr,"smart SR: DLSS SR is not changed by the switch");
+        auto dual=on;dual.dualSrEnabled=true;dual.srPrescale=pipeline::SrPrescale::P1080;describeStages(r,dual,d);
+        check(d.dualSr&&!d.smartSr,"smart SR: double SR keeps its own reduction");
+        auto shrink=on;shrink.srTarget=SrTarget::Uhd8K;shrink.srOutput=SrOutput::Uhd4K;describeStages(r,shrink,d);
+        check(!d.smartSr&&d.srOutputWidth==7680,"smart SR: the supersample shrink keeps its own path");
+    }
+}
+
 int main() {
     {
         EnhancementSettings before;before.nr=before.sr=false;
@@ -1699,6 +1786,7 @@ int main() {
     testWideChains();
     testThreeStepSr();
     testSupersampleSr();
+    testSmartSr();
     {
         using namespace veyra;using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;
         EnhancementSettings s;s.sr=true;s.nr=false;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;

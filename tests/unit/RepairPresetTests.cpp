@@ -366,4 +366,25 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   std::ifstream header(path);std::string magic;int version=0;header>>magic>>version;
   pass=pass&&version==37;ok&=pass;std::cout<<"exclusion schema37 rectangle ellipse feather roundtrip="<<pass<<'\n';
  }
+ // Smart SR (v38): written only when a preset turns it on, after the v37 layout;
+ // a value other than 0/1 fails the file, which is then kept.
+ {
+  EnhancementSettings smart;smart.sr=true;smart.videoSrQuality=4;smart.smartSr=true;
+  auto path=p;path+=L"-smart-sr";std::error_code ec;std::filesystem::remove(path,ec);
+  PresetStore writer(path);bool pass=writer.load()&&writer.put(L"smart",smart);PresetStore reader(path);
+  pass=pass&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==smart;
+  std::ifstream header(path);std::string magic;int version=0;header>>magic>>version;header.close();pass=pass&&version==38;
+  std::ifstream in(path,std::ios::binary);std::string text((std::istreambuf_iterator<char>(in)),{});in.close();
+  const auto end=text.find_last_not_of("\r\n");pass=pass&&end!=std::string::npos&&text[end]=='1';
+  if(pass){
+   text[end]='2';auto broken=p;broken+=L"-smart-sr-invalid";std::ofstream(broken,std::ios::binary)<<text;
+   PresetStore bad(broken);pass=!bad.load();
+   std::ifstream kept(broken,std::ios::binary);pass=pass&&std::string((std::istreambuf_iterator<char>(kept)),{})==text;
+  }
+  EnhancementSettings plain;plain.sr=true;plain.videoSrQuality=4;
+  auto plainPath=p;plainPath+=L"-smart-sr-off";std::filesystem::remove(plainPath,ec);
+  PresetStore off(plainPath);pass=pass&&off.load()&&off.put(L"plain",plain);
+  std::ifstream offHeader(plainPath);offHeader>>magic>>version;pass=pass&&version==21;
+  ok&=pass;std::cout<<"smart SR schema38 roundtrip, invalid value kept, off stays v21="<<pass<<'\n';
+ }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

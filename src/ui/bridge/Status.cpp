@@ -41,6 +41,16 @@ QString QmlPlayerBridge::srStageNote() const {
     return notes.join(QStringLiteral("；"));
 }
 
+// Smart SR as the running graph has it: still measuring, the render extent SR
+// enlarges, or a source that was not upscaled by its sender.
+QString QmlPlayerBridge::smartSrStatus() const {
+    const auto& s = impl_->snapshot;
+    if (!s.running || !s.smartSrActive) return {};
+    if (s.smartSrWidth && s.smartSrHeight)
+        return tr("检测到渲染分辨率 %1x%2，按此还原后超分").arg(s.smartSrWidth).arg(s.smartSrHeight);
+    if (!s.smartSrSettled) return tr("正在检测渲染分辨率…");
+    return tr("画面不是放大输出，按原画面处理");
+}
 double QmlPlayerBridge::queuedFrames() const {
     // Valid output opportunities held by presenter jobs, not cumulative skips
     // and not the OS/display queue. Zero is meaningful only with a live window.

@@ -9,7 +9,8 @@ class VideoSrBackend {
 public:
     ~VideoSrBackend(){release();}
     bool create(NgxCoreHost&,ID3D12GraphicsCommandList*,unsigned width=0,unsigned height=0,unsigned outWidth=0,unsigned outHeight=0);
-    bool evaluate(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*,unsigned);
+    // inputWidth/inputHeight: top-left input region to read; zero reads the whole input.
+    bool evaluate(ID3D12GraphicsCommandList*,ID3D12Resource*,ID3D12Resource*,unsigned,unsigned inputWidth=0,unsigned inputHeight=0);
     bool release();
     const void* identity() const { return handle_; }
     bool duplicateCreation() const { return duplicateCreation_; }

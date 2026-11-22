@@ -635,7 +635,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
 ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     ChainGlobalSettings c;
     c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality; c.dlssSrModel = s.dlssSrModel;
-    c.srPrescale = s.srPrescale; c.srOutput = s.srOutput;
+    c.srPrescale = s.srPrescale; c.srOutput = s.srOutput; c.smartSr = s.smartSr;
     c.dualSrEnabled=s.dualSrEnabled;c.dualSrTarget=s.dualSrTarget;c.dualSrQuality=s.dualSrQuality;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
     c.vfgQuality=s.vfgQuality;
@@ -651,7 +651,7 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
     s.hdrCurve=hdrCurve;s.hdrMetadata=hdrMetadata;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality; s.dlssSrModel = dlssSrModel;
-    s.srPrescale = srPrescale; s.srOutput = srOutput;
+    s.srPrescale = srPrescale; s.srOutput = srOutput; s.smartSr = smartSr;
     s.dualSrEnabled=dualSrEnabled;s.dualSrTarget=dualSrTarget;s.dualSrQuality=dualSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.vfgQuality=vfgQuality;
@@ -673,7 +673,7 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality && dlssSrModel == other.dlssSrModel &&
-        srPrescale == other.srPrescale && srOutput == other.srOutput &&
+        srPrescale == other.srPrescale && srOutput == other.srOutput && smartSr == other.smartSr &&
         dualSrEnabled==other.dualSrEnabled&&dualSrTarget==other.dualSrTarget&&dualSrQuality==other.dualSrQuality&&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
@@ -777,6 +777,8 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.srTarget != next.srTarget) return true;
     // The double SR reduction and the supersample shrink change what SR reads and writes.
     if (previous.srPrescale != next.srPrescale || previous.srOutput != next.srOutput) return true;
+    // Smart SR adds the detection probe and the descale resources.
+    if (previous.smartSr != next.smartSr) return true;
     if(previous.dualSrEnabled!=next.dualSrEnabled||previous.dualSrTarget!=next.dualSrTarget||previous.dualSrQuality!=next.dualSrQuality)return true;
     // A different DLSS SR model (render preset) needs a new SR feature.
     if (previous.dlssSrModel != next.dlssSrModel) return true;

@@ -431,6 +431,11 @@ struct EnhancementSettings {
     // ignores it.
     pipeline::SrPrescale srPrescale=pipeline::SrPrescale::Off;
     pipeline::SrOutput srOutput=pipeline::SrOutput::Target;
+    // Smart SR (pipeline/SmartSr.h): a single standard RTX Video SR on live SDR
+    // video measures the render extent of a source that upscaled itself (console
+    // 4K output of a 1080p/1440p game), inverts that upscale and enlarges the
+    // render instead. Native frames keep the ordinary SR. Off by default.
+    bool smartSr=false;
     bool dualSrEnabled=false;
     pipeline::SrTarget dualSrTarget=pipeline::SrTarget::Uhd4K;
     uint32_t dualSrQuality=kDefaultVideoSrQuality; // any SR value (DLSS SR, RTX Video SR family/tier, FSR), independent of the base
@@ -550,6 +555,8 @@ struct EnhancementSettings {
         }
         // The supersample shrink belongs to a single RTX Video SR pass.
         if(!sr||!rtxVideoSr(videoSrQuality)||dualSrEnabled)active.srOutput=defaults.srOutput;
+        // Smart SR runs with one standard RTX Video SR pass and no supersample shrink.
+        if(!sr||!ngxVideoSr(videoSrQuality)||dualSrEnabled||active.srOutput!=pipeline::SrOutput::Target)active.smartSr=defaults.smartSr;
         if(multiplier<=1){
             active.frameGenerationBackend=defaults.frameGenerationBackend;active.vfgQuality=defaults.vfgQuality;
             active.fgMotion=defaults.fgMotion;active.fgStrictAdmission=defaults.fgStrictAdmission;

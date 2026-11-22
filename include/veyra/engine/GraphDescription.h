@@ -150,9 +150,17 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // ResolutionPlan::srApplied describes enlargement, not SDK execution. Raw capture has
     // no compression artifacts: there a source already at the target skips SR as in 2.0.6
     // (5090 field log 57: 4K->4K VSR cost ~8.7 ms a frame and pushed 60 fps over budget).
-    const bool nativeVideoRestore=request.sr&&!request.stillImage&&!request.uncompressedSource&&request.nvidiaAdapter&&
+    // Smart SR (live video, one standard RTX Video SR pass, no supersample shrink)
+    // re-renders a raw frame from its detected render extent, so it keeps the stage
+    // there; until it finds one, such a frame at the work size is copied as before.
+    const bool smartSr=settings.smartSr&&request.sr&&!request.stillImage&&!request.exportJob&&request.nvidiaAdapter&&
+        ngxVideoSr(settings.videoSrQuality)&&!dualSrRuns(settings,request.nvidiaAdapter,request.stillImage)&&
+        srOutput==pipeline::SrOutput::Target;
+    const bool nativeVideoRestore=request.sr&&!request.stillImage&&(!request.uncompressedSource||smartSr)&&request.nvidiaAdapter&&
         ngxVideoSr(settings.videoSrQuality);
     desc.enableSr=(plan.srApplied||nativeVideoRestore)&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
+    desc.smartSr=smartSr&&desc.enableSr;
+    desc.smartSrNativeCopy=desc.smartSr&&request.uncompressedSource&&!plan.srApplied;
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
     desc.nrBeforeSr=!request.stillImage&&!request.exportJob&&lowLatency&&desc.enableNr&&desc.enableSr;
     desc.enableNvofStandalone=desc.enableNr;
