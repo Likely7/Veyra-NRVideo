@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-22 GitHub 社区 PR 与问题交接
+
+在 `codex/github-prs-20261122` 以 `nrvideo/main` 的 `c6633121` 为基线，逐个核验交接锁定的 17 个 PR head，再用 `git merge --no-ff` 合入。整合采集启动与看门狗、固定刷新撕裂诊断、HUD 保护和两档 60→30。保留旧版可读的预设和会话，RIFE、HUD 和原版半速的组合使用独立 v25/v20 文件。HDMI 码流直通默认关闭，两侧背景默认黑色，PSN 指南优先列 chiaki-ng。
+
+USB 采集同图音频启动失败可退回纯视频，连续两次重开无帧时释放设备后最后重试。补齐 DirectShow 状态、Windows PnP 接口时间和原始 HRESULT。MJPEG 手动范围贯穿渲染。AMD 光流从源尺寸计算，FSR 校验尺寸并记录资源诊断，RX 7000 NR 后台初始化。Ada VFG 中档故障可降档并缓存，Xbox 软解随真实源尺寸。补齐 Ctrl+V 聚焦、隔行场频、HTTP MKV/WebM 内封字幕和关闭补帧时的预设匹配。RIFE 缺组件时菜单显示 `runtime/rife` 并拒绝启用。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-github-prs-20261122 --jobs 2` 使用同任务工作树、依赖和构建目录。集成构建 31 个目标通过，后续增量构建覆盖 Qt、采集、字幕、HDR、VFG 及 RIFE 界面检查。编译记录中可见修复的 FFmpeg 导入路径和 NASM 包含路径。FFmpeg n9.0.1 重编并核对 256-slice 与参考帧池补丁，CI overlay 追加第三处补丁及哈希。对应源码随本机交付记录保存。CI 工作流只做本地核验。
+
+验收包括 245 项 Qt Quick、九语词库、102 项 Chiaki CTest、4 MiB UDP 和加密反馈回环、21 项核心回归、1,048,576 样本半速对拍零差异。AMD 核显通过 HDR10 + SMAA + FSR + 半尺寸光流 + FRC，呈现 12 个生成帧。4K AMD 光流 12 个有效样本的 P95 为原尺寸 19.49 ms、半尺寸 4.41 ms。RTX 5070 的 VFG 注入通过降档、重启和同进程切到 DLSS，冷切换曾进入约 12 秒的 PTX JIT。合成 MJPEG 的自动/有限范围黑位为 16/0。Xbox 软件解码夹具 1440p60 通过。无 RIFE 运行库的 Qt bridge 检查通过。短字幕夹具改用确定的门控和最终字幕断言，保留原渐进加载测试。
+
+输出目录为 `E:/项目/Veyra/{build,logs,tests,tmp,reports}/codex-github-prs-20261122`。逐项状态、失败与复测记录见 [整合与验收](<E:/项目/Veyra/reports/codex-github-prs-20261122/INTEGRATION.md>)。本机使用私有配置与夹具。实体 USB 设备、PS5、Xbox、RTX 40 和 RX 7000 独显仍缺现场验证。#47 的 Bob 底部绿线缺报告者片源，裁切边界已核验。单长 GOP MPEG-TS 在 EOF 后重定位未通过。
+
 ## 2026-11-21 DirectShow 采集时钟失败诊断
 
 按用户选定的采集失败报告「程序侧建议」第 4 条，在 `codex/capture-busy-status-20261120` 的 `4138b97b` 上补齐诊断。创建系统时钟、查询 `IMediaFilter` 或调用 `SetSyncSource` 失败后，`[capture-clock]` 记录具体调用和原始 HRESULT。现有采集失败提示显示 `DirectShow clock` 阶段和相同错误码。保留时钟选择、原有调用顺序和失败清理。
