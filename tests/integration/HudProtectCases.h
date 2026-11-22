@@ -7,6 +7,8 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     const std::wstring mode=argv[1],provider=argv[4];
     const auto has=[&](std::wstring_view token){return mode.find(token)!=std::wstring::npos;};
     const bool enabled=!has(L"-off"),square=has(L"-square"),perf=has(L"-perf");
+    const bool dynamic=has(L"-dynamic");
+    constexpr unsigned panelLeft=248,panelTop=164,panelRight=476,panelBottom=190;
     const unsigned mult=has(L"-4x")?4u:2u;
     constexpr unsigned srcWidth=1280,srcHeight=720;
     const unsigned workHeight=has(L"-2160")?2160u:has(L"-1440")?1440u:srcHeight;
@@ -36,7 +38,11 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     else if(provider==L"amf")desc.frameGenerationBackend=engine::FrameGenerationBackend::AmdFrc;
     else if(provider==L"xess")desc.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;
     else if(provider!=L"dlss")return 2;
-    if(enabled&&has(L"-region")){
+    if(enabled&&dynamic){
+        desc.exclusion.enabled=true;
+        desc.exclusion.regions[0]={244.f/srcWidth,160.f/srcHeight,480.f/srcWidth,194.f/srcHeight,
+                                   false,engine::ExclusionContent::Hud};
+    }else if(enabled&&has(L"-region")){
         desc.exclusion.enabled=true;
         desc.exclusion.regions[2]={.475f,.455f,.525f,.545f,true,engine::ExclusionContent::Hud};
     }else if(enabled)desc.hudProtect=engine::HudProtectMode::Center;
@@ -53,6 +59,7 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     bool ok=av_frame_get_buffer(frame,32)>=0;
     double ghostTotal=0;
     unsigned maxGhost=0,withGhost=0,count=0,changed=0,ownChanged=0,cleanChanges=0,realError=0,hudError=0;
+    unsigned dynamicChecks=0,dynamicError=0;
     std::array<std::vector<double>,unsigned(GpuStage::Count)> timings;
     sink::RgbaImage previous;
     for(unsigned i=0;ok&&i<(perf?44u:18u);++i){
@@ -63,6 +70,20 @@ static int hudProtectCases(int argc,wchar_t** argv) {
             for(unsigned y=260;y<460;++y)for(unsigned x=540;x<740;++x){
                 auto* p=frame->data[0]+size_t(y)*frame->linesize[0]+x*4;
                 p[0]=p[1]=p[2]=detailedPlane(x,y,0);p[3]=255;
+            }
+        }
+        if(dynamic){
+            const unsigned fill=panelLeft+8+(i*35)%164;
+            for(unsigned y=panelTop;y<panelBottom;++y)for(unsigned x=panelLeft;x<panelRight;++x){
+                auto* p=frame->data[0]+size_t(y)*frame->linesize[0]+x*4;
+                const bool rail=y<panelTop+2||y>=panelBottom-2||x<panelLeft+2||x>=panelRight-2;
+                const bool bar=y>=174&&y<=180&&x>=panelLeft+8&&x<fill;
+                const bool digits=x>=436&&x<466&&y>=174&&y<=180&&
+                    ((x-436)/5==(i%6)||(x-436)%5==0&&(i%2==0));
+                p[0]=rail?229:bar?235:digits?68:38;
+                p[1]=rail?229:bar?132:digits?192:38;
+                p[2]=rail?229:bar?60:digits?224:38;
+                p[3]=255;
             }
         }
         pipeline::EnhanceGraph::FrameOutputs out;
@@ -108,6 +129,21 @@ static int hudProtectCases(int argc,wchar_t** argv) {
             sink::RgbaImage generated;
             if(!readImage(ctx,ring,item.lease->texture.Get(),generated)){ok=false;break;}
             const auto& held=item.subframe*2<=mult?previous:real;
+            if(dynamic){
+                for(unsigned y=174;y<=180;++y)for(unsigned x=panelLeft+8;x<panelRight-8;++x){
+                    const auto p=(size_t(y)*workWidth+x)*4;
+                    if(std::equal(real.pixels.begin()+p,real.pixels.begin()+p+3,previous.pixels.begin()+p))continue;
+                    ++dynamicChecks;
+                    for(unsigned c=0;c<3;++c){
+                        const auto error=unsigned(std::abs(int(held.pixels[p+c])-int(generated.pixels[p+c])));
+                        if(error<=dynamicError)continue;
+                        dynamicError=error;
+                        if(enabled&&error>2)std::cout<<"HUD_DYNAMIC_MISS frame="<<i<<" p="<<x<<','<<y
+                            <<" error="<<error<<" A="<<unsigned(previous.pixels[p+c])<<" B="<<unsigned(real.pixels[p+c])
+                            <<" clean="<<unsigned(clean.pixels[p+c])<<'\n';
+                    }
+                }
+            }
             unsigned ghosts=0,preserved=0;
             for(unsigned y=260;y<460;++y)for(unsigned x=440;x<840;++x){
                 const size_t a=(size_t(y)*workWidth+x)*4;
@@ -116,7 +152,7 @@ static int hudProtectCases(int argc,wchar_t** argv) {
                 // Source drawbox geometry, independent of H.264 halo and background colours.
                 const bool vertical=x>=639&&x<641&&((y>=344&&y<354)||(y>=359&&y<361)||(y>=366&&y<376));
                 const bool horizontal=y>=359&&y<361&&((x>=624&&x<634)||(x>=646&&x<656));
-                if(square||(!vertical&&!horizontal))continue;
+                if(square||dynamic||(!vertical&&!horizontal))continue;
                 unsigned error=0;
                 for(unsigned c=0;c<3;++c)error=std::max(error,unsigned(std::abs(int(held.pixels[a+c])-int(generated.pixels[a+c]))));
                 if(error>hudError){
@@ -147,12 +183,16 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     std::cout<<"HUD_RESULT generated="<<count<<" ghost_frames="<<withGhost
              <<" ghost_mean="<<(count?ghostTotal/count:0)<<" ghost_max="<<maxGhost
              <<" hud_pixels="<<changed<<" hud_max_error="<<hudError<<" real_max_error="<<realError
-             <<" cleaned_pixels="<<cleanChanges<<" cleaned_crosshair_pixels="<<ownChanged<<'\n';
+             <<" cleaned_pixels="<<cleanChanges<<" cleaned_crosshair_pixels="<<ownChanged
+             <<" dynamic_pixels="<<dynamicChecks<<" dynamic_max_error="<<dynamicError<<'\n';
     // A baseline can legitimately have no ghosts on a particular provider.
     // The matched baseline/feature runs provide the effectiveness comparison.
-    ok=ok&&realError==0&&(square?cleanChanges==0:!enabled||perf||ownChanged>0)&&
-        (provider==L"xess"||count>0);
-    if(enabled&&!square&&!perf&&provider!=L"xess")ok=ok&&hudError<=2;
+    ok=ok&&realError==0&&(provider==L"xess"||count>0);
+    if(dynamic)ok=ok&&dynamicChecks>0&&(!enabled||dynamicError<=2);
+    else {
+        ok=ok&&(square?cleanChanges==0:!enabled||perf||ownChanged>0);
+        if(enabled&&!square&&!perf&&provider!=L"xess")ok=ok&&hudError<=2;
+    }
     ring.waitIdle();
     graph.shutdown();
     if(!perf){

@@ -1666,3 +1666,11 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 \`scripts/acceptance/build-recording-handoff.py --task codex-fg-hud-protect-20261121 --label 2.2.0-hud-protect-test --jobs 2\` 构建主程序及相关目标。日志在 \`E:/项目/Veyra/logs/codex-fg-hud-protect-20261121\`，构建与私有测试版分别在 E 盘同名 build、tests 目录。实际回归和完整命令见 [验收记录](<E:/项目/Veyra/reports/codex-fg-hud-protect-20261121/RESULTS.md>)。修正初次探针漏选生产导出设置、旧测试枚举和测试运行库路径后重测。
 
 RTX 5070 同帧对照，DLSS 2X/4X 拖影 7/13、19/39 → 0，FSR 3.1 和 ANR 2X 各 13/13 → 0，启用时真准心误差 0。真实 HDR 录屏里「仅补帧」框内外亮度差 39.52% → 2.87%，DLSS 2X HEVC 导出 96 帧/60 FPS、64 帧样本的拖影 10 → 0。XeSS HDR10 从真实软件跑过三组配置。1440p/4K 每张真实帧新增 GPU 阶段中位数之和约 0.13/0.21 ms，每张生成帧合成约 0.007/0.009 ms。DLSS 框外逐像素一致性仍有误差，FSR 4 ML、采集卡和真实游戏待实机验收。独立测试版仅本地，用户配置及运行库身份保持。
+
+### 2026-11-21 动态 HUD 复审
+
+\`codex/dynamic-hud-20261119\` 的 \`70241356\` 保留作实验记录，停止并入它的独立开关和事后掩码。在 \`codex/fg-hud-protect-20261121\` 复用固定细边框和稳定底色的识别思路。框选的数字或血条在 A/B 之间变化时写入同一张保护掩码。掩码参与补帧前修复和生成帧恢复，恢复仍取时间最近的真实帧。新增证据只在当前配对有效。保留用户确认的独立 HUD 自动锁定。
+
+\`veyra_qml_ui veyra_repair_fg_tests\` 构建通过，日志 \`E:/项目/Veyra/logs/codex-fg-hud-protect-20261121/build-20261121-233256\`。RTX 5070 上的动态细框夹具，关闭时 DLSS 2× 最大通道误差 196/255。开启后 DLSS 2× 检查 6,738 个变化像素、4× 检查 20,214 个、VFG 2× 检查 6,738 个，最大误差均为 0。静态自动准心、手动椭圆及 200×200 静止块回归通过，真实帧像素误差 0，D3D12 调试层无错误。初版连续平移时误以为是切镜，从而跳过一对帧，最终让跨帧稳定的双边框独立提供屏幕空间证据。
+
+新的动态识别要求窄框里的固定细边框与稳定底色。无边框动态数字、半透明动态 HUD、其他游戏实机和 XeSS 的 SDK 生成图待测。着色器经 staging 校验，测试版仍在 \`E:/项目/Veyra/tests/codex-fg-hud-protect-20261121\`。过程数据和对照见 \`E:/项目/Veyra/reports/codex-batch-review-20261121\`。
