@@ -2352,7 +2352,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(hasOutput&&graph->resolveGeneration(out))completeReset(out.batch.identity);
                     // Poll live view/size changes at 50 ms; unchanged flip
                     // buffers are retained without commands or another Present.
-                    std::this_thread::sleep_for(std::chrono::milliseconds(refreshPausedFrame_?1:50));continue;
+                    const auto idleStarted=Clock::now();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(refreshPausedFrame_?1:50));
+                    loopTrace.excludeIdle(Clock::now()-idleStarted);
+                    continue;
                 }
                 if(wasPaused&&!paused_){holdFileAudio();audioRebuffering=false;if(audioStarted)audioPipe.setPaused(false);anchor=Clock::now();anchorMs=out.ptsMs;reset=true;pendingResetCause=pipeline::ResetReason::PauseResume;wasPaused=false;}
                 // Backpressure before reading the capacity-one source mailbox:

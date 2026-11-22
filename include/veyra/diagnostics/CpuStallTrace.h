@@ -22,6 +22,11 @@ public:
         if (count_ < samples_.size()) samples_[count_++] = {stage, ms(now - last_)};
         last_ = now;
     }
+    // Deliberate waits must not look like work that failed to finish.
+    void excludeIdle(Clock::duration elapsed) {
+        start_+=elapsed;
+        last_+=elapsed;
+    }
     ~CpuStallTrace() {
         const auto total = ms(Clock::now() - start_);
         if (total < thresholdMs_) return;
