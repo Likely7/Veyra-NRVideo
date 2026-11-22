@@ -33,6 +33,10 @@ struct RemotePlayConnectDesc {
     // protocol has no "stop sending media" switch, so the console still sends a
     // keepalive stream; only this side drops it.
     bool controlOnly=false;
+    // Send the PC microphone (empty id: default recording device) to the
+    // console's voice chat once the stream is connected.
+    bool microphone=false;
+    std::wstring microphoneId;
     // Set by the engine; shared ownership keeps the exact presentation adapter
     // alive until the decoder owner has stopped, including failed connects.
     std::shared_ptr<ID3D12Device> decodeDevice;
@@ -52,6 +56,8 @@ public:
     bool connect(const RemotePlayConnectDesc& desc);
     remoteplay::BackendResult submitController(const remoteplay::ControllerState& state) { return backend_.submitController(state); }
     remoteplay::BackendResult submitLoginPin(std::string_view pin) { return backend_.submitLoginPin(pin); }
+    remoteplay::BackendResult setMicrophone(bool on) { return backend_.setMicrophone(on); }
+    void submitMicrophone(std::int16_t* stereo480) noexcept { backend_.submitMicrophone(stereo480); }
     remoteplay::ControllerFeedback takeFeedback(){return backend_.takeFeedback();}
     remoteplay::NativeSnapshot nativeSnapshot()const{return backend_.snapshot();} // session owner only
     remoteplay::BackendResult disconnectTransportForTest(){return backend_.stop();}

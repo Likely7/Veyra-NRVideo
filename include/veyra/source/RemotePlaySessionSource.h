@@ -24,10 +24,12 @@ public:
     void close() noexcept override;
     void controller(remoteplay::ControllerState state);
     void loginPin(std::string pin);
+    // Any thread; the session owner mutes or unmutes the console microphone on its next pass.
+    void microphoneMuted(bool muted) noexcept { microphoneMuted_.store(muted); }
     remoteplay::ControllerFeedback takeFeedback();
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;
     uint64_t skipped() const;
-    struct Rates {uint64_t received=0,decoded=0,ingressDropped=0;double receivedFps=0,decodedFps=0;bool ready=false;};
+    struct Rates {uint64_t received=0,decoded=0,ingressDropped=0;double receivedFps=0,decodedFps=0;bool ready=false;uint64_t packetReceived=0,packetLost=0;}; // packets: Chiaki's self-resetting window
     Rates rates() const;
     struct RecoveryStatus {bool active=false;unsigned attempts=0;std::wstring message;};
     RecoveryStatus recoveryStatus()const {std::lock_guard lock(mutex_);return recovery_;}
@@ -46,6 +48,7 @@ private:
     std::condition_variable ready_;
     std::jthread owner_;
     std::atomic<bool> alive_{false};
+    std::atomic<bool> microphoneMuted_{false};
     bool initialized_=false, started_=false, failed_=false;
     std::optional<Frame> latest_;
     std::shared_ptr<AVFrame> view_;

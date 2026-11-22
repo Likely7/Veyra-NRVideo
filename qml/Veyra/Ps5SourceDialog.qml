@@ -122,6 +122,11 @@ DialogLayer {
             hint: qsTr("不向 PS5 转发电脑手柄输入")
             VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }
         }
+        VRow {
+            label: qsTr("PC microphone")
+            hint: qsTr("Send this PC's microphone to PS5 voice chat (device: recording microphone setting). Applies on connect.")
+            VSwitch { objectName: "ps5-mic"; checked: veyra.ps5.mic === true; onToggled: checked => veyra.ps5Set("mic", checked) }
+        }
         // The mirror of 仅观看: only the pad, the picture from a capture card.
         VRow {
             visible: veyra.ps5Control.available === true

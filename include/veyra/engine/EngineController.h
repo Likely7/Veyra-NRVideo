@@ -221,7 +221,7 @@ struct PlayerSnapshot {
     int remotePlayState=0; uint64_t remotePlaySkipped=0;
     bool remoteRecovering=false;unsigned remoteReconnectAttempts=0;std::wstring remoteRecoveryMessage;
     remoteplay::SessionInbox::Snapshot remoteStream;
-    double remoteReceivedFps=0,remoteDecodedFps=0;bool remoteRatesReady=false;uint64_t remoteReceived=0,remoteDecoded=0,remoteIngressDropped=0;
+    double remoteReceivedFps=0,remoteDecodedFps=0;bool remoteRatesReady=false;uint64_t remoteReceived=0,remoteDecoded=0,remoteIngressDropped=0,remotePacketReceived=0,remotePacketLost=0;
 #ifdef VEYRA_ENABLE_MOONLIGHT
     bool moonlightActive=false;source::MoonlightStats moonlight;
 #endif
@@ -244,6 +244,7 @@ public:
     remoteplay::ControllerFeedback remotePlayFeedback();
     void remotePlayController(const remoteplay::ControllerState&);
     void remotePlayLoginPin(std::string);
+    void remotePlayMicrophoneMuted(bool);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
     // (the console's keepalive video and audio are dropped on receipt). Start and
     // stop are queued to a dedicated thread, so callers never wait for the

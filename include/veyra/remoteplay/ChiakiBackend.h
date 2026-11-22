@@ -63,6 +63,12 @@ public:
     BackendResult requestIdr();
     BackendResult submitController(const ControllerState&);
     BackendResult submitLoginPin(std::string_view);
+    // PC microphone into the console's voice chat. Owner thread, once connected:
+    // opens Chiaki's microphone channel on first use, then unmutes or mutes it.
+    BackendResult setMicrophone(bool on);
+    // Microphone thread only: one 10 ms block, 480 frames of 48 kHz 16-bit stereo.
+    // Dropped unless setMicrophone(true) succeeded and the session still runs.
+    void submitMicrophone(std::int16_t* stereo480) noexcept;
     NativeSnapshot snapshot() const;
     ControllerFeedback takeFeedback();
 private:
