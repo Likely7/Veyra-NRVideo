@@ -858,7 +858,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
   target_include_directories(veyra_sources PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_sources PUBLIC veyra_pipeline veyra_media veyra_base)
-  target_link_libraries(veyra_sources PRIVATE ${FFMPEG_LIBRARIES} strmiids ole32 oleaut32 d3d12 dxgi)
+  target_link_libraries(veyra_sources PRIVATE ${FFMPEG_LIBRARIES} strmiids ole32 oleaut32 d3d12 dxgi cfgmgr32)
   # Matching FFmpeg imports and external libdovi propagate through veyra_media.
   target_link_libraries(veyra_sources PRIVATE d3d11 windowsapp dwmapi)
 

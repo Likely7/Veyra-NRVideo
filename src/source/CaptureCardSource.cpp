@@ -30,6 +30,7 @@
 #include "veyra/sink/BitstreamAudioSink.h"
 #include "veyra/sink/HdmiBitstreamOutput.h"
 #include <windows.h>
+#include <cfgmgr32.h>
 #include <tlhelp32.h>
 #include <dshow.h>
 #include <dvdmedia.h>
@@ -65,6 +66,73 @@ namespace veyra::source {
 using Microsoft::WRL::ComPtr;
 
 namespace {
+class CaptureInterfaceMonitor {
+public:
+    ~CaptureInterfaceMonitor() { stop(); }
+
+    void watch(std::wstring path) {
+        constexpr std::wstring_view monikerPrefix = L"@device:pnp:";
+        if (path.starts_with(monikerPrefix)) path.erase(0, monikerPrefix.size());
+        if (path == path_) return;
+        stop();
+        const auto begin = path.find(L"#{");
+        if (!path.starts_with(L"\\\\?\\") || begin == std::wstring::npos) return;
+        const auto end = path.find(L'}', begin + 2);
+        if (end == std::wstring::npos) return;
+        CM_NOTIFY_FILTER filter{};
+        filter.cbSize = sizeof(filter);
+        filter.FilterType = CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE;
+        if (FAILED(CLSIDFromString(path.substr(begin + 1, end - begin).c_str(),
+                                   &filter.u.DeviceInterface.ClassGuid))) return;
+        path_ = std::move(path);
+        const CONFIGRET result = CM_Register_Notification(&filter, this, notify, &registration_);
+        if (result != CR_SUCCESS) {
+            registration_ = nullptr;
+            path_.clear();
+            log::warn("capture-pnp", std::format("register interface notification result=0x{:X}", result));
+        }
+    }
+
+    void flush() {
+        writeEvent("arrived", arrival_);
+        writeEvent("removed", removal_);
+    }
+
+private:
+    HCMNOTIFICATION registration_ = nullptr;
+    std::wstring path_;
+    std::atomic<int64_t> arrival_{}, removal_{};
+
+    static DWORD CALLBACK notify(HCMNOTIFICATION, void* context, CM_NOTIFY_ACTION action,
+                                 CM_NOTIFY_EVENT_DATA* event, DWORD) noexcept {
+        auto& self = *static_cast<CaptureInterfaceMonitor*>(context);
+        if ((action != CM_NOTIFY_ACTION_DEVICEINTERFACEARRIVAL &&
+             action != CM_NOTIFY_ACTION_DEVICEINTERFACEREMOVAL) ||
+            event->FilterType != CM_NOTIFY_FILTER_TYPE_DEVICEINTERFACE ||
+            _wcsicmp(self.path_.c_str(), event->u.DeviceInterface.SymbolicLink) != 0) return ERROR_SUCCESS;
+        // The PnP thread performs no IO. Preserve the callback time even if
+        // the owner is inside a driver call and cannot write the log yet.
+        const auto elapsed = std::chrono::system_clock::now().time_since_epoch();
+        const auto unixUs = std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count();
+        auto& target = action == CM_NOTIFY_ACTION_DEVICEINTERFACEARRIVAL ? self.arrival_ : self.removal_;
+        target.store(unixUs, std::memory_order_relaxed);
+        return ERROR_SUCCESS;
+    }
+
+    static void writeEvent(const char* action, std::atomic<int64_t>& time) {
+        if (time.load(std::memory_order_relaxed) == 0) return;
+        const auto unixUs = time.exchange(0, std::memory_order_relaxed);
+        log::info("capture-pnp", std::format("interface={} eventUnixUs={}", action, unixUs));
+    }
+
+    void stop() {
+        if (registration_) CM_Unregister_Notification(registration_);
+        registration_ = nullptr;
+        flush();
+        path_.clear();
+    }
+};
+
 DWORD otherVeyraPid() {
     const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (snapshot == INVALID_HANDLE_VALUE) return 0;
@@ -449,6 +517,7 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
 struct CaptureCardSource::Impl:ISampleGrabberCB {
     using Clock=std::chrono::steady_clock;
     HANDLE deviceLease = nullptr;
+    CaptureInterfaceMonitor interfaceMonitor;
     std::atomic<ULONG> refs{1};std::mutex mutex;std::condition_variable wake;
     // One pending frame plus one reader-owned frame, never an IMediaSample
     // reference. Holding the producer's sole RGB32 sample starves its allocator.
@@ -1213,6 +1282,7 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
         p.deviceLease = lease;
     }
     if(selection.stable&&decklink::isPath(selection.videoPath))return configureDeckLink(desc);
+    p.interfaceMonitor.watch(devicePath);
     HRESULT configured = S_OK;
     const bool haveConfig = devicePath.empty()
         ? configuration(index, p.graph, p.builder, p.device, p.config, &configured)
@@ -2271,6 +2341,7 @@ CaptureMetrics CaptureCardSource::metrics()const{
 SourceReadStatus CaptureCardSource::read(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,30);}
 SourceReadStatus CaptureCardSource::tryRead(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,0);}
 SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds){auto& p=*p_;*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
+    p.interfaceMonitor.flush();
     if(p.decklink&&p.decklink->needsReopen()){error_=p.decklink->error();log::warn("decklink-reconnect",narrowForLog(error_));return SourceReadStatus::Error;}
     // running() goes false only after the SDK releases its DMA buffers and channel.
     // Do not change the audio route. Mark the first DirectShow frame as a clock boundary.
@@ -2421,6 +2492,7 @@ void CaptureCardSource::closeGraph(bool stopped)noexcept{
     p.recentArrivals.clear();
     p.signalProbeEnabled=false;p.signalProbe={};p.nextSignalProbe={};
     p.driverDiscontinuity.reset();p.suppressedDriverDiscontinuities=p.discontinuitySamples=0;
+    p.interfaceMonitor.flush();
     if (p.deviceLease) {
         CloseHandle(p.deviceLease);
         p.deviceLease = nullptr;
