@@ -27,6 +27,8 @@ py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task code
 
 虚拟摄像机模块与安装器由产品目标依赖构建；x86模块通过独立Win32 CMake子工程构建。独立诊断目标为`veyra_virtualcam_transport_tests`、`veyra_virtualcam_probe`、`veyra_virtualcam_cadence`、`veyra_virtualcam_gpu_tests`。只在任务目录运行，用私有IPC命名空间和配置，避免影响用户生产者；不要为测试擅自更新系统组件。
 
+Qt 主程序是 `veyra_qml_ui.exe`。默认开发构建可通过 `Veyra.cmd` 启动。便携包和安装器使用 `scripts/package-portable-update.py` 与 `scripts/package-windows-installer.py`，包根目录的 `Veyra.exe` 是启动器。旧 `run-test.cmd` 和 Win32 打包脚本已停用。导出计时和损坏输入门禁使用 `veyra_export_probe`，生成帧导出另由 VFG 回归覆盖。
+
 ## 验证与stage
 
 - 每个测试进程≤300秒。按实际改动选择合同/CPU/QtQuick/GPU/真实产品回归，保留失败，不把历史结果当本次通过。
