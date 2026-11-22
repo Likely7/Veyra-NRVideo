@@ -1,5 +1,14 @@
 # 当前工作日志
 
+## 2026-11-22 实时语音翻译延迟与字幕漏句
+
+- 本地分支 codex/live-asr-latency-20261122，产品提交 2dcc2dbb，从后续测试版 0f72bcd1 的整合树接续。Parakeet 加入有预算的中间推理，稳定整句提前提交。Whisper 缩短分段和编码填充，自动语言按三段多数锁定。两种模型共享停顿判断及重叠去重。
+- 音频译文独立按序等待，合并同段相邻短句，保证最短阅读时间。Qwen 请求去掉历史对白。启用 Vulkan 翻译时释放预留的 CPU 线程，界面和日志显示实际数量。
+- 使用 scripts/acceptance/build-recording-handoff.py 构建 veyra_qml_ui、veyra_live_translation_tests、veyra_live_timing_tests、veyra_subtitle_overlay_tests 和 veyra_qml_quick_tests。两个并发任务，沿用集成树 CMake 缓存和依赖。最终构建回执 logs/codex-live-asr-latency-20261122/build-20261122-080629。初次构建的字符串转义和 QStringView 调用已修正。Qt Quick 测试通过相对 argv 路径加载中文工作目录中的夹具。
+- 同一段 +8 dB 混音的 48 kHz 播放，字幕延迟 P50 Parakeet 3.34 → 0.99 秒、Whisper 6.34 → 1.35 秒。实时词错率 6.00% → 4.67% 和 19.33% → 14.00%，因界面被挤掉均为 0。Parakeet 预览推理增加 CPU 占用，16 kHz 文件模式原始词错率由 4.67% 升至 7.33%。Qwen 仍有数字误译。
+- 实时翻译集成 61、字幕渲染 21、实时节奏 517、Qt Quick 253/0/0。100 秒 Whisper 注入迟滞、纯伴奏、中英静音后重检、Vulkan 实际 4 线程及私有配置启动通过。i18n 3294 条、9 种语言无缺失，按 SHA-256 核对 105 个着色器。
+- 可运行目录 tests/codex-live-asr-latency-20261122/app，入口 tests/codex-live-asr-latency-20261122/启动实时翻译测试版.cmd。测试配置、模型与素材均位于本轮独立目录，日志和回执见 logs/codex-live-asr-latency-20261122 与 reports/codex-live-asr-latency-20261122。真实游戏、实体采集和其他 GPU 待验证。
+
 ## 2026-11-22 2.2.0 后续整合测试版
 
 以正式标签 `v2.2.0` 的 `671f9e96` 为对照。在 `codex/post-2.2.0-test-20261122` 保留前一轮 17 个 PR，另外合入采集稳帧、清空播放历史、采集本机监听、NIS 与 AMD VideoSR、动态 HUD、实时语音识别六个独立分支。稳帧和两种半速取样各司其职。动态 HUD 先合成，经过验证的准心笔画随后覆盖。原来 AMD VideoSR 1.1 的实验预设映射到 1.0。实时翻译统一选择 Veyra 音频、Windows 实时字幕或画面 OCR，迁移既有已存来源，保留 CPU 运行库兼容。识别模型独立下载。
