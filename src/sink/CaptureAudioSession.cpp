@@ -50,6 +50,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
     std::atomic<bool> stop{false};
     std::atomic<float> gain{1};
     std::atomic<unsigned> mode{0};std::atomic<int> offset{0};
+    std::atomic<bool> measuredDelay{false};
     double videoPts=0,videoHost=0;bool haveVideo=false;
     std::optional<int64_t> videoArrival;
     uint64_t videoObservation=0;
@@ -297,7 +298,11 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             const bool fresh=video&&now>=vHost&&now-vHost<500;
             if(appliedMode==0&&fresh&&observation!=lastVideoObservation){
                 const bool previousFallback=syncEstimate.fallback;
-                syncEstimate=syncTarget.observe(vHost-vPts-ingress,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
+                // A locally estimated stream (PS5) has no source A/V clock;
+                // its audio PTS anchor adds an arbitrary ~35 ms (field log
+                // 2026-11-22), so only the measured video residence counts.
+                const double raw=measuredDelay&&vArrival?vHost-double(*vArrival)/10000:vHost-vPts-ingress;
+                syncEstimate=syncTarget.observe(raw,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
                 lastVideoObservation=observation;
                 if(previousFallback!=syncEstimate.fallback)
                     log::warn("capture-audio-clock",std::format("fallback={} rawMs={:.3f} localVideoMs={:.3f} acceptedMs={:.3f} basis=matched-original-arrival hardwareOffsetUnmeasured=1",syncEstimate.fallback,syncEstimate.rawMs,syncEstimate.localMs,syncEstimate.targetMs));
@@ -418,7 +423,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 state.endpointBufferedMs=renderer.bufferedMs();
                 const auto audioPts=renderer.mediaTimeMs();
                 const double observedNow=double(hostTime())/10000;
-                state.skewMs=fresh&&std::isfinite(audioPts)?std::optional<double>(audioPts-(state.syncClockFallback?observedNow-mapping:vPts+observedNow-vHost)):std::nullopt;
+                const bool targetClock=state.syncClockFallback||(appliedMode==0&&measuredDelay);
+                state.skewMs=fresh&&std::isfinite(audioPts)?std::optional<double>(audioPts-(targetClock?observedNow-mapping:vPts+observedNow-vHost)):std::nullopt;
                 if(hostTime()>=nextSyncLog){
                     nextSyncLog=hostTime()+20000000;
                     if(appliedMode==0)log::info("capture-audio-reserve",std::format("queuedAtCorrectionMs={:.3f} minimumMs={:.3f} rateLimited={} correctionPpm={:.1f} (real scheduling reserve, not extra video delay)",correctionQueuedMs,startupPrefillMs,correctionReserveLimited,correctionPpm));
@@ -491,6 +497,7 @@ bool CaptureAudioSession::push(const void* data,size_t bytes,double pts,bool dis
 }
 void CaptureAudioSession::videoPresented(double pts,int64_t time,std::optional<int64_t> arrival){std::lock_guard lock(p_->mutex);p_->videoPts=pts;p_->videoHost=double(time)/10000;p_->videoArrival=arrival;++p_->videoObservation;p_->haveVideo=true;}
 void CaptureAudioSession::videoReset(bool resetAudio){std::lock_guard lock(p_->mutex);p_->haveVideo=false;if(resetAudio&&p_->mode==0)p_->pendingReset=true;p_->wake.notify_all();}
+void CaptureAudioSession::setMeasuredVideoDelay(bool value){p_->measuredDelay=value;}
 void CaptureAudioSession::setGain(float value){p_->gain=clampAudioGain(value);}
 void CaptureAudioSession::setSync(unsigned mode,int offset){p_->mode=std::min(mode,2u);p_->offset=std::clamp(offset,-250,250);}
 CaptureAudioState CaptureAudioSession::snapshot()const{std::lock_guard lock(p_->mutex);return p_->state;}

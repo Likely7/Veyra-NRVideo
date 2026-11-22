@@ -46,6 +46,9 @@ public:
     // request the old audio reset explicitly.
     void videoReset(bool resetAudio=true);
     void setGain(float);
+    // Automatic sync uses only presentation minus arrival of the matching
+    // frame, for sources whose PTS are local estimates (PS5 Remote Play).
+    void setMeasuredVideoDelay(bool);
     // Records that the input arrived as a decoded bitstream (capture passthrough).
     void setInputBitstream(std::wstring kind);
     // 0 automatic, 1 manual, 2 off. Positive offset delays sound.

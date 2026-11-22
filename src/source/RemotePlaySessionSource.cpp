@@ -109,6 +109,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             });
             WAVEFORMATEX format{}; format.wFormatTag=WAVE_FORMAT_IEEE_FLOAT;format.nChannels=2;
             format.nSamplesPerSec=48000;format.wBitsPerSample=32;format.nBlockAlign=8;format.nAvgBytesPerSec=384000;
+            audio_.setMeasuredVideoDelay(true);
             if(audio_.configure(format)&&audio_.start()) {
                 // Separate from both decoder and GPU owners. Source is closed
                 // only after this reader and the WASAPI owner have joined.
