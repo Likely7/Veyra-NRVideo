@@ -68,6 +68,13 @@ int main(){
         check(gfx::vrrLevel(state)==4,"only real activity flags report VRR active");
         state={};
         check(gfx::vrrLevel(state)==0,"unanswered VRR query remains unknown");
+        // AMD ADL FreeSync: caps 0xf = supported/GPU/display/current mode, state 7 = all use cases.
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(0,0xf,0,7))==3,"AMD FreeSync on in the current mode can request VRR");
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(0,0xf,0,0))==2,"AMD FreeSync off in Adrenalin does not request VRR");
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(0,0x7,0,7))==2,"AMD FreeSync display in an unsupported mode does not request VRR");
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(-1,0,-1,0))==1,"AMD display without FreeSync is unsupported");
+        check(gfx::amdFreeSyncState(-1,0,-1,0).status==0,"AMD display without FreeSync is an answer, not a retried failure");
+        check(!gfx::amdFreeSyncState(0,0xf,0,7).enabled&&!gfx::amdFreeSyncState(0,0xf,0,7).inVrrMode,"AMD FreeSync never fabricates active VRR flags");
     }
     {
         engine::PreviewView v;v.displayAspect=16.0/9;
