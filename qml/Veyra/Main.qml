@@ -780,7 +780,14 @@ Window {
     Shortcut {
         sequence: "Ctrl+Alt+Shift+S"
         enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
+            || (veyra.sourceKind === "ps5" && veyra.ps5.active === true)
         onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
+    }
+    // PS5 voice chat: mute or unmute the PC microphone without reconnecting.
+    Shortcut {
+        sequence: "Ctrl+Alt+Shift+M"
+        enabled: veyra.sourceKind === "ps5" && veyra.ps5.active === true && veyra.ps5.mic === true
+        onActivated: veyra.ps5ToggleMicMute()
     }
     StreamHud {
         id: streamHud

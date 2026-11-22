@@ -864,6 +864,7 @@ public:
     Q_INVOKABLE void ps5Forget();
     Q_INVOKABLE void ps5OpenAccountChecker();
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
+    Q_INVOKABLE void ps5ToggleMicMute();
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
     // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).

@@ -7,6 +7,8 @@
 #error The reviewed Chiaki video metadata patch is required
 #endif
 #include <chiaki/opusdecoder.h>
+#include <chiaki/opusencoder.h>
+#include <chiaki/audio.h>
 #include <chiaki/controller.h>
 #include <chiaki/orientation.h>
 #include <cmath>
@@ -71,6 +73,11 @@ struct ChiakiBackend::Impl {
     ChiakiOrientationTracker orientation{};ChiakiAccelNewZero accelZero{};
     uint64_t lastMotion=0;
     std::mutex feedbackMutex;ControllerFeedback feedback;
+    // Microphone uplink. micMutex orders the microphone thread's encode against
+    // mute and stop; micConnected is owner-thread only.
+    ChiakiOpusEncoder micEncoder{};
+    std::mutex micMutex;
+    bool micEncoderInitialized=false,micConnected=false,micOpen=false;
 
     static void logCallback(ChiakiLogLevel level,const char* message,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
@@ -204,6 +211,7 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
     wipe(info.regist_key,sizeof(info.regist_key));wipe(info.morning,sizeof(info.morning));wipe(info.psn_account_id,sizeof(info.psn_account_id));
     if(code!=CHIAKI_ERR_SUCCESS){auto out=s.record(code,"chiaki_session_init");s.token.failed(out.code);p_.reset();return out;}
     s.initialized=true;
+    chiaki_opus_encoder_init(&s.micEncoder,&s.log);s.micEncoderInitialized=true;
     if(discardMedia){ChiakiAudioSink sink{};sink.user=&s;sink.frame_cb=Impl::discardAudio;chiaki_session_set_audio_sink(&s.session,&sink);}
     else{
         chiaki_opus_decoder_init(&s.opus,&s.log);s.opusInitialized=true;
@@ -224,6 +232,7 @@ BackendResult ChiakiBackend::stop(){
     auto& s=*p_;
     if(!s.onOwner())return {false,-1102,"wrong_owner_thread"};
     s.active=false;
+    {std::lock_guard lock(s.micMutex);s.micOpen=false;}
     ChiakiErrorCode stopResult=CHIAKI_ERR_SUCCESS;
     if(s.started){
         ChiakiControllerState idle;chiaki_controller_state_set_idle(&idle);
@@ -237,6 +246,8 @@ BackendResult ChiakiBackend::stop(){
         if(stopCode!=CHIAKI_ERR_SUCCESS)s.apiError=static_cast<int>(stopCode);
     }
     if(s.opusInitialized){chiaki_opus_decoder_fini(&s.opus);s.opusInitialized=false;}
+    // The audio sender points into the session: free it before chiaki_session_fini.
+    if(s.micEncoderInitialized){chiaki_opus_encoder_fini(&s.micEncoder);s.micEncoderInitialized=false;}
     if(s.initialized){chiaki_session_fini(&s.session);s.initialized=false;}
     wipe(&s.session,sizeof(s.session));
     p_.reset();return result(stopResult,"stop_join_fini");
@@ -249,6 +260,30 @@ BackendResult ChiakiBackend::submitLoginPin(std::string_view pin){
     if(!p_||!p_->onOwner()||!p_->started)return {false,-1104,"pin_without_session"};
     if(pin.empty()||pin.size()>8||!std::all_of(pin.begin(),pin.end(),[](char c){return c>='0'&&c<='9';}))return {false,-1105,"invalid_login_pin"};
     return p_->record(chiaki_session_set_login_pin(&p_->session,reinterpret_cast<const std::uint8_t*>(pin.data()),pin.size()),"chiaki_session_set_login_pin");
+}
+BackendResult ChiakiBackend::setMicrophone(bool on){
+    if(!p_||!p_->onOwner()||!p_->started||!p_->connected)return {false,-1107,"microphone_without_session"};
+    auto& s=*p_;
+    if(on&&!s.micConnected){
+        // Same format as chiaki-ng's own client: 48 kHz stereo, 10 ms frames.
+        ChiakiAudioHeader header{};chiaki_audio_header_set(&header,2,16,48000,480);
+        chiaki_opus_encoder_header(&header,&s.micEncoder,&s.session);
+        if(!s.micEncoder.opus_encoder)return {false,-1108,"microphone_encoder"};
+        const auto code=chiaki_session_connect_microphone(&s.session);
+        if(code!=CHIAKI_ERR_SUCCESS)return s.record(code,"chiaki_session_connect_microphone");
+        s.micConnected=true;
+    }
+    if(!s.micConnected)return {true,0,"microphone_closed"};
+    {std::lock_guard lock(s.micMutex);s.micOpen=on;}
+    // Upstream's parameter is the CURRENT state: true sends "unmute" (ctrl.c), as its own client does.
+    return s.record(chiaki_session_toggle_microphone(&s.session,on),"chiaki_session_toggle_microphone");
+}
+void ChiakiBackend::submitMicrophone(std::int16_t* stereo480) noexcept {
+    // p_ is not reset while a microphone sink is attached: the session owner
+    // detaches the sink (synchronous) before stop().
+    if(!p_||!stereo480)return;
+    std::lock_guard lock(p_->micMutex);
+    if(p_->micOpen)chiaki_opus_encoder_frame(stereo480,&p_->micEncoder);
 }
 BackendResult ChiakiBackend::submitController(const ControllerState& state){
     if(!p_||!p_->onOwner()||!p_->started)return {false,-1106,"controller_without_session"};

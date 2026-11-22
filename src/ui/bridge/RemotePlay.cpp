@@ -22,6 +22,13 @@ QVariantMap QmlPlayerBridge::ps5() const {
     out["controller"] = c.connected;
     out["gyro"] = c.gyro && c.accel;
     out["calibrating"] = c.calibrating;
+    out["micMuted"] = impl_->ps5MicMuted;
+    // The stream's own numbers for StreamHud; a value the stream does not report stays 0.
+    const auto& r = s.remoteStream;
+    out["stream"] = QVariantMap{{"width", int(r.requestedProfile.width)}, {"height", int(r.requestedProfile.height)}, {"fps", int(r.requestedProfile.fps)},
+        {"requestMbps", int(r.requestedProfile.bitrateKbps / 1000)}, {"videoMbps", r.videoMbps}, {"receivedFps", s.remoteReceivedFps}, {"decodedFps", s.remoteDecodedFps},
+        {"decodeMs", r.decodeMeanMs.value_or(0.0)}, {"hardware", r.hardwareDecode}, {"dropped", qulonglong(s.remoteIngressDropped)}, {"framesLost", qulonglong(r.framesLost)},
+        {"packets", qulonglong(s.remotePacketReceived)}, {"packetsLost", qulonglong(s.remotePacketLost)}};
 #else
     out["available"] = false;
 #endif
@@ -294,7 +301,8 @@ void QmlPlayerBridge::ps5Load() {
         // Form defaults, then the selected pairing's own values.
         i.ps5Form = QVariantMap{{"host", QString()}, {"account", QString()}, {"quality", 3}, {"codec", 0}, {"bitrate", 2}, {"viewOnly", false},
             {"decode", int(std::min(2u, GetPrivateProfileIntW(L"RemotePlay", L"DecodeMode", 0, ps5Settings().c_str())))},
-            {"sampling", int(std::min(1u, GetPrivateProfileIntW(L"RemotePlay", L"FineSampling", 1, ps5Settings().c_str())))}};
+            {"sampling", int(std::min(1u, GetPrivateProfileIntW(L"RemotePlay", L"FineSampling", 1, ps5Settings().c_str())))},
+            {"mic", GetPrivateProfileIntW(L"RemotePlay", L"Microphone", 0, ps5Settings().c_str()) != 0}};
         if (!i.ps5Profile.empty())
             if (auto saved = remoteplay::loadProfile(directory / i.ps5Profile)) {
                 i.ps5Form["host"] = QString::fromStdString(saved->host);
@@ -324,7 +332,7 @@ bool QmlPlayerBridge::ps5Set(const QString& key, const QVariant& value) {
         bool ok = false; const int n = value.toInt(&ok); const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) return false;
         impl_->ps5Form[key] = n;
-    } else if (key == QLatin1String("viewOnly")) impl_->ps5Form[key] = value.toBool();
+    } else if (key == QLatin1String("viewOnly") || key == QLatin1String("mic")) impl_->ps5Form[key] = value.toBool();
     else if (key == QLatin1String("host") || key == QLatin1String("account")) impl_->ps5Form[key] = value.toString().trimmed();
     else return false;
     emit ps5Changed();
@@ -437,6 +445,10 @@ bool QmlPlayerBridge::ps5Connect() {
     desc.highQualitySampling = i.ps5Form.value("sampling").toInt() == 1;
     WritePrivateProfileStringW(L"RemotePlay", L"DecodeMode", std::to_wstring(decode).c_str(), ps5Settings().c_str());
     WritePrivateProfileStringW(L"RemotePlay", L"FineSampling", desc.highQualitySampling ? L"1" : L"0", ps5Settings().c_str());
+    // Voice chat uses the microphone chosen for recording (empty: Windows default).
+    desc.microphone = i.ps5Form.value("mic").toBool();
+    desc.microphoneId = recordingMicrophoneId().toStdWString();
+    WritePrivateProfileStringW(L"RemotePlay", L"Microphone", desc.microphone ? L"1" : L"0", ps5Settings().c_str());
     const bool viewOnly = desc.request.viewOnly;
     // The console has one Remote Play slot; the engine ends PS5 手柄控制 first.
     if (i.engine.remoteControlRequested()) emit notice(tr("已结束 PS5 手柄控制：PS5 同一时间只允许一个远程游玩连接"), false);
@@ -477,6 +489,7 @@ bool QmlPlayerBridge::ps5Connect() {
             i.releasePad(Impl::PadPs5);
         }
     });
+    i.ps5MicMuted = false; // a new session starts unmuted
     i.ps5Watching = true;
     rememberSource(QStringLiteral("ps5"), QString::fromStdString(host));
     i.ps5Status = tr("连接已开始。需要登录 PIN 时在下方提交。关闭面板不停止串流。");
@@ -529,6 +542,16 @@ void QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
     impl_->engine.remotePlayLoginPin(text.toStdString());
 #else
     (void)pin; // RemotePlay disabled: keep the QML-callable symbol but no backend.
+#endif
+}
+void QmlPlayerBridge::ps5ToggleMicMute() {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    auto& i = *impl_;
+    if (!i.ps5Form.value("mic").toBool() || !i.snapshot.remotePlay) return;
+    i.ps5MicMuted = !i.ps5MicMuted;
+    i.engine.remotePlayMicrophoneMuted(i.ps5MicMuted);
+    emit notice(i.ps5MicMuted ? tr("PS5 microphone muted") : tr("PS5 microphone live"), false);
+    emit ps5Changed();
 #endif
 }
 void QmlPlayerBridge::ps5Cancel() {
@@ -594,6 +617,13 @@ void QmlPlayerBridge::tickPs5() {
         }
         if (message != i.ps5Status) { i.ps5Status = message; changed = true; }
         if (!active && !s.remotePlay) i.ps5Watching = false;
+    }
+#endif
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // StreamHud reads veyra.ps5.stream: refresh it once a second while the overlay is up.
+    if (i.moonlightStatsVisible && i.snapshot.remotePlay && i.snapshot.running) {
+        const auto second = uint64_t(GetTickCount64() / 1000);
+        if (second != i.ps5StatsSecond) { i.ps5StatsSecond = second; changed = true; }
     }
 #endif
     if (changed) emit ps5Changed();
