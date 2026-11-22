@@ -72,6 +72,7 @@ struct CaptureCompressedDecoder::Impl {
     media::FFmpegVideoDecoder decoder;
     AVCodecParameters* parameters = nullptr;
     SwsContext* sws = nullptr;
+    bool nativeSoftwareExtent = false;
     bool stream = false;               // setStreamProfile(): PC / Xbox streaming
     bool hardwareRequested = false;
     bool hardware = false;
@@ -195,11 +196,24 @@ struct CaptureCompressedDecoder::Impl {
                     captureCodecKey(codec), description->comp[0].depth));
             }
         }
+        const bool native=stream&&nativeSoftwareExtent;
+        const int outputWidth=native?frame.width:int(width),outputHeight=native?frame.height:int(height);
+        if(outputWidth<=0||outputHeight<=0||outputWidth>D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION||
+           outputHeight>D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION){
+            error="invalid decoded video extent";++failures;return false;
+        }
+        if(target->width!=outputWidth||target->height!=outputHeight||
+           target->format!=AV_PIX_FMT_NV12||!target->data[0]||!target->data[1]){
+            if(!native){error="fixed capture target extent or buffer does not match";++failures;return false;}
+            av_frame_unref(target);
+            target->format=AV_PIX_FMT_NV12;target->width=outputWidth;target->height=outputHeight;
+            if(av_frame_get_buffer(target,32)<0){error="native-size stream output allocation failed";++failures;return false;}
+        }
         if (planarToNv12(frame, target)) { copyFrameProperties(frame, target, true); return true; }
         // swscale cannot supply the analysis pixels of an upload-backed target.
         pipeline::useCaptureUploadCpuPlanes(*target);
         sws = sws_getCachedContext(sws, frame.width, frame.height, sourceFormat,
-            int(width), int(height), AV_PIX_FMT_NV12, SWS_BILINEAR, nullptr, nullptr, nullptr);
+            outputWidth, outputHeight, AV_PIX_FMT_NV12, SWS_BILINEAR, nullptr, nullptr, nullptr);
         if (sws == nullptr) {
             error = "swscale context creation failed";
             ++failures;
@@ -397,6 +411,8 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
     ++p.failures;
     return false;
 }
+
+void CaptureCompressedDecoder::preserveSoftwareStreamExtent(bool enabled) { p_->nativeSoftwareExtent=enabled; }
 
 bool CaptureCompressedDecoder::opened() const { return p_->decoder.opened(); }
 bool CaptureCompressedDecoder::hardwareActive() const { return p_->hardware; }

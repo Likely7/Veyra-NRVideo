@@ -49,6 +49,9 @@ public:
     // the software decoder runs several low-delay threads. Capture cards keep
     // the original behaviour.
     void setStreamProfile(bool enabled);
+    // Xbox targets begin with an estimate. In this mode the decoder can resize
+    // an owned CPU target to the actual coded dimensions after the first frame.
+    void preserveSoftwareStreamExtent(bool enabled);
 
     bool open(CaptureCodec codec, unsigned width, unsigned height,
         const uint8_t* extradata, size_t extradataBytes,

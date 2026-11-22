@@ -485,6 +485,7 @@ void XboxSessionSource::decodeLoop() {
         if (!seenKeyframe && !startsDecoding(unit.data)) { ++p.dropped; requestKeyframe(); continue; }
         if (!p.decoderOpen) {
             p.decoder.setStreamProfile(true);
+            p.decoder.preserveSoftwareStreamExtent(true);
             if (!p.decoder.open(CaptureCodec::H264, p.width, p.height, nullptr, 0,
                                 forceSoftware ? nullptr : p.desc.decodeDevice.get(),
                                 forceSoftware ? nullptr : p.desc.decodeQueue.get())) {
@@ -559,6 +560,8 @@ void XboxSessionSource::decodeLoop() {
         recovery.picture();
         seenKeyframe = true;
         if (unsigned(frame->width) != p.width || unsigned(frame->height) != p.height) {
+            log::info("xbox",std::format("decoded stream extent {}x{} replaces estimate {}x{} backend={}",
+                frame->width,frame->height,p.width,p.height,p.decoder.backendName()));
             p.width = unsigned(frame->width);
             p.height = unsigned(frame->height);
         }
