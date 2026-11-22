@@ -599,6 +599,19 @@
    "ru": " · насыщенность"
   },
   {
+   "zh": " · 首次下载 %1 MB",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": " · 首次下載 %1 MB",
+   "en": " · Initial download %1 MB",
+   "ja": " · 初回ダウンロード %1 MB",
+   "ko": " · 첫 다운로드 %1 MB",
+   "es": " · Descarga inicial de %1 MB",
+   "fr": " · Téléchargement initial de %1 Mo",
+   "de": " · Erster Download %1 MB",
+   "pt-BR": " · Download inicial de %1 MB",
+   "ru": " · Первая загрузка %1 МБ"
+  },
+  {
    "zh": " · 驱动默认",
    "src": "include/veyra/source/CaptureFormatSelection.h",
    "zh-TW": " · 驅動預設",
@@ -1507,19 +1520,6 @@
    "de": "60→30 (adaptive Duplikaterkennung)",
    "pt-BR": "60→30 (remoção adaptativa de duplicados)",
    "ru": "60→30 (адаптивное удаление дублей)"
-  },
-  {
-   "zh": "60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。",
-   "src": "qml/DedupModeRow.qml",
-   "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：偵測並跳過重複畫面。",
-   "en": "60→30 keeps every other frame and skips repeated images when the game runs below 30 fps. Automatic removal detects and skips duplicate images.",
-   "ja": "60→30 は2フレームに1枚を保持し、ゲームが30fpsを下回るときは重複した映像をスキップします。自動除去は重複した映像を検出してスキップします。",
-   "ko": "60→30은 두 프레임마다 한 프레임을 남기고, 게임이 30fps 아래로 떨어지면 반복된 화면을 건너뜁니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다.",
-   "es": "60→30 conserva un fotograma de cada dos y omite los duplicados cuando el juego baja de 30 FPS. La eliminación automática detecta y omite fotogramas repetidos.",
-   "fr": "60→30 conserve une image sur deux et ignore les doublons lorsque le jeu passe sous 30 i/s. La suppression automatique détecte et ignore les images répétées.",
-   "de": "60→30 behält jedes zweite Bild und überspringt Duplikate, wenn das Spiel unter 30 FPS fällt. Die automatische Entfernung erkennt und überspringt doppelte Bilder.",
-   "pt-BR": "60→30 mantém um quadro a cada dois e pula os repetidos quando o jogo fica abaixo de 30 FPS. A remoção automática detecta e pula quadros duplicados.",
-   "ru": "60→30 оставляет каждый второй кадр и пропускает повторы, когда частота игры падает ниже 30 FPS. Автоматическое удаление находит и пропускает повторяющиеся кадры."
   },
   {
    "zh": "8 位 4:2:0 · SDR，所需带宽较低。",
@@ -3264,19 +3264,6 @@
    "ru": "MP4 не может сохранить этот кодек как есть; выберите MKV или исключите этот трек"
   },
   {
-   "zh": "MyMemory 今日免费额度已用完，请换用其他翻译引擎",
-   "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "MyMemory 今日免費額度已用完，請改用其他翻譯引擎",
-   "en": "MyMemory's free quota for today is used up. Choose another translation engine",
-   "ja": "MyMemory の本日の無料枠を使い切りました。別の翻訳エンジンを選んでください",
-   "ko": "MyMemory의 오늘 무료 사용량을 모두 썼습니다. 다른 번역 엔진을 선택하세요",
-   "es": "Se agotó la cuota gratuita de MyMemory de hoy. Elige otro motor de traducción",
-   "fr": "Le quota gratuit de MyMemory pour aujourd’hui est épuisé. Choisissez un autre moteur de traduction",
-   "de": "Das kostenlose Tageskontingent von MyMemory ist aufgebraucht. Wähle eine andere Übersetzungsmaschine",
-   "pt-BR": "A cota gratuita do MyMemory de hoje acabou. Escolha outro mecanismo de tradução",
-   "ru": "Бесплатный лимит MyMemory на сегодня исчерпан. Выберите другой переводчик"
-  },
-  {
    "zh": "MyMemory 需要选择原文语言",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "MyMemory 需要選擇原文語言",
@@ -3769,6 +3756,19 @@
    "de": "Mit OBS Spiel-Capture-Kompatibilität wird die Schnittstelle immer in Software gezeichnet",
    "pt-BR": "Com OBS compatibilidade de captura de jogo em, a interface é sempre desenhada em software",
    "ru": "С OBS совместимостью захвата игры интерфейс всегда рисуется в программном обеспечении."
+  },
+  {
+   "zh": "OpenAI Whisper · MIT · 建议性能较强的 CPU",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "OpenAI Whisper · MIT · 建議效能較高的 CPU",
+   "en": "OpenAI Whisper · MIT · Faster CPU recommended",
+   "ja": "OpenAI Whisper · MIT · 高性能な CPU を推奨",
+   "ko": "OpenAI Whisper · MIT · 고성능 CPU 권장",
+   "es": "OpenAI Whisper · MIT · Se recomienda una CPU rápida",
+   "fr": "OpenAI Whisper · MIT · Processeur rapide recommandé",
+   "de": "OpenAI Whisper · MIT · Schnelle CPU empfohlen",
+   "pt-BR": "OpenAI Whisper · MIT · CPU rápida recomendada",
+   "ru": "OpenAI Whisper · MIT · Рекомендуется быстрый процессор"
   },
   {
    "zh": "PC 串流",
@@ -4289,6 +4289,19 @@
    "de": "PSN-Konto",
    "pt-BR": "Conta PSN",
    "ru": "Учётная запись PSN"
+  },
+  {
+   "zh": "Parakeet TDT · 英语",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "Parakeet TDT · 英語",
+   "en": "Parakeet TDT · English",
+   "ja": "Parakeet TDT · 英語",
+   "ko": "Parakeet TDT · 영어",
+   "es": "Parakeet TDT · inglés",
+   "fr": "Parakeet TDT · anglais",
+   "de": "Parakeet TDT · Englisch",
+   "pt-BR": "Parakeet TDT · inglês",
+   "ru": "Parakeet TDT · английский"
   },
   {
    "zh": "Patreon 主页",
@@ -4967,6 +4980,19 @@
    "ru": "Инструкции виртуального спикера Veyra"
   },
   {
+   "zh": "Veyra 音频",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "Veyra 音訊",
+   "en": "Veyra audio",
+   "ja": "Veyra の音声",
+   "ko": "Veyra 오디오",
+   "es": "Audio de Veyra",
+   "fr": "Audio de Veyra",
+   "de": "Veyra-Audio",
+   "pt-BR": "Áudio do Veyra",
+   "ru": "Звук Veyra"
+  },
+  {
    "zh": "Veyra 预设 (*.vpreset)",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "Veyra 預設 (*.vpreset)",
@@ -5136,6 +5162,19 @@
    "ru": "WASAPI конечная точка аудио недоступна; видео продолжается."
   },
   {
+   "zh": "Whisper Turbo · 多语言",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "Whisper Turbo · 多語言",
+   "en": "Whisper Turbo · multilingual",
+   "ja": "Whisper Turbo · 多言語",
+   "ko": "Whisper Turbo · 다국어",
+   "es": "Whisper Turbo · multilingüe",
+   "fr": "Whisper Turbo · multilingue",
+   "de": "Whisper Turbo · mehrsprachig",
+   "pt-BR": "Whisper Turbo · multilíngue",
+   "ru": "Whisper Turbo · несколько языков"
+  },
+  {
    "zh": "Windows GPU 引擎占用率（",
    "src": "qml/ProPerfOrbs.qml",
    "zh-TW": "Windows GPU 引擎占用率（",
@@ -5162,17 +5201,30 @@
    "ru": "Windows не позволяет Veyra использовать микрофон; разрешить настольные приложения в настройках → Конфиденциальность и безопасность → Микрофон"
   },
   {
-   "zh": "Windows 实时字幕（语音）",
+   "zh": "Windows 实时字幕需要 Windows 11 22H2 或更新版本",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "Windows 即時字幕需要 Windows 11 22H2 或更新版本",
+   "en": "Windows Live Captions requires Windows 11 22H2 or later",
+   "ja": "Windows ライブ キャプションには Windows 11 22H2 以降が必要です",
+   "ko": "Windows 실시간 캡션은 Windows 11 22H2 이상이 필요합니다",
+   "es": "Los subtítulos en directo requieren Windows 11 22H2 o posterior",
+   "fr": "Les sous-titres en direct nécessitent Windows 11 22H2 ou une version ultérieure",
+   "de": "Windows-Liveuntertitel erfordern Windows 11 22H2 oder neuer",
+   "pt-BR": "Legendas ao vivo exigem Windows 11 22H2 ou posterior",
+   "ru": "Для субтитров в реальном времени требуется Windows 11 22H2 или новее"
+  },
+  {
+   "zh": "Windows 实时字幕（旧方式）",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "Windows 即時字幕（語音）",
-   "en": "Windows Live Captions (speech)",
-   "ja": "Windows ライブ キャプション (音声)",
-   "ko": "Windows 라이브 캡션(음성)",
-   "es": "Subtítulos en directo de Windows (voz)",
-   "fr": "Sous-titres en direct de Windows (voix)",
-   "de": "Windows-Liveuntertitel (Sprache)",
-   "pt-BR": "Legendas ao vivo do Windows (fala)",
-   "ru": "Динамические субтитры Windows (речь)"
+   "zh-TW": "Windows 即時字幕（舊方式）",
+   "en": "Windows Live Captions (legacy)",
+   "ja": "Windows ライブ キャプション（旧方式）",
+   "ko": "Windows 실시간 캡션 (이전 방식)",
+   "es": "Subtítulos en directo de Windows (método anterior)",
+   "fr": "Sous-titres en direct de Windows (ancienne méthode)",
+   "de": "Windows-Liveuntertitel (bisherige Methode)",
+   "pt-BR": "Legendas ao vivo do Windows (método anterior)",
+   "ru": "Субтитры в реальном времени Windows (прежний способ)"
   },
   {
    "zh": "Windows 已阻止本次更新，请查看保护历史",
@@ -10389,6 +10441,19 @@
    "ru": "Удаление не удалось; проверьте разрешения папок."
   },
   {
+   "zh": "删除模型",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "刪除模型",
+   "en": "Delete model",
+   "ja": "モデルを削除",
+   "ko": "모델 삭제",
+   "es": "Eliminar modelo",
+   "fr": "Supprimer le modèle",
+   "de": "Modell löschen",
+   "pt-BR": "Excluir modelo",
+   "ru": "Удалить модель"
+  },
+  {
    "zh": "删除此层",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "刪除此層",
@@ -10805,19 +10870,6 @@
    "ru": "Восстановление исходного изображения и каденции кадров внутри регионов"
   },
   {
-   "zh": "区域内恢复原始画面，补帧也不参与，按原始帧节奏更新。最多 4 个区域。",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "區域內恢復原始畫面，補幀也不參與，按原始幀節奏更新。最多 4 個區域。",
-   "en": "Restore the source picture inside each region, updating only at the source frame cadence. Up to 4 regions.",
-   "ja": "領域内を元の映像に戻し、元のフレーム周期で更新します。最大 4 領域。",
-   "ko": "선택 영역에 원본 화면을 표시하고 원본 프레임 간격으로만 갱신합니다. 최대 4개 영역을 지정할 수 있습니다.",
-   "es": "Restaurar el cuadro fuente dentro de cada región, actualizando sólo en la cadencia del fotograma fuente. Hasta 4 regiones.",
-   "fr": "Restaurer l'image source à l'intérieur de chaque région, en ne mettant à jour qu'à la cadence de l’image source. Jusqu'à 4 régions.",
-   "de": "Stellen Sie das Quellbild in jeder Region wieder her und aktualisieren Sie nur in der Quellrahmen-Kadenz. Bis zu 4 Regionen.",
-   "pt-BR": "Restaurar a imagem de origem dentro de cada região, atualizando apenas na cadência de quadros de origem. Até 4 regiões.",
-   "ru": "Восстановление исходного изображения внутри каждой области, обновление только по каденции кадра источника. До 4 регионов."
-  },
-  {
    "zh": "区域内排除 NR 处理。最多 4 个区域。",
    "src": "qml/MaskEditor.qml",
    "zh-TW": "區域內排除 NR 處理。最多 4 個區域。",
@@ -11141,19 +11193,6 @@
    "de": "Lichter schützen",
    "pt-BR": "Proteger realces",
    "ru": "Защищать света"
-  },
-  {
-   "zh": "压缩采集使用码流颜色信息；手动颜色和范围请选择原生采集格式。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "壓縮擷取使用碼流顏色資訊；手動顏色和範圍請選擇原生擷取格式。",
-   "en": "Compressed capture uses the stream's color information; for manual color and range choose a native capture format.",
-   "ja": "圧縮キャプチャーはストリームの色情報を使います。手動の色や範囲を使うにはネイティブのキャプチャーフォーマットを選んでください。",
-   "ko": "압축 캡처는 영상 스트림의 색상 정보를 사용합니다. 색상·범위를 직접 지정하려면 장치의 비압축 캡처 형식을 선택하세요.",
-   "es": "La captura comprimida utiliza la información de color del flujo; para el color manual y el rango elige un formato de captura nativo.",
-   "fr": "La capture compressée utilise l'information de couleur du flux; pour la couleur manuelle et la plage choisir un format de capture natif.",
-   "de": "Compressed capture verwendet die farbinformationen des streams; für manuelle farbe und reichweite wählen sie ein natives aufnahmeformat.",
-   "pt-BR": "Captura compacta usa a informação de cor do fluxo; para cor manual e intervalo escolha um formato de captura nativo.",
-   "ru": "Сжатый захват использует цветовую информацию потока; для ручного цвета и диапазона выберите нативный формат захвата."
   },
   {
    "zh": "压缩采集的色彩空间由码流决定。可以单独指定色彩范围。",
@@ -12664,30 +12703,17 @@
    "ru": "Не удалось сохранить старт по умолчанию предустановленной"
   },
   {
-   "zh": "启用后会把系统字幕文本发送给所选服务。",
+   "zh": "启用后会把识别出的字幕文本发送给所选服务。",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "啟用後會將系統字幕文字傳送至所選服務。",
-   "en": "Enabling this sends system caption text to the selected service.",
-   "ja": "有効にするとシステムの字幕テキストが選択したサービスに送信されます。",
-   "ko": "활성화하면 시스템 자막 텍스트를 선택한 서비스로 전송합니다.",
-   "es": "Al activarlo, el texto de los subtítulos se envía al servicio elegido.",
-   "fr": "L’activation envoie le texte des sous-titres système au service choisi.",
-   "de": "Beim Einschalten wird der Untertiteltext an den gewählten Dienst gesendet.",
-   "pt-BR": "Ao ativar, o texto das legendas do sistema é enviado ao serviço escolhido.",
-   "ru": "При включении текст системных субтитров отправляется выбранному сервису."
-  },
-  {
-   "zh": "启用后会把识别出的画面文字发送给所选服务。",
-   "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "啟用後會將辨識出的畫面文字傳送至所選服務。",
-   "en": "Enabling this sends the recognized on-screen text to the selected service.",
-   "ja": "有効にすると、認識した画面の文字が選択したサービスに送信されます。",
-   "ko": "활성화하면 인식한 화면 텍스트를 선택한 서비스로 전송합니다.",
-   "es": "Al activarlo, el texto reconocido en pantalla se envía al servicio elegido.",
-   "fr": "L’activation envoie le texte reconnu à l’écran au service choisi.",
-   "de": "Beim Einschalten wird der erkannte Text im Bild an den gewählten Dienst gesendet.",
-   "pt-BR": "Ao ativar, o texto reconhecido na tela é enviado ao serviço escolhido.",
-   "ru": "При включении распознанный текст с экрана отправляется выбранному сервису."
+   "zh-TW": "啟用後會將辨識出的字幕文字傳送至所選服務。",
+   "en": "When enabled, recognized captions are sent to the selected service.",
+   "ja": "有効にすると認識した字幕のテキストを選択したサービスに送信します。",
+   "ko": "켜면 인식한 자막 텍스트를 선택한 서비스에 전송합니다.",
+   "es": "Al activarlo, los subtítulos reconocidos se envían al servicio seleccionado.",
+   "fr": "Une fois activé, le texte reconnu est envoyé au service sélectionné.",
+   "de": "Nach dem Aktivieren wird der erkannte Untertiteltext an den gewählten Dienst gesendet.",
+   "pt-BR": "Quando ativado, o texto reconhecido é enviado ao serviço selecionado.",
+   "ru": "После включения распознанный текст отправляется выбранному сервису."
   },
   {
    "zh": "启用失败",
@@ -13208,19 +13234,6 @@
    "de": "Kreis ",
    "pt-BR": "Círculo ",
    "ru": "Круг "
-  },
-  {
-   "zh": "在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "在 PSNTools 網頁取得 Account ID，再到 PS5 串流視窗填入並配對。",
-   "en": "Get your Account ID on PSNTools, then enter it in the PS5 streaming window to pair.",
-   "ja": "PSNTools で Account ID を取得し、PS5 ストリーミング画面に入力してペアリングします。",
-   "ko": "PSNTools에서 계정 ID를 얻은 다음 PS5 스트리밍 창에 입력하여 페어링하세요.",
-   "es": "Obtenga su ID de cuenta en PSNTools, y luego ingrese en la ventana de streaming PS5 a par.",
-   "fr": "Obtenez votre ID de compte sur PSNTools, puis entrez-le dans la fenêtre de diffusion PS5 à paire.",
-   "de": "Holen Sie sich Ihre Account-ID auf PSNTools und geben Sie sie dann in das Streaming-Fenster PS5 ein.",
-   "pt-BR": "Obtenha o ID da sua conta em PSNTools, em seguida, digite-o na janela de transmissão PS5 para emparelhar.",
-   "ru": "Установите номер своего аккаунта PSNTools, а затем введите его в PS5 окно потоковой передачи."
   },
   {
    "zh": "在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。",
@@ -13874,7 +13887,7 @@
   },
   {
    "zh": "声音",
-   "src": "qml/ProPage.qml",
+   "src": "qml/PlayerAudioMenu.qml",
    "zh-TW": "聲音",
    "en": "Audio",
    "ja": "音声",
@@ -16591,7 +16604,7 @@
   },
   {
    "zh": "已关闭",
-   "src": "qml/ProDisplayPanel.qml",
+   "src": "qml/PlayerAudioMenu.qml",
    "zh-TW": "已關閉",
    "en": "Off",
    "ja": "オフ",
@@ -17615,19 +17628,6 @@
    "de": "VRR-Darstellung angefordert; der Treiber hat die Aktivierung nicht bestätigt (AMD-Treiber melden dies nicht; prüfen Sie die Bildwiederholrate im Monitormenü). Prüfen Sie die G-SYNC- oder FreeSync-Einstellungen für Fenster/Vollbild. Dies bedeutet nicht, dass die Treibereinstellung ausgeschaltet ist.",
    "pt-BR": "Apresentação VRR solicitada; o driver não confirmou a ativação (drivers AMD não informam isso; verifique a taxa de atualização no menu do monitor). Verifique as configurações de G-SYNC ou FreeSync em janela/tela cheia. Isso não significa que a configuração do driver esteja desligada.",
    "ru": "Запрошен вывод с VRR; драйвер не подтвердил активацию (драйверы AMD об этом не сообщают; проверьте частоту обновления в меню монитора). Проверьте настройки G-SYNC или FreeSync для оконного/полноэкранного режима. Это не означает, что настройка драйвера выключена."
-  },
-  {
-   "zh": "已请求可变刷新，驱动尚未确认生效；可检查窗口/全屏 G-SYNC 设置，当前状态不代表驱动已关闭",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "已請求可變更新率，驅動尚未確認生效；可檢查視窗/全螢幕 G-SYNC 設定，目前狀態不代表驅動已關閉",
-   "en": "VRR presentation requested; the driver has not confirmed activation. Check windowed/fullscreen G-SYNC settings. This does not mean the driver setting is off.",
-   "ja": "VRR 表示を要求しましたが、ドライバーはまだ動作を確認していません。ウィンドウ/全画面の G-SYNC 設定を確認できます。この状態は設定がオフという意味ではありません。",
-   "ko": "VRR 표시를 요청했지만 드라이버에서 활성화를 확인하지 못했습니다. 창 모드·전체 화면 G-SYNC 설정을 확인하세요. 이 메시지가 드라이버 설정이 꺼졌다는 뜻은 아닙니다.",
-   "es": "VRR presentación solicitada; el controlador no ha confirmado la activación. Ver la ventana / pantalla llena G-SYNC configuración. Esto no significa que el ajuste del controlador esté apagado.",
-   "fr": "VRR présentation demandée; le pilote n'a pas confirmé l'activation. Cochez fenêtre/écran complet G-SYNC paramètres. Cela ne signifie pas que le réglage du pilote est désactivé.",
-   "de": "VRR Präsentation angefordert; der Treiber hat die Aktivierung nicht bestätigt. Fenster/Vollbild prüfen G-SYNC Einstellungen. Dies bedeutet nicht, dass die Einstellung des Treibers ausgeschaltet ist.",
-   "pt-BR": "VRR apresentação solicitada; o condutor não confirmou a activação. Verificar janela/tela cheia G-SYNC configurações. Isto não significa que o condutor esteja desligado.",
-   "ru": "VRR представление запрошено; драйвер не подтвердил активацию. Контрольное окно / Fullscreen G-SYNC Настройки. Это не означает, что драйвер выключен."
   },
   {
    "zh": "已请求，等待驱动确认",
@@ -18683,32 +18683,6 @@
    "ru": "Текущая DLSS генерация кадров требует драйвера {}. {:02} или более новый (запрос NGX)"
   },
   {
-   "zh": "当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "當前 GPU 不支援 NVIDIA 增強；NR、超解析及 DLSS 已關閉，XeSS選擇保留",
-   "en": "This GPU does not support NVIDIA enhancements; NR, super resolution and DLSS are off, the XeSS choice is kept",
-   "ja": "この GPU は NVIDIA の補正機能に非対応です。NR、超解像、DLSS をオフにしました。XeSS の選択は保持します",
-   "ko": "이 GPU는 NVIDIA 보정 기능을 지원하지 않습니다. NR·초해상도·DLSS를 끄고 XeSS 선택은 유지합니다.",
-   "es": "Este GPU no apoya las mejoras NVIDIA; NR, super resolución y DLSS están apagados, se mantiene la opción XeSS",
-   "fr": "Cette GPU ne supporte pas les améliorations NVIDIA; NR, la super résolution et DLSS sont désactivés, le choix XeSS est maintenu",
-   "de": "Dies GPU unterstützt keine NVIDIA Erweiterungen; NR, Superauflösung und DLSS sind ausgeschaltet, die XeSS Wahl wird beibehalten",
-   "pt-BR": "Esta GPU não suporta melhorias NVIDIA; NR, super resolução e DLSS estão fora, a escolha XeSS é mantida",
-   "ru": "Это GPU не поддерживает NVIDIA улучшения; NR, супер разрешение и DLSS выключены, выбор XeSS сохранен"
-  },
-  {
-   "zh": "当前 GPU 不支持 NVIDIA 增强；超分及 DLSS 已关闭，NR 使用 AMD 运行库，XeSS选择保留",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "目前 GPU 不支援 NVIDIA 增強；超解析及 DLSS 已關閉，NR 使用 AMD 執行庫，XeSS 選擇保留",
-   "en": "This GPU does not support NVIDIA enhancements; upscaling and DLSS are off, NR uses the AMD runtime, and the XeSS choice is kept",
-   "ja": "この GPU は NVIDIA 拡張に対応していません。超解像と DLSS はオフ、NR は AMD ランタイムを使用し、XeSS の選択は維持します",
-   "ko": "이 GPU는 NVIDIA 보정 기능을 지원하지 않습니다. 초해상도·DLSS를 끄고 NR은 AMD 런타임을 사용합니다. XeSS 선택은 유지합니다.",
-   "es": "Este GPU no soporta las mejoras NVIDIA; el aumento y DLSS están apagados, NR utiliza el tiempo de ejecución AMD, y se mantiene la opción XeSS",
-   "fr": "Cette GPU ne supporte pas les améliorations NVIDIA; l'augmentation de l'échelle et DLSS sont désactivées, NR utilise le AMD runtime, et le choix XeSS est maintenu",
-   "de": "Dies GPU unterstützt keine NVIDIA Erweiterungen; Upscaling und DLSS sind ausgeschaltet, NR verwendet die AMD Laufzeit und die XeSS Auswahl wird beibehalten",
-   "pt-BR": "Este GPU não suporta NVIDIA melhorias; upscaling e DLSS estão desligados, NR utiliza o tempo de execução AMD, e a escolha XeSS é mantida",
-   "ru": "Это GPU не поддерживает NVIDIA улучшения; масштабирование и DLSS выключены, NR использует AMD время выполнения, и XeSS выбор сохранен."
-  },
-  {
    "zh": "当前 GPU 不支持所选 NVIDIA 增强",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前 GPU 不支援所選 NVIDIA 增強",
@@ -19032,6 +19006,19 @@
    "de": "Diese Quelle ist nicht Dolby Vision; Verwenden Sie den Empfehlungsbutton unter den Kurveneinstellungen",
    "pt-BR": "esta fonte não é Dolby Vision; use o botão de recomendação sob a configuração da curva",
    "ru": "Этот источник не Dolby Vision; используйте кнопку рекомендации в настройках кривой."
+  },
+  {
+   "zh": "当前片源没有可识别的 PCM 音频",
+   "src": "src/ui/LiveAsr.cpp",
+   "zh-TW": "目前來源沒有可辨識的 PCM 音訊",
+   "en": "No PCM audio available from this source",
+   "ja": "このソースに認識できる PCM 音声がありません",
+   "ko": "이 소스에서 인식할 수 있는 PCM 오디오가 없습니다",
+   "es": "Esta fuente no ofrece audio PCM para reconocer",
+   "fr": "Cette source ne fournit pas d’audio PCM à reconnaître",
+   "de": "Diese Quelle liefert kein PCM-Audio zur Erkennung",
+   "pt-BR": "Esta fonte não fornece áudio PCM para reconhecimento",
+   "ru": "В этом источнике нет звука PCM для распознавания"
   },
   {
    "zh": "当前片源没有字幕",
@@ -21584,7 +21571,7 @@
   },
   {
    "zh": "播放或连接片源后开始翻译",
-   "src": "src/ui/LiveTranslation.cpp",
+   "src": "src/ui/LiveAsr.cpp",
    "zh-TW": "播放或連接片源後開始翻譯",
    "en": "Translation starts when a source plays",
    "ja": "映像ソースの再生を開始すると翻訳します",
@@ -22389,19 +22376,6 @@
    "ru": "Не удалось сохранить загружаемую модель"
   },
   {
-   "zh": "无法保存翻译运行库",
-   "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "無法儲存翻譯執行庫",
-   "en": "Could not save the translation runtime",
-   "ja": "翻訳ランタイムを保存できません",
-   "ko": "번역 런타임을 저장할 수 없습니다",
-   "es": "No se pudo guardar el entorno de traducción",
-   "fr": "Impossible d’enregistrer le moteur de traduction",
-   "de": "Übersetzungslaufzeit konnte nicht gespeichert werden",
-   "pt-BR": "Não foi possível salvar o runtime de tradução",
-   "ru": "Не удалось сохранить среду перевода"
-  },
-  {
    "zh": "无法保存虚拟扬声器安装包",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "無法儲存虛擬揚聲器安裝包",
@@ -22909,6 +22883,19 @@
    "ru": "Невозможно скопировать параметры трека"
   },
   {
+   "zh": "无法完整删除模型文件",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "無法完整刪除模型檔案",
+   "en": "Couldn't delete all model files",
+   "ja": "一部のモデルファイルを削除できません",
+   "ko": "일부 모델 파일을 삭제할 수 없습니다",
+   "es": "No se pudieron eliminar todos los archivos del modelo",
+   "fr": "Impossible de supprimer tous les fichiers du modèle",
+   "de": "Einige Modelldateien konnten nicht gelöscht werden",
+   "pt-BR": "Não foi possível excluir todos os arquivos do modelo",
+   "ru": "Не удалось удалить все файлы модели"
+  },
+  {
    "zh": "无法建立串流连接（错误码 {}）。",
    "src": "src/source/MoonlightSessionSource.cpp",
    "zh-TW": "無法建立串流連接（錯誤碼 {}）。",
@@ -23169,19 +23156,6 @@
    "ru": "Невозможно определить, поддерживает ли дисплей эту функцию (пока только для GPU NVIDIA и AMD)"
   },
   {
-   "zh": "无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "無法偵測螢幕是否支援（目前只支援 NVIDIA 顯示卡）",
-   "en": "Cannot detect whether the display supports it (NVIDIA GPUs only for now)",
-   "ja": "ディスプレイの対応を検出できません（現在は NVIDIA GPU のみ）",
-   "ko": "디스플레이 지원 여부를 확인하지 못했습니다. 현재 NVIDIA GPU에서만 확인할 수 있습니다.",
-   "es": "No se puede detectar si la pantalla lo soporta (NVIDIA GPUs sólo por ahora)",
-   "fr": "Impossible de détecter si l'affichage le supporte (NVIDIA GPUs seulement pour le moment)",
-   "de": "Kann nicht erkennen, ob das Display es unterstützt (NVIDIA GPUs nur vorerst)",
-   "pt-BR": "Não é possível detectar se o ecrã o suporta (NVIDIA GPUs apenas por enquanto)",
-   "ru": "Невозможно определить, поддерживает ли дисплей (только на данный момент) графические процессоры NVIDIA"
-  },
-  {
    "zh": "无法添加文件：%1",
    "src": "src/ui/bridge/Chain.cpp",
    "zh-TW": "無法添加檔案：%1",
@@ -23221,17 +23195,17 @@
    "ru": "Не удалось получить ток GPU устройства"
   },
   {
-   "zh": "无法解压翻译运行库",
+   "zh": "无法解压模型文件",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "無法解壓縮翻譯執行庫",
-   "en": "Could not extract the translation runtime",
-   "ja": "翻訳ランタイムを展開できません",
-   "ko": "번역 런타임을 압축 해제할 수 없습니다",
-   "es": "No se pudo extraer el entorno de traducción",
-   "fr": "Impossible d’extraire le moteur de traduction",
-   "de": "Übersetzungslaufzeit konnte nicht entpackt werden",
-   "pt-BR": "Não foi possível extrair o runtime de tradução",
-   "ru": "Не удалось распаковать среду перевода"
+   "zh-TW": "無法解壓縮模型檔案",
+   "en": "Couldn't extract model files",
+   "ja": "モデルファイルを展開できません",
+   "ko": "모델 파일을 압축 해제할 수 없습니다",
+   "es": "No se pudieron extraer los archivos del modelo",
+   "fr": "Impossible d’extraire les fichiers du modèle",
+   "de": "Modelldateien konnten nicht entpackt werden",
+   "pt-BR": "Não foi possível extrair os arquivos do modelo",
+   "ru": "Не удалось распаковать файлы модели"
   },
   {
    "zh": "无法解码PNG/JPEG",
@@ -25366,6 +25340,19 @@
    "ru": "Локальный переводчик остановлен. Включите его снова."
   },
   {
+   "zh": "本地语音识别停止，请重新启用",
+   "src": "src/ui/LiveAsr.cpp",
+   "zh-TW": "本機語音辨識已停止，請重新啟用",
+   "en": "Local speech recognition stopped. Enable it again.",
+   "ja": "ローカル音声認識が停止しました。再度有効にしてください。",
+   "ko": "로컬 음성 인식이 중지됐습니다. 다시 켜세요.",
+   "es": "Se detuvo el reconocimiento local. Vuelve a activarlo.",
+   "fr": "La reconnaissance vocale locale s’est arrêtée. Réactivez-la.",
+   "de": "Die lokale Spracherkennung wurde beendet. Aktiviere sie erneut.",
+   "pt-BR": "O reconhecimento de fala local parou. Ative novamente.",
+   "ru": "Локальное распознавание речи остановлено. Включите его снова."
+  },
+  {
    "zh": "本地运行库校验失败，请重新下载",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "本機執行庫驗證失敗，請重新下載",
@@ -26068,6 +26055,19 @@
    "ru": "Сила модели"
   },
   {
+   "zh": "模型文件正在使用，请稍后重试",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "模型檔案使用中，請稍後再試",
+   "en": "Model files are in use. Try again later.",
+   "ja": "モデルファイルは使用中です。後でもう一度お試しください。",
+   "ko": "모델 파일을 사용 중입니다. 나중에 다시 시도하세요.",
+   "es": "Los archivos del modelo están en uso. Inténtalo más tarde.",
+   "fr": "Les fichiers du modèle sont utilisés. Réessayez plus tard.",
+   "de": "Modelldateien werden verwendet. Versuche es später erneut.",
+   "pt-BR": "Os arquivos do modelo estão em uso. Tente novamente mais tarde.",
+   "ru": "Файлы модели используются. Повторите попытку позже."
+  },
+  {
    "zh": "模式",
    "src": "qml/ColourMixer.qml",
    "zh-TW": "模式",
@@ -26237,30 +26237,17 @@
    "ru": "Загрузка обновления · %1%"
   },
   {
-   "zh": "正在下载本地推理运行库…",
+   "zh": "正在下载模型与运行库…",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "正在下載本機推論執行庫…",
-   "en": "Downloading the CPU runtime…",
-   "ja": "CPU ランタイムをダウンロード中…",
-   "ko": "CPU 런타임 다운로드 중…",
-   "es": "Descargando el entorno de CPU…",
-   "fr": "Téléchargement du moteur CPU…",
-   "de": "CPU-Laufzeit wird heruntergeladen…",
-   "pt-BR": "Baixando o runtime de CPU…",
-   "ru": "Загрузка среды ЦП…"
-  },
-  {
-   "zh": "正在下载翻译模型…",
-   "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "正在下載翻譯模型…",
-   "en": "Downloading the translation model…",
-   "ja": "翻訳モデルをダウンロード中…",
-   "ko": "번역 모델 다운로드 중…",
-   "es": "Descargando el modelo de traducción…",
-   "fr": "Téléchargement du modèle de traduction…",
-   "de": "Übersetzungsmodell wird heruntergeladen…",
-   "pt-BR": "Baixando o modelo de tradução…",
-   "ru": "Загрузка модели перевода…"
+   "zh-TW": "正在下載模型與執行階段…",
+   "en": "Downloading model and runtime…",
+   "ja": "モデルとランタイムをダウンロード中…",
+   "ko": "모델과 런타임 다운로드 중…",
+   "es": "Descargando el modelo y el entorno de ejecución…",
+   "fr": "Téléchargement du modèle et de l’environnement d’exécution…",
+   "de": "Modell und Laufzeit werden heruntergeladen…",
+   "pt-BR": "Baixando o modelo e o ambiente de execução…",
+   "ru": "Загрузка модели и среды выполнения…"
   },
   {
    "zh": "正在保存正式文件",
@@ -26378,6 +26365,19 @@
    "de": "Lokales Übersetzungsmodell wird geladen…",
    "pt-BR": "Carregando o modelo de tradução local…",
    "ru": "Загрузка локальной модели перевода…"
+  },
+  {
+   "zh": "正在加载本地语音识别模型…",
+   "src": "src/ui/LiveAsr.cpp",
+   "zh-TW": "正在載入本機語音辨識模型…",
+   "en": "Loading local speech recognition model…",
+   "ja": "ローカル音声認識モデルを読み込み中…",
+   "ko": "로컬 음성 인식 모델을 불러오는 중…",
+   "es": "Cargando el modelo de voz local…",
+   "fr": "Chargement du modèle vocal local…",
+   "de": "Lokales Spracherkennungsmodell wird geladen…",
+   "pt-BR": "Carregando modelo local de reconhecimento de fala…",
+   "ru": "Загрузка локальной модели распознавания речи…"
   },
   {
    "zh": "正在取消…",
@@ -26939,6 +26939,32 @@
    "ru": "Автоматизация: анализ аудиодорожки (не более 30 минут)"
   },
   {
+   "zh": "正在解压并验证模型…",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "正在解壓縮並驗證模型…",
+   "en": "Extracting and verifying model…",
+   "ja": "モデルを展開して検証中…",
+   "ko": "모델을 압축 해제하고 검증하는 중…",
+   "es": "Extrayendo y verificando el modelo…",
+   "fr": "Extraction et vérification du modèle…",
+   "de": "Modell wird entpackt und geprüft…",
+   "pt-BR": "Extraindo e verificando o modelo…",
+   "ru": "Распаковка и проверка модели…"
+  },
+  {
+   "zh": "正在识别 Veyra 音频…",
+   "src": "src/ui/LiveAsr.cpp",
+   "zh-TW": "正在辨識 Veyra 音訊…",
+   "en": "Listening to Veyra audio…",
+   "ja": "Veyra の音声を認識中…",
+   "ko": "Veyra 오디오 인식 중…",
+   "es": "Reconociendo el audio de Veyra…",
+   "fr": "Reconnaissance de l’audio de Veyra…",
+   "de": "Veyra-Audio wird erkannt…",
+   "pt-BR": "Reconhecendo o áudio do Veyra…",
+   "ru": "Распознавание звука Veyra…"
+  },
+  {
    "zh": "正在读取主机列表…",
    "src": "src/ui/XboxModel.cpp",
    "zh-TW": "正在讀取主機列表…",
@@ -27132,19 +27158,6 @@
    "de": "Vorprüfung der Dateien und Tracks dieser Charge",
    "pt-BR": "Pré- verificação dos arquivos e faixas deste lote",
    "ru": "Предварительная проверка файлов и треков этой партии"
-  },
-  {
-   "zh": "正在验证翻译运行库…",
-   "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "正在驗證翻譯執行庫…",
-   "en": "Verifying the translation runtime…",
-   "ja": "翻訳ランタイムを検証中…",
-   "ko": "번역 런타임 검증 중…",
-   "es": "Verificando el entorno de traducción…",
-   "fr": "Vérification du moteur de traduction…",
-   "de": "Übersetzungslaufzeit wird geprüft…",
-   "pt-BR": "Verificando o runtime de tradução…",
-   "ru": "Проверка среды перевода…"
   },
   {
    "zh": "正常",
@@ -29799,17 +29812,17 @@
    "ru": "Запись остановлена: записи на диске слишком медленные (используйте более быстрый диск или более низкий битрейт)."
   },
   {
-   "zh": "磁盘可用空间不足，下载需要约 1.2 GB",
+   "zh": "磁盘可用空间不足，至少需要 %1 MB",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "磁碟可用空間不足，下載需要約 1.2 GB",
-   "en": "About 1.2 GB of free disk space is needed",
-   "ja": "約 1.2 GB の空き容量が必要です",
-   "ko": "약 1.2 GB의 여유 공간이 필요합니다",
-   "es": "Se necesitan unos 1,2 GB libres",
-   "fr": "Environ 1,2 Go d’espace libre sont nécessaires",
-   "de": "Etwa 1,2 GB freier Speicher sind erforderlich",
-   "pt-BR": "São necessários cerca de 1,2 GB livres",
-   "ru": "Требуется около 1,2 ГБ свободного места"
+   "zh-TW": "磁碟可用空間不足，至少需要 %1 MB",
+   "en": "Not enough disk space. At least %1 MB required.",
+   "ja": "ディスク空き容量が不足しています。最低 %1 MB が必要です。",
+   "ko": "디스크 공간이 부족합니다. 최소 %1 MB가 필요합니다.",
+   "es": "Espacio en disco insuficiente. Se necesitan al menos %1 MB.",
+   "fr": "Espace disque insuffisant. Il faut au moins %1 Mo.",
+   "de": "Nicht genug Speicherplatz. Mindestens %1 MB erforderlich.",
+   "pt-BR": "Espaço em disco insuficiente. São necessários pelo menos %1 MB.",
+   "ru": "Недостаточно места на диске. Требуется не менее %1 МБ."
   },
   {
    "zh": "磁盘空间不足，无法下载并解压更新",
@@ -31476,19 +31489,6 @@
    "ru": "Язык перевода"
   },
   {
-   "zh": "翻译接口未返回译文",
-   "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "翻譯介面未回傳譯文",
-   "en": "The API returned no translation",
-   "ja": "API から訳文が返りませんでした",
-   "ko": "API가 번역문을 반환하지 않았습니다",
-   "es": "La API no devolvió una traducción",
-   "fr": "L’API n’a renvoyé aucune traduction",
-   "de": "Die API hat keine Übersetzung geliefert",
-   "pt-BR": "A API não retornou tradução",
-   "ru": "API не вернул перевод"
-  },
-  {
    "zh": "翻译接口返回 HTTP %1",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "翻譯介面傳回 HTTP %1",
@@ -31502,6 +31502,19 @@
    "ru": "API перевода вернул HTTP %1"
   },
   {
+   "zh": "翻译服务未返回译文",
+   "src": "src/ui/LiveTranslation.cpp",
+   "zh-TW": "翻譯服務未傳回譯文",
+   "en": "The translation service returned no text",
+   "ja": "翻訳サービスから翻訳文が返されませんでした",
+   "ko": "번역 서비스에서 번역문을 반환하지 않았습니다",
+   "es": "El servicio no devolvió una traducción",
+   "fr": "Le service de traduction n’a renvoyé aucun texte",
+   "de": "Der Übersetzungsdienst hat keinen Text zurückgegeben",
+   "pt-BR": "O serviço de tradução não retornou texto",
+   "ru": "Сервис перевода не вернул текст"
+  },
+  {
    "zh": "翻译请求失败，请检查连接",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "翻譯請求失敗，請檢查連線",
@@ -31513,32 +31526,6 @@
    "de": "Übersetzungsanfrage fehlgeschlagen. Verbindung prüfen.",
    "pt-BR": "Falha na solicitação de tradução. Verifique a conexão.",
    "ru": "Запрос перевода не выполнен. Проверьте соединение."
-  },
-  {
-   "zh": "翻译运行库校验失败",
-   "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "翻譯執行庫驗證失敗",
-   "en": "Translation runtime failed verification",
-   "ja": "翻訳ランタイムの検証に失敗しました",
-   "ko": "번역 런타임 검증 실패",
-   "es": "El entorno de traducción no se pudo verificar",
-   "fr": "Échec de la vérification du moteur de traduction",
-   "de": "Prüfung der Übersetzungslaufzeit fehlgeschlagen",
-   "pt-BR": "Falha ao verificar o runtime de tradução",
-   "ru": "Среда перевода не прошла проверку"
-  },
-  {
-   "zh": "翻译运行库正在使用，请稍后重试",
-   "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "翻譯執行庫正在使用，請稍後重試",
-   "en": "The runtime is in use. Try again later.",
-   "ja": "ランタイムが使用中です。後でもう一度お試しください。",
-   "ko": "런타임 사용 중입니다. 나중에 다시 시도하세요.",
-   "es": "El entorno está en uso. Inténtalo más tarde.",
-   "fr": "Le moteur est en cours d’utilisation. Réessayez plus tard.",
-   "de": "Laufzeit wird verwendet. Später erneut versuchen.",
-   "pt-BR": "O runtime está em uso. Tente novamente mais tarde.",
-   "ru": "Среда используется. Повторите попытку позже."
   },
   {
    "zh": "老片平淡",
@@ -33881,19 +33868,6 @@
    "ru": "Видео закодировано. Ошибка Windows {} помешала переименованию. Временный файл содержит полное видео."
   },
   {
-   "zh": "视频已编码，但保存文件名失败（Windows错误 {}）；可保留partial文件",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "影片已編碼，但儲存檔名失敗（Windows錯誤 {}）；可保留partial檔案",
-   "en": "The video was encoded, but saving the file name failed (Windows error {}); the partial file can be kept",
-   "ja": "動画はエンコードしましたが、ファイル名を付けて保存できませんでした（Windows エラー {}）。partial ファイルは残せます",
-   "ko": "영상 인코딩은 끝났지만 최종 파일명으로 저장하지 못했습니다 (Windows 오류 {}). 분할 파일은 유지됩니다.",
-   "es": "El vídeo fue codificado, pero guardar el nombre del archivo falló (Windows error {}); el archivo parcial se puede mantener",
-   "fr": "La vidéo a été encodée, mais l'enregistrement du nom du fichier a échoué (Windows erreur {}); le fichier partiel peut être conservé",
-   "de": "Das Video wurde codiert, aber das Speichern des Dateinamens ist fehlgeschlagen (Windows Fehler {}); die Teildatei kann beibehalten werden",
-   "pt-BR": "O vídeo foi codificado, mas salvar o nome do arquivo falhou (Windows erro {}); o arquivo parcial pode ser mantido",
-   "ru": "Видео было закодировано, но сохранение имени файла не удалось (Windows ошибка {}); частичный файл может быть сохранен."
-  },
-  {
    "zh": "视频恢复上次进度；采集卡沿用上次设备与设置",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "影片恢復上次進度；擷取卡沿用上次裝置與設定",
@@ -34048,6 +34022,19 @@
    "de": "Konnte den ersten Videorahmen nicht lesen",
    "pt-BR": "Não foi possível ler o primeiro quadro de vídeo",
    "ru": "Не удалось прочесть первый видеокадр"
+  },
+  {
+   "zh": "解压后的模型文件校验失败",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "解壓縮後的模型檔案驗證失敗",
+   "en": "Extracted model files failed verification",
+   "ja": "展開したモデルファイルの検証に失敗しました",
+   "ko": "압축 해제한 모델 파일 검증 실패",
+   "es": "Falló la verificación de los archivos extraídos",
+   "fr": "Échec de la vérification des fichiers extraits",
+   "de": "Die entpackten Modelldateien konnten nicht geprüft werden",
+   "pt-BR": "Falha na verificação dos arquivos extraídos",
+   "ru": "Проверка распакованных файлов модели не пройдена"
   },
   {
    "zh": "解码",
@@ -34492,6 +34479,19 @@
    "ru": "Сейчас в области нет текста"
   },
   {
+   "zh": "识别实时倍率 %1 · 翻译平均 %2 ms · 跳过 %3 句",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識即時倍率 %1 · 翻譯平均 %2 ms · 略過 %3 句",
+   "en": "Recognition real-time factor %1 · Translation mean %2 ms · Skipped sentences %3",
+   "ja": "認識リアルタイム係数 %1 · 翻訳平均 %2 ms · 省略 %3 文",
+   "ko": "인식 실시간 계수 %1 · 번역 평균 %2 ms · 건너뜀 %3문장",
+   "es": "Factor de tiempo real %1 · Traducción media %2 ms · Frases omitidas %3",
+   "fr": "Facteur temps réel %1 · Traduction moyenne %2 ms · Phrases ignorées %3",
+   "de": "Echtzeitfaktor %1 · Übersetzung im Mittel %2 ms · Übersprungene Sätze %3",
+   "pt-BR": "Fator de tempo real %1 · Tradução média %2 ms · Frases ignoradas %3",
+   "ru": "Коэффициент реального времени %1 · Среднее время перевода %2 мс · Пропущено фраз %3"
+  },
+  {
    "zh": "识别并保护准心，框内背景继续补帧",
    "src": "qml/MaskEditor.qml",
    "zh-TW": "辨識並保護準心，框內背景繼續補幀",
@@ -34503,6 +34503,19 @@
    "de": "Erkennt und schützt das Fadenkreuz, während die Frame-Generierung für den Hintergrund weiterläuft",
    "pt-BR": "Detecta e protege a mira e continua gerando quadros para o fundo",
    "ru": "Обнаруживает и защищает прицел, сохраняя генерацию кадров для фона"
+  },
+  {
+   "zh": "识别播放中的声音，翻译后的字幕显示在 Veyra 预览画面内。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識播放中的聲音，翻譯後的字幕會顯示在 Veyra 預覽畫面中。",
+   "en": "Recognize speech during playback and show translated captions in the Veyra preview.",
+   "ja": "再生中の音声を認識し、翻訳した字幕を Veyra のプレビューに表示します。",
+   "ko": "재생 중인 음성을 인식해 번역 자막을 Veyra 미리 보기에 표시합니다.",
+   "es": "Reconoce el habla durante la reproducción y muestra los subtítulos traducidos en la vista previa de Veyra.",
+   "fr": "Reconnaît la parole pendant la lecture et affiche les sous-titres traduits dans l’aperçu de Veyra.",
+   "de": "Erkennt Sprache während der Wiedergabe und zeigt die Übersetzung in der Veyra-Vorschau an.",
+   "pt-BR": "Reconhece a fala durante a reprodução e mostra as legendas traduzidas na prévia do Veyra.",
+   "ru": "Распознаёт речь при воспроизведении и показывает перевод в окне просмотра Veyra."
   },
   {
    "zh": "识别有固定边框的数字和状态条，补帧时保留真实画面中的内容 · 实验 · 默认关闭",
@@ -34531,6 +34544,45 @@
    "ru": "Уровень обнаружения"
   },
   {
+   "zh": "识别模型已删除",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "辨識模型已刪除",
+   "en": "Speech model deleted",
+   "ja": "音声認識モデルを削除しました",
+   "ko": "음성 인식 모델 삭제됨",
+   "es": "Modelo de voz eliminado",
+   "fr": "Modèle vocal supprimé",
+   "de": "Sprachmodell gelöscht",
+   "pt-BR": "Modelo de fala excluído",
+   "ru": "Модель распознавания удалена"
+  },
+  {
+   "zh": "识别模型已就绪",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識模型已就緒",
+   "en": "Speech model ready",
+   "ja": "音声認識モデルの準備完了",
+   "ko": "음성 인식 모델 준비 완료",
+   "es": "Modelo de voz listo",
+   "fr": "Modèle vocal prêt",
+   "de": "Sprachmodell bereit",
+   "pt-BR": "Modelo de fala pronto",
+   "ru": "Модель распознавания готова"
+  },
+  {
+   "zh": "识别模型按需下载",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識模型按需下載",
+   "en": "Speech model download",
+   "ja": "音声認識モデルのダウンロード",
+   "ko": "음성 인식 모델 다운로드",
+   "es": "Descarga del modelo de voz",
+   "fr": "Téléchargement du modèle vocal",
+   "de": "Sprachmodell herunterladen",
+   "pt-BR": "Baixar modelo de fala",
+   "ru": "Загрузка модели распознавания"
+  },
+  {
    "zh": "识别系统播放的声音。",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "辨識系統播放的聲音。",
@@ -34542,6 +34594,19 @@
    "de": "Erkennt den vom System wiedergegebenen Ton.",
    "pt-BR": "Transcreve o som reproduzido pelo sistema.",
    "ru": "Распознаёт звук, воспроизводимый системой."
+  },
+  {
+   "zh": "识别线程",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "辨識執行緒",
+   "en": "Recognition threads",
+   "ja": "認識スレッド数",
+   "ko": "인식 스레드",
+   "es": "Hilos de reconocimiento",
+   "fr": "Threads de reconnaissance",
+   "de": "Erkennungsthreads",
+   "pt-BR": "Threads de reconhecimento",
+   "ru": "Потоки распознавания"
   },
   {
    "zh": "诊断信息",
@@ -34594,6 +34659,19 @@
    "de": "Diagnoseprotokoll",
    "pt-BR": "Log de diagnóstico",
    "ru": "Журнал диагностики"
+  },
+  {
+   "zh": "译文行数上限",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "譯文行數上限",
+   "en": "Maximum translated lines",
+   "ja": "翻訳字幕の最大行数",
+   "ko": "번역 자막 최대 줄 수",
+   "es": "Máximo de líneas traducidas",
+   "fr": "Nombre maximal de lignes traduites",
+   "de": "Maximale Zeilen für die Übersetzung",
+   "pt-BR": "Máximo de linhas traduzidas",
+   "ru": "Максимум строк перевода"
   },
   {
    "zh": "该地址没有视频流",
@@ -34700,6 +34778,32 @@
    "ru": "Распознавание речи"
   },
   {
+   "zh": "语音识别文件校验失败，请重新下载",
+   "src": "src/ui/LiveAsr.cpp",
+   "zh-TW": "語音辨識檔案驗證失敗，請重新下載",
+   "en": "Speech model verification failed. Download it again.",
+   "ja": "音声認識ファイルを検証できません。再ダウンロードしてください。",
+   "ko": "음성 인식 파일 검증 실패. 다시 다운로드하세요.",
+   "es": "No se pudo verificar el modelo de voz. Vuelve a descargarlo.",
+   "fr": "Échec de la vérification du modèle vocal. Téléchargez-le à nouveau.",
+   "de": "Sprachmodell konnte nicht geprüft werden. Lade es erneut herunter.",
+   "pt-BR": "Falha ao verificar o modelo de fala. Baixe o modelo novamente.",
+   "ru": "Не удалось проверить модель распознавания. Загрузите её заново."
+  },
+  {
+   "zh": "语音识别模型",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "語音辨識模型",
+   "en": "Speech recognition model",
+   "ja": "音声認識モデル",
+   "ko": "음성 인식 모델",
+   "es": "Modelo de reconocimiento de voz",
+   "fr": "Modèle de reconnaissance vocale",
+   "de": "Spracherkennungsmodell",
+   "pt-BR": "Modelo de reconhecimento de fala",
+   "ru": "Модель распознавания речи"
+  },
+  {
    "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
    "src": "src/ui/NvidiaVrrProfileController.cpp",
    "zh-TW": "請以系統管理員身分啟動本軟體後重試；完成設定後可恢復一般方式啟動。",
@@ -34750,6 +34854,19 @@
    "de": "Zuerst das lokale Übersetzungsmodell herunterladen",
    "pt-BR": "Baixe primeiro o modelo de tradução local",
    "ru": "Сначала загрузите локальную модель перевода"
+  },
+  {
+   "zh": "请先下载语音识别模型",
+   "src": "src/ui/LiveAsr.cpp",
+   "zh-TW": "請先下載語音辨識模型",
+   "en": "Download a speech recognition model first",
+   "ja": "先に音声認識モデルをダウンロードしてください",
+   "ko": "먼저 음성 인식 모델을 다운로드하세요",
+   "es": "Descarga primero un modelo de voz",
+   "fr": "Téléchargez d’abord un modèle vocal",
+   "de": "Lade zuerst ein Spracherkennungsmodell herunter",
+   "pt-BR": "Baixe primeiro um modelo de reconhecimento de fala",
+   "ru": "Сначала загрузите модель распознавания речи"
   },
   {
    "zh": "请先切换到要保存的编辑模式",
@@ -35454,19 +35571,6 @@
    "ru": "Не удалось прочитать форматы захвата (%1, 0x%2). %3"
   },
   {
-   "zh": "读取采集格式失败：%1（0x%2）。请检查设备占用与驱动后重试。",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "讀取擷取格式失敗：%1（0x%2）。請檢查裝置占用與驅動後重試。",
-   "en": "Failed to read capture formats: %1 (0x%2). Check whether the device is in use and check its driver, then retry.",
-   "ja": "キャプチャ形式を読み取れません：%1（0x%2）。デバイスの使用状況とドライバーを確認して再試行してください。",
-   "ko": "캡처 형식을 읽지 못했습니다: %1 (0x%2). 장치가 사용 중인지 확인하고 드라이버를 확인한 후 다시 시도하십시오.",
-   "es": "No se puede leer los formatos de captura: %1 (0x%2). Compruebe si el dispositivo está en uso y verifique su controlador, luego vuelva a entrar.",
-   "fr": "Impossible de lire les formats de capture: %1 (0x %2). Vérifiez si l'appareil est utilisé et vérifiez son pilote, puis réessayez.",
-   "de": "Gescheitert, um Aufnahmeformate zu lesen: %1 (0x %2). Überprüfen Sie, ob das Gerät in Gebrauch ist, und überprüfen Sie den Treiber, und versuchen Sie es erneut.",
-   "pt-BR": "Não foi possível ler os formatos de captura: %1 (0x %2). Verifique se o dispositivo está em uso e verifique seu driver, em seguida, tente novamente.",
-   "ru": "Не удалось прочитать форматы захвата: %1 (0x %2). Проверьте, используется ли устройство, и проверьте его драйвер, а затем повторите попытку."
-  },
-  {
    "zh": "读取附属轨道",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "讀取附屬軌道",
@@ -35530,19 +35634,6 @@
    "de": "Planungswarte P95: %1 ms",
    "pt-BR": "Esperar agendamento P95: %1 ms",
    "ru": "Расписание ожидания P95: %1ms"
-  },
-  {
-   "zh": "调度降档",
-   "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "調度降檔",
-   "en": "Scheduling stepped down",
-   "ja": "スケジュールを段階的に下げました",
-   "ko": "처리 단계 하향",
-   "es": "Planificación reducida",
-   "fr": "Planification réduite",
-   "de": "Planung heruntergestuft",
-   "pt-BR": "Agendamento reduzido",
-   "ru": "Планирование снижено"
   },
   {
    "zh": "调控方式",
@@ -38587,19 +38678,6 @@
    "ru": "Карта захвата * %1"
   },
   {
-   "zh": "采集卡上游输入连接失败（0x{:08X}），请检查驱动与输入选择。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "擷取卡上游輸入連接失敗（0x{:08X}），請檢查驅動與輸入選擇。",
-   "en": "Capture card upstream input connection failed (0x{:08X}). Check the driver and selected input.",
-   "ja": "キャプチャカードの上流入力への接続に失敗しました（0x{:08X}）。ドライバーと入力の選択を確認してください。",
-   "ko": "캡처 카드 업스트림 입력 연결에 실패했습니다(0x{:08X}). 드라이버와 선택된 입력을 확인하십시오.",
-   "es": "Capture card upstream input connection failed (0x{:08X}). Compruebe el controlador y la entrada seleccionada.",
-   "fr": "La connexion en amont de la carte de saisie a échoué (0x {:08X}). Vérifiez le pilote et l'entrée sélectionnée.",
-   "de": "Capture Card Upstream-Eingangsverbindung fehlgeschlagen (0x {:08X}. Überprüfen Sie den Treiber und wählen Sie die Eingabe.",
-   "pt-BR": "A conexão de entrada da placa de captura a montante falhou (0x {:08X}). Verifique o driver e a entrada selecionada.",
-   "ru": "Захват карты вверх по течению входного соединения не удался (0x {:08X}). Проверьте драйвера и выбранный вход."
-  },
-  {
    "zh": "采集卡可能已断开或 USB 连接不稳定。请直连电脑的 USB 3 接口，避开扩展坞和延长线，尝试换线。笔记本请接上电源，也可检查 USB 选择性暂停设置。若问题仍在，请用厂商软件或 OBS 对照。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "擷取卡可能已斷線或 USB 連線不穩定。請直連電腦的 USB 3 連接埠，避開擴充座與延長線，並試換線材。筆電請接上電源，也可檢查 USB 選擇性暫停設定。若問題仍在，請用原廠軟體或 OBS 對照。",
@@ -38624,32 +38702,6 @@
    "de": "Auswahl der Aufnahmekarte",
    "pt-BR": "Como escolher a placa de captura",
    "ru": "Как выбрать карту захвата"
-  },
-  {
-   "zh": "采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "擷取卡無法連接所選壓縮格式（0x{:08X}），請重新選擇。",
-   "en": "The selected compressed capture format could not connect (0x{:08X}). Choose another format.",
-   "ja": "選択した圧縮キャプチャ形式を接続できませんでした（0x{:08X}）。形式を選び直してください。",
-   "ko": "선택한 압축 캡처 형식을 연결할 수 없습니다(0x{:08X}). 다른 형식을 선택하세요.",
-   "es": "El formato de captura comprimido seleccionado no podía conectarse (0x {:08X}). Elige otro formato.",
-   "fr": "Le format de capture compressé sélectionné ne pouvait pas se connecter (0x {:08X}). Choisissez un autre format.",
-   "de": "Das ausgewählte komprimierte Aufnahmeformat konnte keine Verbindung herstellen (0x {:08X}. Wählen Sie ein anderes Format.",
-   "pt-BR": "O formato de captura comprimido selecionado não pôde conectar (0x {:08X}). Escolha outro formato.",
-   "ru": "Выбранный формат сжатого захвата не мог соединяться (0x {:08X}). Выберите другой формат."
-  },
-  {
-   "zh": "采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "擷取卡無法連接所選格式（0x{:08X}），請檢查裝置占用並重新選擇。",
-   "en": "The selected capture format could not connect (0x{:08X}). Check whether another app is using the device and choose the format again.",
-   "ja": "選択したキャプチャ形式を接続できませんでした（0x{:08X}）。他のアプリによるデバイス使用を確認し、形式を選び直してください。",
-   "ko": "선택한 캡처 형식을 연결할 수 없습니다(0x{:08X}). 다른 앱이 해당 기기를 사용하고 있는지 확인하고 형식을 다시 선택하세요.",
-   "es": "El formato de captura seleccionado no podía conectarse (0x {:08X}). Compruebe si otra aplicación está utilizando el dispositivo y elegir el formato de nuevo.",
-   "fr": "Le format de capture sélectionné ne pouvait pas se connecter (0x {:08X}). Vérifiez si une autre application utilise l'appareil et choisissez à nouveau le format.",
-   "de": "Das ausgewählte Aufnahmeformat konnte keine Verbindung herstellen (0x {:08X}. Überprüfen Sie, ob eine andere App das Gerät verwendet und wählen Sie das Format erneut aus.",
-   "pt-BR": "O formato de captura selecionado não pôde conectar (0x {:08X}). Verifique se outro aplicativo está usando o dispositivo e escolha o formato novamente.",
-   "ru": "Выбранный формат захвата не мог соединяться (0x {:08X}). Проверьте, использует ли другое приложение устройство, и снова выберите формат."
   },
   {
    "zh": "采集卡设置",
@@ -41603,17 +41655,17 @@
    "ru": "Насыщенность мин."
   },
   {
-   "zh": "首次使用需要在 Windows 中下载语音包，并把字幕语言设成原文语言。",
+   "zh": "首次使用请在 Windows 下载语音包，并保持实时字幕窗口打开。",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "首次使用需要在 Windows 中下載語音套件，並將字幕語言設為原文語言。",
-   "en": "Download the speech pack in Windows on first use and set its caption language to the source language.",
-   "ja": "初回は Windows で音声パックをダウンロードし、字幕の言語を原文の言語に設定してください。",
-   "ko": "처음 사용할 때 Windows에서 음성 팩을 다운로드하고 자막 언어를 원문 언어로 설정하세요.",
-   "es": "La primera vez, descarga el paquete de voz en Windows y selecciona el idioma de origen en los subtítulos.",
-   "fr": "Au premier usage, téléchargez le pack vocal dans Windows et sélectionnez la langue source dans les sous-titres.",
-   "de": "Beim ersten Start das Sprachpaket in Windows herunterladen und die Untertitelsprache auf die Ausgangssprache stellen.",
-   "pt-BR": "No primeiro uso, baixe o pacote de fala no Windows e selecione o idioma de origem nas legendas.",
-   "ru": "При первом запуске загрузите речевой пакет Windows и выберите исходный язык для субтитров."
+   "zh-TW": "首次使用請在 Windows 下載語音套件，並保持即時字幕視窗開啟。",
+   "en": "Download a speech pack in Windows on first use and keep the Live Captions window open.",
+   "ja": "初回は Windows で音声パックをダウンロードし、ライブ キャプションを開いたままにしてください。",
+   "ko": "처음에는 Windows에서 음성 팩을 다운로드하고 실시간 캡션 창을 열어 두세요.",
+   "es": "Descarga un paquete de voz en Windows la primera vez y mantén abierta la ventana de subtítulos en directo.",
+   "fr": "Téléchargez un module vocal dans Windows à la première utilisation et laissez la fenêtre de sous-titres en direct ouverte.",
+   "de": "Lade bei der ersten Nutzung ein Sprachpaket in Windows herunter und lass das Liveuntertitel-Fenster geöffnet.",
+   "pt-BR": "Baixe um pacote de fala no Windows no primeiro uso e mantenha a janela de legendas ao vivo aberta.",
+   "ru": "При первом запуске скачайте речевой пакет в Windows и оставьте окно субтитров открытым."
   },
   {
    "zh": "首次使用：PS5 设置 → 系统 → 远程游玩 → 关联设备，填写账号 ID 与 8 位配对码后配对。",
@@ -41692,19 +41744,6 @@
    "de": "Der Treiber meldet unzureichende Systemressourcen. Schließe OBS, Windows-Kamera oder die Software des Herstellers und prüfe Verbindung und Treiber.",
    "pt-BR": "O driver informa que os recursos do sistema são insuficientes. Feche o OBS, a Câmera do Windows ou o aplicativo do fabricante e confira a conexão e o driver.",
    "ru": "Драйвер сообщает о нехватке системных ресурсов. Закройте OBS, «Камеру Windows» или программу производителя. Проверьте подключение и драйвер."
-  },
-  {
-   "zh": "驱动拒绝所选采集格式（0x{:08X}），请重新选择。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "驅動拒絕所選擷取格式（0x{:08X}），請重新選擇。",
-   "en": "The driver rejected the selected capture format (0x{:08X}). Select another mode.",
-   "ja": "ドライバーが選択したキャプチャ形式を拒否しました（0x{:08X}）。選び直してください。",
-   "ko": "드라이버가 선택한 캡처 형식(0x{:08X})을 거부했습니다. 다른 모드를 선택하세요.",
-   "es": "El controlador rechazó el formato de captura seleccionado (0x {:08X}). Seleccione otro modo.",
-   "fr": "Le pilote a rejeté le format de capture sélectionné (0x {:08X}). Sélectionnez un autre mode.",
-   "de": "Der Treiber hat das ausgewählte Erfassungsformat (0x {:08X}) abgelehnt. Wählen Sie einen anderen Modus.",
-   "pt-BR": "O driver rejeitou o formato de captura selecionado (0x {:08X}). Selecione outro modo.",
-   "ru": "Водитель отклонил выбранный формат захвата (0x {:08X}). Выберите другой режим."
   },
   {
    "zh": "驱动无法连接所选格式。请刷新并选择与输入信号匹配的采集格式。",
@@ -42706,19 +42745,6 @@
    "de": "; die ausgeführten Teile werden aufbewahrt bei: ",
    "pt-BR": "; as partes exportadas são mantidas em: ",
    "ru": "Экспортируемые части хранятся в: "
-  },
-  {
-   "zh": "；当前显卡不能使用所选超分，本次导出关闭超分",
-   "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "；當前顯示卡不能使用所選超解析，本次匯出關閉超解析",
-   "en": "; this GPU cannot use the selected super resolution, it is off for this export",
-   "ja": "；この GPU では選択した超解像を使えないため、今回の書き出しではオフにします",
-   "ko": "; 이 GPU는 선택한 초해상도를 지원하지 않아 이번 내보내기에서는 끕니다.",
-   "es": "; este GPU no puede utilizar la super resolución seleccionada, está apagado para esta exportación",
-   "fr": "; ce GPU ne peut pas utiliser la super résolution sélectionnée, il est désactivé pour cette exportation",
-   "de": "; diese GPU kann die gewählte Superauflösung nicht verwenden, sie ist für diesen Export ausgeschaltet",
-   "pt-BR": "; este GPU não pode usar a super resolução seleccionada, está desligado para esta exportação",
-   "ru": "; это GPU не может использовать выбранное супер разрешение, оно выключено для этого экспорта."
   },
   {
    "zh": "；当前：",

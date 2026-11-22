@@ -222,13 +222,13 @@ Item {
             const left = findChild(dialog, "live-translation-region-left")
             verify(source !== null && region !== null && left !== null)
             compare(region.visible, false)
-            dialog.translation.captionSource = 1
+            dialog.translation.recognitionSource = 2
             tryCompare(region, "visible", true)
             compare(left.visible, false)
             dialog.translation.screenRegion = 4
             tryCompare(left, "visible", true)
             dialog.translation.screenRegion = 0
-            dialog.translation.captionSource = 0
+            dialog.translation.recognitionSource = 1
             tryCompare(region, "visible", false)
             dialog.translation.supported = false
             tryCompare(power, "enabled", false)

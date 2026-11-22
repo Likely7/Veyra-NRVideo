@@ -24,6 +24,7 @@ struct SubtitleLine {
     // rendered at assTimeMs inside the video area; `text` is only diagnostics.
     std::shared_ptr<const engine::SubtitleAssData> ass;
     double assTimeMs=0;
+    int maximumLines=0;                // Live captions may ellipsize to this many lines.
 };
 struct SubtitleView {
     double scale=1.0;                  // viewer size multiplier

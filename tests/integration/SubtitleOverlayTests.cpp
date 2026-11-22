@@ -55,6 +55,14 @@ int wmain(int argc,wchar_t** argv){
     view.fitToLines=true;updateSubtitleOverlay(overlay,{stable},view);const auto fitted=inkBands();
     check(fitted.size()==2&&fitted[0]<two[0],"explicit fit-to-lines still shrinks text");
     view.fitToLines=false;
+    stable.text.assign(280, L'H');
+    stable.maximumLines=1;
+    updateSubtitleOverlay(overlay,{stable},view);
+    const auto capped=inkBands();
+    check(capped.size()==1&&std::abs(capped[0]-one[0])<=1, "live long caption is clipped to one line at the same glyph size");
+    stable.maximumLines=2;
+    updateSubtitleOverlay(overlay,{stable},view);
+    check(inkBands().size()==2, "live line limit changes the measured raster");
     RECT rect{0,0,640,480};
     const auto original=signatureOf({red},view,rect);
     auto changes=[&](auto change){auto copy=red;change(copy.style);check(signatureOf({copy},view,rect)!=original,"style mutation invalidates cache");};

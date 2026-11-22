@@ -60,13 +60,27 @@ QtObject {
     property var preferences: ({exportStopsPlayback:false})
     property QtObject liveTranslation: QtObject {
         property bool supported: true
-        property bool liveCaptionsSupported: true
         property bool screenTextSupported: true
-        property int captionSource: 0
         property int screenRegion: 0
         property rect customRegion: Qt.rect(0.08, 0.70, 0.84, 0.27)
         property string screenReading: ""
         property int screenWords: 0
+        property bool windowsCaptionsSupported: true
+        property int recognitionSource: 0
+        property int recognitionModel: 0
+        property int recognitionThreads: 0
+        property string recognitionStatus: ""
+        property bool recognitionInstalled: false
+        property bool recognitionDownloading: false
+        property real recognitionProgress: 0
+        property real recognitionBytes: 489155614
+        property real recognitionRtf: 0
+        property real averageTranslationMs: 0
+        property int skippedSentences: 0
+        function downloadRecognitionModel() { recognitionDownloading = true }
+        function cancelRecognitionDownload() { recognitionDownloading = false }
+        function deleteRecognitionModel() { recognitionInstalled = false }
+        function openWindowsCaptions() {}
         property bool enabled: false
         property int provider: 0
         property string sourceLanguage: ""

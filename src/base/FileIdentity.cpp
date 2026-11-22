@@ -229,6 +229,11 @@ const char* identityErrorString(IdentityError error)
     }
 }
 
+bool computeFileSha256(const std::wstring& path, std::string& hex, uint64_t& size)
+{
+    return computeSha256(path, hex, size);
+}
+
 bool computeFileIdentity(const std::wstring& path, FileIdentity& out, IdentityError& error)
 {
     error = IdentityError::None;
