@@ -3,6 +3,7 @@
 #include <cmath>
 #include <iostream>
 #include <thread>
+#include <stdexcept>
 
 int wmain(int argc,wchar_t** argv){
     using namespace veyra::engine;
@@ -10,6 +11,9 @@ int wmain(int argc,wchar_t** argv){
     if(argc<2){std::cerr<<"Pass a media file with text subtitle tracks\n";return 2;}
     const auto start=Clock::now();
     SubtitleLoader loader;
+    const bool twoCueFixture=argc==3&&std::wstring_view(argv[2])==L"--two-cue-fixture";
+    auto readGate=std::make_shared<std::atomic<bool>>(false);
+    if(twoCueFixture)loader.setReadGate(readGate);
     loader.request(argv[1]);
     const auto cancelled=loader.request(L"");
     auto await=[&](uint64_t id){
@@ -25,6 +29,24 @@ int wmain(int argc,wchar_t** argv){
     };
     try{
         if(!await(cancelled).tracks.empty())return 1;
+        if(twoCueFixture){
+            const bool http=subtitleHttpContainer(argv[1]);
+            if(http){
+                loader.request(argv[1]);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                if(loader.poll())throw std::runtime_error("HTTP subtitle scan started before playback buffered");
+                if(!await(loader.request(L"")).tracks.empty())return 1;
+            }
+            readGate->store(true);
+            const auto result=await(loader.request(argv[1]));
+            if(result.tracks.size()!=1||!result.tracks.front().embedded)return 1;
+            const auto& track=result.tracks.front();
+            const bool ok=track.cues.size()==2&&textAt(track,1.0)==L"First embedded cue"&&
+                          textAt(track,4.0)==L"Second embedded cue";
+            std::cout<<"tracks="<<result.tracks.size()<<" cues="<<track.cues.size()
+                     <<" httpReadGate="<<http<<" textMatches="<<ok<<'\n';
+            return ok?0:1;
+        }
         const auto interrupted=loader.request(argv[1]);
         const auto metadataDeadline=Clock::now()+std::chrono::seconds(20);
         bool metadataSeen=false;

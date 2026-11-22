@@ -25,6 +25,7 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
     const bool cached=mode==L"--vfg-ada-cache";
     const bool vfg=mode==L"--vfg-provider-recovery"||ada||cached;
     const bool xess=mode==L"--amd-xess-capture";
+    const bool amdHdr=mode==L"--amd-hdr-chain";
     if(!vfg){
         gfx::ComPtr<IDXGIFactory1> factory;
         if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return 2;
@@ -58,8 +59,21 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
             initial.fgMotion=engine::MotionSource::Zero;
             initial.srMotion=engine::MotionSource::Zero;
         }
+        if(amdHdr){
+            initial.color.enabled=true;
+            initial.antiAlias.enabled=true;
+            initial.antiAlias.method=engine::AntiAliasMethod::Smaa;
+            initial.antiAlias.quality=2;
+            initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
+            initial.amdFlowHalfResolution=true;
+            initial.srMotion=engine::MotionSource::OpticalFlow;
+            initial.sr=true;
+            initial.srTarget=pipeline::SrTarget::Qhd;
+            initial.frameGenerationBackend=engine::FrameGenerationBackend::AmdFrc;
+            initial.multiplier=2;
+        }
         auto options=engine::PlayerOptions::from(initial);
-        options.captureReplayForTest=true;
+        options.captureReplayForTest=!amdHdr;
         const auto until=[&](auto predicate,int seconds){
             const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);
             while(std::chrono::steady_clock::now()<deadline){
@@ -88,8 +102,12 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
             if(low&&!cached){
                 auto next=engine.snapshot().desired;
                 next.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+                // This test measures process recovery. Optical flow work is not
+                // needed to validate that DLSSG can create and present after VFG.
+                next.fgMotion=engine::MotionSource::Zero;
                 dlss=engine.requestSettings(next)&&until([](const auto& s){
-                    return s.fgActive&&s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&s.generated>8;
+                    return s.fgActive&&s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&
+                           s.metrics.flow.counters.generatedPresented>8;
                 },25);
             }
             std::cout<<"VFG_ADA_RECOVERY cached="<<cached<<" first="<<first<<" low="<<low<<" dlss="<<dlss<<'\n';
@@ -104,6 +122,19 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
                 ok=until([](const auto& s){return s.fgActive&&s.applied.vfgQuality==1&&s.generated>100;},30);
             }
             std::cout<<"VFG_RECOVERY reconstructedPrivateContext="<<ok<<'\n';
+        }else if(amdHdr){
+            ok=until([](const auto& s){
+                return s.srActive&&s.fgActive&&s.colorStatus.find(L"HDR10 / PQ")!=std::wstring::npos&&
+                    s.metrics.resolution.output==pipeline::Extent{2560,1440}&&
+                    s.metrics.flow.counters.generatedPresented>=12;
+            },40);
+            const auto s=engine.snapshot();
+            const auto output=s.metrics.resolution.output;
+            const auto flow=s.metrics.resolution.flow;
+            std::cout<<"AMD_HDR_CHAIN pass="<<ok<<" output="<<output.width<<'x'<<output.height
+                     <<" flow="<<flow.width<<'x'<<flow.height<<" sr="<<s.srActive<<" fg="<<s.fgActive
+                     <<" generatedPresented="<<s.metrics.flow.counters.generatedPresented<<'\n';
+            std::wcout<<s.colorStatus<<L" / "<<s.backendWarning<<L'\n';
         }else if(xess){
             ok=until([](const auto& s){return s.fgActive&&s.metrics.flow.counters.xessSdkGenerated>=450;},90);
             const auto s=engine.snapshot();
@@ -285,7 +316,7 @@ int wmain(int argc,wchar_t**argv){
     if(argc==4){
         const std::wstring_view mode=argv[3];
         if(mode==L"--vfg-provider-recovery"||mode==L"--vfg-ada-recovery"||mode==L"--vfg-ada-cache"||
-            mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch")
+            mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch"||mode==L"--amd-hdr-chain")
             return providerRecovery(argv[1],argv[2],mode);
     }
     if(argc==4&&(wcscmp(argv[3],L"--inactive-effects")==0||wcscmp(argv[3],L"--inactive-effects-node")==0))return inactiveEffectsTest(argv[1],argv[2],wcscmp(argv[3],L"--inactive-effects-node")==0);
