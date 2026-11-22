@@ -8,6 +8,10 @@ Rectangle {
     property alias text: field.text
     property alias validator: field.validator
     property alias echoMode: field.echoMode
+    function focusEditor() {
+        field.forceActiveFocus()
+        field.selectAll()
+    }
     signal edited(string text)
     // Every keystroke. editingFinished alone needs Enter or a focus change: typing a
     // value and clicking 连接 (which takes no focus) or closing the dialog lost it.
