@@ -1,5 +1,6 @@
 #include "veyra/engine/PresetLibrary.h"
 #include "veyra/engine/NrCorrectionCodec.h"
+#include "veyra/engine/ProtectionCodec.h"
 
 #include <windows.h>
 
@@ -98,9 +99,16 @@ void PresetLibrary::addBuiltins() {
     add(L"极致", L"超分 4K · NR 1 层 · HDR · 补帧 2X", ChainMode::List, true, true, 2, true, false);
 }
 
+static bool hasExclusionModes(const EffectChain& chain) {
+    return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+        return n.type==EffectType::Exclusion&&exclusionModes(n.protection)!=0;
+    });
+}
+
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directModes=std::filesystem::path(path_).concat(L".exclusion-modes");
     const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -167,6 +175,9 @@ bool PresetLibrary::load() {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
+    const auto modesPath=std::filesystem::path(path_).concat(L".exclusion-modes");
+    if(std::filesystem::exists(directModes))path_=directModes;
+    else if(std::filesystem::exists(modesPath))path_=modesPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -259,6 +270,9 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
+    if(data.starts_with("VEYRA_PRESET_LIBRARY 23")&&!path_.wstring().ends_with(L".exclusion-modes"))
+        path_=std::filesystem::path(path_).concat(L".exclusion-modes");
+    if(!path_.wstring().ends_with(L".exclusion-modes")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 22")&&!path_.wstring().ends_with(L".auto-fg"))path_=std::filesystem::path(path_).concat(L".auto-fg");
     if(data.starts_with("VEYRA_PRESET_LIBRARY 21")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".auto-fg")&&!path_.wstring().ends_with(L".output-controls")){
@@ -304,7 +318,8 @@ bool PresetLibrary::save() {
     }
     }
     }
-    } // .auto-fg / .output-controls own every subsequent edit, even after deleting the new nodes.
+    } // .auto-fg / .output-controls own subsequent edits.
+    } // .exclusion-modes owns subsequent edits.
     std::error_code ec;
     std::filesystem::create_directories(path_.parent_path(), ec);
     const auto temporary = std::filesystem::path(path_).concat(L".tmp");
@@ -795,7 +810,12 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return hasOutputControls(e.chain)||(e.nodeConfiguration&&(hasOutputControls(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&hasOutputControls(e.nodeConfiguration->editor->nodes))));
     });
-    const int version=std::max(minimumVersion, autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool individualModes=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return hasExclusionModes(e.chain)||(e.nodeConfiguration&&
+            (hasExclusionModes(e.nodeConfiguration->chain)||(e.nodeConfiguration->editor&&
+             hasExclusionModes(e.nodeConfiguration->editor->nodes))));
+    });
+    const int version=std::max(minimumVersion, individualModes?23:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -818,6 +838,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             // earlier files never hold an inverted box).
             for (const auto& r : n.protection.regions)
                 o << ' ' << (r.ellipse ? r.right : r.left) << ' ' << r.top << ' ' << (r.ellipse ? r.left : r.right) << ' ' << r.bottom;
+            if(version>=23)o<<' '<<exclusionModes(n.protection);
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
               << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
@@ -871,11 +892,8 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
-    // keep the hard ceiling in step with it or encode->decode self-check rejects our file.
-    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
-    // the ceiling must include it or encode->decode self-check rejects our own file.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,22):22;
+    // v23 adds the packed content modes after each node's region geometry.
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,23):23;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
@@ -922,6 +940,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (!(in >> r.left >> r.top >> r.right >> r.bottom)) { error = L"预设库保护区域损坏"; return false; }
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
+            if(version>=23&&!readExclusionModes(in,node.protection)){error=L"Invalid exclusion region mode";return false;}
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
             if (type < 0 || type >= int(EffectType::Count) || (version < 14 && type >= int(EffectType::AntiAliasing)) ||
                 (version < 21 && type >= int(EffectType::NrStabilizer)) ||
@@ -1074,7 +1093,10 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const bool outputControls=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return hasOutputControls(c.chain)||(c.editor&&hasOutputControls(c.editor->nodes));
     });
-    const int version = autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const bool individualModes=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
+        return hasExclusionModes(c.chain)||(c.editor&&hasExclusionModes(c.editor->nodes));
+    });
+    const int version = individualModes?18:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);out<<'\n';
     std::vector<PresetEntry> entries;
@@ -1128,7 +1150,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 17) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v17 = local auto-multiplier session
+        (version < 1 || version > 18) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v17 = local auto-multiplier session
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
@@ -1143,7 +1165,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=18?23:version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
 
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
@@ -1175,7 +1197,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=18?23:version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
 
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
@@ -1193,6 +1215,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directModes=std::filesystem::path(path_).concat(L".exclusion-modes");
     const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -1257,6 +1280,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
+    const auto modesPath=std::filesystem::path(path_).concat(L".exclusion-modes");
+    if(std::filesystem::exists(directModes))path_=directModes;
+    else if(std::filesystem::exists(modesPath))path_=modesPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1281,6 +1307,9 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    if(data.starts_with("VEYRA_CHAIN_SESSION 18")&&!path_.wstring().ends_with(L".exclusion-modes"))
+        path_=std::filesystem::path(path_).concat(L".exclusion-modes");
+    if(!path_.wstring().ends_with(L".exclusion-modes")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 16")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".output-controls")){
 
@@ -1327,6 +1356,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
     }
     } // Keep upgraded sessions in their own sidecar after disabling/removing controls.
+
+    } // .exclusion-modes owns subsequent edits.
 
     std::error_code ec;
     if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path(), ec);

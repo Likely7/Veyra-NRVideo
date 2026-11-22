@@ -5812,6 +5812,19 @@
    "ru": "Под пунктом «Формат пикселей» показаны варианты, доступные для выбранного разрешения и частоты кадров. У распространённых форматов есть следующие различия."
   },
   {
+   "zh": "「全部效果」显示未处理原画。开启 RTX Video HDR 后，框内可能比周围暗。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "「全部效果」顯示未處理的原始畫面。啟用 RTX Video HDR 後，框內可能比周圍暗。",
+   "en": "All effects shows the unprocessed image. With RTX Video HDR on, the region may look darker than its surroundings.",
+   "ja": "「すべての効果」は元の映像を表示します。RTX Video HDR を有効にすると、枠内が周囲より暗く見える場合があります。",
+   "ko": "‘모든 효과’는 처리하지 않은 원본을 표시합니다. RTX Video HDR을 켜면 영역이 주변보다 어두워 보일 수 있습니다.",
+   "es": "«Todos los efectos» muestra la imagen original. Con RTX Video HDR activado, la zona puede verse más oscura que el resto.",
+   "fr": "« Tous les effets » affiche l’image d’origine. Avec RTX Video HDR, la zone peut paraître plus sombre que ses alentours.",
+   "de": "„Alle Effekte“ zeigt das unbearbeitete Bild. Bei aktivem RTX Video HDR kann der Bereich dunkler als die Umgebung erscheinen.",
+   "pt-BR": "«Todos os efeitos» exibe a imagem original. Com RTX Video HDR ligado, a área pode ficar mais escura do que o entorno.",
+   "ru": "«Все эффекты» показывает исходное изображение. При включении RTX Video HDR область может выглядеть темнее окружающей картинки."
+  },
+  {
    "zh": "一键推荐",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "一鍵推薦",
@@ -7775,6 +7788,19 @@
    "ru": "Magewell Захват (PCIe) только; USB Захват серии не поддерживается"
   },
   {
+   "zh": "仅补帧",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "僅補幀",
+   "en": "Frame generation only",
+   "ja": "フレーム生成のみ",
+   "ko": "프레임 생성만",
+   "es": "Solo generación de fotogramas",
+   "fr": "Génération d’images seule",
+   "de": "Nur Frame-Generierung",
+   "pt-BR": "Somente geração de quadros",
+   "ru": "Только генерация кадров"
+  },
+  {
    "zh": "仅观看",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "僅觀看",
@@ -8659,6 +8685,19 @@
    "ru": "Разрешить разрывы кадра"
   },
   {
+   "zh": "先从补帧输入去掉准心，再贴回增强后的准心。动态准心或第三人称游戏可在剔除面板画紧一点的框。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "先從補幀輸入移除準心，再貼回增強後的準心。動態準心或第三人稱遊戲可在排除面板畫緊一點的框。",
+   "en": "Removes the crosshair before frame generation and restores the enhanced crosshair afterward. For dynamic crosshairs or third-person games, draw a tight box in the exclusion panel.",
+   "ja": "フレーム生成の入力から照準を除き、生成後に補正済みの照準を戻します。動く照準や三人称視点では、除外パネルで照準を小さく囲みます。",
+   "ko": "프레임 생성 전에 조준점을 제거하고 생성 후 보정된 조준점을 복원합니다. 움직이는 조준점이나 3인칭 게임에서는 제외 패널에서 조준점을 좁게 둘러싸세요.",
+   "es": "Quita la mira antes de generar fotogramas y restaura la mira mejorada al final. Para miras dinámicas o juegos en tercera persona, dibuja un recuadro ajustado en el panel de exclusión.",
+   "fr": "Retire le viseur avant la génération d’images et rétablit le viseur amélioré ensuite. Pour un viseur dynamique ou un jeu à la troisième personne, tracez un cadre serré dans le panneau d’exclusion.",
+   "de": "Entfernt das Fadenkreuz vor der Frame-Generierung und setzt danach das verbesserte Fadenkreuz wieder ein. Ziehe bei einem dynamischen Fadenkreuz oder Spielen in der dritten Person einen engen Rahmen im Ausschlussbereich.",
+   "pt-BR": "Remove a mira antes de gerar quadros e restaura a mira aprimorada ao final. Para miras dinâmicas ou jogos em terceira pessoa, desenhe uma caixa justa no painel de exclusão.",
+   "ru": "Убирает прицел перед генерацией кадров и возвращает улучшенный прицел после неё. Для динамического прицела или игр от третьего лица обведите прицел плотной рамкой в панели исключений."
+  },
+  {
    "zh": "先在 Windows 中关闭采集卡的“侦听此设备”，或把目标改回原设备。确认后打开 VB-Audio 安装器，选择 Remove Driver 并按提示重启。其他使用 VB-CABLE 的软件也会失去这条音频通路。",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "先在 Windows 中關閉擷取卡的“偵聽此裝置”，或把目標改回原裝置。確認後開啟 VB-Audio 安裝器，選擇 Remove Driver 並按提示重啟。其他使用 VB-CABLE 的軟體也會失去這條音訊通路。",
@@ -8969,6 +9008,19 @@
    "de": "Platzieren Sie den Effektausschluss nach Bildeffekten und vor der Bilderzeugung.",
    "pt-BR": "Exclusão do efeito de lugar após efeitos de imagem e antes da geração de quadros.",
    "ru": "Исключение эффекта места после эффектов изображения и до генерации кадра."
+  },
+  {
+   "zh": "全部效果",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "全部效果",
+   "en": "All effects",
+   "ja": "すべての効果",
+   "ko": "모든 효과",
+   "es": "Todos los efectos",
+   "fr": "Tous les effets",
+   "de": "Alle Effekte",
+   "pt-BR": "Todos os efeitos",
+   "ru": "Все эффекты"
   },
   {
    "zh": "全部显卡",
@@ -9713,6 +9765,32 @@
    "ru": "Написать дополнительный трек"
   },
   {
+   "zh": "准心/HUD",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "準心/HUD",
+   "en": "Crosshair and HUD",
+   "ja": "照準・HUD",
+   "ko": "조준점 및 HUD",
+   "es": "Mira y HUD",
+   "fr": "Viseur et HUD",
+   "de": "Fadenkreuz und HUD",
+   "pt-BR": "Mira e HUD",
+   "ru": "Прицел и HUD"
+  },
+  {
+   "zh": "准心/HUD 保护",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "準心/HUD 保護",
+   "en": "Crosshair and HUD protection",
+   "ja": "照準・HUD 保護",
+   "ko": "조준점 및 HUD 보호",
+   "es": "Protección de mira y HUD",
+   "fr": "Protection du viseur et du HUD",
+   "de": "Fadenkreuz- und HUD-Schutz",
+   "pt-BR": "Proteção da mira e do HUD",
+   "ru": "Защита прицела и HUD"
+  },
+  {
    "zh": "减少 NR 明暗改动；1 为保留原图亮度",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "減少 NR 明暗改動；1 為保留原圖亮度",
@@ -10441,6 +10519,19 @@
    "ru": "Открыть страницу"
   },
   {
+   "zh": "剔除内容",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "排除內容",
+   "en": "Exclude",
+   "ja": "除外する処理",
+   "ko": "제외할 항목",
+   "es": "Excluir",
+   "fr": "Exclure",
+   "de": "Ausschließen",
+   "pt-BR": "Excluir",
+   "ru": "Исключить"
+  },
+  {
    "zh": "剪辑入点已超过源视频时长",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "剪輯入點已超過源影片時長",
@@ -10621,19 +10712,6 @@
    "de": "Wiederherstellen von Quellbild und Frame-Kadenz innerhalb der Regionen",
    "pt-BR": "Restaurar cadência de imagens e quadros de origem dentro das regiões",
    "ru": "Восстановление исходного изображения и каденции кадров внутри регионов"
-  },
-  {
-   "zh": "区域内恢复原始画面，补帧也不参与，按原始帧节奏更新。最多 4 个区域。",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "區域內恢復原始畫面，補幀也不參與，按原始幀節奏更新。最多 4 個區域。",
-   "en": "Restore the source picture inside each region, updating only at the source frame cadence. Up to 4 regions.",
-   "ja": "領域内を元の映像に戻し、元のフレーム周期で更新します。最大 4 領域。",
-   "ko": "선택 영역에 원본 화면을 표시하고 원본 프레임 간격으로만 갱신합니다. 최대 4개 영역을 지정할 수 있습니다.",
-   "es": "Restaurar el cuadro fuente dentro de cada región, actualizando sólo en la cadencia del fotograma fuente. Hasta 4 regiones.",
-   "fr": "Restaurer l'image source à l'intérieur de chaque région, en ne mettant à jour qu'à la cadence de l’image source. Jusqu'à 4 régions.",
-   "de": "Stellen Sie das Quellbild in jeder Region wieder her und aktualisieren Sie nur in der Quellrahmen-Kadenz. Bis zu 4 Regionen.",
-   "pt-BR": "Restaurar a imagem de origem dentro de cada região, atualizando apenas na cadência de quadros de origem. Até 4 regiões.",
-   "ru": "Восстановление исходного изображения внутри каждой области, обновление только по каденции кадра источника. До 4 регионов."
   },
   {
    "zh": "区域内排除 NR 处理。最多 4 个区域。",
@@ -24222,6 +24300,19 @@
    "ru": "не более 4 охраняемых территорий; сначала удалить"
   },
   {
+   "zh": "最多 4 个区域。只想减少准心拖影时，推荐选「准心/HUD」。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "最多 4 個區域。只想減少準心殘影時，建議選擇「準心/HUD」。",
+   "en": "Up to 4 regions. To reduce crosshair ghosting, choose Crosshair and HUD.",
+   "ja": "最大 4 領域。照準の残像を抑えるには「照準・HUD」を選びます。",
+   "ko": "최대 4개 영역. 조준점 잔상이 문제라면 ‘조준점 및 HUD’를 선택하세요.",
+   "es": "Hasta 4 zonas. Para reducir las estelas de la mira, elige «Mira y HUD».",
+   "fr": "Jusqu’à 4 zones. Pour réduire la rémanence du viseur, choisissez « Viseur et HUD ».",
+   "de": "Bis zu 4 Bereiche. Wähle „Fadenkreuz und HUD“, um Geisterbilder am Fadenkreuz zu reduzieren.",
+   "pt-BR": "Até 4 áreas. Para reduzir rastros da mira, escolha «Mira e HUD».",
+   "ru": "До 4 областей. Чтобы уменьшить шлейф прицела, выберите «Прицел и HUD»."
+  },
+  {
    "zh": "最多人脸",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "最多人臉",
@@ -25429,6 +25520,45 @@
    "de": "Format und Bild",
    "pt-BR": "Formato e imagem",
    "ru": "Формат и изображение"
+  },
+  {
+   "zh": "框内 · 使用剔除区域",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "框內 · 使用排除區域",
+   "en": "Inside exclusion regions",
+   "ja": "除外領域内",
+   "ko": "제외 영역 안",
+   "es": "Dentro de las zonas de exclusión",
+   "fr": "Dans les zones d’exclusion",
+   "de": "In Ausschlussbereichen",
+   "pt-BR": "Dentro das áreas de exclusão",
+   "ru": "Внутри областей исключения"
+  },
+  {
+   "zh": "框内按真实帧刷新并显示原始画面",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "框內按真實影格更新並顯示原始畫面",
+   "en": "Shows the original picture at the source frame rate inside the region",
+   "ja": "枠内は元の映像を元のフレームレートで表示します",
+   "ko": "영역에 원본 화면을 원본 프레임 속도로 표시합니다",
+   "es": "Muestra la imagen original de la zona a la frecuencia de la fuente",
+   "fr": "Affiche l’image d’origine à la cadence de la source dans la zone",
+   "de": "Zeigt im Bereich das Originalbild mit der Quellbildrate an",
+   "pt-BR": "Exibe a imagem original na área à taxa de quadros da fonte",
+   "ru": "Показывает исходное изображение в области с частотой исходных кадров"
+  },
+  {
+   "zh": "框内按真实帧刷新，保留超分、NR 和 HDR",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "框內按真實影格更新，保留超解析度、NR 和 HDR",
+   "en": "Updates the region at the source frame rate and keeps super resolution, NR, and HDR",
+   "ja": "枠内は元のフレームレートで更新し、超解像、NR、HDR は維持します",
+   "ko": "영역은 원본 프레임 속도로 갱신하며 초해상도, NR, HDR을 유지합니다",
+   "es": "Actualiza la zona al ritmo de la fuente y conserva superresolución, NR y HDR",
+   "fr": "Actualise la zone à la cadence de la source et conserve la super résolution, le NR et le HDR",
+   "de": "Aktualisiert den Bereich mit der Quellbildrate und behält Super Resolution, NR und HDR bei",
+   "pt-BR": "Atualiza a área à taxa de quadros da fonte e mantém super-resolução, NR e HDR",
+   "ru": "Обновляет область с частотой исходных кадров и сохраняет суперразрешение, NR и HDR"
   },
   {
    "zh": "桌面 %1",
@@ -31398,6 +31528,19 @@
    "ru": "Автомобили – постоянное качество"
   },
   {
+   "zh": "自动 · 画面中心",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "自動 · 畫面中央",
+   "en": "Auto · Screen center",
+   "ja": "自動 · 画面中央",
+   "ko": "자동 · 화면 중앙",
+   "es": "Auto · Centro de pantalla",
+   "fr": "Auto · Centre de l’écran",
+   "de": "Auto · Bildschirmmitte",
+   "pt-BR": "Auto · Centro da tela",
+   "ru": "Авто · Центр экрана"
+  },
+  {
    "zh": "自动NR切档失败",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "自動 NR 切換檔位失敗",
@@ -34113,6 +34256,19 @@
    "de": "Im Bereich ist gerade kein Text",
    "pt-BR": "Nenhum texto na área no momento",
    "ru": "Сейчас в области нет текста"
+  },
+  {
+   "zh": "识别并保护准心，框内背景继续补帧",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "辨識並保護準心，框內背景繼續補幀",
+   "en": "Detects and protects the crosshair while frame generation continues for the background",
+   "ja": "照準を検出して保護し、枠内の背景にはフレーム生成を続けます",
+   "ko": "조준점을 감지해 보호하며 영역 안 배경의 프레임 생성은 계속됩니다",
+   "es": "Detecta y protege la mira y sigue generando fotogramas para el fondo",
+   "fr": "Détecte et protège le viseur et maintient la génération d’images dans l’arrière-plan",
+   "de": "Erkennt und schützt das Fadenkreuz, während die Frame-Generierung für den Hintergrund weiterläuft",
+   "pt-BR": "Detecta e protege a mira e continua gerando quadros para o fundo",
+   "ru": "Обнаруживает и защищает прицел, сохраняя генерацию кадров для фона"
   },
   {
    "zh": "识别档位",

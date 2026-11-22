@@ -11,6 +11,9 @@ Item {
         property var exclusionState: ({enabled:true,feather:12,regions:[],drawShape:""})
         property var preferences: ({})
         property bool exclusionOverlayVisible: false
+        property bool videoHdr: false
+        property bool nrEnabled: false
+        property var lastModeEdit: ({})
         property var edits: []
         function patch(all, fields) {
             if(all) exclusionState=Object.assign({},exclusionState,fields)
@@ -22,6 +25,11 @@ Item {
         }
         function setMaskFeather(all,value) { patch(all,{feather:value}) }
         function selectExclusionRegion(index) { exclusionOverlayVisible=true;patch(true,{selected:index}) }
+        function setExclusionRegionMode(index,mode) {
+            lastModeEdit={index:index,mode:mode}
+            patch(true,{regions:exclusionState.regions.map(region => region.index===index
+                       ? Object.assign({},region,{mode:mode}) : region)})
+        }
         function clearMaskRegions(all) { patch(all,{regions:[]}) }
         function removeMaskRegion(all,index) {
             const state=all?exclusionState:protectionState
@@ -87,6 +95,21 @@ Item {
                 const point=button.mapToItem(editor,0,0)
                 verify(point.x>=0&&point.x+button.width<=editor.width+1)
             }
+        }
+        function test_region_mode_uses_storage_index_and_legacy_default() {
+            fixture.width=320
+            editor.allEffects=true
+            backend.patch(true,{regions:[{index:3,left:.1,top:.2,right:.5,bottom:.6,ellipse:true}]})
+            wait(30)
+            const select=findChild(editor,"fixture-mask-mode-0")
+            verify(select)
+            compare(select.value,select.options[0].label)
+            const point=select.mapToItem(editor,0,0)
+            verify(point.x>=0&&point.x+select.width<=editor.width+1)
+            select.picked("2")
+            compare(backend.lastModeEdit.index,3)
+            compare(backend.lastModeEdit.mode,2)
+            tryCompare(findChild(editor,"fixture-mask-mode-0"),"value",select.options[2].label)
         }
         function test_outline_toggle_and_storage_index_selection() {
             editor.allEffects=true

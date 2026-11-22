@@ -284,6 +284,18 @@ void QmlPlayerBridge::setHudLock(bool value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "HUD lock not saved");
     emit settingsChanged();
 }
+int QmlPlayerBridge::hudProtect() const { return int(settings().hudProtect); }
+void QmlPlayerBridge::setHudProtect(int value) {
+    if(value<0||value>int(engine::HudProtectMode::Regions))return;
+    auto s=settings();
+    const auto mode=engine::HudProtectMode(value);
+    if(s.hudProtect==mode)return;
+    s.hudProtect=mode;
+    if(!impl_->commit(std::move(s))){emit settingsChanged();return;}
+    impl_->prefs[QStringLiteral("hudProtect")]=value;
+    if(!impl_->savePrefs())veyra::log::warn("ui-prefs","HUD protection not saved");
+    emit settingsChanged();
+}
 bool QmlPlayerBridge::dlssgLiteAvailable() const {
     static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
     return present;

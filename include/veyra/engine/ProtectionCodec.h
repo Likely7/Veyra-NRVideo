@@ -5,6 +5,23 @@
 #include <utility>
 
 namespace veyra::engine {
+inline unsigned exclusionModes(const ProtectionSettings& value) {
+    unsigned modes=0;
+    for(unsigned i=0;i<value.regions.size();++i)modes|=unsigned(value.regions[i].content)<<(2*i);
+    return modes;
+}
+inline bool readExclusionModes(std::istream& in,ProtectionSettings& value) {
+    unsigned modes=0;
+    if(!(in>>modes)||modes>0xff)return false;
+    for(auto& region:value.regions){
+        const auto mode=ExclusionContent(modes&3);
+        if(mode>ExclusionContent::Hud)return false;
+        region.content=mode;
+        modes>>=2;
+    }
+    return true;
+}
+
 inline void writeProtection(std::ostream& out,const ProtectionSettings& value) {
     out<<value.enabled<<' '<<value.featherPixels;
     for(const auto& region:value.regions){

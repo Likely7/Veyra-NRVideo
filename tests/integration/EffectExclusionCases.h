@@ -5,6 +5,7 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     using namespace veyra;
     const std::wstring provider=argc>4?argv[4]:L"off";
     const bool hdr=std::wstring(argv[1]).find(L"hdr")!=std::wstring::npos;
+    const bool onlyFg=std::wstring(argv[1]).find(L"onlyfg")!=std::wstring::npos;
     const bool feather=std::wstring(argv[1]).find(L"feather")!=std::wstring::npos;
     const bool upscale=std::wstring(argv[1]).find(L"sr")!=std::wstring::npos;
     const bool resize=upscale||std::wstring(argv[1]).find(L"scale")!=std::wstring::npos;
@@ -26,6 +27,10 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     desc.exclusion.enabled=true;desc.exclusion.featherPixels=feather?16:0;
     desc.exclusion.regions[0]={.1f,.1f,.45f,.45f};
     desc.exclusion.regions[2]={.6f,.6f,.9f,.9f,true};
+    if(onlyFg){
+        desc.exclusion.regions[0].content=engine::ExclusionContent::FrameGeneration;
+        desc.exclusion.regions[2].content=engine::ExclusionContent::FrameGeneration;
+    }
     desc.enableFg=provider!=L"off";
     desc.fgMultiplier=std::wstring(argv[1]).find(L"6x")!=std::wstring::npos?6:provider==L"vfg"?3:2;
     if(provider==L"vfg")desc.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;
@@ -74,12 +79,13 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
                     for(unsigned c=0;c<3;++c){const auto at=(size_t(y)*a.width+x)*4+c;error+=std::abs(int(a.pixels[at])-int(b.pixels[at]));++count;}
             return error/count;
         };
-        const double restored=std::max(patchError(masked,original,.25,.25),patchError(masked,original,.75,.75));
+        const auto& referencePixels=onlyFg?enhanced:original;
+        const double restored=std::max(patchError(masked,referencePixels,.25,.25),patchError(masked,referencePixels,.75,.75));
         const double unchanged=std::max(patchError(masked,enhanced,.75,.25),patchError(masked,enhanced,.61,.61));
         const double changed=patchError(masked,enhanced,.25,.25);
         maximumRawError=std::max(maximumRawError,restored);maximumOutsideError=std::max(maximumOutsideError,unchanged);minimumChanged=std::min(minimumChanged,changed);
-        ok=restored<=2&&unchanged<=1&&changed>8;
-        if(feather&&!hdr){
+        ok=restored<=(onlyFg?0:2)&&unchanged<=1&&(onlyFg?changed==0:changed>8);
+        if(feather&&!hdr&&!onlyFg){
             const unsigned x=unsigned(masked.width*.1)+8,y=unsigned(masked.height*.25);
             const size_t at=(size_t(y)*masked.width+x)*4;
             const double edge=x+.5-masked.width*.1,t=std::clamp(edge/16.,0.,1.),weight=t*t*(3-2*t);
@@ -95,7 +101,7 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
             sink::RgbaImage generated;
             if(item.validity!=pipeline::GenerationValidity::Valid||!readImage(ctx,ring,item.lease->texture.Get(),generated)){ok=false;break;}
             const double held=std::max(patchError(generated,previous,.25,.25),patchError(generated,previous,.75,.75));
-            const double progress=patchError(original,previous,.25,.25);
+            const double progress=patchError(referencePixels,previous,.25,.25);
             std::cout<<"EXCLUSION_FRAME frame="<<i<<" sub="<<item.subframe<<" heldError="<<held<<" currentError="<<patchError(generated,original,.25,.25)<<" rawProgress="<<progress<<std::endl;
             maximumRawError=std::max(maximumRawError,held);minimumRawProgress=std::min(minimumRawProgress,progress);
             ok=held<=2&&progress>1;
@@ -111,7 +117,7 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
             sink::saveImage((artifacts/"enhanced.png").wstring(),enhanced);
             sink::saveImage((artifacts/"masked.png").wstring(),masked);
         }
-        previous=std::move(original);
+        previous=onlyFg?std::move(enhanced):std::move(original);
     }
     const unsigned expectedGenerated=desc.enableFg&&!graph.xessEnabled()?5*(desc.fgMultiplier-1):0;
     ok=ok&&realChecked==6&&generatedChecked==expectedGenerated;
@@ -123,7 +129,7 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
         if(message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::cerr<<message->pDescription<<std::endl;}
     }
     std::cout<<"EXCLUSION real="<<realChecked<<" generated="<<generatedChecked<<" expectedGenerated="<<expectedGenerated
-        <<" rawError="<<maximumRawError<<" outsideError="<<maximumOutsideError<<" restoredDifference="<<minimumChanged
+        <<" onlyFg="<<onlyFg<<" heldError="<<maximumRawError<<" outsideError="<<maximumOutsideError<<" restoredDifference="<<minimumChanged
         <<" rawProgress="<<minimumRawProgress<<" featherError="<<maximumFeatherError<<" hdr="<<hdr<<" feather="<<feather<<" scale="<<resize<<" debugErrors="<<errors<<" pass="<<(ok&&!errors)<<std::endl;
     ring.shutdown();ctx.shutdown();CoUninitialize();return ok&&!errors?0:1;
 }

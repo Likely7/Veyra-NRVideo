@@ -1948,6 +1948,7 @@ VPage {
                                     onToggled: checked => veyra.hudLock = checked
                                 }
                             }
+                            HudProtectControl { objectName: "list-hud-protect" }
                             VSubGroup {
                                 id: fgFlowGroup
                                 objectName: "list-fg-flow-group"

@@ -19,7 +19,9 @@ inline std::optional<double> enhancementProcessingMs(const GpuFrameTiming& frame
     constexpr GpuStage stages[]={GpuStage::Flow,GpuStage::Sr,GpuStage::Nr,GpuStage::NrLayer0,GpuStage::NrLayer1,
         GpuStage::NrLayer2,GpuStage::NrLayer3,GpuStage::Residual,GpuStage::FgBatch,GpuStage::AaNode0,GpuStage::AaNode1,
         GpuStage::BeautyNode0,GpuStage::BeautyNode1,GpuStage::BeautyNode2,GpuStage::BeautyNode3,GpuStage::BeautyNode4,
-        GpuStage::BeautyNode5,GpuStage::BeautyDetect};
+        GpuStage::BeautyNode5,GpuStage::BeautyDetect,GpuStage::HudMask,GpuStage::HudRepair,GpuStage::HudMotion,
+        GpuStage::HudCompose1,GpuStage::HudCompose2,GpuStage::HudCompose3,GpuStage::HudCompose4,
+        GpuStage::HudCompose5,GpuStage::HudCompose6,GpuStage::HudCompose7};
     struct Interval {uint64_t begin,end;};
     std::array<Interval,std::size(stages)> intervals{};
     size_t count=0;uint64_t frequency=0;

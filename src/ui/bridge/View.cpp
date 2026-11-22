@@ -41,7 +41,7 @@ QVariantMap QmlPlayerBridge::maskState(bool allEffects) const {
     for(int index=0;index<int(value.regions.size());++index){
         const auto& q=value.regions[size_t(index)];
         if(!q.empty())regions<<QVariantMap{{"index",index},{"left",q.left},{"top",q.top},
-            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse}};
+            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse},{"mode",int(q.content)}};
     }
     const auto& first=value.regions[0];
     return {{"overlayVisible",allEffects&&exclusionOverlayVisible()},{"selected",allEffects?impl_->exclusionSelected:-1},{"enabled",node&&node->enabled},{"feather",value.featherPixels},{"regions",regions},
@@ -152,6 +152,16 @@ bool QmlPlayerBridge::setMaskFeather(bool allEffects,double pixels) {
     if(!std::isfinite(pixels)||pixels<0||pixels>64)return false;
     return editProtection([&](engine::ChainNode& node){node.protection.featherPixels=float(pixels);return true;},allEffects);
 }
+bool QmlPlayerBridge::setExclusionRegionMode(int index,int mode) {
+    if(index<0||mode<0||mode>int(engine::ExclusionContent::Hud))return false;
+    return editProtection([&](engine::ChainNode& node){
+        auto& regions=node.protection.regions;
+        if(size_t(index)>=regions.size()||regions[size_t(index)].empty())return false;
+        regions[size_t(index)].content=engine::ExclusionContent(mode);
+        return true;
+    },true);
+}
+
 bool QmlPlayerBridge::clearMaskRegions(bool allEffects) {
     if(allEffects){endExclusionMove(false);impl_->exclusionSelected=-1;}
     return editProtection([](engine::ChainNode& node){node.protection.regions={};return true;},allEffects);

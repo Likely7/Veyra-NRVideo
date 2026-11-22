@@ -212,7 +212,7 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
  ok=ok&&b.put(L"FSR 4 ML 2X",fsr4);PresetStore fsr4Reload(p);
  ok=ok&&fsr4Reload.load()&&fsr4Reload.entries().back().settings==fsr4&&b.erase(1);
  fsr4.multiplier=4;ok=ok&&!b.put(L"FSR 4 ML 4X rejected",fsr4);
- auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(5);ok=ok&&!b.put(L"invalid backend",badBackend);
+ auto badBackend=s;badBackend.frameGenerationBackend=static_cast<FrameGenerationBackend>(99);ok=ok&&!b.put(L"invalid backend",badBackend);
  auto dis=s;dis.opticalFlowBackend=OpticalFlowBackend::GpuDis;ok=ok&&b.put(L"GPU DIS",dis)&&b.save();PresetStore disReload(p);ok=ok&&disReload.load()&&disReload.entries().back().settings==dis&&b.erase(1);
  
  auto badFlow=s;badFlow.opticalFlowBackend=static_cast<OpticalFlowBackend>(3);ok=ok&&!b.put(L"invalid flow backend",badFlow);
@@ -365,5 +365,13 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   pass=pass&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==mask;
   std::ifstream header(path);std::string magic;int version=0;header>>magic>>version;
   pass=pass&&version==37;ok&=pass;std::cout<<"exclusion schema37 rectangle ellipse feather roundtrip="<<pass<<'\n';
+  header.close();
+  mask.exclusion.regions[0].content=ExclusionContent::FrameGeneration;
+  mask.exclusion.regions[2].content=ExclusionContent::Hud;
+  pass=pass&&writer.put(L"mixed modes",mask);
+  PresetStore updated(path);
+  pass=pass&&updated.load()&&updated.entries().size()==2&&updated.entries()[1].settings==mask&&
+      updated.entries()[0].settings.exclusion.regions[0].content==ExclusionContent::All;
+  ok&=pass;std::cout<<"exclusion schema38 per-region modes and legacy defaults="<<pass<<'\n';
  }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

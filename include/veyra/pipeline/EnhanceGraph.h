@@ -76,6 +76,7 @@ class NvOfSession;
 }
 
 namespace veyra::pipeline {
+class HudProtect;
 struct ColorDescription;
 // Decoded-surface view for the D3D11VA ingress (defined in FramePacket.h).
 struct HardwareSurfaceInput;
@@ -155,6 +156,7 @@ struct EnhanceGraphDesc {
     bool vfgAutoRegulate=false;
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
     bool hudLock=false; // Live HUD Lock (HudLock.h, from PushFPS), graph frame generation only
+    engine::HudProtectMode hudProtect=engine::HudProtectMode::Off;
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
     engine::OpticalFlowBackend opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;
@@ -715,7 +717,9 @@ public:
     ID3D12Resource* sourceReference(unsigned slot=0)const{return sourceReferences_[slot%2].Get();}
     ID3D12Resource* exclusionUi(unsigned slot)const{return exclusionUi_[slot%2].Get();}
     ID3D12Resource* unmaskedVideo(unsigned slot)const{return videoFrame_[slot%2].Get();}
-    bool exclusionEnabled()const{return desc_.exclusion.enabled;}
+    ID3D12Resource* fgInput(unsigned slot) const;
+    // Diagnostic SRV: xy current-to-previous pixels, z trusted, w cut.
+    ID3D12Resource* hudBackgroundMotion(unsigned slot) const;
     bool srEnabled() const { return srEnabled_; }
     bool nrEnabled() const { return nrEnabled_; }
     bool fgEnabled() const { return fgEnabled_; }
@@ -990,7 +994,7 @@ private:
     ComPtr<ID3D12Resource> genFrame_[kGeneratedPoolSlots];
     ComPtr<ID3D12Resource> exclusionVideo_[2],exclusionScratch_,exclusionUi_[2];
     ComputePass exclusionPass_;
-    bool composeExclusion(ID3D12GraphicsCommandList*,unsigned outputIndex,unsigned rawParity,bool ui);
+    void composeExclusion(ID3D12GraphicsCommandList*,unsigned outputIndex,unsigned rawParity,bool ui,bool historyValid);
     ComPtr<ID3D12Resource> fgDisable_[kGeneratedPoolSlots],fgDisableReadback_[kGeneratedPoolSlots],fgDisableInit_;
     std::array<const volatile uint8_t*,kGeneratedPoolSlots> fgDisableMapped_{};
     ComPtr<ID3D12Resource> nrZeroMotion_;
@@ -1187,6 +1191,9 @@ private:
     std::unique_ptr<gfx::RifeDmlBackend> rife_;
     std::unique_ptr<HudLock> hudLock_;  // Live HUD Lock (from PushFPS)
     bool initHudLock();
+    std::unique_ptr<HudProtect> hudProtect_;
+    bool initHudProtect();
+    void composeHudProtect(ID3D12GraphicsCommandList*,unsigned slot,unsigned parity,unsigned subframe,unsigned multiplier);
     void composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity);
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).

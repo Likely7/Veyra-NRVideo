@@ -21,12 +21,12 @@
 int wmain(int argc, wchar_t** argv)
 {
     if (argc < 3) {
-        std::fwprintf(stderr, L"usage: veyra_export_probe <input> <output> [--hevc] [--video-hdr] [--max-frames N] [--trim-start seconds] [--trim-end seconds] [--audio-stream index] [--rate-control cbr|vbr|cq] [--bitrate-mbps N]\n");
+        std::fwprintf(stderr, L"usage: veyra_export_probe <input> <output> [--hevc] [--video-hdr] [--dlss-fg] [--protect-crosshair] [--max-frames N] [--trim-start seconds] [--trim-end seconds] [--audio-stream index] [--rate-control cbr|vbr|cq] [--bitrate-mbps N]\n");
         return 2;
     }
     const std::wstring input = argv[1];
     const std::wstring output = argv[2];
-    bool hevc = false, videoHdr = false;
+    bool hevc = false, videoHdr = false, dlssFg = false, protectCrosshair = false;
     unsigned maxFrames = 0;
     double trimStart = 0.0, trimEnd = 0.0;
     int audioStream = -1;
@@ -38,6 +38,10 @@ int wmain(int argc, wchar_t** argv)
             hevc = true;
         } else if (arg == L"--video-hdr") {
             videoHdr = true;
+        } else if (arg == L"--dlss-fg") {
+            dlssFg = true;
+        } else if (arg == L"--protect-crosshair") {
+            protectCrosshair = true;
         } else if (arg == L"--max-frames" && i + 1 < argc) {
             maxFrames = unsigned(std::wcstoul(argv[++i], nullptr, 10));
         } else if (arg == L"--trim-start" && i + 1 < argc) {
@@ -67,8 +71,11 @@ int wmain(int argc, wchar_t** argv)
         }
     }
 
-    veyra::engine::PlayerOptions options; // nr/sr/fg all off: decode -> encode only
-    options.settings.videoHdr.enabled = videoHdr;
+    veyra::engine::EnhancementSettings settings;
+    settings.videoHdr.enabled = videoHdr;
+    if (dlssFg) settings.multiplier = 2;
+    if (protectCrosshair) settings.hudProtect = veyra::engine::HudProtectMode::Center;
+    auto options = veyra::engine::PlayerOptions::from(settings);
     options.exportStartSeconds = trimStart;
     options.exportEndSeconds = trimEnd;
     options.audioStreamIndex = audioStream;

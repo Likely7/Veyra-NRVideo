@@ -973,6 +973,19 @@ static void testOutputControlNodes(){
     check(!requiresGraphRebuild(s,changed),"mask geometry and feather edit live");
     changed.exclusion.enabled=false;
     check(requiresGraphRebuild(s,changed),"mask allocation is rebuilt on enable transitions");
+    changed=s;
+    changed.exclusion.regions[0].content=ExclusionContent::FrameGeneration;
+    check(!requiresGraphRebuild(s,changed),"only-FG mode is a live composition parameter");
+    changed.exclusion.regions[0].content=ExclusionContent::Hud;
+    check(requiresGraphRebuild(s,changed)&&hudProtectRegions(HudProtectMode::Off,changed.exclusion)[1].ellipse,
+          "HUD regions activate independently and rebuild bounded GPU history");
+    changed=s;changed.hudProtect=HudProtectMode::Center;
+    check(requiresGraphRebuild(s,changed)&&
+          !hudProtectRegions(changed.hudProtect,changed.exclusion)[0].empty(),
+          "automatic centre selection rebuilds FG history");
+    changed.hudProtect=HudProtectMode::Regions;changed.exclusion.enabled=false;
+    check(!hudProtectRegions(changed.hudProtect,changed.exclusion)[1].empty(),
+          "manual HUD protection can use saved geometry with whole-box exclusion off");
     for(uint32_t i=0;i<chain.nodeCount;++i)
         if(chain.nodes[i].type==EffectType::NrStabilizer||chain.nodes[i].type==EffectType::Exclusion){
             chain.nodes[i].enabled=false;chain.nodes[i].protection={};
