@@ -1658,3 +1658,11 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+### 2026-11-22 PS5 高码率 UDP 接收缓存
+
+Windows 有线局域网下，请求 100 Mbps 时周期性卡顿，降到 15/20 Mbps 后改善。固定 Chiaki 的两个 SO_RCVBUF 初始化分支都复用了 0x19000（100 KiB）的协议窗口；新增 0005 补丁，独立请求 4 MiB socket 接收缓存，保留协议窗口和握手不变。同步 build-native.ps1、完整来源验证器、依赖锁与开发文档；新增真实 loopback socket 回归，覆盖新建及传入 socket 两条路径。相同容量的既有社区方案见 [CrisBuen/NLFork](https://github.com/CrisBuen/NLFork)。
+
+本次从 PR 源码配置 services/remoteplay-probe，Release/MSVC 19.33，构建并发 2。复用已核验的固定 Chiaki stage 与 /MD 静态依赖；本机 probe 对已有 sscanf/getenv 报 C4996，私有 CMake 配置补充 _CRT_SECURE_NO_WARNINGS 并保留 /EHsc，未修改产品编译选项。构建目标为 veyra_remoteplay_udp_buffer_tests、veyra_remoteplay_feedback_wire_tests、veyra_remoteplay_native_probe、veyra_remoteplay_core_tests；ctest --test-dir <build-native> -V -E "rp[.]dpapi_profile" --timeout 30 --output-on-failure：82/82 通过（79 个 offline-core、native 初始化、UDP buffer、feedback wire）。两条路径均读回 SO_RCVBUF=4194304、a_rwnd=102400；feedback wire 为 8 个加密 history 报文和 1 个 state 报文。未构建的 DPAPI profile 测试明确排除。完整命令、失败日志和通过记录保留在本次私有验证目录。
+
+此前包含同一 UDP 补丁的 2.2.0 本地产品测试包已编译并完成启动检查，用户反馈 100 Mbps 已流畅；该包另含本机编译适配，不将其视为严格单变量对照。本 PR 本次仅重建上述原生目标，没有重新构建完整 GUI，也没有自动连接 PS5。未测修改后丢包率、端到端延迟或其他机器效果；本次提交仅包含 UDP 修复、构建接线、回归与记录。

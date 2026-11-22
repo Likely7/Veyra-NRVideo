@@ -40,5 +40,7 @@
     "bc397a728bb430f28666129ef006f7a8ac0e6081"
   ],
   "trigger_effects_patch": "patches/0004-chiaki-pad-proc-no.patch",
-  "trigger_effects_upstream_commit": "27ab96fd000bd0904f8ea3953c81f3ddb75b188b"
+  "trigger_effects_upstream_commit": "27ab96fd000bd0904f8ea3953c81f3ddb75b188b",
+  "udp_receive_buffer_patch": "patches/0005-chiaki-udp-receive-buffer.patch",
+  "udp_receive_buffer_bytes": 4194304
 }

@@ -40,7 +40,8 @@ $patches = @(
     "0001-chiaki-msvc-vla-compat.patch",
     "0002-chiaki-video-metadata.patch",
     "0003-chiaki-feedback-history.patch",
-    "0004-chiaki-pad-proc-no.patch"
+    "0004-chiaki-pad-proc-no.patch",
+    "0005-chiaki-udp-receive-buffer.patch"
 )
 foreach ($name in $patches) {
     $patch = Join-Path $Root "scripts/remoteplay/patches/$name"
@@ -71,6 +72,6 @@ if ($PkgConfigPath) {
     $Args += "-DPKG_CONFIG_EXECUTABLE=$PkgConfigPath"
 }
 Invoke-Checked "cmake" $Args
-Invoke-Checked "cmake" @("--build", $BuildDirectory, "--config", "Release", "--target", "veyra_remoteplay_native_probe")
+Invoke-Checked "cmake" @("--build", $BuildDirectory, "--config", "Release", "--parallel", "2", "--target", "veyra_remoteplay_native_probe", "veyra_remoteplay_udp_buffer_tests")
 Invoke-Checked "ctest" @("--test-dir", $BuildDirectory, "-C", "Release", "-L", "native-core", "--output-on-failure", "--timeout", "30")
 Write-Host "Native initialization gate completed. PS5 connection, decoder and GPU are still NOT tested by this probe."
