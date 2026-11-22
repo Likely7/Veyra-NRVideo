@@ -23,3 +23,15 @@ physical build/install/temp outputs remain under `E:/项目/Veyra/`.
 Supply `--zlib-source` when packaging the corresponding source, and include
 `share/zlib` notices/provenance. The baseline vcpkg FFmpeg SPDX identifies the
 base port; the new `veyra-local-build.json` identifies the actual rebuilt DLLs.
+
+# D3D12VA reference-only pool repair
+
+`d3d12va-reference-only-pool.patch` is an unchanged backport of upstream FFmpeg commit [`bcd2c69e087a09b07cf45c6bd2428ee1ccb2925c`](https://github.com/FFmpeg/FFmpeg/commit/bcd2c69e087a09b07cf45c6bd2428ee1ccb2925c) "avcodec/d3d12va: fix reference-only resource pool exhaustion" by Kacper Michajłow, 2026-06-22. The n9.0.1/vcpkg 9.0.1#1 preimage of `libavcodec/d3d12va_decode.c` is the same blob as upstream's parent (`4e714efb1a1a`), so the hunks apply verbatim. It touches only that file; license stays LGPL-2.1-or-later and the configure line is unchanged.
+
+Drivers that report `D3D12_VIDEO_DECODE_CONFIGURATION_FLAG_REFERENCE_ONLY_ALLOCATIONS_REQUIRED` (AMD RX 9070 XT: `configFlags=0x4` for H.264 and HEVC Main/Main10) decode references into a separate reference-only pool of `max_num_ref + 1` slots. n9.0.1 gave a recycled output surface a new slot instead of reusing its existing one and only searched `max_num_ref` slots, so the pool ran out: PS5 Remote Play hardware decode failed after 71 frames with "No space for new Reference frame!", 32x `avcodec_send_packet` -22 and teardown (error 2004). The patch reuses the slot already mapped to the output resource and iterates the full allocated pool. Decoders without the flag never allocate the map and are unaffected.
+
+Apply it to the same source copy after `ps5-h264-slices.patch` (step 2 above; the two touch different files and apply in either order), then build as described above:
+
+1. `git apply --check /path/to/d3d12va-reference-only-pool.patch`, then `git apply` it.
+2. Verify `libavcodec/d3d12va_decode.c` has five `for (... < ctx->max_num_ref + 1; ...)` loops plus `if (i == ctx->max_num_ref + 1)`, and record this patch's SHA-256 in `veyra-local-build.json` next to the slice patch's (step 5 above; `prepare-slice-build.py` does not record it automatically).
+3. On a REFERENCE_ONLY GPU, run a PS5 Remote Play hardware decode session well beyond 71 frames and confirm no "No space for new Reference frame!" and no `avcodec_send_packet` -22; repeat a short session on a GPU without the flag as a regression check.

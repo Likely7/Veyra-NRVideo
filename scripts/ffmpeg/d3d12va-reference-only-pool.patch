@@ -1,0 +1,91 @@
+From bcd2c69e087a09b07cf45c6bd2428ee1ccb2925c Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Kacper=20Michaj=C5=82ow?= <kasper93@gmail.com>
+Date: Mon, 22 Jun 2026 20:57:58 +0200
+Subject: [PATCH] avcodec/d3d12va: fix reference-only resource pool exhaustion
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+When the driver requires REFERENCE_ONLY allocations, get_reference_only_resource()
+is called for each frame's output surface but did not check whether that surface
+was already mapped to a slot. As the frame pool recycles output surfaces, a
+recycled surface that was still mapped got assigned a new slot every time,
+leaking slots until the pool was exhausted and decoding failed with "No space
+for new Reference frame!".
+
+Reuse the slot already mapped to an output resource. Also iterate the full
+max_num_ref + 1 pool that is allocated: the extra slot covers the new current
+frame, which is acquired before prepare_reference_only_resources() releases the
+previous frame's slots.
+
+Signed-off-by: Kacper Michajłow <kasper93@gmail.com>
+
+Veyra backport note: upstream commit
+bcd2c69e087a09b07cf45c6bd2428ee1ccb2925c applied unchanged to FFmpeg n9.0.1
+(vcpkg 9.0.1#1); the n9.0.1 preimage blob is identical (4e714efb1a1a).
+---
+ libavcodec/d3d12va_decode.c | 26 +++++++++++++++++++-------
+ 1 file changed, 19 insertions(+), 7 deletions(-)
+
+diff --git a/libavcodec/d3d12va_decode.c b/libavcodec/d3d12va_decode.c
+index 4e714efb1a1af..1b83b2d905069 100644
+--- a/libavcodec/d3d12va_decode.c
++++ b/libavcodec/d3d12va_decode.c
+@@ -61,8 +61,20 @@ static ID3D12Resource *get_reference_only_resource(AVCodecContext *avctx, ID3D12
+         return NULL;
+     }
+ 
+-    // find unused resource
+-    for (i = 0; i < ctx->max_num_ref; i++) {
++    // Reuse the slot already mapped to this output resource. Output surfaces are
++    // recycled by the frame pool, so without this the same output_resource would
++    // be assigned a new slot every time it is reused, leaking slots until the
++    // pool is exhausted.
++    for (i = 0; i < ctx->max_num_ref + 1; i++) {
++        if (reference_only_map[i].resource != NULL &&
++            reference_only_map[i].output_resource == output_resource) {
++            reference_only_map[i].used = 1;
++            return reference_only_map[i].resource;
++        }
++    }
++
++    // Find an unused resource.
++    for (i = 0; i < ctx->max_num_ref + 1; i++) {
+         if (!reference_only_map[i].used && reference_only_map[i].resource != NULL) {
+             reference_only_map[i].used = 1;
+             resource = reference_only_map[i].resource;
+@@ -71,13 +83,13 @@ static ID3D12Resource *get_reference_only_resource(AVCodecContext *avctx, ID3D12
+         }
+     }
+ 
+-    // find space to allocate
+-    for (i = 0; i < ctx->max_num_ref; i++) {
++    // Find space to allocate.
++    for (i = 0; i < ctx->max_num_ref + 1; i++) {
+         if (reference_only_map[i].resource == NULL)
+             break;
+     }
+ 
+-    if (i == ctx->max_num_ref) {
++    if (i == ctx->max_num_ref + 1) {
+         av_log(avctx, AV_LOG_ERROR, "No space for new Reference frame!\n");
+         return NULL;
+     }
+@@ -105,7 +117,7 @@ static void free_reference_only_resources(AVCodecContext *avctx)
+     int i;
+     ReferenceFrame *reference_only_map = ctx->reference_only_map;
+     if (reference_only_map != NULL) {
+-        for (i = 0; i < ctx->max_num_ref; i++) {
++        for (i = 0; i < ctx->max_num_ref + 1; i++) {
+             if (reference_only_map[i].resource != NULL) {
+                 D3D12_OBJECT_RELEASE(reference_only_map[i].resource);
+             }
+@@ -123,7 +135,7 @@ static void prepare_reference_only_resources(AVCodecContext *avctx)
+     if (reference_only_map == NULL)
+         return;
+     memset(ctx->ref_only_resources, 0, ctx->max_num_ref * sizeof(*(ctx->ref_only_resources)));
+-    for (j = 0; j < ctx->max_num_ref; j++) {
++    for (j = 0; j < ctx->max_num_ref + 1; j++) {
+         for (i = 0; i < ctx->max_num_ref; i++) {
+             if (reference_only_map[j].used && reference_only_map[j].output_resource == ctx->ref_resources[i]) {
+                 ctx->ref_only_resources[i] = reference_only_map[j].resource;

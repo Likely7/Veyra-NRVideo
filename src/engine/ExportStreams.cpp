@@ -1,5 +1,6 @@
 #include "veyra/engine/ExportStreams.h"
 #include "veyra/Log.h"
+#include "veyra/media/FfmpegLog.h"
 #include <windows.h>
 #include <algorithm>
 #include <cmath>
@@ -38,13 +39,8 @@ bool validPgsPacket(const AVPacket& packet){
 }
 struct PacketDelete{void operator()(AVPacket* p)const{av_packet_free(&p);}};
 using Packet=std::unique_ptr<AVPacket,PacketDelete>;
-void workerAvLog(void* context,int level,const char* format,va_list args){
-    if(level>av_log_get_level())return;
-    char line[4096]{};int prefix=1;av_log_format_line2(context,level,format,args,line,sizeof(line),&prefix);
-    if(level<=AV_LOG_ERROR)log::error("ffmpeg-export",line);else if(level<=AV_LOG_WARNING)log::warn("ffmpeg-export",line);else log::info("ffmpeg-export",line);
 }
-}
-void ExportStreams::enableWorkerLogging(bool detailed){av_log_set_callback(workerAvLog);av_log_set_level(detailed?AV_LOG_DEBUG:AV_LOG_WARNING);}
+void ExportStreams::enableWorkerLogging(bool detailed){media::ffmpeglog::installWorker(detailed);}
 struct ExportStreams::Impl {
     struct Track {
         AVStream* source=nullptr;AVStream* target=nullptr;
