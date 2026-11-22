@@ -176,6 +176,14 @@ jobs:
           Copy-Item C:\dovi\bin\*.dll $stage
           & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --qmldir qml --no-translations `
             --skip-plugin-types qmltooling,generic "$stage\veyra_qml_ui.exe"
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          $qmlModules = 'qml/QtCore/qmldir', 'qml/QtCore/qtqmlcoreplugin.dll',
+                        'qml/QtQuick/Dialogs/qmldir', 'qml/QtQuick/Dialogs/qtquickdialogsplugin.dll'
+          foreach ($file in $qmlModules) {
+            if (!(Test-Path -LiteralPath (Join-Path $stage $file) -PathType Leaf)) {
+              throw "QML deployment is missing $file"
+            }
+          }
           Copy-Item "$env:VCToolsRedistDir\x64\Microsoft.VC143.CRT\*.dll" $stage
           foreach ($f in 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.md', 'README_EN.md') { Copy-Item $f $stage }
           @'

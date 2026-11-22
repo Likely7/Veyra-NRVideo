@@ -8,7 +8,7 @@ USB 采集同图音频启动失败可退回纯视频，连续两次重开无帧�
 
 `scripts/acceptance/build-recording-handoff.py --task codex-github-prs-20261122 --jobs 2` 使用同任务工作树、依赖和构建目录。集成构建 31 个目标通过，后续增量构建覆盖 Qt、采集、字幕、HDR、VFG 及 RIFE 界面检查。编译记录中可见修复的 FFmpeg 导入路径和 NASM 包含路径。FFmpeg n9.0.1 重编并核对 256-slice 与参考帧池补丁，CI overlay 追加第三处补丁及哈希。对应源码随本机交付记录保存。CI 工作流只做本地核验。
 
-验收包括 245 项 Qt Quick、九语词库、102 项 Chiaki CTest、4 MiB UDP 和加密反馈回环、21 项核心回归、1,048,576 样本半速对拍零差异。AMD 核显通过 HDR10 + SMAA + FSR + 半尺寸光流 + FRC，呈现 12 个生成帧。4K AMD 光流 12 个有效样本的 P95 为原尺寸 19.49 ms、半尺寸 4.41 ms。RTX 5070 的 VFG 注入通过降档、重启和同进程切到 DLSS，冷切换曾进入约 12 秒的 PTX JIT。合成 MJPEG 的自动/有限范围黑位为 16/0。Xbox 软件解码夹具 1440p60 通过。无 RIFE 运行库的 Qt bridge 检查通过。短字幕夹具改用确定的门控和最终字幕断言，保留原渐进加载测试。
+验收包括 245 项 Qt Quick、九语词库、102 项 Chiaki CTest、4 MiB UDP 和加密反馈回环、21 项核心回归、1,048,576 样本半速对拍零差异。AMD 核显通过 HDR10 + SMAA + FSR + 半尺寸光流 + FRC，呈现 12 个生成帧。4K AMD 光流 12 个有效样本的 P95 为原尺寸 19.49 ms、半尺寸 4.41 ms。RTX 5070 的 VFG 注入通过降档、重启和同进程切到 DLSS，冷切换曾进入约 12 秒的 PTX JIT。合成 MJPEG 的自动/有限范围黑位为 16/0。Xbox 软件解码夹具 1440p60 通过。无 RIFE 运行库的 Qt bridge 检查通过。短字幕夹具改用确定的门控和最终字幕断言，保留原渐进加载测试。 初次沿用 2.2.0 Qt 部署时缺少带鱼屏背景的 QtCore 与 QtQuick.Dialogs 模块，主界面未加载。按正式打包的 windeployqt 参数部署后，私有目录的最终应用正常启动、关闭。发布打包和 CI 均检查这两块 QML 模块。试运行生成的 Qt 缓存已移至本任务 E 盘临时目录。
 
 输出目录为 `E:/项目/Veyra/{build,logs,tests,tmp,reports}/codex-github-prs-20261122`。逐项状态、失败与复测记录见 [整合与验收](<E:/项目/Veyra/reports/codex-github-prs-20261122/INTEGRATION.md>)。本机使用私有配置与夹具。实体 USB 设备、PS5、Xbox、RTX 40 和 RX 7000 独显仍缺现场验证。#47 的 Bob 底部绿线缺报告者片源，裁切边界已核验。单长 GOP MPEG-TS 在 EOF 后重定位未通过。
 
