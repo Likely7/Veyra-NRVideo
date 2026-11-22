@@ -74,7 +74,7 @@ else {
 }
 
 # FFmpeg dependency roots (C:\veyra-deps: the project path contains spaces,
-# which FFmpeg's build refuses; see loop/JOURNAL.md).
+# which FFmpeg's build refuses; see docs/history/loop/JOURNAL.md).
 $ffmpegRoot = if ($FfmpegRoot) { [IO.Path]::GetFullPath($FfmpegRoot) } else { "C:\veyra-deps\installed\x64-windows" }
 if (Test-Path -LiteralPath (Join-Path $ffmpegRoot "include\libavformat\avformat.h") -PathType Leaf) {
     $configureExtra = $configureExtra + (' -DVEYRA_FFMPEG_ROOT="{0}"' -f $ffmpegRoot)
