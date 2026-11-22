@@ -513,8 +513,10 @@ void QmlPlayerBridge::ps5Forget() {
 #endif
 }
 void QmlPlayerBridge::ps5OpenAccountChecker() {
+    // Opens Veyra's own guide to getting the Account ID through Sony's sign-in (psn-account-id
+    // or chiaki-ng). Never a third-party lookup site: those ask for the NPSSO session cookie.
     // Fixed public URL; no account IDs, pairing credentials or login tokens leave Veyra.
-    const bool opened=QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.psntools.com/psn/checker")));
+    const bool opened=QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/Likely7/Veyra-NRVideo/blob/main/docs/PSN_ACCOUNT_ID.md")));
     impl_->ps5Status=opened
         ? tr("在网页获取 PSN Account ID 后，复制到配对栏，再填写主机的 8 位配对码。")
         : tr("无法打开浏览器，请检查默认浏览器设置。");
