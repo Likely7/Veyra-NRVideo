@@ -496,6 +496,14 @@ int main(){
             sync.reset();r=sync.observe(delay,10000,10000-delay);
             check(!r.fallback&&r.targetMs==delay,"genuine measured video residence retains automatic synchronization");
         }
+        {
+            // PS5 field log 2026-11-22: startup backlog drains 1481 ms -> 39 ms.
+            sink::CaptureSyncTarget start;bool early=false;sink::CaptureSyncTarget::Result s;
+            for(double delay:{1481.,1100.,700.,300.,39.,39.,39.,40.}){s=start.observe(delay,20000,20000-delay);early|=s.settled;}
+            check(!early,"startup backlog does not settle the audio target");
+            s=start.observe(38,20033,20033-38);
+            check(s.settled&&s.targetMs<=40,"five agreeing frames settle the audio target");
+        }
         sync.reset();for(int i=0;i<5;++i)sync.observe(35,10000+i*20,9965+i*20);
         r=sync.observe(400,10100,9700);
         check(r.targetMs==35,"one real presentation stall does not change the audio target");

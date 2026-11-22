@@ -110,6 +110,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
         int64_t lastReset=0;
         int64_t largeSkewSince=0;
         int largeSkewDirection=0;
+        int64_t settleWaitSince=0;
         int64_t nextSyncLog=0;
         int64_t nextPeakLog=0;
         // Sample findings since the last report (see the report below).
@@ -319,7 +320,12 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             const double startupPrefillMs=capturePrefillMs(renderer.capacityMs(),blockMs);
             const size_t prefill=size_t(std::ceil(startupPrefillMs*kAudioRate/1000));
             const size_t queuedFrames=pcm.size()/layout.channels;
-            if(!renderer.started()&&haveHead&&queuedFrames>=prefill&&(appliedMode!=0||fresh)){
+            // Automatic mode waits for a settled video delay, bounded so an
+            // unsteady source still starts after two seconds.
+            if(renderer.started()||appliedMode!=0||!fresh)settleWaitSince=0;
+            else if(!settleWaitSince)settleWaitSince=hostTime();
+            const bool settled=appliedMode!=0||syncEstimate.settled||(settleWaitSince&&hostTime()-settleWaitSince>=20000000);
+            if(!renderer.started()&&haveHead&&queuedFrames>=prefill&&(appliedMode!=0||(fresh&&settled))){
                 // Live recovery discards expired sound rather than replaying
                 // an obsolete half-second after a GPU stall or graph reset.
                 const size_t expired=std::min(queuedFrames-prefill,size_t(std::max(0.0,(now-mapping-headPts-5)*kAudioRate/1000)));
