@@ -103,6 +103,7 @@ struct PlayerSnapshot {
     std::string nrReuseUnavailable;
     bool videoHdrActive=false; // TrueHDR actually running this graph (needs an HDR display path)
     std::wstring backendWarning;
+    bool nrPreparing=false;
     std::wstring sourceNotice;
     std::wstring colorStatus;
     // Custom (format label): the source's HDR format as one word ("Dolby Vision

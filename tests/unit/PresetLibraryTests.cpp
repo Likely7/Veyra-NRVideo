@@ -1471,7 +1471,8 @@ __declspec(noinline) void testHalfRateVariants() {
     const auto oldPath=std::filesystem::path(path).concat(L".flow");
     const auto oldBytes=readBytes(oldPath);
     auto original=entry;original.name=L"original cadence";original.flow->content=ContentRate::Capture60To30Original;
-    auto frameOptions=fromChain(original.chain,{});
+    EnhancementSettings frameOptions;
+    fromChain(original.chain,frameOptions);
     frameOptions.frameGenerationBackend=FrameGenerationBackend::Rife;
     frameOptions.exclusion.enabled=true;
     frameOptions.exclusion.regions[0]={.1f,.2f,.6f,.8f,true};
@@ -1538,7 +1539,28 @@ __declspec(noinline) void testAutomaticMultiplierCompatibility() {
     entry.chain=session->configurations[1].chain;entry.nodeConfiguration=session->configurations[1];
     check(library.put(entry),"auto FG: preset with editor v17 serializes");
 }
+__declspec(noinline) void testDisabledFrameGenerationMatch() {
+    EnhancementSettings off;
+    auto saved=toChain(off);
+    auto running=saved;
+    if(auto* node=saved.firstOf(EffectType::FrameGeneration))node->enabled=false;
+    else{
+        auto& newNode=saved.nodes[saved.nodeCount++];
+        newNode.type=EffectType::FrameGeneration;
+        newNode.enabled=false;
+    }
+    saved.fgMultiplier=4;saved.fgAutoMultiplier=true;
+    running.fgMultiplier=2;running.fgStrictAdmission=true;
+    check(PresetLibrary::matchesChain(saved,running),"FG off still matches after switching presets");
+    auto* node=saved.firstOf(EffectType::FrameGeneration);
+    node->enabled=true;
+    check(!PresetLibrary::matchesChain(saved,running),"an enabled FG preset remains distinct");
+    node->enabled=false;
+    running.mode=ChainMode::Node;
+    check(!PresetLibrary::matchesChain(saved,running),"matching stays in the selected editor mode");
+}
 int main(int argc,char** argv) {
+    testDisabledFrameGenerationMatch();
     if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
         testDedupModeMigration();testHalfRateVariants();testFlowStorage();testFlowApplication();return failures?1:0;
     }

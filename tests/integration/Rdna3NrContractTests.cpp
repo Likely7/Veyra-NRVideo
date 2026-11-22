@@ -117,5 +117,20 @@ int wmain(int argc,wchar_t** argv){
     list=ring.acquireNext(slot,st);if(!list)return 2;transition(list,destination.Get(),outputState,D3D12_RESOURCE_STATE_COPY_DEST);outputState=D3D12_RESOURCE_STATE_COPY_DEST;
     check(smallNr.recordOutputs(list,destination.Get())&&ring.submitAndSignal(slot)&&smallNr.retireSubmitted(),"unvalidated result passes through the guarded decoder");
     check(verify(colors[1],true),"missing GPU result marker preserves the exact current linear source, not an old/partial result");smallNr.close();
+    const auto stalledDir=prepareDir(L"startup-timeout");
+    std::ofstream(stalledDir/L"contract-no-init-reply")<<"test-only";
+    const auto requestAt=std::chrono::steady_clock::now();
+    check(smallNr.openContractTestAsync(stalledDir,ctx.device(),ctx.directQueue(),w,h,true,400),
+          "deferred startup returns while the test worker deliberately sends no reply");
+    check(smallNr.pollPreparation()==pipeline::NrPreparation::Pending&&!smallNr.ready(),
+          "the worker stays pending without claiming enhancement availability");
+    for(unsigned i=0;i<3;++i)check(fill(colors[i])&&ring.drainQueue(),
+          "the preview GPU queue keeps processing base frames during startup");
+    while(smallNr.pollPreparation()==pipeline::NrPreparation::Pending)Sleep(5);
+    check(smallNr.pollPreparation()==pipeline::NrPreparation::Failed&&smallNr.error().find("timed out")!=std::string::npos,
+          "unresponsive startup reaches a bounded, diagnosed failure");
+    check(std::chrono::steady_clock::now()-requestAt<std::chrono::seconds(5)&&ring.drainQueue(),
+          "timeout does not block the preview GPU queue");
+    smallNr.close();
     printf("%d checks %d failures (GPU protocol/parity only; no NR inference)\n",checks,failures);return failures?1:0;
 }

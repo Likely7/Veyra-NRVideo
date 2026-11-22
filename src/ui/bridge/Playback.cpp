@@ -173,7 +173,12 @@ bool QmlPlayerBridge::fgActive() const { return impl_->snapshot.fgActive; }
 bool QmlPlayerBridge::captureRecovering() const { return impl_->snapshot.captureRecovering; }
 double QmlPlayerBridge::captureFps() const { return impl_->snapshot.captureFps; }
 double QmlPlayerBridge::captureDropped() const { return double(impl_->snapshot.captureDropped); }
-QString QmlPlayerBridge::backendWarning() const { return uiText(impl_->snapshot.backendWarning); }
+QString QmlPlayerBridge::backendWarning() const {
+    const auto& snapshot=impl_->snapshot;
+    if(snapshot.running&&snapshot.nrPreparing&&snapshot.backendWarning.empty())
+        return tr("正在准备 RX 7000 NR，当前显示未应用 NR 的画面。");
+    return uiText(snapshot.backendWarning);
+}
 
 // --- commands ---------------------------------------------------------------
 void QmlPlayerBridge::openFileDialog() {
@@ -298,7 +303,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
-    refreshSubtitles(network?std::wstring():wide);
+    refreshSubtitles(!network||engine::subtitleHttpContainer(wide)?wide:std::wstring());
 }
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }

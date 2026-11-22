@@ -4356,17 +4356,17 @@
    "ru": "RIFE · ИИ-интерполяция видео · 2X / 3X"
   },
   {
-   "zh": "RIFE 未能启用（需要 runtimerife 运行组件和 SDR 输出），已关闭补帧；原因见日志",
+   "zh": "RIFE 未能启用（需要 runtime/rife 运行组件和 SDR 输出），已关闭补帧；原因见日志",
    "src": "src/engine/EngineController.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "zh-TW": "RIFE 無法啟用（需要 runtime/rife 執行元件與 SDR 輸出），已關閉補幀。原因請見日誌。",
+   "en": "RIFE could not start. It requires the runtime/rife components and SDR output. Frame generation was turned off. See the log for details.",
+   "ja": "RIFE を開始できませんでした。runtime/rife のランタイムと SDR 出力が必要です。フレーム生成をオフにしました。詳細はログを確認してください。",
+   "ko": "RIFE를 시작할 수 없습니다. runtime/rife 구성 요소와 SDR 출력이 필요합니다. 프레임 생성을 껐습니다. 자세한 내용은 로그를 확인하세요.",
+   "es": "No se pudo iniciar RIFE. Requiere los componentes de runtime/rife y salida SDR. Se desactivó la generación de fotogramas. Consulta el registro.",
+   "fr": "RIFE n’a pas pu démarrer. Les composants de runtime/rife et une sortie SDR sont requis. La génération d’images a été désactivée. Consultez le journal.",
+   "de": "RIFE konnte nicht gestartet werden. Die Komponenten unter runtime/rife und eine SDR-Ausgabe sind erforderlich. Die Frame-Generierung wurde ausgeschaltet. Details stehen im Protokoll.",
+   "pt-BR": "Não foi possível iniciar o RIFE. Ele exige os componentes em runtime/rife e saída SDR. A geração de quadros foi desativada. Consulte o log.",
+   "ru": "Не удалось запустить RIFE. Нужны компоненты из runtime/rife и вывод SDR. Генерация кадров отключена. Подробности в журнале."
   },
   {
    "zh": "RTX 30 VFG 为实验兼容，复用现有模型；支持 2X～8X，实际画质与速度需实卡验证",
@@ -18839,6 +18839,19 @@
    "ru": "Это GPU не может использовать выбранное супер-разрешение; оно выключено для этого экспорта."
   },
   {
+   "zh": "当前显卡和驱动的 VFG 中档发生显存访问错误，已改用低档。",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "目前顯卡與驅動的 VFG 中檔出現顯示記憶體存取錯誤，已改用低檔。",
+   "en": "VFG Medium reported a GPU memory access fault with this adapter and driver. Veyra switched to Low.",
+   "ja": "現在の GPU とドライバーで VFG の中設定にメモリアクセスエラーが発生したため、低設定に切り替えました。",
+   "ko": "현재 GPU와 드라이버에서 VFG 중간 품질의 메모리 접근 오류가 발생해 낮은 품질로 전환했습니다.",
+   "es": "VFG en calidad media registró un error de acceso a la memoria con esta GPU y su controlador. Se cambió a calidad baja.",
+   "fr": "VFG en qualité moyenne a rencontré une erreur d’accès mémoire avec ce GPU et son pilote. La qualité basse a été activée.",
+   "de": "VFG meldete mit dieser Grafikkarte und diesem Treiber im mittleren Modus einen Speicherzugriffsfehler. Veyra ist auf Niedrig gewechselt.",
+   "pt-BR": "O VFG em qualidade média apresentou um erro de acesso à memória com esta GPU e seu driver. A qualidade baixa foi ativada.",
+   "ru": "При средней настройке VFG на этом адаптере и драйвере произошла ошибка доступа к памяти. Выбрано низкое качество."
+  },
+  {
    "zh": "当前最多支持 {}X 帧生成，已按 {}X 应用",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前最多支援 {}X 幀生成，已按 {}X 應用",
@@ -26118,6 +26131,19 @@
    "de": "Einsparung: %1",
    "pt-BR": "Salvando: %1",
    "ru": "Экономия: %1"
+  },
+  {
+   "zh": "正在准备 RX 7000 NR，当前显示未应用 NR 的画面。",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "正在準備 RX 7000 NR，目前顯示尚未套用 NR 的畫面。",
+   "en": "Preparing RX 7000 NR. Video continues without NR during startup.",
+   "ja": "RX 7000 NR を準備しています。準備中は NR を適用せずに再生します。",
+   "ko": "RX 7000 NR을 준비 중입니다. 준비가 끝날 때까지 NR 없이 재생합니다.",
+   "es": "Preparando NR para RX 7000. El vídeo sigue reproduciéndose sin NR durante el inicio.",
+   "fr": "Préparation de NR pour RX 7000. La vidéo continue sans NR pendant le démarrage.",
+   "de": "RX 7000 NR wird vorbereitet. Das Video läuft beim Start ohne NR weiter.",
+   "pt-BR": "Preparando o NR para RX 7000. O vídeo continua sem NR durante a inicialização.",
+   "ru": "Подготовка NR для RX 7000. Пока идёт запуск, видео воспроизводится без NR."
   },
   {
    "zh": "正在准备独立导出任务",
@@ -39523,17 +39549,17 @@
    "ru": "Нужен PIN-код"
   },
   {
-   "zh": "需要 runtimerife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
+   "zh": "需要 runtime/rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
    "src": "src/ui/bridge/Hardware.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
+   "zh-TW": "需要 runtime/rife 中的 ONNX Runtime、DirectML 與 RIFE 模型",
+   "en": "Requires ONNX Runtime, DirectML and a RIFE model in runtime/rife",
+   "ja": "runtime/rife に ONNX Runtime、DirectML、RIFE モデルが必要です",
+   "ko": "runtime/rife에 ONNX Runtime, DirectML 및 RIFE 모델이 필요합니다",
+   "es": "Requiere ONNX Runtime, DirectML y un modelo RIFE en runtime/rife",
+   "fr": "ONNX Runtime, DirectML et un modèle RIFE sont requis dans runtime/rife",
+   "de": "Erfordert ONNX Runtime, DirectML und ein RIFE-Modell in runtime/rife",
+   "pt-BR": "Requer ONNX Runtime, DirectML e um modelo RIFE em runtime/rife",
+   "ru": "Требуются ONNX Runtime, DirectML и модель RIFE в runtime/rife"
   },
   {
    "zh": "需要主机显示器开启 HDR，且编码选 HEVC 或 AV1；本机需要硬件解码",

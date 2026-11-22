@@ -116,7 +116,7 @@ static QVariantMap scanEffectCapabilities() {
     // AMD FRC uses the AMF runtime the AMD driver installs; nothing ships with Veyra.
     add("amdfrc", H::AmdFrc, gfx::AmfFrcBackend::runtimeInstalled(), QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
     // RIFE: ONNX Runtime + DirectML and the models in runtime/rife (local install).
-    add("rife", H::CrossVendor, gfx::RifeDmlBackend::runtimeInstalled(), QObject::tr("需要 runtime\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型"));
+    add("rife", H::CrossVendor, gfx::RifeDmlBackend::runtimeInstalled(), QObject::tr("需要 runtime/rife 中的 ONNX Runtime、DirectML 和 RIFE 模型"));
     add("hdr", H::Nvidia, exists(nr / "nvngx_truehdr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("flow0", H::Nvidia, true, QObject::tr("需要 NVIDIA RTX 显卡及 NVOF 驱动"));
     add("flow1", H::CrossVendor, true, QObject::tr("需要支持 DirectX 12 的硬件显卡"));

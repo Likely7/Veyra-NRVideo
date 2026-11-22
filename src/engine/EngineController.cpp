@@ -78,6 +78,24 @@ namespace {
 double elapsedMs(Clock::time_point from){return std::chrono::duration<double,std::milli>(Clock::now()-from).count();}
 int64_t monotonic100ns(){return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;}
 struct OnExit {std::function<void()> action;~OnExit(){action();}};
+bool usesVfgMedium(const EnhancementSettings& s) {
+    return s.frameGenerationBackend==FrameGenerationBackend::Vfg&&s.multiplier>1&&
+        (vfgPrimaryMode(s.vfgQuality)==1||(vfgMixedQuality(s.vfgQuality)&&vfgSecondaryMode(s.vfgQuality)==1)||
+            (s.vfgQuality==2&&s.vfgAutoRegulate));
+}
+std::filesystem::path vfgFaultRecord(const gfx::AdapterInfo& adapter) {
+    if(!adapter.isNvidia||adapter.driverVersion.empty()||adapter.driverVersion.size()>64||
+       adapter.driverVersion.find_first_not_of(L"0123456789.")!=std::wstring::npos)return {};
+    return runtime::userDataDirectory()/std::format(L"vfg-ada-{:04x}-{}.low",adapter.deviceId,adapter.driverVersion);
+}
+void rememberVfgFault(const std::filesystem::path& file) {
+    if(file.empty())return;
+    std::error_code ec;
+    std::filesystem::create_directories(file.parent_path(),ec);
+    if(ec)return;
+    const auto handle=CreateFileW(file.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);
+    if(handle!=INVALID_HANDLE_VALUE)CloseHandle(handle);
+}
 void logFrameFlow(const diagnostics::FrameFlowMetrics& m,const char* state){
     const auto& c=m.counters;const auto& id=m.latest;
     if(c.xessSdkPresented)veyra::log::info("provider-flow",std::format("state={} session={} revision={} sdkPresented={} sdkGenerated={} sdkSubmitFps={:.2f} measurement=provider-report-not-scanout",state,id.sessionId,id.frame.settingsRevision,c.xessSdkPresented,c.xessSdkGenerated,m.xessSdkSubmitFps));
@@ -770,7 +788,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                      snapshot_.posterRgba=std::move(poster);snapshot_.posterWidth=pw;snapshot_.posterHeight=ph;
                  }else{snapshot_.posterRgba.clear();snapshot_.posterWidth=snapshot_.posterHeight=0;}}
                 {std::lock_guard lock(mutex_);snapshot_.sourceNotice=activeSource->info().dolbyVision.description();
-                 const auto& si=activeSource->info();if(si.deinterlaced)snapshot_.sourceNotice+=std::format(L"{}去隔行：{} · {:.3f}i → {:.3f}p",snapshot_.sourceNotice.empty()?L"":L" · ",si.deinterlacePath=="d3d12-video-processor"?L"GPU":L"兼容软解",si.averageFps,si.averageFps);}
+                 const auto& si=activeSource->info();if(si.deinterlaced)snapshot_.sourceNotice+=std::format(L"{}去隔行：{} · {:.3f}i → {:.3f}p",snapshot_.sourceNotice.empty()?L"":L" · ",si.deinterlacePath=="d3d12-video-processor"?L"GPU":L"兼容软解",si.averageFps*0.5,si.averageFps);}
             }
             if(!pipeline::Extent{width,height}.valid()){status(L"图像尺寸超出单张GPU纹理能力，需要分块处理",true);break;}
             HdrDisplayState displayHdrState;
@@ -843,6 +861,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
             gd.compatibilityPreflight=[this](const auto& desc,const auto& device){return checkFgCompatibility(desc,device,stop_);};
             std::wstring backendRecoveryWarning;
+            const auto vfgFaultFile=vfgFaultRecord(ctx.adapter());
+            std::error_code vfgRecordError;
+            bool avoidVfgMedium=!vfgFaultFile.empty()&&std::filesystem::is_regular_file(vfgFaultFile,vfgRecordError);
+            constexpr auto vfgLowWarning=L"当前显卡和驱动的 VFG 中档发生显存访问错误，已改用低档。";
+            const auto lowerVfg=[&](EnhancementSettings& settings){
+                settings.vfgQuality=0;
+                settings.vfgAutoRegulate=false;
+            };
+            const auto rememberVfg=[&]{
+                avoidVfgMedium=true;
+                rememberVfgFault(vfgFaultFile);
+            };
             bool nrAutoPoolUnavailable=false;
             std::wstring nrAutoStatus;
             auto openPreparedPresenter=[&](const PlayerOptions& selected,bool createViews=true){
@@ -863,8 +893,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         L"当前 GPU 不支持 NVIDIA 增强；NR、超分及 DLSS 已关闭，XeSS选择保留";
                     veyra::log::warn("capability","normalized requested NVIDIA effects before graph creation; applied settings reflect actual disabled stages");
                 }
+                if(avoidVfgMedium&&usesVfgMedium(selected.snapshot())){
+                    auto safe=selected.snapshot();lowerVfg(safe);
+                    selected=PlayerOptions::from(safe,selected.nodeOrder,&selected);
+                    describeStages(stageRequest(selected),selected.snapshot(),desc);
+                    if(!backendRecoveryWarning.empty())backendRecoveryWarning+=L"；";
+                    backendRecoveryWarning+=vfgLowWarning;
+                }
                 for(unsigned attempt=0;attempt<6;++attempt){
                     if(stop_)return false;
+                    desc.deferRdna3Init=!isImage;
                     desc.vfgAsyncSubmission=!isImage&&selected.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&
                         GetEnvironmentVariableW(L"VEYRA_TEST_VFG_SYNC_SUBMIT",nullptr,0)==0;
                     desc.vfgFastFallback=desc.vfgAsyncSubmission&&selected.settings.vfgAutoRegulate&&(physicalCapture||isScreen||testReplayAsCard)&&selected.settings.multiplier==2&&
@@ -935,7 +973,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // session into effects-off playback when the new provider fails.
                 // FSR 4 ML that the provider does not offer switches to FSR 3.1
                 // below rather than rolling the request back.
-                if(preserveWorkingFg&&failure==FailedBackend::Fg&&selected.settings.frameGenerationBackend!=FrameGenerationBackend::Fsr4)return false;
+                const bool retryLow=failure==FailedBackend::Fg&&usesVfgMedium(selected.snapshot())&&graph->vfgAdaMediumMemoryFault();
+                if(retryLow)rememberVfg();
+                if(preserveWorkingFg&&failure==FailedBackend::Fg&&!retryLow&&selected.settings.frameGenerationBackend!=FrameGenerationBackend::Fsr4)return false;
                 if(preserveWorkingNr&&failure==FailedBackend::Nr)return false;
                 auto reduced=selected.snapshot();
                 // Requested multiplier above this GPU's capability: clamp to what
@@ -969,18 +1009,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     backendRecoveryWarning+=std::format(L"当前最多支持 {}X 帧生成，已按 {}X 应用",clamped,clamped);
                 }
                 if(FAILED(ctx.device()->GetDeviceRemovedReason()))return false;
-                if(!clampedOverCapability&&!disableFailedBackend(reduced,failure))return false;
+                if(retryLow)lowerVfg(reduced);
+                else if(!clampedOverCapability&&!disableFailedBackend(reduced,failure))return false;
                     veyra::log::warn("backend-recovery",std::format("initialization failed component={} attempt={} revision={} -> nr={} sr={} multiplier={}; original SDK error above",unsigned(failure),attempt+1,reduced.revision,reduced.nr,reduced.sr,reduced.multiplier));
                     if(!backendRecoveryWarning.empty())backendRecoveryWarning+=L"；";
                     const uint32_t ngxResult=uint32_t(graph->failedNgxResult());
-                    if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Anr&&failure==FailedBackend::Fg)
+                    if(retryLow)backendRecoveryWarning+=vfgLowWarning;
+                    else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Anr&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"ANR 帧生成未能启用，已关闭补帧；请检查运行组件、驱动与工作尺寸（至少 640×360），详细原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::AmdFrc&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Rife&&failure==FailedBackend::Fg)
-                        backendRecoveryWarning+=L"RIFE 未能启用（需要 runtime\rife 运行组件和 SDR 输出），已关闭补帧；原因见日志";
+                        backendRecoveryWarning+=L"RIFE 未能启用（需要 runtime/rife 运行组件和 SDR 输出），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
                     {
                         backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志";
@@ -1053,8 +1095,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
                 if(!captureSource.start()){status(captureSource.errorMessage().empty()?L"无法启动采集，请查看诊断":captureSource.errorMessage(),true);break;}
             }
-            {std::lock_guard lock(mutex_);snapshot_.duration=duration;snapshot_.nominalSourceFps=isImage?0:activeSource->info().averageFps;snapshot_.running=true;snapshot_.transport=TransportState::Playing;snapshot_.image=isImage;snapshot_.capture=isCapture;snapshot_.applied=options.snapshot();snapshot_.desired=desired_;}
-            status(isImage?L"图片已增强，可保存PNG/JPEG":std::format(L"{} | 输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",isRemote?L"PS5 串流":isMoonlight?L"PC 串流":isXbox?L"Xbox 串流":isCapture?L"实时采集":L"播放",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）"));
+            {std::lock_guard lock(mutex_);snapshot_.duration=duration;snapshot_.nominalSourceFps=isImage?0:activeSource->info().averageFps;snapshot_.running=true;snapshot_.nrPreparing=graph->nrPreparing();snapshot_.transport=TransportState::Playing;snapshot_.image=isImage;snapshot_.capture=isCapture;snapshot_.applied=options.snapshot();snapshot_.desired=desired_;}
+            status(isImage?L"图片已增强，可保存PNG/JPEG":std::format(L"{} | 输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",isRemote?L"PS5 串流":isMoonlight?L"PC 串流":isXbox?L"Xbox 串流":isCapture?L"实时采集":L"播放",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,graph->flowWidth(),graph->flowHeight(),gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）"));
             pipeline::EnhanceGraph::FrameOutputs out;bool reset=true,hasOutput=false,audioRebuffering=false,seekPreviewPending=false;
             bool initialRemoteFramePending=isStream;
             bool initialFileFramePending=!isImage&&!isCapture;
@@ -3080,9 +3122,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(processed)lastProcessedPtsMs=pts;
                 if(!processed){
                     const auto failedComponent=graph->failedBackend();
+                    const bool retryVfgLow=failedComponent==FailedBackend::Fg&&usesVfgMedium(options.snapshot())&&graph->vfgAdaMediumMemoryFault();
+                    if(retryVfgLow)rememberVfg();
                     if(!transaction){
                         auto reduced=options.snapshot();
-                        if(SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&disableFailedBackend(reduced,failedComponent)){
+                        if(retryVfgLow)lowerVfg(reduced);
+                        if(SUCCEEDED(ctx.device()->GetDeviceRemovedReason())&&(retryVfgLow||disableFailedBackend(reduced,failedComponent))){
                             const auto attempted=options.snapshot();
                             drainLivePresentation();
                             if(!ring.drainQueue()||!ring.discardRecording()){status(L"增强故障恢复排空失败",true);break;}
@@ -3095,7 +3140,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             publishFrameGenerationCapabilities();
                             const bool mlToFsr3=failedComponent==FailedBackend::Fg&&attempted.frameGenerationBackend==FrameGenerationBackend::Fsr4&&
                                 options.settings.frameGenerationBackend==FrameGenerationBackend::Fsr;
-                            backendRecoveryWarning=(mlToFsr3?std::wstring(L"FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志"):
+                            backendRecoveryWarning=(retryVfgLow?std::wstring(vfgLowWarning):
+                                mlToFsr3?std::wstring(L"FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志"):
                                 std::wstring(backendFailureName(failedComponent))+L"运行失败，已关闭对应效果；错误码见日志")+(backendRecoveryWarning.empty()?L"":L"；"+backendRecoveryWarning);
                             {std::lock_guard lock(mutex_);desired_.rejectVideoRequest(attempted,options.snapshot());snapshot_.desired=desired_;snapshot_.applied=options.snapshot();snapshot_.rejectedRevision=attempted.revision;snapshot_.applying=desired_!=snapshot_.applied;snapshot_.backendWarning=backendRecoveryWarning;}
                             veyra::log::warn("backend-recovery",std::format("runtime component={} disabled; rebuilt revision={} nr={} sr={} multiplier={}; retry next source frame",unsigned(failedComponent),options.settings.revision,options.nr,options.sr,options.snapshot().multiplier));
@@ -3192,7 +3238,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // Published after the metrics window switch above: a snapshot that already reports
                 // the new revision never carries the previous revision's totals. The publish of
                 // this frame's metrics can be a while later.
-                if(transaction||pendingSettingsAck){std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;pendingSettingsAck=false;snapshot_.status=std::format(L"输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,gd.flowWidth,gd.flowHeight,gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）");veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));veyra::log::info("settings",std::format("Applied revision={} sourcePtsMs={} fgBackend={} flowBackend={} multiplier={} (source kept open)",options.settings.revision,pts,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend),options.snapshot().multiplier));}
+                if(transaction||pendingSettingsAck){std::lock_guard lock(mutex_);snapshot_.applied=options.snapshot();snapshot_.applying=desired_!=snapshot_.applied;pendingSettingsAck=false;snapshot_.status=std::format(L"输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,graph->flowWidth(),graph->flowHeight(),gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）");veyra::log::info("display-color",std::format("hdrInput={} hdrOutput={} forceSdrPreview={}",gd.hdrInput,gd.hdrOutput,options.settings.forceSdrPreview));veyra::log::info("settings",std::format("Applied revision={} sourcePtsMs={} fgBackend={} flowBackend={} multiplier={} (source kept open)",options.settings.revision,pts,frameGenerationBackendName(options.settings.frameGenerationBackend),opticalFlowBackendName(options.settings.opticalFlowBackend),options.snapshot().multiplier));}
                 const double processMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();
                 frameFlow->advanceHistory(out.batch.identity);
                 frameFlow->update([&](auto& m){m.counters.historyResets+=uint64_t(out.historyReset);m.counters.captureDropResets+=uint64_t(pipeline::hasFrameFlag(pkt.flags,pipeline::FrameFlagBits::Drop));});
@@ -3592,6 +3638,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 
                 for(size_t stage=0;stage<measured.gpu.size();++stage){const auto& sample=measured.gpu[stage];if(sample.state==diagnostics::SampleState::Measured&&sample.milliseconds&&sample.end&&sample.end!=lastGpuSampleEnd[stage]){gpuStageTimes[stage].add(*sample.milliseconds);lastGpuSampleEnd[stage]=sample.end;}}
                 measured.resolution=pipeline::ResolutionPlan::make({width,height},options.sr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr,0,runningSrPrescale(options.settings,ctx.adapter().isNvidia,isImage),runningSrOutput(options.settings,ctx.adapter().isNvidia),dualSrRuns(options.settings,ctx.adapter().isNvidia,isImage),options.settings.dualSrTarget);measured.decodeCpuMs=decodeMs;measured.submitCpuMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();measured.gpuWaitCpuMs=gpuWaitMs;measured.deadlineWaitCpuMs=frameWaitMs;measured.presentCpuMs=framePresentMs;measured.queueWatermark=out.batch.count;
+                measured.resolution.flow={graph->flowWidth(),graph->flowHeight()};
+                measured.resolution.base=measured.resolution.fg=measured.resolution.output={graph->workWidth(),graph->workHeight()};
                 LiveStats completed;if(liveScheduler)completed=liveStats;
                 uint64_t skipped=0;{std::lock_guard lock(mutex_);skipped=snapshot_.captureRateSkipped-rateSkippedBase;}
                 frameFlow->update([&](auto& m){m.counters.captureReceived=captureStats.received-captureFlowBase.received;m.counters.mailboxOverwritten=captureStats.dropped-captureFlowBase.dropped;m.counters.sourceSkippedBeforeGraph=skipped;m.slotReuseWaitCount=slotWaitCount;m.slotReuseWaitMs=slotWaitMilliseconds;m.counters.commandSlotsInFlight=slotsInFlight;m.counters.commandSlotHighWater=std::max(m.counters.commandSlotHighWater,slotsInFlight);});
@@ -3607,7 +3655,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // Refresh and VRR state (DisplayStateService, queried on events
                 // only) are polled outside the snapshot lock; this never waits.
                 presenter.displayRefreshHz();
-                ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;
+                ++frames;{std::lock_guard lock(mutex_);snapshot_.metrics=measured;snapshot_.nrPreparing=graph->nrPreparing();
                     // Custom (format label): one name for what the source carries,
                     // used by the player bar and the start-up badge. Dolby Vision
                     // first, then the dynamic-metadata HDR formats, then the static

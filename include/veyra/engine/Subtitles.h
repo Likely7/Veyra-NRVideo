@@ -4,6 +4,7 @@
 // container tracks. Bitmap subtitles retain their authored canvas and palette.
 #include <atomic>
 #include <string>
+#include <string_view>
 #include <vector>
 #include <functional>
 #include <memory>
@@ -95,6 +96,7 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
 // True for a file on a server: a UNC path or a drive mapped to a share (media::remoteMediaPath),
 // or any file when VEYRA_TEST_FORCE_REMOTE_PATH is set (tests).
 bool subtitleServerFile(const std::wstring& path);
+bool subtitleHttpContainer(std::wstring_view path);
 // Bytes the server-file subtitle scan has read so far (diagnostics and tests).
 uint64_t subtitleServerScanBytes();
 

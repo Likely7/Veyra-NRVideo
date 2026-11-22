@@ -20,6 +20,9 @@ namespace {
 FfxApiSurfaceFormat surfaceFormatFromDxgi(DXGI_FORMAT format) {
     switch (format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM: return FFX_API_SURFACE_FORMAT_R8G8B8A8_UNORM;
+    case DXGI_FORMAT_R10G10B10A2_UNORM: return FFX_API_SURFACE_FORMAT_R10G10B10A2_UNORM;
+    case DXGI_FORMAT_B8G8R8A8_UNORM: return FFX_API_SURFACE_FORMAT_B8G8R8A8_UNORM;
+    case DXGI_FORMAT_R11G11B10_FLOAT: return FFX_API_SURFACE_FORMAT_R11G11B10_FLOAT;
     case DXGI_FORMAT_R16G16B16A16_FLOAT: return FFX_API_SURFACE_FORMAT_R16G16B16A16_FLOAT;
     case DXGI_FORMAT_R16G16_FLOAT: return FFX_API_SURFACE_FORMAT_R16G16_FLOAT;
     case DXGI_FORMAT_R32_FLOAT: return FFX_API_SURFACE_FORMAT_R32_FLOAT;
@@ -210,10 +213,7 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
                             uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs) {
 #ifdef VEYRA_HAS_FSR
     auto& p = *p_;
-    if (!p.available || list == nullptr || color == nullptr || motion == nullptr || depth == nullptr ||
-        output == nullptr) {
-        return false;
-    }
+    if (!p.available || !list) return false;
     if (renderWidth > p.maxRenderWidth || renderHeight > p.maxRenderHeight ||
         upscaleWidth > p.maxUpscaleWidth || upscaleHeight > p.maxUpscaleHeight) {
         log::error("fsr-sr", std::format("extent {}x{} -> {}x{} exceeds the created ceiling", renderWidth,
@@ -221,22 +221,26 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
         ++p.failureCount;
         return false;
     }
-    const auto inputOk=[&](ID3D12Resource* resource){
+    const auto validTexture=[](const char* role,ID3D12Resource* resource,uint32_t w,uint32_t h,bool requiresUav){
+        if(!resource){
+            log::error("fsr-sr",std::format("dispatch rejected resource={} missing required={}x{}",role,w,h));
+            return false;
+        }
         const auto desc=resource->GetDesc();
-        return desc.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&desc.SampleDesc.Count==1&&
-            desc.Width>=renderWidth&&desc.Height>=renderHeight&&surfaceFormatFromDxgi(desc.Format)!=FFX_API_SURFACE_FORMAT_UNKNOWN;
+        const bool uav=(desc.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)!=0;
+        const bool valid=w&&h&&desc.Dimension==D3D12_RESOURCE_DIMENSION_TEXTURE2D&&desc.SampleDesc.Count==1
+            &&desc.Width>=w&&desc.Height>=h&&(!requiresUav||uav)
+            &&surfaceFormatFromDxgi(desc.Format)!=FFX_API_SURFACE_FORMAT_UNKNOWN;
+        if(!valid)log::error("fsr-sr",std::format("dispatch rejected resource={} format={} extent={}x{} required={}x{} dimension={} samples={} uav={}",
+            role,unsigned(desc.Format),desc.Width,desc.Height,w,h,unsigned(desc.Dimension),desc.SampleDesc.Count,uav));
+        return valid;
     };
-    const auto target=output->GetDesc();
-    if(!renderWidth||!renderHeight||!upscaleWidth||!upscaleHeight||
-        !inputOk(color)||!inputOk(motion)||!inputOk(depth)||output==color||
-        target.Dimension!=D3D12_RESOURCE_DIMENSION_TEXTURE2D||target.SampleDesc.Count!=1||
-        target.Width<upscaleWidth||target.Height<upscaleHeight||
-        !(target.Flags&D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS)||
-        surfaceFormatFromDxgi(target.Format)==FFX_API_SURFACE_FORMAT_UNKNOWN){
-        log::error("fsr-sr","dispatch rejected: invalid render, guidance, or output resource");
-        ++p.failureCount;
-        return false;
-    }
+    bool valid=validTexture("color",color,renderWidth,renderHeight,false);
+    valid&=validTexture("motion",motion,renderWidth,renderHeight,false);
+    valid&=validTexture("depth",depth,renderWidth,renderHeight,false);
+    valid&=validTexture("output",output,upscaleWidth,upscaleHeight,true);
+    if(output==color)log::error("fsr-sr","dispatch rejected because output aliases color input");
+    if(!valid||output==color){++p.failureCount;return false;}
     ffxDispatchDescUpscale dispatch{};
     dispatch.header.type = FFX_API_DISPATCH_DESC_TYPE_UPSCALE;
     dispatch.commandList = list;

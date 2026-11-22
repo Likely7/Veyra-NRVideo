@@ -102,6 +102,7 @@ struct EnhanceGraphDesc {
     bool enableFg = true;
     bool validateMotion = true; // disable only in isolated legacy A/B diagnostics
     bool enableNvofStandalone = false; // run NVOF+densify per frame without FG (quality core)
+    bool deferRdna3Init = false;  // Real-time previews can send base frames during worker startup.
     bool noFeatures = false;     // VEYRA_NO_FEATURES: NVOF/NGX objects skipped
     bool noNgx = false;          // VEYRA_NO_NGX: core/features skipped, NVOF only
     bool hdrInput = false;       // PQ/HLG YUV ingress; SDR tone mapping unless hdrOutput.
@@ -721,7 +722,8 @@ public:
     // Diagnostic SRV: xy current-to-previous pixels, z trusted, w cut.
     ID3D12Resource* hudBackgroundMotion(unsigned slot) const;
     bool srEnabled() const { return srEnabled_; }
-    bool nrEnabled() const { return nrEnabled_; }
+    bool nrEnabled() const { return nrEnabled_ && !nrPreparing_; }
+    bool nrPreparing() const { return nrPreparing_; }
     bool fgEnabled() const { return fgEnabled_; }
     bool hdrOutput() const { return desc_.hdrOutput; }
     // Whether the *source* is HDR (PQ/HLG ingress). The brightness curve is restricted
@@ -870,6 +872,7 @@ public:
     uint64_t nvofNextOutValue() const;
     uint64_t nrCreateResult() const { return nrResult_; }
     uint64_t failedNgxResult() const;
+    bool vfgAdaMediumMemoryFault() const;
     const std::wstring& driverRequirementNotice() const {return driverRequirementNotice_;}
     // DLSS-G performance mode: 0 not requested (or not DLSS FG), 1 active,
     // 2 its runtime is missing, 3 this GPU keeps the default runtime (RTX
@@ -887,6 +890,8 @@ public:
     engine::FailedBackend failedBackend() const { return failedBackend_; }
 
 private:
+    bool nrPreparing_=false;
+    bool pendingNrEnabled_=false;
     engine::FailedBackend failedBackend_=engine::FailedBackend::None;
     bool createResources();
     bool initZeroAndDepthTextures();

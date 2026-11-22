@@ -505,6 +505,9 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
     std::vector<SubtitleTrack> tracks;
     if(stop.stop_requested())return tracks;
     const auto started=std::chrono::steady_clock::now();
+    const bool http=subtitleHttpContainer(path);
+    const bool gatedFile=serverGate&&!http;
+    const std::string sourceLabel=http?"HTTP Matroska":utf8(std::filesystem::path(path).filename().wstring());
     ScanAvio serverFile;   // outlives the demuxer below (members are released in reverse order)
     if(serverGate){
         // Deferred: the server is not touched until playback has its buffer.
@@ -512,22 +515,34 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
             if(stop.stop_requested())return tracks;
             Sleep(100);
         }
-        log::info("subtitle",std::format("server file scan starts (playback buffered) file={} rate<={:.0f}MB/s",
-            utf8(std::filesystem::path(path).filename().wstring()),kServerScanMBps));
-        if(!serverFile.open(path,serverGate,stop)){
-            log::warn("subtitle",std::format("server file open failed file={}",utf8(std::filesystem::path(path).filename().wstring())));
+        log::info("subtitle",std::format("subtitle scan starts after playback buffers source={}",sourceLabel));
+        if(gatedFile&&!serverFile.open(path,serverGate,stop)){
+            log::warn("subtitle",std::format("server file open failed file={}",sourceLabel));
             return tracks;
         }
     }
     AVFormatContext* input=avformat_alloc_context();
     if(!input)return tracks;
-    input->interrupt_callback={[](void* opaque){return static_cast<std::stop_token*>(opaque)->stop_requested()?1:0;},&stop};
-    if(serverGate){input->pb=serverFile.avio;input->flags|=AVFMT_FLAG_CUSTOM_IO;}
+    using ScanClock=std::chrono::steady_clock;
+    struct ScanInterrupt { std::stop_token stop; ScanClock::time_point deadline; };
+    ScanInterrupt interrupt{stop,http?ScanClock::now()+std::chrono::seconds(75):ScanClock::time_point::max()};
+    input->interrupt_callback={[](void* opaque){
+        const auto& control=*static_cast<const ScanInterrupt*>(opaque);
+        return control.stop.stop_requested()||ScanClock::now()>=control.deadline?1:0;
+    },&interrupt};
+    if(gatedFile){input->pb=serverFile.avio;input->flags|=AVFMT_FLAG_CUSTOM_IO;}
     struct InputCleanup {AVFormatContext*& input;~InputCleanup(){avformat_close_input(&input);}} cleanup{input};
     const auto utf8Path=utf8(path);
-    const int openResult=avformat_open_input(&input,utf8Path.c_str(),format,nullptr);
+    AVDictionary* options=nullptr;
+    if(http){
+        av_dict_set(&options,"rw_timeout","5000000",0);
+        av_dict_set(&options,"protocol_whitelist","http,https,tcp,tls",0);
+        if(!format)format=av_find_input_format("matroska");
+    }
+    const int openResult=avformat_open_input(&input,utf8Path.c_str(),format,&options);
+    av_dict_free(&options);
     if(openResult<0||!input){
-        log::warn("subtitle",std::format("open failed ret={} file={}",openResult,utf8(std::filesystem::path(path).filename().wstring())));
+        log::warn("subtitle",std::format("open failed ret={} source={}",openResult,sourceLabel));
         return tracks;
     }
     const int infoResult=avformat_find_stream_info(input,nullptr);
@@ -535,7 +550,11 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
         log::warn("subtitle",std::format("stream info failed ret={}",infoResult));
         return tracks;
     }
-    log::info("subtitle",std::format("scan file={} demuxer={} zlib={}",utf8(std::filesystem::path(path).filename().wstring()),
+    if(http&&input->duration<=0){
+        log::info("subtitle","HTTP Matroska has no finite duration; independent subtitle scan skipped");
+        return tracks;
+    }
+    log::info("subtitle",std::format("scan file={} demuxer={} zlib={}",sourceLabel,
         input->iformat?input->iformat->name:"",std::strstr(avformat_configuration(),"--enable-zlib")!=nullptr));
     struct DecoderCleanup {void operator()(AVCodecContext* context)const{avcodec_free_context(&context);}};
     std::vector<std::unique_ptr<AVCodecContext,DecoderCleanup>> decoders;
@@ -627,7 +646,14 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
     }
     auto nextPublish=std::chrono::steady_clock::now()+std::chrono::milliseconds(250);
     int readResult=0;
-    while(packet&&!stop.stop_requested()&&(readResult=av_read_frame(input,packet))>=0){
+    while(packet&&!stop.stop_requested()){
+            if(http&&serverGate&&!serverGate->load()){
+                if(ScanClock::now()>=interrupt.deadline){readResult=AVERROR_EXIT;break;}
+                Sleep(50);
+                continue;
+            }
+            readResult=av_read_frame(input,packet);
+            if(readResult<0)break;
             ++packets;
             const int index=packet->stream_index>=0&&size_t(packet->stream_index)<streamToTrack.size()?streamToTrack[packet->stream_index]:-1;
             if(index<0||!decoders[index]){av_packet_unref(packet);continue;}
@@ -760,6 +786,12 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
 }
 
 bool subtitleServerFile(const std::wstring& path){return serverFilePath(path);}
+bool subtitleHttpContainer(std::wstring_view path){
+    std::wstring url(path.substr(0,path.find_first_of(L"?#")));
+    std::transform(url.begin(),url.end(),url.begin(),[](wchar_t c){return wchar_t(towlower(c));});
+    return (url.starts_with(L"http://")||url.starts_with(L"https://"))
+        &&(url.ends_with(L".mkv")||url.ends_with(L".webm"));
+}
 uint64_t subtitleServerScanBytes(){return g_serverScanBytes.load();}
 
 std::vector<SubtitleTrack> loadExternalSubtitleTracks(const std::wstring& path,std::stop_token stop,
@@ -853,7 +885,7 @@ struct SubtitleLoader::Impl {
                     auto tracks=loadExternalSubtitleTracks(path,stop,[&](const auto& listing){publish(listing,false);});
                     publish(std::move(tracks),true);continue;
                 }
-                for(const wchar_t* extension:{L".srt",L".ass",L".ssa",L".vtt",L".sup",L".pgs",L".idx",L".sub",L".smi",L".sami",L".mpl",L".sbv",L".stl"}){
+                if(!subtitleHttpContainer(path))for(const wchar_t* extension:{L".srt",L".ass",L".ssa",L".vtt",L".sup",L".pgs",L".idx",L".sub",L".smi",L".sami",L".mpl",L".sbv",L".stl"}){
                     if(stop.stop_requested())break;
                     auto candidate=std::filesystem::path(path);candidate.replace_extension(extension);
                     std::error_code ec;if(!std::filesystem::exists(candidate,ec))continue;
@@ -863,7 +895,7 @@ struct SubtitleLoader::Impl {
                 }
                 if(!external.empty())publish(external,false);
                 // A file on a server that playback is reading too: deferred and paced (#48 C5).
-                const std::atomic<bool>* serverGate=readGate&&serverFilePath(path)?readGate.get():nullptr;
+                const std::atomic<bool>* serverGate=readGate&&(serverFilePath(path)||subtitleHttpContainer(path))?readGate.get():nullptr;
                 auto embedded=loadEmbeddedSubtitleTracks(path,stop,[&](const auto& tracks){auto listing=external;listing.insert(listing.end(),tracks.begin(),tracks.end());publish(std::move(listing),false);},serverGate);
                 for(auto& track:embedded)external.push_back(std::move(track));
                 publish(std::move(external),true);

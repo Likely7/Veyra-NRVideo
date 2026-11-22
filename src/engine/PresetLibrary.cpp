@@ -478,6 +478,25 @@ void PresetLibrary::apply(const PresetEntry& entry, EnhancementSettings& setting
     }
 }
 
+bool PresetLibrary::matchesChain(const EffectChain& saved,const EffectChain& current) {
+    if(saved.mode!=current.mode||saved.nodeCount>kMaxChainNodes||current.nodeCount>kMaxChainNodes)return false;
+    const auto enabledFg=[](const auto& chain){
+        const auto* node=chain.firstOf(EffectType::FrameGeneration);
+        return node&&node->enabled;
+    };
+    if(enabledFg(saved)||enabledFg(current))return saved==current;
+    // An inactive FG node can be absent or retained for the next toggle.
+    // Its remembered multiplier/admission flags do not describe rendered output.
+    const auto skipFg=[](const auto& chain,uint32_t& i){
+        while(i<chain.nodeCount&&chain.nodes[i].type==EffectType::FrameGeneration)++i;
+    };
+    uint32_t a=0,b=0;
+    while(true){
+        skipFg(saved,a);skipFg(current,b);
+        if(a==saved.nodeCount||b==current.nodeCount)return a==saved.nodeCount&&b==current.nodeCount;
+        if(saved.nodes[a++]!=current.nodes[b++])return false;
+    }
+}
 ChainValidation PresetLibrary::applyToChain(const PresetEntry& entry, EffectChain& chain,
                                            EnhancementSettings& settings) {
     if (entry.kind != chain.mode) return {false, "预设编辑模式不匹配"};

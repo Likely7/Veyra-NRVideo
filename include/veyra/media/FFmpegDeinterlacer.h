@@ -15,6 +15,7 @@ public:
     int push(const AVFrame*,const HardwareSurfaceView* = nullptr);
     int receive(const AVFrame**);
     int timeBaseNum()const;
+    double observedPictureRate()const;
     int timeBaseDen()const;
     bool active()const;
     const std::string& path()const;

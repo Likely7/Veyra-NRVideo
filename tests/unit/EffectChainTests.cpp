@@ -663,6 +663,27 @@ void testProductionFixedPlanDescription() {
     check(desc.validateFixedExecutionPlan().empty()&&desc.enableNr&&!desc.enableSr&&desc.fixedExecutionPlan&&
           desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==2,
         "AMD adapter description keeps NR layers for the lmxxf runtime");
+    {
+        EnhancementSettings flow;
+        flow.nrPolicy=NrSizePolicy::Realtime;
+        StageRequest capture;
+        capture.width=3840;capture.height=2160;capture.nvidiaAdapter=false;capture.amdNr=true;
+        capture.nr=false;flow.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
+        const auto fullFlow=[&]{
+            const auto plan=describeStages(capture,flow,desc);
+            return plan.flow==Extent{3840,2160}&&desc.flowWidth==3840&&desc.flowHeight==2160;
+        };
+        check(fullFlow(),"AMD flow with NR disabled uses the source extent");
+        capture.nr=true;flow.nr=true;
+        check(fullFlow()&&desc.nrWidth==1920&&desc.nrHeight==1080,"AMD flow and NR have independent extents");
+        flow.amdFlowHalfResolution=true;
+        check(fullFlow()&&desc.amdFlowHalfResolution,"half resolution is applied once in the AMD graph");
+        capture.nvidiaAdapter=true;capture.amdNr=false;flow.opticalFlowBackend=OpticalFlowBackend::Nvidia;
+        const auto withNr=describeStages(capture,flow,desc);
+        check(withNr.flow==Extent{1920,1080},"NVOF with realtime NR keeps the existing guidance budget");
+        capture.nr=false;
+        check(fullFlow(),"NVOF without NR retains the source extent");
+    }
     request.amdNr=false;request.sr=true;
     request.nvidiaAdapter=true;request.nr=false;describeStages(request,s,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.enableNr&&desc.fixedExecutionPlan&&

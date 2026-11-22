@@ -1110,7 +1110,16 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
     for (;;) {
         if(deinterlacer_.active()){
             const int result=deinterlacer_.receive(&frame);
-            if(result>=0)break;
+            if(result>=0){
+                if(const auto pictureRate=deinterlacer_.observedPictureRate();pictureRate>0&&
+                        std::abs(info_.averageFps-pictureRate*2)>0.01){
+                    const auto rate=av_d2q(pictureRate*2,1000000);
+                    log::info("deinterlace",std::format("decoded PTS pictureRate={:.3f} progressiveRate={:.3f} prior={:.3f}",
+                        pictureRate,pictureRate*2,info_.averageFps));
+                    info_.averageFps=pictureRate*2;info_.nominalRateNum=rate.num;info_.nominalRateDen=rate.den;
+                }
+                break;
+            }
             if(result==AVERROR_EOF)return SourceReadStatus::Eos;
             if(result!=AVERROR(EAGAIN)||filterDraining_){errorMessage_=L"去隔行输出失败，请查看诊断";return SourceReadStatus::Error;}
         }

@@ -30,7 +30,7 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
     if (!i.subLoader) i.subLoader = std::make_unique<engine::SubtitleLoader>();
     // A file on a server is scanned only while playback has its buffer (#48): a second reader
     // that takes the same share's bandwidth would starve the picture it is meant to subtitle.
-    const bool server = !media.empty() && engine::subtitleServerFile(media);
+    const bool server = !media.empty() && (engine::subtitleServerFile(media)||engine::subtitleHttpContainer(media));
     i.subScanGate = server ? std::make_shared<std::atomic<bool>>(false) : nullptr;
     i.subScanOpen = false;
     i.subLoader->setReadGate(i.subScanGate);
@@ -47,8 +47,9 @@ void QmlPlayerBridge::tickSubtitles() {
         const auto& n = i.snapshot.network;
         const bool ended = n.active && n.state == media::NetworkStats::State::Ended;
         const bool healthy = n.active && !n.bandwidthLow && n.state == media::NetworkStats::State::Playing;
-        const bool open = i.subScanOpen ? (ended || (healthy && n.bufferedSeconds >= 1.0))
-                                        : (ended || (healthy && n.bufferedSeconds >= 3.0));
+        const bool http = engine::subtitleHttpContainer(i.subMedia);
+        const double needed = http ? (i.subScanOpen?0.5:1.0) : (i.subScanOpen?1.0:3.0);
+        const bool open = ended || (healthy && n.bufferedSeconds >= needed);
         if (open != i.subScanOpen) {
             i.subScanOpen = open;
             i.subScanGate->store(open);

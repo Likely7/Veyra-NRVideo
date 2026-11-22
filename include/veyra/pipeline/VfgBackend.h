@@ -23,6 +23,7 @@ public:
                     unsigned width,unsigned height,DXGI_FORMAT,unsigned multiplier,unsigned quality,
                     bool asynchronousSubmission=false,bool fastFallback=false);
     bool created() const;
+    bool adaMediumMemoryFault() const;
     // Caller transitions encoded texture to COPY_SOURCE and back to COMMON.
     // Submit this list before generate(). Normal frames never CPU-wait here;
     // teardown and exceptional SDK rejection drain work before releasing it.

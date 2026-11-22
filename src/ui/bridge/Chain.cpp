@@ -303,12 +303,26 @@ QVariantList QmlPlayerBridge::presets() const {
 }
 
 QString QmlPlayerBridge::currentPresetName() const {
-    // Matching is by name of the stored entry whose chain equals what the UI is
-    // showing; anything else is honestly "自定义" rather than the nearest guess.
     const auto& entries = impl_->facade.presets().entries();
-    for (const auto& e : entries) {
-        if (e.chain == impl_->chain) return utf8Of(e.name);
-    }
+    const auto match=[&](const engine::PresetEntry& entry){
+        if(entry.kind!=impl_->chain.mode)return false;
+        if(entry.nodeConfiguration&&entry.nodeConfiguration->editor){
+            const auto& document=*entry.nodeConfiguration->editor;
+            if(document.layout!=impl_->layout)return false;
+            return engine::PresetLibrary::matchesChain(document.nodes,impl_->chain);
+        }
+        return engine::PresetLibrary::matchesChain(entry.chain,impl_->chain);
+    };
+    const auto preferred=std::find_if(entries.begin(),entries.end(),[&](const auto& e){
+        return e.name==impl_->lastAppliedPresetName&&match(e);
+    });
+    if(preferred!=entries.end())return utf8Of(preferred->name);
+    const auto exact=std::find_if(entries.begin(),entries.end(),[&](const auto& e){
+        const auto& chain=e.nodeConfiguration&&e.nodeConfiguration->editor?e.nodeConfiguration->editor->nodes:e.chain;
+        return chain==impl_->chain&&match(e);
+    });
+    if(exact!=entries.end())return utf8Of(exact->name);
+    for(const auto& e:entries)if(match(e))return utf8Of(e.name);
     return tr("自定义");
 }
 
@@ -905,6 +919,7 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
     }
     impl_->selectedNr = selectedNr;
     impl_->selectedColour = selectedColour;
+    impl_->lastAppliedPresetName=entry.name;
     if (entry.flow && (entry.contents & engine::presetContentMask(engine::PresetContent::Flow))) {
         impl_->prefs[QStringLiteral("contentRate")] = int(this->settings().content);
         if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "preset content cadence not saved");

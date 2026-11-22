@@ -5,6 +5,7 @@
 #include <libavutil/hwcontext_d3d12va.h>
 #include "veyra/Log.h"
 #include "veyra/engine/EngineController.h"
+#include "veyra/media/FFmpegDeinterlacer.h"
 #include <chrono>
 #include <thread>
 #include <filesystem>
@@ -72,6 +73,32 @@ int enginePlayback(const wchar_t* path,const wchar_t* directory,const wchar_t* e
     return !failed&&playing&&frames>10&&stopMs<2500&&(!options.nr||(nr&&fg&&generated>0))?0:1;
 }
 int wmain(int argc,wchar_t** argv){
+    if(argc==2&&std::wstring_view(argv[1])==L"--field-duration"){
+        media::FFmpegDeinterlacer filter;
+        AVFrame* input=av_frame_alloc();
+        if(!input)return 2;
+        input->width=72;input->height=48;input->format=AV_PIX_FMT_YUV420P;
+        input->flags=AV_FRAME_FLAG_INTERLACED|AV_FRAME_FLAG_TOP_FIELD_FIRST;
+        input->duration=1800; // 20 ms metadata for each of two 40 ms decoded picture intervals.
+        bool ok=av_frame_get_buffer(input,32)>=0;
+        for(unsigned plane=0;ok&&plane<3;++plane)
+            memset(input->data[plane],plane==0?96:128,size_t(input->linesize[plane])*(plane==0?48:24));
+        ok=ok&&filter.open(input,nullptr,1,90000,50,1);
+        int n=0;int64_t firstPts=0;const AVFrame* output=nullptr;
+        const auto receive=[&]{
+            while(filter.receive(&output)>=0){
+                if(!n)firstPts=output->pts;
+                const auto offset=(output->pts-firstPts)*double(filter.timeBaseNum())/filter.timeBaseDen();
+                ok=ok&&std::abs(offset-n*.02)<.0001;
+                ++n;
+            }
+        };
+        for(int i=0;ok&&i<8;++i){input->pts=3600*i;ok=filter.push(input)>=0;receive();}
+        if(ok){ok=filter.push(nullptr)>=0;receive();}
+        av_frame_free(&input);
+        std::cout<<"Field cadence fixture outputs="<<n<<" picture_fps="<<filter.observedPictureRate()<<'\n';
+        return ok&&n==16&&std::abs(filter.observedPictureRate()-25)<.0001?0:1;
+    }
     if(argc<3)return 2;
     if(std::wstring_view(argv[2])==L"engine")return argc>=4?enginePlayback(argv[1],argv[3],argc>=5?argv[4]:L"off"):2;
     std::atomic<bool> cancel=false;

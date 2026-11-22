@@ -128,8 +128,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         desc.fixedExecutionPlanError="invalid fixed-plan source extent, SR target or NR size policy";
         return {};
     }
-    // Preserve the existing offline base/flow/output contract. AMD keeps its
-    // existing 1080p guidance budget independently of the selected NR layer.
+    // The NR budget controls NR. AMD optical flow keeps its source extent
+    // and applies its own optional half-resolution setting in the graph.
     auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
         boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
@@ -144,7 +144,6 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.dualSr=plan.dualSrApplied;desc.dualSrQuality=settings.dualSrQuality;
     desc.firstSrWidth=plan.firstSrOutput.width;desc.firstSrHeight=plan.firstSrOutput.height;
     desc.nrWidth=plan.nr.width;desc.nrHeight=plan.nr.height;
-    desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
     // Standard RTX Video SR can restore compressed video at its original resolution
     // (the Video Effects families only enlarge).
     // ResolutionPlan::srApplied describes enlargement, not SDK execution. Raw capture has
@@ -154,6 +153,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         ngxVideoSr(settings.videoSrQuality);
     desc.enableSr=(plan.srApplied||nativeVideoRestore)&&(request.nvidiaAdapter||settings.videoSrQuality==kVideoSrFsr);
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
+    if(!desc.enableNr||!request.nvidiaAdapter||settings.opticalFlowBackend!=OpticalFlowBackend::Nvidia)
+        plan.flow=plan.source;
+    desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
     desc.nrBeforeSr=!request.stillImage&&!request.exportJob&&lowLatency&&desc.enableNr&&desc.enableSr;
     desc.enableNvofStandalone=desc.enableNr;
     const bool temporalMotion=settings.usesNrTemporal();

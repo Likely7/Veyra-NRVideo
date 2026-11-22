@@ -766,6 +766,9 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         // Double SR runs any SR backend; the supersample shrink only RTX Video SR.
         if(!desc.enableSr||(!desc.dualSr&&!engine::rtxVideoSr(desc.videoSrQuality))){veyra::log::error("resolution","supersampled SR runs on RTX Video SR only");return false;}
     }
+    if(context_.adapter().vendorId==0x1002 && desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia)
+        desc_.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
+    if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     diagnostics::DiagnosticEvent initDiagnostic;initDiagnostic.stage="initialize";initDiagnostic.identity={epoch_+1,desc.settingsRevision,0};initDiagnostic.resolution.source={srcW_,srcH_};initDiagnostic.resolution.base=initDiagnostic.resolution.fg=initDiagnostic.resolution.output={workW_,workH_};initDiagnostic.resolution.nr={nrW_,nrH_};initDiagnostic.resolution.flow={nvofW_,nvofH_};initDiagnostic.flowApplied=std::to_string(unsigned(desc.flowQuality));initDiagnostic.runtimeHash="unverified-user-replaceable";Logger::diagnosticContext(initDiagnostic);
     veyra::log::info("resolution",std::format("source={}x{} base={}x{} nr={}x{} flow={}x{} fg={}x{} output={}x{}",srcW_,srcH_,workW_,workH_,nrW_,nrH_,nvofW_,nvofH_,workW_,workH_,workW_,workH_));
     veyra::log::info("pipeline-order",desc.splitNrAcrossSr()?"NR(source) -> SR -> NR(work) -> FG (node preview)":desc.nrBeforeSr?"NR -> residual(source) -> SR -> FG (experimental preview)":"SR -> NR -> residual -> FG");
@@ -773,15 +776,12 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const bool videoRestore=!desc.stillImage&&desc.videoSrQuality>=1&&desc.videoSrQuality<=4;
     srEnabled_ = desc.enableSr && (srcW_ != workW_ || srcH_ != workH_ || videoRestore || srPrescaleActive() || srResolveActive());
     lmxxfNr_ = context_.adapter().vendorId == 0x1002 || desc.nrRuntime == engine::NrRuntime::LmxxfAmd;
-    if(context_.adapter().vendorId==0x1002 && desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia)
-        desc_.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
     nrEnabled_ = desc.enableNr && !desc.noFeatures && (!desc.noNgx || lmxxfNr_);
     fgEnabled_ = desc.enableFg && !desc.noFeatures && !desc.stillImage &&
         desc.frameGenerationBackend != engine::FrameGenerationBackend::XeSS &&
         (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend)||desc.frameGenerationBackend==engine::FrameGenerationBackend::Vfg||desc.frameGenerationBackend==engine::FrameGenerationBackend::Anr||
          desc.frameGenerationBackend==engine::FrameGenerationBackend::AmdFrc||desc.frameGenerationBackend==engine::FrameGenerationBackend::Rife);
     nvofStandalone_ = desc.enableNvofStandalone && !desc.noFeatures;
-    if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     wchar_t refine[4]{};
     const bool refineDisabled=GetEnvironmentVariableW(L"VEYRA_TEST_FLOW_REFINE",refine,4)&&refine[0]==L'0';
     const bool nvidiaFlow=desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia,
@@ -1897,7 +1897,13 @@ bool EnhanceGraph::initNgxFeatures()
                 if(amdNrProvider(context_.adapter().vendorId,context_.adapter().description)==AmdNrProvider::RedDukeRdna3){
                     auto backend=std::make_unique<Rdna3NrBackend>();
                     const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr-rdna3";
-                    if(!backend->open(directory.lexically_normal(),context_.device(),ring_.queue(),extent.width,extent.height,instance->model.performance))return false;
+                    const auto runtime=directory.lexically_normal();
+                    const bool deferred=desc_.deferRdna3Init;
+                    const bool open=deferred?backend->openAsync(runtime,context_.device(),ring_.queue(),extent.width,extent.height,instance->model.performance):
+                        backend->open(runtime,context_.device(),ring_.queue(),extent.width,extent.height,instance->model.performance);
+                    if(!open)return false;
+                    nrPreparing_=deferred;
+                    pendingNrEnabled_=deferred;
                     instance->amd=std::move(backend);
                 }else{
                     auto backend=std::make_unique<LmxxfNrBackend>();
@@ -1905,7 +1911,7 @@ bool EnhanceGraph::initNgxFeatures()
                     if(!backend->open(directory.lexically_normal(),context_.device(),ring_.queue(),context_.adapter().vendorId,instance->model.performance))return false;
                     instance->amd=std::move(backend);
                 }
-                if(!instance->amd->admits(extent.width,extent.height))return false;
+                if(!nrPreparing_&&!instance->amd->admits(extent.width,extent.height))return false;
             }
             veyra::log::info("resolution",std::format("NR layer={} internal={}x{} composite={}x{} sharedMotion={}",
                 index+1,extent.width,extent.height,fullW,fullH,motion!=nullptr));
@@ -2712,6 +2718,7 @@ bool EnhanceGraph::createViews()
             }
         }
     }
+    if(nrPreparing_)setNrEnabled(pendingNrEnabled_);
     return true;
 }
 
@@ -2939,6 +2946,27 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         std::memcpy(p7Curve_, doviP7->curve, sizeof(p7Curve_));
     }
     retainReferences=retainReferences||desc_.exclusion.enabled;
+    if(nrPreparing_){
+        bool pending=false;
+        for(auto& layer:nrInstances_){
+            if(!layer->amd)continue;
+            switch(layer->amd->pollPreparation()){
+            case NrPreparation::Ready: break;
+            case NrPreparation::Pending: pending=true; break;
+            case NrPreparation::Failed:
+                failedBackend_=engine::FailedBackend::Nr;
+                return false;
+            }
+        }
+        if(!pending){
+            // Rebinding the source views is a one-time transition. Retire the
+            // base frames before replacing descriptors still used by the GPU.
+            if(!ring_.drainQueue()){failedBackend_=engine::FailedBackend::Infrastructure;return false;}
+            nrPreparing_=false;
+            setNrEnabled(pendingNrEnabled_);
+            reset=true;
+        }
+    }
 
     reset=reset||nrAutoResetPending_;nrAutoResetPending_=false;
     frameFlowValid_=false;
@@ -3824,7 +3852,11 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // split-node/color output. Reading srcRgba_ here discards completed NR.
         auto* srInput=srStageInput();
         tracker_.transition(list,srInput,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        const bool validMotion=desc_.srUsesFlow()&&haveFlow;
+        const auto flow=flowTex_?flowTex_->GetDesc():D3D12_RESOURCE_DESC{};
+        const bool fullSizeFlow=flow.Width>=srcW_&&flow.Height>=srcH_;
+        const bool validMotion=desc_.srUsesFlow()&&haveFlow&&fullSizeFlow;
+        if(realFrameIndex_==0&&desc_.srUsesFlow()&&!fullSizeFlow)
+            log::info("fsr-sr",std::format("using render-size zero motion for guidance extent {}x{} below {}x{}",flow.Width,flow.Height,srcW_,srcH_));
         auto* srMotion=validMotion?flowTex_.Get():fsrSrZeroMotion_.Get();
         tracker_.transition(list,srMotion,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,fsrSrDepth_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
@@ -4609,6 +4641,9 @@ bool EnhanceGraph::resolveGeneration(FrameOutputs& out)
     if(complete)out.hasGenerated=anyValid;
     return complete;
 }
+bool EnhanceGraph::vfgAdaMediumMemoryFault() const {
+    return vfgBackend_&&vfgBackend_->adaMediumMemoryFault();
+}
 uint64_t EnhanceGraph::failedNgxResult() const {
     switch(failedBackend_) {
     case engine::FailedBackend::Nr:return nrResult_;
@@ -4648,7 +4683,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // A non-NVIDIA adapter keeps the user's requested NR setting in the UI
     // but has this NGX-only stage explicitly disabled in the graph. Do not
     // reject unrelated live settings in that degraded, playable state.
-    if(s.nr&&desc_.enableNr&&!nrCreated())return false;
+    if(s.nr&&desc_.enableNr&&!nrPreparing_&&!nrCreated())return false;
     const auto requestedFlow=context_.adapter().vendorId==0x1002&&s.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia
         ?engine::OpticalFlowBackend::AmdFidelityFx:s.opticalFlowBackend;
     const bool usesSharedFlow=dlaaRequested()||nvofStandalone_||(desc_.enableFg&&desc_.fgUsesFlow())||
@@ -4790,7 +4825,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
 void EnhanceGraph::setNrEnabled(bool on)
 {
     const bool wasEnabled=nrEnabled_;
-    nrEnabled_ = on && nrCreated();
+    if(nrPreparing_)pendingNrEnabled_=on;
+    nrEnabled_=on&&!nrPreparing_&&nrCreated();
     if(tailColorOutput_){
         // Live colour edits also call this setter. Keep the final blit bound
         // to the tail, rather than silently bypassing every downstream grade.
@@ -4985,6 +5021,7 @@ void EnhanceGraph::shutdown()
     for(unsigned i=0;i<2;++i){if(upRgb_[i]&&mappedRgb_[i])upRgb_[i]->Unmap(0,nullptr);mappedRgb_[i]=nullptr;upRgb_[i].Reset();}
     downsamplePass_={};residualPass_={};stackProtectionPass_={};flowAdaptPass_={};
     for(auto& layer:nrInstances_)layer->close();
+    nrPreparing_=false;
     nrInstances_.clear();
     for(auto& layer:nrAutoPool_)layer.reset();nrAutoLevel_=0;nrAutoPoolReady_=nrAutoResetPending_=false;
     residualRgba_.Reset();preSrProtectionRgba_.Reset();interNrProtectionRgba_.Reset();nrFlow_.Reset();baseFlow_.Reset();

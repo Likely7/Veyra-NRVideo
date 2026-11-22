@@ -326,6 +326,7 @@ struct QmlPlayerBridge::Impl {
     double exportTrimStartSeconds = 0.0;
     double exportTrimEndSeconds = 0.0;
     std::wstring exportPresetName;
+    std::wstring lastAppliedPresetName;
     QString initialPageOverride;
     QString currentPage;
     std::wstring captureDevice;
