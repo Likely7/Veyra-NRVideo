@@ -57,6 +57,7 @@ static int hudFilmCases(int argc,wchar_t** argv) {
     bool ok=av_frame_get_buffer(frame,32)>=0;
     manifest<<"kind,scene,frame,sub,reticle,density,core,repaired,remembered,evidence,trusted,shape\n";
     std::vector<double> realCosts,composeCosts;
+    std::array<std::vector<double>,3> realStageCosts;
     std::vector<uint8_t> pixels,statistics;
     const auto write=[&](std::ofstream& file){
         file.write(reinterpret_cast<const char*>(pixels.data()),std::streamsize(pixels.size()));
@@ -112,8 +113,13 @@ static int hudFilmCases(int argc,wchar_t** argv) {
             priorVisible=visible;
             for(const auto& timing:graph.takeGpuTimings()){
                 const auto milliseconds=[&](GpuStage stage){return timing.gpu[unsigned(stage)].milliseconds.value_or(0);};
-                const double real=milliseconds(GpuStage::HudMask)+milliseconds(GpuStage::HudRepair)+milliseconds(GpuStage::HudMotion);
-                if(i>5&&real>0)realCosts.push_back(real);
+                const std::array<double,3> stages={milliseconds(GpuStage::HudMask),
+                    milliseconds(GpuStage::HudRepair),milliseconds(GpuStage::HudMotion)};
+                const double real=stages[0]+stages[1]+stages[2];
+                if(i>5&&real>0){
+                    realCosts.push_back(real);
+                    for(unsigned at=0;at<stages.size();++at)realStageCosts[at].push_back(stages[at]);
+                }
                 for(unsigned sub=1;sub<desc.fgMultiplier;++sub){
                     const auto ms=milliseconds(GpuStage(unsigned(GpuStage::HudCompose1)+sub-1));
                     if(i>5&&ms>0)composeCosts.push_back(ms);
@@ -129,6 +135,12 @@ static int hudFilmCases(int argc,wchar_t** argv) {
     };
     std::cout<<"HUD_FILM scenes="<<scene<<" real="<<submitted<<" generated="<<generated
              <<" real_p50_ms="<<quantile(realCosts,50)<<" real_p95_ms="<<quantile(realCosts,95)
+             <<" real_max_ms="<<quantile(realCosts,100)
+             <<" real_samples="<<realCosts.size()
+             <<" real_over_700us="<<std::count_if(realCosts.begin(),realCosts.end(),[](double ms){return ms>0.7;})
+             <<" mask_p95_ms="<<quantile(realStageCosts[0],95)
+             <<" repair_p95_ms="<<quantile(realStageCosts[1],95)
+             <<" flow_p95_ms="<<quantile(realStageCosts[2],95)
              <<" compose_p50_ms="<<quantile(composeCosts,50)<<'\n';
     ring.waitIdle();
     graph.shutdown();

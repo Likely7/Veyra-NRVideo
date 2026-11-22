@@ -11,13 +11,15 @@ RWTexture2D<float4> motionTex : register(u0); // xy displacement, z: moving +1, 
 RWTexture2D<uint> counts : register(u1);
 
 static const int kTaps=128;
+static const int kFlowStride=4;
+static const int kFlowTaps=kTaps/kFlowStride;
 static const int kWide=25;
 static const int kCandidates=kWide*kWide;
 static const float kMissingCost=1.;
 groupshared int2 points[kTaps];
 groupshared float3 currentColors[kTaps];
-groupshared float2 flowSamples[kTaps];
-groupshared int currentSupport;
+groupshared float2 flowSamples[kFlowTaps];
+groupshared int currentSupport,denseSupport;
 groupshared float zeroError, cutError;
 groupshared float coarseErrors[kCandidates];
 groupshared float errors[kTaps];
@@ -172,12 +174,18 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
     const bool valid=frameContains(p);
     points[lane]=p;
     currentColors[lane]=valid?comparisonColor(currentTex.Load(int3(p,0)).rgb):0;
-    if(readDenseFlow)flowSamples[lane]=valid?clamp(denseFlow.Load(int3(p,0)),-4096.,4096.):65536.;
+    if(readDenseFlow&&lane%kFlowStride==0)
+        flowSamples[lane/kFlowStride]=valid?clamp(denseFlow.Load(int3(p,0)),-4096.,4096.):65536.;
     GroupMemoryBarrierWithGroupSync();
 
     if(lane==0) {
         currentSupport=0;
-        [loop] for(int i=0;i<kTaps;++i)currentSupport+=frameContains(points[i])?1:0;
+        denseSupport=0;
+        [loop] for(int i=0;i<kTaps;++i) {
+            const bool valid=frameContains(points[i]);
+            currentSupport+=int(valid);
+            denseSupport+=int(valid&&i%kFlowStride==0);
+        }
         zeroError=matchError(int2(0,0));
         cutError=matchError(int2(0,0),true);
     }
@@ -189,12 +197,13 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
         return;
     }
     if(readDenseFlow) {
-        // Component-wise median, followed by the same image checks as
-        // every other candidate. HUD and outlier flows cannot win alone.
-        [unroll] for(uint size=2;size<=kTaps;size*=2) {
+        // Take two evenly spaced flow samples per side and ring. The
+        // resulting median is a proposal; all 128 colour samples still
+        // decide whether the resulting motion is trustworthy.
+        [unroll] for(uint size=2;size<=kFlowTaps;size*=2) {
             [unroll] for(uint stride=size/2;stride>0;stride/=2) {
                 const uint other=lane^stride;
-                if(lane<other) {
+                if(lane<kFlowTaps&&lane<other) {
                     const float2 a=flowSamples[lane],b=flowSamples[other];
                     const bool forward=(lane&size)==0;
                     flowSamples[lane]=forward?min(a,b):max(a,b);
@@ -205,16 +214,20 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
         }
     }
 
+    // Dense flow already supplies an independent proposal. Coarse ranking
+    // can use fewer taps on that path; the two finalists are still refined
+    // and checked against the full ring before accepting any reprojection.
+    const int searchStride=readDenseFlow?kFlowStride:2;
     float best=kMissingCost;
     int2 offset=0;
     [loop] for(int i=int(lane);i<kCandidates;i+=kTaps) {
         const int2 shift=gridOffset(i,step);
-        const float error=matchError(shift,false,2);
+        const float error=matchError(shift,false,searchStride);
         coarseErrors[i]=error;
         if(offsetCost(error,shift)<offsetCost(best,offset)){best=error;offset=shift;}
     }
     const float4 prior=previousMotion.Load(int3(dst,0));
-    if(lane==0&&readDenseFlow)testOffset(int2(round(flowSamples[(currentSupport-1)/2])),best,offset);
+    if(lane==0&&readDenseFlow&&denseSupport>0)testOffset(int2(round(flowSamples[(denseSupport-1)/2])),best,offset);
     if(lane==1&&prior.z>0)testOffset(int2(prior.xy),best,offset);
     errors[lane]=best;
     offsets[lane]=offset;
