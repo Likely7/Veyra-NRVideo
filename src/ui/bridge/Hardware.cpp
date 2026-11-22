@@ -115,8 +115,11 @@ static QVariantMap scanEffectCapabilities() {
     add("fsr4", H::Fsr4, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要 AMD RX 9000"));
     // AMD FRC uses the AMF runtime the AMD driver installs; nothing ships with Veyra.
     add("amdfrc", H::AmdFrc, gfx::AmfFrcBackend::runtimeInstalled(), QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
-    // RIFE: ONNX Runtime + DirectML and the models in runtime/rife (local install).
-    add("rife", H::CrossVendor, gfx::RifeDmlBackend::runtimeInstalled(), QObject::tr("需要 runtime/rife 中的 ONNX Runtime、DirectML 和 RIFE 模型"));
+    const bool rifeHardware = ui::hardwareSupports(H::CrossVendor, gpu);
+    const bool rifeRuntime = gfx::RifeDmlBackend::runtimeInstalled();
+    out["rife"] = QVariantMap{{"available", rifeHardware && rifeRuntime},
+        {"reason", !rifeHardware ? QObject::tr("需要支持 DirectX 12 的硬件显卡") :
+                   !rifeRuntime ? QObject::tr("需要 runtime/rife 中的 ONNX Runtime、DirectML 和 RIFE 模型") : QString{}}};
     add("hdr", H::Nvidia, exists(nr / "nvngx_truehdr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("flow0", H::Nvidia, true, QObject::tr("需要 NVIDIA RTX 显卡及 NVOF 驱动"));
     add("flow1", H::CrossVendor, true, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
