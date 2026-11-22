@@ -38,6 +38,7 @@
 #include "veyra/gfx/FsrSrBackend.h"
 #include "veyra/gfx/FsrFgPresenter.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/gfx/RifeDmlBackend.h"
 #include "veyra/ngx/DlssNrParameters.h"
 #include "veyra/ngx/DlssNrRuntimeAdapter.h"
 #include "veyra/ngx/DlssSrBackend.h"
@@ -775,7 +776,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     fgEnabled_ = desc.enableFg && !desc.noFeatures && !desc.stillImage &&
         desc.frameGenerationBackend != engine::FrameGenerationBackend::XeSS &&
         (!desc.noNgx || engine::fsrFrameGeneration(desc.frameGenerationBackend)||desc.frameGenerationBackend==engine::FrameGenerationBackend::Vfg||desc.frameGenerationBackend==engine::FrameGenerationBackend::Anr||
-         desc.frameGenerationBackend==engine::FrameGenerationBackend::AmdFrc);
+         desc.frameGenerationBackend==engine::FrameGenerationBackend::AmdFrc||desc.frameGenerationBackend==engine::FrameGenerationBackend::Rife);
     nvofStandalone_ = desc.enableNvofStandalone && !desc.noFeatures;
     if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     wchar_t refine[4]{};
@@ -903,6 +904,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     if (!initFsrFg()) return false;
     if (!initVfg()) return false;
     if (!initAmfFrc()) return false;
+    if (!initRife()) return false;
     if (!initHudLock()) return false;
     if(nrEnabled_&&GetEnvironmentVariableW(L"VEYRA_TEST_NR_INIT_FAILURE",nullptr,0)){
         failedBackend_=engine::FailedBackend::Nr;
@@ -1112,7 +1114,7 @@ bool EnhanceGraph::createResources()
     for(size_t i=0;i<kGeneratedPoolSlots;++i){
         // DLSS compatibility binds ten full-sized resources even at 2X.
         // VFG owns only the selected multiplier's outputs; FSR owns one pair.
-        const unsigned usedCount=fsrEnabled()?2u:desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg?2u*(desc_.fgMultiplier-1u):10u;
+        const unsigned usedCount=fsrEnabled()?2u:desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg||desc_.frameGenerationBackend==engine::FrameGenerationBackend::Rife?2u*(desc_.fgMultiplier-1u):10u;
         const bool used=fgEnabled_&&i<usedCount;
         genFrame_[i]=makeTexture(context_.device(),used?workW_:1,used?workH_:1,outputFormat(),true);
         if(!genFrame_[i])return false;
@@ -1589,6 +1591,17 @@ bool EnhanceGraph::initAmfFrc()
     failedBackend_=engine::FailedBackend::None;
     return true;
 }
+bool EnhanceGraph::rifeActive() const { return rife_&&rife_->ready(); }
+bool EnhanceGraph::initRife()
+{
+    if(!fgEnabled_||!rifeEnabled())return true;
+    failedBackend_=engine::FailedBackend::Fg;
+    rife_=std::make_unique<gfx::RifeDmlBackend>();
+    if(!rife_->initialize(context_.device(),ring_.queue(),workW_,workH_,outputFormat(),desc_.fgMultiplier))return false;
+    fgCapsAvailable_=true;fgMultiFrameMax_=int(desc_.fgMultiplier)-1;
+    failedBackend_=engine::FailedBackend::None;
+    return true;
+}
 
 bool EnhanceGraph::initNgxFeatures()
 {
@@ -1633,7 +1646,7 @@ bool EnhanceGraph::initNgxFeatures()
     }
     // FSR upscaling is a FidelityFX effect: a session whose only feature is
     // FSR SR must not require (or fail on) the NGX core.
-    const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled() && !vfgBackend_ && !anr && !amfFrc_) || desc_.convertVideoHdr() ||
+    const bool needNgxCore = (nrEnabled_ && !lmxxfNr_) || (fgEnabled_ && !fsrEnabled() && !vfgBackend_ && !anr && !amfFrc_ && !rife_) || desc_.convertVideoHdr() ||
         (srEnabled_ && (desc_.finalSrQuality()==0 || desc_.firstSrRuns(0) || ngxVideoSrPass(desc_))) || dlaaRequested();
     if (!needNgxCore) {
         veyra::log::info("graph", "NGX core skipped: lmxxf NR / AMD FSR stages use their own runtimes");
@@ -1701,7 +1714,7 @@ bool EnhanceGraph::initNgxFeatures()
     }
     }
 
-    if(!vfgBackend_&&!anr&&!amfFrc_){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
+    if(!vfgBackend_&&!anr&&!amfFrc_&&!rife_){fgCapsAvailable_ = false;fgMultiFrameMax_ = 0;}
     if (fgEnabled_ && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss) {
     failedBackend_=engine::FailedBackend::Fg;
     fgBackend_ = std::make_unique<ngx::DlssFgBackend>();
@@ -4230,7 +4243,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // skipped for budget still records B, so the next pair interpolates from a
     // valid A: no reset, no hidden seed Run, no second lost group.
     const bool vfgRecordOnly=vfgBackend_&&fgBackendAvailable&&!runFg&&historyValid&&!vfgSkipResetsHistory;
-    if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=!vfgRecordOnly;}
+    // RIFE keeps its own A/B planes too: every real frame is converted, so a
+    // pair skipped for budget never leaves an older frame as A.
+    const bool rifeRecordOnly=rife_&&fgBackendAvailable&&!runFg;
+    if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=!vfgRecordOnly&&!rifeRecordOnly;}
     if((runFg||vfgRecordOnly)&&vfgBackend_){
         // First timestamp precedes the producer signal/CUDA dependency wait;
         // the matching end follows the consumer copy. The direct-queue span
@@ -4247,6 +4263,15 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         if(!amfFrc_->capture(list,videoFrame_[parity].Get())){failedBackend_=engine::FailedBackend::Fg;return false;}
+        tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+    }
+    if((runFg||rifeRecordOnly)&&rife_){
+        // The span from here to the last unpack brackets RIFE's DirectML work,
+        // which runs between our lists on this same queue.
+        if(runFg){gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);}
+        if(resetFg)rife_->reset();
+        tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+        if(!rife_->capture(list,videoFrame_[parity].Get())){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,videoFrame_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
     }
     if(!composeExclusion(list,parity,parity,presentSinkFg()))return false;
@@ -4287,6 +4312,32 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 f.lease=std::make_shared<FrameLease>();f.lease->texture=genFrame_[generatedSlot];f.lease->slot=generatedSlot;
                 f.lease->readyFence=out.genFenceValue;f.lease->readyFenceObject=out.genFenceObject;generatedLeases_[generatedSlot]=f.lease;out.batch.append(std::move(f));
             }
+            continue;
+        }
+        if(rife_){
+            // GPU producer -> DirectML network -> GPU consumer, all on this queue
+            // in submission order: no CPU wait, no cross-queue fence.
+            if(!rife_->hasPair())break;   // first frame after a reset: nothing to interpolate yet
+            if(!rife_->generate(sub,outputMultiplier)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            auto* flist=ring_.acquireNext(slot,st);if(!flist)return false;
+            tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            if(!rife_->copyOutput(flist,genFrame_[generatedSlot].Get(),sub,outputMultiplier)){failedBackend_=engine::FailedBackend::Fg;return false;}
+            composeHudLock(flist,generatedSlot,1-parity);
+            if(!composeExclusion(flist,generatedSlot+2,1-parity,false))return false;
+            tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
+            const bool last=sub==fgCalls;
+            if(last){gpuTimer_.mark(flist,GpuStage::Fg1,true);gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);}
+            if(!submitGraph(slot))return false;
+            if(last)gpuTimer_.submitted(ring_.lastSignaledValue());
+            if(previewCheckpoint&&!reset)previewCheckpoint();
+            ++out.fgEvaluated;out.hasGenerated=true;out.genSlot=parity;
+            out.genFenceValue=ring_.lastSignaledValue();out.genFenceObject=context_.fence();
+            out.generatedPtsMs=prevPtsMs_+(ptsMs-prevPtsMs_)*double(sub)/double(outputMultiplier);
+            ++metrics_.fgSubmittedCandidates;
+            BatchFrame f;f.identity=out.batch.identity;f.kind=FrameKind::Generated;f.validity=GenerationValidity::Pending;f.subframe=sub;
+            f.pts100ns=FrameBatch::interpolate(out.batch.a100ns,out.batch.b100ns,sub,outputMultiplier);
+            f.lease=std::make_shared<FrameLease>();f.lease->texture=genFrame_[generatedSlot];f.lease->slot=generatedSlot;
+            f.lease->readyFence=out.genFenceValue;f.lease->readyFenceObject=out.genFenceObject;generatedLeases_[generatedSlot]=f.lease;out.batch.append(std::move(f));
             continue;
         }
         if(vfgBackend_){
@@ -4444,7 +4495,7 @@ bool EnhanceGraph::resolveFrame(FrameOutputs& out,uint32_t index)
             return true;
         }
     }
-    if(fsrActive()||vfgBackend_||amfFrc_){
+    if(fsrActive()||vfgBackend_||amfFrc_||rife_){
         frame.validity=GenerationValidity::Valid;++metrics_.fgGeneratedFrames;
         return true;
     }
@@ -4677,7 +4728,7 @@ uint32_t EnhanceGraph::actualFlowPerf()const{return nvof_?nvof_->caps().actualPe
 bool EnhanceGraph::vfgFastReady() const { return vfgBackend_&&vfgBackend_->fastReady(); }
 bool EnhanceGraph::fgCreated() const
 {
-    return (vfgBackend_&&vfgBackend_->created()) || fsrActive() || amfFrcActive() || (fgBackend_ && fgBackend_->created());
+    return (vfgBackend_&&vfgBackend_->created()) || fsrActive() || amfFrcActive() || rifeActive() || (fgBackend_ && fgBackend_->created());
 }
 
 uint64_t EnhanceGraph::lastNvofSignal() const
@@ -4754,6 +4805,7 @@ void EnhanceGraph::shutdown()
     fsrFgBackend_.reset();
     vfgBackend_.reset();
     amfFrc_.reset();
+    rife_.reset();
     if (fgBackend_) featuresReleased=fgBackend_->release()&&featuresReleased;
     if(firstVideoSrBackend_){featuresReleased=firstVideoSrBackend_->release()&&featuresReleased;firstVideoSrBackend_.reset();}
     if(videoSrBackend_){featuresReleased=videoSrBackend_->release()&&featuresReleased;videoSrBackend_.reset();}

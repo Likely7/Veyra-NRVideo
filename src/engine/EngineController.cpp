@@ -941,6 +941,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     else if(reduced.frameGenerationBackend==FrameGenerationBackend::AmdFrc){
                         capabilityGeneratedFrames=int((graph->amfFrcActive()?1u:0u));
                     }
+                    else if(reduced.frameGenerationBackend==FrameGenerationBackend::Rife){
+                        capabilityGeneratedFrames=graph->rifeActive()?graph->fgMultiFrameCountMax():0;
+                    }
                 }
                 if(capabilityGeneratedFrames>0&&int(reduced.multiplier)-1>capabilityGeneratedFrames){
                     const uint32_t clamped=uint32_t(capabilityGeneratedFrames+1);
@@ -961,6 +964,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         backendRecoveryWarning+=L"NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::AmdFrc&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志";
+                    else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Rife&&failure==FailedBackend::Fg)
+                        backendRecoveryWarning+=L"RIFE 未能启用（需要 runtime\rife 运行组件和 SDR 输出），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
                     {
                         backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志";

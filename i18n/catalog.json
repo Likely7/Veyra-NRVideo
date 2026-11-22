@@ -41237,6 +41237,45 @@
    "de": "Hoch standardmäßig. Wenn ein Spiel oder ein anderes schweres Programm, das nebenbei läuft, langsamer wird, wählen Sie Normal",
    "pt-BR": "; Alta por padrão. Se um jogo ou outro programa pesado em execução ao lado desacelera, escolha Normal",
    "ru": "; высокий по умолчанию. Если игра или другая тяжелая программа, работающая рядом, замедляется, выберите Normal."
+  },
+  {
+   "zh": "RIFE · AI 视频补帧 · 2X / 3X",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "RIFE · AI 影片補幀 · 2X / 3X",
+   "en": "RIFE · AI video interpolation · 2X / 3X",
+   "ja": "RIFE · AI 動画補間 · 2X / 3X",
+   "ko": "RIFE · AI 영상 보간 · 2X / 3X",
+   "es": "RIFE · interpolación de vídeo con IA · 2X / 3X",
+   "fr": "RIFE · interpolation vidéo IA · 2X / 3X",
+   "de": "RIFE · KI-Videointerpolation · 2X / 3X",
+   "pt-BR": "RIFE · interpolação de vídeo com IA · 2X / 3X",
+   "ru": "RIFE · ИИ-интерполяция видео · 2X / 3X"
+  },
+  {
+   "zh": "RIFE 4.26（3X 用 4.22 lite）AI 视频补帧，经 DirectML 在任意 DirectX 12 显卡上运行，只用前后两帧画面；比 AMD FRC 清晰，但 GPU 占用更高、延迟略高",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "RIFE 4.26（3X 使用 4.22 lite）AI 影片補幀，透過 DirectML 在任何 DirectX 12 顯示卡上執行，只用前後兩幀畫面；比 AMD FRC 清晰，但 GPU 佔用更高、延遲略高",
+   "en": "RIFE 4.26 (4.22 lite at 3X) AI video interpolation, run through DirectML on any DirectX 12 GPU from the two neighbouring frames only; cleaner than AMD FRC, but higher GPU load and slightly more latency",
+   "ja": "RIFE 4.26（3X は 4.22 lite）AI 動画補間。DirectML により DirectX 12 対応 GPU で動作し、前後 2 フレームのみを使用します。AMD FRC より鮮明ですが、GPU 負荷と遅延がやや増えます",
+   "ko": "RIFE 4.26(3X는 4.22 lite) AI 영상 보간. DirectML로 DirectX 12 GPU에서 실행되며 앞뒤 두 프레임만 사용합니다. AMD FRC보다 깨끗하지만 GPU 부하와 지연이 조금 더 큽니다",
+   "es": "Interpolación de vídeo con IA RIFE 4.26 (4.22 lite en 3X), ejecutada con DirectML en cualquier GPU DirectX 12 a partir de los dos fotogramas vecinos; más limpia que AMD FRC, pero con más carga de GPU y algo más de latencia",
+   "fr": "Interpolation vidéo IA RIFE 4.26 (4.22 lite en 3X), exécutée via DirectML sur tout GPU DirectX 12 à partir des deux images voisines ; plus nette qu'AMD FRC, mais charge GPU plus élevée et latence un peu plus forte",
+   "de": "RIFE 4.26 (bei 3X 4.22 lite) KI-Videointerpolation über DirectML auf jeder DirectX-12-GPU, nur aus den beiden Nachbarbildern; sauberer als AMD FRC, aber höhere GPU-Last und etwas mehr Latenz",
+   "pt-BR": "Interpolação de vídeo com IA RIFE 4.26 (4.22 lite em 3X), executada via DirectML em qualquer GPU DirectX 12 a partir dos dois quadros vizinhos; mais limpa que o AMD FRC, mas com maior carga na GPU e um pouco mais de latência",
+   "ru": "ИИ-интерполяция видео RIFE 4.26 (4.22 lite при 3X) через DirectML на любой GPU с DirectX 12, только по двум соседним кадрам; чище, чем AMD FRC, но выше нагрузка на GPU и немного больше задержка"
+  },
+  {
+   "zh": "需要 runtime\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 runtime\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
+   "en": "Requires ONNX Runtime, DirectML and the RIFE models in runtime\rife",
+   "ja": "runtime\rife に ONNX Runtime、DirectML、RIFE モデルが必要です",
+   "ko": "runtime\rife에 ONNX Runtime, DirectML, RIFE 모델이 필요합니다",
+   "es": "Requiere ONNX Runtime, DirectML y los modelos RIFE en runtime\rife",
+   "fr": "Nécessite ONNX Runtime, DirectML et les modèles RIFE dans runtime\rife",
+   "de": "Benötigt ONNX Runtime, DirectML und die RIFE-Modelle in runtime\rife",
+   "pt-BR": "Requer ONNX Runtime, DirectML e os modelos RIFE em runtime\rife",
+   "ru": "Нужны ONNX Runtime, DirectML и модели RIFE в runtime\rife"
   }
  ]
 }

@@ -147,6 +147,7 @@ add_library(veyra_gfx STATIC
   src/gfx/XessPacing.cpp
   src/gfx/FsrFgPresenter.cpp
   src/gfx/AmfFrcBackend.cpp
+  src/gfx/RifeDmlBackend.cpp
   src/gfx/FsrSrBackend.cpp
 )
 veyra_apply_warnings(veyra_gfx)
@@ -171,6 +172,15 @@ if(EXISTS "${VEYRA_AMF_SDK_ROOT}/include/components/FRC.h")
   target_link_libraries(veyra_gfx PRIVATE ole32)
 else()
   message(STATUS "AMF SDK headers not found at ${VEYRA_AMF_SDK_ROOT}; AMD FRC is unavailable in this build")
+endif()
+# RIFE frame generation: ONNX Runtime (MIT) and DirectML headers only; the
+# runtime DLLs and models are loaded from runtime/rife at run time.
+set(VEYRA_ORT_DML_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps/ort-dml" CACHE PATH "ONNX Runtime DirectML NuGet (ort/build/native/include) and DirectML NuGet (dml/include)")
+if(EXISTS "${VEYRA_ORT_DML_ROOT}/ort/build/native/include/dml_provider_factory.h" AND EXISTS "${VEYRA_ORT_DML_ROOT}/dml/include/DirectML.h")
+  target_include_directories(veyra_gfx PRIVATE "${VEYRA_ORT_DML_ROOT}/ort/build/native/include" "${VEYRA_ORT_DML_ROOT}/dml/include")
+  target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_RIFE_DML=1)
+else()
+  message(STATUS "ONNX Runtime DirectML headers not found at ${VEYRA_ORT_DML_ROOT}; RIFE is unavailable in this build")
 endif()
 if(EXISTS "${VEYRA_FIDELITYFX2_ROOT}/framegeneration/include/dx12/ffx_api_framegeneration_dx12.h")
   target_include_directories(veyra_gfx PRIVATE
@@ -379,6 +389,10 @@ veyra_add_compute_shader(veyra_shader_flow_fill FlowFill)
 veyra_add_compute_shader(veyra_shader_flow_claim FlowClaim)
 # VfgShotChange: per-pair shot-change test for VFG (replaces the SDK's automatic one).
 veyra_add_compute_shader(veyra_shader_vfg_shot_change VfgShotChange)
+# RIFE (RifeDmlBackend): colour <-> planar model tensors.
+veyra_add_compute_shader(veyra_shader_rife_pack RifePack)
+veyra_add_compute_shader(veyra_shader_rife_unpack RifeUnpack)
+veyra_add_compute_shader(veyra_shader_rife_shot_change RifeShotChange)
 veyra_add_compute_shader(veyra_shader_rgb_nv12 RgbToNv12)
 veyra_add_compute_shader(veyra_shader_virtual_camera_nv12 VirtualCameraNv12)
 
@@ -757,7 +771,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change veyra_shader_rife_pack veyra_shader_rife_unpack veyra_shader_rife_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp

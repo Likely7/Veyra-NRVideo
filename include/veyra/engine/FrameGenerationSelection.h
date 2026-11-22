@@ -4,7 +4,7 @@
 
 namespace veyra::engine {
 struct FrameGenerationAvailability {
-    bool dlss = false, xess = false, fsr = false, fsr4 = false, vfg = false, anr = false, amdFrc = false;
+    bool dlss = false, xess = false, fsr = false, fsr4 = false, vfg = false, anr = false, amdFrc = false, rife = false;
     constexpr bool supports(FrameGenerationBackend backend) const {
         switch (backend) {
         case FrameGenerationBackend::Dlss: return dlss;
@@ -14,6 +14,7 @@ struct FrameGenerationAvailability {
         case FrameGenerationBackend::Vfg: return vfg;
         case FrameGenerationBackend::Anr: return anr;
         case FrameGenerationBackend::AmdFrc: return amdFrc;
+        case FrameGenerationBackend::Rife: return rife;
         }
         return false;
     }

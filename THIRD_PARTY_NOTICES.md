@@ -1,5 +1,26 @@
 # Third-party dependencies
 
+## RIFE frame generation through ONNX Runtime DirectML (2026-11-22)
+
+`src/gfx/RifeDmlBackend.cpp` runs RIFE video frame interpolation (Practical-RIFE,
+hzwer, MIT) with ONNX Runtime and its DirectML execution provider on the graph's
+D3D12 queue. Nothing below is committed or bundled; the user places it in
+`runtime/rife` (docs/RIFE_DIRECTML.md) and the backend loads it by absolute path:
+
+- ONNX Runtime 1.24.4 (`onnxruntime.dll`, `onnxruntime_providers_shared.dll`), MIT,
+  from the NuGet package Microsoft.ML.OnnxRuntime.DirectML. The build uses its
+  C API headers (`onnxruntime_c_api.h`, `dml_provider_factory.h`) only.
+- DirectML 1.15.4 (`DirectML.dll`), Microsoft DirectML license (redistributable),
+  from the NuGet package Microsoft.AI.DirectML; header `DirectML.h` at build time.
+- Models `rife_v4.26_fp16.onnx` and `rife_v4.22_lite_fp16.onnx`: Practical-RIFE
+  weights (MIT) as exported to ONNX by vs-mlrt (AmusementClub, external-models
+  release), converted by `tools/rife_models/make_rife_models.py` (separate inputs,
+  fp16). The script reproduces the files byte for byte.
+
+`shaders/RifePack.hlsl`, `RifeUnpack.hlsl` and `RifeShotChange.hlsl` are original.
+The shot-change test reuses the sampling idea of `VfgShotChange.hlsl` with a
+motion-compensated block match instead of the histogram/SAD thresholds.
+
 ## Live subtitle translation (2026-11-20)
 
 Veyra's native subtitle translation adapts the Live Captions integration and

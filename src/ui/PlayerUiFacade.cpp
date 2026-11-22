@@ -110,7 +110,7 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     const bool recoveredGraphFg=snapshot.rejectedRevision>=pendingFgRevision_&&
         snapshot.desired.revision==snapshot.rejectedRevision&&
         (requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Anr||
-         requestedFgBackend_==veyra::engine::FrameGenerationBackend::AmdFrc)&&
+         requestedFgBackend_==veyra::engine::FrameGenerationBackend::AmdFrc||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Rife)&&
         snapshot.desired.frameGenerationBackend==requestedFgBackend_&&
         snapshot.desired.vfgQuality==requestedVfgQuality_&&
         requestedFgMultiplier_>1&&snapshot.desired.multiplier==1&&
