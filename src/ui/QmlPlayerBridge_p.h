@@ -91,6 +91,7 @@
 #include "veyra/remoteplay/ControllerInput.h"
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/ProfileStore.h"
+#include "veyra/ui/PsnService.h"
 #include "veyra/source/RemotePlaySource.h"
 #endif
 #ifdef VEYRA_ENABLE_XBOX
@@ -468,6 +469,7 @@ struct QmlPlayerBridge::Impl {
     QVariantMap ps5Form;
     QString ps5Status;
     std::wstring ps5Profile;                 // file name inside profileDirectory()
+    int ps5OpenGen = -1;                     // owns only this deferred/opening source
     QVariantList ps5ProfileList;
     bool ps5Watching = false;
     struct Ps5Outcome { std::wstring message; std::vector<std::pair<std::string, std::string>> hosts; std::wstring savedPath; bool refreshProfiles = false; };
@@ -475,6 +477,10 @@ struct QmlPlayerBridge::Impl {
     Ps5Outcome ps5Outcome;
     std::atomic<bool> ps5Done{false};
     bool ps5Busy = false;
+    QVariantMap ps5LastLoginPrompt;
+    QVariantMap ps5LastEndStatus;
+    QString ps5EndNoticed;
+    uint64_t ps5ControlPinCanceledSession=0;
     QTimer* controllerTimer = nullptr;
     // PS5 手柄控制 (capture card dialog).
     QTimer* ps5ControlTimer = nullptr;
@@ -485,6 +491,7 @@ struct QmlPlayerBridge::Impl {
     bool ps5ControlNoPair = false;           // switched on without a pairing; cleared once pairings exist
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     remoteplay::ControllerInput controller;
+    std::unique_ptr<PsnService> psn;
     // One SDL pad reader shared by PS5 stream, PS5 手柄控制, PC and Xbox streaming.
     // Each user acquires it and only the last release stops it, so the timer of a
     // source that just ended never cuts off the pad the next source started using.

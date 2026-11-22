@@ -17,6 +17,7 @@ HostTime monotonic100ns() noexcept;
 enum class Codec : std::uint8_t { H264, H265, H265Hdr };
 enum class TimestampProvenance : std::uint8_t { Unknown, SourceProvided, LocalEstimated };
 enum class SessionState : std::uint8_t { Idle, Connecting, WaitingFirstFrame, Streaming, LoginPinRequired, Failed, Stopping };
+enum class LoginPinStatus : std::uint8_t { None, Required, Submitting, Sent, Incorrect, Accepted, SendFailed };
 enum class SampleKind : std::uint8_t { CodecConfig, AccessUnit };
 struct VideoProfile {
     std::uint32_t width = 1920, height = 1080, fps = 60, bitrateKbps = 15000;

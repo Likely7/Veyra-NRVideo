@@ -13,6 +13,47 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 struct RemotePlaySessionSourceTestAccess {
+static void stopStreamingBoundary(){
+    RemotePlaySessionSource s;
+    if(s.stopStreaming(false)||s.stopStreaming(true))throw std::runtime_error("idle source must reject disconnect commands");
+    auto inbox=std::make_shared<remoteplay::SessionInbox>();auto token=inbox->begin(remoteplay::monotonic100ns());
+    s.telemetryInbox_=inbox;s.started_=true;s.alive_=true;
+    token.loginPinRequired();
+    if(s.stopStreaming(true))throw std::runtime_error("standby must require an authenticated live session");
+    token.connected();
+    if(!s.stopStreaming(true)||s.stopStreaming(false))throw std::runtime_error("queue exactly one stop choice while processing");
+    RemotePlaySource noConnection;
+    if(s.processStopRequest(noConnection,{}))throw std::runtime_error("failed standby must not disconnect");
+    const auto failure=s.stopStatus();
+    if(!failure.finished||failure.disconnected||failure.commandSent||failure.error==0||!s.alive())
+        throw std::runtime_error("standby failure must be observable and preserve the session");
+    if(!s.stopStreaming(false))throw std::runtime_error("user must be able to disconnect after failed standby");
+    if(!s.processStopRequest(noConnection,{}))throw std::runtime_error("ordinary disconnect must not require a native standby call");
+    const auto plain=s.stopStatus();
+    if(plain.standby||plain.commandSent||plain.error||plain.attempt!=2)throw std::runtime_error("ordinary disconnect must not request console power");
+    s.alive_=false;s.close();
+}
+static void loginPinBoundary(){
+    RemotePlaySessionSource s;
+    if(s.loginPin("1234")||!s.pin_.empty())throw std::runtime_error("PIN before connection must be rejected, not silently retained");
+    auto inbox=std::make_shared<remoteplay::SessionInbox>();auto token=inbox->begin(remoteplay::monotonic100ns());
+    s.telemetryInbox_=inbox;s.started_=true;s.alive_=true;
+    if(s.loginPin("1234"))throw std::runtime_error("PIN before challenge must be rejected");
+    token.loginPinRequired();
+    if(s.loginPin("1234",1,1)||s.loginPin("1234",inbox->snapshot().commonOrigin100ns,99))
+        throw std::runtime_error("stale PIN dialog identity must not enqueue a secret");
+    if(s.loginPin("123")||s.loginPin("12345")||s.loginPin("12x4"))throw std::runtime_error("PIN validation boundary");
+    if(!s.loginPin("1234")||s.pin_!="1234")throw std::runtime_error("requested PIN must reach owner queue");
+    if(s.loginPin("5678")||s.pin_!="1234")throw std::runtime_error("pending PIN must not be replaced");
+    SecureZeroMemory(s.pin_.data(),s.pin_.size());s.pin_.clear();
+    token.loginPinSubmitting();token.loginPinSubmissionResult(0);
+    if(s.loginPin("1234"))throw std::runtime_error("PIN awaiting reply must not be resent");
+    token.loginPinRequired(true);
+    if(!s.loginPin("5678"))throw std::runtime_error("rejected PIN must allow retry");
+    s.close();if(!s.pin_.empty())throw std::runtime_error("close must clear pending PIN");
+    s.alive_=false;
+    if(s.loginPin("1234"))throw std::runtime_error("closed PIN challenge must not accept input");
+}
 static bool slowConsumer(){
     RemotePlaySessionSource s;s.started_=true;
     const auto base=remoteplay::monotonic100ns();
@@ -116,6 +157,20 @@ static void controlOnlyBoundary(){
     if(s.takeControllerLocked(now)!=down)throw std::runtime_error("controller-only pad state must pass through the shared queue");
     s.controller({});
     if(s.takeControllerLocked(now)!=remoteplay::ControllerState{})throw std::runtime_error("focus loss must neutralize the controller-only queue");
+}
+static void psnCancellationBoundary(){
+    // Valid synthetic requests: pre-cancellation must stop before any PSN I/O.
+    for(bool ps5:{false,true})for(bool control:{false,true})for(bool flag:{false,true}){
+        RemotePlaySessionSource s;RemotePlayConnectDesc desc;desc.controlOnly=control;
+        desc.request.psn=true;desc.request.ps5=ps5;desc.request.psnDuid=std::string(64,ps5?'1':'0');
+        desc.request.video.codec=remoteplay::Codec::H264;
+        desc.request.credentials.accountId.fill(7);desc.request.psnToken.assign("synthetic-token");
+        if(desc.request.validate())throw std::runtime_error("synthetic PSN request should pass validation");
+        std::stop_source stop;std::atomic<bool> canceled{true};
+        if(!flag)stop.request_stop();
+        if(s.connect(std::move(desc),stop.get_token(),flag?&canceled:nullptr))throw std::runtime_error("pre-canceled PSN source started");
+        s.close();if(s.alive()||s.info().opened)throw std::runtime_error("pre-canceled PSN source remained active");
+    }
 }
 };
 }
@@ -250,6 +305,9 @@ int main(int argc,char** argv){
     if(!veyra::remoteplay::discoverLocalPs5(cancelled.get_token()).hosts.empty())return 6;
     veyra::source::RemotePlaySessionSourceTestAccess::mailbox();
     veyra::source::RemotePlaySessionSourceTestAccess::controlOnlyBoundary();
+    veyra::source::RemotePlaySessionSourceTestAccess::psnCancellationBoundary();
+    veyra::source::RemotePlaySessionSourceTestAccess::loginPinBoundary();
+    veyra::source::RemotePlaySessionSourceTestAccess::stopStreamingBoundary();
     if(!veyra::source::RemotePlaySessionSourceTestAccess::slowConsumer())return 44;
     veyra::source::RemotePlaySessionSource source;
     for(int i=0;i<3;++i){

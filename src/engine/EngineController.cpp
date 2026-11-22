@@ -215,35 +215,123 @@ void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc 
 // A PS5 stream (activeRemote_) takes precedence; otherwise PS5 手柄控制.
 remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(activeRemote_)return activeRemote_->takeFeedback();return controlRemote_?controlRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
 void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);else if(controlRemote_)controlRemote_->controller(state);}
-void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
+bool EngineController::remotePlayLoginPin(std::string pin){
+    std::lock_guard lock(mutex_);
+    if(activeRemote_)return activeRemote_->loginPin(std::move(pin));
+    if(controlRemote_)return controlRemote_->loginPin(std::move(pin));
+    SecureZeroMemory(pin.data(),pin.size());return false;
+}
+EngineController::RemoteLoginPrompt EngineController::remotePlayLoginPromptLocked()const{
+    RemoteLoginPrompt out;
+    std::shared_ptr<source::RemotePlaySessionSource> session;
+    uint64_t identity=0;
+    if(activeRemote_){
+        if(!snapshot_.remotePlay||snapshot_.failed||stop_||snapshot_.sessionId!=activeRemoteSessionId_||snapshot_.transport!=TransportState::Opening)return out;
+        session=activeRemote_;identity=activeRemoteSessionId_;
+    }else if(controlRemote_&&!controlCancel_&&controlRemoteRequestId_==controlRequestId_.load()){
+        session=controlRemote_;identity=controlRemoteRequestId_;out.controllerOnly=true;
+    }
+    if(!session||!session->alive()||session->failed())return out;
+    out.session=session->sessionSnapshot();
+    if(out.session.state!=remoteplay::SessionState::LoginPinRequired||!out.session.loginPinRequests||out.session.dataConnecting)return out;
+    using P=remoteplay::LoginPinStatus;
+    const auto status=out.session.loginPinStatus;
+    out.active=status==P::Required||status==P::Incorrect||status==P::Submitting||status==P::Sent||status==P::SendFailed;
+    if(!out.active)return out;
+    out.canSubmit=status==P::Required||status==P::Incorrect||status==P::SendFailed;
+    // The source's clock origin changes on every internal reconnect, even when
+    // its inbox generation and PIN request counter both restart at one.
+    out.requestId=std::format("{}:{}:{}:{}",out.controllerOnly?'c':'s',identity,out.session.commonOrigin100ns,out.session.loginPinRequests);
+    return out;
+}
+EngineController::RemoteLoginPrompt EngineController::remotePlayLoginPrompt()const{
+    std::lock_guard lock(mutex_);return remotePlayLoginPromptLocked();
+}
+bool EngineController::remotePlayLoginPin(std::string pin,std::string_view requestId){
+    std::lock_guard lock(mutex_);const auto prompt=remotePlayLoginPromptLocked();
+    if(!prompt.active||!prompt.canSubmit||requestId.empty()||prompt.requestId!=requestId){SecureZeroMemory(pin.data(),pin.size());return false;}
+    const auto& source=prompt.controllerOnly?controlRemote_:activeRemote_;
+    return source->loginPin(std::move(pin),prompt.session.commonOrigin100ns,prompt.session.loginPinRequests);
+}
+bool EngineController::cancelRemotePlayLoginPin(std::string_view requestId,bool& controllerOnly){
+    {
+        std::lock_guard lock(mutex_);const auto prompt=remotePlayLoginPromptLocked();
+        if(!prompt.active||requestId.empty()||prompt.requestId!=requestId)return false;
+        controllerOnly=prompt.controllerOnly;
+        if(controllerOnly){
+            std::lock_guard controlLock(controlMutex_);
+            // A queued replacement must never be canceled by the old modal.
+            if(controlRemoteRequestId_!=controlRequestId_.load())return false;
+            ++controlRequestId_;controlCancel_=true;controlPending_=std::shared_ptr<source::RemotePlayConnectDesc>{};
+        }else{
+            stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;
+            if(!busy_)pending_=[this]{prewarmed_.reset();};
+        }
+    }
+    if(controllerOnly)controlWake_.notify_all();else wake_.notify_one();
+    return true;
+}
+EngineController::RemoteStreamEndStatus EngineController::remotePlayEndStatusLocked()const{
+    if(!activeRemote_||!snapshot_.remotePlay||snapshot_.sessionId!=activeRemoteSessionId_){
+        auto out=lastRemoteEndStatus_.sessionId==snapshot_.sessionId?lastRemoteEndStatus_:RemoteStreamEndStatus{};
+        if(snapshot_.remotePlay&&!snapshot_.failed&&!stop_&&snapshot_.transport==TransportState::Opening){out.sessionId=snapshot_.sessionId;out.canEnd=true;}
+        return out;
+    }
+    RemoteStreamEndStatus out;out.sessionId=activeRemoteSessionId_;
+    const auto stop=activeRemote_->stopStatus();
+    out.requested=stop.requested;out.finished=stop.finished;out.standby=stop.standby;out.commandSent=stop.commandSent;
+    out.disconnected=stop.disconnected;out.error=stop.error;out.attempt=stop.attempt;
+    out.ending=stop.requested&&!stop.finished;
+    const auto session=activeRemote_->sessionSnapshot();
+    out.connected=session.state==remoteplay::SessionState::WaitingFirstFrame||session.state==remoteplay::SessionState::Streaming;
+    out.canEnd=!stop_&&!snapshot_.failed&&!activeRemote_->failed()&&!out.ending&&!out.disconnected&&
+        (activeRemote_->alive()||snapshot_.transport==TransportState::Opening);
+    return out;
+}
+EngineController::RemoteStreamEndStatus EngineController::remotePlayEndStatus()const{
+    std::lock_guard lock(mutex_);return remotePlayEndStatusLocked();
+}
+bool EngineController::endRemotePlay(bool standby){
+    std::lock_guard lock(mutex_);const auto state=remotePlayEndStatusLocked();
+    if(!state.canEnd||(standby&&!state.connected))return false;
+    if(activeRemote_&&activeRemoteSessionId_==snapshot_.sessionId&&activeRemote_->stopStreaming(standby))return true;
+    // Before the native owner is ready, an ordinary disconnect cancels the
+    // queued/opening run. Standby is never sent through this fallback.
+    if(!standby&&snapshot_.remotePlay&&snapshot_.transport==TransportState::Opening){
+        stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;
+        if(!busy_)pending_=[this]{prewarmed_.reset();};wake_.notify_one();return true;
+    }
+    return false;
+}
 void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){
     desc.controlOnly=true;desc.request.viewOnly=false;
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
-    {std::lock_guard lock(controlMutex_);controlPending_=std::move(request);
+    {std::lock_guard lock(controlMutex_);++controlRequestId_;controlCancel_=true;controlPending_=std::move(request);
         if(!controlThread_.joinable())controlThread_=std::jthread([this](std::stop_token stop){controlLoop(stop);});}
     controlWake_.notify_all();
 }
 void EngineController::stopRemoteControl(){
     {std::lock_guard lock(controlMutex_);if(!controlThread_.joinable())return;
-        controlPending_=std::shared_ptr<source::RemotePlayConnectDesc>{};}
+        ++controlRequestId_;controlCancel_=true;controlPending_=std::shared_ptr<source::RemotePlayConnectDesc>{};}
     controlWake_.notify_all();
 }
 void EngineController::controlLoop(std::stop_token stop){
     for(;;){
         std::shared_ptr<source::RemotePlayConnectDesc> request;
+        uint64_t requestId=0;
         {std::unique_lock lock(controlMutex_);
             if(!controlWake_.wait(lock,stop,[&]{return controlPending_.has_value();}))break;
-            request=std::move(*controlPending_);controlPending_.reset();controlBusy_=true;controlStarting_=bool(request);}
+            request=std::move(*controlPending_);requestId=controlRequestId_;controlPending_.reset();controlCancel_=false;controlBusy_=true;controlStarting_=bool(request);}
         // One Remote Play slot per console: the old session ends before a new one starts.
         std::shared_ptr<source::RemotePlaySessionSource> old;
         {std::lock_guard lock(mutex_);old=std::move(controlRemote_);}
         if(old){const auto closing=Clock::now();old->close();veyra::log::info("remoteplay-control",std::format("controller-only session closed in {:.0f} ms",elapsedMs(closing)));}
         if(request&&!stop.stop_requested()){
             auto session=std::make_shared<source::RemotePlaySessionSource>();
-            const bool ok=session->connect(std::move(*request));
+            const bool ok=session->connect(std::move(*request),stop,&controlCancel_);
             veyra::log::info("remoteplay-control",std::format("controller-only session start ok={} alive={}",ok,session->alive()));
             // Kept even when the start failed: its status carries the reason.
-            std::lock_guard lock(mutex_);controlRemote_=std::move(session);
+            std::lock_guard lock(mutex_);controlRemote_=std::move(session);controlRemoteRequestId_=requestId;
         }
         {std::lock_guard lock(controlMutex_);controlBusy_=controlStarting_=false;}
         controlIdle_.notify_all();
@@ -526,7 +614,15 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto remote=remoteRequest?std::make_shared<source::RemotePlaySessionSource>():nullptr;
     const bool isRemote=bool(remote);
-    {std::lock_guard lock(mutex_);activeRemote_=remote;}
+    {std::lock_guard lock(mutex_);activeRemote_=remote;activeRemoteSessionId_=snapshot_.sessionId;}
+    const auto reportRemoteStop=[&]{
+        if(!remote)return false;
+        const auto ending=remote->stopStatus();
+        if(!ending.finished||!ending.disconnected)return false;
+        status(ending.standby&&ending.commandSent?L"已发送主机待机请求，串流已断开。":
+               ending.standby?L"串流已结束，未能确认主机待机请求已发送。":L"串流已断开，主机保持运行。");
+        return true;
+    };
 #else
     (void)remoteRequest;const bool isRemote=false;
 #endif
@@ -675,17 +771,28 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                 if(remote){
-                    status(L"正在连接 PS5…");
+                    status(remoteRequest->request.ps5?L"正在连接 PS5…":L"正在连接 PS4…");
                     ctx.device()->AddRef();remoteRequest->decodeDevice=std::shared_ptr<ID3D12Device>(ctx.device(),[](ID3D12Device* device){device->Release();});
-                    if(!remote->connect(std::move(*remoteRequest))){status(L"PS5 连接失败，请查看诊断",true);break;}
+                    if(!remote->connect(std::move(*remoteRequest),{},&stop_)){if(!stop_.load())status(L"PlayStation 连接失败，请查看诊断",true);break;}
                     remoteRequest.reset();
                     while(!stop_){
                         const AVFrame* first=nullptr;const auto result=remote->read(cachedPacket,&first);
-                        const auto state=remote->sessionSnapshot().state;
+                        const auto session=remote->sessionSnapshot();const auto state=session.state;
                         {std::lock_guard lock(mutex_);snapshot_.remotePlayState=int(state);}
                         if(result==source::SourceReadStatus::Frame){cachedFrame=av_frame_clone(first);break;}
-                        if(result==source::SourceReadStatus::Error){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 未返回可解码画面，请检查主机及网络后重新连接。":recovery.message,true);break;}
-                        if(state==remoteplay::SessionState::LoginPinRequired)status(L"PS5 要求登录 PIN，请在串流面板输入");
+                        if(result==source::SourceReadStatus::Error){
+                            if(!reportRemoteStop()){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 未返回可解码画面，请检查主机及网络后重新连接。":recovery.message,true);}
+                            break;
+                        }
+                        if(state==remoteplay::SessionState::LoginPinRequired){
+                            using P=remoteplay::LoginPinStatus;
+                            status(session.loginPinStatus==P::Submitting?L"正在提交 PlayStation 登录 PIN…":
+                                   session.loginPinStatus==P::Sent?L"登录 PIN 已提交，等待主机确认…":
+                                   session.loginPinStatus==P::Incorrect?L"主机提示登录 PIN 不正确，请重新输入。":
+                                   session.loginPinStatus==P::SendFailed?L"登录 PIN 提交失败，请重试或重新连接。":
+                                   L"PlayStation 要求登录 PIN，请在弹出的登录窗口输入");
+                        }else if(session.dataConnecting)status(L"正在建立 PlayStation 串流数据连接…");
+                        else if(session.loginPinStatus==remoteplay::LoginPinStatus::Accepted)status(L"登录 PIN 已通过，等待串流画面…");
                         std::this_thread::sleep_for(std::chrono::milliseconds(2));
                     }
                     if(stop_||!cachedFrame)break;
@@ -1848,6 +1955,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();}}};
             while(!stop_){
                 watchdog_->beat();
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+                // A paused presenter may not read another frame. Observe the
+                // owner's completed disconnect independently of media reads.
+                if(reportRemoteStop())break;
+#endif
                 if(testHangMs&&frames>=120){veyra::log::warn("engine-test",std::format("blocking owner thread for {} ms",testHangMs));Sleep(testHangMs<0?INFINITE:DWORD(testHangMs));testHangMs=0;}
                 if(Clock::now()-cacheBudgetPolledAt>=std::chrono::milliseconds(500)){
                     (void)recentGraphCache.checkBudget();cacheBudgetPolledAt=Clock::now();
@@ -2369,7 +2481,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             status(captureSource.errorMessage().empty()?L"采集信号中断，等待原设备恢复":captureSource.errorMessage());continue;
                         }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-                        if(remote){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 串流异常，请检查主机状态后重新连接。":recovery.message,true);break;}
+                        if(remote){
+                            if(!reportRemoteStop()){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 串流异常，请检查主机状态后重新连接。":recovery.message,true);}
+                            break;
+                        }
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
                         if(moon){const auto message=moon->stats().message;status(message.empty()?L"串流中断，请检查主机和网络后重新连接。":message,true);break;}
@@ -3625,7 +3740,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
         status(L"引擎异常，请查看诊断",true);failed=true;}
     (void)failed;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    {std::lock_guard lock(mutex_);activeRemote_.reset();}
+    {std::lock_guard lock(mutex_);
+        if(activeRemote_==remote){
+            lastRemoteEndStatus_=remotePlayEndStatusLocked();lastRemoteEndStatus_.canEnd=false;lastRemoteEndStatus_.connected=false;
+            if(lastRemoteEndStatus_.disconnected&&snapshot_.sessionId==activeRemoteSessionId_)snapshot_.transport=TransportState::Empty;
+            activeRemote_.reset();
+        }
+    }
     if(remote)remote->close();
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT

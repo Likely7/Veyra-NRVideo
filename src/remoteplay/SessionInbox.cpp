@@ -13,6 +13,10 @@ struct SessionInbox::Shared {
     uint64_t decodedFrames=0,receivedBytes=0,framesLost=0,referenceRecoveryEvents=0;
     bool hardwareDecode=false,decodeFallback=false,decodeConfirmed=false;
     VideoProfile requestedProfile;
+    LoginPinStatus loginPinStatus=LoginPinStatus::None;
+    int loginPinError=0;
+    unsigned loginPinRequests=0,loginPinStage=0;
+    bool dataConnecting=false;
     struct Sample {HostTime time;double value;};
     std::deque<Sample> received,decoded,decodeTimes,ingressWait;
     static void add(std::deque<Sample>& q,HostTime now,double value){
@@ -30,6 +34,7 @@ SessionInbox::Token SessionInbox::begin(HostTime origin){
     ++s.generation;s.video.begin(s.generation);s.audio.begin(s.generation);s.origin=origin;s.state=SessionState::Connecting;s.accepting=true;s.error=0;
     s.lastVideo=s.lastAudio=s.decodeStart=s.lastDecoded=0;s.decodedFrames=s.receivedBytes=s.framesLost=s.referenceRecoveryEvents=0;
     s.hardwareDecode=s.decodeFallback=s.decodeConfirmed=false;
+    s.loginPinStatus=LoginPinStatus::None;s.loginPinError=0;s.loginPinRequests=s.loginPinStage=0;s.dataConnecting=false;
     s.received.clear();s.decoded.clear();s.decodeTimes.clear();s.ingressWait.clear();
     return Token{shared_,s.generation};
 }
@@ -52,6 +57,8 @@ SessionInbox::Snapshot SessionInbox::snapshot()const{
     result.decodedFrames=s.decodedFrames;result.receivedBytes=s.receivedBytes;result.framesLost=s.framesLost;result.referenceRecoveryEvents=s.referenceRecoveryEvents;
     result.hardwareDecode=s.hardwareDecode;result.decodeFallback=s.decodeFallback;result.decodeConfirmed=s.decodeConfirmed;
     result.requestedProfile=s.requestedProfile;
+    result.loginPinStatus=s.loginPinStatus;result.loginPinError=s.loginPinError;result.loginPinRequests=s.loginPinRequests;
+    result.loginPinStage=s.loginPinStage;result.dataConnecting=s.dataConnecting;
     result.ratesReady=now-s.origin>=10000000;
     for(const auto& v:s.received)if(v.time>now-10000000){++result.receivedFps;result.videoMbps+=v.value*8/1000000;}
     for(const auto& v:s.decoded)if(v.time>now-10000000)++result.decodedFps;
@@ -78,10 +85,52 @@ bool SessionInbox::Token::audio(PcmBlock block)const noexcept{
 void SessionInbox::Token::connected()const noexcept{
     try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
         if(s->state==SessionState::Connecting||s->state==SessionState::LoginPinRequired)s->state=SessionState::WaitingFirstFrame;
+        s->dataConnecting=false;
     }catch(...){}
 }
-void SessionInbox::Token::loginPinRequired()const noexcept{
-    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(s->current(generation_))s->state=SessionState::LoginPinRequired;}catch(...){}
+void SessionInbox::Token::loginPinRequired(bool incorrect)const noexcept{
+    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
+        s->state=SessionState::LoginPinRequired;s->loginPinStatus=incorrect?LoginPinStatus::Incorrect:LoginPinStatus::Required;
+        s->loginPinError=0;s->loginPinStage=incorrect?6u:1u;s->dataConnecting=false;
+        if(s->loginPinRequests<std::numeric_limits<unsigned>::max())++s->loginPinRequests;
+    }catch(...){}
+}
+bool SessionInbox::Token::loginPinSubmitting()const noexcept{
+    try{auto s=shared_.lock();if(!s)return false;std::lock_guard l(s->mutex);if(!s->current(generation_))return false;
+        if(s->state!=SessionState::LoginPinRequired||(s->loginPinStatus!=LoginPinStatus::Required&&s->loginPinStatus!=LoginPinStatus::Incorrect&&s->loginPinStatus!=LoginPinStatus::SendFailed))return false;
+        s->loginPinStatus=LoginPinStatus::Submitting;s->loginPinError=0;s->loginPinStage=2;return true;
+    }catch(...){return false;}
+}
+void SessionInbox::Token::loginPinSubmissionResult(int error)const noexcept{
+    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
+        // The native callback can reject or accept the PIN before set_login_pin
+        // returns. That newer console result must survive this local API result.
+        if(s->loginPinStatus!=LoginPinStatus::Submitting)return;
+        s->loginPinStatus=error?LoginPinStatus::SendFailed:LoginPinStatus::Sent;s->loginPinError=error;
+    }catch(...){}
+}
+void SessionInbox::Token::loginPinNativeProgress(unsigned stage)const noexcept{
+    if(stage!=3&&stage!=4)return;
+    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
+        if(s->loginPinStatus!=LoginPinStatus::Submitting&&s->loginPinStatus!=LoginPinStatus::Sent)return;
+        s->loginPinStage=std::max(s->loginPinStage,stage);
+    }catch(...){}
+}
+void SessionInbox::Token::loginPinAccepted()const noexcept{
+    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
+        // The console also sends login success for sessions without a PIN.
+        if(!s->loginPinRequests)return;
+        s->loginPinStatus=LoginPinStatus::Accepted;s->loginPinError=0;s->loginPinStage=5;
+        if(s->state==SessionState::LoginPinRequired)s->state=SessionState::Connecting;
+    }catch(...){}
+}
+void SessionInbox::Token::dataChannelConnecting(bool connecting)const noexcept{
+    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
+        s->dataConnecting=connecting;
+        // Advancing to a data handshake is not a console acknowledgement of PIN
+        // correctness, but it must not keep the UI or watchdog in PIN entry.
+        if(s->state==SessionState::LoginPinRequired)s->state=SessionState::Connecting;
+    }catch(...){}
 }
 void SessionInbox::Token::failed(int code)const noexcept{
     try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;

@@ -27,3 +27,21 @@ target_compile_definitions(veyra_remoteplay_profile_tests PRIVATE NOMINMAX WIN32
 target_link_libraries(veyra_remoteplay_profile_tests PRIVATE veyra_remoteplay_chiaki)
 add_test(NAME rp.dpapi_profile COMMAND veyra_remoteplay_profile_tests)
 set_tests_properties(rp.dpapi_profile PROPERTIES TIMEOUT 30)
+
+option(VEYRA_RP_BUILD_PSN_TESTS "Build PSN OAuth service tests with Qt" OFF)
+if(VEYRA_RP_BUILD_PSN_TESTS)
+    include("${VEYRA_ROOT}/cmake/VeyraPsnService.cmake")
+endif()
+
+# Compile the exact patched holepunch implementation into a lifetime regression
+# executable so it can exercise an unopened websocket worker without PSN I/O.
+add_executable(veyra_remoteplay_psn_cancellation_tests
+    "${VEYRA_ROOT}/tests/remoteplay/PsnCancellationTests.c")
+target_compile_definitions(veyra_remoteplay_psn_cancellation_tests PRIVATE
+    MINIUPNP_STATICLIB
+    "VEYRA_CHIAKI_HOLEPUNCH_SOURCE=\"${VEYRA_RP_CHIAKI_SOURCE_DIR}/lib/src/remote/holepunch.c\"")
+target_include_directories(veyra_remoteplay_psn_cancellation_tests PRIVATE
+    "$<TARGET_PROPERTY:chiaki-lib,INCLUDE_DIRECTORIES>")
+target_link_libraries(veyra_remoteplay_psn_cancellation_tests PRIVATE chiaki-lib)
+add_test(NAME rp.psn_cancellation COMMAND veyra_remoteplay_psn_cancellation_tests)
+set_tests_properties(rp.psn_cancellation PROPERTIES TIMEOUT 30 LABELS "native-core;offline;not-ps5")

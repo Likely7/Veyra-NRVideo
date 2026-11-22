@@ -205,22 +205,6 @@ VPage {
                                 onToggled: checked => veyra.setPreference("introAnimation", checked)
                             }
                         }
-                        // This saved switch controls future launches. The corner button
-                        // stops only the current launch and leaves this preference intact.
-                        VRow {
-                            label: qsTr("启动音乐")
-                            hint: typeof vyMusic !== "undefined" && vyMusic.available
-                                  ? qsTr("每次启动播放一次，动画结束后继续；此开关会保存，角落按钮仅停止本次")
-                                  : qsTr("未找到音乐文件：程序目录下的 media/startup-music.mp3")
-                            VSwitch {
-                                objectName: "set-intro-music"
-                                checked: veyra.preferences.introMusic !== false
-                                onToggled: checked => {
-                                    veyra.setPreference("introMusic", checked)
-                                    if (!checked && typeof vyMusic !== "undefined") vyMusic.pause()
-                                }
-                            }
-                        }
                         VRow {
                             label: qsTr("页面切换栏")
                             hint: qsTr("平时隐藏；鼠标碰到窗口顶部时弹下来")
@@ -342,7 +326,7 @@ VPage {
                     visible: root.section === "window"
                     VH1 { text: qsTr("启动与窗口") }
                     Text {
-                        text: qsTr("程序启动时的页面、窗口和恢复行为。")
+                        text: qsTr("程序启动时的音乐、页面、窗口和恢复行为。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -350,6 +334,19 @@ VPage {
                         wrapMode: Text.WordWrap
                     }
                     VGroup {
+                        // Saved across launches; the corner button stops only this launch.
+                        VRow {
+                            label: qsTr("启动时播放音乐")
+                            hint: qsTr("关闭后立即停止，以后启动也不播放。设置自动保存；角落按钮仅停止本次播放。")
+                            VSwitch {
+                                objectName: "set-intro-music"
+                                checked: veyra.preferences.introMusic !== false
+                                onToggled: checked => {
+                                    veyra.setPreference("introMusic", checked)
+                                    if (!checked && typeof vyMusic !== "undefined") vyMusic.pause()
+                                }
+                            }
+                        }
                         VRow {
                             label: qsTr("打开时的默认页面")
                             hint: qsTr("首页 = 选择片源的页面（点顶部 Logo 也能回到这里）")

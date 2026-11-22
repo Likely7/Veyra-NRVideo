@@ -32,6 +32,9 @@ Item {
         property var subtitleTracks: []
         property var audioTracks: []
         property var seeks: []
+        property var relativeSeeks: []
+        property var stopRequests: []
+        property var ps5: ({canEndStream:false, ending:false})
         property var liveTimeshift: ({enabled: false, available: false, start: 0, end: 0})
         readonly property bool timelineSeekable: !isCapture && (duration > 0 || liveTimeshift.available)
         function timelineSeconds(fraction) {
@@ -40,12 +43,16 @@ Item {
         }
         function returnToLive() { seekTo(liveTimeshift.end) }
         function seekTo(seconds) { seeks = seeks.concat([seconds]) }
+        function seekBy(seconds) { relativeSeeks = relativeSeeks.concat([seconds]) }
+        function ps5EndStream(standby) { stopRequests = stopRequests.concat([standby]); return true }
+        function stopPlayback() { stopRequests = stopRequests.concat([false]) }
         function formatTime(seconds) { return String(Math.floor(seconds)) }
         function logUi(category, text) {}
         function setWindowMask(window, rect) {}
     }
     CineBar { id: bar; x: 50; y: 220; width: 860; height: 92 }
     SignalSpy { id: moveSpy; target: bar; signalName: "requestMove" }
+    SignalSpy { id: dialogSpy; target: bar; signalName: "requestDialog" }
     TestCase {
         name: "CinemaSeek"
         when: windowShown
@@ -54,9 +61,84 @@ Item {
             root.Window.window.height = 650
             root.Window.window.requestActivate()
             veyra.seeks = []; veyra.duration = 100; veyra.isCapture = false
+            veyra.relativeSeeks = []; veyra.stopRequests = []
+            veyra.ps5 = {canEndStream:false, ending:false}
             veyra.liveTimeshift = {enabled: false, available: false, start: 0, end: 0}
             bar.fullscreen = true
+            // Session changes replace a layout item. Settle that layout and
+            // leave the prior test's seek preview before synthesizing presses.
+            mouseMove(root, 1, 1)
+            waitForPolish(bar)
+            wait(30)
             moveSpy.clear()
+            dialogSpy.clear()
+        }
+        function transportModes() {
+            return [{tag:"fullscreen",full:true},{tag:"windowed",full:false}]
+        }
+        function glyphButton(item, glyph) {
+            if (item.glyph === glyph) return item
+            const children = item.children || []
+            for (let i = 0; i < children.length; ++i) {
+                const found = glyphButton(children[i], glyph)
+                if (found) return found
+            }
+            return null
+        }
+        function test_ps5_stop_opens_choice_without_power_data() { return transportModes() }
+        function test_ps5_stop_opens_choice_without_power(data) {
+            bar.fullscreen = data.full
+            const stop = findChild(bar, "ps5-end-stream")
+            const forward = glyphButton(bar, "fwd10")
+            verify(stop && forward)
+            veyra.ps5 = {canEndStream:true, ending:false}
+            tryCompare(stop, "visible", true)
+            verify(stop.enabled)
+            verify(!forward.visible, "The stop control replaces the forward transport slot")
+            wait(30)
+            mouseClick(stop, stop.width / 2, stop.height / 2)
+            compare(dialogSpy.count, 1)
+            compare(dialogSpy.signalArguments[0][0], "ps5-stop")
+            compare(veyra.stopRequests.length, 0, "Opening the choice must not disconnect or send a power command")
+            compare(veyra.relativeSeeks.length, 0)
+            compare(moveSpy.count, 0, "Clicking the stop control must not move the window")
+        }
+        function test_ps5_ending_stays_visible_but_disabled_data() { return transportModes() }
+        function test_ps5_ending_stays_visible_but_disabled(data) {
+            bar.fullscreen = data.full
+            // The real backend clears canEndStream while an end request runs.
+            veyra.ps5 = {canEndStream:false, ending:true}
+            const stop = findChild(bar, "ps5-end-stream")
+            verify(stop)
+            tryCompare(stop, "visible", true)
+            verify(!stop.enabled)
+            verify(!glyphButton(bar, "fwd10").visible)
+            wait(30)
+            mouseClick(stop, stop.width / 2, stop.height / 2)
+            compare(dialogSpy.count, 0)
+            compare(veyra.stopRequests.length, 0)
+            compare(veyra.relativeSeeks.length, 0)
+        }
+        function test_no_ps5_restores_transport_and_seek_data() { return transportModes() }
+        function test_no_ps5_restores_transport_and_seek(data) {
+            bar.fullscreen = data.full
+            const stop = findChild(bar, "ps5-end-stream")
+            const forward = glyphButton(bar, "fwd10")
+            verify(stop && forward)
+            veyra.ps5 = {canEndStream:true, ending:false}
+            tryCompare(stop, "visible", true)
+            veyra.ps5 = {canEndStream:false, ending:false}
+            tryCompare(stop, "visible", false)
+            verify(forward.visible)
+            wait(30)
+            mouseClick(forward, forward.width / 2, forward.height / 2)
+            compare(veyra.relativeSeeks.length, 1)
+            compare(veyra.relativeSeeks[0], 10)
+            const rail = findChild(bar, "cine-seek")
+            mouseClick(rail, rail.width * .6, 7)
+            fuzzyCompare(veyra.seeks[veyra.seeks.length-1], 60, 1)
+            compare(dialogSpy.count, 0)
+            compare(veyra.stopRequests.length, 0)
         }
         function test_scrub_data() {
             return [{tag:"fullscreen",full:true},{tag:"windowed",full:false}]

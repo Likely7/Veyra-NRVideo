@@ -3,6 +3,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <condition_variable>
 #include <functional>
@@ -243,7 +244,24 @@ public:
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
     void remotePlayController(const remoteplay::ControllerState&);
-    void remotePlayLoginPin(std::string);
+    bool remotePlayLoginPin(std::string);
+    struct RemoteLoginPrompt {
+        bool active=false,controllerOnly=false,canSubmit=false;
+        std::string requestId;
+        remoteplay::SessionInbox::Snapshot session;
+    };
+    RemoteLoginPrompt remotePlayLoginPrompt() const;
+    bool remotePlayLoginPin(std::string pin,std::string_view requestId);
+    bool cancelRemotePlayLoginPin(std::string_view requestId,bool& controllerOnly);
+    struct RemoteStreamEndStatus {
+        uint64_t sessionId=0;
+        bool canEnd=false,connected=false,ending=false,requested=false,finished=false;
+        bool standby=false,commandSent=false,disconnected=false;
+        int error=0;
+        unsigned attempt=0;
+    };
+    RemoteStreamEndStatus remotePlayEndStatus() const;
+    bool endRemotePlay(bool standby);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
     // (the console's keepalive video and audio are dropped on receipt). Start and
     // stop are queued to a dedicated thread, so callers never wait for the
@@ -334,12 +352,18 @@ private:
     std::shared_ptr<source::RemotePlaySessionSource> activeRemote_;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     std::shared_ptr<source::RemotePlaySessionSource> controlRemote_; // mutex_; PS5 手柄控制
+    uint64_t activeRemoteSessionId_=0,controlRemoteRequestId_=0; // mutex_
+    std::atomic<uint64_t> controlRequestId_{0};
+    RemoteLoginPrompt remotePlayLoginPromptLocked() const; // mutex_ held
+    RemoteStreamEndStatus remotePlayEndStatusLocked() const; // mutex_ held
+    RemoteStreamEndStatus lastRemoteEndStatus_; // mutex_; survives source teardown
     // controlMutex_ guards the queue below; the session thread never holds it
     // (nor mutex_) while it talks to the console.
     mutable std::mutex controlMutex_;
     std::condition_variable_any controlWake_;
     std::condition_variable controlIdle_;
     std::optional<std::shared_ptr<source::RemotePlayConnectDesc>> controlPending_; // empty pointer = stop
+    std::atomic<bool> controlCancel_{false};
     bool controlBusy_=false,controlStarting_=false,controlExited_=false;
     std::jthread controlThread_; // started on first use; joined (bounded) in the destructor
 #endif

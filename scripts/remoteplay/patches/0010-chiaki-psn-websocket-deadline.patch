@@ -1,0 +1,67 @@
+--- a/lib/src/remote/holepunch.c
++++ b/lib/src/remote/holepunch.c
+@@ -2181,6 +2181,13 @@
+         event, state, http_status >= 100 && http_status <= 599 ? http_status : 0u);
+ }
+ 
++// Fixed numeric fields only; never forward CURL error buffers or URLs.
++static void psn_ws_error(Session *session, unsigned operation, CURLcode code)
++{
++    CHIAKI_LOGI(session->log, "VEYRA_PSN_WS op=%u curl=%u", operation, (unsigned)code);
++    psn_diagnostic(session, 6, 0);
++}
++
+ static void psn_http_accepted(Session *session, CURL *curl, unsigned event)
+ {
+     long status = 0;
+@@ -2286,6 +2293,16 @@
+         } else {
+             CHIAKI_LOGE(session->log, "websocket_thread_func: Connecting to push notification WebSocket %s failed with CURL error %s", ws_url, curl_easy_strerror(res));
+         }
++        psn_ws_error(session, 1, res);
++        goto cleanup;
++    }
++    // CURLOPT_TIMEOUT bounds the HTTP upgrade, not the lifetime of the open
++    // notification channel. Schannel checks this deadline on later writes,
++    // including heartbeat PINGs, even with CURLOPT_CONNECT_ONLY=2.
++    res = curl_easy_setopt(curl, CURLOPT_TIMEOUT, 0L);
++    if (res != CURLE_OK)
++    {
++        psn_ws_error(session, 6, res);
+         goto cleanup;
+     }
+     CHIAKI_LOGV(session->log, "websocket_thread_func: Connected to push notification WebSocket %s", ws_url);
+@@ -2304,6 +2321,7 @@
+     res = curl_easy_getinfo(curl, CURLINFO_ACTIVESOCKET, &sockfd);
+     if(res != CURLE_OK) {
+         CHIAKI_LOGE(session->log, "websocket_thread_func: Getting active socket failed with CURL error %s", curl_easy_strerror(res));
++        psn_ws_error(session, 2, res);
+         goto cleanup;
+     }
+     fd_set fds;
+@@ -2355,7 +2373,7 @@
+             if (res != CURLE_OK)
+             {
+                 CHIAKI_LOGE(session->log, "websocket_thread_func: Sending WebSocket PING failed with CURL error %s.", curl_easy_strerror(res));
+-                psn_diagnostic(session, 6, 0);
++                psn_ws_error(session, 3, res);
+                 goto cleanup_json;
+             }
+             CHIAKI_LOGV(session->log, "websocket_thread_func: PING.");
+@@ -2385,7 +2403,7 @@
+             } else
+             {
+                 CHIAKI_LOGE(session->log, "websocket_thread_func: Receiving WebSocket frame failed with CURL error %s", curl_easy_strerror(res));
+-                psn_diagnostic(session, 6, 0);
++                psn_ws_error(session, 4, res);
+                 goto cleanup_json;
+             }
+         }
+@@ -2403,6 +2421,7 @@
+             if (res != CURLE_OK)
+             {
+                 CHIAKI_LOGE(session->log, "websocket_thread_func: Sending WebSocket PONG failed with CURL error %s", curl_easy_strerror(res));
++                psn_ws_error(session, 5, res);
+                 goto cleanup_json;
+             }
+             CHIAKI_LOGV(session->log, "websocket_thread_func: Sent PONG.");

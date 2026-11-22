@@ -7,6 +7,14 @@ namespace {
 constexpr uint32_t kPs5Bitrates[] = {5000, 10000, 15000, 20000, 30000, 50000, 80000, 100000};
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 std::filesystem::path ps5Settings() { return remoteplay::profileDirectory() / L"settings.ini"; }
+QString ps5EndMessage(const engine::EngineController::RemoteStreamEndStatus& state) {
+    if(state.ending)return state.standby?QmlPlayerBridge::tr("正在发送主机待机请求，请稍候…"):QmlPlayerBridge::tr("正在断开串流…");
+    if(!state.requested||!state.finished)return {};
+    if(state.error&&state.disconnected)return QmlPlayerBridge::tr("串流已结束，本次主机状态请求未完成（错误 %1）。").arg(state.error);
+    if(state.error)return QmlPlayerBridge::tr("待机请求未发送成功（错误 %1）。可重试或仅断开串流。").arg(state.error);
+    if(state.disconnected)return state.standby?QmlPlayerBridge::tr("已发送主机待机请求，串流已断开。"):QmlPlayerBridge::tr("串流已断开，主机保持运行。");
+    return {};
+}
 #endif
 }
 QVariantMap QmlPlayerBridge::ps5() const {
@@ -17,17 +25,46 @@ QVariantMap QmlPlayerBridge::ps5() const {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     out["available"] = true;
     const auto& s = impl_->snapshot;
-    out["active"] = s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping);
+    const bool pending = impl_->openingSource && impl_->ps5OpenGen == impl_->liveOpenGen;
+    out["active"] = pending || (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping));
+    const auto ending=impl_->engine.remotePlayEndStatus();
+    out["canEndStream"]=ending.canEnd;out["canStandby"]=ending.canEnd&&ending.connected;
+    out["ending"]=ending.ending;out["endMessage"]=ps5EndMessage(ending);
     const auto c = impl_->controller.capabilities();
     out["controller"] = c.connected;
     out["gyro"] = c.gyro && c.accel;
     out["calibrating"] = c.calibrating;
 #else
     out["available"] = false;
+    out["canEndStream"]=false;out["canStandby"]=false;out["ending"]=false;out["endMessage"]=QString();
+#endif
+    return out;
+}
+QVariantMap QmlPlayerBridge::ps5LoginPrompt() const {
+    QVariantMap out{{"active",false},{"required",false},{"canSubmit",false},{"status",0},{"message",QString()},{"requestId",QString()}};
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    const auto prompt=impl_->engine.remotePlayLoginPrompt();
+    if(!prompt.active)return out;
+    out["active"]=true;out["required"]=true;out["canSubmit"]=prompt.canSubmit;
+    out["status"]=int(prompt.session.loginPinStatus);
+    out["requestId"]=QString::fromStdString(prompt.requestId);
+    using P=remoteplay::LoginPinStatus;
+    out["message"]=prompt.session.loginPinStatus==P::Submitting?tr("正在提交登录 PIN…"):
+        prompt.session.loginPinStatus==P::Sent?tr("已提交，等待主机确认…"):
+        prompt.session.loginPinStatus==P::Incorrect?tr("主机提示 PIN 不正确，请重新输入。"):
+        prompt.session.loginPinStatus==P::SendFailed?tr("提交失败，请重试或取消本次连接。"):
+        tr("请输入主机用户的 4 位登录 PIN。");
 #endif
     return out;
 }
 QVariantList QmlPlayerBridge::ps5Profiles() const { return impl_->ps5ProfileList; }
+QObject* QmlPlayerBridge::psnModel() const {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    return impl_->psn.get();
+#else
+    return nullptr;
+#endif
+}
 
 // --- PC streaming (Moonlight / Sunshine) -----------------------------------------------------------
 QObject* QmlPlayerBridge::moonlightModel() const {
@@ -263,6 +300,28 @@ void QmlPlayerBridge::ps5Load() {
     auto& i = *impl_;
     try {
         const auto directory = remoteplay::profileDirectory();
+        if (!i.psn) {
+            i.psn = std::make_unique<PsnService>(directory);
+            connect(i.psn.get(), &PsnService::changed, this, &QmlPlayerBridge::psnChanged);
+            emit psnChanged();
+        }
+        auto connectionMode = i.ps5Form.value("connection").toString();
+        auto psnDuid = i.ps5Form.value("psnDuid").toString();
+        if (connectionMode.isEmpty()) {
+            wchar_t savedMode[16]{};
+            GetPrivateProfileStringW(L"RemotePlay", L"ConnectionMode", L"", savedMode, 16, ps5Settings().c_str());
+            connectionMode = QString::fromWCharArray(savedMode);
+            if (connectionMode != QLatin1String("psn") && connectionMode != QLatin1String("local")) connectionMode.clear();
+        }
+        if (psnDuid.isEmpty()) {
+            wchar_t savedDuid[80]{};
+            GetPrivateProfileStringW(L"RemotePlay", L"PsnDuid", L"", savedDuid, 80, ps5Settings().c_str());
+            const auto id = QString::fromWCharArray(savedDuid).toLower();
+            if (id.size() == 64 && std::all_of(id.begin(), id.end(), [](QChar c) {
+                    return (c >= QLatin1Char('0') && c <= QLatin1Char('9')) || (c >= QLatin1Char('a') && c <= QLatin1Char('f'));
+                })) psnDuid = id;
+        }
+        const auto previousForm = i.ps5Form;
         if (i.ps5Profile.empty()) {
             wchar_t last[80]{};
             GetPrivateProfileStringW(L"RemotePlay", L"LastProfile", L"", last, 80, ps5Settings().c_str());
@@ -293,6 +352,8 @@ void QmlPlayerBridge::ps5Load() {
         if (!known) i.ps5Profile = i.ps5ProfileList.isEmpty() ? std::wstring{} : i.ps5ProfileList.front().toMap().value("id").toString().toStdWString();
         // Form defaults, then the selected pairing's own values.
         i.ps5Form = QVariantMap{{"host", QString()}, {"account", QString()}, {"quality", 3}, {"codec", 0}, {"bitrate", 2}, {"viewOnly", false},
+            {"connection", connectionMode.isEmpty() ? (i.ps5Profile.empty() ? QStringLiteral("psn") : QStringLiteral("local")) : connectionMode},
+            {"psnDuid", psnDuid},
             {"decode", int(std::min(2u, GetPrivateProfileIntW(L"RemotePlay", L"DecodeMode", 0, ps5Settings().c_str())))},
             {"sampling", int(std::min(1u, GetPrivateProfileIntW(L"RemotePlay", L"FineSampling", 1, ps5Settings().c_str())))}};
         if (!i.ps5Profile.empty())
@@ -305,10 +366,20 @@ void QmlPlayerBridge::ps5Load() {
                 i.ps5Form["bitrate"] = found == std::end(kPs5Bitrates) ? 2 : int(found - std::begin(kPs5Bitrates));
                 i.ps5Form["viewOnly"] = saved->viewOnly;
             }
+        if (connectionMode == QLatin1String("psn")) {
+            i.ps5Form["quality"] = int(std::min(3u, GetPrivateProfileIntW(L"RemotePlay", L"PsnQuality", 3, ps5Settings().c_str())));
+            i.ps5Form["codec"] = int(std::min(2u, GetPrivateProfileIntW(L"RemotePlay", L"PsnCodec", 0, ps5Settings().c_str())));
+            i.ps5Form["bitrate"] = int(std::min(7u, GetPrivateProfileIntW(L"RemotePlay", L"PsnBitrate", 2, ps5Settings().c_str())));
+            i.ps5Form["decode"] = int(std::min(2u, GetPrivateProfileIntW(L"RemotePlay", L"PsnDecode", 0, ps5Settings().c_str())));
+            i.ps5Form["sampling"] = int(std::min(1u, GetPrivateProfileIntW(L"RemotePlay", L"PsnSampling", 1, ps5Settings().c_str())));
+            i.ps5Form["viewOnly"] = GetPrivateProfileIntW(L"RemotePlay", L"PsnViewOnly", 0, ps5Settings().c_str()) != 0;
+            for (const auto* key : {"quality", "codec", "bitrate", "decode", "sampling", "viewOnly"})
+                if (previousForm.contains(QLatin1String(key))) i.ps5Form[QLatin1String(key)] = previousForm.value(QLatin1String(key));
+        }
         if (i.ps5Status.isEmpty())
             i.ps5Status = failures ? tr("有配对存档无法读取或解密，详情见日志。请使用原 Windows 账户；不要删除原件。")
                         : !i.ps5Profile.empty() ? tr("已加载保存的主机，直接点“连接”，无需重新填写 8 位配对码。")
-                        : tr("首次使用：PS5 设置 → 系统 → 远程游玩 → 关联设备，填写账号 ID 与 8 位配对码后配对。");
+                        : tr("首次使用可选择 PSN，登录后直接连接已启用远程游玩的 PS5 或主要 PS4；局域网配对仍可使用。");
         veyra::log::info("remoteplay-ui", std::format("profiles={} readFailures={}", i.ps5ProfileList.size(), failures));
     } catch (...) {
         impl_->ps5Status = tr("无法读取远程游玩目录；原有配对文件不会被改动。");
@@ -325,6 +396,18 @@ bool QmlPlayerBridge::ps5Set(const QString& key, const QVariant& value) {
         if (!ok || n < low || n > high) return false;
         impl_->ps5Form[key] = n;
     } else if (key == QLatin1String("viewOnly")) impl_->ps5Form[key] = value.toBool();
+    else if (key == QLatin1String("connection")) {
+        const auto mode = value.toString();
+        if (mode != QLatin1String("local") && mode != QLatin1String("psn")) return false;
+        impl_->ps5Form[key] = mode;
+        impl_->ps5Status.clear();
+    } else if (key == QLatin1String("psnDuid")) {
+        const auto id = value.toString().toLower();
+        if (id.size() != 64 || !std::all_of(id.begin(), id.end(), [](QChar c) {
+                return (c >= QLatin1Char('0') && c <= QLatin1Char('9')) || (c >= QLatin1Char('a') && c <= QLatin1Char('f'));
+            })) return false;
+        impl_->ps5Form[key] = id;
+    }
     else if (key == QLatin1String("host") || key == QLatin1String("account")) impl_->ps5Form[key] = value.toString().trimmed();
     else return false;
     emit ps5Changed();
@@ -425,28 +508,69 @@ bool QmlPlayerBridge::ps5Connect() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto& i = *impl_;
     if (i.ps5Busy) return false;
-    const auto path = i.ps5Profile.empty() ? std::filesystem::path{} : remoteplay::profileDirectory() / i.ps5Profile;
-    auto saved = path.empty() ? std::nullopt : remoteplay::loadProfile(path);
-    const auto host = asciiOnly(i.ps5Form.value("host").toString());
-    if (!saved || !remoteplay::validHost(host)) { i.ps5Status = tr("请先完成配对，并填写有效主机地址。"); emit ps5Changed(); return false; }
-    saved->host = host; saved->video = ps5Video(i.ps5Form); saved->viewOnly = i.ps5Form.value("viewOnly").toBool();
-    if (!remoteplay::saveProfile(path, *saved)) { i.ps5Status = tr("保存连接设置失败，请检查目录权限。"); emit ps5Changed(); return false; }
+    const bool psnMode = i.ps5Form.value("connection").toString() == QLatin1String("psn");
+    std::optional<remoteplay::NativeConnectRequest> saved;
+    QString consoleLabel;
+    if (psnMode) {
+        if (!i.psn) { i.ps5Status = tr("请先登录 PSN 并选择主机。"); emit ps5Changed(); return false; }
+        saved.emplace();
+        saved->video = ps5Video(i.ps5Form);
+        saved->viewOnly = i.ps5Form.value("viewOnly").toBool();
+        const auto duid = i.ps5Form.value("psnDuid").toString();
+        if (!i.psn->prepareConnection(duid, *saved)) {
+            i.ps5Status = i.psn->property("status").toString(); emit ps5Changed(); return false;
+        }
+        for (const auto& entry : i.psn->property("consoles").toList()) {
+            const auto console = entry.toMap();
+            if (console.value("id").toString() == duid) { consoleLabel = console.value("label").toString(); break; }
+        }
+        if (consoleLabel.isEmpty()) consoleLabel = saved->ps5 ? tr("PS5") : tr("主要 PS4");
+        if (!saved->ps5) saved->video.codec = remoteplay::Codec::H264;
+    } else {
+        const auto path = i.ps5Profile.empty() ? std::filesystem::path{} : remoteplay::profileDirectory() / i.ps5Profile;
+        saved = path.empty() ? std::nullopt : remoteplay::loadProfile(path);
+        const auto host = asciiOnly(i.ps5Form.value("host").toString());
+        if (!saved || !remoteplay::validHost(host)) { i.ps5Status = tr("请先完成配对，并填写有效主机地址。"); emit ps5Changed(); return false; }
+        saved->host = host; saved->video = ps5Video(i.ps5Form); saved->viewOnly = i.ps5Form.value("viewOnly").toBool();
+        if (!remoteplay::saveProfile(path, *saved)) { i.ps5Status = tr("保存连接设置失败，请检查目录权限。"); emit ps5Changed(); return false; }
+        consoleLabel = QString::fromStdString(host);
+    }
     source::RemotePlayConnectDesc desc; desc.request = std::move(*saved);
     const int decode = std::clamp(i.ps5Form.value("decode").toInt(), 0, 2);
     desc.decodeMode = static_cast<source::RemotePlayConnectDesc::DecodeMode>(decode);
     desc.highQualitySampling = i.ps5Form.value("sampling").toInt() == 1;
-    WritePrivateProfileStringW(L"RemotePlay", L"DecodeMode", std::to_wstring(decode).c_str(), ps5Settings().c_str());
-    WritePrivateProfileStringW(L"RemotePlay", L"FineSampling", desc.highQualitySampling ? L"1" : L"0", ps5Settings().c_str());
+    // This contains only the transport choice, console ID and video preferences.
+    // These are dialog defaults only; the authoritative resume tuple is saved
+    // atomically with lastSource before opening any connection below.
+    WritePrivateProfileStringW(L"RemotePlay", L"ConnectionMode", psnMode ? L"psn" : L"local", ps5Settings().c_str());
+    if (psnMode) {
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnDuid", i.ps5Form.value("psnDuid").toString().toStdWString().c_str(), ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnQuality", std::to_wstring(i.ps5Form.value("quality").toInt()).c_str(), ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnCodec", std::to_wstring(i.ps5Form.value("codec").toInt()).c_str(), ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnBitrate", std::to_wstring(i.ps5Form.value("bitrate").toInt()).c_str(), ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnDecode", std::to_wstring(decode).c_str(), ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnSampling", desc.highQualitySampling ? L"1" : L"0", ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"PsnViewOnly", desc.request.viewOnly ? L"1" : L"0", ps5Settings().c_str());
+    } else {
+        WritePrivateProfileStringW(L"RemotePlay", L"DecodeMode", std::to_wstring(decode).c_str(), ps5Settings().c_str());
+        WritePrivateProfileStringW(L"RemotePlay", L"FineSampling", desc.highQualitySampling ? L"1" : L"0", ps5Settings().c_str());
+    }
     const bool viewOnly = desc.request.viewOnly;
+    if (!rememberSource(QStringLiteral("ps5"), consoleLabel)) {
+        i.ps5Status = tr("保存连接目标失败，请检查配置目录权限后重试。");
+        emit ps5Changed();
+        return false;
+    }
     // The console has one Remote Play slot; the engine ends PS5 手柄控制 first.
     if (i.engine.remoteControlRequested()) emit notice(tr("已结束 PS5 手柄控制：PS5 同一时间只允许一个远程游玩连接"), false);
     rememberPosition(true);
     // The session id is cleared with the flag: the previous session's id left over here
     // ended "opening" on the next snapshot while the old source still ran.
     emit mediaOpenRequested();
-    i.openingSource = true; i.openingSessionId = 0; i.sourceLabel = L"PS5 · " + std::wstring(host.begin(), host.end()); i.resumeSession = 0; i.screenFillActive = false;
+    i.openingSource = true; i.openingSessionId = 0; i.sourceLabel = L"PlayStation · " + consoleLabel.toStdWString(); i.resumeSession = 0; i.screenFillActive = false;
     auto request = std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
-    openAfterLivePage(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly] {
+    i.ps5OpenGen = i.liveOpenGen + 1;
+    openAfterLivePage(tr("正在连接 PlayStation · %1").arg(consoleLabel), [this, request, viewOnly] {
         auto& i = *impl_;
         if (i.preOpen) i.preOpen();
         i.engine.previewView({});
@@ -478,8 +602,7 @@ bool QmlPlayerBridge::ps5Connect() {
         }
     });
     i.ps5Watching = true;
-    rememberSource(QStringLiteral("ps5"), QString::fromStdString(host));
-    i.ps5Status = tr("连接已开始。需要登录 PIN 时在下方提交。关闭面板不停止串流。");
+    i.ps5Status = tr("连接已开始。主机要求登录 PIN 时会自动弹出输入窗口。关闭此设置面板不停止串流。");
     veyra::log::info("remoteplay-ui", std::format("connect quality={} codec={} bitrate={} decode={} viewOnly={}",
         i.ps5Form.value("quality").toInt(), i.ps5Form.value("codec").toInt(), i.ps5Form.value("bitrate").toInt(), decode, viewOnly));
     emit ps5Changed();
@@ -520,20 +643,74 @@ void QmlPlayerBridge::ps5OpenAccountChecker() {
         : tr("无法打开浏览器，请检查默认浏览器设置。");
     emit ps5Changed();
 }
-void QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
+bool QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
+    // Kept for existing callers/tests: a caller without the current modal key
+    // cannot submit a PIN to whichever connection happens to be active.
+    return ps5SubmitLoginPin(pin,{});
+}
+bool QmlPlayerBridge::ps5SubmitLoginPin(const QString& pin,const QString& requestId) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     const auto text = pin.trimmed();
-    if (text.isEmpty() || !std::all_of(text.begin(), text.end(), [](QChar c) { return c.isDigit(); })) {
-        impl_->ps5Status = tr("登录 PIN 必须为数字。"); emit ps5Changed(); return;
+    if (text.size()!=4 || !std::all_of(text.begin(), text.end(), [](QChar c) { return c>=QLatin1Char('0')&&c<=QLatin1Char('9'); })) {
+        impl_->ps5Status = tr("登录 PIN 必须为 4 位数字。"); emit ps5Changed();
+        emit notice(impl_->ps5Status,false);return false;
     }
-    impl_->engine.remotePlayLoginPin(text.toStdString());
+    const bool queued=impl_->engine.remotePlayLoginPin(text.toStdString(),requestId.toStdString());
+    impl_->ps5Status=queued?tr("登录 PIN 已提交，等待主机确认…"):tr("此登录请求已结束或已处理，请等待当前连接的提示。");
+    veyra::log::info("remoteplay-pin",std::format("ui queued={}",queued));
+    emit ps5Changed();emit notice(impl_->ps5Status,false);
+    return queued;
 #else
     (void)pin; // RemotePlay disabled: keep the QML-callable symbol but no backend.
+    (void)requestId;
+    return false;
+#endif
+}
+bool QmlPlayerBridge::ps5CancelLoginPin(const QString& requestId) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    bool controllerOnly=false;
+    if(!impl_->engine.cancelRemotePlayLoginPin(requestId.toStdString(),controllerOnly))return false;
+    if(controllerOnly){
+        // Suspend only this capture session. The user's saved enable setting is
+        // unchanged; an explicit retry or a new capture can start it again.
+        impl_->ps5ControlPinCanceledSession=impl_->snapshot.sessionId;
+        impl_->ps5ControlProfile.clear();
+        if(impl_->ps5ControlTimer)impl_->ps5ControlTimer->stop();
+        impl_->releasePad(Impl::PadPs5Control);
+        tickPs5Control(true);
+    }else{
+        ++impl_->liveOpenGen;impl_->pendingLiveText.clear();
+        impl_->openingSource=false;impl_->openingSessionId=0;
+    }
+    impl_->ps5Status=tr("已取消本次 PlayStation 登录连接。");
+    emit ps5Changed();return true;
+#else
+    (void)requestId;return false;
+#endif
+}
+bool QmlPlayerBridge::ps5EndStream(bool standby) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    if(!impl_->engine.endRemotePlay(standby)){
+        emit notice(tr("当前串流无法执行此操作，请等待连接状态更新。"),false);return false;
+    }
+    impl_->ps5Status=standby?tr("正在发送主机待机请求，请稍候…"):tr("正在断开串流…");
+    emit ps5Changed();emit notice(impl_->ps5Status,false);return true;
+#else
+    (void)standby;return false;
 #endif
 }
 void QmlPlayerBridge::ps5Cancel() {
+    const auto& s = impl_->snapshot;
+    const bool pending = impl_->openingSource && impl_->ps5OpenGen == impl_->liveOpenGen;
+    const bool active = s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping);
+    // Also invalidate a deferred open waiting for the Home-page animation.
+    if (pending || active) { stopPlayback(); return; }
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    if (impl_->psn && (impl_->psn->busy() || impl_->psn->awaitingRedirect())) {
+        impl_->psn->cancel(); return;
+    }
+#endif
     if (impl_->ps5Busy && impl_->ps5Worker.joinable()) { impl_->ps5Worker.request_stop(); return; }
-    if (impl_->snapshot.remotePlay) stopPlayback();
 }
 void QmlPlayerBridge::ps5Calibrate() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -579,8 +756,9 @@ void QmlPlayerBridge::tickPs5() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     if (i.ps5Watching && !i.ps5Busy) {
         const auto& s = i.snapshot;
-        const bool active = s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping);
-        QString message = veyra::ui::i18n::text(s.failed ? s.status : s.remoteRecovering ? s.remoteRecoveryMessage
+        const bool pending = i.openingSource && i.ps5OpenGen == i.liveOpenGen;
+        const bool active = pending || (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping));
+        QString message = pending && !s.remotePlay ? tr("正在建立 PlayStation 连接…") : veyra::ui::i18n::text(s.failed ? s.status : s.remoteRecovering ? s.remoteRecoveryMessage
                           : s.remotePlay && s.running ? std::wstring(L"PS5 画面已进入播放；关闭此面板不停止串流。") : active ? s.status : std::wstring(L"PS5 串流已停止，可以重新连接。"));
         if (s.remotePlay && s.running && !s.failed && !s.remoteRecovering) {
             const auto& r = s.remoteStream; const auto& p = r.requestedProfile;
@@ -594,6 +772,22 @@ void QmlPlayerBridge::tickPs5() {
         }
         if (message != i.ps5Status) { i.ps5Status = message; changed = true; }
         if (!active && !s.remotePlay) i.ps5Watching = false;
+    }
+#endif
+    const auto prompt=ps5LoginPrompt();
+    if(prompt!=i.ps5LastLoginPrompt){i.ps5LastLoginPrompt=prompt;changed=true;}
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    const auto ending=i.engine.remotePlayEndStatus();
+    const QVariantMap endState{{"session",QVariant::fromValue<qulonglong>(ending.sessionId)},{"attempt",ending.attempt},
+        {"canEnd",ending.canEnd},{"connected",ending.connected},{"ending",ending.ending},{"finished",ending.finished},{"error",ending.error}};
+    if(endState!=i.ps5LastEndStatus){
+        i.ps5LastEndStatus=endState;changed=true;
+        const auto message=ps5EndMessage(ending);
+        if(!message.isEmpty())i.ps5Status=message;
+        if(ending.finished&&ending.attempt){
+            const auto key=QString::number(ending.sessionId)+QLatin1Char(':')+QString::number(ending.attempt);
+            if(key!=i.ps5EndNoticed){i.ps5EndNoticed=key;if(!message.isEmpty())emit notice(message,ending.error!=0);}
+        }
     }
 #endif
     if (changed) emit ps5Changed();
@@ -635,6 +829,7 @@ void QmlPlayerBridge::ps5ControlSet(const QString& key, const QVariant& value) {
     if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("PS5 手柄控制设置保存失败"), true); emit ps5ControlChanged(); return; }
     veyra::log::info("remoteplay-control", std::format("ui {}={}", key.toStdString(), on));
     if (key == QLatin1String("enabled")) {
+        impl_->ps5ControlPinCanceledSession=0;
         impl_->ps5ControlNoPair = false;
         if (!on) stopPs5Control();
         else if (captureCardLive()) startPs5Control(false);
@@ -643,11 +838,14 @@ void QmlPlayerBridge::ps5ControlSet(const QString& key, const QVariant& value) {
     emit ps5ControlChanged();
 }
 void QmlPlayerBridge::ps5ControlRestart() {
+    impl_->ps5ControlPinCanceledSession=0;
     if (impl_->prefBool("ps5CaptureControl", false) && captureCardLive()) startPs5Control(true);
 }
 void QmlPlayerBridge::startPs5Control(bool restart) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto& i = *impl_;
+    if(restart)i.ps5ControlPinCanceledSession=0;
+    if(i.ps5ControlPinCanceledSession&&i.ps5ControlPinCanceledSession==i.snapshot.sessionId)return;
     source::RemotePlayConnectDesc desc;
     std::wstring profile;
     // Tests only: a dummy pairing to this host (an unroutable test address); the
@@ -723,7 +921,7 @@ void QmlPlayerBridge::tickPs5Control(bool force) {
     // Switched on while the capture card was still opening, or the capture came
     // back by itself: start once it is live. A failed session stays requested
     // until the user restarts it, so this never loops.
-    if (!force && !i.ps5ControlNoPair && i.prefBool("ps5CaptureControl", false) && captureCardLive() && !i.engine.remoteControlRequested())
+    if (!force && !i.ps5ControlNoPair && i.ps5ControlPinCanceledSession!=i.snapshot.sessionId && i.prefBool("ps5CaptureControl", false) && captureCardLive() && !i.engine.remoteControlRequested())
         startPs5Control(false);
     const auto st = i.engine.remoteControlStatus();
     QString state = QStringLiteral("off");
@@ -749,7 +947,7 @@ void QmlPlayerBridge::tickPs5Control(bool force) {
     i.ps5ControlState = next;
     if (state != i.ps5ControlNoticed) {
         if (state == QLatin1String("connected")) emit notice(tr("PS5 手柄控制已连接"), false);
-        else if (state == QLatin1String("pin")) emit notice(tr("PS5 要求输入登录 PIN：在采集卡面板「PS5 手柄控制」里填写"), false);
+        else if (state == QLatin1String("pin")) emit notice(tr("PS5 要求输入登录 PIN，请在弹出的登录窗口填写"), false);
         else if (state == QLatin1String("failed")) {
             const QString reason = next.value(QStringLiteral("message")).toString();
             emit notice(reason.isEmpty() ? tr("PS5 手柄控制已停止") : reason, true);

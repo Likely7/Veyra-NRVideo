@@ -802,7 +802,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: dialogs.dialog === "" && !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && !veyra.gameInputActive && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -1182,7 +1182,7 @@ Window {
             onTapped: root.stopStartupMusicForSession()
         }
         ToolTip.visible: musicHover.hovered
-        ToolTip.text: qsTr("停止本次启动音乐")
+        ToolTip.text: qsTr("停止本次启动音乐；每次启动都不播放可在“设置 → 启动与窗口”中关闭")
     }
     // The menu anchors on laid-out buttons, so it opens once the page has settled.
     // --full-bar shown|hidden: enter fullscreen with the control window held shown

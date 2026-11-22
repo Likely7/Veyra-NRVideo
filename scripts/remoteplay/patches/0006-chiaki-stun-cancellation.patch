@@ -1,0 +1,210 @@
+diff --git a/lib/src/remote/holepunch.c b/lib/src/remote/holepunch.c
+index f2f9fc0..0035c05 100644
+--- a/lib/src/remote/holepunch.c
++++ b/lib/src/remote/holepunch.c
+@@ -3776,7 +3776,7 @@ static bool get_client_addr_remote_stun(Session *session, char *address, uint16_
+         {
+             CHIAKI_LOGW(session->log, "Getting stun servers returned error %s", chiaki_error_string(err));
+         }
+-        if (!stun_port_allocation_test(session->log, address, port, &session->stun_allocation_increment, &session->stun_random_allocation, session->stun_server_list, session->num_stun_servers, sock))
++        if (!stun_port_allocation_test(session->log, address, port, &session->stun_allocation_increment, &session->stun_random_allocation, session->stun_server_list, session->num_stun_servers, sock, &session->select_pipe))
+         {
+             CHIAKI_LOGE(session->log, "get_client_addr_remote_stun: Failed to get external address");
+             return false;
+@@ -3785,7 +3785,7 @@ static bool get_client_addr_remote_stun(Session *session, char *address, uint16_
+     }
+     if(ipv4)
+     {
+-        if (!stun_get_external_address(session->log, address, port, session->stun_server_list, session->num_stun_servers, sock, ipv4))
++        if (!stun_get_external_address(session->log, address, port, session->stun_server_list, session->num_stun_servers, sock, ipv4, &session->select_pipe))
+         {
+             CHIAKI_LOGE(session->log, "get_client_addr_remote_stun: Failed to get external address");
+             return false;
+@@ -3793,7 +3793,7 @@ static bool get_client_addr_remote_stun(Session *session, char *address, uint16_
+     }
+     else
+     {
+-        if (!stun_get_external_address(session->log, address, port, session->stun_server_list_ipv6, session->num_stun_servers_ipv6, sock, ipv4))
++        if (!stun_get_external_address(session->log, address, port, session->stun_server_list_ipv6, session->num_stun_servers_ipv6, sock, ipv4, &session->select_pipe))
+         {
+             CHIAKI_LOGE(session->log, "get_client_addr_remote_stun: Failed to get external address");
+             return false;
+diff --git a/lib/src/remote/stun.h b/lib/src/remote/stun.h
+index 81e6d7a..e01af11 100644
+--- a/lib/src/remote/stun.h
++++ b/lib/src/remote/stun.h
+@@ -17,6 +17,7 @@
+ #include <chiaki/seqnum.h>
+ #include <chiaki/sock.h>
+ #include <chiaki/random.h>
++#include <chiaki/stoppipe.h>
+ 
+ #define STUN_REPLY_TIMEOUT_SEC 5
+ 
+@@ -50,7 +51,7 @@ StunServer STUN_SERVERS[] = {
+     {"stun4.l.google.com", 19305}
+ };
+ 
+-static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *server, char *address, uint16_t *port, chiaki_socket_t *sock, bool ipv4);
++static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *server, char *address, uint16_t *port, chiaki_socket_t *sock, bool ipv4, ChiakiStopPipe *stop_pipe);
+ 
+ /**
+  * Get external address and port using STUN.
+@@ -63,7 +64,7 @@ static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *se
+  * @param[out] port Buffer to store port in
+  * @return true if successful, false otherwise
+  */
+-static bool stun_get_external_address(ChiakiLog *log, char *address, uint16_t *port, StunServer *passed_servers, size_t num_passed_servers, chiaki_socket_t *sock, bool ipv4)
++static bool stun_get_external_address(ChiakiLog *log, char *address, uint16_t *port, StunServer *passed_servers, size_t num_passed_servers, chiaki_socket_t *sock, bool ipv4, ChiakiStopPipe *stop_pipe)
+ {
+     // Try servers preferred by user (i.e., known to be online)
+     bool ipv6_tried = false;
+@@ -73,7 +74,7 @@ static bool stun_get_external_address(ChiakiLog *log, char *address, uint16_t *p
+         {
+             if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                 return false;
+-            if (stun_get_external_address_from_server(log, &passed_servers[i], address, port, sock, ipv4))
++            if (stun_get_external_address_from_server(log, &passed_servers[i], address, port, sock, ipv4, stop_pipe))
+                 return true;
+             CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", passed_servers[i].host, passed_servers[i].port);
+             // Only try 1 IPV6 server
+@@ -98,7 +99,7 @@ static bool stun_get_external_address(ChiakiLog *log, char *address, uint16_t *p
+         for (int i = 0; i < num_servers; i++) {
+             if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                 return false;
+-            if (stun_get_external_address_from_server(log, &STUN_SERVERS[i], address, port, sock, ipv4)) {
++            if (stun_get_external_address_from_server(log, &STUN_SERVERS[i], address, port, sock, ipv4, stop_pipe)) {
+                 return true;
+             }
+             CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+@@ -122,7 +123,7 @@ static bool stun_get_external_address(ChiakiLog *log, char *address, uint16_t *p
+  * @param[out] port Buffer to store port in
+  * @return true if successful, false otherwise
+  */
+-CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint16_t *port, int32_t *allocation_increment, bool *random_allocation, StunServer *passed_servers, size_t num_passed_servers, chiaki_socket_t *sock)
++CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint16_t *port, int32_t *allocation_increment, bool *random_allocation, StunServer *passed_servers, size_t num_passed_servers, chiaki_socket_t *sock, ChiakiStopPipe *stop_pipe)
+ {
+     // skip testing if outgoing port changes with same internal ip and port if send to same ip and different port bc that doesn't apply in our case (we will be using a different address anyway)
+     uint16_t port1 = 0;
+@@ -143,7 +144,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (!stun_get_external_address_from_server(log, &passed_servers[i], addr1, &port1, sock, true))
++                if (!stun_get_external_address_from_server(log, &passed_servers[i], addr1, &port1, sock, true, stop_pipe))
+                     CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", passed_servers[i].host, passed_servers[i].port);
+                 else
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", passed_servers[i].host, passed_servers[i].port);
+@@ -152,7 +153,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (!stun_get_external_address_from_server(log, &passed_servers[i], addr2, &port2, sock, true))
++                if (!stun_get_external_address_from_server(log, &passed_servers[i], addr2, &port2, sock, true, stop_pipe))
+                     CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", passed_servers[i].host, passed_servers[i].port);
+                 else
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", passed_servers[i].host, passed_servers[i].port);
+@@ -161,7 +162,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (!stun_get_external_address_from_server(log, &passed_servers[i], addr3, &port3, sock, true))
++                if (!stun_get_external_address_from_server(log, &passed_servers[i], addr3, &port3, sock, true, stop_pipe))
+                     CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", passed_servers[i].host, passed_servers[i].port);
+                 else
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", passed_servers[i].host, passed_servers[i].port);
+@@ -170,7 +171,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (stun_get_external_address_from_server(log, &passed_servers[i], addr4, &port4, sock, true))
++                if (stun_get_external_address_from_server(log, &passed_servers[i], addr4, &port4, sock, true, stop_pipe))
+                 {
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", passed_servers[i].host, passed_servers[i].port);
+                     break;
+@@ -197,7 +198,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (!stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr1, &port1, sock, true))
++                if (!stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr1, &port1, sock, true, stop_pipe))
+                     CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+                 else
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+@@ -206,7 +207,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (!stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr2, &port2, sock, true))
++                if (!stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr2, &port2, sock, true, stop_pipe))
+                     CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+                 else
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+@@ -215,7 +216,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (!stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr3, &port3, sock, true))
++                if (!stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr3, &port3, sock, true, stop_pipe))
+                     CHIAKI_LOGW(log, "Failed to get external address from %s:%d, retrying with another STUN server...", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+                 else
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+@@ -224,7 +225,7 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+             {
+                 if(CHIAKI_SOCKET_IS_INVALID(*sock))
+                     break;
+-                if (stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr4, &port4, sock, true))
++                if (stun_get_external_address_from_server(log, &STUN_SERVERS[i], addr4, &port4, sock, true, stop_pipe))
+                 {
+                     CHIAKI_LOGV(log, "Got response from STUN server %s:%d", STUN_SERVERS[i].host, STUN_SERVERS[i].port);
+                     break;
+@@ -464,8 +465,10 @@ CHIAKI_EXPORT bool stun_port_allocation_test(ChiakiLog *log, char *address, uint
+     return true;
+ }
+ 
+-static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *server, char *address, uint16_t *port, chiaki_socket_t *sock, bool ipv4)
++static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *server, char *address, uint16_t *port, chiaki_socket_t *sock, bool ipv4, ChiakiStopPipe *stop_pipe)
+ {
++    if(chiaki_stop_pipe_select_single(stop_pipe, CHIAKI_INVALID_SOCKET, false, 0) == CHIAKI_ERR_CANCELED)
++        return false;
+     struct addrinfo* resolved;
+     struct addrinfo hints;
+     struct sockaddr* server_addr;
+@@ -485,6 +488,11 @@ static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *se
+         CHIAKI_LOGE(log, "remote/stun.h: Failed to resolve STUN server '%s', error was " CHIAKI_SOCKET_ERROR_FMT, server->host, CHIAKI_SOCKET_ERROR_VALUE);
+         return false;
+     }
++    if(chiaki_stop_pipe_select_single(stop_pipe, CHIAKI_INVALID_SOCKET, false, 0) == CHIAKI_ERR_CANCELED)
++    {
++        freeaddrinfo(resolved);
++        return false;
++    }
+     server_addr = resolved->ai_addr;
+     if(ipv4)
+         server_addr_len = sizeof(struct sockaddr_in);
+@@ -511,22 +519,10 @@ static bool stun_get_external_address_from_server(ChiakiLog *log, StunServer *se
+     }
+     freeaddrinfo(resolved);
+ 
+-#ifdef _WIN32
+-    int timeout = STUN_REPLY_TIMEOUT_SEC * 1000;
+-#else
+-    struct timeval timeout;
+-    timeout.tv_sec = STUN_REPLY_TIMEOUT_SEC;
+-    timeout.tv_usec = 0;
+-#endif
+-    if (setsockopt(*sock, SOL_SOCKET, SO_RCVTIMEO, (const CHIAKI_SOCKET_BUF_TYPE)&timeout, sizeof(timeout)) < 0) {
+-        CHIAKI_LOGE(log, "remote/stun.h: Failed to set socket timeout, error was " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
+-        if (!CHIAKI_SOCKET_IS_INVALID(*sock))
+-        {
+-            CHIAKI_SOCKET_CLOSE(*sock);
+-            *sock = CHIAKI_INVALID_SOCKET;
+-        }
++    // Stop interrupts the receive wait instead of paying a five-second timeout
++    // for every configured and fallback server after the user has canceled.
++    if(chiaki_stop_pipe_select_single(stop_pipe, *sock, false, STUN_REPLY_TIMEOUT_SEC * 1000) != CHIAKI_ERR_SUCCESS)
+         return false;
+-    }
+ 
+     uint8_t binding_resp[256];
+     CHIAKI_SSIZET_TYPE received = recvfrom(*sock, (CHIAKI_SOCKET_BUF_TYPE)binding_resp, sizeof(binding_resp), 0, NULL, NULL);

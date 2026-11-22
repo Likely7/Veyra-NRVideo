@@ -40,5 +40,16 @@
     "bc397a728bb430f28666129ef006f7a8ac0e6081"
   ],
   "trigger_effects_patch": "patches/0004-chiaki-pad-proc-no.patch",
-  "trigger_effects_upstream_commit": "27ab96fd000bd0904f8ea3953c81f3ddb75b188b"
+  "trigger_effects_upstream_commit": "27ab96fd000bd0904f8ea3953c81f3ddb75b188b",
+  "psn_cancellation_patch": "patches/0005-chiaki-psn-cancellation.patch",
+  "psn_cancellation_origin": "Veyra adaptation at the same pinned Chiaki commit: interruptible setup, websocket thread join on failure, owned session cleanup",
+  "stun_cancellation_patch": "patches/0006-chiaki-stun-cancellation.patch",
+  "psn_socket_ownership_patch": "patches/0007-chiaki-psn-socket-ownership.patch",
+  "psn_notification_locks_patch": "patches/0008-chiaki-psn-notification-locks.patch",
+  "psn_notification_lifecycle_patch": "patches/0009-chiaki-psn-notification-lifecycle.patch",
+  "psn_notification_lifecycle_origin": "Backport notification ownership and unrelated-session deletion guard from chiaki-ng 1625cd640146fd25f2cce65eea3a33df79748757; Veyra adds closed-channel wakeup, preserved network error, numeric diagnostics and offline lifetime regressions",
+  "psn_websocket_deadline_patch": "patches/0010-chiaki-psn-websocket-deadline.patch",
+  "psn_websocket_deadline_origin": "Veyra correction: clear the handshake-only total timeout after WebSocket upgrade, matching upstream long-lived channel behavior; bounded numeric operation/CURL diagnostics",
+  "standby_send_result_patch": "patches/0011-chiaki-standby-send-result.patch",
+  "standby_send_result_origin": "Veyra adds fixed sent/failed markers after the control transport send for explicitly requested standby; queue insertion is not treated as send completion"
 }

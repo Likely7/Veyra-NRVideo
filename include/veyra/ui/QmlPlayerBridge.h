@@ -209,7 +209,9 @@ class QmlPlayerBridge : public QObject {
     // wake, stream profile, decode/sampling, view-only, login PIN, controller
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
+    Q_PROPERTY(QVariantMap ps5LoginPrompt READ ps5LoginPrompt NOTIFY ps5Changed)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
+    Q_PROPERTY(QObject* psn READ psnModel NOTIFY psnChanged)
     // PS5 手柄控制 (采集卡对话框): a controller-only Remote Play session beside the
     // capture card, using the pairing selected in the PS5 dialog. {available,
     // enabled, background, state: off|starting|connected|pin|recovering|failed|
@@ -842,7 +844,9 @@ public:
     Q_INVOKABLE void autoAlignSubtitle();
 
     QVariantMap ps5() const;
+    QVariantMap ps5LoginPrompt() const;
     QVariantList ps5Profiles() const;
+    QObject* psnModel() const;
     QVariantMap ps5Control() const;
     QObject* moonlightModel() const;
     bool moonlightCaptured() const;
@@ -863,7 +867,10 @@ public:
     Q_INVOKABLE void ps5Wake();
     Q_INVOKABLE void ps5Forget();
     Q_INVOKABLE void ps5OpenAccountChecker();
-    Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
+    Q_INVOKABLE bool ps5SendLoginPin(const QString& pin);
+    Q_INVOKABLE bool ps5SubmitLoginPin(const QString& pin,const QString& requestId);
+    Q_INVOKABLE bool ps5CancelLoginPin(const QString& requestId);
+    Q_INVOKABLE bool ps5EndStream(bool standby);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
     // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).
@@ -1525,6 +1532,7 @@ signals:
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
+    void psnChanged();
     void ps5ControlChanged();
     void moonlightUiChanged();
     void imageBatchChanged();
@@ -1617,7 +1625,7 @@ private:
     // live source so the video viewport has time to settle.
     void openAfterLivePage(const QString& pending, std::function<void()> open,
                            const QString& homeTarget = QStringLiteral("min"));
-    void rememberSource(const QString& kind, const QString& label);
+    bool rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
     void updateMaskOverlay();
     QVariantMap maskState(bool allEffects) const;

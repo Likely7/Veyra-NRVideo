@@ -1,7 +1,15 @@
 # Build-time HLSL compilation via the installed DXC (Playbook section 5.4).
 # Machine-specific DXC discovery stays here; CMakePresets stay path-free.
 
+set(VEYRA_DXC_EXECUTABLE "" CACHE FILEPATH "Optional DXC executable from a portable Windows SDK")
 function(veyra_find_dxc out_var)
+  if(VEYRA_DXC_EXECUTABLE)
+    if(NOT EXISTS "${VEYRA_DXC_EXECUTABLE}")
+      message(FATAL_ERROR "VEYRA_DXC_EXECUTABLE does not exist")
+    endif()
+    set(${out_var} "${VEYRA_DXC_EXECUTABLE}" PARENT_SCOPE)
+    return()
+  endif()
   set(candidates "")
   file(GLOB kit_roots "$ENV{ProgramFiles\(x86\)}/Windows Kits/10/bin/*")
   if(kit_roots)

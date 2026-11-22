@@ -1658,3 +1658,26 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+### 2026-11-21 dreamgyf fork: PSN remote streaming
+
+本轮用户授权 fork 后在 D 盘接入 PSN 远程串流并编译。源码 D:/Projects/Veyra-NRVideo，分支 feat/psn-remote-streaming，基线 fe8df532。实现、构建与实际验证边界见 [PSN_REMOTE_STREAMING.md](PSN_REMOTE_STREAMING.md)。旧文档中的作者 E 盘路径、历史不构建任务与旧主线不是本次工作目录；本次产物隔离在 D:/Projects/Veyra-NRVideo-work。保留现有视频增强和 LAN 配对，不触碰真实账号/主机/用户应用设置。已完成 MSVC/Qt 6.8.3 主程序构建、91 个着色器打包、85 项 UCRT 原生测试、MSVC 认证/存储/反馈/产品边界测试、7 项 Qt Quick 测试，以及实际程序 PSN/局域网两种模式的隔离启动检查。真实账号登录、首次外网连接及串流增强效果仍未实测。运行包位于 D:/Projects/Veyra-NRVideo-work/package/Veyra-2.2.0-PSN，源码与本地改动保留在该分支，未推送或发布。
+### 2026-11-21 PSN 会话启动失败跟进
+
+用户报告 PS5 连接失败，日志两次为 psn_session_start code=8。用户确认 PS5 开机、Veyra 尝试时无其他串流，且之前 Chiaki-ng 可连接同一主机。该错误源自等待主机加入/自定义数据通知超时，旧日志不能区分主机未回应与 WebSocket 提前退出。增加 0009 补丁：移植上游通知所有权和会话删除筛选修复，通知通道关闭时及时返回网络错误；新增只接受完整受限数值的诊断标记和阶段耗时。它们是已确认的代码缺陷，但不能据旧日志宣称已查明此次根因。九补丁精确校验、84 项相关 UCRT 回归、五组 MSVC 离线测试及两种实际程序隔离启动检查通过。独立包 D:/Projects/Veyra-NRVideo-work/package/Veyra-2.2.0-PSN-fix1，沿用用户现有登录与 UI 设置的启动脚本在本次 outputs；旧运行包未替换，未自动重连真实主机，等待用户重试。完整记录见 PSN_REMOTE_STREAMING.md。
+
+### 2026-11-21 PSN fix2：清除已完成握手的总超时
+
+用户重试 fix1 后仍失败；22:02/22:03 新日志均为 HTTP202 已接受启动、通知 WebSocket 传输错误退出，尚无主机加入。发现本次 PSN 接入的 0005 补丁给 WebSocket 设定十秒总超时后未清除，Schannel 后续心跳发送继续检查这个已过期的期限。真实产品静态 curl 的本地 WSS 对照复现：握手十一秒后旧配置发送返回 CURL55，清除总超时后发送和回显成功。0010 只在握手成功后清除该总超时，保留握手限制、取消机制和其他 HTTP 超时，并增加受限数字 ws_op/ws_curl 诊断。十补丁精确核验、MSVC 产品构建、84 项 UCRT 回归、五组 MSVC 测试及两种实际程序隔离启动检查均通过。新包 D:/Projects/Veyra-NRVideo-work/package/Veyra-2.2.0-PSN-fix2；不替换运行中的 fix1，不自动连接主机，真实问题是否全部解决仍待用户重试。证据、命令脚本及边界见 PSN_REMOTE_STREAMING.md。
+
+### 2026-11-21 PSN fix3：连接时 PIN 弹窗与结束串流
+
+用户确认 fix2 在同一页面输入 PIN 已可连接，随后要求改进操作流程。删除设置中的手动 PIN 提交栏；收到主机登录请求后自动弹出四位密码输入框，提交后继续当前连接，输入错误可重试，取消则结束该次连接。请求身份绑定防止旧弹窗操作新连接。画面右上角新增结束串流按钮，提供保持开机或发送待机请求后断开两种选择；只在用户明确选择时请求待机，原生发送完成后才释放连接，失败可改选仅断开，主动结束不触发自动恢复。0011 补丁增加固定发送结果标记。十一补丁核验、MSVC 构建、84 项既有 UCRT + 6 项 PIN 回归、5 组 MSVC 测试、25 项 QML 测试、2 项实际程序隔离检查通过；截图已检查。独立包 Veyra-2.2.0-PSN-fix3，沿用登录和设置；本次没有真实主机连接或电源操作，自动弹窗和主机待机仍待用户实测。详见 PSN_REMOTE_STREAMING.md。
+
+### 2026-11-22 PSN fix5：首页说明与启动音乐入口
+
+首页标题改为“PS5 / PS4 串流”，副标题始终显示“PSN 远程 / 局域网”。原有 introMusic 永久开关移至“设置 → 启动与窗口”页首，命名“启动时播放音乐”，明确当前停止和下次禁播；角落按钮提示指向此处。沿用旧偏好键与默认值，不更改用户实际设置。MSVC 构建、三个实际程序静音隔离启动检查通过：从真实 UI handler 关闭并核验 native paused，重启保持关闭，重新开启并重启保持开启；首页两条文本在 1280x900 下完整显示，VFG 仍可用。未重复运行无关 GPU/协议测试，未连接主机。回执 D:/Projects/Veyra-NRVideo-work/fix5-ui-result.json，新包 package/Veyra-2.2.0-PSN-fix5，未推送或发布。详见 PSN_REMOTE_STREAMING.md。
+
+### 2026-11-22 PSN fix4：结束入口融入播放栏，恢复 NVIDIA VFG
+
+按用户反馈移除独立右上角按钮，改为极简/全屏、专业、节点现有播放栏中播放键旁的断开图标，悬停显示“结束串流”；仍进入原有断开/待机选择。结束处理中保持可见并禁用。用户随后指出 VFG 缺失：原 PSN 构建漏配 VEYRA_CUDA_DRIVER_INCLUDE_DIR，虽然 DLL 已完整打包，VFG 与 Video Effects SR 都被编译为不可用。改用用户现有 Optical Flow SDK 自带的 CUDA 11.4 驱动头文件，重新编译，未安装驱动或完整 CUDA Toolkit。40 项 QML 检查、683 项 VFG 设置断言、本机 RTX 3070 Ti 的 640x360 异步真实插帧 2425 项断言、2 项实际程序菜单/对话框隔离检查通过。QML 初次失败为测试点击早于内部布局更新，修正等待与点击中心后通过，失败日志保留。新包 D:/Projects/Veyra-NRVideo-work/package/Veyra-2.2.0-PSN-fix4，实际 GPU 测试不代表 PS5 游戏画质或 1080p 持续性能验证，未连接或控制真实主机。详细记录与回执见 PSN_REMOTE_STREAMING.md；未推送或发布。

@@ -8,27 +8,113 @@ DialogLayer {
     objectName: "ps5-dialog"
     key: "ps5"
     glyph: "gamepad"
-    title: qsTr("PS5 串流")
-    sub: qsTr("局域网 Remote Play · 凭据加密保存在本机")
+    title: qsTr("PlayStation 串流")
+    sub: qsTr("PSN 远程连接 / 局域网 · 凭据加密保存在本机")
+    readonly property bool psnMode: veyra.ps5.connection === "psn"
+    readonly property var psnService: veyra.psn || null
+    readonly property var selectedPsnConsole: psnService ? psnService.consoles.find(x => x.id === veyra.ps5.psnDuid) : null
+    readonly property bool ps4Selected: psnMode && !!selectedPsnConsole && selectedPsnConsole.ps5 === false
     dialogWidth: 680
     actions: [
         { label: veyra.ps5.active ? qsTr("断开") : qsTr("取消") },
         { label: veyra.ps5.active ? qsTr("应用设置并重连") : qsTr("连接"), primary: true }
     ]
     onActionTriggered: label => {
-        if (label === qsTr("断开")) { veyra.ps5Cancel(); return }
-        if (label === qsTr("取消")) { if (veyra.ps5.busy) veyra.ps5Cancel(); else dialogHost.close(); return }
+        if (label === qsTr("断开")) { dialogHost.open("ps5-stop"); return }
+        if (label === qsTr("取消")) { if (veyra.ps5.busy || (psnService && (psnService.busy || psnService.awaitingRedirect))) veyra.ps5Cancel(); else dialogHost.close(); return }
         if (veyra.ps5Connect()) { dialogHost.close(); dialogHost.startPs5() }
     }
     Connections {
         target: dialogHost
-        function onDialogChanged() { if (dialogHost.dialog === "ps5") veyra.ps5Load() }
+        function onDialogChanged() {
+            callbackUrl.text = ""
+            if (dialogHost.dialog === "ps5") veyra.ps5Load()
+        }
     }
     readonly property var qualities: [{ id: "0", label: "720p · 30 fps" }, { id: "1", label: "720p · 60 fps" }, { id: "2", label: "1080p · 30 fps" }, { id: "3", label: "1080p · 60 fps" }]
     readonly property var bitrates: [5, 10, 15, 20, 30, 50, 80, 100].map((m, i) => ({ id: String(i), label: m + " Mbps" }))
 
-    DialogSection { text: qsTr("主机") }
+    DialogSection { text: qsTr("连接方式") }
     DialogGroup {
+        VRow {
+            label: qsTr("连接方式")
+            VSeg {
+                objectName: "ps5-connection-mode"
+                options: [{id:"psn",label:qsTr("PSN 远程")}, {id:"local",label:qsTr("局域网")}]
+                current: ps5Dialog.psnMode ? "psn" : "local"
+                onPicked: id => veyra.ps5Set("connection", id)
+            }
+        }
+    }
+    DialogSection { visible: ps5Dialog.psnMode; text: qsTr("PSN 账号与主机") }
+    DialogGroup {
+        visible: ps5Dialog.psnMode
+        VRow {
+            label: !!ps5Dialog.psnService && ps5Dialog.psnService.signedIn ? qsTr("已登录 PSN") : qsTr("登录 PSN")
+            hint: qsTr("在浏览器登录主机使用的 PSN 账号。主机须已启用远程游玩；首次连接不要求同一局域网。")
+            hintBelow: true
+            RowLayout {
+                spacing: 6
+                VButton {
+                    objectName: "psn-login"
+                    text: qsTr("登录 PSN"); ghost: true
+                    enabled: !!ps5Dialog.psnService && !ps5Dialog.psnService.busy
+                    onClicked: ps5Dialog.psnService.beginLogin()
+                }
+                VButton {
+                    objectName: "psn-sign-out"
+                    text: qsTr("退出账号"); ghost: true
+                    visible: !!ps5Dialog.psnService && ps5Dialog.psnService.signedIn
+                    enabled: !!ps5Dialog.psnService && !ps5Dialog.psnService.busy
+                    onClicked: { callbackUrl.text = ""; ps5Dialog.psnService.signOut() }
+                }
+                VSpinner { visible: !!ps5Dialog.psnService && ps5Dialog.psnService.busy; Layout.alignment: Qt.AlignVCenter }
+            }
+        }
+        VRow {
+            visible: !!ps5Dialog.psnService && ps5Dialog.psnService.awaitingRedirect
+            label: qsTr("登录结果网址")
+            hint: qsTr("登录完成后，复制浏览器地址栏中的完整跳转网址并粘贴到这里。")
+            hintBelow: true
+            RowLayout {
+                spacing: 6
+                DialogTextField { id: callbackUrl; objectName: "psn-callback-url"; implicitWidth: 280; placeholder: "https://remoteplay.dl.playstation.net/remoteplay/redirect?..." }
+                VButton {
+                    objectName: "psn-submit-login"
+                    text: qsTr("提交登录结果")
+                    enabled: !!ps5Dialog.psnService && !ps5Dialog.psnService.busy && callbackUrl.text.trim().length > 0
+                    onClicked: { const url = callbackUrl.text.trim(); callbackUrl.text = ""; ps5Dialog.psnService.completeLogin(url) }
+                }
+            }
+        }
+        VRow {
+            visible: !!ps5Dialog.psnService && ps5Dialog.psnService.signedIn
+            label: qsTr("远程主机")
+            hint: qsTr("PS4 仅支持此账号的主要主机。选择后点“连接”，无需局域网配对码。")
+            hintBelow: true
+            RowLayout {
+                spacing: 6
+                VSelect {
+                    objectName: "psn-console"
+                    implicitWidth: 240
+                    value: ps5Dialog.selectedPsnConsole ? ps5Dialog.selectedPsnConsole.label : qsTr("请选择主机")
+                    options: ps5Dialog.psnService ? ps5Dialog.psnService.consoles : []
+                    onPicked: id => veyra.ps5Set("psnDuid", id)
+                }
+                VButton {
+                    objectName: "psn-refresh"
+                    text: qsTr("刷新"); ghost: true
+                    enabled: !!ps5Dialog.psnService && !ps5Dialog.psnService.busy
+                    onClicked: ps5Dialog.psnService.refreshConsoles()
+                }
+            }
+        }
+        DialogNote { visible: !!ps5Dialog.psnService && ps5Dialog.psnService.status.length > 0; text: ps5Dialog.psnService ? ps5Dialog.psnService.status : "" }
+    }
+
+    DialogSection { visible: !ps5Dialog.psnMode; text: qsTr("主机") }
+    DialogGroup {
+        visible: !ps5Dialog.psnMode
         VRow {
             visible: veyra.ps5Profiles.length > 0
             label: qsTr("已保存主机")
@@ -52,8 +138,9 @@ DialogLayer {
             }
         }
     }
-    DialogSection { text: qsTr("配对（首次）") }
+    DialogSection { visible: !ps5Dialog.psnMode; text: qsTr("配对（首次）") }
     DialogGroup {
+        visible: !ps5Dialog.psnMode
         VRow {
             label: "PSN Account ID"
             hint: qsTr("点击获取 Account ID，在网页查询后复制到这里。支持数字 ID 或 8 字节 Base64，不是 PSN 昵称。")
@@ -88,16 +175,18 @@ DialogLayer {
         }
         VRow {
             label: qsTr("编码")
-            hint: qsTr("HDR 需要 PS5 实际输出 HDR 且 Windows HDR 开启")
+            hint: ps5Dialog.ps4Selected ? qsTr("PS4 使用 H.264") : qsTr("HDR 需要 PS5 实际输出 HDR 且 Windows HDR 开启")
             VSeg {
+                objectName: "ps5-codec"
+                enabled: !ps5Dialog.ps4Selected
                 options: [{ id: "0", label: "H.264" }, { id: "1", label: "H.265" }, { id: "2", label: "H.265 HDR" }]
-                current: String(veyra.ps5.codec || 0)
+                current: ps5Dialog.ps4Selected ? "0" : String(veyra.ps5.codec || 0)
                 onPicked: id => veyra.ps5Set("codec", Number(id))
             }
         }
         VRow {
             label: qsTr("请求码率")
-            hint: qsTr("发给 PS5 的带宽请求，主机不保证达到")
+            hint: qsTr("发给主机的带宽请求，主机不保证达到")
             VSelect { implicitWidth: 130; value: ps5Dialog.bitrates[veyra.ps5.bitrate || 0].label; options: ps5Dialog.bitrates; onPicked: id => veyra.ps5Set("bitrate", Number(id)) }
         }
         VRow {
@@ -119,12 +208,12 @@ DialogLayer {
         }
         VRow {
             label: qsTr("仅观看")
-            hint: qsTr("不向 PS5 转发电脑手柄输入")
+            hint: qsTr("不向主机转发电脑手柄输入")
             VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }
         }
         // The mirror of 仅观看: only the pad, the picture from a capture card.
         VRow {
-            visible: veyra.ps5Control.available === true
+            visible: !ps5Dialog.psnMode && veyra.ps5Control.available === true
             label: qsTr("画面用采集卡")
             hint: veyra.ps5Control.enabled === true
                   ? qsTr("已在「采集卡」里打开 PS5 手柄控制：连接采集卡时只用远程游玩传手柄")
@@ -135,18 +224,6 @@ DialogLayer {
             label: qsTr("陀螺仪")
             hint: veyra.ps5.controller ? (veyra.ps5.gyro ? qsTr("手柄支持陀螺仪") : qsTr("手柄没有陀螺仪")) : qsTr("连接串流及电脑手柄后可校准")
             VButton { text: veyra.ps5.calibrating ? qsTr("校准中…") : qsTr("校准"); ghost: true; onClicked: veyra.ps5Calibrate() }
-        }
-    }
-    DialogSection { text: qsTr("登录 PIN") }
-    DialogGroup {
-        VRow {
-            label: qsTr("PS5 提示时填写")
-            hint: qsTr("不是 8 位配对码")
-            RowLayout {
-                spacing: 6
-                DialogTextField { id: loginPin; implicitWidth: 120 }
-                VButton { text: qsTr("提交"); ghost: true; onClicked: { veyra.ps5SendLoginPin(loginPin.text); loginPin.text = "" } }
-            }
         }
     }
     DialogNote { visible: (veyra.ps5.status || "").length > 0; text: (veyra.ps5.busy ? qsTr("处理中 · ") : "") + (veyra.ps5.status || "") }

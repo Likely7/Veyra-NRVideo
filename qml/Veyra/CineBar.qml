@@ -193,7 +193,14 @@ Rectangle {
                     TapHandler { id: playTap; gesturePolicy: TapHandler.WithinBounds; onTapped: veyra.togglePlayPause() }
                 }
 
-                CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
+                // Live console streams use the existing transport slot for disconnect.
+                Ps5StreamStopButton {
+                    id: stopStream
+                    backend: veyra
+                    radius: 16
+                    onRequestStop: bar.requestDialog("ps5-stop")
+                }
+                CBtn { glyph: "fwd10"; visible: !stopStream.visible; onTapped: veyra.seekBy(10) }
                 CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
                 PlaybackRateButton { id: playbackRate; objectName: "cine-playback-rate"; menuBottomLimit: bar.menuBottomLimit }
             }

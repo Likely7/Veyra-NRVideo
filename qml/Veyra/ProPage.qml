@@ -665,6 +665,11 @@ VPage {
                     HoverHandler { cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: veyra.togglePlayPause() }
                 }
+                Ps5StreamStopButton {
+                    backend: veyra
+                    implicitWidth: 28; implicitHeight: 28
+                    onRequestStop: root.requestDialog("ps5-stop")
+                }
                 Text {
                     text: veyra.positionText
                     color: Theme.t2
