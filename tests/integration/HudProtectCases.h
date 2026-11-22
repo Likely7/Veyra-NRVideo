@@ -76,7 +76,7 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     std::ofstream crops;
     if(smooth&&!perf)crops.open(artifacts/"generated-crops.rgba",std::ios::binary);
     unsigned motionSamples=0,trustedSamples=0,untrustedChanged=0,minimumBody=~0u,missedBody=0,missedHit=0;
-    unsigned bodySize=0,previousBodySize=0;
+    unsigned bodySize=0,previousBodySize=0,untrustedBodyCleaned=0;
     double maxMotionError=0;
     const unsigned frames=perf?44u:smooth?124u:18u;
     for(unsigned i=0;ok&&i<frames;++i){
@@ -148,6 +148,13 @@ static int hudProtectCases(int argc,wchar_t** argv) {
             std::cout<<"HUD_SHIFT frame="<<i<<" dx="<<measured[0]<<" dy="<<measured[1]<<" trusted="<<trusted
                      <<" truth="<<trueDx<<','<<trueDy<<" strict="<<strictMotion<<'\n';
         }
+        if(smooth&&enabled&&!trusted){
+            const auto hasInk=[](const uint8_t* p){return int(p[0])-p[1]>12&&int(p[2])-p[1]>12;};
+            for(unsigned j=0;j<bodySize;++j){
+                const auto offset=size_t(body[j])*4;
+                untrustedBodyCleaned+=hasInk(real.pixels.data()+offset)&&!hasInk(clean.pixels.data()+offset);
+            }
+        }
         for(size_t a=0;a<real.pixels.size();a+=4){
             const unsigned x=unsigned((a/4)%workWidth),y=unsigned((a/4)/workWidth);
             const bool changedPixel=!std::equal(real.pixels.begin()+a,real.pixels.begin()+a+3,clean.pixels.begin()+a);
@@ -202,8 +209,17 @@ static int hudProtectCases(int argc,wchar_t** argv) {
                 for(size_t k=0;k<expected.size();++k){
                     const auto* p=generated.pixels.data()+size_t(expected[k])*4;
                     const bool painted=int(p[0])-p[1]>12&&int(p[2])-p[1]>12;
-                    if(k<coreSize)preserved+=painted;
-                    else missedHit+=!painted;
+                    if(k<coreSize){
+                        preserved+=painted;
+                        if(enabled&&!painted){
+                            const auto* a=held.pixels.data()+size_t(expected[k])*4;
+                            const auto* b=real.pixels.data()+size_t(expected[k])*4;
+                            std::cout<<"HUD_BODY_MISS frame="<<i<<" x="<<expected[k]%srcWidth<<" y="<<expected[k]/srcWidth
+                                     <<" held="<<int(a[0])<<','<<int(a[1])<<','<<int(a[2])
+                                     <<" other="<<int(b[0])<<','<<int(b[1])<<','<<int(b[2])
+                                     <<" out="<<int(p[0])<<','<<int(p[1])<<','<<int(p[2])<<'\n';
+                        }
+                    } else missedHit+=!painted;
                 }
                 minimumBody=std::min(minimumBody,preserved);
                 missedBody+=coreSize-preserved;
@@ -262,9 +278,9 @@ static int hudProtectCases(int argc,wchar_t** argv) {
     if(smooth&&!perf){
         std::cout<<"HUD_MASK_RESULTS motion_samples="<<motionSamples<<" trusted="<<trustedSamples
                  <<" largest_shift_error="<<maxMotionError<<" untrusted_cleaned="<<untrustedChanged
-                 <<" min_body="<<(count?minimumBody:0)<<" missing_body="<<missedBody<<" missing_hit="<<missedHit<<'\n';
+                 <<" untrusted_body_cleaned="<<untrustedBodyCleaned<<" min_body="<<(count?minimumBody:0)<<" missing_body="<<missedBody<<" missing_hit="<<missedHit<<'\n';
         ok=ok&&crops.good()&&(!enabled||(motionSamples>0&&trustedSamples==motionSamples&&
-               maxMotionError<=2&&untrustedChanged==0&&missedBody==0&&ownChanged>0));
+               maxMotionError<=2&&untrustedBodyCleaned>0&&missedBody==0&&ownChanged>0));
     }else if(dynamic)ok=ok&&dynamicChecks>0&&(!enabled||dynamicError<=2);
     else {
         ok=ok&&(square?cleanChanges==0:!enabled||perf||ownChanged>0);

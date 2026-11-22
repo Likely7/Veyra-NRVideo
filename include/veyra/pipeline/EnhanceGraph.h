@@ -723,6 +723,7 @@ public:
     ID3D12Resource* fgInput(unsigned slot) const;
     // Diagnostic SRV: xy current-to-previous pixels, z trusted, w cut.
     ID3D12Resource* hudBackgroundMotion(unsigned slot) const;
+    ID3D12Resource* hudProtectionCounters(unsigned slot) const;
     bool srEnabled() const { return srEnabled_; }
     bool nrEnabled() const { return nrEnabled_ && !nrPreparing_; }
     bool nrPreparing() const { return nrPreparing_; }

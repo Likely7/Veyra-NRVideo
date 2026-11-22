@@ -6,6 +6,7 @@ Texture2D<float4> currentTex : register(t0);
 Texture2D<float4> previousTex : register(t1);
 Texture2D<float2> denseFlow : register(t2);
 Texture2D<float4> previousMotion : register(t3);
+Texture2D<uint> previousCounts : register(t4);
 RWTexture2D<float4> motionTex : register(u0); // xy displacement, z: moving +1, still -1, unknown 0; w cut
 RWTexture2D<uint> counts : register(u1);
 
@@ -54,8 +55,15 @@ void reduce(uint lane) {
         GroupMemoryBarrierWithGroupSync();
     }
 }
+int coarseStep(int index,int step) {
+    const int distance=abs(index);
+    // Dense near zero, sparsely sampled on the quarter-resolution grid
+    // farther away. The far grid reaches 396 work pixels at 2160p.
+    return sign(index)*(min(distance,5)+4*max(distance-5,0))*step;
+}
 int2 gridOffset(int index,int step) {
-    return (int2(index%kWide,index/kWide)-kWide/2)*step;
+    const int2 rank=int2(index%kWide,index/kWide)-kWide/2;
+    return int2(coarseStep(rank.x,step),coarseStep(rank.y,step));
 }
 bool separated(int2 first,int2 second,int radius) {
     const int2 distance=abs(first-second);
@@ -78,20 +86,86 @@ void refine(uint lane,int2 center,int radius,int step) {
     reduce(lane);
 }
 
+float3 colorAt(Texture2D<float4> image,int2 p) {
+    return comparisonColor(image.Load(int3(boundPixel(p),0)).rgb);
+}
+bool strokeInk(int2 p,int2 normal,int radius,out float3 color) {
+    color=colorAt(currentTex,p);
+    const float3 lo=colorAt(currentTex,p-normal*radius),hi=colorAt(currentTex,p+normal*radius);
+    // Test both sides of the mark. A single background edge is insufficient.
+    return min(colorError(lo,color),colorError(hi,color))>0.10;
+}
+bool centredMark(float4 box) {
+    const int2 center=int2((box.xy+box.zw)*0.5);
+    const int step=clamp(int(round(float(frameSize.y)/1080.0)),1,4);
+    const int side=clamp(int(round(float(frameSize.y)/540.0)),2,8);
+    uint pairedHorizontal=0,pairedVertical=0;
+    uint singleHorizontal=0,singleVertical=0;
+    const int2 horizontal=int2(1,0),vertical=int2(0,1);
+    [loop] for(int i=3;i<=18;++i) {
+        const int d=i*step;
+        const int2 l=center-horizontal*d,r=center+horizontal*d;
+        const int2 t=center-vertical*d,b=center+vertical*d;
+        float3 lc,rc,tc,bc;
+        const bool left=strokeInk(l,vertical,side,lc),right=strokeInk(r,vertical,side,rc);
+        const bool top=strokeInk(t,horizontal,side,tc),bottom=strokeInk(b,horizontal,side,bc);
+        pairedHorizontal+=uint(left&&right&&colorError(lc,rc)<0.085);
+        pairedVertical+=uint(top&&bottom&&colorError(tc,bc)<0.085);
+        singleHorizontal+=uint(left)+uint(right);
+        singleVertical+=uint(top)+uint(bottom);
+        if((pairedHorizontal>=2&&pairedVertical>=2)||
+           (pairedHorizontal>=4&&singleVertical>=4)||(pairedVertical>=4&&singleHorizontal>=4))return true;
+    }
+
+    // A small isolated centre dot also works without opposing arms. Use
+    // several directions to distinguish it from an ordinary textured edge.
+    const float3 dotColor=colorAt(currentTex,center);
+    const float high=max(dotColor.r,max(dotColor.g,dotColor.b));
+    const float low=min(dotColor.r,min(dotColor.g,dotColor.b));
+    if(high<0.58&&high-low<0.16)return false;
+    if(colorError(dotColor,colorAt(previousTex,center))>0.075)return false;
+    // Step beyond the chroma footprint of a two-pixel dot on subsampled
+    // video. Radius two reads into the same ink on one side at 720p.
+    const int dotRadius=max(3,side);
+    const int2 directions[8]={horizontal,-horizontal,vertical,-vertical,
+                              int2(1,1),int2(-1,1),int2(1,-1),int2(-1,-1)};
+    uint edges=0;
+    [unroll] for(int k=0;k<8;++k)
+        edges+=uint(colorError(dotColor,colorAt(currentTex,center+dotRadius*directions[k]))>0.12);
+    return edges>=7;
+}
+
 [numthreads(kTaps,1,1)]
 void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
     const uint region=group.x;
-    const float4 box=regionBox(region);
+    float4 box=regionBox(region);
     const uint2 dst=uint2(region,0);
-    if(lane==0)counts[dst]=0;
+    if(lane<HudCounterCount&&lane!=HudTrusted&&lane!=HudCentredMark)counts[hudCounter(region,lane)]=0;
+    if(lane==0) {
+        uint shape=0;
+        if(!resetHistory&&region==0&&all(box.zw>box.xy)) {
+            const uint last=previousCounts.Load(int3(hudCounter(region,HudCentredMark),0));
+            // Preserve a learned outline over a brief occlusion or drop in
+            // contrast. Appearance must still match before a pixel is used.
+            const uint age=last&HudMarkAgeMask;
+            shape=centredMark(box)?(HudMarkLifetime|HudFreshMark):(age>0?age-1:0);
+        }
+        counts[hudCounter(region,HudCentredMark)]=shape;
+    }
+    if(lane==0)counts[hudCounter(region,HudTrusted)]=0;
     if(resetHistory||any(box.zw<=box.xy)) {
         if(lane==0)motionTex[dst]=0;
         return;
     }
-    const int step=clamp(int(round(float(frameSize.y)/180)),4,16);
+    const int step=4*clamp(int(round(float(frameSize.y)/720)),1,4);
+    if(region==0) {
+        const float2 center=(box.xy+box.zw)*0.5;
+        const float extent=clamp(float(frameSize.y)/42.,16.,96.);
+        box=float4(max(box.xy,center-extent),min(box.zw,center+extent));
+    }
     const uint side=(lane/8)%4, ring=lane/32;
     const float t=(float(lane%8)+0.31+0.13*float(ring))/8.;
-    const float margin=(1.+2.5*ring)*step;
+    const float margin=(1.+float(ring)*(tightRegion(region)?0.50:0.90))*step;
     const float2 lo=box.xy-margin,hi=box.zw+margin;
     const float2 path=side==0?float2(t,0):side==1?float2(1,t):side==2?float2(t,1):float2(0,t);
     const int2 p=int2(floor(lerp(lo,hi,path)));
@@ -161,7 +235,8 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
     const int2 runnerUp=offsets[0];
     GroupMemoryBarrierWithGroupSync();
     const int fineStep=max(step/4,1);
-    refine(lane,coarse,step,fineStep);
+    const bool wide=any(abs(coarse)>5*step);
+    refine(lane,coarse,wide?2*step:step,fineStep);
     if(fineStep>1) {
         const int2 seed=offsets[0];
         GroupMemoryBarrierWithGroupSync();
@@ -169,7 +244,8 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
     }
     if(lane==0){primaryShift=offsets[0];primaryError=errors[0];}
     GroupMemoryBarrierWithGroupSync();
-    refine(lane,runnerUp,step,fineStep);
+    const bool wideRunnerUp=any(abs(runnerUp)>5*step);
+    refine(lane,runnerUp,wideRunnerUp?2*step:step,fineStep);
     if(fineStep>1) {
         const int2 seed=offsets[0];
         GroupMemoryBarrierWithGroupSync();
@@ -188,5 +264,6 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
         const bool trusted=(unique||(consistent&&error+0.000004<competitor*0.93))
             &&error<min(0.003,zeroError*0.64)&&dot(float2(shift),float2(shift))>2.25;
         motionTex[dst]=float4(trusted?float2(shift):0,trusted?1:0,!trusted&&cutError>0.024?1:0);
+        counts[hudCounter(region,HudTrusted)]=trusted?1:0;
     }
 }

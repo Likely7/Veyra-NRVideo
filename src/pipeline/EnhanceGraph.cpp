@@ -873,12 +873,16 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const uint64_t reuseBytes=reuseRequested?uint64_t(desc_.finalNrAfterSr()?workW_:srcW_)*(desc_.finalNrAfterSr()?workH_:srcH_)*16u+
         uint64_t(nvofW_)*nvofH_*20u:0;
     const unsigned outputBytes=desc_.hdrOutput&&!hdr10Output()?8u:4u;
-    const auto hudBounds=HudProtect::regionBounds(workW_,workH_,engine::hudProtectRegions(desc_.hudProtect,desc_.exclusion));
+    const auto protectRegions=engine::hudProtectRegions(desc_.hudProtect,desc_.exclusion);
+    const auto hudBounds=HudProtect::regionBounds(workW_,workH_,protectRegions);
+    const auto hudComposeBounds=HudProtect::compositionBounds(workW_,workH_,protectRegions);
     const bool hasHud=(fgEnabled_||presentSinkFg())&&hudBounds.right>hudBounds.left;
     const uint64_t hudBytes=hasHud?
         uint64_t(workW_)*workH_*(2*outputBytes+(desc_.fgUsesFlow()?4u:0u)+
             (presentSinkFg()?(desc_.exclusion.enabled?0u:4*outputBytes):0u))+
-        uint64_t(hudBounds.right-hudBounds.left)*(hudBounds.bottom-hudBounds.top)*(4u+(presentSinkFg()?0u:outputBytes)):0;
+        uint64_t(hudBounds.right-hudBounds.left)*(hudBounds.bottom-hudBounds.top)*18u+
+        (presentSinkFg()?0ull:uint64_t(hudComposeBounds.right-hudComposeBounds.left)*
+            (hudComposeBounds.bottom-hudComposeBounds.top)*outputBytes):0;
     const auto spatialBytes = [&](uint32_t quality, Extent input, Extent output) -> uint64_t {
         if (!srEnabled_) return 0;
         if (quality == engine::kVideoSrNis) {
@@ -1672,6 +1676,10 @@ ID3D12Resource* EnhanceGraph::fgInput(unsigned slot) const {
 
 ID3D12Resource* EnhanceGraph::hudBackgroundMotion(unsigned slot) const {
     return hudProtect_?hudProtect_->motion(slot%2):nullptr;
+}
+
+ID3D12Resource* EnhanceGraph::hudProtectionCounters(unsigned slot) const {
+    return hudProtect_?hudProtect_->counters(slot%2):nullptr;
 }
 
 void EnhanceGraph::composeHudProtect(ID3D12GraphicsCommandList* list,unsigned slot,unsigned parity,
@@ -4421,7 +4429,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         haveFlow&&desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nrZeroMotion_.Get();
     if(hudProtect_){
         const bool useFgFlow=haveFlow&&desc_.fgUsesFlow()&&!desc_.fgMotionProbe;
-        hudProtect_->prepare(list,tracker_,gpuTimer_,parity,reset||!prevValid_,useFgFlow);
+        hudProtect_->prepare(list,tracker_,gpuTimer_,parity,reset||!prevValid_,useFgFlow,context_.fence());
         if(!reset&&prevValid_&&useFgFlow)
             fgMotion=hudProtect_->fixMotion(list,tracker_,gpuTimer_,parity,fgMotion);
     }
@@ -4514,6 +4522,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if(hudLock_&&!hudLock_->update(list,tracker_,parity,!prevValid_))veyra::log::warn("hud-lock","update skipped");
     if(!runFg)gpuTimer_.resolve(list);
     if (!submitGraph(slot)) return false;
+    if(hudProtect_)hudProtect_->submitted(ring_.lastSignaledValue());
     if(!runFg)gpuTimer_.submitted(ring_.lastSignaledValue());
     out.videoFenceValue = ring_.lastSignaledValue();
     out.videoFenceObject = context_.fence();

@@ -70,10 +70,11 @@ double translation(const veyra::sink::RgbaImage& previous,const veyra::sink::Rgb
 // Test-only raw GPU readback. Restore the caller's resource state after copying.
 static bool readTexture(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& ring,
                         ID3D12Resource* texture,D3D12_RESOURCE_STATES state,size_t pixelBytes,
-                        std::vector<uint8_t>& pixels) {
+                        std::vector<uint8_t>& pixels,const D3D12_BOX* crop=nullptr) {
     using namespace veyra;
     if(!texture)return false;
-    const auto desc=texture->GetDesc();
+    auto desc=texture->GetDesc();
+    if(crop){desc.Width=crop->right-crop->left;desc.Height=crop->bottom-crop->top;}
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
     UINT64 bytes=0;
     ctx.device()->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
@@ -102,7 +103,7 @@ static bool readTexture(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandS
     destination.pResource=readback.Get();
     destination.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
     destination.PlacedFootprint=footprint;
-    list->CopyTextureRegion(&destination,0,0,0,&source,nullptr);
+    list->CopyTextureRegion(&destination,0,0,0,&source,crop);
     std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);
     list->ResourceBarrier(1,&barrier);
     if(!ring.submitAndSignal(slot)||!ring.drainQueue())return false;
@@ -145,10 +146,12 @@ static bool readImage(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlo
 }
 #include "EffectExclusionCases.h"
 #include "HudProtectCases.h"
+#include "HudFilmCases.h"
 int wmain(int argc,wchar_t** argv){
     const std::wstring modeWide=argc>1?argv[1]:L"off";
     const std::string mode(modeWide.begin(),modeWide.end());
     if(mode.starts_with("exclusion"))return effectExclusionCases(argc,argv);
+    if(mode.starts_with("hud-film"))return hudFilmCases(argc,argv);
     if(mode.starts_with("hud-protect"))return hudProtectCases(argc,argv);
     using namespace veyra;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;pipeline::EnhanceGraph graph(ctx,ring);
