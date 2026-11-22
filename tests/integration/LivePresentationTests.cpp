@@ -21,7 +21,9 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
     std::filesystem::create_directories(output);
     Logger::instance().openFile((std::filesystem::path(output)/L"engine.log").wstring());
     Logger::instance().setConsoleEnabled(false);
-    const bool vfg=mode==L"--vfg-provider-recovery";
+    const bool ada=mode==L"--vfg-ada-recovery";
+    const bool cached=mode==L"--vfg-ada-cache";
+    const bool vfg=mode==L"--vfg-provider-recovery"||ada||cached;
     const bool xess=mode==L"--amd-xess-capture";
     if(!vfg){
         gfx::ComPtr<IDXGIFactory1> factory;
@@ -72,10 +74,27 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
         const auto stop=[&]{engine.stop();return until([&](const auto&){return engine.idle();},10);};
         if(vfg){
             SetEnvironmentVariableW(L"VEYRA_TEST_VFG_PRIVATE_CONTEXT",L"1");
-            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",L"55");
+            if(!cached)SetEnvironmentVariableW(ada?L"VEYRA_TEST_VFG_ADA_FAULT_RUN":L"VEYRA_TEST_VFG_REJECT_RUN",L"55");
         }
         engine.open(window,input,options);
-        if(vfg){
+        if(ada||cached){
+            const bool first=cached||until([](const auto& s){return s.fgActive&&s.applied.vfgQuality==1&&s.generated>8;},22);
+            const bool low=first&&until([](const auto& s){
+                return s.running&&s.fgActive&&s.applied.vfgQuality==0&&s.frames>70&&
+                    s.backendWarning.find(L"VFG")!=std::wstring::npos&&s.metrics.flow.counters.generatedPresented>8;
+            },24);
+            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_ADA_FAULT_RUN",nullptr);
+            bool dlss=false;
+            if(low&&!cached){
+                auto next=engine.snapshot().desired;
+                next.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+                dlss=engine.requestSettings(next)&&until([](const auto& s){
+                    return s.fgActive&&s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&s.generated>8;
+                },25);
+            }
+            std::cout<<"VFG_ADA_RECOVERY cached="<<cached<<" first="<<first<<" low="<<low<<" dlss="<<dlss<<'\n';
+            ok=low&&(dlss||cached);
+        }else if(vfg){
             ok=until([](const auto& s){return s.fgActive&&s.generated>8;},25);
             ok=ok&&until([](const auto& s){return s.running&&!s.fgActive&&s.frames>70;},25);
             SetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",nullptr);
@@ -265,7 +284,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
 int wmain(int argc,wchar_t**argv){
     if(argc==4){
         const std::wstring_view mode=argv[3];
-        if(mode==L"--vfg-provider-recovery"||mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch")
+        if(mode==L"--vfg-provider-recovery"||mode==L"--vfg-ada-recovery"||mode==L"--vfg-ada-cache"||
+            mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch")
             return providerRecovery(argv[1],argv[2],mode);
     }
     if(argc==4&&(wcscmp(argv[3],L"--inactive-effects")==0||wcscmp(argv[3],L"--inactive-effects-node")==0))return inactiveEffectsTest(argv[1],argv[2],wcscmp(argv[3],L"--inactive-effects-node")==0);
