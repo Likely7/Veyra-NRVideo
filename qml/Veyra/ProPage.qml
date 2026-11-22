@@ -778,9 +778,14 @@ VPage {
                     id: barBtn
                     property string glyph: ""
                     property string tip: ""
+                    property bool highlighted: false
                     signal tapped()
                     implicitWidth: 28; implicitHeight: 28
-                    VIcon { anchors.centerIn: parent; name: barBtn.glyph; color: barHover.hovered ? Theme.t1 : Theme.t2 }
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: barBtn.glyph
+                        color: barBtn.highlighted ? Theme.warn : barHover.hovered ? Theme.t1 : Theme.t2
+                    }
                     HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: barBtn.tapped() }
                     ToolTip.visible: barHover.hovered
@@ -797,9 +802,10 @@ VPage {
                 BarButton {
                     id: proAudioButton
                     objectName: "pro-audio-tracks"
-                    glyph: "music"
-                    tip: qsTr("音轨")
-                    visible: veyra.hasSource && !veyra.isCapture
+                    glyph: proAudioMenu.captureSource ? "vol" : "music"
+                    tip: proAudioMenu.buttonLabel
+                    highlighted: proAudioMenu.monitorOff
+                    visible: veyra.hasSource && (!veyra.isCapture || proAudioMenu.captureSource)
                     onTapped: proAudioMenu.openAt(proAudioButton, "up")
                 }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
@@ -2098,20 +2104,11 @@ VPage {
             else if (o.track !== undefined) veyra.subtitlePrimary = o.track
         }
     }
-    VMenu {
+    PlayerAudioMenu {
         id: proAudioMenu
-        title: qsTr("音轨")
-        readonly property var mk: t => ({ label: t.label, index: t.index,
-                                          note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
-                                          checked: t.index === veyra.selectedAudioTrack })
-        items: veyra.audioTracks.length > 0
-               ? veyra.audioTracks.map(mk).concat([{ sep: true },
-                     { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
-               : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
-        onPicked: (i, o) => {
-            if (o.act === "dlg") return root.requestDialog("audio")
-            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
-        }
+        objectName: "pro-audio-menu"
+        backend: veyra
+        onSettingsRequested: root.requestDialog("audio")
     }
     // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
     VMenu {

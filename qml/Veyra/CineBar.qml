@@ -143,6 +143,7 @@ Rectangle {
                     id: cbtn
                     property string glyph: ""
                     property string tip: ""
+                    property bool highlighted: false
                     // The signal has to be declared: an inline component does not
                     // inherit the TapHandler's signal, so callers cannot assign
                     // onTapped without it.
@@ -157,7 +158,7 @@ Rectangle {
                     VIcon {
                         anchors.centerIn: parent
                         name: glyph
-                        color: cHover.hovered ? "#FFFFFF" : Theme.t2
+                        color: cbtn.highlighted ? Theme.warn : cHover.hovered ? "#FFFFFF" : Theme.t2
                     }
                     scale: cTap.pressed ? 0.86 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
@@ -194,7 +195,13 @@ Rectangle {
                 }
 
                 CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
-                CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
+                CBtn {
+                    objectName: "cine-audio-tracks"
+                    glyph: audioMenu.captureSource ? "vol" : "music"
+                    tip: audioMenu.buttonLabel
+                    highlighted: audioMenu.monitorOff
+                    onTapped: audioMenu.openAt(this, "up")
+                }
                 PlaybackRateButton { id: playbackRate; objectName: "cine-playback-rate"; menuBottomLimit: bar.menuBottomLimit }
             }
 
@@ -561,24 +568,11 @@ Rectangle {
         }
     }
 
-    // 音轨: this one is real - the bridge exposes the file's audio streams and the
-    // selected index, so the list and the check mark both come from the engine.
-    VMenu {
+    PlayerAudioMenu {
         id: audioMenu
+        objectName: "cine-audio-menu"
+        backend: veyra
         aboveLimit: bar.menuBottomLimit
-        title: qsTr("音轨")
-        // The bridge's label already carries language · title · codec; only the
-        // channel count is separate.
-        readonly property var mk: t => ({ label: t.label, index: t.index,
-                                          note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
-                                          checked: t.index === veyra.selectedAudioTrack })
-        items: veyra.audioTracks.length > 0
-               ? veyra.audioTracks.map(mk).concat([{ sep: true },
-                     { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
-               : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
-        onPicked: (i, o) => {
-            if (o.act === "dlg") return bar.requestDialog("audio")
-            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
-        }
+        onSettingsRequested: bar.requestDialog("audio")
     }
 }

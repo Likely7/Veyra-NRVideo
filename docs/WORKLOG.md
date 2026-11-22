@@ -1,5 +1,15 @@
 # 当前工作日志
 
+## 2026-11-21 Elgato 4K60 Pro MK.2 本机监听入口
+
+现场两份日志中，veyra-qml.old(4).log 记录了本机监听开/关，最后一次操作为关闭。旧日志中另有一段独立音频设备绑定失败。veyra-qml(35).log 的 6 次启动均读取 enabled=false，8 次 PCM ConnectDirect 和 8 次 Run 均成功。最后一次输入为 48 kHz / 16-bit / 双声道，音频处理连续推进到 17:57:20 UTC，期间检查过 1 MiB 输入。日志证明有样本流入，未记录游戏实际波形振幅。代码在监听关闭时将本机输出增益置零，默认值为开启，沿用用户保存的值。
+
+发现专业模式的声音按钮在采集时隐藏，极简的音轨列表为空时也没有音频设置操作。两处共用 PlayerAudioMenu，采集时显示音频入口及监听开关，关闭时图标高亮。节点模式的输出卡增加同一偏好的开关。用户可在当前 2.2.0 的「专业模式 → 声音 → 本机音频监听」立即切换。录制取声在本机监听增益之前，切换监听独立于录制与即时回放，也无需断开采集。
+
+基于 main eb5fd6d0 的独立分支 codex/elgato-monitor-control-20261121。只更换 QML 和翻译目录来源路径，复用经过验证的 2.2.0 程序及运行组件。命令 py -3.11 -X utf8 -B -I stage.py / product-test.py / quick-regression.py 从同名 tmp 路径运行，日志在 E:/项目/Veyra/logs/codex-elgato-monitor-control-20261121。Qt Quick 242 通过、0 失败、1 可选栅格截图跳过；独立音频菜单 3 个用例及初始化、退出通过。实际应用以模拟的无音轨采集视图验证专业和极简两处入口，调用真实桥接配置，日志显示 false→true→false→true，重启读回 true，并验证普通文件音轨及 WASAPI 渲染开始。首轮夹具找错极简独立窗口，第二轮受累加日志误判，已改用正确窗口和每次单独日志。全量 Quick Test 曾漏放 qml-tests，补齐后通过。3172 条词库校验通过，91 个着色器与发行构建逐项匹配。
+
+本地入口 E:/项目/Veyra/tests/codex-elgato-monitor-control-20261121/启动采集监听测试.cmd。现场 Elgato 听感需实卡复核。
+
 ## 2026-11-21 播放列表清空历史
 
 从 `main eb5fd6d0` 建立 `codex/playlist-clear-history-20261121`。播放列表右下角新增「清空历史」。确认后清空首页共用的最近播放记录并保存到 `ui-session.v1`。历史为空时按钮置灰。保存失败时恢复显示并提示错误。确认框接管 Escape、Delete 和 Enter，避免确认期间误关窗口、移除项目或触发播放。

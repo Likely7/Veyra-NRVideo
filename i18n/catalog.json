@@ -28344,7 +28344,7 @@
   },
   {
    "zh": "片源没有音轨或尚未打开",
-   "src": "qml/CineBar.qml",
+   "src": "qml/PlayerAudioMenu.qml",
    "zh-TW": "片源沒有音軌或尚未開啟",
    "en": "The source has no audio tracks or is not open yet",
    "ja": "ソースに音声トラックがないか、まだ開かれていません",
@@ -36755,7 +36755,7 @@
   },
   {
    "zh": "输出设备、音画同步、偏移",
-   "src": "qml/CineBar.qml",
+   "src": "qml/PlayerAudioMenu.qml",
    "zh-TW": "輸出裝置、音畫同步、偏移",
    "en": "Output device, audio/video sync, offset",
    "ja": "出力デバイス、音声と映像の同期、オフセット",
@@ -40005,7 +40005,7 @@
   },
   {
    "zh": "音频设置…",
-   "src": "qml/CineBar.qml",
+   "src": "qml/PlayerAudioMenu.qml",
    "zh-TW": "音訊設定…",
    "en": "Audio settings…",
    "ja": "オーディオ設定…",
