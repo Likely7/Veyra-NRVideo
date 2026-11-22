@@ -31,25 +31,37 @@ Item {
     }
     onShownChanged: ring.requestPaint()
     onToneChanged: ring.requestPaint()
-    Canvas {
-        id: ring
+    // Layout footprint of the ring: always orb.size square, so rows of orbs
+    // keep their spacing and the label sits where it always has.
+    Item {
+        id: ringBox
         width: orb.size; height: orb.size
         anchors.horizontalCenter: parent.horizontalCenter
+    }
+    // The canvas is larger than ringBox so the shadowBlur glow around the
+    // arc has room to fade out. Drawn at exactly orb.size, the glow was cut
+    // off flat at the canvas edges (squared-off halo on all four sides).
+    readonly property real glowBlur: 8
+    readonly property real glowPad: glowBlur + 4
+    Canvas {
+        id: ring
+        width: orb.size + orb.glowPad * 2; height: width
+        anchors.centerIn: ringBox
         onPaint: {
             const c = getContext("2d"); c.reset()
-            const r = width / 2 - 4, cx = width / 2, cy = height / 2
+            const r = orb.size / 2 - 4, cx = width / 2, cy = height / 2
             c.lineWidth = 5; c.lineCap = "round"
             c.strokeStyle = Qt.rgba(1, 1, 1, 0.08)
             c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke()
             if (orb.shown > 0.001) {
                 c.strokeStyle = orb.tone
-                c.shadowColor = orb.tone; c.shadowBlur = 8
+                c.shadowColor = orb.tone; c.shadowBlur = orb.glowBlur
                 c.beginPath(); c.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * orb.shown); c.stroke()
             }
         }
     }
     Text {
-        anchors.centerIn: ring
+        anchors.centerIn: ringBox
         width: orb.size - 12
         horizontalAlignment: Text.AlignHCenter
         text: orb.value
@@ -62,7 +74,7 @@ Item {
     Text {
         id: labelText
         visible: orb.showLabel
-        anchors.top: ring.bottom; anchors.topMargin: 4
+        anchors.top: ringBox.bottom; anchors.topMargin: 4
         anchors.horizontalCenter: parent.horizontalCenter
         text: orb.label
         color: Theme.t3
