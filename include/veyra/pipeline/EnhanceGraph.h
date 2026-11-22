@@ -60,6 +60,7 @@ class CommandSlotRing;
 class FsrSrBackend;
 class FsrFgPresenter;
 class AmfFrcBackend;
+class RifeDmlBackend;
 }
 
 namespace veyra::ngx {
@@ -772,6 +773,8 @@ public:
     bool fsrActive() const;
     bool amfFrcEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::AmdFrc; }
     bool amfFrcActive() const;
+    bool rifeEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Rife; }
+    bool rifeActive() const;
     const char* fsrProviderVersion() const;
     // XeSS generates in the present sink; FSR and DLSSG generate in the graph.
     // All backends consume the same guidance motion texture.
@@ -889,6 +892,7 @@ private:
     bool initFsrFg();
     bool initVfg();
     bool initAmfFrc();
+    bool initRife();
     std::unique_ptr<VfgBackend> vfgBackend_;
     // RTX 40 series: opens the Blackwell-only multi-frame gate in the mapped
     // DLSS-G runtime. Never touched on any other architecture.
@@ -1180,6 +1184,7 @@ private:
     std::unique_ptr<ngx::DlssFgBackend> fgBackend_;
     std::unique_ptr<gfx::FsrFgPresenter> fsrFgBackend_;
     std::unique_ptr<gfx::AmfFrcBackend> amfFrc_;
+    std::unique_ptr<gfx::RifeDmlBackend> rife_;
     std::unique_ptr<HudLock> hudLock_;  // Live HUD Lock (from PushFPS)
     bool initHudLock();
     void composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity);

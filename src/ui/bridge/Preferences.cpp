@@ -2,6 +2,7 @@
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/gfx/RifeDmlBackend.h"
 #include "veyra/ui/UpdateChecker.h"
 
 namespace veyra::ui {
@@ -86,6 +87,10 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     wchar_t systemDirectory[MAX_PATH]{};GetSystemDirectoryW(systemDirectory,MAX_PATH);
     out<<QVariantMap{{"name",QStringLiteral("AMD FRC (AMF)")},{"detail",QString::fromWCharArray(systemDirectory)+QStringLiteral("\\amfrt64.dll")},
         {"loaded",gfx::AmfFrcBackend::runtimeInstalled()}};
+    // RIFE: ONNX Runtime + DirectML and the models, placed by the user (docs/RIFE_DIRECTML.md).
+    out<<QVariantMap{{"name",QStringLiteral("RIFE (ONNX Runtime DirectML)")},
+        {"detail",QString::fromStdWString((runtime::applicationRoot()/L"runtime"/L"rife").wstring())},
+        {"loaded",gfx::RifeDmlBackend::runtimeInstalled()},{"experimental",true}};
     const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
     const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},
