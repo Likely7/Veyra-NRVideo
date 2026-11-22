@@ -406,6 +406,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasImage = impl_->snapshot.image;
         const bool wasFailed = impl_->snapshot.failed;
         const bool wasEngineHung = impl_->snapshot.status == engine::kEngineHangStatus;
+        const bool wasCaptureDriverWaiting = impl_->snapshot.captureDriverWaitMs != 0;
         const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
@@ -564,6 +565,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 if (!reconnect && impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
             // Engine watchdog (field logs(15)): a frozen picture says why, once.
+            if (had && !wasCaptureDriverWaiting && s.captureDriverWaitMs) emit notice(statusText(), true);
             if (had && !wasEngineHung && s.status == engine::kEngineHangStatus) emit notice(uiText(s.status), true);
             // Network sources (#48): a recovered connection and now-and-then loss summaries.
             if (s.sessionId != impl_->netNoticeSession) {

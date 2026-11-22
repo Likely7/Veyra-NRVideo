@@ -1696,3 +1696,19 @@ Windows 用 `scripts/acceptance/build-recording-handoff.py --task codex-communit
 在 E:/项目/Veyra/worktrees/magewell-low-latency-20261119 从综合测试版 2be802ee 隔离修复，产品提交 4e29ff4a。build-recording-handoff.py --task codex-magewell-low-latency-20261119 --jobs 2 启用原版 Magewell SDK 和既有 libdovi、Chiaki 固定输入，首次完整构建 336.7s，提交后增量构建 8.4s，最终回执 build-20261119-082706/receipt.json。部署脚本独立复制既有 QA stage，91 个着色器逐哈希核对。8 个预期结果均通过，包括无卡探针按预期返回 1，DLSS/VFG 四组 P010 回归 debugErrors=0，以及产品采集对话框启动。extract.py --check 缺失和占位符问题均为 0。
 
 初次启动自动生成的约 2.7 MB Qt 缓存已从 C 盘对应本次唯一摘要路径移至 E 盘任务 tmp。显式重定向后复测通过，手测入口默认采用同一隔离策略。实卡端到端帧率和延迟需现场验证，未改运行库、用户配置、驱动或发行包。可运行入口在 tests/codex-magewell-low-latency-20261119/启动美乐威低延迟测试版.cmd。
+
+### 2026-11-22 启动器诊断与采集驱动断连恢复
+
+在 `codex/capture-busy-status-20261120` 的 `f03fe1ba` 上继续。现场 2.2.0 日志和转储见 `E:/项目/Veyra/reports/claude-launch-hang-20261122`。现场的引擎线程分别阻塞在 DirectShow 图的 Stop 和设备枚举或打开调用。启动器故障当时没有具体的 Windows 错误记录，现场拦截原因仍缺乏证据。
+
+便携启动器检查版本路径与主程序，区分找不到文件、路径类型异常、创建进程、等待、读取退出码及已知加载器错误。原生提示显示中英文、实际路径及适用的系统错误。诊断覆盖写 UTF-8 的 `launcher-last-error.txt`，优先写入持有安装锁的安装目录，回退至 `%LOCALAPPDATA%/Veyra/`。自动回滚会保留导致回滚的诊断。目录属性检查若没有系统错误码则写 `n/a`。19 条本次新增消息的 9 种翻译已入词库。
+
+采集重连等待按 1、2、4、8、15 秒递增，5 次未收到有效新帧即失败。正常 Run 后仍保留计数，只有有效视频帧重置计数。DirectShow `EC_DEVICE_LOST` 按参数区分设备移除和重新出现，两种通知均要求重新建图。10 分钟内累计第 10 次移除时停止自动重连。断连提示覆盖现场的三个 HRESULT。Watchdog 在采集 Stop、枚举、建图、Run 和释放期间单独记录诊断，首次超过 8 秒时推送采集提示。同一会话、相同阶段和完整调用栈只写一份转储，每会话最多写 16 份采集转储。真实驱动的 COM 图、回调释放和 GPU 资源仍由引擎线程串行管理，单独增加等待超时无法取消已阻塞的驱动调用。界面独立的格式查询退出时限、按设备阻止后续查询属于后续范围。
+
+复用同一源码树的 `E:/项目/Veyra/build/codex-capture-busy-status-20261120`，使用 `py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-launch-hang-20261122 --jobs 2 --build-dir <同一构建目录> --root <本分支工作树> <targets>` 及固定依赖选项。11 个目标成功，包括主程序、启动器、采集和实例测试、界面与词库测试、回放集成测试。`scripts/i18n/extract.py --check` 的 3208 条源文案缺失和占位符异常均为零。91 个着色器部署后逐文件核对一致。
+
+验收命令和产物在 `E:/项目/Veyra/{tmp,tests,logs,reports}/codex-launch-hang-20261122`。用 `launcher-smoke.py` 验证 13 项，包括原生弹窗与 UTF-8 记录的错误 2、5、216、模拟的 NTSTATUS、路径类型、备用日志、参数转发、两种回滚和工作进程。Windows 实际给测试用损坏文件返回 216，夹具接受处理范围内的 193 或 216。初轮脚本改用 cl 的完整路径和只发往夹具窗口的 WM_CLOSE 后完成复测。签名更新夹具在本机回环完整安装 2.1.10，再因主程序缺失回滚到 2.1.9。更新测试使用已有测试签名和旧版更新工作进程。
+
+`veyra_live_presentation_tests --capture-no-video` 用视频回放和假采集重开验证真实计时与状态。45.055 秒完成 5 次重开和无帧超时，进入手动重试提示。采集启动测试 23 项通过，包括 3 个 HRESULT、收到视频后清零、10 分钟限制和独立夹具进程的 PID 建议。其余执行的 7 个套件通过，Qt Quick 为 241 通过、0 失败，色彩面板夹具的已知 `groupBypassMask` 警告次数仍为 7。真实 Veyra Qt 进程以 `VEYRA_TEST_ENGINE_HANG_MS=9000` 和 `VEYRA_TEST_CAPTURE_DRIVER_STALLS=1` 测试两次相同驱动等待，中文和英文均两次出现正确提示，每会话只有 1 份转储。普通引擎等待的负对照继续使用原提示。窗口操作、配置及截图探针限于私有夹具，部署的 QML 最后核对与源码一致。
+
+未连接实体采集卡，实卡正常取流、换格式、拔插、厂商驱动行为及安全软件实际隔离场景未复测。仅本地提交，未合并 main、推送或发布。

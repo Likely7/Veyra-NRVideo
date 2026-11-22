@@ -5058,6 +5058,32 @@
    "ru": "Windows заблокировала обновление. Проверьте журнал защиты."
   },
   {
+   "zh": "Windows 报告文件被安全软件拦截或删除。请检查保护历史记录。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 回報檔案遭安全軟體封鎖或刪除。請檢查保護歷程記錄。",
+   "en": "Windows reports that security software blocked or removed the file. Check Protection history.",
+   "ja": "Windows によると、セキュリティソフトがファイルをブロックまたは削除しました。保護の履歴を確認してください。",
+   "ko": "Windows에 따르면 보안 소프트웨어가 파일을 차단하거나 삭제했습니다. 보호 기록을 확인하세요.",
+   "es": "Windows indica que el software de seguridad bloqueó o eliminó el archivo. Consulta el historial de protección.",
+   "fr": "Windows signale que le logiciel de sécurité a bloqué ou supprimé le fichier. Consultez l’historique de protection.",
+   "de": "Windows meldet, dass Sicherheitssoftware die Datei blockiert oder gelöscht hat. Prüfe den Schutzverlauf.",
+   "pt-BR": "O Windows informa que o software de segurança bloqueou ou removeu o arquivo. Consulte o histórico de proteção.",
+   "ru": "Windows сообщает, что защитное ПО заблокировало или удалило файл. Проверьте журнал защиты."
+  },
+  {
+   "zh": "Windows 无法启动主程序。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 無法啟動主程式。",
+   "en": "Windows could not start the program.",
+   "ja": "Windows がプログラムを起動できませんでした。",
+   "ko": "Windows에서 프로그램을 시작할 수 없습니다.",
+   "es": "Windows no pudo iniciar el programa.",
+   "fr": "Windows n’a pas pu démarrer le programme.",
+   "de": "Windows konnte das Programm nicht starten.",
+   "pt-BR": "O Windows não conseguiu iniciar o programa.",
+   "ru": "Windows не удалось запустить программу."
+  },
+  {
    "zh": "Windows 无法确认 Veyra（PID %1）已退出。请在任务管理器中查看此进程。",
    "src": "apps/veyra-qml/main.cpp",
    "zh-TW": "Windows 無法確認 Veyra（PID %1）已結束。請在工作管理員中檢查此處理程序。",
@@ -5069,6 +5095,71 @@
    "de": "Windows konnte nicht bestätigen, dass Veyra (PID %1) beendet wurde. Prüfe den Prozess im Task-Manager.",
    "pt-BR": "O Windows não conseguiu confirmar o encerramento do Veyra (PID %1). Verifique o processo no Gerenciador de Tarefas.",
    "ru": "Windows не удалось подтвердить завершение Veyra (PID %1). Проверьте процесс в Диспетчере задач."
+  },
+  {
+   "zh": "Windows 无法读取主程序的退出代码。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 無法讀取主程式的結束代碼。",
+   "en": "Windows could not read the program's exit code.",
+   "ja": "Windows がプログラムの終了コードを読み取れませんでした。",
+   "ko": "Windows에서 프로그램의 종료 코드를 읽을 수 없습니다.",
+   "es": "Windows no pudo leer el código de salida del programa.",
+   "fr": "Windows n’a pas pu lire le code de sortie du programme.",
+   "de": "Windows konnte den Beendigungscode des Programms nicht lesen.",
+   "pt-BR": "O Windows não conseguiu ler o código de saída do programa.",
+   "ru": "Windows не удалось прочитать код завершения программы."
+  },
+  {
+   "zh": "Windows 无法读取主程序路径。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 無法讀取主程式路徑。",
+   "en": "Windows could not read the program path.",
+   "ja": "Windows がプログラムのパスを読み取れませんでした。",
+   "ko": "Windows에서 프로그램 경로를 읽을 수 없습니다.",
+   "es": "Windows no pudo leer la ruta del programa.",
+   "fr": "Windows n’a pas pu lire le chemin du programme.",
+   "de": "Windows konnte den Programmpfad nicht lesen.",
+   "pt-BR": "O Windows não conseguiu ler o caminho do programa.",
+   "ru": "Windows не удалось прочитать путь программы."
+  },
+  {
+   "zh": "Windows 无法锁定安装目录。请检查 Veyra 文件夹的访问权限。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 無法鎖定安裝資料夾。請檢查 Veyra 資料夾的存取權限。",
+   "en": "Windows could not acquire the installation lock. Check access to the Veyra folder.",
+   "ja": "Windows がインストールフォルダーをロックできませんでした。Veyra フォルダーのアクセス権を確認してください。",
+   "ko": "Windows에서 설치 폴더를 잠글 수 없습니다. Veyra 폴더의 액세스 권한을 확인하세요.",
+   "es": "Windows no pudo bloquear la carpeta de instalación. Comprueba los permisos de la carpeta de Veyra.",
+   "fr": "Windows n’a pas pu verrouiller le dossier d’installation. Vérifiez les droits d’accès au dossier de Veyra.",
+   "de": "Windows konnte den Installationsordner nicht sperren. Prüfe die Zugriffsrechte für den Veyra-Ordner.",
+   "pt-BR": "O Windows não conseguiu bloquear a pasta de instalação. Verifique as permissões da pasta do Veyra.",
+   "ru": "Windows не удалось заблокировать папку установки. Проверьте права доступа к папке Veyra."
+  },
+  {
+   "zh": "Windows 等待主程序退出时失败。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 等候主程式結束時失敗。",
+   "en": "Windows could not wait for the program to exit.",
+   "ja": "Windows がプログラムの終了を待機できませんでした。",
+   "ko": "Windows에서 프로그램 종료를 기다리는 중 오류가 발생했습니다.",
+   "es": "Windows no pudo esperar a que se cerrara el programa.",
+   "fr": "Windows n’a pas pu attendre la fermeture du programme.",
+   "de": "Windows konnte nicht auf das Beenden des Programms warten.",
+   "pt-BR": "O Windows não conseguiu aguardar o encerramento do programa.",
+   "ru": "Windows не удалось дождаться завершения программы."
+  },
+  {
+   "zh": "Windows 错误 {}",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "Windows 錯誤 {}",
+   "en": "Windows error {}",
+   "ja": "Windows エラー {}",
+   "ko": "Windows 오류 {}",
+   "es": "Error {} de Windows",
+   "fr": "Erreur Windows {}",
+   "de": "Windows-Fehler {}",
+   "pt-BR": "Erro {} do Windows",
+   "ru": "Ошибка Windows {}"
   },
   {
    "zh": "X 为上限",
@@ -7201,6 +7292,45 @@
    "de": "Der Gastgeber war lange Zeit nicht bereit zu streamen. Stellen Sie sicher, dass es eingeschaltet ist und das Netzwerk funktioniert.",
    "pt-BR": "O anfitrião não estava pronto para transmitir por muito tempo. Certifique-se de que está ligado e que a rede funciona.",
    "ru": "Хозяин долго не был готов к стриму. Убедитесь, что он включен и сеть работает."
+  },
+  {
+   "zh": "主程序缺少运行组件。请使用官方安装包修复。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "主程式缺少執行階段元件。請使用官方安裝程式修復。",
+   "en": "The program is missing runtime components. Repair Veyra with the official installer.",
+   "ja": "プログラムの実行に必要なコンポーネントが不足しています。公式インストーラーで修復してください。",
+   "ko": "프로그램 실행에 필요한 구성 요소가 없습니다. 공식 설치 프로그램으로 복구하세요.",
+   "es": "Faltan componentes necesarios para ejecutar el programa. Repara Veyra con el instalador oficial.",
+   "fr": "Il manque des composants d’exécution. Réparez Veyra avec le programme d’installation officiel.",
+   "de": "Dem Programm fehlen Laufzeitkomponenten. Repariere Veyra mit dem offiziellen Installationsprogramm.",
+   "pt-BR": "Faltam componentes necessários para executar o programa. Repare o Veyra com o instalador oficial.",
+   "ru": "Не хватает компонентов для запуска программы. Восстановите Veyra официальным установщиком."
+  },
+  {
+   "zh": "主程序路径包含链接或云端占位文件。请将 Veyra 放在普通的本地文件夹中。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "主程式路徑包含連結或雲端預留位置檔案。請將 Veyra 放在一般本機資料夾中。",
+   "en": "The program path contains a link or cloud placeholder. Put Veyra in a regular local folder.",
+   "ja": "プログラムのパスにリンクまたはクラウドのプレースホルダーがあります。Veyra を通常のローカルフォルダーに置いてください。",
+   "ko": "프로그램 경로에 링크 또는 클라우드 자리 표시자가 있습니다. Veyra를 일반 로컬 폴더에 두세요.",
+   "es": "La ruta del programa contiene un enlace o un marcador de la nube. Coloca Veyra en una carpeta local normal.",
+   "fr": "Le chemin du programme contient un lien ou un fichier à la demande. Placez Veyra dans un dossier local ordinaire.",
+   "de": "Der Programmpfad enthält einen Link oder Cloud-Platzhalter. Lege Veyra in einem normalen lokalen Ordner ab.",
+   "pt-BR": "O caminho do programa contém um link ou um arquivo sob demanda. Coloque o Veyra em uma pasta local comum.",
+   "ru": "Путь программы содержит ссылку или облачный заполнитель. Поместите Veyra в обычную локальную папку."
+  },
+  {
+   "zh": "主程序路径的文件类型不正确。请使用官方安装包修复。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "主程式路徑的檔案類型不正確。請使用官方安裝程式修復。",
+   "en": "The program path has an unexpected file type. Repair Veyra with the official installer.",
+   "ja": "プログラムのパスにあるファイルの種類が正しくありません。公式インストーラーで修復してください。",
+   "ko": "프로그램 경로의 파일 유형이 올바르지 않습니다. 공식 설치 프로그램으로 복구하세요.",
+   "es": "El tipo de archivo en la ruta del programa es incorrecto. Repara Veyra con el instalador oficial.",
+   "fr": "Le type de fichier au chemin du programme est incorrect. Réparez Veyra avec le programme d’installation officiel.",
+   "de": "Der Dateityp im Programmpfad ist falsch. Repariere Veyra mit dem offiziellen Installationsprogramm.",
+   "pt-BR": "O tipo de arquivo no caminho do programa é incorreto. Repare o Veyra com o instalador oficial.",
+   "ru": "По пути программы находится файл неподходящего типа. Восстановите Veyra официальным установщиком."
   },
   {
    "zh": "举个例子。游戏原帧是 `ABCDEFG`，采到的可能是 `AABBCCDDEEFFGG`。相同的两张图之间补不出新的运动。在「补帧」里选 **60→30** 或 **自动去除**，让补帧从 `A→B→C` 这样的不同画面开始。锁 30 帧可先试 60→30，帧率经常变化就对照自动去除和实际内容帧率。",
@@ -19983,6 +20113,19 @@
    "ru": "Канал Magewell Pro Capture не соответствует выбранному устройству"
   },
   {
+   "zh": "找不到主程序文件。请使用官方安装包修复，或检查 Windows 安全中心的保护历史记录。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "找不到主程式檔案。請使用官方安裝程式修復，或檢查 Windows 安全性的保護歷程記錄。",
+   "en": "Main program file not found. Repair Veyra with the official installer or check Protection history in Windows Security.",
+   "ja": "メインプログラムのファイルが見つかりません。公式インストーラーで修復するか、Windows セキュリティの保護の履歴を確認してください。",
+   "ko": "기본 프로그램 파일을 찾을 수 없습니다. 공식 설치 프로그램으로 복구하거나 Windows 보안의 보호 기록을 확인하세요.",
+   "es": "No se encuentra el archivo del programa principal. Repara Veyra con el instalador oficial o consulta el historial de protección de Seguridad de Windows.",
+   "fr": "Le fichier principal est introuvable. Réparez Veyra avec le programme d’installation officiel ou consultez l’historique de protection dans Sécurité Windows.",
+   "de": "Die Hauptprogrammdatei wurde nicht gefunden. Repariere Veyra mit dem offiziellen Installationsprogramm oder prüfe den Schutzverlauf in Windows-Sicherheit.",
+   "pt-BR": "O arquivo principal do programa não foi encontrado. Repare o Veyra com o instalador oficial ou consulte o histórico de proteção na Segurança do Windows.",
+   "ru": "Файл основной программы не найден. Восстановите Veyra официальным установщиком или проверьте журнал защиты в разделе «Безопасность Windows»."
+  },
+  {
    "zh": "找不到所选设备。请检查连接并刷新采集设备列表。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "找不到所選裝置。請檢查連線並重新整理擷取裝置清單。",
@@ -21451,6 +21594,19 @@
    "de": "Die Datei ist leer oder größer als 8 MiB",
    "pt-BR": "O arquivo está vazio ou maior que 8 MiB",
    "ru": "Файл пустой или больше 8 МБ"
+  },
+  {
+   "zh": "文件可能已损坏，或与此 Windows 系统不兼容。请使用官方安装包修复。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "檔案可能已損毀，或與此 Windows 系統不相容。請使用官方安裝程式修復。",
+   "en": "The file may be damaged or incompatible with this Windows system. Repair Veyra with the official installer.",
+   "ja": "ファイルが破損しているか、この Windows と互換性がない可能性があります。公式インストーラーで修復してください。",
+   "ko": "파일이 손상되었거나 이 Windows 시스템과 호환되지 않을 수 있습니다. 공식 설치 프로그램으로 복구하세요.",
+   "es": "Es posible que el archivo esté dañado o no sea compatible con este sistema Windows. Repara Veyra con el instalador oficial.",
+   "fr": "Le fichier est peut-être endommagé ou incompatible avec ce système Windows. Réparez Veyra avec le programme d’installation officiel.",
+   "de": "Die Datei ist möglicherweise beschädigt oder mit diesem Windows-System inkompatibel. Repariere Veyra mit dem offiziellen Installationsprogramm.",
+   "pt-BR": "O arquivo pode estar danificado ou ser incompatível com este sistema Windows. Repare o Veyra com o instalador oficial.",
+   "ru": "Файл может быть повреждён или несовместим с этой системой Windows. Восстановите Veyra официальным установщиком."
   },
   {
    "zh": "文件名不被接受（需要 .cube，且不能包含路径分隔符）",
@@ -29370,6 +29526,19 @@
    "ru": "Время ожидания выхода выходной текстуры"
   },
   {
+   "zh": "等待采集卡驱动",
+   "src": "src/ui/bridge/Preferences.cpp",
+   "zh-TW": "等候擷取卡驅動程式",
+   "en": "Waiting for capture driver",
+   "ja": "キャプチャードライバーを待機中",
+   "ko": "캡처 카드 드라이버 대기 중",
+   "es": "Esperando al controlador de captura",
+   "fr": "Attente du pilote de capture",
+   "de": "Warten auf den Aufnahmetreiber",
+   "pt-BR": "Aguardando o driver de captura",
+   "ru": "Ожидание драйвера захвата"
+  },
+  {
    "zh": "等线",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "等線",
@@ -31123,6 +31292,19 @@
    "de": "Automatische Maske · experimentell",
    "pt-BR": "Máscara automática · experimental",
    "ru": "Автомаска · экспериментально"
+  },
+  {
+   "zh": "自动重连已停止。请检查采集设备和输入信号，然后手动重试。",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "自動重新連線已停止。請檢查擷取裝置和輸入訊號，再手動重試。",
+   "en": "Automatic reconnect stopped. Check the capture device and input signal, then retry manually.",
+   "ja": "自動再接続を停止しました。キャプチャーデバイスと入力信号を確認し、手動で再試行してください。",
+   "ko": "자동 재연결을 중지했습니다. 캡처 장치와 입력 신호를 확인한 후 직접 다시 시도하세요.",
+   "es": "Se detuvo la reconexión automática. Comprueba la capturadora y la señal de entrada y vuelve a intentarlo manualmente.",
+   "fr": "La reconnexion automatique a été arrêtée. Vérifiez le périphérique de capture et le signal d’entrée, puis réessayez manuellement.",
+   "de": "Die automatische Wiederverbindung wurde beendet. Prüfe das Aufnahmegerät und das Eingangssignal und versuche es dann manuell erneut.",
+   "pt-BR": "A reconexão automática foi interrompida. Verifique o dispositivo de captura e o sinal de entrada. Depois, tente novamente de forma manual.",
+   "ru": "Автоматическое переподключение остановлено. Проверьте устройство захвата и входной сигнал, затем повторите попытку вручную."
   },
   {
    "zh": "自动隐藏",
@@ -33517,6 +33699,19 @@
    "ru": "Диагностика скопирована; вставьте их прямо в свой отчет"
   },
   {
+   "zh": "诊断文件",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "診斷檔案",
+   "en": "Diagnostic log",
+   "ja": "診断ログ",
+   "ko": "진단 로그",
+   "es": "Registro de diagnóstico",
+   "fr": "Journal de diagnostic",
+   "de": "Diagnoseprotokoll",
+   "pt-BR": "Log de diagnóstico",
+   "ru": "Журнал диагностики"
+  },
+  {
    "zh": "该地址没有视频流",
    "src": "src/media/DemuxSession.cpp",
    "zh-TW": "該位址沒有影片串流",
@@ -34009,6 +34204,19 @@
    "de": "Win + Strg + L öffnet die Liveuntertitel",
    "pt-BR": "Pressione Win + Ctrl + L para abrir as legendas",
    "ru": "Нажмите Win + Ctrl + L, чтобы открыть субтитры"
+  },
+  {
+   "zh": "请检查安装目录的访问权限、系统策略和安全软件的保护历史记录。",
+   "src": "include/veyra/base/LauncherDiagnostics.h",
+   "zh-TW": "請檢查安裝資料夾的存取權限、系統原則，以及安全軟體的保護歷程記錄。",
+   "en": "Check access to the installation folder, system policy and your security software's protection history.",
+   "ja": "インストールフォルダーのアクセス権、システムポリシー、セキュリティソフトの保護履歴を確認してください。",
+   "ko": "설치 폴더의 액세스 권한, 시스템 정책 및 보안 소프트웨어의 보호 기록을 확인하세요.",
+   "es": "Comprueba los permisos de la carpeta de instalación, la política del sistema y el historial de protección del antivirus.",
+   "fr": "Vérifiez les droits d’accès au dossier d’installation, la stratégie système et l’historique de protection de votre logiciel de sécurité.",
+   "de": "Prüfe die Zugriffsrechte für den Installationsordner, die Systemrichtlinien und den Schutzverlauf deiner Sicherheitssoftware.",
+   "pt-BR": "Verifique as permissões da pasta de instalação, a política do sistema e o histórico de proteção do software de segurança.",
+   "ru": "Проверьте права доступа к папке установки, системные политики и журнал защиты антивируса."
   },
   {
    "zh": "请检查设备连接与驱动，重试后查看诊断日志。",
@@ -37443,6 +37651,19 @@
    "ru": "Карта захвата * %1"
   },
   {
+   "zh": "采集卡可能已断开或 USB 连接不稳定。请直连电脑的 USB 3 接口，避开扩展坞和延长线，尝试换线。笔记本请接上电源，也可检查 USB 选择性暂停设置。若问题仍在，请用厂商软件或 OBS 对照。",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡可能已斷線或 USB 連線不穩定。請直連電腦的 USB 3 連接埠，避開擴充座與延長線，並試換線材。筆電請接上電源，也可檢查 USB 選擇性暫停設定。若問題仍在，請用原廠軟體或 OBS 對照。",
+   "en": "The capture card may be disconnected or the USB connection unstable. Plug it directly into a USB 3 port and try another cable. Avoid docks and extensions. Plug in your laptop and check USB selective suspend. If it still happens, compare with the vendor's app or OBS.",
+   "ja": "キャプチャーカードが外れたか、USB 接続が不安定な可能性があります。パソコンの USB 3 ポートに直接接続して別のケーブルを試し、ドックや延長ケーブルは避けてください。ノート PC を電源に接続し、USB のセレクティブ サスペンド設定を確認してください。改善しない場合はメーカーのソフトウェアや OBS で比較してください。",
+   "ko": "캡처 카드가 분리되었거나 USB 연결이 불안정할 수 있습니다. 컴퓨터의 USB 3 포트에 직접 연결하고 케이블을 바꿔 보세요. 도크와 연장 케이블은 피하세요. 노트북에 전원을 연결하고 USB 선택적 절전 모드 설정을 확인하세요. 문제가 계속되면 제조사 프로그램이나 OBS에서 비교해 보세요.",
+   "es": "Puede que la capturadora se haya desconectado o que la conexión USB sea inestable. Conéctala directamente a un puerto USB 3 y prueba otro cable. Evita bases y extensiones. Conecta el portátil a la corriente y revisa la suspensión selectiva de USB. Si persiste, compara con la aplicación del fabricante o con OBS.",
+   "fr": "La carte d’acquisition est peut-être déconnectée ou la connexion USB instable. Branchez-la directement sur un port USB 3 et essayez un autre câble. Évitez les stations d’accueil et les rallonges. Branchez le portable au secteur et vérifiez la suspension sélective USB. Si le problème persiste, comparez avec le logiciel du fabricant ou OBS.",
+   "de": "Die Aufnahmekarte wurde möglicherweise getrennt oder die USB-Verbindung ist instabil. Schließe sie direkt an einen USB-3-Anschluss an und probiere ein anderes Kabel. Vermeide Docks und Verlängerungen. Schließe den Laptop ans Netz an und prüfe das selektive USB-Energiesparen. Vergleiche bei Bedarf mit der Herstellersoftware oder OBS.",
+   "pt-BR": "A placa de captura pode estar desconectada ou a conexão USB pode estar instável. Ligue-a diretamente a uma porta USB 3 e teste outro cabo. Evite docks e extensões. Conecte o notebook à tomada e verifique a suspensão seletiva de USB. Se persistir, compare com o aplicativo do fabricante ou com o OBS.",
+   "ru": "Карта захвата могла отключиться, или подключение USB нестабильно. Подключите её напрямую к порту USB 3 и попробуйте другой кабель. Избегайте док-станций и удлинителей. Подключите ноутбук к питанию и проверьте выборочное приостановление USB. Если проблема осталась, сравните с программой производителя или OBS."
+  },
+  {
    "zh": "采集卡怎么挑",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "擷取卡怎麼挑",
@@ -37545,6 +37766,19 @@
    "de": "Die Capture-Karte liefert weniger Bilder als das Signal. Schließe eine USB-Capture-Karte direkt an einen USB-3.0-Anschluss oder schneller auf der Rückseite des Mainboards an, ohne Hub, Verlängerung oder Frontanschluss, und prüfe, ob die Ausgabebildrate der Konsole zum gewählten Aufnahmeformat passt.",
    "pt-BR": "A placa de captura está entregando menos quadros que o sinal. Conecte a placa USB diretamente a uma porta USB 3.0 ou superior na traseira da placa-mãe, sem hub, extensão ou portas frontais, e confira se a taxa de saída do console corresponde ao formato de captura escolhido.",
    "ru": "Карта захвата выдаёт меньше кадров, чем частота сигнала. Подключите USB-карту захвата напрямую к порту USB 3.0 или быстрее на задней панели материнской платы, без хаба, удлинителя и передних портов, и проверьте, что частота вывода консоли совпадает с выбранным форматом захвата."
+  },
+  {
+   "zh": "采集卡驱动响应缓慢（已等待 %1 秒）。若频繁出现，请重新插拔采集卡并检查 USB 连接。",
+   "src": "src/ui/bridge/Playback.cpp",
+   "zh-TW": "擷取卡驅動程式回應緩慢（已等候 %1 秒）。若經常出現，請重新插拔擷取卡並檢查 USB 連線。",
+   "en": "The capture card driver is slow to respond (waiting for %1 s). If this happens often, reconnect the capture card and check the USB connection.",
+   "ja": "キャプチャーカードのドライバーの応答が遅れています（%1 秒経過）。頻繁に発生する場合はカードを挿し直し、USB 接続を確認してください。",
+   "ko": "캡처 카드 드라이버 응답이 느립니다(%1초 대기 중). 자주 발생하면 캡처 카드를 다시 연결하고 USB 연결을 확인하세요.",
+   "es": "El controlador de la capturadora tarda en responder (espera de %1 s). Si ocurre a menudo, vuelve a conectar la capturadora y comprueba la conexión USB.",
+   "fr": "Le pilote de la carte de capture tarde à répondre (%1 s d’attente). Si cela se produit souvent, rebranchez la carte et vérifiez la connexion USB.",
+   "de": "Der Treiber der Aufnahmekarte reagiert langsam (Wartezeit %1 s). Wenn dies häufiger auftritt, verbinde die Karte neu und prüfe die USB-Verbindung.",
+   "pt-BR": "O driver da placa de captura demora a responder (espera de %1 s). Se isso ocorrer com frequência, reconecte a placa e verifique a conexão USB.",
+   "ru": "Драйвер карты захвата отвечает медленно (ожидание %1 с). Если это происходит часто, переподключите карту и проверьте подключение USB."
   },
   {
    "zh": "采集失败（{}，0x{:08X}）。{}",
@@ -37727,6 +37961,19 @@
    "de": "Das aufgenommene Bild wird vertikal umgedreht (betrifft nur diese PC Aufnahme)",
    "pt-BR": "A imagem capturada é virada verticalmente (afeta apenas esta captura PC)",
    "ru": "Захваченный снимок переворачивается вертикально (влияет только на этот PC снимок)"
+  },
+  {
+   "zh": "采集画面已恢复",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "擷取畫面已恢復",
+   "en": "Capture video restored",
+   "ja": "キャプチャー映像が復旧しました",
+   "ko": "캡처 영상이 복구되었습니다",
+   "es": "Imagen de captura recuperada",
+   "fr": "Image de capture rétablie",
+   "de": "Aufnahmebild wiederhergestellt",
+   "pt-BR": "Vídeo de captura restabelecido",
+   "ru": "Изображение с карты захвата восстановлено"
   },
   {
    "zh": "采集画面方向已恢复",

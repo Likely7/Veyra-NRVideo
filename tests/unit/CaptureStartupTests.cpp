@@ -1,4 +1,5 @@
 #include "veyra/FileIdentity.h"
+#include "veyra/engine/CaptureReconnectBudget.h"
 #include "veyra/source/CaptureCardSource.h"
 #include <windows.h>
 #include <vfwmsgs.h>
@@ -16,10 +17,63 @@ void expect(bool ok, const char* description) {
     if (ok) ++passed;
     else ++failed;
 }
+
+void testReconnectBudget() {
+    using Budget = veyra::engine::CaptureReconnectBudget;
+    using namespace std::chrono_literals;
+    auto now = Budget::Clock::time_point{};
+    Budget noFrames;
+    bool backoffMatched = true;
+    unsigned attempts = 0;
+    for (const auto expected : {1s, 2s, 4s, 8s, 15s}) {
+        const auto decision = noFrames.afterFailure(now, false);
+        backoffMatched &= decision.limit == Budget::Limit::None && decision.delay == expected;
+        now += decision.delay;
+        noFrames.attemptStarted();
+        backoffMatched &= noFrames.attempts() == ++attempts;
+        // Graph Run succeeded, but three seconds passed without a video frame.
+        now += 3s;
+    }
+    expect(backoffMatched, "no-frame attempts wait 1, 2, 4, 8 and 15 seconds");
+    expect(noFrames.afterFailure(now, false).limit == Budget::Limit::NoFrames &&
+           noFrames.attempts() == 5, "five reopened graphs without a frame stop automatic reconnect");
+    expect(now.time_since_epoch() == 45s, "backoff plus the five no-frame timeouts is 45 seconds in the fixture");
+
+    Budget recovered;
+    recovered.attemptStarted();
+    recovered.attemptStarted();
+    recovered.frameDelivered();
+    auto next = recovered.afterFailure(now, false);
+    expect(recovered.attempts() == 0 && next.delay == 1s, "a delivered video frame resets consecutive attempts");
+
+    Budget flapping;
+    bool allowed = true;
+    for (int i = 0; i < 9; ++i) {
+        const auto decision = flapping.afterFailure(now, true);
+        allowed &= decision.limit == Budget::Limit::None;
+        flapping.attemptStarted();
+        flapping.frameDelivered();
+        now += 1min;
+    }
+    expect(allowed && flapping.recentRemovals() == 9, "device removals survive successful video recovery");
+    expect(flapping.afterFailure(now, true).limit == Budget::Limit::DeviceRemovals,
+           "the tenth removal within ten minutes stops automatic reconnect");
+    next = flapping.afterFailure(now + 10min, true);
+    expect(next.limit == Budget::Limit::None && flapping.recentRemovals() == 1,
+           "device removals age out at the rolling ten-minute boundary");
+}
 }
 
 int main(int argc, char** argv) {
     using namespace veyra::source;
+    testReconnectBudget();
+    for (const DWORD code : {ERROR_NO_SUCH_DEVICE, ERROR_GEN_FAILURE, ERROR_OPERATION_ABORTED}) {
+        const auto hr = HRESULT_FROM_WIN32(code);
+        expect(isCaptureDisconnect(hr) && captureFailureAdvice(hr).find(L"USB 3") != std::wstring::npos,
+               std::format("0x{:08X} gives the capture disconnection advice", uint32_t(hr)).c_str());
+    }
+    expect(!isCaptureDisconnect(HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES)) && !isCaptureDisconnect(E_ACCESSDENIED),
+           "resource and privacy errors stay distinct from disconnects");
     expect(std::wstring_view(captureFailureAdvice(HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES)))
                .starts_with(L"驱动报告系统资源不足。"), "0x800705AA is a driver resource error");
     expect(std::wstring_view(captureFailureAdvice(HRESULT_FROM_WIN32(ERROR_BUSY)))

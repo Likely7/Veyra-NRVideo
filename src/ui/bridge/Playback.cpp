@@ -7,7 +7,14 @@
 
 namespace veyra::ui {
 // --- playback ---------------------------------------------------------------
-QString QmlPlayerBridge::statusText() const { return uiText(impl_->snapshot.status); }
+QString QmlPlayerBridge::statusText() const {
+    const auto& snapshot = impl_->snapshot;
+    if (snapshot.captureDriverWaitMs) {
+        return tr("采集卡驱动响应缓慢（已等待 %1 秒）。若频繁出现，请重新插拔采集卡并检查 USB 连接。")
+            .arg(snapshot.captureDriverWaitMs / 1000);
+    }
+    return uiText(snapshot.status);
+}
 bool QmlPlayerBridge::running() const { return impl_->snapshot.running; }
 bool QmlPlayerBridge::paused() const { return impl_->snapshot.transport == engine::TransportState::Paused; }
 bool QmlPlayerBridge::failed() const { return impl_->snapshot.failed; }

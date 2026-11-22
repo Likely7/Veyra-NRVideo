@@ -2,6 +2,8 @@
 #include "veyra/source/IFrameSource.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFormatSelection.h"
+#include "veyra/source/CaptureDriverStage.h"
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <vector>
@@ -41,6 +43,7 @@ struct CaptureFormatQueryInfo {
     bool partial=false,fallback=false;
 };
 std::wstring captureFailureAdvice(long code);
+bool isCaptureDisconnect(long code);
 
 class CaptureCardSource final:public IFrameSource {
 public:
@@ -60,6 +63,7 @@ public:
     bool configure(const SourceOpenDesc&);
     bool start();
     bool reconnect(float gain,unsigned syncMode,int offsetMs);
+    void setDriverStageObserver(std::function<void(CaptureDriverStage)> observer);
     // Owner-thread recovery of DirectShow audio pins; same video filter retained.
     void recoverAudio(float gain,unsigned syncMode,int offsetMs);
     bool setAudioGain(float); // call on the graph owner thread; never system volume
@@ -86,6 +90,8 @@ public:
     sink::CaptureAudioState audioState()const;
     const SourceInfo& info()const override;
     const std::wstring& errorMessage()const{return error_;}
+    long lastFailureCode()const{return lastFailureCode_;}
+    bool deviceRemoved()const{return deviceRemoved_;}
     // The selected media type is compressed (MJPEG, H.264, ...) and decoded by Veyra.
     bool compressedVideo()const;
     SourceReadStatus read(pipeline::FramePacket&,const AVFrame**)override;
@@ -97,7 +103,15 @@ public:
     bool seek(const pipeline::Rational&)override{return false;}
     void close()noexcept override;
 private:
+    class DriverCall;
+    CaptureDriverStage driverStage_ = CaptureDriverStage::None;
+    std::function<void(CaptureDriverStage)> driverStageObserver_;
     std::wstring error_;
+    long lastFailureCode_ = 0;
+    bool deviceRemoved_ = false;
+    void clearFailure();
+    void setFailure(const wchar_t* stage, long code);
+    void closeGraph(bool stopped = false) noexcept;
     bool configureDevice(const SourceOpenDesc&);
     bool configureDeckLink(const SourceOpenDesc&);
     bool connectDirectShowAudio(const SourceOpenDesc&);

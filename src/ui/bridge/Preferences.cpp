@@ -957,6 +957,7 @@ QString QmlPlayerBridge::capturePreviewUrl() const {
 }
 QString QmlPlayerBridge::captureSignalLevel() const {
     const auto& s = impl_->snapshot;
+    if (s.captureDriverWaitMs) return QStringLiteral("warn");
     if (!s.running || !s.capture) return QStringLiteral("idle");
     if (s.captureRecovering) return QStringLiteral("warn");
     if (s.captureSampledBlack) return QStringLiteral("warn");
@@ -964,6 +965,7 @@ QString QmlPlayerBridge::captureSignalLevel() const {
 }
 QString QmlPlayerBridge::captureSignalText() const {
     const auto& s = impl_->snapshot;
+    if (s.captureDriverWaitMs) return tr("等待采集卡驱动");
     if (captureSignalLevel() == QLatin1String("idle")) return tr("未连接");
     if (s.captureRecovering) return tr("正在恢复");
     if (s.captureFps > 0.5 && s.captureSampledBlack) return tr("收到黑帧 · 检查输入制式");
@@ -1006,6 +1008,7 @@ bool QmlPlayerBridge::exportPreset(int index, const QString& path) {
 QString QmlPlayerBridge::liveOpeningText() const {
     if (!impl_->pendingLiveText.isEmpty()) return impl_->pendingLiveText;
     const auto& s = impl_->snapshot;
+    if (!s.running && s.captureDriverWaitMs) return statusText();
     if (s.running || s.failed || s.transport != engine::TransportState::Opening) return {};
     const QString status = veyra::ui::i18n::text(s.status);
     if (s.remotePlay)

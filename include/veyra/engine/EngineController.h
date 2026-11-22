@@ -167,6 +167,7 @@ struct PlayerSnapshot {
     bool captureHalfRate=false;
     bool captureSampledBlack=false; // Sparse CPU-source samples, not no-signal detection.
     bool captureRecovering=false;unsigned captureReconnectAttempts=0;
+    uint64_t captureDriverWaitMs=0;
     double captureFps=0,captureReadAgeMs=0,captureAgeMs=0,captureAgeP95Ms=0;
     double schedulingWaitP95Ms=0,processCpuP95Ms=0,presentCpuP95Ms=0;
     // Realtime file preview: dropped enhancement opportunities this metrics
@@ -321,7 +322,7 @@ private:
     void post(std::function<void()>);
     void dispatch();
     void status(const std::wstring&,bool failed=false);
-    void noteEngineHang(uint64_t stalledMs);
+    void noteEngineHang(uint64_t stalledMs,bool captureDriver);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void controlLoop(std::stop_token);
     void waitRemoteControlIdle();

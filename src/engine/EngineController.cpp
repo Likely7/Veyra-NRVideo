@@ -28,6 +28,7 @@
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/engine/CapturePreviewClock.h"
+#include "veyra/engine/CaptureReconnectBudget.h"
 #include "veyra/engine/DisplayFgBudget.h"
 #include "veyra/engine/AdaptiveFgMultiplier.h"
 #include "veyra/engine/FramePacingRepair.h"
@@ -85,7 +86,7 @@ void logFrameFlow(const diagnostics::FrameFlowMetrics& m,const char* state){
 }
 }
 EngineController::EngineController(){
-    watchdog_=std::make_unique<EngineWatchdog>([this](uint64_t stalledMs){noteEngineHang(stalledMs);});
+    watchdog_=std::make_unique<EngineWatchdog>([this](uint64_t stalledMs,bool captureDriver){noteEngineHang(stalledMs,captureDriver);});
     worker_=std::thread(&EngineController::dispatch,this);
 }
 EngineController::~EngineController(){
@@ -138,8 +139,9 @@ void EngineController::dispatch(){
 }
 // Watchdog thread. try_lock: an owner stuck while holding mutex_ must not take
 // the watchdog down with it.
-void EngineController::noteEngineHang(uint64_t stalledMs){
+void EngineController::noteEngineHang(uint64_t stalledMs,bool captureDriver){
     std::unique_lock lock(mutex_,std::try_to_lock);if(!lock.owns_lock())return;
+    if(captureDriver){snapshot_.captureDriverWaitMs=stalledMs;return;}
     if(stalledMs){if(snapshot_.status!=kEngineHangStatus){hangPreviousStatus_=snapshot_.status;snapshot_.status=kEngineHangStatus;}}
     else if(snapshot_.status==kEngineHangStatus)snapshot_.status=hangPreviousStatus_;
 }
@@ -491,6 +493,7 @@ struct MmcssScope {
 };
 }
 void EngineController::run(HWND window,std::wstring path,PlayerOptions options,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest,std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest,std::shared_ptr<source::XboxConnectDesc> xboxRequest){
+    watchdog_->beginSession();
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     MmcssScope mmcss(L"Pro Audio");
     status(L"正在初始化GPU与本地运行时…");
@@ -517,7 +520,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     auto& graphBytes=gpu->graphBytes;auto cacheBudgetPolledAt=Clock::now();
     const bool recentCacheAllowed=!GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_RECENT_GRAPH_CACHE",nullptr,0);
     AVFrame* imageFrame=nullptr;AVFrame* cachedFrame=nullptr;pipeline::FramePacket cachedPacket;
-   source::CaptureCardSource captureSource;const bool physicalCapture=path.starts_with(L"capture:")||path.starts_with(L"capture2:");
+    source::CaptureCardSource captureSource;const bool physicalCapture=path.starts_with(L"capture:")||path.starts_with(L"capture2:");
+    if(physicalCapture)captureSource.setDriverStageObserver([this](source::CaptureDriverStage stage){
+        watchdog_->setCaptureDriverStage(stage);
+    });
     source::ScreenCaptureSource screenSource;const bool isScreen=path.starts_with(L"screen:");
     // Set when a live parameter change arrives while paused (or on a still
     // image): the cached source frame must be re-rendered before the next
@@ -1792,8 +1798,49 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(Clock::now()>=nextNetworkPublish){nextNetworkPublish=Clock::now()+std::chrono::milliseconds(100);publishNetwork();}
             };
             uint64_t hdrDisplayCheck=0;
-            bool captureRecovering=false;unsigned captureRetries=0;
-            Clock::time_point captureRetryAt{};
+            CaptureReconnectBudget captureRetries;
+            std::optional<Clock::time_point> captureRetryAt;
+            std::wstring captureDisconnectReason;
+            // A file-backed integration test simulates one removal followed by
+            // successful opens that never deliver video. It never calls the driver.
+            const bool testCaptureNoVideo=options.captureReplayForTest
+                &&GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_NO_VIDEO",nullptr,0);
+            auto testCaptureFrameDeadline=Clock::time_point::min();
+            auto readSource=[&](pipeline::FramePacket& packet,const AVFrame** frame){
+                if(testCaptureNoVideo&&frames>=120)
+                    return Clock::now()>=testCaptureFrameDeadline?source::SourceReadStatus::Error:source::SourceReadStatus::Waiting;
+                return physicalCapture?captureSource.tryRead(packet,frame):activeSource->read(packet,frame);
+            };
+            auto scheduleCaptureRetry=[&]{
+                const auto now=Clock::now();
+                const bool testRemoval=testCaptureNoVideo&&captureRetries.attempts()==0;
+                const auto code=testRemoval?HRESULT_FROM_WIN32(ERROR_NO_SUCH_DEVICE):captureSource.lastFailureCode();
+                const auto detail=testRemoval?source::captureFailureAdvice(code):captureSource.errorMessage();
+                if(source::isCaptureDisconnect(code))captureDisconnectReason=detail;
+                const auto decision=captureRetries.afterFailure(now,testRemoval||captureSource.deviceRemoved());
+                const bool exhausted=decision.limit!=CaptureReconnectBudget::Limit::None;
+                const char* limit=decision.limit==CaptureReconnectBudget::Limit::DeviceRemovals?"device-removals":
+                    exhausted?"no-frames":"none";
+                log::warn("capture-reconnect",std::format("attempts={} delaySec={} removals10min={} limit={} hr=0x{:08X} reason={}",
+                    captureRetries.attempts(),decision.delay.count(),captureRetries.recentRemovals(),limit,uint32_t(code),
+                    !detail.empty()?"source-error":"no-valid-frame"));
+                {
+                    std::lock_guard lock(mutex_);
+                    snapshot_.captureRecovering=!exhausted;
+                    snapshot_.captureReconnectAttempts=captureRetries.attempts();
+                    snapshot_.captureFps=0;
+                }
+                if(exhausted){
+                    const auto& reason=captureDisconnectReason.empty()?detail:captureDisconnectReason;
+                    std::wstring message=L"自动重连已停止。请检查采集设备和输入信号，然后手动重试。";
+                    if(!reason.empty())message+=L"\n"+reason;
+                    status(message,true);
+                    return false;
+                }
+                captureRetryAt=now+decision.delay;
+                status(detail.empty()?L"采集信号中断，等待原设备恢复":detail);
+                return true;
+            };
             bool xessPresentationRecovery=false;
             auto recoverXessPresentation=[&]{
                 if(!presenter.xessFailed()||FAILED(ctx.device()->GetDeviceRemovedReason()))return false;
@@ -1824,6 +1871,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // (-1 = forever), to exercise the hang watchdog and bounded shutdown.
             wchar_t testHangText[16]{};
             int testHangMs=GetEnvironmentVariableW(L"VEYRA_TEST_ENGINE_HANG_MS",testHangText,16)?_wtoi(testHangText):0;
+            // Two identical waits on a file exercise capture diagnostics and
+            // dump deduplication without opening a physical capture device.
+            const bool testCaptureHang=ordinaryFile&&testHangMs>0
+                &&GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_DRIVER_STALLS",nullptr,0);
+            unsigned testHangsLeft=testCaptureHang?2:1;
+            uint64_t testHangAt=120;
             // Test hook: VEYRA_TEST_GPU_FAILURE=<frames>:<removeAfterMs> fails live presentation
             // once, as a GPU frame-ready timeout does, and removes this device that many ms
             // later as the driver reset does (-1 = never), for the recovery paths.
@@ -1848,7 +1901,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();}}};
             while(!stop_){
                 watchdog_->beat();
-                if(testHangMs&&frames>=120){veyra::log::warn("engine-test",std::format("blocking owner thread for {} ms",testHangMs));Sleep(testHangMs<0?INFINITE:DWORD(testHangMs));testHangMs=0;}
+                if(testHangMs&&testHangsLeft&&frames>=testHangAt){
+                    if(testCaptureHang)watchdog_->setCaptureDriverStage(source::CaptureDriverStage::Stop);
+                    veyra::log::warn("engine-test",std::format("blocking owner thread for {} ms captureDriver={}",testHangMs,testCaptureHang));
+                    Sleep(testHangMs<0?INFINITE:DWORD(testHangMs));
+                    if(testCaptureHang)watchdog_->setCaptureDriverStage(source::CaptureDriverStage::None);
+                    --testHangsLeft;
+                    testHangAt=frames+40;
+                }
                 if(Clock::now()-cacheBudgetPolledAt>=std::chrono::milliseconds(500)){
                     (void)recentGraphCache.checkBudget();cacheBudgetPolledAt=Clock::now();
                 }
@@ -1867,23 +1927,28 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         pause(true);
                     }
                 }else if(audioGateNotified)audioGateNotified=false;
-                if(captureRecovering){
-                    if(Clock::now()<captureRetryAt){std::this_thread::sleep_for(std::chrono::milliseconds(20));continue;}
-                    ++captureRetries;
-                    {std::lock_guard lock(mutex_);snapshot_.captureReconnectAttempts=captureRetries;}
-                    status(std::format(L"采集信号中断，正在重连原设备（第 {} 次）",captureRetries));
+                if(captureRetryAt){
+                    if(Clock::now()<*captureRetryAt){std::this_thread::sleep_for(std::chrono::milliseconds(20));continue;}
+                    captureRetryAt.reset();
+                    captureRetries.attemptStarted();
+                    {std::lock_guard lock(mutex_);snapshot_.captureReconnectAttempts=captureRetries.attempts();}
+                    status(std::format(L"采集信号中断，正在重连原设备（第 {} 次）",captureRetries.attempts()));
+                    log::info("capture-reconnect",std::format("opening attempt={}",captureRetries.attempts()));
                     captureSource.setAudioIngress(unsigned(options.settings.captureAudio));
                     captureSource.setVerticalFlip(options.settings.captureFlipVertical);
                     captureSource.setBufferMode(unsigned(options.settings.captureBuffer));
-                    if(captureSource.reconnect(muted_||!captureAudioMonitoring_?0.0f:volume_.load(),unsigned(options.settings.audioSync),options.settings.audioOffsetMs)){
-                        captureRecovering=false;reset=true;pendingResetCause=pipeline::ResetReason::DeviceLost;captureSampler.reset();
-                        {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;
-                            if(captureSource.info().videoDecodePath=="decklink")snapshot_.nominalSourceFps=captureSource.info().averageFps;}
-                        status(L"采集设备已重新连接，等待新画面");
-                    }else{
-                        captureRetryAt=Clock::now()+std::chrono::seconds(std::min(5u,captureRetries));
+                    if(testCaptureNoVideo)testCaptureFrameDeadline=Clock::now()+std::chrono::seconds(3);
+                    const bool reopened=testCaptureNoVideo||captureSource.reconnect(muted_||!captureAudioMonitoring_?0.0f:volume_.load(),
+                        unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
+                    if(stop_)break;
+                    if(!reopened){
+                        if(!scheduleCaptureRetry())break;
                         continue;
                     }
+                    reset=true;pendingResetCause=pipeline::ResetReason::DeviceLost;captureSampler.reset();
+                    {std::lock_guard lock(mutex_);
+                        if(captureSource.info().videoDecodePath=="decklink")snapshot_.nominalSourceFps=captureSource.info().averageFps;}
+                    status(L"采集设备已重新连接，等待新画面");
                 }
                 // Windows HDR flips with a newer display answer (a display or monitor
                 // change, 刷新显示器状态, a session start). Reading it calls no driver; the
@@ -2341,12 +2406,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 pipeline::FramePacket pkt;const AVFrame* frame=imageFrame;
                 if(cachedFrame&&((initialRemoteFramePending||initialFileFramePending)||(transaction&&(!isCapture||paused_)))){frame=cachedFrame;pkt=cachedPacket;initialRemoteFramePending=false;initialFileFramePending=false;}
                 else if(!isImage){
-                    auto rs=physicalCapture?captureSource.tryRead(pkt,&frame):activeSource->read(pkt,&frame);
+                    auto rs=readSource(pkt,&frame);
                     // Keep the accepted transaction and rollback state alive until
                     // the next real capture sample arrives. Never bind old PTS to now.
                     while(transaction&&isCapture&&rs==source::SourceReadStatus::Waiting&&!stop_){
                         if(paused_&&cachedFrame){frame=cachedFrame;pkt=cachedPacket;rs=source::SourceReadStatus::Frame;break;}
-                        advanceLive();publishWaitingProgress();waitLive();rs=physicalCapture?captureSource.tryRead(pkt,&frame):activeSource->read(pkt,&frame);
+                        advanceLive();publishWaitingProgress();waitLive();rs=readSource(pkt,&frame);
                     }
                     if(stop_)break;
                     if(rs==source::SourceReadStatus::Waiting){if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}advanceLive();publishWaitingProgress();waitLive();continue;}
@@ -2361,12 +2426,12 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         continue;
                     }
                     if(rs!=source::SourceReadStatus::Frame||pkt.pts.isUnknown()){
-                        if(physicalCapture){
+                        if(physicalCapture||testCaptureNoVideo){
                             drainLivePresentation();if(!ring.drainQueue()){status(L"采集恢复时GPU排空失败",true);break;}
-                            captureSource.videoReset();av_frame_free(&cachedFrame);hasOutput=false;out={};
-                            captureRecovering=true;captureRetries=0;captureRetryAt=Clock::now()+std::chrono::milliseconds(500);
-                            {std::lock_guard lock(mutex_);snapshot_.captureRecovering=true;snapshot_.captureFps=0;}
-                            status(captureSource.errorMessage().empty()?L"采集信号中断，等待原设备恢复":captureSource.errorMessage());continue;
+                            if(physicalCapture)captureSource.videoReset();
+                            av_frame_free(&cachedFrame);hasOutput=false;out={};
+                            if(!scheduleCaptureRetry())break;
+                            continue;
                         }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
                         if(remote){const auto recovery=remote->recoveryStatus();status(recovery.message.empty()?L"PS5 串流异常，请检查主机状态后重新连接。":recovery.message,true);break;}
@@ -2413,6 +2478,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
 #endif
                         status(isScreen?screenSource.status():isCapture?L"采集信号中断，请检查设备连接或格式":source.errorMessage().empty()?L"视频解码或时间戳错误":source.errorMessage(),true);break;}
+                    if(physicalCapture&&captureRetries.attempts()&&frame&&frame!=cachedFrame){
+                        log::info("capture-reconnect",std::format("first valid frame after attempt={}",captureRetries.attempts()));
+                        captureRetries.frameDelivered();
+                        captureDisconnectReason.clear();
+                        {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;snapshot_.captureReconnectAttempts=0;}
+                        status(L"采集画面已恢复");
+                    }
                 }
                 if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}
                 const bool nativeCapture=physicalCapture&&activeSource->info().videoDecodePath=="decklink";
@@ -3652,7 +3724,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
         else veyra::log::warn("gpu-failure","device still not removed at teardown; no DRED report available");
     }
     gpu->shutdown();
-    {std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.audioEndpointRecovering=false;snapshot_.audioRebuffering=false;}
+    {std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.audioEndpointRecovering=false;snapshot_.audioRebuffering=false;
+        snapshot_.captureRecovering=false;snapshot_.captureReconnectAttempts=0;snapshot_.captureDriverWaitMs=0;}
     CoUninitialize();
 }
 }
