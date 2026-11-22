@@ -2361,9 +2361,7 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
         // Compressed video carries its own VUI metadata; the negotiated layout
         // stays the declared fallback. D3D12VA surfaces report NV12 by
         // contract (the capture ingress contract is 8-bit for this path).
-        colorInfo=pipeline::resolveFrameColor(*delivered,p.layout.color);
-        // YUVJ can imply full range even when the card is delivering limited codes.
-        applyCaptureColorOverride(colorInfo,p.compressedRangeOverride);
+        colorInfo=resolveCompressedCaptureColor(*delivered,p.layout.color,p.compressedRangeOverride);
         if(delivered->format==AV_PIX_FMT_D3D12&&colorInfo.pixelFormat==pipeline::SourcePixelFormat::Unknown)colorInfo.pixelFormat=pipeline::SourcePixelFormat::NV12;
     }
     delivered->pts=p.decklink?nativeTime100ns:static_cast<int64_t>(time*10000000);delivered->duration=duration.isUnknown()?0:duration.to100ns();delivered->time_base={1,10000000};packet={};packet.pts={delivered->pts,10000000};packet.duration=duration;packet.colorInfo=colorInfo;packet.sourceKind=pipeline::SourceKind::CaptureCard;packet.sequence=sequence;packet.flags=flags;packet.sourceEpoch=1;

@@ -5,12 +5,127 @@
 #include "veyra/engine/VideoPresenter.h"
 #include "veyra/sink/ImageExportSink.h"
 #include "veyra/RuntimePaths.h"
+#include "veyra/source/CaptureCompressedDecoder.h"
+#include "veyra/source/CaptureColorOverride.h"
 #include <cmath>
+#include <fstream>
 #include <iostream>
 extern "C" {
 #include <libavutil/frame.h>
 }
 using namespace veyra;
+namespace {
+bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring) {
+    using namespace pipeline;
+    constexpr unsigned w=64,h=32;
+    struct Format { const char* name; AVPixelFormat input; SourcePixelFormat color; };
+    const Format formats[]={
+        {"YUY2",AV_PIX_FMT_YUYV422,SourcePixelFormat::Yuy2},
+        {"UYVY",AV_PIX_FMT_UYVY422,SourcePixelFormat::Uyvy},
+        {"YVYU",AV_PIX_FMT_YVYU422,SourcePixelFormat::Yvyu},
+        {"NV12",AV_PIX_FMT_NV12,SourcePixelFormat::NV12},
+        {"P010",AV_PIX_FMT_P010,SourcePixelFormat::P010}
+    };
+    bool all=true;
+    for(const auto& spec:formats){
+        const bool planar=spec.input==AV_PIX_FMT_NV12||spec.input==AV_PIX_FMT_P010;
+        const bool p010=spec.input==AV_PIX_FMT_P010;
+        AVFrame* frame=av_frame_alloc();
+        if(!frame)return false;
+        frame->format=spec.input;frame->width=w;frame->height=h;
+        if(av_frame_get_buffer(frame,32)<0){av_frame_free(&frame);return false;}
+        const auto u=[](unsigned x,unsigned y){return uint8_t(((x+y)&1)?160:96);};
+        const auto v=[](unsigned x,unsigned y){return uint8_t(((x+y)&1)?112:144);};
+        if(planar){
+            for(unsigned y=0;y<h;++y){
+                auto* line=frame->data[0]+y*frame->linesize[0];
+                if(p010)std::fill_n(reinterpret_cast<uint16_t*>(line),w,uint16_t(126*256));
+                else std::fill_n(line,w,uint8_t(126));
+            }
+            for(unsigned y=0;y<h/2;++y)for(unsigned x=0;x<w/2;++x){
+                auto* line=frame->data[1]+y*frame->linesize[1];
+                if(p010){
+                    auto* words=reinterpret_cast<uint16_t*>(line)+2*x;
+                    words[0]=uint16_t(u(x,y))*256;words[1]=uint16_t(v(x,y))*256;
+                }else{line[2*x]=u(x,y);line[2*x+1]=v(x,y);}
+            }
+        }else{
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w/2;++x){
+                auto* pair=frame->data[0]+y*frame->linesize[0]+4*x;
+                if(spec.color==SourcePixelFormat::Uyvy){
+                    pair[0]=u(x,y);pair[1]=126;pair[2]=v(x,y);pair[3]=126;
+                }else{
+                    pair[0]=pair[2]=126;
+                    pair[1]=spec.color==SourcePixelFormat::Yvyu?v(x,y):u(x,y);
+                    pair[3]=spec.color==SourcePixelFormat::Yvyu?u(x,y):v(x,y);
+                }
+            }
+        }
+        EnhanceGraphDesc desc;
+        desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;desc.noFeatures=true;
+        desc.yuy2Input=spec.color==SourcePixelFormat::Yuy2;
+        desc.packedInput=packedInputCode(spec.color);desc.captureBitDepth=p010?10:8;
+        ColorDescription color;
+        color.pixelFormat=spec.color;color.range=ColorRange::Limited;color.matrix=YuvMatrix::BT709;
+        color.transfer=TransferFunction::SRGB;
+        color.reconstructChroma=planar;color.chromaLocation=ChromaLocation::TopLeft;
+        EnhanceGraph graph(ctx,ring);EnhanceGraph::FrameOutputs out;
+        sink::RgbaImage pixels;
+        const bool rendered=graph.initialize(desc)&&graph.createViews()&&graph.process(frame,0,true,out,1,&color)&&
+            sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),pixels);
+        int maxError=0;
+        if(rendered)for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+            const unsigned row=planar?y/2:y,nextRow=planar?std::min(row+1,h/2-1):row;
+            const auto col=x/2,nextCol=std::min(col+1,w/2-1);
+            const double fx=x%2?.5:0,fy=planar&&y%2?.5:0;
+            const auto sample=[&](auto c){return std::lerp(
+                std::lerp(double(c(col,row)),double(c(nextCol,row)),fx),
+                std::lerp(double(c(col,nextRow)),double(c(nextCol,nextRow)),fx),fy);};
+            const double l=110.0/219,cb=(sample(u)-128.0)/224,cr=(sample(v)-128.0)/224;
+            const double rgb[]={l+1.5748*cr,l-.187324*cb-.468124*cr,l+1.8556*cb};
+            for(unsigned c=0;c<3;++c)maxError=std::max(maxError,std::abs(
+                int(pixels.pixels[(size_t(y)*w+x)*4+c])-int(std::lround(std::clamp(rgb[c],0.0,1.0)*255))));
+        }
+        const bool pass=rendered&&maxError<=1;
+        std::cout<<"CAPTURE_CHROMA "<<spec.name<<" maxError="<<maxError<<" pass="<<pass<<std::endl;
+        all&=pass;
+        out={};graph.shutdown();av_frame_free(&frame);
+    }
+    return all;
+}
+bool mjpegRange(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const wchar_t* path) {
+    constexpr unsigned w=64,h=32;
+    std::ifstream file(std::filesystem::path(path),std::ios::binary);
+    const std::vector<uint8_t> encoded((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
+    source::CaptureCompressedDecoder decoder;
+    if(encoded.empty()||!decoder.open(source::CaptureCodec::Mjpeg,w,h,nullptr,0,nullptr,nullptr))return false;
+    AVFrame* buffer=av_frame_alloc();
+    if(!buffer)return false;
+    buffer->format=AV_PIX_FMT_NV12;buffer->width=w;buffer->height=h;
+    AVFrame* frame=nullptr;bool hardware=false;
+    if(av_frame_get_buffer(buffer,32)<0||!decoder.decode(encoded.data(),encoded.size(),1,buffer,&frame,hardware)){
+        av_frame_free(&buffer);return false;
+    }
+    pipeline::EnhanceGraphDesc desc;
+    desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;desc.noFeatures=true;
+    pipeline::EnhanceGraph graph(ctx,ring);
+    if(!graph.initialize(desc)||!graph.createViews()){av_frame_free(&buffer);return false;}
+    pipeline::ColorDescription fallback;fallback.preserveSdrCodeValues=true;
+    int black[2]{};
+    bool ok=frame->data[0][0]==16&&!hardware;
+    for(unsigned range=0;range<2;++range){
+        const auto color=source::resolveCompressedCaptureColor(*frame,fallback,source::captureColorOverride(0,range));
+        pipeline::EnhanceGraph::FrameOutputs out;sink::RgbaImage image;
+        if(!graph.process(frame,range*33.3,true,out,range+1,&color)||
+            !sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),image)){ok=false;break;}
+        black[range]=image.pixels[0];
+    }
+    const bool pass=ok&&std::abs(black[0]-16)<=1&&black[1]==0;
+    std::cout<<"MJPEG_RANGE auto="<<black[0]<<" limited="<<black[1]<<" pass="<<pass<<std::endl;
+    graph.shutdown();av_frame_free(&buffer);
+    return pass;
+}
+}
 int wmain(int argc,wchar_t**argv){
     bool legacyRemote=false;
     bool remoteYuv=false,nr=false,rgb=false,native4k=false,temporal=false,realtime=false;
@@ -21,6 +136,10 @@ int wmain(int argc,wchar_t**argv){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 1;
+    if(argc==2&&std::wstring_view(argv[1])==L"--capture-chroma")
+        return reconstructedCaptureChroma(ctx,ring)?0:1;
+    if(argc==3&&std::wstring_view(argv[1])==L"--mjpeg-range")
+        return mjpegRange(ctx,ring,argv[2])?0:1;
     const unsigned w=native4k?3840:nr?1920:256,h=native4k?2160:nr?1080:64;
     HWND window=CreateWindowExW(0,L"STATIC",L"YUY2 contract",WS_POPUP,0,0,w,h,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     pipeline::EnhanceGraph graph(ctx,ring);engine::VideoPresenter presenter;pipeline::EnhanceGraphDesc gd;

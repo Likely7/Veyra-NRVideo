@@ -19,8 +19,19 @@ extern "C" {
 #include "veyra/media/FFmpegVideoDecoder.h"
 #include "veyra/pipeline/CaptureUploadFrame.h"
 #include "veyra/pipeline/FramePacket.h"
+#include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/source/CaptureColorOverride.h"
 
 namespace veyra::source {
+
+pipeline::ColorDescription resolveCompressedCaptureColor(AVFrame& frame,const pipeline::ColorDescription& fallback,unsigned rangeOverride) {
+    auto color=pipeline::resolveFrameColor(frame,fallback);
+    if(rangeOverride){
+        applyCaptureColorOverride(color,rangeOverride);
+        frame.color_range=color.range==pipeline::ColorRange::Limited?AVCOL_RANGE_MPEG:AVCOL_RANGE_JPEG;
+    }
+    return color;
+}
 
 namespace {
 

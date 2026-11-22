@@ -16,9 +16,13 @@ struct AVFrame;
 struct ID3D12Device;
 struct ID3D12CommandQueue;
 
-namespace veyra::pipeline { struct HardwareSurfaceInput; }
+namespace veyra::pipeline { struct ColorDescription; struct HardwareSurfaceInput; }
 
 namespace veyra::source {
+
+// Apply the capture range after decode so the graph's explicit AVFrame
+// metadata read preserves the override on subsequent color resolution.
+pipeline::ColorDescription resolveCompressedCaptureColor(AVFrame&,const pipeline::ColorDescription&,unsigned rangeOverride);
 
 class CaptureCompressedDecoder {
 public:
