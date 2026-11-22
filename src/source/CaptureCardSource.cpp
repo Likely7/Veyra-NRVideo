@@ -22,12 +22,14 @@
 #include "veyra/source/CaptureAudioDeliveryPolicy.h"
 #include "veyra/source/ElgatoHdrControl.h"
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/FileIdentity.h"
 #include "veyra/Log.h"
 #include "veyra/sink/AudioFormat.h"
 #include "veyra/sink/BitstreamAudio.h"
 #include "veyra/sink/BitstreamAudioSink.h"
 #include "veyra/sink/HdmiBitstreamOutput.h"
 #include <windows.h>
+#include <tlhelp32.h>
 #include <dshow.h>
 #include <dvdmedia.h>
 #include <ks.h>
@@ -60,7 +62,107 @@ extern "C" {
 #include "veyra/source/MagewellCapture.h"
 namespace veyra::source {
 using Microsoft::WRL::ComPtr;
+
 namespace {
+DWORD otherVeyraPid() {
+    const HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+    if (snapshot == INVALID_HANDLE_VALUE) return 0;
+    const DWORD self = GetCurrentProcessId();
+    DWORD pid = 0;
+    PROCESSENTRY32W entry{};
+    entry.dwSize = sizeof(entry);
+    for (BOOL ok = Process32FirstW(snapshot, &entry); ok; ok = Process32NextW(snapshot, &entry)) {
+        // Skip our own worker subprocesses. Existence of another process only
+        // makes contention possible. The device reservation verifies ownership.
+        if (entry.th32ProcessID != self && entry.th32ParentProcessID != self
+            && _wcsicmp(entry.szExeFile, L"veyra_qml_ui.exe") == 0) {
+            pid = entry.th32ProcessID;
+            break;
+        }
+    }
+    CloseHandle(snapshot);
+    return pid;
+}
+}
+
+bool isCaptureDisconnect(long code) {
+    return code == HRESULT_FROM_WIN32(ERROR_NO_SUCH_DEVICE)
+        || code == HRESULT_FROM_WIN32(ERROR_GEN_FAILURE)
+        || code == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED);
+}
+
+std::wstring captureFailureAdvice(long code) {
+    if (isCaptureDisconnect(code)) {
+        return L"采集卡可能已断开或 USB 连接不稳定。请直连电脑的 USB 3 接口，避开扩展坞和延长线，尝试换线。笔记本请接上电源，也可检查 USB 选择性暂停设置。若问题仍在，请用厂商软件或 OBS 对照。";
+    }
+    switch (code) {
+    case HRESULT_FROM_WIN32(ERROR_NO_SYSTEM_RESOURCES):
+        if (const auto pid = otherVeyraPid())
+            return std::format(L"驱动报告系统资源不足。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。", pid);
+        return L"驱动报告系统资源不足。请关闭其他采集程序后重试，并检查设备连接和驱动。";
+    case HRESULT_FROM_WIN32(ERROR_BUSY):
+        if (const auto pid = otherVeyraPid())
+            return std::format(L"设备当前忙。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。", pid);
+        return L"设备当前忙。请关闭可能正在采集的应用后重试。";
+    case HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION):
+        return L"设备当前忙。请关闭可能正在采集的应用后重试。";
+    case E_ACCESSDENIED:
+        return L"访问被拒绝。请在 Windows 隐私设置中允许桌面应用访问摄像头和麦克风。";
+    case VFW_E_INVALIDMEDIATYPE:
+    case VFW_E_NO_ACCEPTABLE_TYPES:
+    case VFW_E_CANNOT_CONNECT:
+    case VFW_E_TYPE_NOT_ACCEPTED:
+        return L"驱动无法连接所选格式。请刷新并选择与输入信号匹配的采集格式。";
+    case VFW_E_NOT_FOUND:
+    case HRESULT_FROM_WIN32(ERROR_DEVICE_NOT_CONNECTED):
+        return L"找不到所选设备。请检查连接并刷新采集设备列表。";
+    default:
+        return L"请检查设备连接与驱动，重试后查看诊断日志。";
+    }
+}
+
+void CaptureCardSource::clearFailure() {
+    error_.clear();
+    lastFailureCode_ = 0;
+    deviceRemoved_ = false;
+}
+
+void CaptureCardSource::setFailure(const wchar_t* stage, long code) {
+    lastFailureCode_ = code;
+    error_ = std::format(L"采集失败（{}，0x{:08X}）。{}", stage, uint32_t(code), captureFailureAdvice(code));
+}
+
+class CaptureCardSource::DriverCall {
+public:
+    DriverCall(CaptureCardSource& source, CaptureDriverStage stage) : source_(source), previous_(source.driverStage_) {
+        set(stage);
+    }
+    ~DriverCall() { set(previous_); }
+    DriverCall(const DriverCall&) = delete;
+    DriverCall& operator=(const DriverCall&) = delete;
+
+private:
+    void set(CaptureDriverStage stage) {
+        if (source_.driverStage_ == stage) return;
+        source_.driverStage_ = stage;
+        if (source_.driverStageObserver_) source_.driverStageObserver_(stage);
+    }
+    CaptureCardSource& source_;
+    CaptureDriverStage previous_;
+};
+
+void CaptureCardSource::setDriverStageObserver(std::function<void(CaptureDriverStage)> observer) {
+    driverStageObserver_ = std::move(observer);
+}
+
+namespace {
+std::wstring deviceLeaseName(std::wstring path) {
+    if (path.empty()) return {};
+    CharLowerBuffW(path.data(), DWORD(path.size()));
+    const auto key = sha256Hex(reinterpret_cast<const uint8_t*>(path.data()), path.size() * sizeof(wchar_t));
+    return key.empty() ? std::wstring{} : L"Local\\Veyra.Capture." + std::wstring(key.begin(), key.end());
+}
+
 // Legacy qedit interfaces are intentionally declared without obsolete qedit.h,
 // which conflicts with modern D3D headers. ABI follows Microsoft DirectShow.
 struct __declspec(uuid("0579154A-2B53-4994-B0D0-E773148EFF85")) ISampleGrabberCB: IUnknown {virtual HRESULT STDMETHODCALLTYPE SampleCB(double,IMediaSample*)=0;virtual HRESULT STDMETHODCALLTYPE BufferCB(double,BYTE*,long)=0;};
@@ -344,6 +446,7 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
 }
 struct CaptureCardSource::Impl:ISampleGrabberCB {
     using Clock=std::chrono::steady_clock;
+    HANDLE deviceLease = nullptr;
     std::atomic<ULONG> refs{1};std::mutex mutex;std::condition_variable wake;
     // One pending frame plus one reader-owned frame, never an IMediaSample
     // reference. Holding the producer's sole RGB32 sample starves its allocator.
@@ -1064,9 +1167,58 @@ bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
     p.configured=true;reconnectDesc_=desc;reconnectFormat_=selected->key;reconnectInfo_=p.info;
     return true;
 }
-bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.clear();p_->lastAudioGain=-1;auto& p=*p_;CaptureSelection selection;if(!parseCapturePath(desc.path,selection))return false;const unsigned index=selection.videoIndex;int format=selection.format;const int audio=selection.audio;
+bool CaptureCardSource::configure(const SourceOpenDesc& desc) {
+    close();
+    clearFailure();
+    p_->lastAudioGain = -1;
+    {
+        DriverCall driver(*this, CaptureDriverStage::Configure);
+        if (configureDevice(desc)) return true;
+    }
+    close();
+    return false;
+}
+
+bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
+    auto& p = *p_;
+    CaptureSelection selection;
+    if (!parseCapturePath(desc.path, selection)) return false;
+    const unsigned index = selection.videoIndex;
+    int format = selection.format;
+    const int audio = selection.audio;
+    std::wstring devicePath = selection.videoPath;
+    if (!selection.stable) {
+        const auto devices = monikers(false);
+        if (index < devices.size()) devicePath = monikerPath(devices[index].Get());
+    }
+    if (const auto name = deviceLeaseName(devicePath); !name.empty()) {
+        // The handle covers negotiation as well as Run, and is closed only
+        // after releasing the graph. Kernel cleanup releases it on process exit.
+        const HANDLE lease = CreateMutexW(nullptr, FALSE, name.c_str());
+        const auto result = GetLastError();
+        if (!lease) {
+            log::warn("capture-device", std::format("could not reserve device error={}", result));
+            setFailure(L"Veyra device reservation", HRESULT_FROM_WIN32(result));
+            return false;
+        }
+        if (result == ERROR_ALREADY_EXISTS) {
+            CloseHandle(lease);
+            log::warn("capture-device", "this device is reserved by an existing Veyra capture session");
+            error_ = L"另一个 Veyra 采集会话正在使用此设备。请停止原会话中的采集后重试。";
+            return false;
+        }
+        p.deviceLease = lease;
+    }
     if(selection.stable&&decklink::isPath(selection.videoPath))return configureDeckLink(desc);
-    if(selection.stable?!configuration(selection.videoPath,p.graph,p.builder,p.device,p.config):!configuration(index,p.graph,p.builder,p.device,p.config))return false;
+    HRESULT configured = S_OK;
+    const bool haveConfig = devicePath.empty()
+        ? configuration(index, p.graph, p.builder, p.device, p.config, &configured)
+        : configuration(devicePath, p.graph, p.builder, p.device, p.config, &configured);
+    if (!haveConfig) {
+        setFailure(L"DirectShow configuration", configured);
+        log::warn("capture", std::format("DirectShow configuration failed hr=0x{:08X}", uint32_t(configured)));
+        return false;
+    }
     ComPtr<IPin> formatPin;dshow::findCaptureVideoPin(p.device.Get(),formatPin);
     dshow::CaptureNativeCapabilities capabilities;
     CaptureFormatQueryInfo query;
@@ -1089,8 +1241,6 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     if(!native)return false;
     *native=*nativeOwner;nativeOwner->pbFormat=nullptr;nativeOwner->cbFormat=0;nativeOwner->pUnk=nullptr;
     log::info("capture-rate",std::format("requestFps={:.6f} interval100ns={} deviceNegotiation=1 softwareLimiter=0",expectedFps,interval));
-    std::wstring devicePath=selection.videoPath;
-    if(devicePath.empty()){const auto devices=monikers(false);if(index<devices.size())devicePath=monikerPath(devices[index].Get());}
     const auto deviceName=captureDeviceName(devicePath);p.signalProbeEnabled=isBlackmagicCaptureDevice(deviceName,devicePath);
     wchar_t legacyFlag[2]{};
     const bool bmdLegacy=GetEnvironmentVariableW(L"VEYRA_BMD_DSHOW_LEGACY",legacyFlag,2)==1&&legacyFlag[0]==L'1';
@@ -1098,14 +1248,14 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     if(p.signalProbeEnabled)log::info("capture-bmd-compat",std::format("enabled={} legacyOverride={} allocator={} bufferRequirements={} connectType={} dibOrientation={} notSignalDetection=1",bmdCompat,bmdLegacy,bmdCompat?"upstream":"sink-default",bmdCompat?"driver":"N4",bmdCompat?"output-selected":"explicit",bmdCompat?"driver":"request-top-down"));
     const auto upstream=dshow::connectCaptureCrossbar(p.graph.Get(),p.builder.Get(),p.device.Get());
     log::info("capture-upstream",std::format("name={} inputMediums={} crossbar={} existing={} hr=0x{:08X} routeChanged=0",narrowForLog(deviceName),upstream.inputMediums,bool(upstream.filter),upstream.existing,uint32_t(upstream.hr)));
-    if(FAILED(upstream.hr)){error_=std::format(L"采集卡上游输入连接失败（0x{:08X}），请检查驱动与输入选择。",uint32_t(upstream.hr));freeType(native);return false;}
+    if(FAILED(upstream.hr)){setFailure(L"DirectShow crossbar",upstream.hr);freeType(native);return false;}
     configureAverToneMap(p.device.Get(),devicePath,native->subtype.Data1==MAKEFOURCC('P','0','1','0')||native->subtype.Data1==MAKEFOURCC('P','0','1','6'));
     log::info("capture-device",std::format("path={} selectedFormat={} requestedFps={} nativeSubtype=0x{:X}",narrowForLog(devicePath),format,expectedFps,native->subtype.Data1));
     HRESULT hr=p.config->SetFormat(native);const GUID requestedSubtype=native->subtype;
     const bool connectionNegotiation=hr==E_NOTIMPL;
     log::info("capture",std::format("SetFormat device={} nativeIndex={} subtype=0x{:08X} hr=0x{:08X} verifyConnection={}",index,format,native->subtype.Data1,uint32_t(hr),connectionNegotiation));
     freeType(native);native=nullptr;
-    if(FAILED(hr)&&!connectionNegotiation){error_=std::format(L"驱动拒绝所选采集格式（0x{:08X}），请重新选择。",uint32_t(hr));return false;}
+    if(FAILED(hr)&&!connectionNegotiation){setFailure(L"DirectShow SetFormat",hr);return false;}
     hr=p.config->GetFormat(&native);
     if(FAILED(hr)&&hr!=E_NOTIMPL&&hr!=E_NOINTERFACE){error_=std::format(L"读取协商后的采集格式失败（0x{:08X}）。",uint32_t(hr));freeType(native);return false;}
     if(SUCCEEDED(hr)&&native&&!connectionNegotiation&&!dshow::captureTypesMatch(*requested,*native)){
@@ -1187,7 +1337,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         }
         log::info("capture-decode",std::format("compressed ConnectDirect codec={} subtype=0x{:08X} size={}x{} hr=0x{:08X}",captureCodecKey(codec),native->subtype.Data1,compressedWidth,compressedHeight,uint32_t(hr)));
         if(FAILED(hr)){
-            if(error_.empty())error_=std::format(L"采集卡无法连接所选压缩格式（0x{:08X}），请重新选择。",uint32_t(hr));
+            if(error_.empty())setFailure(L"DirectShow compressed connection",hr);
             freeType(native);freeType(&connected,false);return false;
         }
     }else if(direct){
@@ -1238,7 +1388,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         }
     }
     if(FAILED(hr)){
-        error_=std::format(L"采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",uint32_t(hr));
+        setFailure(L"DirectShow connection",hr);
         freeType(native);freeType(&connected,false);return false;
     }
     if(SUCCEEDED(hr)&&(direct||compressedPath)&&!dshow::captureTypesMatch(*requested,connected)){
@@ -1273,7 +1423,7 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
     }else{
         freeType(native);layoutValid=SUCCEEDED(hr)&&captureMediaLayout(connected,p.layout);freeType(&connected,false);
     }
-    if(!layoutValid){log::error("capture",std::format("unsupported negotiated layout/connect failure hr=0x{:08X}",uint32_t(hr)));if(error_.empty())error_=std::format(L"采集卡无法连接所选格式（0x{:08X}），请检查设备占用并重新选择。",uint32_t(hr));return false;}
+    if(!layoutValid){log::error("capture",std::format("unsupported negotiated layout/connect failure hr=0x{:08X}",uint32_t(hr)));if(error_.empty())setFailure(L"DirectShow negotiated layout",FAILED(hr)?hr:VFW_E_INVALIDMEDIATYPE);return false;}
     if(p.cpuUnpack&&captureLegacyCpuLayout(p.layout))log::warn("capture-unpack",std::format("legacy CPU unpack path active packing={} format={} (per-pixel conversion stays on the callback thread)",int(p.layout.packing),int(p.layout.format)));
     const unsigned colorOverride=selection.colorOverride;
     log::info("capture-color",std::format("driver controlFlags=0x{:08X} colorInfoPresent={} transfer={} matrix={} primaries={} chroma={} override={}",p.layout.colorControlFlags,bool(p.layout.colorControlFlags&AMCONTROL_COLORINFO_PRESENT),int(p.layout.color.transfer),int(p.layout.color.matrix),int(p.layout.color.primaries),int(p.layout.color.chromaLocation),colorOverride));
@@ -1367,9 +1517,19 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc){close();error_.cle
         // the system clock pinned, and video alone with the default clock.
         const bool embeddedAudio=audio==kCaptureAudioFromVideoDevice&&audioReady;
         if(!embeddedAudio||!embeddedAudioDeviceClock_){
+            const auto clockFailure = [&](std::string_view operation, HRESULT result) {
+                log::error("capture-clock", std::format("DirectShow clock failed: {} hr=0x{:08X}", operation, uint32_t(result)));
+                setFailure(L"DirectShow clock", result);
+                return false;
+            };
+            HRESULT clockResult = CoCreateInstance(CLSID_SystemClock, nullptr, CLSCTX_INPROC_SERVER,
+                                                   IID_PPV_ARGS(&p.referenceClock));
+            if (FAILED(clockResult)) return clockFailure("CoCreateInstance(CLSID_SystemClock)", clockResult);
             ComPtr<IMediaFilter> mediaFilter;
-            if(FAILED(CoCreateInstance(CLSID_SystemClock,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&p.referenceClock)))||
-                FAILED(p.graph.As(&mediaFilter))||FAILED(mediaFilter->SetSyncSource(p.referenceClock.Get())))return false;
+            clockResult = p.graph.As(&mediaFilter);
+            if (FAILED(clockResult)) return clockFailure("QueryInterface(IMediaFilter)", clockResult);
+            clockResult = mediaFilter->SetSyncSource(p.referenceClock.Get());
+            if (FAILED(clockResult)) return clockFailure("IMediaFilter::SetSyncSource", clockResult);
         }
         log::info("capture-audio",std::format("graph clock={} embeddedAudio={}",embeddedAudio&&embeddedAudioDeviceClock_?"directshow-default":"system",embeddedAudio?1:0));
     }
@@ -1881,16 +2041,17 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
 }
 bool CaptureCardSource::start(){
     auto& p=*p_;if(p.info.opened)return true;if(!p.configured||(!p.control&&!p.decklink))return false;
+    DriverCall driver(*this, CaptureDriverStage::Run);
     if(p.vendorAudio)log::info("capture-audio-vendor","audio session is fed by the AVerMedia graph; no DirectShow audio start");
     else if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
     p.audioRecovery.reset(GetTickCount64());
     if(p.decklink){
         if(p.control){const HRESULT hr=p.control->Run();log::info("decklink-audio",std::format("Run separate audio hr=0x{:08X}",uint32_t(hr)));}
-        p.lastFrame=Impl::Clock::now();
         p.info.opened=p.decklink->start([&p](const decklink::Frame& frame){p.deliverExternal(frame.data,frame.bytes,double(frame.pts100ns)/1e7,false,frame.duration100ns,frame.pts100ns);},
             [&p](const void* data,size_t bytes,int64_t pts){if(p.audioSession)p.audioSession->push(data,bytes,double(pts)/10000,false);});
         if(!p.info.opened){error_=p.decklink->error();return false;}
+        p.lastFrame=Impl::Clock::now();
         if(p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
         return true;
     }
@@ -1900,7 +2061,6 @@ bool CaptureCardSource::start(){
      if(SUCCEEDED(p.graph.As(&fg))&&SUCCEEDED(p.graph.As(&mf))){
          if(!p.referenceClock)fg->SetDefaultSyncSource();
          if(SUCCEEDED(mf->GetSyncSource(&p.ageClock))&&p.ageClock&&FAILED(p.ageClock->GetTime(&p.runReference)))p.runReference=0;}}
-    p.lastFrame=Impl::Clock::now();
     p.magewellDeferredGraph=false;
     if(p.magewellWanted){
         p.externalTimeAnchored=false;
@@ -1921,10 +2081,12 @@ bool CaptureCardSource::start(){
     }
     const auto hr=p.magewellDeferredGraph?S_OK:p.control->Run();
     p.info.opened=SUCCEEDED(hr);
+    p.lastFrame=Impl::Clock::now();
+    if (!p.info.opened) setFailure(L"DirectShow Run", hr);
     if(!p.info.opened&&p.magewell){p.magewell->stop();p.magewellDelivering=false;}
     if(p.vendorDelivering)p.vendorDelivering->store(p.info.opened);
     if(p.info.opened&&p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
-    veyra::log::info("capture",std::format("Run hr=0x{:X} actual={}x{} nominalFps={:.3f} mailbox=1 ownedBuffers=2",unsigned(hr),p.info.width,p.info.height,p.info.averageFps));return p.info.opened;
+    veyra::log::info("capture",std::format("Run hr=0x{:08X} actual={}x{} nominalFps={:.3f} mailbox=1 ownedBuffers=2",unsigned(hr),p.info.width,p.info.height,p.info.averageFps));return p.info.opened;
 }
 void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     auto& p=*p_;if(!p.info.opened||!p.control||p.wasapi||p.magewellDeferredGraph)return;
@@ -1972,11 +2134,14 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     log::info("capture-audio-reconnect",std::format("connected={} Run hr=0x{:08X} epoch={} awaitingActualPCM=1",connected,uint32_t(resumed),epoch_));
 }
 bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
+    clearFailure();
     CaptureSelection selection;
     if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||reconnectFormat_.empty()){
         log::warn("capture-reconnect","Stable device and format identity unavailable; manual selection required");return false;
     }
     const auto desc=reconnectDesc_;const auto key=reconnectFormat_;const auto expected=reconnectInfo_;
+    const auto cancelled = [&] { return desc.cancelled && desc.cancelled->load(); };
+    if (cancelled()) return false;
     // Audio from the video filter's pin kept arriving while no video frame ever
     // did: the other graph-clock mode gets the next attempt (see configure()).
     if(selection.audio==kCaptureAudioFromVideoDevice&&p_->audioSession){
@@ -1989,13 +2154,40 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
     }
     // Stop callbacks before carrying counters into the next device session.
     // Never hold the mailbox lock while DirectShow Stop waits for a callback.
-    if(p_->decklink)p_->decklink->stop();
-    if(p_->control){const HRESULT hr=p_->control->Stop();log::info("capture-reconnect",std::format("Stop hr=0x{:08X}",uint32_t(hr)));if(FAILED(hr))return false;}
+    if (p_->decklink || p_->magewell || p_->control) {
+        DriverCall driver(*this, CaptureDriverStage::Stop);
+        if (p_->decklink) p_->decklink->stop();
+        if (p_->magewell) p_->magewell->stop();
+        if (p_->control) {
+            const HRESULT hr = p_->control->Stop();
+            log::info("capture-reconnect", std::format("Stop hr=0x{:08X}", uint32_t(hr)));
+            if (FAILED(hr) && !isCaptureDisconnect(hr) && hr != HRESULT_FROM_WIN32(ERROR_DEVICE_NOT_CONNECTED)) {
+                setFailure(L"DirectShow Stop", hr);
+                return false;
+            }
+        }
+    }
     {std::lock_guard lock(p_->mutex);
         receivedOffset_+=p_->received;deliveredOffset_+=p_->sequence;droppedOffset_+=p_->dropped;}
-    close();
-    int format=-1;for(const auto& candidate:formatsByPath(selection.videoPath,nullptr,key))if(candidate.key==key){format=candidate.index;break;}
-    if(format<0)return false;
+    closeGraph(true);
+    if (cancelled()) return false;
+    CaptureFormatQueryInfo query;
+    int format = -1;
+    bool hasFormats = false;
+    {
+        DriverCall driver(*this, CaptureDriverStage::Enumerate);
+        const auto formats = formatsByPath(selection.videoPath, &query, key);
+        hasFormats = !formats.empty();
+        for (const auto& candidate : formats) {
+            if (candidate.key == key) { format = candidate.index; break; }
+        }
+    }
+    if (cancelled()) return false;
+    if (format < 0) {
+        setFailure(L"Capture device / format", FAILED(query.code) ? query.code :
+            hasFormats ? VFW_E_INVALIDMEDIATYPE : VFW_E_NOT_FOUND);
+        return false;
+    }
     auto reopen=desc;reopen.path=std::format(L"capture2:{}:{}:{}:{}:{}",encodePath(selection.videoPath),format,selection.audio,encodePath(selection.audioPath),selection.colorOverride);
     reopen.path+=capturePathOptions(selection.requestedFps,encodePath(key));
     bool ok=configure(reopen);
@@ -2003,9 +2195,13 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
         ok=current.width==expected.width&&current.height==expected.height&&captureFrameRateMatches(expected.averageFps,p_->layout.duration)&&current.color.pixelFormat==expected.color.pixelFormat&&
            current.color.transfer==expected.color.transfer&&current.color.matrix==expected.color.matrix&&current.color.primaries==expected.color.primaries&&
            current.color.range==expected.color.range&&current.color.displayReferred709==expected.color.displayReferred709&&current.color.preserveSdrCodeValues==expected.color.preserveSdrCodeValues;
-        if(!ok)log::warn("capture-reconnect","Negotiated input contract changed; explicit reselection required");
+        if(!ok){
+            log::warn("capture-reconnect","Negotiated input contract changed; explicit reselection required");
+            setFailure(L"DirectShow negotiated layout",VFW_E_INVALIDMEDIATYPE);
+        }
     }
-    if(ok){setAudioGain(gain);setAudioSync(syncMode,offsetMs);ok=start();}
+    if(ok&&!cancelled()){setAudioGain(gain);setAudioSync(syncMode,offsetMs);ok=start();}
+    else ok=false;
     if(ok){++epoch_;log::info("capture-reconnect",std::format("reconnected epoch={} formatIndex={} history reset required",epoch_,format));return true;}
     close();reconnectDesc_=desc;reconnectFormat_=key;reconnectInfo_=expected;return false;
 }
@@ -2031,14 +2227,37 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
             p.forceDiscontinuity=true;
         }
         if(p.magewellDeferredGraph&&p.ageClock&&FAILED(p.ageClock->GetTime(&p.runReference)))p.runReference=0;
-        p.lastFrame=Impl::Clock::now();
         p.magewellDelivering=false;
-        const auto hr=p.magewellDeferredGraph?p.control->Run():S_OK;
+        HRESULT hr = S_OK;
+        if (p.magewellDeferredGraph) {
+            DriverCall driver(*this, CaptureDriverStage::Run);
+            hr = p.control->Run();
+        }
+        p.lastFrame=Impl::Clock::now();
         p.magewellDeferredGraph=false;
         log::warn("magewell",std::format("SDK capture ended; DirectShow video resumed hr=0x{:08X}",uint32_t(hr)));
-        if(FAILED(hr))return SourceReadStatus::Error;
+        if(FAILED(hr)){setFailure(L"DirectShow Run",hr);return SourceReadStatus::Error;}
     }
-    long code=0;LONG_PTR a=0,b=0;while(p.events&&p.events->GetEvent(&code,&a,&b,0)==S_OK){if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)log::warn("capture-reconnect",std::format("DirectShow event={} detail=0x{:X}",code,uint64_t(a)));p.events->FreeEventParams(code,a,b);if(code==EC_DEVICE_LOST||code==EC_ERRORABORT)return SourceReadStatus::Error;}
+    long event = 0;
+    LONG_PTR param1 = 0, param2 = 0;
+    while (p.events && p.events->GetEvent(&event, &param1, &param2, 0) == S_OK) {
+        p.events->FreeEventParams(event, param1, param2);
+        if (event == EC_DEVICE_LOST) {
+            // param1 is an IUnknown*, not an HRESULT. Reappearance also
+            // invalidates the filter, but only removal counts against the USB budget.
+            deviceRemoved_ = param2 == 0;
+            log::warn("capture-reconnect", std::format("DirectShow event={} removed={}", event, deviceRemoved_));
+            if (deviceRemoved_) setFailure(L"DirectShow EC_DEVICE_LOST", HRESULT_FROM_WIN32(ERROR_NO_SUCH_DEVICE));
+            else error_ = captureFailureAdvice(HRESULT_FROM_WIN32(ERROR_NO_SUCH_DEVICE));
+            return SourceReadStatus::Error;
+        }
+        if (event == EC_ERRORABORT) {
+            const auto code = static_cast<HRESULT>(param1);
+            log::warn("capture-reconnect", std::format("DirectShow event={} hr=0x{:08X}", event, uint32_t(code)));
+            setFailure(L"DirectShow EC_ERRORABORT", code);
+            return SourceReadStatus::Error;
+        }
+    }
     double time=0;int64_t nativeTime100ns=0;uint32_t flags=0;uint64_t sequence=0;pipeline::Rational duration;AVFrame* delivered=nullptr;AVFrame* expiredHardware=nullptr;bool feedDecode=false;
     {
         std::unique_lock lock(p.mutex);if(milliseconds)p.wake.wait_for(lock,std::chrono::milliseconds(milliseconds),[&]{return p.pending||p.callbackError;});
@@ -2088,12 +2307,23 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
     if(log::verboseFrameLogs())log::info("capture-read-sample",std::format("source={} arrival={} read={} width={} height={} format={}",packet.sequence,packet.arrivalHost100ns,std::chrono::duration_cast<std::chrono::nanoseconds>(Impl::Clock::now().time_since_epoch()).count()/100,delivered->width,delivered->height,delivered->format));
     *frame=delivered;p.lastFrame=Impl::Clock::now();return SourceReadStatus::Frame;
 }
-void CaptureCardSource::close()noexcept{
+void CaptureCardSource::close()noexcept{closeGraph();}
+
+void CaptureCardSource::closeGraph(bool stopped)noexcept{
     auto& p=*p_;
     // Native stop detaches and joins callbacks before freeing mailbox/audio.
-    if(p.decklink){p.decklink->stop();p.decklink.reset();}
-    if(p.magewell){p.magewell->stop();p.magewell.reset();}
-    if(p.control){const HRESULT hr=p.control->Stop();if(FAILED(hr))log::error("capture-close",std::format("Stop failed hr=0x{:08X}; releasing graph",uint32_t(hr)));}
+    if (!stopped && (p.decklink || p.magewell || p.control)) {
+        DriverCall driver(*this, CaptureDriverStage::Stop);
+        if (p.decklink) p.decklink->stop();
+        if (p.magewell) p.magewell->stop();
+        if (p.control) {
+            const HRESULT hr = p.control->Stop();
+            if (FAILED(hr)) log::error("capture-close", std::format("Stop failed hr=0x{:08X}; releasing graph", uint32_t(hr)));
+        }
+    }
+    DriverCall release(*this, (p.graph || p.decklink || p.magewell) ? CaptureDriverStage::Release : driverStage_);
+    p.decklink.reset();
+    p.magewell.reset();
     if(p.grab){const HRESULT hr=p.grab->SetCallback(nullptr,0);if(FAILED(hr))log::error("capture-close",std::format("detach callback hr=0x{:08X}",uint32_t(hr)));}
     p.magewellDelivering=false;p.magewellDeferredGraph=false;
     if(p.wasapi)p.wasapi->stop();p.wasapi.reset();
@@ -2122,5 +2352,9 @@ void CaptureCardSource::close()noexcept{
     p.recentArrivals.clear();
     p.signalProbeEnabled=false;p.signalProbe={};p.nextSignalProbe={};
     p.driverDiscontinuity.reset();p.suppressedDriverDiscontinuities=p.discontinuitySamples=0;
+    if (p.deviceLease) {
+        CloseHandle(p.deviceLease);
+        p.deviceLease = nullptr;
+    }
 }
 }

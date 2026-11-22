@@ -294,6 +294,8 @@ bool QmlPlayerBridge::gpuUtilizationKnown() const { return impl_->gpuUtil.load()
 QString QmlPlayerBridge::runStatus() const { return impl_->runStatus; }
 QString QmlPlayerBridge::runStatusLevel() const { return impl_->runLevel; }
 QString QmlPlayerBridge::runStatusDetail() const { return impl_->runDetail; }
+QString QmlPlayerBridge::runStatusAction() const { return impl_->runAction; }
+QString QmlPlayerBridge::runStatusHint() const { return impl_->runHint; }
 QStringList QmlPlayerBridge::runOptions() const { return impl_->runOptions; }
 double QmlPlayerBridge::effectiveOutputFps() const { return impl_->effectiveOutputFps; }
 double QmlPlayerBridge::outputRateRatio() const { return impl_->rateRatio; }
@@ -354,6 +356,8 @@ void QmlPlayerBridge::updateRunStatus() {
     const auto& f = s.metrics.flow;
     const bool active = s.running && !s.image && s.transport == engine::TransportState::Playing;
     QString status = tr("待机"), level = QStringLiteral("idle");
+    QString action, hint;
+    bool secondaryFgWarning = false;
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
     // Paused to buffer a network source (#48): no pictures are due, so the output rate is not judged.
@@ -362,9 +366,17 @@ void QmlPlayerBridge::updateRunStatus() {
     }
     else if (active && !s.applying && f.rateWindowReady) {
         // Judged on the engine's own words, shown in the interface language.
-        const std::wstring rate = i.history.rateStatus(s);
-        status = uiText(rate);
-        level = rate == L"正常" ? QStringLiteral("ok") : QStringLiteral("warn");
+        const std::wstring rateStatus = i.history.rateStatus(s);
+        status = uiText(rateStatus);
+        level = rateStatus == L"正常" ? QStringLiteral("ok") : QStringLiteral("warn");
+        secondaryFgWarning = rateStatus != L"补帧调度降档" && i.history.fgScheduleLimited(s);
+        if (rateStatus == L"输入帧率不足" && sourceKind() == QLatin1String("capture")) {
+            action = tr("请检查采集卡接口");
+            hint = tr("采集卡送来的帧率低于信号帧率。USB 采集卡请直接插在主板背部的 USB 3.0 及以上接口，不要经过扩展坞、延长线或前置接口。同时确认主机输出帧率与所选采集格式一致。");
+        } else if (rateStatus == L"补帧调度降档") {
+            action = tr("性能不足");
+            hint = tr("显卡跟不上当前补帧设置，部分帧已改用更低档位或跳过。可降低补帧倍率或档位，或关闭部分增强。");
+        }
     }
     else if (s.applying && s.running) { status = tr("调整中"); level = QStringLiteral("warn"); }
     else if (active) status = tr("采样中");
@@ -445,6 +457,7 @@ void QmlPlayerBridge::updateRunStatus() {
         else if(s.hudLockState==3)options<<tr("HUD 自动锁定 · 当前补帧方式不支持");
     }
     QStringList detail;
+    if (secondaryFgWarning) detail << tr("补帧降档");
     // Live output hint: also shown under the 倍率 control (fgDisplayHint).
     QString fgHint;
     if (s.running && !s.image && s.applied.multiplier > 1 && i.compareMode == 0 && s.displayFgSuggestion > 0 &&
@@ -479,8 +492,6 @@ void QmlPlayerBridge::updateRunStatus() {
         // Live output hint (DisplayFgBudget.h): a suggestion only, the
         // multiplier stays the user's choice.
         else if (!fgHint.isEmpty()) detail << fgHint;
-        else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed) &&
-                 (!rate.policyLimited()||i.history.overloaded)) detail << tr("调度降档");
         // Why VFG cannot hold the requested multiplier. One VFG interpolation
         // costs about the same at any resolution, so what fits follows from its
         // measured cost, the rest of the chain and the source interval; the
@@ -526,10 +537,13 @@ void QmlPlayerBridge::updateRunStatus() {
     const QString text = detail.join(QStringLiteral(" · "));
     const double gpu = i.gpuUtil.load();
     const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
-    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
+    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail ||
+                         action != i.runAction || hint != i.runHint ||
+                         options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
                          fgHint != i.fgDisplayHint || vrrLevel != i.vrrState || displayChecking != i.displayChecking ||
                          hdr != i.displayHdr || std::abs(refreshHz - i.displayRefreshHz) > .01;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
+    i.runAction = action; i.runHint = hint;
     i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;i.displayChecking=displayChecking;
     i.displayHdr=hdr;i.displayRefreshHz=refreshHz;
     if (changed) emit perfChanged();

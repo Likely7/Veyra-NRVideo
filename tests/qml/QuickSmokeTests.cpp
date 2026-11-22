@@ -87,6 +87,11 @@ QtObject {
     property int sourceWidth: 1000
     property int sourceHeight: 500
     property string statusText: ""
+    property string runStatus: ""
+    property string runStatusLevel: "idle"
+    property string runStatusDetail: ""
+    property string runStatusAction: ""
+    property string runStatusHint: ""
     property var appliedCrop: ({})
     // Off by default, as before these existed: only the low latency test turns them on.
     property bool nvidiaLowLatencyAvailable: false

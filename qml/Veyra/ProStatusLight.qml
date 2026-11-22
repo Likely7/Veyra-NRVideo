@@ -8,6 +8,9 @@ import QtQuick.Effects
 RowLayout {
     id: light
     spacing: 8
+    readonly property string action: veyra.runStatusAction
+    readonly property string summary: veyra.runStatus + (action.length > 0 ? " · " + action : "")
+    readonly property string description: summary + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
     readonly property color tone: veyra.runStatusLevel === "ok" ? Theme.ok
                                 : veyra.runStatusLevel === "warn" ? "#F2B941"
                                 : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
@@ -34,22 +37,50 @@ RowLayout {
             shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true
         }
     }
-    Text {
-        objectName: "run-status"
+    ColumnLayout {
+        spacing: 2
         Layout.maximumWidth: Math.max(0, light.width - 40)
-        Layout.preferredWidth: Math.min(implicitWidth, light.width * 0.75)
-        text: veyra.runStatus + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
-        color: light.tone
-        font.family: Theme.fontUi
-        font.pixelSize: 11
-        font.weight: Font.Medium
-        horizontalAlignment: Text.AlignRight
-        wrapMode: Text.Wrap
-        maximumLineCount: 2
-        elide: Text.ElideRight
+        Layout.preferredWidth: Math.min(implicitWidth, light.width * 0.85)
+        Text {
+            objectName: "run-status"
+            Layout.fillWidth: true
+            text: light.action.length > 0 ? light.summary : light.description
+            color: light.tone
+            font.family: Theme.fontUi
+            font.pixelSize: 11
+            font.weight: Font.Medium
+            horizontalAlignment: Text.AlignRight
+            wrapMode: Text.Wrap
+            maximumLineCount: light.action.length > 0 ? 2147483647 : 2
+            elide: light.action.length > 0 ? Text.ElideNone : Text.ElideRight
+            Accessible.name: text
+            Accessible.description: veyra.runStatusHint
+        }
+        Text {
+            Layout.fillWidth: true
+            visible: light.action.length > 0 && text.length > 0
+            text: veyra.runStatusDetail
+            color: light.tone
+            font.family: Theme.fontUi
+            font.pixelSize: 11
+            horizontalAlignment: Text.AlignRight
+            elide: Text.ElideRight
+        }
         HoverHandler { id: statusHover }
-        ToolTip.visible: statusHover.hovered
-        ToolTip.delay: 400
-        ToolTip.text: text
+        ToolTip {
+            id: statusTip
+            objectName: "run-status-tooltip"
+            visible: statusHover.hovered && text.length > 0
+            delay: 400
+            width: Math.min(360, Math.max(0, light.Window.width - 24))
+            text: light.description + (veyra.runStatusHint.length > 0 ? "\n\n" + veyra.runStatusHint : "")
+            contentItem: Text {
+                text: statusTip.text
+                color: Theme.t1
+                font.family: Theme.fontUi
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+            }
+        }
     }
 }

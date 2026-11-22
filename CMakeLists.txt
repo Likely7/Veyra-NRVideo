@@ -111,6 +111,7 @@ add_library(veyra_base STATIC
   src/base/Log.cpp
   src/base/NgxResult.cpp
   src/base/FileIdentity.cpp
+  src/base/InstanceWindow.cpp
   src/base/RuntimePaths.cpp
   src/base/ThunkHook.cpp
   # .cube parsing, the runtime LUT store and named colour looks: low level, no
@@ -129,6 +130,10 @@ target_link_libraries(veyra_base PUBLIC bcrypt wintrust crypt32 version)
 add_executable(veyra_logger_tests tests/unit/LoggerTests.cpp)
 target_compile_features(veyra_logger_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_logger_tests PRIVATE veyra_base)
+
+add_executable(veyra_instance_recovery_tests tests/unit/InstanceRecoveryTests.cpp)
+target_compile_features(veyra_instance_recovery_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_instance_recovery_tests PRIVATE veyra_base user32)
 veyra_apply_warnings(veyra_logger_tests)
 
 add_executable(veyra_export_timeline_tests tests/unit/ExportTimelineTests.cpp)
@@ -1125,6 +1130,10 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_fg_admission_tests PRIVATE veyra_engine)
   target_compile_features(veyra_capture_color_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_capture_color_tests PRIVATE veyra_sources)
+  add_executable(veyra_capture_startup_tests tests/unit/CaptureStartupTests.cpp)
+  target_compile_features(veyra_capture_startup_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_capture_startup_tests PRIVATE /utf-8)
+  target_link_libraries(veyra_capture_startup_tests PRIVATE veyra_sources ole32)
   add_executable(veyra_capture_compressed_tests tests/unit/CaptureCompressedDecoderTests.cpp)
   target_compile_features(veyra_capture_compressed_tests PRIVATE cxx_std_20)
   target_compile_definitions(veyra_capture_compressed_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
@@ -1342,7 +1351,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_options(veyra_portable_launcher PRIVATE /utf-8)
   target_compile_definitions(veyra_portable_launcher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_portable_launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-  target_link_libraries(veyra_portable_launcher PRIVATE shell32 user32)
+  target_link_libraries(veyra_portable_launcher PRIVATE veyra_base shell32 user32)
   add_executable(veyra_update_worker apps/veyra-portable/UpdateWorker.cpp)
   target_compile_definitions(veyra_update_worker PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_update_worker PRIVATE veyra_portable_manifest ole32 uuid)
@@ -1498,7 +1507,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # WIN32: a GUI subsystem binary. Without it a console window follows the app
   # around, which is not what a player should look like. Diagnostics still reach
   # the log file through the logger.
-  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp src/ui/QmlDataDirectory.cpp src/ui/QmlDiskCache.cpp)
+  add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp apps/veyra-qml/ProfileInstance.cpp
+    src/ui/QmlDataDirectory.cpp src/ui/QmlDiskCache.cpp)
   add_dependencies(veyra_qml_ui veyra_virtualcam_components)
   if(VEYRA_UPDATE_PUBLIC_KEY)
     add_dependencies(veyra_qml_ui veyra_portable_launcher veyra_update_worker)
@@ -1540,7 +1550,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Reserve only: pages are committed as they are touched.
   target_link_options(veyra_qml_ui PRIVATE /STACK:8388608)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
-  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine veyra_startup_music Qt6::CorePrivate dbghelp ole32)
+  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine veyra_startup_music Qt6::CorePrivate dbghelp ole32 rstrtmgr)
 
   add_executable(veyra_qml_data_tests tests/unit/QmlDataDirectoryTests.cpp src/ui/QmlDataDirectory.cpp)
   add_executable(veyra_game_passthrough_tests tests/integration/GamePassthroughTests.cpp)

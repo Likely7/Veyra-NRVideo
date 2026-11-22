@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 
+#include "veyra/source/CaptureDriverStage.h"
+
 namespace veyra::engine {
 // Engine status while a stall is being reported (the bridge raises it once).
 inline constexpr wchar_t kEngineHangStatus[] = L"画面引擎无响应，已记录诊断信息；如画面未恢复，请关闭软件后重新打开";
@@ -18,11 +20,15 @@ inline constexpr wchar_t kEngineHangStatus[] = L"画面引擎无响应，已记�
 class EngineWatchdog {
 public:
     // Interface notice: stalledMs > 0 while blocked, 0 once the loop moves again.
-    using Notify = std::function<void(uint64_t stalledMs)>;
+    using Notify = std::function<void(uint64_t stalledMs, bool captureDriver)>;
     explicit EngineWatchdog(Notify notify);
     ~EngineWatchdog();
     EngineWatchdog(const EngineWatchdog&) = delete;
     EngineWatchdog& operator=(const EngineWatchdog&) = delete;
+    // Owner thread. Start a fresh capture dump budget for this playback session.
+    void beginSession();
+    // Capture driver calls are monitored even before/after the playback loop.
+    void setCaptureDriverStage(source::CaptureDriverStage);
     // Owner thread, top of every playback-loop iteration.
     void beat();
     // Owner thread, when it leaves the playback loop.

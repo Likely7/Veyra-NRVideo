@@ -104,11 +104,14 @@ struct DashboardHistory {
         if(actual<target*.95){good=0;if(++low>=8)overloaded=true;}
         else{low=0;if(++good>=8)overloaded=false;}
     }
+    bool fgScheduleLimited(const engine::PlayerSnapshot& s)const{
+        return s.applied.multiplier>1&&!output.comparison&&(s.fgBudgetLimited||s.xessGenerationSuppressed)&&
+            (!output.policyLimited()||overloaded);
+    }
     const wchar_t* rateStatus(const engine::PlayerSnapshot& s)const{
         if(resetSamples>=3)return L"输入时间线异常";
         if(inputLimited)return L"输入帧率不足";
-        if(s.applied.multiplier>1&&!output.comparison&&(s.fgBudgetLimited||s.xessGenerationSuppressed)&&
-           (!output.policyLimited()||overloaded))return L"补帧调度降档";
+        if(fgScheduleLimited(s))return L"补帧调度降档";
         return overloaded?L"输出未达标":L"正常";
     }
 };

@@ -452,6 +452,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusAction READ runStatusAction NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusHint READ runStatusHint NOTIFY perfChanged)
     // Live FG output hint ("当前帧率…超出屏幕刷新率，建议降至…"), empty when the
     // output fits; a suggestion only, the multiplier is never changed.
     Q_PROPERTY(QString fgDisplayHint READ fgDisplayHint NOTIFY perfChanged)
@@ -1155,6 +1157,8 @@ public:
     QString runStatus() const;
     QString runStatusLevel() const;
     QString runStatusDetail() const;
+    QString runStatusAction() const;
+    QString runStatusHint() const;
     QStringList runOptions() const;
     double effectiveOutputFps() const;
     double outputRateRatio() const;
@@ -1261,7 +1265,7 @@ public:
     // Split position from a pointer on the picture host (fractions of the host).
     Q_INVOKABLE void setCompareSplitAt(double hostFractionX);
     Q_INVOKABLE void resumeLastSource();
-    void autoResumeLastSource();
+    void autoResumeLastSource(bool allowCapture);
     // List mode: an NR layer's model and residual back to their defaults.
     Q_INVOKABLE bool resetNrLayer(int index);
     QVariantList protectionRegions() const;

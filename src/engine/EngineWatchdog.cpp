@@ -1,8 +1,10 @@
 #include "veyra/engine/EngineWatchdog.h"
 
 #include <windows.h>
+#include <vector>
 #include <dbghelp.h>
 
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstring>
@@ -20,12 +22,32 @@ namespace {
 // iteration; a healthy loop beats every few milliseconds.
 constexpr uint64_t kReportMs = 8000;
 constexpr unsigned kMaxFrames = 48;
+constexpr size_t kMaxCaptureDumpsPerSession = 16;
+using source::CaptureDriverStage;
+
+const char* phaseName(CaptureDriverStage phase) {
+    switch (phase) {
+    case CaptureDriverStage::Stop: return "stop";
+    case CaptureDriverStage::Enumerate: return "enumerate";
+    case CaptureDriverStage::Configure: return "configure";
+    case CaptureDriverStage::Run: return "run";
+    case CaptureDriverStage::Release: return "release";
+    case CaptureDriverStage::None: return "none";
+    }
+    return "none";
+}
 
 std::mutex g_dumpMutex;
 std::wstring g_dumpDirectory;
-std::atomic<int> g_dumpsWritten{0};
+std::atomic<bool> g_engineDumpRequested{false};
+std::atomic<unsigned> g_captureDumpSerial{0};
 
 struct StackSample { uintptr_t pc[kMaxFrames]; unsigned count; };
+struct CaptureDumpSignature { CaptureDriverStage phase; StackSample stack; };
+
+bool sameStack(const StackSample& a, const StackSample& b) {
+    return a.count == b.count && std::memcmp(a.pc, b.pc, sizeof(uintptr_t) * a.count) == 0;
+}
 
 // The owner is suspended while this runs: no allocation, no locks, no logging.
 __declspec(noinline) void unwindSuspended(CONTEXT* context, StackSample* out) {
@@ -105,27 +127,32 @@ std::string describe(uintptr_t pc) {
     return text;
 }
 
-void logStack(const char* label, const StackSample& sample) {
+void logStack(const char* category, const char* label, const StackSample& sample) {
     for (unsigned i = 0; i < sample.count; ++i)
-        log::error("engine-hang", std::format("{} frame={} {}", label, i, describe(sample.pc[i])));
+        log::error(category, std::format("{} frame={} {}", label, i, describe(sample.pc[i])));
 }
 
-void writeDump() {
+bool writeDump(const char* category, bool captureDriver) {
     std::wstring directory;
     { std::lock_guard lock(g_dumpMutex); directory = g_dumpDirectory; }
-    if (directory.empty() || g_dumpsWritten.fetch_add(1) != 0) return;
+    if (directory.empty() || (!captureDriver && g_engineDumpRequested.exchange(true))) return false;
     using WriteDump = BOOL(WINAPI*)(HANDLE, DWORD, HANDLE, MINIDUMP_TYPE, PMINIDUMP_EXCEPTION_INFORMATION,
                                     PMINIDUMP_USER_STREAM_INFORMATION, PMINIDUMP_CALLBACK_INFORMATION);
-    const HMODULE dbghelp = LoadLibraryExW(L"dbghelp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+    // Keep one system DLL reference while the process uses the watchdog.
+    static const HMODULE dbghelp = LoadLibraryExW(L"dbghelp.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     const auto write = dbghelp ? reinterpret_cast<WriteDump>(GetProcAddress(dbghelp, "MiniDumpWriteDump")) : nullptr;
-    if (!write) { log::error("engine-hang", "minidump unavailable (dbghelp)"); return; }
+    if (!write) { log::error(category, "minidump unavailable (dbghelp)"); return false; }
     SYSTEMTIME st{};
     GetLocalTime(&st);
-    const auto name = std::format(L"veyra-hang-{:04}{:02}{:02}-{:02}{:02}{:02}-{}.dmp", st.wYear, st.wMonth, st.wDay,
-                                  st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
-    const auto path = std::filesystem::path(directory) / name;
+    auto name = std::format(L"veyra-hang-{:04}{:02}{:02}-{:02}{:02}{:02}-{}", st.wYear, st.wMonth, st.wDay,
+                            st.wHour, st.wMinute, st.wSecond, GetCurrentProcessId());
+    if (captureDriver) name += L"-capture-" + std::to_wstring(++g_captureDumpSerial);
+    const auto path = std::filesystem::path(directory) / (name + L".dmp");
     const HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file == INVALID_HANDLE_VALUE) { log::error("engine-hang", std::format("minidump open failed error={}", GetLastError())); return; }
+    if (file == INVALID_HANDLE_VALUE) {
+        log::error(category, std::format("minidump open failed error={}", GetLastError()));
+        return false;
+    }
     // Thread stacks, module list and handle table (which event/mutex a wait is
     // on); no heap, so the file stays small enough to send with the logs.
     const auto type = MINIDUMP_TYPE(MiniDumpWithThreadInfo | MiniDumpWithHandleData | MiniDumpWithUnloadedModules);
@@ -133,13 +160,17 @@ void writeDump() {
     LARGE_INTEGER bytes{};
     GetFileSizeEx(file, &bytes);
     CloseHandle(file);
-    log::error("engine-hang", std::format("minidump written={} file={} bytes={}", ok != FALSE, path.filename().string(), bytes.QuadPart));
+    log::error(category, std::format("minidump written={} file={} bytes={}", ok != FALSE, path.filename().string(), bytes.QuadPart));
+    if (!ok) DeleteFileW(path.c_str());
+    return ok != FALSE;
 }
 } // namespace
 
 struct EngineWatchdog::State {
     Notify notify;
     std::atomic<uint64_t> lastBeat{0};
+    std::atomic<uint64_t> session{0};
+    std::atomic<CaptureDriverStage> captureStage{CaptureDriverStage::None};
     std::atomic<bool> armed{false}, reporting{false};
     std::atomic<const char*> stage{nullptr};
     std::atomic<DWORD> ownerId{0};
@@ -150,9 +181,18 @@ struct EngineWatchdog::State {
     std::mutex notifyMutex;                 // held while the callback runs
     ~State() { if (owner) CloseHandle(owner); }
 
-    void tell(uint64_t stalledMs) {
+    void tell(uint64_t stalledMs, bool captureDriver) {
         std::lock_guard lock(notifyMutex);
-        if (notify) notify(stalledMs);
+        if (notify) notify(stalledMs, captureDriver);
+    }
+
+    void touchOwner() {
+        const DWORD id = GetCurrentThreadId();
+        if (ownerId.load(std::memory_order_relaxed) == id) return;
+        std::lock_guard lock(mutex);
+        if (owner) CloseHandle(owner);
+        owner = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_LIMITED_INFORMATION, FALSE, id);
+        ownerId = id;
     }
 
     HANDLE duplicateOwner(DWORD& id) {
@@ -167,33 +207,41 @@ struct EngineWatchdog::State {
         uint64_t beatAtReport = 0, resampleAt = 0, notifiedAt = 0, cpuAtReport = 0;
         unsigned samples = 0;
         StackSample first{};
+        auto reportedPhase = CaptureDriverStage::None;
+        uint64_t reportedSession = 0, dumpSession = 0;
+        std::vector<CaptureDumpSignature> captureDumps;
         for (;;) {
             {
                 std::unique_lock lock(mutex);
                 if (wake.wait_for(lock, std::chrono::milliseconds(250), [&] { return stopping; })) break;
             }
             const uint64_t now = GetTickCount64();
+            const auto phase = captureStage.load();
+            const uint64_t sessionId = session.load();
             const uint64_t beatAt = lastBeat.load();
             const uint64_t stalled = now > beatAt ? now - beatAt : 0;
-            const bool active = armed.load();
+            const bool captureDriver = phase != CaptureDriverStage::None;
+            const bool active = captureDriver || armed.load();
             if (reporting.load()) {
-                if (!active || beatAt != beatAtReport) {
-                    log::warn("engine-hang", std::format("owner {} after {} ms (stage={})", active ? "moved again" : "left the playback loop",
-                                                         (active ? beatAt : now) - beatAtReport, stage.load() ? stage.load() : "none"));
+                const bool reportedCapture = reportedPhase != CaptureDriverStage::None;
+                const auto category = reportedCapture ? "capture-driver-hang" : "engine-hang";
+                if (!active || beatAt != beatAtReport || phase != reportedPhase || sessionId != reportedSession) {
+                    log::warn(category, std::format("owner moved again after {} ms (stage={})",
+                                                    now - beatAtReport, reportedCapture ? phaseName(reportedPhase) : "playback"));
                     reporting = false;
-                    tell(0);
+                    tell(0, reportedCapture);
                     continue;
                 }
-                if (now - notifiedAt >= 1000) { tell(stalled); notifiedAt = now; }
+                if (now - notifiedAt >= 1000) { tell(stalled, reportedCapture); notifiedAt = now; }
                 if (samples < 3 && now >= resampleAt) {
                     DWORD id = 0;
                     const HANDLE thread = duplicateOwner(id);
                     StackSample again{};
                     if (thread && sampleThread(thread, again)) {
-                        const bool same = again.count == first.count && std::memcmp(again.pc, first.pc, sizeof(uintptr_t) * first.count) == 0;
-                        log::error("engine-hang", std::format("resample owner={} stalledMs={} cpuMsSinceReport={} stack={}", id, stalled,
-                                                              threadCpuMs(thread) - cpuAtReport, same ? "unchanged" : "changed"));
-                        if (!same) logStack("resample", again);
+                        const bool same = sameStack(again, first);
+                        log::error(category, std::format("resample owner={} stalledMs={} cpuMsSinceReport={} stack={}", id, stalled,
+                                                        threadCpuMs(thread) - cpuAtReport, same ? "unchanged" : "changed"));
+                        if (!same) logStack(category, "resample", again);
                         Logger::instance().flush();
                     }
                     if (thread) CloseHandle(thread);
@@ -203,25 +251,54 @@ struct EngineWatchdog::State {
                 continue;
             }
             if (!active || stalled < kReportMs) continue;
-            reporting = true;
-            beatAtReport = beatAt;
             DWORD id = 0;
             const HANDLE thread = duplicateOwner(id);
             first.count = 0;
             const bool sampled = thread && sampleThread(thread, first);
             cpuAtReport = thread ? threadCpuMs(thread) : 0;
-            log::error("engine-hang", std::format("owner={} stalledMs={} lastStage={} cpuMs={} stackFrames={} nvidiaOverlay={} rtss={} gamePP={} (playback loop made no progress; capture/audio threads are separate)",
-                                                  id, stalled, stage.load() ? stage.load() : "none", cpuAtReport, sampled ? first.count : 0,
-                                                  gfx::nvidiaOverlayRunning(), gfx::rivaTunerRunning(), gfx::gamePPRunning() || gfx::gamePPInjected()));
-            if (sampled) logStack("stack", first);
             if (thread) CloseHandle(thread);
+            const auto stillBlocked = [&] {
+                return (captureDriver || armed.load()) && lastBeat.load() == beatAt
+                    && captureStage.load() == phase && session.load() == sessionId;
+            };
+            if (!stillBlocked()) continue;
+            reporting = true;
+            beatAtReport = beatAt;
+            reportedPhase = phase;
+            reportedSession = sessionId;
+            const auto category = captureDriver ? "capture-driver-hang" : "engine-hang";
+            if (captureDriver) {
+                log::warn(category, std::format("owner={} stalledMs={} phase={} cpuMs={} stackFrames={}",
+                                               id, stalled, phaseName(phase), cpuAtReport, sampled ? first.count : 0));
+            } else {
+                const auto lastStage = stage.load();
+                log::error(category, std::format("owner={} stalledMs={} lastStage={} cpuMs={} stackFrames={} nvidiaOverlay={} rtss={} gamePP={}",
+                                                id, stalled, lastStage ? lastStage : "none", cpuAtReport, sampled ? first.count : 0,
+                                                gfx::nvidiaOverlayRunning(), gfx::rivaTunerRunning(), gfx::gamePPRunning() || gfx::gamePPInjected()));
+            }
+            if (stillBlocked()) tell(stalled, captureDriver);
+            notifiedAt = now;
+            if (sampled) logStack(category, "stack", first);
             Logger::instance().flush();
-            writeDump();
+            if (captureDriver) {
+                if (dumpSession != sessionId) {
+                    dumpSession = sessionId;
+                    captureDumps.clear();
+                }
+                const bool duplicate = std::ranges::any_of(captureDumps, [&](const CaptureDumpSignature& entry) {
+                    return entry.phase == phase && sameStack(entry.stack, first);
+                });
+                if (duplicate || captureDumps.size() >= kMaxCaptureDumpsPerSession) {
+                    log::info(category, duplicate ? "minidump skipped: duplicate phase and stack" : "minidump skipped: session limit");
+                } else if (writeDump(category, true)) {
+                    captureDumps.push_back({phase, first});
+                }
+            } else {
+                writeDump(category, false);
+            }
             Logger::instance().flush();
             samples = 1;
             resampleAt = now + 10000;
-            tell(stalled);
-            notifiedAt = now;
         }
         std::lock_guard lock(mutex);
         exited = true;
@@ -246,15 +323,21 @@ EngineWatchdog::~EngineWatchdog() {
 
 void EngineWatchdog::beat() {
     auto& s = *state_;
-    const DWORD id = GetCurrentThreadId();
-    if (s.ownerId.load(std::memory_order_relaxed) != id) {
-        std::lock_guard lock(s.mutex);
-        if (s.owner) CloseHandle(s.owner);
-        s.owner = OpenThread(THREAD_SUSPEND_RESUME | THREAD_GET_CONTEXT | THREAD_QUERY_LIMITED_INFORMATION, FALSE, id);
-        s.ownerId = id;
-    }
+    s.touchOwner();
     s.lastBeat.store(GetTickCount64(), std::memory_order_relaxed);
     s.armed.store(true, std::memory_order_release);
+}
+
+void EngineWatchdog::beginSession() {
+    state_->lastBeat = GetTickCount64();
+    ++state_->session;
+}
+
+void EngineWatchdog::setCaptureDriverStage(CaptureDriverStage phase) {
+    auto& s = *state_;
+    if (phase != CaptureDriverStage::None) s.touchOwner();
+    s.lastBeat = GetTickCount64();
+    s.captureStage = phase;
 }
 
 void EngineWatchdog::disarm() { state_->armed.store(false, std::memory_order_release); }

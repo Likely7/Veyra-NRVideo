@@ -529,7 +529,7 @@ struct QmlPlayerBridge::Impl {
     // --- performance orbs / status light (#13) ---
     ui::live_status::DashboardHistory history;
     int historyTicks = 0;
-    QString runStatus, runLevel, runDetail;
+    QString runStatus, runLevel, runDetail, runAction, runHint;
     QStringList runOptions;
     double effectiveOutputFps=-1;
     // FG output hint for the 倍率 row; 可变刷新 level (gfx::vrrLevel) of the
