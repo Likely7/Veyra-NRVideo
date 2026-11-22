@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/engine/PresentTearingDetector.h"
 #include <windows.h>
 #include <atomic>
 #include <mutex>
@@ -199,6 +200,7 @@ struct PlayerSnapshot {
     // now, 3 possible, 4 active. presentationVrrSync: the 可变刷新 switch made
     // Automatic present like Vsync for it.
     unsigned displayVrr=0;
+    TearingHint tearingHint=TearingHint::None;
     bool presentationVrrSync=false;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
     // 0 = not queried yet (no session). The UI uses this to offer only the

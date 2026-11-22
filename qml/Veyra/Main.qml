@@ -916,6 +916,7 @@ Window {
         z: 30
         property string message: ""
         property bool isError: false
+        property bool isWarning: false
         property bool on: false
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
@@ -926,22 +927,29 @@ Window {
         width: Math.min(toastText.implicitWidth + 24 + 2, root.width - 48)
         height: toastText.implicitHeight + 14 + 2
         radius: 9
-        color: toast.isError ? "#2A1414" : "#132218"
+        color: toast.isError ? "#2A1414" : toast.isWarning ? "#302315" : "#132218"
         border.width: 1
-        border.color: toast.isError ? Qt.rgba(1, 0.365, 0.365, 0.4) : Qt.rgba(0.239, 0.863, 0.518, 0.35)
+        border.color: toast.isError ? Qt.rgba(1, 0.365, 0.365, 0.4)
+                     : toast.isWarning ? Theme.warn : Qt.rgba(0.239, 0.863, 0.518, 0.35)
         opacity: on ? 1 : 0
         visible: opacity > 0.01
         transform: Translate { id: toastShift; y: toast.on ? 0 : -8
             Behavior on y { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } } }
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
-        function show(m, bad) { toast.message = m; toast.isError = bad; toast.on = true; toastTimer.restart() }
-        Timer { id: toastTimer; interval: 2600; onTriggered: toast.on = false }
+        function show(message, error, warning = false) {
+            toast.message = message
+            toast.isError = error
+            toast.isWarning = warning
+            toast.on = true
+            toastTimer.restart()
+        }
+        Timer { id: toastTimer; interval: toast.isWarning ? 6500 : 2600; onTriggered: toast.on = false }
         Text {
             id: toastText
             anchors.centerIn: parent
             width: Math.min(implicitWidth, root.width - 72)
             text: toast.message
-            color: toast.isError ? "#FFC9C9" : "#BDF3D2"
+            color: toast.isError ? "#FFC9C9" : toast.isWarning ? "#FFE3B6" : "#BDF3D2"
             font.family: Theme.fontUi
             font.pixelSize: 12
             wrapMode: Text.WordWrap
@@ -969,6 +977,7 @@ Window {
         target: veyra
         function onPlaylistRequested() { onboarding.close(); playlistWindow.open() }
         function onNotice(text, isError) { toast.show(text, isError) }
+        function onWarningNotice(text) { toast.show(text, false, true) }
         function onOverlayRestartSuggested(kind) { onboarding.close(); overlayRestart.kind = kind; overlayRestart.open() }
         function onNavigate(p) {
             onboarding.close()

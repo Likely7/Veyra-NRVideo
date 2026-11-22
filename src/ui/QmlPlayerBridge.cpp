@@ -467,6 +467,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             else emit notice(tr("显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。")
                                  .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
         }
+        const auto& displayed = impl_->snapshot;
+        if (displayed.running && !displayed.image && displayed.tearingHint != engine::TearingHint::None
+            && displayed.sessionId != impl_->tearingNoticeSession) {
+            impl_->tearingNoticeSession = displayed.sessionId;
+            emit warningNotice(displayed.tearingHint == engine::TearingHint::Nvidia
+                ? tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请在 NVIDIA 控制面板的程序设置中，将 veyra_qml_ui.exe 的垂直同步设为“使用 3D 应用程序设置”。")
+                : tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请检查显卡驱动中的垂直同步设置。"));
+        }
         updateMaskOverlay();
         tickSubtitles();
         tickImageBatch();

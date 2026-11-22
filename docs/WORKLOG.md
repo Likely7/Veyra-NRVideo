@@ -38,6 +38,16 @@
 
 产物在 `E:/项目/Veyra/{build,logs,tests,tmp,reports}/codex-capture-busy-status-20261120`，手工入口为同任务测试目录的 `启动采集与状态提示测试.cmd`。原生测试使用独立配置、测试文件和可控的窗口阻塞。真实占用的采集卡、USB 带宽不足和 4K 高负载的现场触发仍需在对应硬件复测。完整命令、样本与证据见 `reports/codex-capture-busy-status-20261120/FINAL.json`。
 
+## 2026-11-21 固定刷新送显时序提示
+
+从本地 `main` 的 `eb5fd6d0` 建立 `codex/tearing-diagnostics-20261121`。沿用每秒 DXGI 帧统计。在固定刷新计数正常、自动或垂直同步档下，连续观测至少 5 秒、中位数均低于 1 ms 且累计至少 30 个样本时，每次播放或采集会话最多提示一次。丢失计数、换屏、切档和显示状态变化会重新累计。可变刷新正在跟随或当前显示模式有可变刷新能力时跳过，避免把可变刷新下自然偏短的送显时间误报为撕裂。提示表述为可能的送显时序问题，记录本身无法确认驱动覆盖或屏幕撕裂。启动时后台读取全局及 Veyra 程序配置的 VSYNCMODE。沿用原有 DXGI 交换链标志。驱动读数使用 [NVIDIA 定义](https://github.com/NVIDIA/nvapi/blob/main/NvApiDriverSettings.h)，交换链行为见 [DXGI 可变刷新文档](https://learn.microsoft.com/en-us/windows/win32/direct3ddxgi/variable-refresh-rate-displays)。
+
+复算现场 4K 120 Hz 固定刷新日志，自动档无遮挡送显 P50 为 0.24 ms，被菜单覆盖时为 10.25 ms。回放 488 个统计窗口，包含无样本的时间段。检测器只触发一次，累计 5.021 秒、51 个样本，最后一个窗口 P50 为 0.151 ms。`scripts/acceptance/build-recording-handoff.py --task codex-tearing-diagnostics-20261121 --label 2.2.0-display-diagnostics-test --jobs 2` 最后五目标 143.4 秒通过。检测器 14 项、Qt Quick 238 项、异步显示查询和九语词库检查全部通过。
+
+本机以独立配置播放移动画面，NVIDIA 全局读数为应用控制，Veyra 无独立驱动配置。320.002 Hz 显示器报告可请求 VRR。私有配置打开可变刷新后，Veyra 记录 `vrrSync=true` 并以 `Present(1,0)` 送显。驱动仍报告 `active=false`，两次播放均无撕裂提示。PresentMon 启动 ETW 会话时被 Windows 拒绝，需要管理员或 Performance Log Users 权限。本轮保留只读诊断，驱动强制关闭垂直同步的实机对照未执行。
+
+产物位于 `E:/项目/Veyra/{build,logs,tests,tmp,reports}/codex-tearing-diagnostics-20261121`。日志 `replay-and-policy.txt`、`monitor-evidence.json` 和 `monitor-vrr-request.json` 分别记录固定刷新回放、本机默认配置及私有 VRR 配置。构建回执为 `logs/codex-tearing-diagnostics-20261121/build-20261121-040516/receipt.json`。启动入口为 `tests/codex-tearing-diagnostics-20261121/启动送显诊断测试.cmd`。
+
 ## 2026-11-20 Veyra 2.2.0 正式发行
 
 用户授权向 Likely7/Veyra-NRVideo 发布 2.2.0、精简 README 并把完整更新和已有对比图放在 Release。安装器分支 7ecb5d1d 合入发行树，WORKLOG 的追加冲突保留两边记录。运行程序、QML、着色器及依赖构建使用主线 41d1aeb6，其中生产源码与 ecbe0543 一致。从已验证配置重用依赖参数，只加入正式 Ed25519 验签公钥及关闭回环测试。命令入口为 `scripts/acceptance/build-recording-handoff.py --task codex-release-2.2.0-20261120 --label 2.2.0 --jobs 2 --reconfigure`，8 个目标 374.0 秒通过，回执在同任务 `logs/build-20261120-055915`。
@@ -1720,3 +1730,9 @@ Windows 有线局域网下，请求 100 Mbps 时周期性卡顿，降到 15/20 M
 本次从 PR 源码配置 services/remoteplay-probe，Release/MSVC 19.33，构建并发 2。复用已核验的固定 Chiaki stage 与 /MD 静态依赖；本机 probe 对已有 sscanf/getenv 报 C4996，私有 CMake 配置补充 _CRT_SECURE_NO_WARNINGS 并保留 /EHsc，未修改产品编译选项。构建目标为 veyra_remoteplay_udp_buffer_tests、veyra_remoteplay_feedback_wire_tests、veyra_remoteplay_native_probe、veyra_remoteplay_core_tests；ctest --test-dir <build-native> -V -E "rp[.]dpapi_profile" --timeout 30 --output-on-failure：82/82 通过（79 个 offline-core、native 初始化、UDP buffer、feedback wire）。两条路径均读回 SO_RCVBUF=4194304、a_rwnd=102400；feedback wire 为 8 个加密 history 报文和 1 个 state 报文。未构建的 DPAPI profile 测试明确排除。完整命令、失败日志和通过记录保留在本次私有验证目录。
 
 此前包含同一 UDP 补丁的 2.2.0 本地产品测试包已编译并完成启动检查，用户反馈 100 Mbps 已流畅；该包另含本机编译适配，不将其视为严格单变量对照。本 PR 本次仅重建上述原生目标，没有重新构建完整 GUI，也没有自动连接 PS5。未测修改后丢包率、端到端延迟或其他机器效果；本次提交仅包含 UDP 修复、构建接线、回归与记录。
+
+### 2026-11-21 撕裂提示复审
+
+在 \`codex/tearing-diagnostics-20261121\` 分开判断 VRR 能力与实际状态。已生效或应用使用 VRR 时跳过，可用 VRR 且送帧率达到刷新率的 90% 时也跳过。其余在固定刷新、持续五秒和有足够样本时可以提示。送帧数用 DXGI 统计差值。提示改成琥珀色并停留 6.5 秒。
+
+构建 \`veyra_tearing_detector_tests\` 和 \`veyra_qml_ui\`，并发 2，记录在 \`E:/项目/Veyra/logs/codex-tearing-diagnostics-20261121/build-20261121-231937\`。单测含现场统计复放共 17 项通过，488 个窗口复放只报告一次。RTX 5070 接 320 Hz 显示器，在实跑窗口和全屏时均检测到可用 VRR、实际未开启。每组 11 个样本，窗口各窗中位数 3.688–4.644 ms，全屏 4.735–7.639 ms，共 0 次误报。私有 UI 探针确认琥珀色提示及原有红色错误样式。全屏样本合成模式未知，独立翻转及驱动强制关闭垂直同步的实机正对照待测。日志在 \`E:/项目/Veyra/logs/codex-batch-review-20261121/tearing\`，手测版在 \`E:/项目/Veyra/tests/codex-tearing-diagnostics-20261121\`。

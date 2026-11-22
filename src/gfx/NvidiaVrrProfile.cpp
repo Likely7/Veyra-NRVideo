@@ -2,7 +2,9 @@
 #include <windows.h>
 #include <algorithm>
 #include <cwctype>
+#include <format>
 #include <mutex>
+#include <optional>
 #include <stdexcept>
 #include <utility>
 
@@ -13,6 +15,24 @@ namespace {
 using Handle = void*;
 using U = uint32_t;
 constexpr int settingNotFound = -160, executableNotFound = -166;
+constexpr U vsyncModeId = 0x00A879CF; // VSYNCMODE_ID from NVIDIA NvApiDriverSettings.h (MIT)
+
+std::string vsyncDescription(const std::optional<VrrProfileValue>& value) {
+    if (!value) return "unset";
+    // EValues_VSYNCMODE, NvApiDriverSettings.h. Preserve unknown values in
+    // the diagnostic so newer driver modes are still visible.
+    const char* mode = "unknown";
+    switch (value->value) {
+    case 0x60925292: mode = "application-controlled"; break;
+    case 0x08416747: mode = "force-off"; break;
+    case 0x47814940: mode = "force-on"; break;
+    case 0x32610244: mode = "interval-2"; break;
+    case 0x71271021: mode = "interval-3"; break;
+    case 0x13245256: mode = "interval-4"; break;
+    case 0x18888888: mode = "virtual"; break;
+    }
+    return std::format("{}(0x{:08X})", mode, value->value);
+}
 #pragma pack(push, 4)
 union Value {
     U dword;
@@ -105,13 +125,32 @@ public:
     template<class... A> int call(U id, A... args) const {
         return api_.function<int(__cdecl*)(A...)>(id)(args...);
     }
-    VrrProfileValue value(Handle target, U id) const {
+    std::optional<VrrProfileValue> readDword(Handle target, U id) const {
         auto setting = versioned<Setting>();
         const int code = call<Handle, Handle, U, Setting*>(0x73BF8338, session, target, id, &setting);
         if (code == settingNotFound) return {};
         checked(code);
-        if (setting.type != 0 || setting.current.dword > 2) throw Failure{VrrProfileError::UnsafeProfile};
-        return {setting.current.dword, setting.location == 0};
+        if (setting.type != 0) throw Failure{VrrProfileError::UnsafeProfile};
+        return VrrProfileValue{setting.current.dword, setting.location == 0};
+    }
+    VrrProfileValue value(Handle target, U id) const {
+        const auto entry = readDword(target, id).value_or(VrrProfileValue{});
+        if (entry.value > 2) throw Failure{VrrProfileError::UnsafeProfile};
+        return entry;
+    }
+    bool findApplication(const std::wstring& executable, Application& app) {
+        wchar_t name[2048]{}; copy(name, executable);
+        int code = call<Handle, wchar_t*, Handle*, Application*>(0xEEE566B2, session, name, &profile, &app);
+        if (code == executableNotFound) {
+            // Check a basename association too; never overwrite a shared match
+            // or create a conflicting association for a different installation.
+            const auto slash = executable.find_last_of(L'\\');
+            copy(name, executable.substr(slash + 1));
+            code = call<Handle, wchar_t*, Handle*, Application*>(0xEEE566B2, session, name, &profile, &app);
+        }
+        if (code == executableNotFound) { profile = nullptr; return false; }
+        checked(code);
+        return true;
     }
     VrrProfileSnapshot read(const std::wstring& executable) {
         VrrProfileSnapshot state;
@@ -121,17 +160,7 @@ public:
         if (state.profileName.size() >= 2048) throw Failure{VrrProfileError::UnsafeProfile};
         for (size_t k = 0; k < state.global.size(); ++k) state.global[k] = value(global, vrrProfileSettingIds[k]);
         auto app = versioned<Application>();
-        wchar_t name[2048]{}; copy(name, state.executable);
-        int code = call<Handle, wchar_t*, Handle*, Application*>(0xEEE566B2, session, name, &profile, &app);
-        if (code == executableNotFound) {
-            // Check a basename association too; never overwrite a shared match
-            // or create a conflicting association for a different installation.
-            const auto slash = state.executable.find_last_of(L'\\');
-            copy(name, state.executable.substr(slash + 1));
-            code = call<Handle, wchar_t*, Handle*, Application*>(0xEEE566B2, session, name, &profile, &app);
-        }
-        if (code == executableNotFound) { profile = nullptr; state.isolated = true; return state; }
-        checked(code);
+        if (!findApplication(state.executable, app)) { state.isolated = true; return state; }
         auto info = versioned<Profile>();
         checked(call<Handle, Handle, Profile*>(0x61CD6FD6, session, profile, &info));
         state.exists = true; state.profileName = info.name; state.settingCount = info.settings;
@@ -195,6 +224,26 @@ VrrProfileResult inspectVrrProfile(const std::wstring& executable) {
     try { Session session; VrrProfileResult result; result.snapshot = session.read(executable); return result; }
     catch (Failure e) { return failure(e); }
     catch (...) { return failure({VrrProfileError::Driver}); }
+}
+std::string nvidiaVsyncProfileDiagnostic(const std::wstring& executable) {
+    const std::lock_guard lock(operations());
+    try {
+        const auto path = normalized(executable);
+        if (path.empty()) return "global=unavailable app=unavailable reason=invalid-executable-path";
+        Session session;
+        const auto global = session.readDword(session.global, vsyncModeId);
+        auto application = versioned<Application>();
+        const bool present = session.findApplication(path, application);
+        const auto app = present ? session.readDword(session.profile, vsyncModeId) : std::nullopt;
+        return std::format("global={} app={} appProfile={} appLocal={} effective={}",
+            vsyncDescription(global), present ? vsyncDescription(app) : "no-profile",
+            present, app && app->local, vsyncDescription(app ? app : global));
+    } catch (Failure error) {
+        return std::format("global=unavailable app=unavailable nvapiStatus={} error={}",
+                           error.status, int(error.error));
+    } catch (...) {
+        return "global=unavailable app=unavailable reason=read-failed";
+    }
 }
 VrrProfileResult repairVrrProfile(const VrrProfileSnapshot& expected) {
     const std::lock_guard lock(operations()); return write(expected, nullptr);

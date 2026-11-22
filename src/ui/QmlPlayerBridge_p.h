@@ -221,6 +221,7 @@ struct QmlPlayerBridge::Impl {
     bool openingSource = false;
     uint64_t openingSessionId = 0;
     uint64_t vramNoticeSession = 0;   // the session the video-memory warning was shown for
+    uint64_t tearingNoticeSession = 0;
 
     // The chain the UI edits, kept in step with the facade's pending settings.
     engine::EffectChain chain;

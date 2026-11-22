@@ -25379,6 +25379,32 @@
    "ru": "RivaTuner (RTSS OSD) вводится в Veyra. Set Settings → Мониторинг наложения совместимости с Auto и перезапуск Veyra во время работы RTSS: интерфейс использует совместимый чертеж, а OSD показывает только на видео"
   },
   {
+   "zh": "检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请在 NVIDIA 控制面板的程序设置中，将 veyra_qml_ui.exe 的垂直同步设为“使用 3D 应用程序设置”。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到可能造成畫面撕裂的呈現時序。如果看見撕裂，請在 NVIDIA 控制面板的程式設定中，將 veyra_qml_ui.exe 的垂直同步設為「使用 3D 應用程式設定」。",
+   "en": "Presentation timing suggests possible screen tearing. If you see tearing, open NVIDIA Control Panel → Program Settings and set Vertical sync for veyra_qml_ui.exe to “Use the 3D application setting”.",
+   "ja": "ティアリングが起きる可能性のある表示タイミングを検出しました。ティアリングが見える場合は、NVIDIA コントロール パネルのプログラム設定で veyra_qml_ui.exe の垂直同期を「3D アプリケーション設定を使用する」に設定してください。",
+   "ko": "화면 찢어짐이 발생할 수 있는 표시 타이밍이 감지되었습니다. 찢어짐이 보이면 NVIDIA 제어판의 프로그램 설정에서 veyra_qml_ui.exe의 수직 동기를 “3D 응용 프로그램 설정 사용”으로 설정하세요.",
+   "es": "Los tiempos de presentación apuntan a un posible desgarro de pantalla. Si lo ves, abre el Panel de control de NVIDIA → Configuración de programa y ajusta la sincronización vertical de veyra_qml_ui.exe a «Usar la configuración de la aplicación 3D».",
+   "fr": "Le rythme de présentation indique un risque de déchirement de l’image. Si vous en voyez, ouvrez le Panneau de configuration NVIDIA → Paramètres de programme et réglez la synchronisation verticale de veyra_qml_ui.exe sur « Utiliser le paramètre de l’application 3D ».",
+   "de": "Das Anzeigetiming deutet auf mögliches Tearing hin. Wenn du Tearing siehst, öffne die NVIDIA-Systemsteuerung → Programmeinstellungen und stelle die vertikale Synchronisierung für veyra_qml_ui.exe auf „Einstellung für 3D-Anwendung verwenden“.",
+   "pt-BR": "O ritmo de apresentação indica possível rasgo na imagem. Se você notar rasgos, abra Painel de controle da NVIDIA → Configurações de programa e defina a sincronização vertical de veyra_qml_ui.exe como “Usar a configuração do aplicativo 3D”.",
+   "ru": "Время вывода кадров указывает на возможные разрывы изображения. Если видите разрывы, откройте Панель управления NVIDIA → Программные настройки и выберите для вертикальной синхронизации veyra_qml_ui.exe «Использовать настройку 3D-приложения»."
+  },
+  {
+   "zh": "检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请检查显卡驱动中的垂直同步设置。",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "偵測到可能造成畫面撕裂的呈現時序。如果看見撕裂，請檢查顯示卡驅動程式的垂直同步設定。",
+   "en": "Presentation timing suggests possible screen tearing. If you see tearing, check the vertical sync setting in your graphics driver.",
+   "ja": "ティアリングが起きる可能性のある表示タイミングを検出しました。ティアリングが見える場合は、グラフィックス ドライバーの垂直同期設定を確認してください。",
+   "ko": "화면 찢어짐이 발생할 수 있는 표시 타이밍이 감지되었습니다. 찢어짐이 보이면 그래픽 드라이버의 수직 동기 설정을 확인하세요.",
+   "es": "Los tiempos de presentación apuntan a un posible desgarro de pantalla. Si lo ves, revisa la sincronización vertical del controlador gráfico.",
+   "fr": "Le rythme de présentation indique un risque de déchirement de l’image. Si vous en voyez, vérifiez la synchronisation verticale du pilote graphique.",
+   "de": "Das Anzeigetiming deutet auf mögliches Tearing hin. Wenn du Tearing siehst, prüfe die Einstellung für vertikale Synchronisierung im Grafiktreiber.",
+   "pt-BR": "O ritmo de apresentação indica possível rasgo na imagem. Se você notar rasgos, verifique a sincronização vertical no driver gráfico.",
+   "ru": "Время вывода кадров указывает на возможные разрывы изображения. Если видите разрывы, проверьте настройку вертикальной синхронизации в драйвере видеокарты."
+  },
+  {
    "zh": "检测到抖音直播伴侣：GPU 优先级暂时从“实时”降为“高”，避免两个程序争用显卡时卡死；直播伴侣退出后自动恢复",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "偵測到抖音直播伴侶：GPU 優先級暫時從「即時」降為「高」，避免兩個程式爭用顯示卡時卡死；直播伴侶結束後自動恢復",

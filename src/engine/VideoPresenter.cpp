@@ -638,7 +638,25 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         if(stats.supported)veyra::log::info("display-stats",std::format("refreshHz={:.3f} presentCalls={} dxgiPresentCount={} refreshes={} presentRefreshDelta={} presentsAhead={} backend={} (DXGI GetFrameStatistics delta over ~1s. These counters CANNOT tell how many frames the panel actually showed: with vsync off and tearing allowed, dxgiPresentCount tracks completed Present calls, and both refresh counters just advance with the monitor. presentsAhead = submitted presents after the last shown one at the sample: the display queue under VSync; with Automatic Present(0,0) it includes frames a newer one replaces; -1 unavailable. Measuring scanout needs PresentMon. XeSS generated presents are provider-internal.)",sink_.displayRefreshHz(),stats.presents,stats.displayed,stats.refreshes,stats.displayedRefresh,stats.ahead,sink_.xess()?"XeSS":"DXGI"));
         else if(FAILED(stats.result))veyra::log::info("display-stats",std::format("unavailable hr=0x{:X} backend={}",unsigned(stats.result),sink_.xess()?"XeSS":"DXGI"));
         const auto scanout=displayStats?sink_.takeDisplayLatency():gfx::PresentSink::DisplayLatencySummary{};
-        if(scanout.samples||scanout.compositionMode>=0)veyra::log::info("display-latency",std::format("presentToScanoutP50Ms={:.3f} presentToScanoutP95Ms={:.3f} presentToScanoutMaxMs={:.3f} samples={} replacedAtLeast={} compositionMode={} refreshHz={:.3f} (DXGI frame statistics: Present call to the vblank that showed it, VSync and Automatic DXGI presents; Automatic dates only frames named as shown; compositionMode 0 composed 1 overlay 2 none 3 failure -1 unknown; not a photon measurement)",scanout.p50Ms,scanout.p95Ms,scanout.maxMs,scanout.samples,scanout.replacedAtLeast,scanout.compositionMode,sink_.displayRefreshHz()));
+        const bool vrrCapable = gfx::vrrPresentationAvailable(vrr_);
+        // ADL reports FreeSync availability in this mode, without a scanout-active flag.
+        const bool vrrActive = (!vrr_.amd && vrrSync_) || vrr_.enabled || vrr_.inVrrMode;
+        if(scanout.samples||scanout.compositionMode>=0)veyra::log::info("display-latency",std::format("presentToScanoutP50Ms={:.3f} presentToScanoutP95Ms={:.3f} presentToScanoutMaxMs={:.3f} samples={} replacedAtLeast={} compositionMode={} refreshHz={:.3f} vrrCapable={} vrrActive={} (DXGI frame statistics: Present call to the vblank that showed it, VSync and Automatic DXGI presents; Automatic dates only frames named as shown; compositionMode 0 composed 1 overlay 2 none 3 failure -1 unknown; not a photon measurement)",scanout.p50Ms,scanout.p95Ms,scanout.maxMs,scanout.samples,scanout.replacedAtLeast,scanout.compositionMode,sink_.displayRefreshHz(),vrrCapable,vrrActive));
+        const double sampleSeconds = scanoutSampleAt_.time_since_epoch().count() > 0
+            ? std::chrono::duration<double>(presentEnd - scanoutSampleAt_).count() : 0;
+        scanoutSampleAt_ = presentEnd;
+        const bool countersValid = stats.supported && !sink_.xess() && refreshQueried_
+            && observedDisplayGeneration_ == displayGeneration_ && sink_.lastPresentTiming().result == S_OK;
+        if (tearingDetector_.sample({sampleSeconds, refreshHz_, scanout.p50Ms, stats.refreshes,
+                                     scanout.samples, stats.presents, scanoutSync_, countersValid,
+                                     vrrCapable, vrrActive})) {
+            tearingHint_ = ctx.adapter().isNvidia ? TearingHint::Nvidia : TearingHint::Driver;
+            veyra::log::warn("display-tearing", std::format(
+                "possible-immediate-flip sync={} refreshHz={:.3f} observedHz={:.3f} submittedHz={:.3f} vrrCapable={} spanSeconds={:.3f} samples={} p50Ms={:.3f} compositionMode={}",
+                unsigned(scanoutSync_), refreshHz_, double(stats.refreshes) / sampleSeconds,
+                double(stats.presents) / sampleSeconds, vrrCapable, tearingDetector_.seconds(),
+                tearingDetector_.samples(), scanout.p50Ms, scanout.compositionMode));
+        }
         const auto& timing=sink_.lastPresentTiming();
         veyra::log::info("present-cost",std::format("generated={} totalMs={:.3f} recordSubmitMs={:.3f} slotWaitMs={:.3f} dxgiMs={:.3f} slow={} source={} epoch={} backend={} resized={} resizeMs={:.3f} beginMs={:.3f} commandsMs={:.3f} beforeMs={:.3f} presentCallMs={:.3f} bufferMs={:.3f} afterMs={:.3f} hr=0x{:X}",generated,
             std::chrono::duration<double,std::milli>(presentEnd-presentStart).count(),
@@ -686,6 +704,7 @@ void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve,pipeline:
 }
 
 void VideoPresenter::close(){
+    tearingDetector_.resetWindow();scanoutSampleAt_={};observedDisplayGeneration_=0;
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakInfo_={};
     refreshMonitor_=nullptr;refreshHz_=0;vrr_={};refreshQueried_=false;vrrSync_=false;displayStateSerial_=0;vrrConfirmAt_.reset();
@@ -719,6 +738,12 @@ void VideoPresenter::startDisplayState(){
 void VideoPresenter::applyDisplayState(const DisplayState& state){
     if(state.monitor!=refreshMonitor_)return;
     const auto hz=state.refreshHz;const auto& vrr=state.vrr;
+    if (!refreshQueried_ || std::abs(hz - refreshHz_) > 0.5 || vrr != vrr_
+        || observedDisplayGeneration_ != state.generation) {
+        tearingDetector_.resetWindow();
+        scanoutSampleAt_ = {};
+    }
+    observedDisplayGeneration_ = state.generation;
     if(refreshQueried_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
     refreshHz_=hz;sink_.setDisplayRefreshHz(hz);
     if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} driver={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible or AMD FreeSync state of the window's monitor; read-only monitor query, per-application setup is a separate explicit action)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.amd?"amd":"nvidia",vrr.status,hz));
@@ -733,6 +758,7 @@ double VideoPresenter::displayRefreshHz(){
         // Never apply the previous monitor's VRR/cap to a moved window; its own
         // stored state (an earlier visit) applies at once when there is one.
         refreshMonitor_=monitor;refreshHz_=0;vrr_={};refreshQueried_=false;displayStateSerial_=0;reason="monitor-change";
+        tearingDetector_.resetWindow();scanoutSampleAt_={};
     }
     if(const auto generation=displayStates_->generation();generation!=displayGeneration_){displayGeneration_=generation;reason="display-change";}
     // request() starts a query only when this monitor's state is stale or
@@ -743,6 +769,12 @@ double VideoPresenter::displayRefreshHz(){
     return refreshHz_;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
+    if (scanoutSync_ != requested.display || scanoutFullscreen_ != requested.fullscreen) {
+        tearingDetector_.resetWindow();
+        scanoutSampleAt_ = {};
+        scanoutSync_ = requested.display;
+        scanoutFullscreen_ = requested.fullscreen;
+    }
     // The NVIDIA choice only runs on an NVIDIA adapter, where it implies the
     // low queue. Another adapter keeps the plain switch's value; the UI retains
     // the choice for the next NVIDIA session (syncNvidiaLowLatencyQueue).

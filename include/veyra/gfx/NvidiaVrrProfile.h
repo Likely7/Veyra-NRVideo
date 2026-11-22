@@ -84,6 +84,8 @@ inline VrrProfilePlan planVrrProfileRestore(const VrrProfileSnapshot& original,
 // and compare the expected snapshot before saving, then verify in a fresh
 // session. Callers must durably save the original snapshot BEFORE repair.
 VrrProfileResult inspectVrrProfile(const std::wstring& executable);
+// Read-only startup diagnostics from the same DRS session and application lookup.
+std::string nvidiaVsyncProfileDiagnostic(const std::wstring& executable);
 VrrProfileResult repairVrrProfile(const VrrProfileSnapshot& expected);
 VrrProfileResult restoreVrrProfile(const VrrProfileSnapshot& original,
                                   const VrrProfileSnapshot& expected);
