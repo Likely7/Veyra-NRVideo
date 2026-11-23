@@ -323,8 +323,10 @@ VPage {
         selectedId = id
         selectedNode = veyra.nodeIndexForId(id)
     }
+    property int colourRevision: 0
     Connections {
         target: veyra
+        function onColourParamsChanged() { ++root.colourRevision }
         function onChainChanged() {
             root.selectedNode = veyra.nodeIndexForId(root.selectedId)
             if (root.wireFrom > 1 && veyra.nodeIndexForId(root.wireFrom) < 0) root.wireFrom = -1
@@ -1292,7 +1294,9 @@ VPage {
         QtObject {
             id: colourApi
             function select() { veyra.selectedColourLayer = card.node.index }
-            readonly property var colourState: (veyra.chain, veyra.colourStateAt(card.node.index))
+            // Parameter edits notify the colour group without changing the chain.
+            readonly property var colourState: card.node.type === "color"
+                ? (root.colourRevision, veyra.colourStateAt(card.node.index)) : ({})
             readonly property var colourParameters: veyra.colourParameters
             property bool colorEnabled: false
             onColorEnabledChanged: if (colorEnabled !== !!colourState.enabled) { select(); veyra.colorEnabled = colorEnabled }

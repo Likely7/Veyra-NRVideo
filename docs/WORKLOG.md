@@ -1,5 +1,12 @@
 # 当前工作日志
 
+## 2026-11-23 极简播放条和节点滑条
+
+- 播放条原先把右侧锁为 308 px。860 px 极简条的眼睛点击区延伸到 x=872，自定义预设长名会进一步挤出按钮。三栏按实际控件宽度布局，缩短窄条间距和音量轨道，预设名字超长时省略并可悬停读全名。
+- 节点调色的状态绑定只监听结构变化。实测拖动曝光提交到 +2.10 EV，松手显示 0。改为监听调色参数通知并按卡片索引重读。修后实测两个调色节点分别保持 +1.80 和 −1.70 EV，抗锯齿阈值、美颜保护强度、NR 模型强度、输出音量也通过拖动、切换列表与节点模式及进程重启。 [修前录证](<E:/项目/Veyra/logs/codex-player-node-ui-fix-20261123/native-before-engine.log>) · [多节点拖动](<E:/项目/Veyra/logs/codex-player-node-ui-fix-20261123/native-editors-engine.log>) · [读取保存值](<E:/项目/Veyra/logs/codex-player-node-ui-fix-20261123/native-editors-restore-engine.log>)
+- 四组布局回归由失败变为通过。用原录屏在正式播放器 UI 测 860 px 极简及 760 px 全屏，眼睛点击区距右边缘均为 16 px，隐藏及恢复有效。Qt Quick 全量 256 通过，单独启用图像目录补跑跳过的栅格用例通过。i18n 缺失和占位符错误均为 0。 [Qt Quick](<E:/项目/Veyra/logs/codex-player-node-ui-fix-20261123/quick-all.log>) · [本地实播](<E:/项目/Veyra/logs/codex-player-node-ui-fix-20261123/native-playback-engine.log>)
+- `build-recording-handoff.py --task codex-player-node-ui-fix-20261123 --label 2.2.1 --jobs 2 veyra_qml_ui veyra_qml_quick_tests` 复用同一构建树。测试目录保留此前的准星修复，107 个着色器均核对一致。用独立配置启动最终目录，原录屏走 D3D12 硬解并显示播放条。本轮画面验证用文件输入。 [构建日志](<E:/项目/Veyra/logs/codex-player-node-ui-fix-20261123/build-20261123-074755/compile.log>) · [启动测试版](<E:/项目/Veyra/tests/codex-player-node-ui-fix-20261123/启动2.2.1界面修复测试版.cmd>)
+
 ## 2026-11-23 准星保护的方形背景
 
 - 用原录屏复现 2.2.1 候选版的准星方块。掩码不完整时，自动保护会把上一帧中心一整块贴到生成帧上。1440p 实录的覆盖约 308×288 像素，边缘另有羽化，导致方块内外跟随不同帧运动。

@@ -2,7 +2,7 @@
 // minimal page and the fullscreen control window (G2.5). Only the pill: where it
 // sits and how it enters belong to the owner.
 //
-// .cine-bar: 3 columns (230px | 1fr | 230px), 92px tall, radius 30. The design's
+// .cine-bar: three columns, 92px tall, radius 30. The design's
 // frosted glass cannot sample a native video window, so the fill is the opaque
 // approximation rgba(22,22,26,.86) (D5).
 import QtQuick
@@ -29,6 +29,7 @@ Rectangle {
     readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
+    readonly property bool compact: width < 820
     readonly property bool seekPreviewOpen: seekMouse.enabled && (seekMouse.containsMouse || seekArea.scrubbing)
     readonly property bool editing: volumeSlider.editing
     // Keep the control window active until a seek releases its mouse grab, too.
@@ -58,11 +59,11 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 16
         anchors.rightMargin: 16
-        spacing: 18
+        spacing: 12
 
-        // --- left: artwork + title (230px) ---------------------------
+        // --- left: artwork, title and playlist -----------------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 140; Layout.maximumWidth: 230
+            Layout.preferredWidth: 230; Layout.minimumWidth: 112; Layout.maximumWidth: 230
             Layout.fillHeight: true
             spacing: 10
             // The file's own cover art when it carries one (MP4 covr, MKV image
@@ -131,12 +132,14 @@ Rectangle {
         // --- middle: transport + seek --------------------------------
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.minimumWidth: transport.implicitWidth
             Layout.alignment: Qt.AlignVCenter
             spacing: 4
 
             RowLayout {
+                id: transport
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 10
+                spacing: bar.compact ? 4 : 6
 
                 // .cbtn: 32px round, muted, brightens on hover.
                 component CBtn: Item {
@@ -427,9 +430,10 @@ Rectangle {
             }
         }
 
-        // --- right: preset, volume, fullscreen (230px) ---------------
+        // --- right: preset, volume, picture and bar controls ----------
         RowLayout {
-            Layout.preferredWidth: 308; Layout.minimumWidth: 308; Layout.maximumWidth: 308
+            Layout.fillWidth: false
+            Layout.minimumWidth: implicitWidth
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -438,6 +442,7 @@ Rectangle {
             VPill {
                 key: ""
                 value: veyra.currentPresetName
+                maximumValueWidth: bar.compact ? 52 : 80
                 onClicked: presetMenu.openAt(this, "up")
                 Rectangle {
                     width: 7; height: 7; radius: 3.5
@@ -445,32 +450,26 @@ Rectangle {
                 }
             }
 
-            Item {
-                implicitWidth: 146
-                implicitHeight: 32
-                Layout.minimumWidth: 146
-                RowLayout {
-                    anchors.fill: parent
-                    spacing: 6
-                    VIcon { name: "vol"; color: Theme.t2 }
-                    VSlider {
-                        id: volumeSlider
-                        objectName: "cine-volume"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.minimumWidth: 72
-                        from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
-                        defaultValue: 1
-                        valueFromModel: true
-                        fullKnobHitArea: true
-                        onMoved: moved => veyra.volume = moved
-                    }
-                    VSliderValue {
-                        Layout.preferredWidth: 36
-                        slider: volumeSlider
-                        text: Math.round(veyra.volume * 100) + "%"
-                        color: Theme.t2; pixelSize: 10
-                    }
+            RowLayout {
+                Layout.preferredHeight: 32
+                spacing: 6
+                VIcon { name: "vol"; color: Theme.t2 }
+                VSlider {
+                    id: volumeSlider
+                    objectName: "cine-volume"
+                    Layout.preferredWidth: bar.compact ? 48 : 68
+                    Layout.fillHeight: true
+                    from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                    defaultValue: 1
+                    valueFromModel: true
+                    fullKnobHitArea: true
+                    onMoved: moved => veyra.volume = moved
+                }
+                VSliderValue {
+                    Layout.preferredWidth: 30
+                    slider: volumeSlider
+                    text: Math.round(veyra.volume * 100) + "%"
+                    color: Theme.t2; pixelSize: 10
                 }
             }
 
