@@ -7,7 +7,7 @@
 namespace veyra::diagnostics {
 // NrLayer*/ColorNode* are per-instance node spans nested inside the stage
 // spans above; they are never merged into enhancementProcessingMs.
-enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, Fg6, Fg7, FgBatch, Blit, VideoHdr,
+enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, Fg6, Fg7, FgBatch, VideoDenoise, Blit, VideoHdr,
     NrLayer0, NrLayer1, NrLayer2, NrLayer3,
     ColorNode0, ColorNode1, ColorNode2, ColorNode3, ColorNode4, ColorNode5,
     AaNode0, AaNode1,

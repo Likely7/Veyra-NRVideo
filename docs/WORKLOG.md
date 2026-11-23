@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-23 视频降噪
+
+- 移植 Magpie 的 Anime4K Bilateral Mean，使用 5×5、单帧 D3D12 计算。亮度和彩噪初始强度分别为 20% 和 60%。列表卡片默认关闭，节点可独立添加，强度可实时调整。列表在源尺寸运行并先于调色、超分和补帧，节点按实际有效接线运行。SDR 与 P010 HDR 使用各自的阈值，保留线性工作域中的高光和负通道。新增一个 8,152 字节的着色器。 [来源及许可证](THIRD_PARTY_NOTICES.md)
+- 预设 v26 和会话 v21 只在存在降噪节点时写入新版数据。首次保存走 `.video-denoise` 旁文件，旧文件字节不变。列表、节点、未连接草稿、单个预设导出导入及重启回归通过。GPU 渲染时可以关闭效果。关闭没有该 pass，双零强度与关闭的像素结果一致。 [预设检查](<E:/项目/Veyra/logs/codex-video-denoise-20261123/presets.log>) · [节点重启](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gui-restore-engine.log>)
+- RTX 5070 与 AMD 核显均通过 SDR、P010 测试及 D3D12 错误检查。RTX 5070 的暗部噪声 RMS 分别降低 34.2% 和 24.8%，SDR 一像素准星最大误差 0，HDR 峰值与负通道极值一致。开启降噪和调色时，6 块图像拼接与全图逐字节一致。 [SDR](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gpu-denoise-sdr.log>) · [P010](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gpu-denoise-hdr.log>) · [AMD](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gpu-denoise-hdr-amd.log>) · [拼图](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gpu-tiled-image.log>)
+- 用用户原录屏在 1.823054 秒停到同一帧做 A/B，并实跑 NIS 加 VFG 中档 2× 和准星保护。降噪叠加链提交约 60 FPS。降噪独立实播两段逐帧变化的 60 FPS 测试片，1080p 和 4K 均提交 60 FPS。降噪 GPU P95 分别为 0.114 ms 和 1.516 ms，各 60 个采样；4K P010 单独 GPU 夹具 P95 1.781 ms，72 个采样。NVENC 导出工作进程真实执行降噪，产物 2560×1440、160 帧全部解码。 [实播 A/B](<E:/项目/Veyra/reports/codex-video-denoise-20261123/gameplay-center-ab.png>) · [1080p60](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gui-playback-1080-engine.log>) · [4K60](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gui-playback-2160-engine.log>) · [叠加链](<E:/项目/Veyra/logs/codex-video-denoise-20261123/gui-combo-engine.log>) · [导出](<E:/项目/Veyra/logs/codex-video-denoise-20261123/export-worker.log>)
+- `build-recording-handoff.py --task codex-video-denoise-20261123 --label 2.2.1 --jobs 2` 构建播放器和回归目标。Qt Quick 257 项通过，九种译文缺失为 0，108 个着色器 SHA256 一致，最终独立测试目录以默认关闭状态解码并播放原录屏。初次 GUI 测试注入脚本的属性名和 Qt Item 冲突，改名后通过。画面与性能验证使用文件回放和 GPU 夹具，采集卡和 Intel 实机不在这组测量内。 [构建](<E:/项目/Veyra/logs/codex-video-denoise-20261123/build-20261123-084443/compile.log>) · [最终目录烟测](<E:/项目/Veyra/logs/codex-video-denoise-20261123/final-stage-engine.log>) · [启动测试版](<E:/项目/Veyra/tests/codex-video-denoise-20261123/启动2.2.1视频降噪测试版.cmd>)
+
 ## 2026-11-23 极简播放条和节点滑条
 
 - 播放条原先把右侧锁为 308 px。860 px 极简条的眼睛点击区延伸到 x=872，自定义预设长名会进一步挤出按钮。三栏按实际控件宽度布局，缩短窄条间距和音量轨道，预设名字超长时省略并可悬停读全名。

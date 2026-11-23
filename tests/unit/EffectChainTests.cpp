@@ -1657,6 +1657,48 @@ static void testSupersampleSr(){
 
 int main() {
     {
+        EnhancementSettings off;
+        check(!toChain(off).firstOf(EffectType::VideoDenoise),"video denoise: old settings leave the stage absent");
+        auto on=off;
+        on.videoDenoiseEnabled=true;
+        on.color.enabled=true;
+        on.sr=true;
+        on.srTarget=veyra::pipeline::SrTarget::Qhd;
+        const auto chain=toChain(on);
+        EnhancementSettings restored;
+        fromChain(chain,restored);
+        check(restored.videoDenoiseEnabled&&restored.videoDenoise==on.videoDenoise,
+              "video denoise: settings and list chain round trip");
+        StageRequest request;request.width=1920;request.height=1080;request.sr=true;
+        veyra::pipeline::EnhanceGraphDesc desc;
+        describeStages(request,on,desc);
+        using Slot=veyra::pipeline::EnhanceGraphDesc::PassSlot;
+        check(desc.fixedExecutionPlan&&desc.validateFixedExecutionPlan().empty()&&
+              desc.fixedExecutionPlan->steps[0].type==EffectType::VideoDenoise&&
+              desc.fixedExecutionPlan->steps[0].output==veyra::pipeline::Extent{1920,1080}&&
+              desc.slotOfStep(0)==Slot::SourcePost&&desc.slotOfStep(1)==Slot::SourcePost,
+              "video denoise: source-sized stage before the grade and SR");
+        auto edit=on;edit.videoDenoise.luma=.37f;edit.videoDenoise.chroma=.85f;
+        check(!requiresGraphRebuild(on,edit)&&on.sameVideoConfiguration(edit),
+              "video denoise: strengths are live uniforms");
+        edit.videoDenoiseEnabled=false;
+        check(requiresGraphRebuild(on,edit),"video denoise: toggle adds/removes GPU resources");
+        edit.videoDenoise.chroma=-.01f;
+        check(!edit.validate().empty()&&!validateChain(toChain(edit)).accepted,
+              "video denoise: range is enforced even while disabled");
+        auto nodeChain=chain;
+        nodeChain.mode=ChainMode::Node;
+        request.nodeOrder=nullptr;
+        auto* denoise=nodeChain.firstOf(EffectType::VideoDenoise);
+        denoise->enabled=false;
+        fromChain(nodeChain,restored);
+        const auto order=runtimeOrder(nodeChain);
+        EffectChain rebuilt;
+        check(order&&restoreRuntimeOrder(restored,*order,rebuilt).accepted&&
+              rebuilt.firstOf(EffectType::VideoDenoise)&&!rebuilt.firstOf(EffectType::VideoDenoise)->enabled,
+              "video denoise: disabled default node stays in runtime order");
+    }
+    {
         EnhancementSettings before;before.nr=before.sr=false;
         before.antiAlias.enabled=true;before.antiAlias.method=AntiAliasMethod::Dlaa;before.antiAlias.quality=0;
         auto after=before;after.dlssSrModel=1;

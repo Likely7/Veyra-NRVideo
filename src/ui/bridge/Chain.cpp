@@ -79,7 +79,7 @@ QString QmlPlayerBridge::nrAutoSelectionReason(int index) const {
     }
     if(first!=index||count>2||otherAuto)return tr("自动 NR 仅支持一至两层列表的第一层");
     if(impl_->chain.mode!=engine::ChainMode::List||engine::currentNrRuntime(s.nrRuntime)!=engine::NrRuntime::Ampere||s.sr||s.multiplier>1||temporal||
-       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.antiAlias.enabled||s.additionalAntiAliasCount||s.beautyEnabled()||s.videoHdr.enabled||
+       s.nrHoldStrength>0||s.color.enabled||s.additionalColorCount||s.videoDenoiseEnabled||s.antiAlias.enabled||s.additionalAntiAliasCount||s.beautyEnabled()||s.videoHdr.enabled||
        s.opticalFlowBackend!=engine::OpticalFlowBackend::Nvidia||s.nrMotion!=engine::MotionSource::OpticalFlow||snapshot.capture||snapshot.image||snapshot.sourceHdr||
        (snapshot.sourceWidth&& (snapshot.sourceWidth!=1920||snapshot.sourceHeight!=1080)))
         return tr("需 1080p SDR 文件、SF 和 NVIDIA 光流；关闭超分、补帧、抗闪烁、调色、美颜及 HDR");
@@ -219,7 +219,7 @@ void QmlPlayerBridge::emitChainChanged() {
     endExclusionMove(false);
     impl_->exclusionSelected=-1;
     emit chainChanged(); emit nrLayersChanged(); emit videoHdrParamsChanged();
-    emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
+    emit videoDenoiseChanged(); emit antiAliasChanged(); emit beautyChanged(); emit colourParamsChanged(); emit protectionChanged();
     emit nrStabilizerChanged();
 }
 // Every chainChanged re-evaluated all chain-bound bindings on every page (the pro
@@ -441,7 +441,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
             auto projected = std::make_unique<engine::EffectChain>();
             if (oldLayout.project(*before, *projected).accepted) {
                 uint32_t predecessor = 0, next = impl_->layout.inputNext;
-                while (next > 1) {
+                while (next > 1 && info->type!=engine::EffectType::VideoDenoise) {
                     const int at = impl_->layout.indexOf(c, next);
                     const auto t = c.nodes[at].type;
                     if (t == engine::EffectType::FrameGeneration ||
@@ -533,6 +533,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
                 (c.nodes[i].type==engine::EffectType::Protection||c.nodes[i].type==engine::EffectType::NrStabilizer||c.nodes[i].type==engine::EffectType::VideoHdr))) { insertAt = i; break; }
         }
     }
+    if(wanted==engine::EffectType::VideoDenoise)insertAt=0;
     if(wanted==engine::EffectType::NrStabilizer)
         for(uint32_t i=0;i<c.nodeCount;++i)
             if(c.nodes[i].type==engine::EffectType::NrEnhance||c.nodes[i].type==engine::EffectType::Protection)insertAt=i+1;
@@ -558,7 +559,8 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     c.nodes[insertAt].viewY = 40.0f + float(insertAt / 4) * 200.0f;
     ++c.nodeCount;
 
-    const bool live=c.mode==engine::ChainMode::Node||wanted==engine::EffectType::NrEnhance||wanted==engine::EffectType::Color;
+    const bool live=c.mode==engine::ChainMode::Node||wanted==engine::EffectType::NrEnhance||
+        wanted==engine::EffectType::Color||wanted==engine::EffectType::VideoDenoise;
     if(!impl_->revalidate(live)){
         const auto error=impl_->validation.message;c=before;impl_->selectedNr=selected;
         impl_->selectedColour=colourSelected;
@@ -777,6 +779,48 @@ bool QmlPlayerBridge::setEffectEnabled(int index, bool enabled) {
     }
     emitChainChanged();
     emit settingsChanged();
+    return true;
+}
+
+bool QmlPlayerBridge::videoDenoiseEnabled() const {
+    const auto* node=impl_->chain.firstOf(engine::EffectType::VideoDenoise);
+    return node&&node->enabled;
+}
+
+void QmlPlayerBridge::setVideoDenoiseEnabled(bool enabled) {
+    auto& chain=impl_->chain;
+    if(const auto* node=chain.firstOf(engine::EffectType::VideoDenoise))
+        setEffectEnabled(int(node-chain.nodes.data()),enabled);
+    else if(enabled)
+        addEffect(QStringLiteral("video-denoise"));
+}
+
+QVariantMap QmlPlayerBridge::videoDenoiseParams() const {
+    const auto* node=impl_->chain.firstOf(engine::EffectType::VideoDenoise);
+    const auto defaults=engine::VideoDenoiseSettings{};
+    const auto& values=node?node->videoDenoise:defaults;
+    return {{"luma",values.luma},{"chroma",values.chroma}};
+}
+
+bool QmlPlayerBridge::setVideoDenoiseStrength(const QString& channel,double value) {
+    auto* node=impl_->chain.firstOf(engine::EffectType::VideoDenoise);
+    if(!node||!std::isfinite(value)||value<0||value>1)return false;
+    auto& controls=node->videoDenoise;
+    const auto before=controls;
+    if(channel==QLatin1String("luma"))controls.luma=float(value);
+    else if(channel==QLatin1String("chroma"))controls.chroma=float(value);
+    else return false;
+    if(controls==before)return true;
+    const bool wasValid=chainValid();
+    if(!impl_->revalidate(true)){
+        const auto error=impl_->validation.message;
+        controls=before;
+        impl_->revalidate();
+        emit notice(uiText(error),true);
+        return false;
+    }
+    emit settingsChanged();
+    emitParameterChanged(&QmlPlayerBridge::videoDenoiseChanged,wasValid);
     return true;
 }
 

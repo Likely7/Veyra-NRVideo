@@ -86,6 +86,7 @@ VPage {
         case "color": return "#E0C341"
         case "sr": return "#4F7BFF"
         case "aa": return "#7FD4FF"
+        case "video-denoise": return "#62CDB7"
         case "beauty": return "#FF8FBF"
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
@@ -1076,7 +1077,7 @@ VPage {
                 radius: 5
                 color: Theme.shade(10, 10, 13, 0.85)
                 visible: segments.length > 0 && (!root.shortLayout || root.overlay)
-                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", aa: "#7FD4FF",
+                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", "video-denoise": "#62CDB7", aa: "#7FD4FF",
                                                "frame-generation": "#3DDC84", protection: "#E7B868" })
                 readonly property var segments: {
                     const timings = veyra.nodeTimings, chain = veyra.chain
@@ -1479,6 +1480,7 @@ VPage {
                                : card.node.type === "color" ? colourEditor
                                : card.node.type === "sr" ? srEditor
                                : card.node.type === "aa" ? aaEditor
+                               : card.node.type === "video-denoise" ? denoiseEditor
                                : card.node.type === "beauty" ? beautyEditor
                                : card.node.type === "video-hdr" ? hdrEditor
                                : card.node.type === "protection" ? protectionEditor
@@ -1586,6 +1588,15 @@ VPage {
                 namePrefix: "node-aa-" + card.node.id
                 params: (veyra.chain, veyra.antiAliasParams, veyra.antiAliasParamsAt(card.node.index))
                 onEdited: (key, amount) => veyra.setAntiAliasParameterAt(card.node.index, key, amount)
+            }
+        }
+        Component {
+            id: denoiseEditor
+            VideoDenoiseEditor {
+                namePrefix: "node-denoise"
+                params: veyra.videoDenoiseParams || ({})
+                enabled: !!card.node.enabled
+                onEdited: (channel, amount) => veyra.setVideoDenoiseStrength(channel, amount)
             }
         }
         Component {

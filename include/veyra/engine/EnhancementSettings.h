@@ -10,6 +10,7 @@
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/engine/ColorSettings.h"
 #include "veyra/engine/AntiAliasSettings.h"
+#include "veyra/engine/VideoDenoiseSettings.h"
 #include "veyra/engine/BeautySettings.h"
 namespace veyra::engine {
 inline constexpr uint32_t kMaxColorInstances = 6;
@@ -505,6 +506,8 @@ struct EnhancementSettings {
     uint32_t additionalColorCount=0;
     // Spatial anti-aliasing (#53). Instance zero is the list card; a node chain may
     // hold a second instance. Fixed capacity for the export shared-memory POD.
+    bool videoDenoiseEnabled = false;
+    VideoDenoiseSettings videoDenoise;
     AntiAliasSettings antiAlias;
     std::array<AntiAliasSettings,kMaxAntiAliasInstances-1> additionalAntiAlias{};
     uint32_t additionalAntiAliasCount=0;
@@ -606,6 +609,7 @@ struct EnhancementSettings {
         for(size_t i=0;i<active.additionalColors.size();++i)
             if(i>=additionalColorCount||!additionalColors[i].enabled)active.additionalColors[i]={};
         if(!videoHdr.enabled)active.videoHdr=defaults.videoHdr;
+        if(!videoDenoiseEnabled)active.videoDenoise={};
         active.antiAlias=antiAlias.active();
         for(size_t i=0;i<active.additionalAntiAlias.size();++i)
             active.additionalAntiAlias[i]=i<additionalAntiAliasCount?additionalAntiAlias[i].active():AntiAliasSettings{};
@@ -684,6 +688,7 @@ struct EnhancementSettings {
         }
         video.videoHdr=target.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
+        video.videoDenoise=target.videoDenoise;
         // Anti-aliasing thresholds and history weights are uniforms; the method,
         // tier and temporal mode decide which passes exist.
         if(video.antiAlias.sameStructure(target.antiAlias))video.antiAlias=target.antiAlias;
@@ -772,6 +777,7 @@ struct EnhancementSettings {
         if(additionalColorCount>additionalColors.size())return "too many color instances";
         for(uint32_t i=0;i<additionalColorCount;++i)
             if(auto error=additionalColors[i].validate();!error.empty())return error;
+        if(!videoDenoise.valid())return "video denoise strength out of range";
         if(auto error=antiAlias.validate();!error.empty())return error;
         if(additionalAntiAliasCount>additionalAntiAlias.size())return "too many anti-aliasing instances";
         for(uint32_t i=0;i<additionalAntiAliasCount;++i)

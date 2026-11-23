@@ -91,6 +91,7 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     struct Row { const char* label; Stage stage; const char* color; };
     const Row rows[] = {
         {"输入", Stage::Color, "#A8A8B8"},
+        {"视频降噪", Stage::VideoDenoise, "#62CDB7"},
         {"抗锯齿", Stage::AaNode0, "#7FD4FF"},
         {"抗锯齿 2", Stage::AaNode1, "#A9E2FF"},
         {"人脸识别", Stage::BeautyDetect, "#FFB3D1"},
@@ -244,6 +245,7 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
             if (beauty < diagnostics::kTimedBeautyNodes) stage = diagnostics::beautyNodeStage(beauty);
             ++beauty;
             break;
+        case engine::EffectType::VideoDenoise: stage = Stage::VideoDenoise; break;
         case engine::EffectType::SuperResolution: stage = Stage::Sr; break;
         case engine::EffectType::VideoHdr:
             stage = Stage::VideoHdr;

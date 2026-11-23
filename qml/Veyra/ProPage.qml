@@ -111,6 +111,7 @@ VPage {
             tab = "quality"
             if (chip.type === "sr") target = "list-sr"
             else if (chip.type === "aa") target = "list-anti-alias"
+            else if (chip.type === "video-denoise") target = "list-video-denoise"
             else if (chip.type === "video-hdr") target = "list-video-hdr"
             else if (chip.type === "protection") { nrStage.open = true; target = "list-global-protection" }
             else if (chip.type === "beauty") {
@@ -1493,6 +1494,24 @@ VPage {
                         // The design builds the inspector from accordion cards, not
                         // flat rows: an icon, a title, a live summary line, a switch
                         // and a chevron, with nested groups inside.
+                        VAccordion {
+                            objectName: "list-video-denoise"
+                            Layout.fillWidth: true
+                            glyph: "sparkles"
+                            hue: "#62CDB7"
+                            title: qsTr("视频降噪")
+                            summary: veyra.videoDenoiseEnabled ? qsTr("已开启") : qsTr("已关闭")
+                            on: !!veyra.videoDenoiseEnabled
+                            onToggled: checked => veyra.videoDenoiseEnabled = checked
+
+                            VideoDenoiseEditor {
+                                Layout.fillWidth: true
+                                namePrefix: "list-denoise"
+                                params: veyra.videoDenoiseParams || ({})
+                                enabled: !!veyra.videoDenoiseEnabled
+                                onEdited: (channel, amount) => veyra.setVideoDenoiseStrength(channel, amount)
+                            }
+                        }
                         // Spatial anti-aliasing (#53) runs at source size right after the
                         // input conversion, in front of SR, so jaggies are never enlarged.
                         VAccordion {

@@ -34,6 +34,7 @@ enum class EffectType : uint8_t {
     Beauty,             // face restore + skin smoothing: same size, repeatable, before RTX Video HDR
     NrStabilizer,       // one output hold pass after the NR stack
     Exclusion,          // raw-source restoration, including generated frames
+    VideoDenoise,       // spatial, same-size, no temporal reference frames
     Count
 };
 constexpr uint32_t effectTypeCount = uint32_t(EffectType::Count);
@@ -49,6 +50,7 @@ constexpr std::string_view effectTypeName(EffectType type) {
     case EffectType::Beauty: return "beauty";
     case EffectType::NrStabilizer: return "nr-stabilizer";
     case EffectType::Exclusion: return "exclusion";
+    case EffectType::VideoDenoise: return "video-denoise";
     case EffectType::Count: break;
     }
     return "unknown";
@@ -84,6 +86,7 @@ struct ChainNode {
     VideoHdrSettings videoHdr{};
     AntiAliasSettings aa{};
     BeautySettings beauty{};
+    VideoDenoiseSettings videoDenoise{};
     bool operator==(const ChainNode&) const = default;
 };
 

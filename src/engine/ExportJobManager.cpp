@@ -35,7 +35,8 @@ struct Shared {
     // 13: independent second SR parameters. 14: srOutput (the supersample
     // shrink) is honoured again; a version 13 worker would silently ignore it.
     // 15: final exclusion mask and independent output-control node payloads.
-    static constexpr DWORD kVersion=15;
+    // 16: the spatial video-denoise stage and strength controls.
+    static constexpr DWORD kVersion=16;
     DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;

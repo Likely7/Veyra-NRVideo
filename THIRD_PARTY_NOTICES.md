@@ -263,6 +263,37 @@ connection are Veyra's own. Not ported: jittered SMAA T2x / 4x (captured
 frames cannot be jittered), Anime4K 3D AA upscale, SGSR, and the MagpieFX
 effect runtime. No Magpie binary or runtime is used.
 
+## Magpie / Anime4K bilateral video denoise (2026-11-23)
+
+- HLSL source: [Blinue/Magpie](https://github.com/Blinue/Magpie/blob/7133a2dd4a2e7013b218510db22a724f8bdfb9bf/src/Effects/Anime4K/Anime4K_Denoise_Bilateral_Mean.hlsl), GPL-3.0, blob SHA-256 45a5a0b35757efc59b6775ca10745bca51a47278c7c3a60aebe7f974ec3dd057.
+- Original: [bloc97/Anime4K](https://github.com/bloc97/Anime4K/blob/7684e9586f8dcc738af08a1cdceb024cc184f426/glsl/Denoise/Anime4K_Denoise_Bilateral_Mean.glsl), MIT, blob SHA-256 bdcbc73cecdbc2fda879824cad822c70cc89c9e93d747fa740c1301c3d270dee.
+- Veyra port: `shaders/VideoDenoise.hlsl` retains the 5×5 spatial Gaussian and range-weighted mean. MagpieFX texture gathers become an 8×8 D3D12 group with shared tiles. The range metric uses linear luma and chroma differences with SDR / scRGB calibration, and luma and chroma can be mixed independently. Edge clamping and alpha follow the Veyra input/output contract.
+
+```text
+MIT License
+
+Copyright (c) 2019-2021 bloc97
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ## User-provided ShortFuse NR 310.9.16 (2026-10-17, local testing)
 
 The user supplied `nvngx_dlssnr.dll` and authorized replacement of the SF-v2

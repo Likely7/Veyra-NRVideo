@@ -178,6 +178,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // An export never writes a file that silently lacks a selected effect.
     desc.beautyRequireDetector=request.exportJob;
     desc.videoHdr=settings.videoHdr;
+    desc.videoDenoiseEnabled=settings.videoDenoiseEnabled;
+    desc.videoDenoise=settings.videoDenoise;
     // Custom: static HDR output tuning (present blit curve + display metadata).
     desc.hdrCurve=settings.hdrCurve;
     desc.hdrMetadata=settings.hdrMetadata;

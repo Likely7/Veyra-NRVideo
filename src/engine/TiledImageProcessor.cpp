@@ -66,6 +66,8 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
         // (or a nonempty additional chain) before the first tile is processed.
         tileSettings.color=desc.color;tileSettings.additionalColors=desc.additionalColors;
         tileSettings.additionalColorCount=desc.additionalColorCount;
+        tileSettings.videoDenoiseEnabled=desc.videoDenoiseEnabled;
+        tileSettings.videoDenoise=desc.videoDenoise;
         tileSettings.antiAlias=desc.antiAlias[0];
         for(uint32_t i=1;i<kMaxAntiAliasInstances;++i)
             if(desc.antiAlias[i].configured()){tileSettings.additionalAntiAlias[i-1]=desc.antiAlias[i];tileSettings.additionalAntiAliasCount=i;}

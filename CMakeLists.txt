@@ -577,6 +577,8 @@ add_dependencies(veyra_pipeline veyra_shader_color_grade veyra_shader_color_deta
 # Spatial anti-aliasing (#53): FXAA / SMAA / MLAA ported from SAOG0721/Magpie
 # d687997 (sources and notices: THIRD_PARTY_NOTICES.md). Quality tiers of one
 # source are separate .dxil variants.
+veyra_add_compute_shader(veyra_shader_video_denoise VideoDenoise)
+add_dependencies(veyra_pipeline veyra_shader_video_denoise)
 veyra_add_compute_shader(veyra_shader_aa_luma AaLuma)
 veyra_add_compute_shader_variant(veyra_shader_aa_fxaa3 AaFxaa AaFxaa3 FXAA_PRESET=3)
 veyra_add_compute_shader_variant(veyra_shader_aa_fxaa4 AaFxaa AaFxaa4 FXAA_PRESET=4)

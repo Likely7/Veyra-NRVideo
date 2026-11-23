@@ -53,6 +53,7 @@ HudProtectControl 1.0 HudProtectControl.qml
 DedupModeRow 1.0 DedupModeRow.qml
 NrWebPad 1.0 NrWebPad.qml
 SrStageEditor 1.0 SrStageEditor.qml
+VideoDenoiseEditor 1.0 VideoDenoiseEditor.qml
 AntiAliasEditor 1.0 AntiAliasEditor.qml
 BeautyEditor 1.0 BeautyEditor.qml
 VSpinner 1.0 VSpinner.qml

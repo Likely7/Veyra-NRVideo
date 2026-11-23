@@ -364,6 +364,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantMap beautyDetection READ beautyDetection NOTIFY beautyChanged)
     Q_PROPERTY(QString beautyStatus READ beautyStatus NOTIFY snapshotChanged)
     Q_PROPERTY(bool beautyAnyEnabled READ beautyAnyEnabled NOTIFY beautyChanged)
+    Q_PROPERTY(bool videoDenoiseEnabled READ videoDenoiseEnabled WRITE setVideoDenoiseEnabled NOTIFY videoDenoiseChanged)
+    Q_PROPERTY(QVariantMap videoDenoiseParams READ videoDenoiseParams NOTIFY videoDenoiseChanged)
     Q_PROPERTY(bool antiAliasEnabled READ antiAliasEnabled WRITE setAntiAliasEnabled NOTIFY antiAliasChanged)
     Q_PROPERTY(QVariantMap antiAliasParams READ antiAliasParams NOTIFY antiAliasChanged)
     // Custom: static HDR output tuning (globals, every field live).
@@ -1067,6 +1069,10 @@ public:
     void syncHdrDisplayProfile();
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
+    bool videoDenoiseEnabled() const;
+    void setVideoDenoiseEnabled(bool enabled);
+    QVariantMap videoDenoiseParams() const;
+    Q_INVOKABLE bool setVideoDenoiseStrength(const QString& channel, double value);
     bool antiAliasEnabled() const;
     void setAntiAliasEnabled(bool enabled);
     QVariantMap antiAliasParams() const;
@@ -1556,6 +1562,7 @@ signals:
     // labels or positions; only that group notifies (audit 2026-10-15 B1).
     void nrLayersChanged();
     void videoHdrParamsChanged();
+    void videoDenoiseChanged();
     void antiAliasChanged();
     void beautyChanged();
     void colourParamsChanged();

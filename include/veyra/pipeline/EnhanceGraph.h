@@ -116,6 +116,8 @@ struct EnhanceGraphDesc {
     bool srUsesFlow()const{return engine::motionUsesFlow(srMotion);}
     bool nrUsesFlow()const{return engine::motionUsesFlow(nrMotion);}
     engine::VideoHdrSettings videoHdr;
+    bool videoDenoiseEnabled = false;
+    engine::VideoDenoiseSettings videoDenoise;
     // Custom: static HDR output tuning (see HdrOutputTuning.h). Both blocks are
     // live: the curve reaches the present blit, the metadata the display.
     engine::HdrCurveSettings hdrCurve;
@@ -300,7 +302,8 @@ struct EnhanceGraphDesc {
     // after it at source size, before any enlargement or NR.
     enum class PassSlot : uint8_t { None, Ingress, SourcePost, PreSr, PreNr, InterNr, Tail };
     static constexpr bool samePass(engine::EffectType type){
-        return type==engine::EffectType::Color||type==engine::EffectType::AntiAliasing||type==engine::EffectType::Beauty;
+        return type==engine::EffectType::Color||type==engine::EffectType::AntiAliasing||
+            type==engine::EffectType::Beauty||type==engine::EffectType::VideoDenoise;
     }
     uint32_t planStepOf(engine::EffectType type,uint32_t parameter) const {
         if(!fixedExecutionPlan)return engine::kMaxChainNodes;
@@ -412,7 +415,7 @@ struct EnhanceGraphDesc {
         // Without a compiled plan (tiled full-resolution images) enabled
         // anti-aliasing instances follow the list chain: behind NR when NR
         // runs, otherwise at source size.
-        if(!fixedExecutionPlan)return antiAliasActive()&&!enableNr;
+        if(!fixedExecutionPlan)return videoDenoiseEnabled||(antiAliasActive()&&!enableNr);
         for(uint32_t i=0;i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i)
             if(slotOfStep(i)==PassSlot::SourcePost)return true;
         return false;
@@ -427,7 +430,8 @@ struct EnhanceGraphDesc {
             // whenever NR runs, anti-aliasing follow the whole NR group
             // (compileChainExecutionPlan). Without NR anti-aliasing runs at source
             // size right after the input conversion.
-            if(type==EffectType::Color)return PassSlot::Ingress;
+            if(type==EffectType::VideoDenoise)return PassSlot::SourcePost;
+            if(type==EffectType::Color)return videoDenoiseEnabled?PassSlot::SourcePost:PassSlot::Ingress;
             if(type==EffectType::AntiAliasing&&!afterNrStep(s))return PassSlot::SourcePost;
             return nrBeforeSr?PassSlot::PreSr:PassSlot::Tail;
         }
@@ -443,7 +447,10 @@ struct EnhanceGraphDesc {
     bool preNrColor(uint32_t parameter) const { return preNrStep(planStepOf(engine::EffectType::Color,parameter)); }
     uint32_t interNrColorTarget(uint32_t parameter) const { return interNrStepTarget(planStepOf(engine::EffectType::Color,parameter)); }
     bool tailColor(uint32_t parameter) const { return tailStep(planStepOf(engine::EffectType::Color,parameter)); }
-    bool sourcePostColor(uint32_t parameter) const { return sourcePostStep(planStepOf(engine::EffectType::Color,parameter)); }
+    bool sourcePostColor(uint32_t parameter) const {
+        if(!fixedExecutionPlan)return videoDenoiseEnabled;
+        return slotOfStep(planStepOf(engine::EffectType::Color,parameter))==PassSlot::SourcePost;
+    }
     // A Color that runs as a node pass (its own texture) instead of the fused /
     // in-place input grade.
     bool nodeColor(uint32_t parameter) const {
@@ -474,6 +481,8 @@ struct EnhanceGraphDesc {
                     return "anti-aliasing parameter index/enabled mismatch";
                 if(!antiAliasExecutor)return "anti-aliasing is not available in this build";
             }
+            if(step.type==EffectType::VideoDenoise&&(!videoDenoiseEnabled||step.parameterIndex!=0))
+                return "video denoise parameter mismatch";
             if(step.type==EffectType::Beauty){
                 if(step.parameterIndex>=beauty.size()||!beauty[step.parameterIndex].enabled)
                     return "beauty parameter index/enabled mismatch";
@@ -487,7 +496,7 @@ struct EnhanceGraphDesc {
                 // List mode: anti-aliasing without NR runs at source size first; the
                 // beauty group and, with NR, anti-aliasing follow the whole NR group
                 // (with its protection). Node slots below.
-                if(step.type==EffectType::AntiAliasing||step.type==EffectType::Beauty)
+                if(step.type!=EffectType::Color)
                     rank=passSlot==PassSlot::SourcePost?0:int(EffectType::Protection);
             }
             if(nrBeforeSr){
@@ -1099,6 +1108,10 @@ private:
     ID3D12Resource* chainSlotViews(const std::vector<SlotPass>& passes,ID3D12Resource* input,const char* where);
     bool dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std::vector<SlotPass>& passes,unsigned slot,
                             const char* where,bool log,bool reset);
+    ComputePass videoDenoisePass_;
+    ComPtr<ID3D12Resource> videoDenoiseOutput_;
+    ID3D12Resource* videoDenoiseInput_=nullptr;
+    bool createVideoDenoise(uint32_t width,uint32_t height);
     // Indexed by anti-aliasing parameter ordinal, like the node Color instances.
     std::array<std::unique_ptr<AntiAliasPass>,engine::kMaxAntiAliasInstances> antiAliasPasses_{};
     std::array<ComPtr<ID3D12Resource>,engine::kMaxAntiAliasInstances> antiAliasOutputs_{};

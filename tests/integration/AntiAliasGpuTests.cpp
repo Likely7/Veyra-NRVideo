@@ -213,6 +213,7 @@ struct Gpu {
         if (!up) {
             gfx::DeviceContextDesc device; Status st;
             device.enableDebugLayer = debug;
+            if (std::getenv("VEYRA_DENOISE_TEST_AMD")) device.requiredVendorId = 0x1002;
             if (!ctx.initialize(device, st) || !ring.initialize(ctx.device(), ctx.directQueue(), ctx.fence(), ctx.fenceEvent(), 4, st)) return false;
             up = true;
         } else { ring.drainQueue(); graph->shutdown(); }
@@ -265,9 +266,10 @@ struct Gpu {
         D3D12_RANGE empty{}; readback->Unmap(0, &empty);
         return true;
     }
-    std::optional<double> aaMs(unsigned parameter) {
+    std::optional<double> aaMs(unsigned parameter) { return stageMs(diagnostics::aaNodeStage(parameter)); }
+    std::optional<double> stageMs(diagnostics::GpuStage stage) {
         const auto m = graph->gpuMetrics();
-        const auto& s = m.gpu[size_t(diagnostics::aaNodeStage(parameter))];
+        const auto& s = m.gpu[size_t(stage)];
         if (s.state != diagnostics::SampleState::Measured) return std::nullopt;
         return s.milliseconds;
     }
@@ -591,12 +593,18 @@ int realFrameCase() {
 // whole-image graph exactly. SMAA / FXAA search with normalised coordinates;
 // a different texture size changes their bilinear sample positions by rounding,
 // so they are held to a small tolerance that must not cluster at the tile seams.
-bool tiledMatches(const char* label, const AntiAliasSettings& setting, bool exact) {
+bool tiledMatches(const char* label, const engine::EnhancementSettings& settings, bool exact) {
     const Scene scene(2900, 1700);
     AVFrame* frame = sdrFrame(scene);
     auto gpu = std::make_unique<Gpu>();
     sink::RgbaImage whole, input, tiled, tiledOff;
-    bool ok = frame && gpu->start(withAa(setting), scene.width, scene.height, false) && gpu->render(frame, true, whole);
+    if(frame&&settings.videoDenoiseEnabled)
+        for(unsigned y=0;y<scene.height;++y)
+            for(unsigned x=0;x<scene.width;++x){
+                auto* p=frame->data[0]+size_t(y)*frame->linesize[0]+x*4;
+                p[0]=uint8_t(int(p[0])+((x+y)%2?4:-4));
+            }
+    bool ok = frame && gpu->start(settings, scene.width, scene.height, false) && gpu->render(frame, true, whole);
     input.width = scene.width; input.height = scene.height; input.pixels.resize(size_t(scene.width) * scene.height * 4);
     for (unsigned y = 0; frame && y < scene.height; ++y)
         for (unsigned x = 0; x < scene.width; ++x) {
@@ -608,11 +616,14 @@ bool tiledMatches(const char* label, const AntiAliasSettings& setting, bool exac
     engine::TiledImageProcessor::Stats stats, statsOff;
     pipeline::EnhanceGraphDesc desc; desc.enableNr = false; desc.noFeatures = true; desc.settingsRevision = 1; desc.outputDitherStep = 0;
     desc.runtimeAbsPath = runtime::localRuntimeDirectory().wstring();
-    engine::describeAntiAlias(withAa(setting), desc);
-    pipeline::EnhanceGraphDesc descOff = desc; descOff.antiAlias = {};
+    engine::describeAntiAlias(settings, desc);
+    desc.videoDenoiseEnabled=settings.videoDenoiseEnabled;
+    desc.videoDenoise=settings.videoDenoise;
+    desc.color=settings.color;
+    pipeline::EnhanceGraphDesc descOff = desc; descOff.antiAlias = {}; descOff.videoDenoiseEnabled=false;
     ok = ok && engine::TiledImageProcessor::process(gpu->ctx, gpu->ring, input, tiled, desc, cancel, stats, {}) &&
          engine::TiledImageProcessor::process(gpu->ctx, gpu->ring, input, tiledOff, descOff, cancel, statsOff, {});
-    check(ok && stats.tiles > 1 && tiled.pixels.size() == whole.pixels.size(), std::string(label) + ": the tiled path runs anti-aliasing per tile");
+    check(ok && stats.tiles > 1 && tiled.pixels.size() == whole.pixels.size(), std::string(label) + ": the tiled path runs the effect per tile");
     bool matches = false;
     if (ok && tiled.pixels.size() == whole.pixels.size()) {
         int maxDifference = 0; size_t differing = 0, changed = 0, nearSeam = 0;
@@ -633,14 +644,19 @@ bool tiledMatches(const char* label, const AntiAliasSettings& setting, bool exac
         matches = exact ? differing == 0 : maxDifference <= 4 && differing * 10000 <= channels && nearSeam * 3 <= differing + 3;
         check(matches, std::string(label) + (exact ? ": tiles match one whole-image graph exactly" :
               ": tiles match one whole-image graph within the bilinear rounding tolerance, not clustered at seams"));
-        check(changed > 1000, std::string(label) + ": anti-aliasing changed the tiled result");
+        check(changed > 1000, std::string(label) + ": the effect changed the tiled result");
     }
     av_frame_free(&frame);
     return matches;
 }
 int tiledCase() {
-    tiledMatches("mlaa", aa(AntiAliasMethod::Mlaa, 0), true);
-    tiledMatches("smaa-high", aa(AntiAliasMethod::Smaa, 2), false);
+    tiledMatches("mlaa", withAa(aa(AntiAliasMethod::Mlaa, 0)), true);
+    tiledMatches("smaa-high", withAa(aa(AntiAliasMethod::Smaa, 2)), false);
+    engine::EnhancementSettings settings;
+    settings.videoDenoiseEnabled=true;
+    settings.color.enabled=true;
+    settings.color.exposure=.25f;
+    tiledMatches("video-denoise-with-grade",settings,true);
     return failures ? 1 : 0;
 }
 
@@ -891,9 +907,138 @@ int temporalSrHdrCase(const char* name,unsigned quality){
     return failures?1:0;
 }
 
+// A known clean render makes noise suppression and detail loss measurable
+// independently. P010 keeps out-of-gamut values and a 1000-nit highlight.
+int denoiseQualityCase(bool hdr) {
+    const Scene scene(hdr ? 640 : 641, hdr ? 360 : 359);
+    const auto make = [&] { return hdr ? hdrFrame(scene) : sdrFrame(scene); };
+    auto* clean=make();
+    auto* noisy=make();
+    auto gpu=std::make_unique<Gpu>();
+    engine::EnhancementSettings settings;
+    settings.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    constexpr unsigned x0=16,x1=152,y0=16,y1=96;
+    constexpr unsigned rx=570,ry=50;
+    auto isReticle=[](unsigned x,unsigned y) {
+        return (x==rx&&y>=ry-6&&y<=ry+6)||(y==ry&&x>=rx-6&&x<=rx+6);
+    };
+    if(!hdr&&clean&&noisy){
+        for(auto* f:{clean,noisy})
+            for(unsigned y=ry-6;y<=ry+6;++y)
+                for(unsigned x=rx-6;x<=rx+6;++x)
+                    if(isReticle(x,y))std::memset(f->data[0]+size_t(y)*f->linesize[0]+x*4,245,3);
+    }
+    uint32_t rng=0x51c0ffee;
+    auto noise=[&](int amount) {
+        rng^=rng<<13;rng^=rng>>17;rng^=rng<<5;
+        return int(rng%uint32_t(2*amount+1))-amount;
+    };
+    if(noisy){
+        for(unsigned y=y0;y<y1;++y)
+            for(unsigned x=x0;x<x1;++x){
+                auto* line=noisy->data[0]+size_t(y)*noisy->linesize[0];
+                if(hdr){
+                    auto& y10=reinterpret_cast<uint16_t*>(line)[x];
+                    y10=uint16_t((int(y10>>6)+noise(3))*64);
+                }else{
+                    const auto l=noise(2),cb=noise(6),cr=noise(5);
+                    auto* pixel=line+x*4;
+                    pixel[0]=uint8_t(int(pixel[0])+l+cb);
+                    pixel[1]=uint8_t(int(pixel[1])+l-(cb+2*cr)/7);
+                    pixel[2]=uint8_t(int(pixel[2])+l+cr);
+                }
+            }
+        if(hdr){
+            for(unsigned y=y0/2;y<y1/2;++y)
+                for(unsigned x=x0/2;x<x1/2;++x){
+                    auto* uv=reinterpret_cast<uint16_t*>(noisy->data[1]+size_t(y)*noisy->linesize[1])+2*x;
+                    uv[0]=uint16_t((int(uv[0]>>6)+noise(3))*64);
+                    uv[1]=uint16_t((int(uv[1]>>6)+noise(3))*64);
+                }
+        }
+    }
+    sink::RgbaImage reference,off,on,zero;
+    bool ok=clean&&noisy&&gpu->start(settings,scene.width,scene.height,hdr)&&
+        gpu->render(clean,true,reference)&&gpu->render(noisy,true,off);
+    check(ok&&!gpu->stageMs(diagnostics::GpuStage::VideoDenoise),"video denoise: disabled path has no denoise GPU work");
+    settings.videoDenoiseEnabled=true;
+    ok=ok&&gpu->start(settings,scene.width,scene.height,hdr)&&gpu->render(noisy,true,on);
+    const size_t pixelBytes=hdr?8:4;
+    check(ok&&on.pixels.size()==size_t(scene.width)*scene.height*pixelBytes&&on.pixels.size()==off.pixels.size(),
+          "video denoise: real enhancement graph emits same extent and colour format");
+    if(ok){
+        const auto value=[&](const sink::RgbaImage& image,size_t pixel,unsigned channel)->double {
+            if(!hdr)return image.pixels[pixel*4+channel];
+            return DirectX::PackedVector::XMConvertHalfToFloat(
+                reinterpret_cast<const uint16_t*>(image.pixels.data())[pixel*4+channel]);
+        };
+        double errOff=0,errOn=0,edgeMax=0;
+        for(unsigned y=y0+2;y<y1-2;++y)
+            for(unsigned x=x0+2;x<x1-2;++x)
+                for(unsigned k=0;k<3;++k){
+                    const auto i=size_t(y)*scene.width+x;
+                    const double a=value(off,i,k)-value(reference,i,k),b=value(on,i,k)-value(reference,i,k);
+                    errOff+=a*a;errOn+=b*b;
+                }
+        const double ratio=errOff>0?std::sqrt(errOn/errOff):1;
+        if(hdr){
+            float hi=0,lo=0,prevHi=0,prevLo=0;
+            check(finiteHalf(on,hi,lo)&&finiteHalf(off,prevHi,prevLo)&&hi>=12&&lo<0&&hi==prevHi&&lo==prevLo,
+                  "video denoise: HDR preserves peak, signed gamut and finite values");
+        }else{
+            for(unsigned y=ry-6;y<=ry+6;++y)
+                for(unsigned x=rx-6;x<=rx+6;++x)
+                    if(isReticle(x,y))for(unsigned k=0;k<3;++k){
+                        const auto i=size_t(y)*scene.width+x;
+                        edgeMax=std::max(edgeMax,std::abs(value(on,i,k)-value(off,i,k)));
+                    }
+            check(edgeMax<=1,"video denoise: one-pixel crosshair is preserved");
+        }
+        std::printf("DENOISE_QUALITY format=%s noiseRmsRatio=%.4f edgeMax=%.3f\n",
+                    hdr?"P010/PQ":"BGR0/SDR",ratio,edgeMax);
+        check(ratio<.90,"video denoise: RMS noise in the dark patch drops by at least 10%");
+        settings.videoDenoise={0,0};
+        check(gpu->graph->applySettings(settings)&&gpu->render(noisy,false,zero)&&zero.pixels==off.pixels,
+              "video denoise: both strengths at zero give byte-identical output after live edit");
+    }
+    check(gpu->debugErrors()==0,"video denoise: no D3D12 validation errors");
+    av_frame_free(&clean);av_frame_free(&noisy);
+    return failures?1:0;
+}
+
+int denoiseTimingCase(unsigned width,unsigned height,bool hdr) {
+    const Scene scene(width,height,true);
+    auto* input=hdr?hdrFrame(scene):sdrFrame(scene);
+    auto gpu=std::make_unique<Gpu>();
+    engine::EnhancementSettings settings;
+    settings.videoDenoiseEnabled=true;
+    settings.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    bool ok=input&&gpu->start(settings,width,height,hdr);
+    std::vector<double> samples;
+    for(unsigned i=0;ok&&i<80;++i){
+        pipeline::EnhanceGraph::FrameOutputs outputs;
+        ok=gpu->graph->process(input,double(i)*1000/60,i==0,outputs,++gpu->frameId)&&gpu->ring.waitIdle();
+        const auto ms=gpu->stageMs(diagnostics::GpuStage::VideoDenoise);
+        if(ok&&i>=8&&ms)samples.push_back(*ms);
+    }
+    av_frame_free(&input);
+    check(ok&&samples.size()>=60,"video denoise: timestamps recorded for source-sized spatial kernel");
+    if(!samples.empty()){
+        std::sort(samples.begin(),samples.end());
+        std::printf("DENOISE_TIMING extent=%ux%u hdr=%d samples=%zu p50Ms=%.3f p95Ms=%.3f\n",
+                    width,height,int(hdr),samples.size(),samples[samples.size()/2],samples[samples.size()*95/100]);
+    }
+    return failures?1:0;
+}
+
 struct Case { std::string name; std::function<int()> run; };
 std::vector<Case> cases() {
     std::vector<Case> c;
+    c.push_back({"denoise-sdr",[] { return denoiseQualityCase(false); }});
+    c.push_back({"denoise-hdr",[] { return denoiseQualityCase(true); }});
+    c.push_back({"denoise-1080p",[] { return denoiseTimingCase(1920,1080,false); }});
+    c.push_back({"denoise-2160p",[] { return denoiseTimingCase(3840,2160,false); }});
+    c.push_back({"denoise-2160p-p010",[] { return denoiseTimingCase(3840,2160,true); }});
     const struct { const char* name; AntiAliasSettings a; } sdr[] = {
         {"sdr-fxaa-medium", aa(AntiAliasMethod::Fxaa, 0)}, {"sdr-fxaa-high", aa(AntiAliasMethod::Fxaa, 1)}, {"sdr-fxaa-ultra", aa(AntiAliasMethod::Fxaa, 2)},
         {"sdr-smaa-low", aa(AntiAliasMethod::Smaa, 0)}, {"sdr-smaa-medium", aa(AntiAliasMethod::Smaa, 1)}, {"sdr-smaa-high", aa(AntiAliasMethod::Smaa, 2)},

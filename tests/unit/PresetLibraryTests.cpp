@@ -1559,7 +1559,60 @@ __declspec(noinline) void testDisabledFrameGenerationMatch() {
     running.mode=ChainMode::Node;
     check(!PresetLibrary::matchesChain(saved,running),"matching stays in the selected editor mode");
 }
+__declspec(noinline) void testVideoDenoiseStorage() {
+    const auto path=scratch(L"video-denoise-library.v1");
+    PresetLibrary library(path);
+    library.setIncludeBuiltins(false);
+    PresetEntry base;base.name=L"Legacy denoise-free preset";base.chain=toChain({});
+    base.contents=presetContentMask(PresetContent::Chain);
+    check(library.load()&&library.put(base),"video denoise: write a preset readable by old versions");
+    const auto oldBytes=readBytes(path);
+    EnhancementSettings settings;
+    settings.videoDenoiseEnabled=true;
+    settings.videoDenoise={.36f,.81f};
+    const auto chain=toChain(settings);
+    auto filtered=base;
+    filtered.name=L"Video Denoise";
+    filtered.chain=chain;
+    const auto newer=std::filesystem::path(path).concat(L".video-denoise");
+    check(library.put(filtered)&&readBytes(newer).starts_with("VEYRA_PRESET_LIBRARY 26\n")&&
+          readBytes(path)==oldBytes,"video denoise: v26 sidecar preserves the prior library");
+    PresetLibrary reopened(path);
+    reopened.setIncludeBuiltins(false);
+    check(reopened.load()&&reopened.entries().size()==2&&reopened.entries().back()==filtered,
+          "video denoise: strengths survive reopening the library");
+    const auto preset=scratch(L"video-denoise.vpreset");
+    PresetLibrary imported(scratch(L"import-denoise.v1"));
+    imported.setIncludeBuiltins(false);
+    std::wstring importedName;
+    check(reopened.exportEntry(1,preset)&&imported.load()&&imported.importFile(preset,importedName)&&
+          imported.entries().size()==1&&imported.entries().front()==filtered,
+          "video denoise: individual preset export/import round trip");
+
+    const auto sessionPath=scratch(L"video-denoise-session.v1");
+    auto session=std::make_unique<ChainSession>(ChainSession::initial({}));
+    ChainSessionStore writer(sessionPath);
+    check(writer.save(*session),"video denoise: seed a legacy session");
+    const auto saved=readBytes(sessionPath);
+    check(session->select(ChainMode::Node),"video denoise: initialize node mode");
+    auto doc=std::make_shared<NodeEditorDocument>();
+    doc->nodes=session->configurations[1].chain;
+    auto& node=doc->nodes.nodes[doc->nodes.nodeCount++];
+    node.type=EffectType::VideoDenoise;node.enabled=true;node.videoDenoise=settings.videoDenoise;
+    check(doc->layout.initialize(doc->nodes).accepted,"video denoise: initialize editor layout");
+    check(doc->layout.disconnect(doc->nodes,doc->layout.ids[doc->nodes.nodeCount-1]).accepted,
+          "video denoise: leave a configured node disconnected");
+    session->configurations[1].editor=doc;
+    const auto next=std::filesystem::path(sessionPath).concat(L".video-denoise");
+    check(writer.save(*session)&&readBytes(sessionPath)==saved&&readBytes(next).starts_with("VEYRA_CHAIN_SESSION 21\n"),
+          "video denoise: editor-only payload upgrades without touching the old session");
+    ChainSessionStore reader(sessionPath);
+    auto loaded=std::make_unique<ChainSession>();
+    check(reader.load(*loaded)&&*loaded==*session,"video denoise: editor graph and detached settings restore");
+}
+
 int main(int argc,char** argv) {
+    testVideoDenoiseStorage();
     testDisabledFrameGenerationMatch();
     if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
         testDedupModeMigration();testHalfRateVariants();testFlowStorage();testFlowApplication();return failures?1:0;

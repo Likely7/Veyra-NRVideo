@@ -7840,6 +7840,19 @@
    "ru": "Шаг яркости выше этого считается краем; более низкие значения обрабатывают больше краев."
   },
   {
+   "zh": "亮度降噪",
+   "src": "qml/VideoDenoiseEditor.qml",
+   "zh-TW": "亮度降噪",
+   "en": "Luma denoise",
+   "ja": "輝度ノイズ除去",
+   "ko": "휘도 노이즈 제거",
+   "es": "Ruido de luminancia",
+   "fr": "Bruit de luminance",
+   "de": "Luminanzrauschen",
+   "pt-BR": "Ruído de luminância",
+   "ru": "Яркостный шум"
+  },
+  {
    "zh": "人脸原画保护",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "人臉原畫保護",
@@ -11232,6 +11245,19 @@
    "de": "Einlagige Schicht",
    "pt-BR": "Camada única",
    "ru": "Однослойный"
+  },
+  {
+   "zh": "单帧保边降噪，可分别调节亮度颗粒和彩色噪点。",
+   "src": "qml/VideoDenoiseEditor.qml",
+   "zh-TW": "單幀保邊降噪，可分別調整亮度顆粒與色彩雜訊。",
+   "en": "Edge-preserving, single-frame filtering with separate luma and chroma controls.",
+   "ja": "輪郭を保つ単一フレーム処理で、輝度と色のノイズを個別に調整します。",
+   "ko": "테두리를 보존하는 단일 프레임 처리로 휘도와 색상 노이즈를 따로 조절합니다.",
+   "es": "Filtrado por fotograma que conserva los bordes, con controles de luminancia y crominancia.",
+   "fr": "Filtrage image par image préservant les contours, avec réglages séparés de luminance et de chrominance.",
+   "de": "Kantenschonender Einzelbildfilter mit separaten Reglern für Luminanz- und Farbrauschen.",
+   "pt-BR": "Filtro por quadro que preserva bordas, com controles separados de luminância e crominância.",
+   "ru": "Фильтр одного кадра с сохранением контуров и раздельной регулировкой яркостного и цветового шума."
   },
   {
    "zh": "即时回放",
@@ -19799,6 +19825,19 @@
    "de": "Mikrofon aufnehmen",
    "pt-BR": "Gravar microfone",
    "ru": "Записывать микрофон"
+  },
+  {
+   "zh": "彩噪抑制",
+   "src": "qml/VideoDenoiseEditor.qml",
+   "zh-TW": "色彩雜訊抑制",
+   "en": "Chroma denoise",
+   "ja": "色ノイズ除去",
+   "ko": "색상 노이즈 제거",
+   "es": "Ruido cromático",
+   "fr": "Bruit chromatique",
+   "de": "Farbrauschen",
+   "pt-BR": "Ruído de crominância",
+   "ru": "Цветовой шум"
   },
   {
    "zh": "往返 ",
@@ -34297,6 +34336,19 @@
    "ru": "Очередь видео или презентация не удались; GPU не сообщил об удалении устройства. Посмотреть Диагностика"
   },
   {
+   "zh": "视频降噪",
+   "src": "qml/ProPage.qml",
+   "zh-TW": "影片降噪",
+   "en": "Video denoise",
+   "ja": "映像ノイズ除去",
+   "ko": "영상 노이즈 제거",
+   "es": "Reducción de ruido de vídeo",
+   "fr": "Réduction du bruit vidéo",
+   "de": "Video-Entrauschung",
+   "pt-BR": "Redução de ruído de vídeo",
+   "ru": "Шумоподавление видео"
+  },
+  {
    "zh": "视频首帧无法解码或没有有效时间戳，请查看诊断",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "影片首幀無法解碼或沒有有效時間戳，請查看診斷",
@@ -39939,6 +39991,19 @@
    "ru": "Это уменьшает исходный результат SR, а не исходный ввод. Выберите размер ниже базового результата и второй цели SR."
   },
   {
+   "zh": "降噪强度超出范围",
+   "src": "src/engine/EffectChain.cpp",
+   "zh-TW": "降噪強度超出範圍",
+   "en": "Denoise strength is out of range",
+   "ja": "ノイズ除去の強度が範囲外です",
+   "ko": "노이즈 제거 강도가 범위를 벗어났습니다",
+   "es": "La intensidad de reducción de ruido está fuera de rango",
+   "fr": "L'intensité du débruitage est hors plage",
+   "de": "Die Entrauschungsstärke liegt außerhalb des gültigen Bereichs",
+   "pt-BR": "Intensidade de redução de ruído fora da faixa",
+   "ru": "Сила шумоподавления вне допустимого диапазона"
+  },
+  {
    "zh": "隐藏播放条",
    "src": "qml/TopDock.qml",
    "zh-TW": "隱藏播放條",
@@ -41575,6 +41640,19 @@
    "de": "Die voreingestellte Bibliothek hat ein ungültiges Frame-Generierungs-Backend.",
    "pt-BR": "A biblioteca predefinida tem uma infraestrutura de geração de quadros inválida.",
    "ru": "Предустановленная библиотека имеет недействительный бэкэнд поколения кадров."
+  },
+  {
+   "zh": "预设库视频降噪参数损坏",
+   "src": "src/engine/PresetLibrary.cpp",
+   "zh-TW": "預設庫的影片降噪參數已損毀",
+   "en": "Video denoise settings in the preset library are corrupt",
+   "ja": "プリセットライブラリの映像ノイズ除去設定が破損しています",
+   "ko": "프리셋 라이브러리의 영상 노이즈 제거 설정이 손상되었습니다",
+   "es": "Los ajustes de reducción de ruido de vídeo de la biblioteca están dañados",
+   "fr": "Les paramètres de réduction du bruit vidéo de la bibliothèque sont corrompus",
+   "de": "Die Einstellungen zur Video-Entrauschung in der Vorgabenbibliothek sind beschädigt",
+   "pt-BR": "As configurações de redução de ruído de vídeo na biblioteca de predefinições estão corrompidas",
+   "ru": "Параметры шумоподавления видео в библиотеке пресетов повреждены"
   },
   {
    "zh": "预设库调色参数超出范围",

@@ -439,30 +439,10 @@ bool EnhanceGraph::createNodeColorResources(){
     interNrColorOutputs_={};
     sourcePostPasses_.clear();preSrPasses_.clear();preNrPasses_.clear();tailPasses_.clear();
     for(auto& passes:interNrPasses_)passes.clear();
-    if(!desc_.fixedExecutionPlan){
-        // Graphs built without a compiled plan (the tiled full-resolution image
-        // path) run their enabled anti-aliasing instances in parameter order like
-        // the list chain: behind NR when NR runs (no SR here, so still the source
-        // size), otherwise right after the input conversion.
-        for(uint32_t parameter=0;parameter<desc_.antiAlias.size();++parameter){
-            if(!desc_.antiAlias[parameter].enabled)continue;
-            if(!createAntiAlias(parameter,srcW_,srcH_))return false;
-            (desc_.enableNr?tailPasses_:sourcePostPasses_).push_back({engine::kMaxChainNodes,engine::EffectType::AntiAliasing,parameter,
-                antiAliasOutputs_[parameter].Get(),srcW_,srcH_,parameter});
-        }
-        if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;
-        return true;
-    }
-    const auto& plan=*desc_.fixedExecutionPlan;
-    for(uint32_t i=0;i<plan.stepCount;++i){
-        const auto& step=plan.steps[i];
-        uint32_t target=engine::kMaxNrInstances;
-        const auto where=desc_.slotOfStep(i,&target);
-        // Ingress: the fused / in-place grade of the input conversion (createColorResources).
-        if(where==PassSlot::None||where==PassSlot::Ingress)continue;
-        const auto parameter=step.parameterIndex;
-        SlotPass pass{i,step.type,parameter,nullptr,step.output.width,step.output.height,step.resourceIndex};
-        if(step.type==engine::EffectType::Color){
+    using engine::EffectType;
+    const auto appendPass=[&](SlotPass pass,PassSlot where,uint32_t target) {
+        const auto parameter=pass.parameter;
+        if(pass.type==EffectType::Color){
             const auto& settings=parameter?desc_.additionalColors[parameter-1]:desc_.color;
             auto& instance=nodeColorInstances_[parameter];
             instance=std::make_unique<ColorGradeInstance>();
@@ -477,7 +457,7 @@ bool EnhanceGraph::createNodeColorResources(){
                     veyra::log::warn("color-grade",std::format("node instance={} lut rejected mismatch={} name={}",parameter,mismatch,utf8Of(settings.lutNameString())));
                 }
             }
-            nodeColorOutputs_[parameter]=makeTexture(context_.device(),step.output.width,step.output.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+            nodeColorOutputs_[parameter]=makeTexture(context_.device(),pass.width,pass.height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
             if(!nodeColorOutputs_[parameter])return false;
             pass.output=nodeColorOutputs_[parameter].Get();
             if(where==PassSlot::PreNr)++preNrColorActiveCount_;
@@ -485,14 +465,17 @@ bool EnhanceGraph::createNodeColorResources(){
             else if(where==PassSlot::InterNr)++interNrColorActiveCount_;
             else if(where==PassSlot::SourcePost)++sourcePostColorActiveCount_;
             else ++tailColorActiveCount_;
-        }else if(step.type==engine::EffectType::AntiAliasing&&parameter<antiAliasPasses_.size()){
-            if(!createAntiAlias(parameter,step.output.width,step.output.height))return false;
+        }else if(pass.type==EffectType::AntiAliasing&&parameter<antiAliasPasses_.size()){
+            if(!createAntiAlias(parameter,pass.width,pass.height))return false;
             pass.output=antiAliasOutputs_[parameter].Get();
-        }else if(step.type==engine::EffectType::Beauty&&parameter<beautyPasses_.size()){
-            if(!createBeauty(parameter,step.output.width,step.output.height))return false;
+        }else if(pass.type==EffectType::Beauty&&parameter<beautyPasses_.size()){
+            if(!createBeauty(parameter,pass.width,pass.height))return false;
             pass.output=beautyOutputs_[parameter].Get();
+        }else if(pass.type==EffectType::VideoDenoise){
+            if(!createVideoDenoise(pass.width,pass.height))return false;
+            pass.output=videoDenoiseOutput_.Get();
         }else{
-            veyra::log::error("graph",std::format("no executor for same-size {} step={}",engine::effectTypeName(step.type),i));
+            veyra::log::error("graph",std::format("no executor for same-size {} step={}",engine::effectTypeName(pass.type),pass.step));
             return false;
         }
         if(where==PassSlot::SourcePost)sourcePostPasses_.push_back(pass);
@@ -500,6 +483,34 @@ bool EnhanceGraph::createNodeColorResources(){
         else if(where==PassSlot::PreSr)preSrPasses_.push_back(pass);
         else if(where==PassSlot::InterNr&&target<interNrPasses_.size())interNrPasses_[target].push_back(pass);
         else tailPasses_.push_back(pass);
+        return true;
+    };
+    if(desc_.fixedExecutionPlan){
+        const auto& plan=*desc_.fixedExecutionPlan;
+        for(uint32_t i=0;i<plan.stepCount;++i){
+            uint32_t target=engine::kMaxNrInstances;
+            const auto where=desc_.slotOfStep(i,&target);
+            // Ingress uses the fused grade of the input converter.
+            if(where==PassSlot::None||where==PassSlot::Ingress)continue;
+            const auto& step=plan.steps[i];
+            if(!appendPass({i,step.type,step.parameterIndex,nullptr,step.output.width,step.output.height,step.resourceIndex},
+                           where,target))return false;
+        }
+    }else{
+        // Padded still-image tiles have their own extent and use the source-size
+        // list order without a compiled whole-image plan.
+        const auto appendAtSource=[&](EffectType type,uint32_t parameter,PassSlot where) {
+            return appendPass({engine::kMaxChainNodes,type,parameter,nullptr,srcW_,srcH_,parameter},where,engine::kMaxNrInstances);
+        };
+        if(desc_.videoDenoiseEnabled){
+            if(!appendAtSource(EffectType::VideoDenoise,0,PassSlot::SourcePost))return false;
+            if(desc_.color.enabled&&!appendAtSource(EffectType::Color,0,PassSlot::SourcePost))return false;
+            for(uint32_t i=0;i<desc_.additionalColorCount;++i)
+                if(desc_.additionalColors[i].enabled&&!appendAtSource(EffectType::Color,i+1,PassSlot::SourcePost))return false;
+        }
+        for(uint32_t i=0;i<desc_.antiAlias.size();++i)
+            if(desc_.antiAlias[i].enabled&&!appendAtSource(EffectType::AntiAliasing,i,
+                desc_.enableNr?PassSlot::Tail:PassSlot::SourcePost))return false;
     }
     if(!sourcePostPasses_.empty())sourcePostOutput_=sourcePostPasses_.back().output;
     if(!preNrPasses_.empty())preNrColorOutput_=preNrPasses_.back().output;
@@ -507,6 +518,17 @@ bool EnhanceGraph::createNodeColorResources(){
     for(size_t target=0;target<interNrPasses_.size();++target)
         if(!interNrPasses_[target].empty())interNrColorOutputs_[target]=interNrPasses_[target].back().output;
     return true;
+}
+
+bool EnhanceGraph::createVideoDenoise(uint32_t width,uint32_t height){
+    auto* device=context_.device();
+    videoDenoiseOutput_=makeTexture(device,width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    std::vector<uint8_t> shader;
+    const bool ready=videoDenoiseOutput_&&videoDenoisePass_.loadShader("VideoDenoise.dxil",shader)&&
+        videoDenoisePass_.create(device,shader,2,1,1);
+    if(ready)veyra::log::info("video-denoise",std::format("bilateral mean {}x{} hdr={}",width,height,desc_.hdrWorking()));
+    else veyra::log::error("video-denoise",std::format("could not create GPU pass {}x{}",width,height));
+    return ready;
 }
 
 bool EnhanceGraph::createAntiAlias(uint32_t parameter,uint32_t width,uint32_t height){
@@ -694,6 +716,11 @@ void EnhanceGraph::bindSlotPassInput(const SlotPass& pass,ID3D12Resource* input)
     }
     else if(pass.type==engine::EffectType::Beauty)
         beautyPasses_[pass.parameter]->createViews(context_.device(),stager_,input,pass.output,beautyOriginalSource_,beautyFaces(),beautyShapes());
+    else if(pass.type==engine::EffectType::VideoDenoise){
+        videoDenoiseInput_=input;
+        stager_.stageSrv(input,nullptr,videoDenoisePass_.heap.Get(),0);
+        makeUav(context_.device(),pass.output,DXGI_FORMAT_R16G16B16A16_FLOAT,cpuHandleOf(videoDenoisePass_,1));
+    }
 }
 
 // Binds one slot's passes in plan order: each reads the previous output.
@@ -722,6 +749,16 @@ bool EnhanceGraph::dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std:
             gpuTimer_.mark(list,diagnostics::beautyNodeStage(pass.parameter));
             if(!beautyPasses_[pass.parameter]->dispatch(list,tracker_,desc_.hdrWorking(),beautyOriginalValid_))return false;
             gpuTimer_.mark(list,diagnostics::beautyNodeStage(pass.parameter),true);
+        }else if(pass.type==engine::EffectType::VideoDenoise){
+            gpuTimer_.mark(list,GpuStage::VideoDenoise);
+            tracker_.transition(list,videoDenoiseInput_,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            tracker_.transition(list,pass.output,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            const float constants[8]={uintBits(pass.width),uintBits(pass.height),desc_.videoDenoise.luma,
+                desc_.videoDenoise.chroma,desc_.hdrWorking()?1.0f:0.0f};
+            videoDenoisePass_.bind(list,constants,gpuHandleOf(videoDenoisePass_,0).ptr,gpuHandleOf(videoDenoisePass_,1).ptr);
+            list->Dispatch((pass.width+7)/8,(pass.height+7)/8,1);
+            tracker_.uavBarrier(list,pass.output);
+            gpuTimer_.mark(list,GpuStage::VideoDenoise,true);
         }
         if(log)veyra::log::info("node-dispatch",std::format("recorded {} {} step={} parameter={} resource={}",where,engine::effectTypeName(pass.type),pass.step,pass.parameter,pass.resource));
     }
@@ -4877,7 +4914,7 @@ uint64_t EnhanceGraph::failedNgxResult() const {
 }
 
 bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
-    if(!s.validate().empty())return false;
+    if(!s.validate().empty()||s.videoDenoiseEnabled!=desc_.videoDenoiseEnabled)return false;
     if(s.hdrOutputMode!=desc_.hdrOutputMode||
        (desc_.enableFg&&s.fgMotion!=desc_.fgMotion)||
        (desc_.enableSr&&s.srMotion!=desc_.srMotion)||
@@ -4997,6 +5034,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     }
     desc_.antiAlias=nextNr.antiAlias;
     for(size_t i=0;i<antiAliasPasses_.size();++i)if(antiAliasPasses_[i])antiAliasPasses_[i]->refresh(desc_.antiAlias[i]);
+    desc_.videoDenoise=s.videoDenoise;
     desc_.beauty=nextNr.beauty;desc_.beautyDetection=nextNr.beautyDetection;
     for(size_t i=0;i<beautyPasses_.size();++i)if(beautyPasses_[i])beautyPasses_[i]->refresh(desc_.beauty[i]);
     if(faceTracker_)faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
@@ -5261,6 +5299,7 @@ void EnhanceGraph::shutdown()
     nodeColorOutputs_={};tailColorActiveCount_=preNrColorActiveCount_=preSrColorActiveCount_=interNrColorActiveCount_=sourcePostColorActiveCount_=0;
     sourcePostPasses_.clear();preSrPasses_.clear();preNrPasses_.clear();tailPasses_.clear();
     for(auto& passes:interNrPasses_)passes.clear();
+    videoDenoisePass_={};videoDenoiseOutput_.Reset();videoDenoiseInput_=nullptr;
     for(auto& pass:antiAliasPasses_)pass.reset();
     antiAliasOutputs_={};
     dlaa_={};antiAliasNotice_.clear();frameFlowValid_=false;

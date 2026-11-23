@@ -517,7 +517,7 @@ void EngineController::status(const std::wstring& s,bool failed){std::lock_guard
 namespace {
 constexpr std::array gpuTraceStageNames{
     "Color","Sr","Flow","Nr","Residual","Fg1","Fg2","Fg3","Fg4","Fg5","Fg6","Fg7",
-    "FgBatch","Blit","VideoHdr","NrLayer0","NrLayer1","NrLayer2","NrLayer3",
+    "FgBatch","VideoDenoise","Blit","VideoHdr","NrLayer0","NrLayer1","NrLayer2","NrLayer3",
     "ColorNode0","ColorNode1","ColorNode2","ColorNode3","ColorNode4","ColorNode5",
     "AaNode0","AaNode1","BeautyNode0","BeautyNode1","BeautyNode2","BeautyNode3",
     "BeautyNode4","BeautyNode5","BeautyDetect","HudMask","HudRepair","HudMotion",
@@ -951,7 +951,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const bool admitted=(tested||(autoRequested&&automatic==desc.nrLayersSizePolicy.begin()&&selected.settings.activeAutoNrLayerCount()==1))&&
                        !nrAutoPoolUnavailable&&selected.settings.activeNrLayerCount()<=2&&
                        !isCapture&&!isImage&&desc.enableNr&&!desc.enableSr&&!desc.enableFg&&
-                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
+                       !desc.hdrWorking()&&!desc.videoHdr.enabled&&!desc.color.enabled&&!desc.additionalColorCount&&!desc.videoDenoiseEnabled&&!desc.antiAliasActive()&&!desc.beautyActive()&&!desc.runtimeNodeOrder&&desc.nrHoldStrength==0&&
                        desc.nrReuse==NrReuseMode::Off&&
                        currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere&&desc.opticalFlowBackend==OpticalFlowBackend::Nvidia&&
                        desc.nrMotion==MotionSource::OpticalFlow&&
