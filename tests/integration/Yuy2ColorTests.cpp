@@ -16,6 +16,95 @@ extern "C" {
 }
 using namespace veyra;
 namespace {
+bool captureNearBlack(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,bool vfg) {
+    using namespace pipeline;
+    constexpr unsigned width=2560,height=1440,viewWidth=1280,viewHeight=720;
+    constexpr std::array<uint8_t,16> codes{0,4,8,12,15,16,17,18,20,24,28,32,40,48,64,235};
+    std::unique_ptr<AVFrame,void(*)(AVFrame*)> frame(av_frame_alloc(),[](AVFrame* f){av_frame_free(&f);});
+    if(!frame)return false;
+    frame->format=AV_PIX_FMT_NV12;frame->width=width;frame->height=height;
+    if(av_frame_get_buffer(frame.get(),32)<0)return false;
+    for(unsigned y=0;y<height;++y)
+        for(unsigned i=0;i<codes.size();++i)
+            std::fill_n(frame->data[0]+y*frame->linesize[0]+i*(width/codes.size()),width/codes.size(),codes[i]);
+    for(unsigned y=0;y<height/2;++y) {
+        auto* row=frame->data[1]+y*frame->linesize[1];
+        std::fill_n(row,width,uint8_t(128));
+        if(y>=3*height/8)
+            for(unsigned x=1;x<width;x+=2)row[x]=x%4==1?124:132;
+    }
+    const HWND window=CreateWindowExW(0,L"STATIC",L"NV12 near-black fixture",WS_POPUP,
+        0,0,viewWidth,viewHeight,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!window)return false;
+    bool ok=true;
+    for(const auto range:{ColorRange::Limited,ColorRange::Full}) {
+        std::vector<uint8_t> nearest;
+        for(const bool reconstruct:{false,true}) {
+            EnhanceGraphDesc desc;
+            desc.sourceWidth=desc.workWidth=width;desc.sourceHeight=desc.workHeight=height;
+            desc.enableNr=desc.enableSr=false;desc.enableFg=vfg;desc.noFeatures=!vfg;
+            desc.captureBitDepth=8;desc.highQualityPresentation=true;
+            desc.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;
+            desc.fgMultiplier=2;desc.vfgQuality=1;desc.vfgAsyncSubmission=vfg;
+            desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+            ColorDescription color;
+            color.pixelFormat=SourcePixelFormat::NV12;color.range=range;color.matrix=YuvMatrix::BT709;
+            color.transfer=TransferFunction::SRGB;color.preserveSdrCodeValues=true;
+            color.reconstructChroma=reconstruct;
+            EnhanceGraph graph(ctx,ring);engine::VideoPresenter presenter;
+            EnhanceGraph::FrameOutputs output;
+            sink::RgbaImage real,generated;
+            auto rendered=graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
+            for(unsigned i=0;rendered&&i<(vfg?4u:1u);++i) {
+                output={};
+                // Motions are outside the neutral probes so the provider can
+                // generate a real midpoint while the gray bars stay still.
+                for(unsigned y=height-128;y<height-64;++y) {
+                    auto* patch=frame->data[0]+y*frame->linesize[0];
+                    std::fill_n(patch,128,uint8_t(16));
+                    std::fill_n(patch+16+8*i,32,uint8_t(80));
+                }
+                rendered=graph.process(frame.get(),i*(1000.0/30),i==0,output,i+1,&color);
+            }
+            rendered=rendered&&presenter.present(ctx,ring,graph,output.videoSlot,false)
+                &&presenter.readPresentedFrameForTest(ctx,ring,real);
+            if(rendered&&vfg)rendered=ring.waitIdle()&&graph.resolveGeneration(output)&&output.hasGenerated
+                &&presenter.present(ctx,ring,graph,output.genSlot,true)
+                &&presenter.readPresentedFrameForTest(ctx,ring,generated);
+            auto inspect=[&](const sink::RgbaImage& image,bool interpolated) {
+                if(image.width!=viewWidth||image.height!=viewHeight)return false;
+                int maxError=0;
+                std::cout<<"NEAR_BLACK "<<(range==ColorRange::Limited?"limited":"full")
+                    <<" chroma="<<reconstruct<<" generated="<<interpolated<<" values=";
+                const unsigned y=viewHeight/4;
+                for(unsigned i=0;i<codes.size();++i) {
+                    const auto px=(size_t(y)*viewWidth+(2*i+1)*(viewWidth/(2*codes.size())))*4;
+                    const int expected=range==ColorRange::Full?codes[i]:
+                        int(std::lround(std::clamp((codes[i]-16.0)/219.0,0.0,1.0)*255));
+                    std::cout<<int(image.pixels[px])<<(i+1==codes.size()?"":";");
+                    for(unsigned c=0;c<3;++c)
+                        maxError=std::max(maxError,std::abs(int(image.pixels[px+c])-expected));
+                }
+                std::cout<<" error="<<maxError<<std::endl;
+                return maxError<=(interpolated?3:1);
+            };
+            if(rendered) {
+                const auto neutralEnd=real.pixels.begin()+size_t(real.width)*real.height*2;
+                if(!reconstruct)nearest.assign(real.pixels.begin(),neutralEnd);
+                else ok&=std::equal(nearest.begin(),nearest.end(),real.pixels.begin(),neutralEnd);
+                ok&=inspect(real,false);
+                if(vfg)ok&=inspect(generated,true);
+            }else{
+                std::cout<<"NEAR_BLACK render failed chroma="<<reconstruct<<" vfg="<<vfg<<std::endl;
+                ok=false;
+            }
+            output={};ring.drainQueue();presenter.close();graph.shutdown();
+        }
+    }
+    DestroyWindow(window);
+    return ok;
+}
+
 bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring) {
     using namespace pipeline;
     constexpr unsigned w=64,h=32;
@@ -232,6 +321,10 @@ int wmain(int argc,wchar_t**argv){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;gfx::DeviceContextDesc dd;
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 1;
+    if(argc==2&&std::wstring_view(argv[1])==L"--capture-near-black")
+        return captureNearBlack(ctx,ring,false)?0:1;
+    if(argc==2&&std::wstring_view(argv[1])==L"--capture-near-black-vfg")
+        return captureNearBlack(ctx,ring,true)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-chroma")
         return reconstructedCaptureChroma(ctx,ring)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-hdr-chroma")

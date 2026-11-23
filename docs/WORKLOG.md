@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-23 T900 夜景黑位与测试组件补齐
+
+- 截图时 T900 提供 1440p60 NV12，自动限幅、BT.709、SDR，VFG 中档 2×。用户复核 OBS 也有同样现象。与 2.2.0 核对两个颜色送显着色器哈希一致。PR #246 启用采集色度插值，已知限幅的灰阶与旧采样结果一致。原帧与 VFG 生成帧的 Y=16、17、18、24 对应 RGB 0、1、2、9。全范围保持原值。实体采集的同帧原始 YUV 未留存。
+- 向字幕测试目录补回 2.2.0 清单所列 AMD FidelityFX 补帧 DLL，并补入两档 RIFE、DirectML 与 ONNX Runtime。Qt 可用性检查确认 FSR 3.1、RIFE、VFG 与 Qwen/Parakeet/Whisper。FSR 3.1.6 2×、RIFE 2×/3× 动态夹具各生成 38、38、76 帧，D3D12 错误为零。
+- `build-recording-handoff.py --task codex-black-level-runtime-20261123 --jobs 2` 构建 `veyra_yuy2_color_tests` 与 `veyra_fsr_switch_tests`。修正诊断夹具的无效字段和 3× 两张生成帧的同名截图后复测通过。测试与运行库校验见 [验收记录](<E:/项目/Veyra/reports/codex-black-level-runtime-20261123/FINAL.md>)。
+
 ## 2026-11-23 实时字幕快语速与样式
 
 - Veyra 音频的无标点定稿直接进入翻译。短暂的 PCM 断点保留完整语音段和已排队的译文。有积压时缩短换行间隔。识别队列最多等四段，每段等待上限 1.6 秒。缩短英文分段后混音口令覆盖改善，初版同样缩短中文导致字错率升至 33.09%，最终版保留多语上下文。
