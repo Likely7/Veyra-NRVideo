@@ -837,15 +837,16 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     target_link_libraries(veyra_sources PUBLIC veyra_moonlight_protocol veyra_moonlight_common_c PRIVATE Opus::opus)
   endif()
 
-  # Xbox home streaming: the Chromium reference player inside WebView2 is the
-  # only transport (the old native libdatachannel source was removed).
+  # Xbox home streaming: two selectable transports. V1 is the native
+  # libdatachannel session; V2 enhanced is the Chromium reference player inside
+  # WebView2. Both share the decoder/audio/enhancement chain.
   if(VEYRA_ENABLE_XBOX)
     set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
     include(VeyraXbox)
     include(cmake/VeyraXboxWeb.cmake)
     find_package(Opus CONFIG REQUIRED)
     target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_XBOX=1)
-    target_sources(veyra_sources PRIVATE src/source/XboxWebSource.cpp)
+    target_sources(veyra_sources PRIVATE src/source/XboxSessionSource.cpp src/source/XboxWebSource.cpp)
     target_link_libraries(veyra_sources PUBLIC veyra_xbox_protocol veyra_xbox_web PRIVATE Opus::opus)
   endif()
 

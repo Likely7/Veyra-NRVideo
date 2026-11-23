@@ -476,7 +476,10 @@ void XboxWebSource::run(XboxConnectDesc desc) {
         });
 
         if (!p.web.start(nullptr, std::move(callbacks), std::chrono::seconds(30))) {
-            fail(L"WebView2 启动失败。请确认已安装 Microsoft Edge WebView2 运行时。");
+            const std::string why = p.web.startFailureReason();
+            fail(L"WebView2 启动失败" + (why.empty()
+                ? std::wstring(L"（超时）。请确认已安装 Microsoft Edge WebView2 运行时。")
+                : L"：" + widen(why)));
             return;
         }
         if (cancelled()) { fail(L"已取消。"); return; }

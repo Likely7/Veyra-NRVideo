@@ -211,6 +211,7 @@ struct WebView2Host::Impl {
         {
             std::lock_guard lock(owner->readyMutex_);
             owner->failed_ = true;
+            if (owner->failReason_.empty()) owner->failReason_ = reason;
         }
         owner->readyCv_.notify_all();
         if (callbacks.failed) callbacks.failed(reason);
@@ -294,7 +295,12 @@ struct WebView2Host::Impl {
             return;
         }
         controller = created;
-        controller->put_IsVisible(FALSE);
+        // Keep the controller "visible": IsVisible=FALSE makes Chromium treat
+        // the page as hidden and suspend the media pipeline (RTP arrives but
+        // the encoded-frame transform never sees a frame). The host window is
+        // a never-shown 1x1 WS_EX_TOOLWINDOW popup, so nothing appears on
+        // screen; this flag only controls Chromium's internal state.
+        controller->put_IsVisible(TRUE);
         controller->put_Bounds(RECT{0, 0, 1, 1});
         if (FAILED(controller->get_CoreWebView2(&webview)) || !webview) {
             fail("WebView2 core unavailable");
@@ -353,13 +359,15 @@ struct WebView2Host::Impl {
             return;
         }
         environment = created;
-        if (FAILED(environment->CreateCoreWebView2Controller(parent,
-                Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
-                    [this](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
-                        onControllerCreated(result, controller);
-                        return S_OK;
-                    }).Get()))) {
-            fail("CreateCoreWebView2Controller failed");
+        const HRESULT hr = environment->CreateCoreWebView2Controller(parent,
+            Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                [this](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
+                    onControllerCreated(result, controller);
+                    return S_OK;
+                }).Get());
+        if (FAILED(hr)) {
+            fail(std::format("CreateCoreWebView2Controller failed (0x{:08X}) parent={} visible={}",
+                             uint32_t(hr), static_cast<void*>(parent), IsWindowVisible(parent) ? 1 : 0));
         }
     }
 };
@@ -377,6 +385,7 @@ bool WebView2Host::start(HWND parentWindow, WebView2HostCallbacks callbacks, std
     {
         std::lock_guard lock(readyMutex_);
         ready_ = failed_ = false;
+        failReason_.clear();
     }
     staThread_ = std::thread([this, parentWindow] { staMain(parentWindow); });
     std::unique_lock lock(readyMutex_);
@@ -396,26 +405,36 @@ void WebView2Host::staMain(HWND parentWindow) {
     // PostThreadMessage to it (otherwise the first post may be dropped).
     MSG peek{};
     PeekMessageW(&peek, nullptr, WM_USER, WM_USER, PM_NOREMOVE);
-    // WebView2 requires STA. The caller's apartment is irrelevant: this thread
-    // initializes its own and pumps until stop().
+    // WebView2 requires STA. This thread initializes its own apartment and
+    // pumps until stop(). RPC_E_CHANGED_MODE means the thread was already MTA
+    // (COM cannot switch apartments); continuing would only fail later inside
+    // the loader with the same code, so report it here.
     const HRESULT co = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    if (FAILED(co) && co != RPC_E_CHANGED_MODE) {
-        p_->fail(std::format("CoInitializeEx failed (0x{:08X})", uint32_t(co)));
+    if (FAILED(co)) {
+        p_->fail(std::format("CoInitializeEx(STA) failed (0x{:08X})", uint32_t(co)));
         return;
     }
 
     HWND parent = parentWindow;
     if (!parent) {
-        // A real (never shown) window, not a message-only one: WebView2 hosts
-        // its composition visuals under the parent and needs a normal HWND.
-        parent = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, 0, 0, 1, 1, nullptr, nullptr,
+        // A real window, shown but parked far offscreen. Chromium suspends the
+        // media pipeline of a never-shown/hidden host (RTP arrives but the
+        // encoded-frame transform never sees a frame); the working probes all
+        // ShowWindow their host. WS_EX_TOOLWINDOW keeps it out of the taskbar
+        // and alt-tab; SW_SHOWNOACTIVATE never steals focus.
+        parent = CreateWindowExW(WS_EX_TOOLWINDOW, L"STATIC", L"", WS_POPUP, -32000, -32000, 1, 1, nullptr, nullptr,
                                  GetModuleHandleW(nullptr), nullptr);
         if (!parent) {
             p_->fail("could not create the hidden host window");
             if (SUCCEEDED(co)) CoUninitialize();
             return;
         }
+        SetWindowPos(parent, nullptr, -32000, -32000, 1, 1, SWP_NOACTIVATE | SWP_NOZORDER);
+        ShowWindow(parent, SW_SHOWNOACTIVATE);
     }
+    // The environment callback runs later on this thread; it must see the
+    // window created here, not the caller's (possibly null) parent.
+    p_->parent = parent;
 
     p_->userDataDir = userDataDirectory().wstring();
     std::error_code ec;
@@ -498,6 +517,11 @@ void WebView2Host::stop() {
     staThread_.join();
     running_ = false;
     p_->callbacks = {};
+}
+
+std::string WebView2Host::startFailureReason() const {
+    std::lock_guard lock(readyMutex_);
+    return failReason_;
 }
 
 } // namespace veyra::xbox

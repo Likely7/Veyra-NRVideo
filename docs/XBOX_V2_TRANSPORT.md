@@ -1,19 +1,33 @@
-# Xbox transport: Chromium reference player (WebView2)
+# Xbox transport: V1 native and V2 enhanced (Chromium/WebView2)
 
-Xbox home streaming uses the same receive stack as the reference clients
-(XStreaming / Greenlight): the forked `xstreaming-player` (MIT) runs inside an
-invisible WebView2. Chromium's libwebrtc owns NACK, the jitter buffer and
-reordering; an `RTCRtpScriptTransform` exports the reassembled encoded frames
-before decoding. The earlier native libdatachannel transport and its
-experimental switches (transport engine / streaming plan selectors) were
-removed — this is the only path.
+Xbox home streaming offers two selectable transports (传输引擎 in the Xbox
+dialog, persisted; default **V2 增强版**):
 
-The streaming profile is fixed to the former "plan 2": 1080p HQ tier, public
-STUN, full Teredo candidate expansion. The dialog keeps only the necessary
-settings: account, console list, gamepad forwarding, bitrate cap (0 = console
-decides), the software-decode compatibility switch and the hardware decode API
-choice (D3D11VA for Intel iGPUs that corrupt D3D12VA output), plus an optional
-custom TURN relay.
+- **V1 原版** — the native libdatachannel session (`XboxSessionSource`):
+  in-process WebRTC, Veyra's own NACK/reordering/keyframe recovery. Slightly
+  lower latency on a clean network.
+- **V2 增强版** — the same receive stack as the reference clients
+  (XStreaming / Greenlight): the forked `xstreaming-player` (MIT) runs inside
+  an offscreen WebView2. Chromium's libwebrtc owns NACK, the jitter buffer and
+  reordering; an `RTCRtpScriptTransform` exports the reassembled encoded frames
+  before decoding. Stronger loss/jitter handling on real home networks.
+
+Both engines share the decoder/audio/enhancement chain and the same fixed
+streaming profile (1080p HQ tier, public STUN, full Teredo expansion). The
+dialog keeps: account, console list, gamepad forwarding, transport engine,
+bitrate cap (0 = console decides), the software-decode compatibility switch,
+the hardware decode API choice (D3D11VA for Intel iGPUs that corrupt D3D12VA
+output), and an optional custom TURN relay.
+
+## V2 critical implementation note
+
+The encoded transform **must be attached to the transceiver receiver before
+`createOffer`/`setLocalDescription`** (see `index.ts` `bind`). A transform set
+at `ontrack` (after negotiation) is silently bypassed on real-console SDP —
+frames go straight to the decoder and `reader.read()` never resolves
+(Chromium bug w3c/webrtc-encoded-transform#314 / chromium 467247265). The
+export worker uses `self.postMessage` (no transferred MessagePort), matching
+the probe-verified mechanism in `tools/wv2-probe/`.
 
 ## What the transport does — and what it does not touch
 

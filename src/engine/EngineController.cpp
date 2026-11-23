@@ -37,6 +37,7 @@
 #include "veyra/source/ScreenCaptureSource.h"
 #include "veyra/xbox/DisconnectPolicy.h"
 #ifdef VEYRA_ENABLE_XBOX
+#include "veyra/source/XboxSessionSource.h"
 #include "veyra/source/XboxWebSource.h"
 #endif
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -541,9 +542,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     (void)moonlightRequest;const bool isMoonlight=false;
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-    // Xbox streaming is the Chromium reference transport only (WebView2 +
-    // xstreaming-player). The old native libdatachannel source was removed.
-    auto xb=xboxRequest?std::make_shared<source::XboxWebSource>():nullptr;
+    // Two selectable transports: 1 = V1 native libdatachannel, 2 = V2 enhanced
+    // Chromium reference player (WebView2). Default is V2.
+    std::shared_ptr<source::IXboxSource> xb;
+    if(xboxRequest){
+        if(xboxRequest->transportEngine==1) xb=std::make_shared<source::XboxSessionSource>();
+        else xb=std::make_shared<source::XboxWebSource>();
+    }
     xbox::ReconnectBudget xboxReconnectBudget;
     const bool isXbox=bool(xb);
     {std::lock_guard lock(mutex_);activeXbox_=xb;}

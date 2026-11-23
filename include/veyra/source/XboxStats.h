@@ -25,6 +25,7 @@ struct XboxConnectDesc {
     bool softwareDecode = false;    // opt-in workaround for silent hardware decode corruption
     std::string locale = "zh-CN";
     xbox::StreamProfile profile;   // quality tier / bitrate / ICE policy; default = historical behaviour
+    int transportEngine = 2;         // 1 = V1 native libdatachannel, 2 = V2 enhanced Chromium/WebView2
     std::shared_ptr<ID3D12Device> decodeDevice;
     std::shared_ptr<ID3D12CommandQueue> decodeQueue;
     const std::atomic<bool>* stopRequested = nullptr; // engine owner outlives the source

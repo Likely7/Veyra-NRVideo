@@ -157,6 +157,19 @@ DialogLayer {
             }
         }
         VRow {
+            label: qsTr("传输引擎")
+            hint: qsTr("V1 原版：原生 libdatachannel 收流，延迟略低。V2 增强版：与 XStreaming 相同的 Chromium WebRTC 收流（WebView2），抗丢包/抖动更强、复杂网络更稳。断开后重新连接生效。")
+            hintBelow: true
+            VSelect {
+                objectName: "xbox-transport-engine"
+                implicitWidth: 170
+                title: qsTr("传输引擎")
+                options: [{id:"1",label:qsTr("V1 原版")},{id:"2",label:qsTr("V2 增强版")}]
+                value: xbDialog.st.transportEngine === 1 ? qsTr("V1 原版") : qsTr("V2 增强版")
+                onPicked: id => xbDialog.xb.set("transportEngine", Number(id))
+            }
+        }
+        VRow {
             visible: true
             label: qsTr("码率上限 (Mbps)")
             hint: qsTr("0 = 由主机决定。建议 15–30；过高可能被主机钳制。")

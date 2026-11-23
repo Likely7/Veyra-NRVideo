@@ -4642,6 +4642,45 @@
    "ru": "Коррекция интерфейса · не проверено"
   },
   {
+   "zh": "V1 原版",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "V1 原版",
+   "en": "V1 Original",
+   "ja": "V1 原版",
+   "ko": "V1 원본",
+   "es": "V1 Original",
+   "fr": "V1 Original",
+   "de": "V1 Original",
+   "pt-BR": "V1 Original",
+   "ru": "V1 Оригинал"
+  },
+  {
+   "zh": "V1 原版：原生 libdatachannel 收流，延迟略低。V2 增强版：与 XStreaming 相同的 Chromium WebRTC 收流（WebView2），抗丢包/抖动更强、复杂网络更稳。断开后重新连接生效。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "V1 原版：原生 libdatachannel 收流，延遲略低。V2 增強版：與 XStreaming 相同的 Chromium WebRTC 收流（WebView2），抗丟包/抖動更強、複雜網路更穩。斷開後重新連接生效。",
+   "en": "V1 original: native libdatachannel receive, slightly lower latency. V2 enhanced: the same Chromium WebRTC receive as XStreaming (WebView2), stronger loss/jitter handling and more stable on complex networks. Takes effect on the next connection.",
+   "ja": "V1 原版：ネイティブ libdatachannel 受信、遅延やや低め。V2 強化：XStreaming と同じ Chromium WebRTC 受信（WebView2）、ロス/ジッタに強く複雑なネットワークで安定。切断後の再接続で有効。",
+   "ko": "V1 원본: 네이티브 libdatachannel 수신, 지연이 약간 낮음. V2 강화: XStreaming과 동일한 Chromium WebRTC 수신(WebView2), 손실/지터에 강하고 복잡한 네트워크에서 안정적. 연결을 끊었다 다시 연결하면 적용.",
+   "es": "V1 original: recepción nativa libdatachannel, latencia algo menor. V2 mejorado: la misma recepción Chromium WebRTC que XStreaming (WebView2), mejor manejo de pérdidas/jitter y más estable en redes complejas. Se aplica al reconectar.",
+   "fr": "V1 original : réception native libdatachannel, latence légèrement plus faible. V2 amélioré : la même réception Chromium WebRTC que XStreaming (WebView2), meilleure gestion pertes/gigue et plus stable sur réseaux complexes. Appliqué à la reconnexion.",
+   "de": "V1 original: nativer libdatachannel-Empfang, etwas geringere Latenz. V2 erweitert: derselbe Chromium-WebRTC-Empfang wie XStreaming (WebView2), stärkere Verlust-/Jitter-Behandlung und stabiler in komplexen Netzen. Wirkt beim Wiederverbinden.",
+   "pt-BR": "V1 original: recepção nativa libdatachannel, latência um pouco menor. V2 aprimorado: a mesma recepção Chromium WebRTC do XStreaming (WebView2), melhor tratamento de perdas/jitter e mais estável em redes complexas. Aplica ao reconectar.",
+   "ru": "V1 оригинал: нативный приём libdatachannel, чуть ниже задержка. V2 улучшенный: тот же приём Chromium WebRTC, что у XStreaming (WebView2), лучше обработка потерь/джиттера и стабильнее в сложных сетях. Применяется при переподключении."
+  },
+  {
+   "zh": "V2 增强版",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "V2 增強版",
+   "en": "V2 Enhanced",
+   "ja": "V2 強化版",
+   "ko": "V2 강화판",
+   "es": "V2 Mejorado",
+   "fr": "V2 Amélioré",
+   "de": "V2 Erweitert",
+   "pt-BR": "V2 Aprimorado",
+   "ru": "V2 Улучшенный"
+  },
+  {
    "zh": "VB-Audio 安装器未完成操作（%1）",
    "src": "src/ui/bridge/VirtualCaptureAudioSetup.cpp",
    "zh-TW": "VB-Audio 安裝器未完成操作（%1）",
@@ -5019,17 +5058,17 @@
    "ru": "WASAPI конечная точка аудио недоступна; видео продолжается."
   },
   {
-   "zh": "WebView2 启动失败。请确认已安装 Microsoft Edge WebView2 运行时。",
+   "zh": "WebView2 启动失败",
    "src": "src/source/XboxWebSource.cpp",
-   "zh-TW": "WebView2 啟動失敗。請確認已安裝 Microsoft Edge WebView2 執行時。",
-   "en": "WebView2 failed to start. Make sure the Microsoft Edge WebView2 runtime is installed.",
-   "ja": "WebView2 の起動に失敗しました。Microsoft Edge WebView2 ランタイムがインストールされているか確認してください。",
-   "ko": "WebView2 시작에 실패했습니다. Microsoft Edge WebView2 런타임이 설치되어 있는지 확인하세요.",
-   "es": "WebView2 no pudo iniciarse. Asegúrate de tener instalado el runtime Microsoft Edge WebView2.",
-   "fr": "Échec du démarrage de WebView2. Vérifiez que le runtime Microsoft Edge WebView2 est installé.",
-   "de": "WebView2 konnte nicht starten. Prüfen Sie, ob die Microsoft Edge WebView2-Runtime installiert ist.",
-   "pt-BR": "Falha ao iniciar o WebView2. Verifique se o runtime Microsoft Edge WebView2 está instalado.",
-   "ru": "Не удалось запустить WebView2. Убедитесь, что установлена среда выполнения Microsoft Edge WebView2."
+   "zh-TW": "WebView2 啟動失敗",
+   "en": "WebView2 failed to start",
+   "ja": "WebView2 の起動に失敗",
+   "ko": "WebView2 시작 실패",
+   "es": "WebView2 no pudo iniciarse",
+   "fr": "Échec du démarrage de WebView2",
+   "de": "WebView2 konnte nicht starten",
+   "pt-BR": "Falha ao iniciar o WebView2",
+   "ru": "Не удалось запустить WebView2"
   },
   {
    "zh": "WebView2 运行出错（",
@@ -7695,6 +7734,19 @@
    "de": "Komprimierung nötig",
    "pt-BR": "Compressão necessária",
    "ru": "Нужно сжатие"
+  },
+  {
+   "zh": "传输引擎",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "傳輸引擎",
+   "en": "Transport engine",
+   "ja": "転送エンジン",
+   "ko": "전송 엔진",
+   "es": "Motor de transporte",
+   "fr": "Moteur de transport",
+   "de": "Transport-Engine",
+   "pt-BR": "Motor de transporte",
+   "ru": "Транспортный движок"
   },
   {
    "zh": "位流优先",
@@ -41276,6 +41328,19 @@
    "de": " (Ausreisecode) {} / Fehler {})",
    "pt-BR": " (código de saída {} / erro {})",
    "ru": " (код выхода) {} Ошибка {}"
+  },
+  {
+   "zh": "（超时）。请确认已安装 Microsoft Edge WebView2 运行时。",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "（超時）。請確認已安裝 Microsoft Edge WebView2 執行時。",
+   "en": " (timeout). Make sure the Microsoft Edge WebView2 runtime is installed.",
+   "ja": "（タイムアウト）。Microsoft Edge WebView2 ランタイムがインストールされているか確認してください。",
+   "ko": "(시간 초과). Microsoft Edge WebView2 런타임이 설치되어 있는지 확인하세요.",
+   "es": " (tiempo de espera agotado). Asegúrate de tener instalado el runtime Microsoft Edge WebView2.",
+   "fr": " (délai dépassé). Vérifiez que le runtime Microsoft Edge WebView2 est installé.",
+   "de": " (Zeitüberschreitung). Prüfen Sie, ob die Microsoft Edge WebView2-Runtime installiert ist.",
+   "pt-BR": " (tempo esgotado). Verifique se o runtime Microsoft Edge WebView2 está instalado.",
+   "ru": " (тайм-аут). Убедитесь, что установлена среда выполнения Microsoft Edge WebView2."
   },
   {
    "zh": "）。请确认已安装 WebView2 运行时。",

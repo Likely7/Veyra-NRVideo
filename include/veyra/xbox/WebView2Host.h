@@ -94,15 +94,19 @@ public:
 
     void stop();          // posts 'stop', closes the controller, joins the STA thread
     bool running() const { return running_.load(); }
+    // Why the last start() failed (empty on timeout without a specific error).
+    // Valid after start() returns false; survives stop().
+    std::string startFailureReason() const;
 
 private:
     struct Impl;
     std::unique_ptr<Impl> p_;
     std::atomic<bool> running_{false};
     std::thread staThread_;
-    std::mutex readyMutex_;
+    mutable std::mutex readyMutex_;
     std::condition_variable readyCv_;
     bool ready_ = false, failed_ = false;
+    std::string failReason_;            // guarded by readyMutex_
 
     void staMain(HWND parentWindow);
 };

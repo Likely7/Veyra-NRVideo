@@ -68,6 +68,7 @@ void XboxModel::loadSettings() {
     softwareDecode_ = o.value("softwareDecode").toBool(false);
     videoBitrateKbps_ = o.value("videoBitrateKbps").toInt(0);
     decodeBackend_ = o.value("decodeBackend").toInt(0);
+    transportEngine_ = o.value("transportEngine").toInt(2);
     turnUrl_ = o.value("turnUrl").toString();
     turnUser_ = o.value("turnUser").toString();
     turnPass_ = o.value("turnPass").toString();
@@ -79,7 +80,7 @@ void XboxModel::saveSettings() const {
     QSaveFile file(settingsPath());
     if (!file.open(QIODevice::WriteOnly)) return;
     file.write(QJsonDocument(QJsonObject{{"lastConsole", lastId_}, {"lastName", lastName_}, {"gamepad", gamepad_}, {"softwareDecode", softwareDecode_},
-                                         {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_},
+                                         {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_}, {"transportEngine", transportEngine_},
                                          {"turnUrl", turnUrl_}, {"turnUser", turnUser_}, {"turnPass", turnPass_}}).toJson());
     file.commit();
 }
@@ -89,7 +90,7 @@ QVariantMap XboxModel::state() const {
         {"signedIn", account_->signedIn()}, {"busy", busy_}, {"status", status_}, {"code", code_},
         {"verificationUri", verificationUri_}, {"signingIn", signingIn_}, {"selected", selected_}, {"gamepad", gamepad_},
         {"streaming", streamActive_}, {"stream", stream_}, {"lastLabel", lastName_}, {"softwareDecode", softwareDecode_},
-        {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_},
+        {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_}, {"transportEngine", transportEngine_},
         {"turnUrl", turnUrl_}, {"turnUser", turnUser_}, {"turnPass", turnPass_},
     };
 }
@@ -214,10 +215,12 @@ void XboxModel::select(const QString& id) {
 }
 
 bool XboxModel::set(const QString& key, const QVariant& value) {
+    if (!loaded_) { loadSettings(); loaded_ = true; }
     if (key == "gamepad") { gamepad_ = value.toBool(); saveSettings(); emit changed(); return true; }
     if (key == "softwareDecode") { softwareDecode_ = value.toBool(); saveSettings(); emit changed(); return true; }
     if (key == "videoBitrateKbps") { videoBitrateKbps_ = std::clamp(value.toInt(), 0, 40000); saveSettings(); emit changed(); return true; }
     if (key == "decodeBackend") { decodeBackend_ = value.toInt() == 1 ? 1 : 0; saveSettings(); emit changed(); return true; }
+    if (key == "transportEngine") { transportEngine_ = value.toInt() == 1 ? 1 : 2; saveSettings(); emit changed(); return true; }
     if (key == "turnUrl") { turnUrl_ = value.toString().trimmed(); saveSettings(); emit changed(); return true; }
     if (key == "turnUser") { turnUser_ = value.toString().trimmed(); saveSettings(); emit changed(); return true; }
     if (key == "turnPass") { turnPass_ = value.toString(); saveSettings(); emit changed(); return true; }
@@ -236,6 +239,7 @@ bool XboxModel::launchConsole(const QString& id, const QString& name) {
     // Fixed streaming profile: 1080p HQ tier + public STUN + full Teredo
     // expansion (the old plan-2 configuration is now the only configuration).
     launch.desc.profile.decodeBackend = decodeBackend_ == 1 ? xbox::DecodeBackend::D3D11VA : xbox::DecodeBackend::Auto;
+    launch.desc.transportEngine = transportEngine_;
     launch.desc.profile.tier = xbox::QualityTier::P1080Hq;
     launch.desc.profile.videoBitrateKbps = videoBitrateKbps_;
     launch.desc.profile.useStun = true;
