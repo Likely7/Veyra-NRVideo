@@ -475,7 +475,9 @@ PlayerSnapshot EngineController::snapshot()const{
     }
     copy.volume=volume_;copy.muted=muted_;
     const bool playing=copy.running&&!copy.image&&copy.transport==TransportState::Playing;
-    if(flowWindow){
+    // EOF publishes the drained counters before marking the transport ended.
+    // A cached live reading can still precede the last Present by one frame.
+    if(flowWindow&&copy.transport!=TransportState::Ended){
         static std::mutex cacheMutex;static diagnostics::FrameFlowMetrics cached;static const FrameFlowWindow* cachedFor=nullptr;static int64_t cachedAt=0;
         const auto now=monotonic100ns();
         std::lock_guard lock(cacheMutex);

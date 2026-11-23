@@ -1888,3 +1888,5 @@ RTX 5070 同帧对照，DLSS 2X/4X 拖影 7/13、19/39 → 0，FSR 3.1 和 ANR 2
 `scripts/acceptance/build-recording-handoff.py --task codex-github-issue-followup-20261122 --jobs 2` 构建 16 个目标。已有 ASCII Qt Junction 指向 E 盘物理依赖以避开 MSVC 链接乱码。107 个 shader 与构建校验一致，翻译缺失与占位异常均为 0。补帧预算的 1,800 对夹具与 1440p29.97 DLSS 2X 回放拒绝均为 0。回放提交约 59.9 FPS，1% Low 58.50 FPS。静止 1440p30 开 VFG 2X 后提交约 60 FPS，1% Low 58.98。全屏帧率首版绘制在本机快速失败，改用单个 GPU 绘制后四角像素对照通过。
 
 构建、日志、私有测试程序及临时文件分属 E 盘同名任务目录。逐条处理、复现命令、数据与现场边界见 [验收记录](<E:/项目/Veyra/reports/codex-github-issue-followup-20261122/RESULTS.md>)。
+
+断流夹具中，尾帧已呈现，结束状态却一度读到上一份 50 ms 缓存。结束后改用排空时发布的快照，实时统计缓存继续用于播放中。
