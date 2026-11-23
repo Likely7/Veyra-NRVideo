@@ -4,6 +4,10 @@ function status(api, id) {
     // Reading the notifying property also invalidates bindings after settings,
     // adapter/runtime status or a rejected backend request changes.
     var caps = api.effectCapabilities
+    // The "sr" group resolves to the currently selected algorithm; depend on
+    // videoSrQuality explicitly so picking FSR re-evaluates the card switch
+    // even if the invokable's internal read is not tracked by the binding.
+    if (id === "sr") { var q = api.videoSrQuality }
     return typeof api.effectAvailability === "function"
             ? api.effectAvailability(id) : {available: true, reason: ""}
 }

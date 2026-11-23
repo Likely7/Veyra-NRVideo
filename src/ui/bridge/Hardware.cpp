@@ -177,6 +177,17 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
             veyra::log::warn("fg-default",std::format("unavailable saved backend={} selected={} rememberedMultiplier={} enabled flags preserved",
                 engine::frameGenerationBackendName(savedBackend),engine::frameGenerationBackendName(globals.fgBackend),chain.fgMultiplier));
         }
+        // A saved SR algorithm this GPU cannot run (e.g. an NVIDIA profile
+        // moved to an AMD/Intel card) would grey the whole SR card and block
+        // the algorithm dropdown, so the user could never pick the FSR that
+        // this card DOES support. Migrate to the cross-vendor FSR upscaler
+        // when its runtime is present, mirroring the FG backend migration.
+        if (!caps.value("sr" + QString::number(globals.videoSrQuality)).toMap().value("available").toBool() &&
+            caps.value("sr5").toMap().value("available").toBool()) {
+            const auto savedSr = globals.videoSrQuality;
+            globals.videoSrQuality = engine::kVideoSrFsr;
+            veyra::log::warn("effect-availability", std::format("unavailable saved SR quality={} selected=FSR", savedSr));
+        }
         for (uint32_t i = 0; i < chain.nodeCount; ++i) {
             auto& node = chain.nodes[i];
             QString id;
