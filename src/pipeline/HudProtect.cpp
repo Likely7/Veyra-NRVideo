@@ -11,7 +11,7 @@ constexpr unsigned matchStride=7;
 constexpr unsigned detectStride=9;
 constexpr unsigned repairStride=10;
 constexpr unsigned flowStride=3;
-constexpr unsigned composeStride=10;
+constexpr unsigned composeStride=9;
 constexpr UINT64 counterPlacement=D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT;
 constexpr UINT64 sampleStride=2*counterPlacement;
 constexpr auto readState=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -39,27 +39,10 @@ D3D12_BOX HudProtect::regionBounds(uint32_t width,uint32_t height,const engine::
     return box.left<box.right&&box.top<box.bottom?box:D3D12_BOX{};
 }
 
-D3D12_BOX HudProtect::compositionBounds(uint32_t width,uint32_t height,
-                                         const engine::HudProtectRegions& regions) {
-    auto expanded=regions;
-    const float scale=float(height)/2160.f;
-    const float reach=std::max(4.f,16.f*scale);
-    for(auto& r:expanded){
-        if(r.empty())continue;
-        const float cx=(r.left+r.right)*0.5f,cy=(r.top+r.bottom)*0.5f;
-        const float rx=std::max((r.right-r.left)*width*.5f,208.f*scale)+reach;
-        const float ry=std::max((r.bottom-r.top)*height*.5f,208.f*scale)+reach;
-        r.left=cx-rx/width; r.right=cx+rx/width;
-        r.top=cy-ry/height; r.bottom=cy+ry/height;
-    }
-    return regionBounds(width,height,expanded);
-}
-
 bool HudProtect::initialize(ID3D12Device* device,DXGI_FORMAT format,uint32_t width,uint32_t height,
                             unsigned outputMode,const engine::HudProtectRegions& regions,
                             bool externalMotion,unsigned generatedCount) {
     bounds_=regionBounds(width,height,regions);
-    composeBounds_=compositionBounds(width,height,regions);
     generatedCount_=generatedCount;
     const UINT roiWidth=bounds_.right-bounds_.left,roiHeight=bounds_.bottom-bounds_.top;
     if(!roiWidth||!roiHeight)return false;
@@ -73,10 +56,6 @@ bool HudProtect::initialize(ID3D12Device* device,DXGI_FORMAT format,uint32_t wid
             std::max(0.f,std::min(r.right,1.f)-std::max(r.left,0.f))*
             std::max(0.f,std::min(r.bottom,1.f)-std::max(r.top,0.f))*(i==0?0.12f:0.55f);
     }
-    constants_[30]=bits(composeBounds_.left);
-    constants_[31]=bits(composeBounds_.top);
-    constants_[32]=bits(composeBounds_.right-composeBounds_.left);
-    constants_[33]=bits(composeBounds_.bottom-composeBounds_.top);
     for(unsigned i=0;i<2;++i){
         input_[i]=makeTexture(device,width,height,format,true);
         confidence_[i]=makeTexture(device,roiWidth,roiHeight,DXGI_FORMAT_R8_UNORM,true);
@@ -87,8 +66,7 @@ bool HudProtect::initialize(ID3D12Device* device,DXGI_FORMAT format,uint32_t wid
         if(!input_[i]||!confidence_[i]||!appearance_[i]||!density_[i]||!mask_[i]||!motion_[i])return false;
     }
     if(generatedCount){
-        scratch_=makeTexture(device,composeBounds_.right-composeBounds_.left,
-                             composeBounds_.bottom-composeBounds_.top,format,true);
+        scratch_=makeTexture(device,roiWidth,roiHeight,format,true);
         if(!scratch_)return false;
     }
     if(externalMotion){
@@ -115,7 +93,7 @@ bool HudProtect::initialize(ID3D12Device* device,DXGI_FORMAT format,uint32_t wid
        !build(detectPass_,"HudProtectDetect.dxil",2,6,3)||
        !build(repairPass_,"HudProtectRepair.dxil",2,7,3)||
        (externalMotion&&!build(flowPass_,"HudProtectFlow.dxil",2,2,1))||
-       (generatedCount&&!build(composePass_,"HudProtectCompose.dxil",generatedCount*4,9,1)))return false;
+       (generatedCount&&!build(composePass_,"HudProtectCompose.dxil",generatedCount*4,8,1)))return false;
     log::info("hud-protect",std::format("created work={}x{} roi={}x{} motion={} present={}",
         width,height,roiWidth,roiHeight,externalMotion,generatedCount==0));
     return true;
@@ -177,8 +155,7 @@ void HudProtect::createViews(ID3D12Device* device,DescriptorStager& stager,
                 srv(composePass_,base+4,input_[held].Get());srv(composePass_,base+5,real[1-held]);
                 srv(composePass_,base+6,density_[maskParity].Get());
                 srv(composePass_,base+7,density_[1-maskParity].Get());
-                srv(composePass_,base+8,motion_[maskParity].Get());
-                uav(composePass_,base+9,scratch_.Get());
+                uav(composePass_,base+8,scratch_.Get());
             }
 }
 
@@ -267,16 +244,14 @@ void HudProtect::compose(ID3D12GraphicsCommandList* list,StateTracker& tracker,u
     tracker.transition(list,scratch_.Get(),writeState);
     const unsigned table=((slot*2+maskParity)*2+heldParity)*composeStride;
     tracker.transition(list,input_[heldParity].Get(),readState);
-    composePass_.bind(list,constants_.data(),gpuHandleOf(composePass_,table).ptr,gpuHandleOf(composePass_,table+9).ptr);
-    list->Dispatch((composeBounds_.right-composeBounds_.left+15)/16,
-                   (composeBounds_.bottom-composeBounds_.top+15)/16,1);
+    dispatch(list,composePass_,constants_,table,8);
     if(sampleRecorded_)++samples_[(sampleWrite_+diagnosticSlots-1)%diagnosticSlots].generated;
     tracker.transition(list,input_[heldParity].Get(),commonState);
     tracker.transition(list,scratch_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
     tracker.transition(list,generated,D3D12_RESOURCE_STATE_COPY_DEST);
     const auto source=subresource(scratch_.Get());
     const auto destination=subresource(generated);
-    list->CopyTextureRegion(&destination,composeBounds_.left,composeBounds_.top,0,&source,nullptr);
+    list->CopyTextureRegion(&destination,bounds_.left,bounds_.top,0,&source,nullptr);
     tracker.transition(list,real_[heldParity],commonState);
     tracker.transition(list,real_[1-heldParity],commonState);
 }

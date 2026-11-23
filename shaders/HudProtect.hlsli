@@ -8,7 +8,6 @@ cbuffer HudProtectConstants : register(b0) {
     float4 hudRegions[5];          // left > right encodes an ellipse
     uint readDenseFlow;
     uint reserved;
-    uint2 composeOrigin, composeSize;
 };
 static const uint HudDensity = 0;
 static const uint HudCore = 1;

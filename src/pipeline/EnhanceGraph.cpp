@@ -922,14 +922,12 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const unsigned outputBytes=desc_.hdrOutput&&!hdr10Output()?8u:4u;
     const auto protectRegions=engine::hudProtectRegions(desc_.hudProtect,desc_.exclusion);
     const auto hudBounds=HudProtect::regionBounds(workW_,workH_,protectRegions);
-    const auto hudComposeBounds=HudProtect::compositionBounds(workW_,workH_,protectRegions);
     const bool hasHud=(fgEnabled_||presentSinkFg())&&hudBounds.right>hudBounds.left;
     const uint64_t hudBytes=hasHud?
         uint64_t(workW_)*workH_*(2*outputBytes+(desc_.fgUsesFlow()?4u:0u)+
             (presentSinkFg()?(desc_.exclusion.enabled?0u:4*outputBytes):0u))+
-        uint64_t(hudBounds.right-hudBounds.left)*(hudBounds.bottom-hudBounds.top)*18u+
-        (presentSinkFg()?0ull:uint64_t(hudComposeBounds.right-hudComposeBounds.left)*
-            (hudComposeBounds.bottom-hudComposeBounds.top)*outputBytes):0;
+        uint64_t(hudBounds.right-hudBounds.left)*(hudBounds.bottom-hudBounds.top)*
+            (18u+(presentSinkFg()?0u:outputBytes)):0;
     const auto spatialBytes = [&](uint32_t quality, Extent input, Extent output) -> uint64_t {
         if (!srEnabled_) return 0;
         if (quality == engine::kVideoSrNis) {

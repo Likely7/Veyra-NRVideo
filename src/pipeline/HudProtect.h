@@ -37,10 +37,9 @@ public:
     const D3D12_BOX& bounds() const { return bounds_; }
 
     static D3D12_BOX regionBounds(uint32_t width,uint32_t height,const engine::HudProtectRegions& regions);
-    static D3D12_BOX compositionBounds(uint32_t width,uint32_t height,const engine::HudProtectRegions& regions);
 
 private:
-    using Constants=std::array<float,34>;
+    using Constants=std::array<float,30>;
     using Clock=std::chrono::steady_clock;
     static constexpr unsigned diagnosticSlots=6;
     struct DiagnosticSample {
@@ -57,7 +56,7 @@ private:
     void dispatch(ID3D12GraphicsCommandList* list,const ComputePass& pass,const Constants& values,
                   unsigned table,unsigned srvCount) const;
 
-    D3D12_BOX bounds_{},composeBounds_{};
+    D3D12_BOX bounds_{};
     std::array<float,regionCount> densityLimits_{};
     unsigned generatedCount_=0;
     Constants constants_{};
