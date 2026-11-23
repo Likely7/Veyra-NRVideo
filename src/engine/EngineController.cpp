@@ -1249,7 +1249,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             LiveStats liveStats;std::deque<int64_t> liveSubmissions;
             TimingWindow liveAges,liveWaits,liveReady;
             TimingWindow livePresent{std::chrono::seconds(1)};
-            TimingWindow livePresentGpu{std::chrono::seconds(1)};
+            // RIFE: a shorter window, so a transient blit spike stops blocking admission sooner.
+            TimingWindow livePresentGpu{options.settings.frameGenerationBackend==FrameGenerationBackend::Rife?std::chrono::milliseconds(500):std::chrono::milliseconds(1000)};
             FgRecoveryBudget fgBudget;uint64_t fgBudgetRevision=options.settings.revision;
             const bool vfgMeasuredReducedQueue=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST",nullptr,0)==0;
             int64_t nextVfgQueueLog=0;
@@ -2844,6 +2845,20 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const bool admitted=!vfgCostSettling.holding(now)&&fgBudget.admit(now,deadline,elapsed,presentP95,warmingHistory);
                         logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous");
                         auto decision=admitted?pipeline::EnhanceGraph::FgDecision::Evaluate:pipeline::EnhanceGraph::FgDecision::Skip;
+                        // RIFE 3X capture rejected: try a 2X midpoint instead of a full gap.
+                        if(!admitted&&options.settings.frameGenerationBackend==FrameGenerationBackend::Rife&&previewFgMultiplier>2&&!warmingHistory){
+                            const auto midpointPts=pipeline::FrameBatch::interpolate(a,batch.b100ns,1,2);
+                            const auto midDeadline=liveTimeline.deadline(midpointPts);
+                            // RIFE's Fg1 span covers the whole group (capture to the last unpack): one interpolation is its share.
+                            auto firstFg=frameFlow?frameFlow->snapshot(now).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95:std::optional<double>{};
+                            if(firstFg)*firstFg/=double(previewFgMultiplier-1);
+                            if(fgBudget.canAdmitReduced(now,midDeadline,interval/previewFgMultiplier,elapsed,presentP95,firstFg,0)){
+                                ++fgReducedPairs;
+                                if(now>=nextFgReducedLog){nextFgReducedLog=now+10000000;
+                                    veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} reduced=2X requestedMultiplier={} reducedPairs={} remainingMidpointMs={:.3f} predictedFullMs={:.3f} (history kept; presentable midpoint instead of whole-group hole)",pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous",batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,fgReducedPairs,double(midDeadline-now)/10000,fgBudget.predicted(now,false).value_or(-1)));}
+                                decision=pipeline::EnhanceGraph::FgDecision::Reduced;
+                            }
+                        }
                         if(smoothTransportAnchor&&options.settings.vfgAutoRegulate&&previewFgMultiplier==2&&!warmingHistory&&graph->vfgFastReady()){
                             const double base=fgBudget.baseCost(now).value_or(0),progress=std::clamp(elapsed,0.0,base),blit=std::max(0.0,presentP95);
                             if(!admitted){
