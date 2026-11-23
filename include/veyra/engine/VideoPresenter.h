@@ -13,6 +13,7 @@
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentCapture.h"
 #include "veyra/engine/DisplayStateService.h"
+#include "veyra/engine/FullscreenFrameStats.h"
 #include <chrono>
 #include <array>
 #include <optional>
@@ -115,6 +116,11 @@ public:
     }
     bool vrrSync()const{return vrrSync_;}
     TearingHint tearingHint()const { return tearingHint_; }
+    int displayCompositionMode()const{return displayCompositionMode_;}
+    void setFullscreenFrameStats(int corner){frameStatsCorner_=corner;}
+    void updateFrameStats(std::optional<double> fps,std::optional<double> low){
+        if(frameStatsCorner_>=0)frameStats_.update(fps,low);
+    }
     diagnostics::GpuSample blitTiming(ID3D12Fence* f,uint64_t revision=0,uint64_t epoch=0){gpuTimer_.collect(presentationFence_?presentationFence_.Get():f);if((revision&&gpuTimer_.last().identity.settingsRevision!=revision)||(epoch&&gpuTimer_.last().identity.epoch!=epoch)){diagnostics::GpuSample pending;pending.state=diagnostics::SampleState::Pending;return pending;}return gpuTimer_.last().gpu[size_t(diagnostics::GpuStage::Blit)];}
     // Application-side frame-generation timing for present-sink backends
     // (XeSS): the copies, barriers and provider prepare work recorded on
@@ -137,6 +143,7 @@ private:
     gfx::ReflexSession reflex_;
     uint64_t reflexFrame_=0,reflexInputFrame_=0,generation_=0;
     int64_t lastPresentCallHost100ns_=0;
+    int displayCompositionMode_=-1;
     bool providerOwnedPresentation_=false;
     PresentCapture* capture_=nullptr;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> presentationQueue_;
@@ -196,6 +203,7 @@ private:
         pipeline::FrameIdentity identity{};
         HMONITOR monitor=nullptr;
         HdrCurveSettings displayCurve{};
+        int frameStatsCorner=-1;
         bool operator==(const RetainedFrame&)const=default;
     };
     std::optional<RetainedFrame> retainedFrame_;
@@ -232,5 +240,9 @@ private:
     std::array<XessWork,4> xessWork_{};
     size_t xessWorkPosition_=0;
     bool refresh(ID3D12Device*);
+    bool ensureXessUiSurfaces(ID3D12Device*,D3D12_RESOURCE_DESC);
+    FullscreenFrameStats frameStats_;
+    int frameStatsCorner_=-1;
+    bool xessFrameStatsFailed_=false;
 };
 }

@@ -7,6 +7,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/source/CaptureCompressedDecoder.h"
 #include "veyra/source/CaptureColorOverride.h"
+#include "CaptureFormatGpuCases.h"
 #include <cmath>
 #include <fstream>
 #include <iostream>
@@ -93,6 +94,101 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
     }
     return all;
 }
+bool hdrCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring) {
+    using namespace pipeline;
+    constexpr unsigned w=256,h=128;
+    AVFrame* frame=av_frame_alloc();
+    if(!frame)return false;
+    frame->format=AV_PIX_FMT_P010;frame->width=w;frame->height=h;
+    if(av_frame_get_buffer(frame,32)<0){av_frame_free(&frame);return false;}
+    for(unsigned y=0;y<h;++y)
+        std::fill_n(reinterpret_cast<uint16_t*>(frame->data[0]+y*frame->linesize[0]),w,uint16_t(500u<<6));
+    for(unsigned y=0;y<h/2;++y){
+        auto* row=reinterpret_cast<uint16_t*>(frame->data[1]+y*frame->linesize[1]);
+        for(unsigned x=0;x<w/2;++x){
+            row[2*x]=uint16_t(480u<<6);
+            row[2*x+1]=uint16_t((570u+x+y)<<6);
+        }
+    }
+    EnhanceGraphDesc desc;
+    desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;desc.noFeatures=true;
+    desc.enableNr=desc.enableSr=desc.enableFg=false;
+    desc.hdrInput=desc.hdrOutput=true;desc.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+    desc.captureBitDepth=10;
+    ColorDescription color;
+    color.pixelFormat=SourcePixelFormat::P010;color.range=ColorRange::Limited;color.matrix=YuvMatrix::BT2020NCL;
+    color.primaries=ColorPrimaries::BT2020;color.transfer=TransferFunction::PQ;color.chromaLocation=ChromaLocation::TopLeft;
+    EnhanceGraph graph(ctx,ring);
+    bool ok=graph.initialize(desc)&&graph.createViews();
+    double energy[2][2]{};
+    for(unsigned reconstructed=0;ok&&reconstructed<2;++reconstructed) {
+        EnhanceGraph::FrameOutputs out;
+        std::vector<float> pixels;
+        color.reconstructChroma=reconstructed!=0;
+        ok=graph.process(frame,double(reconstructed)*16.667,true,out,reconstructed+1,&color)&&
+            captureReadFp16(ctx,ring,graph.videoFrameResource(out.videoSlot),pixels,D3D12_RESOURCE_STATE_COMMON);
+        if(!ok)break;
+        for(unsigned y=2;y+2<h;++y)for(unsigned x=2;x+2<w;++x) {
+            const size_t center=(size_t(y)*w+x)*4;
+            for(unsigned axis=0;axis<2;++axis) {
+                const size_t step=axis?w*4:4;
+                energy[reconstructed][axis]+=std::abs(2.0*pixels[center]-pixels[center-step]-pixels[center+step]);
+            }
+        }
+    }
+    graph.shutdown();av_frame_free(&frame);
+    ok=ok&&energy[0][0]>1&&energy[0][1]>1&&energy[1][0]<energy[0][0]*.25&&energy[1][1]<energy[0][1]*.25;
+    std::cout<<"CAPTURE_HDR_CHROMA nearestX="<<energy[0][0]<<" nearestY="<<energy[0][1]
+        <<" reconstructedX="<<energy[1][0]<<" reconstructedY="<<energy[1][1]<<" pass="<<ok<<std::endl;
+    return ok;
+}
+
+bool fullscreenFrameStats(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring) {
+    constexpr unsigned w=384,h=216;
+    const HWND window=CreateWindowExW(0,L"STATIC",L"Fullscreen FPS fixture",WS_POPUP,0,0,w,h,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!window)return false;
+    AVFrame* frame=av_frame_alloc();
+    if(!frame){DestroyWindow(window);return false;}
+    frame->format=AV_PIX_FMT_NV12;frame->width=w;frame->height=h;
+    pipeline::EnhanceGraphDesc desc;
+    desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;desc.noFeatures=true;
+    desc.enableNr=desc.enableSr=desc.enableFg=false;
+    pipeline::EnhanceGraph graph(ctx,ring);
+    engine::VideoPresenter presenter;
+    pipeline::EnhanceGraph::FrameOutputs output;
+    bool ok=av_frame_get_buffer(frame,32)>=0&&graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
+    if(ok){
+        for(unsigned y=0;y<h;++y)std::fill_n(frame->data[0]+y*frame->linesize[0],w,110);
+        for(unsigned y=0;y<h/2;++y)std::fill_n(frame->data[1]+y*frame->linesize[1],w,128);
+        ok=graph.process(frame,0,true,output,1);
+    }
+    sink::RgbaImage baseline,shown;
+    const auto present=[&](sink::RgbaImage& out){
+        return presenter.present(ctx,ring,graph,output.videoSlot,false)&&presenter.readPresentedFrameForTest(ctx,ring,out);
+    };
+    if(ok)ok=present(baseline)&&baseline.width==w&&baseline.height==h;
+    std::cout<<"frame stats baseline="<<ok<<std::endl;
+    for(int corner=0;ok&&corner<4;++corner){
+        presenter.setFullscreenFrameStats(corner);presenter.updateFrameStats(59.9,54.0);
+        std::cout<<"frame stats before present corner="<<corner<<std::endl;
+        ok=present(shown)&&shown.pixels.size()==baseline.pixels.size();
+        if(!ok)break;
+        unsigned count=0,outside=0;
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+            const size_t pixel=(size_t(y)*w+x)*4;
+            if(shown.pixels[pixel]==baseline.pixels[pixel])continue;
+            ++count;
+            outside+=((x>=w/2)!=(corner&1))||((y>=h/2)!=bool(corner&2));
+        }
+        ok=count>300&&outside==0;
+        std::cout<<"FULLSCREEN_FRAME_STATS corner="<<corner<<" changedPixels="<<count<<" outside="<<outside<<" pass="<<ok<<std::endl;
+    }
+    presenter.setFullscreenFrameStats(-1);
+    if(ok)ok=present(shown)&&shown.pixels==baseline.pixels;
+    output={};ring.drainQueue();presenter.close();graph.shutdown();av_frame_free(&frame);DestroyWindow(window);
+    return ok;
+}
+
 bool mjpegRange(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const wchar_t* path) {
     constexpr unsigned w=64,h=32;
     std::ifstream file(std::filesystem::path(path),std::ios::binary);
@@ -114,7 +210,7 @@ bool mjpegRange(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const wc
     int black[2]{};
     bool ok=frame->data[0][0]==16&&!hardware;
     for(unsigned range=0;range<2;++range){
-        const auto color=source::resolveCompressedCaptureColor(*frame,fallback,source::captureColorOverride(0,range));
+        const auto color=source::resolveCompressedCaptureColor(*frame,fallback,source::effectiveCaptureColorOverride(source::captureColorOverride(1,range),true));
         pipeline::EnhanceGraph::FrameOutputs out;sink::RgbaImage image;
         if(!graph.process(frame,range*33.3,true,out,range+1,&color)||
             !sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),image)){ok=false;break;}
@@ -138,6 +234,10 @@ int wmain(int argc,wchar_t**argv){
     if(!ctx.initialize(dd,st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,st))return 1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-chroma")
         return reconstructedCaptureChroma(ctx,ring)?0:1;
+    if(argc==2&&std::wstring_view(argv[1])==L"--capture-hdr-chroma")
+        return hdrCaptureChroma(ctx,ring)?0:1;
+    if(argc==2&&std::wstring_view(argv[1])==L"--fullscreen-stats")
+        return fullscreenFrameStats(ctx,ring)?0:1;
     if(argc==3&&std::wstring_view(argv[1])==L"--mjpeg-range")
         return mjpegRange(ctx,ring,argv[2])?0:1;
     const unsigned w=native4k?3840:nr?1920:256,h=native4k?2160:nr?1080:64;

@@ -38,6 +38,9 @@ struct NativeSnapshot {
     bool started=false,connected=false;
     std::uint64_t warnings=0,errors=0,videoCallbacks=0,audioCallbacks=0;
     int lastQuitReason=0,lastApiError=0;
+    uint32_t applicationReason=0;
+    enum class SessionAdvice { None, Account, Registration, InUse, Version, Rejected };
+    SessionAdvice sessionAdvice=SessionAdvice::None;
     uint64_t callbackRejected=0,packetReceived=0,packetLost=0;
     uint64_t transportErrors=0,assemblyErrors=0;
     bool automaticRetryAllowed=true;

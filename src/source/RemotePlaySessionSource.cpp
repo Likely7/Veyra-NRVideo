@@ -8,6 +8,33 @@ extern "C" {
 #include <libavutil/frame.h>
 }
 namespace veyra::source {
+namespace {
+std::wstring sessionFailureDetail(const remoteplay::NativeSnapshot& native, int errorCode) {
+    using Advice=remoteplay::NativeSnapshot::SessionAdvice;
+    std::wstring message=std::format(L"（终止码 {} / 错误 {}）",native.lastQuitReason,errorCode);
+    if(native.sessionAdvice!=Advice::None)message+=L"\n";
+    switch(native.sessionAdvice) {
+    case Advice::Account:
+        message+=L"主机拒绝了 Account ID，请在获取指南中使用当前配对用户的 PSN 账号重新查询。";
+        break;
+    case Advice::Registration:
+        message+=L"主机拒绝了已保存的配对，请使用同一 PSN 账号和主机新生成的配对码重新配对。";
+        break;
+    case Advice::InUse:
+        message+=L"请结束其他远程游玩会话，等待主机释放连接后重试。";
+        break;
+    case Advice::Version:
+        message+=L"主机报告远程游玩协议版本不匹配，请检查主机系统和 Veyra 版本。";
+        break;
+    case Advice::Rejected:
+        message+=L"主机未提供可识别的拒绝原因，请将本次连接的诊断日志提供给维护者。";
+        break;
+    case Advice::None: break;
+    }
+    return message;
+}
+}
+
 bool RemotePlaySessionSource::connect(RemotePlayConnectDesc desc) {
     close();
     { std::lock_guard lock(mutex_); initialized_=started_=failed_=false; skipped_=publishedSequence_=0; recovery_={}; rates_={}; feedback_={}; controller_={}; pendingControllers_.clear(); snapshot_={}; }
@@ -90,10 +117,10 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                     const auto action=recovery.poll(milliseconds(),snapshot.state==remoteplay::SessionState::LoginPinRequired,snapshot.state==remoteplay::SessionState::Failed,native.automaticRetryAllowed,native.startupRetryAllowed);
                     if(action==remoteplay::StreamRecovery::Action::Reconnect){retryWasRpInUse=native.startupRetryAllowed;retryAfterLiveSession=false;retry=true;break;}
                     if(action==remoteplay::StreamRecovery::Action::Fail){
-                        log::error("remoteplay-recovery",std::format("controller-only recovery stopped attempts={} quitReason={} error={}",recovery.reconnects(),native.lastQuitReason,snapshot.errorCode));
+                        log::error("remoteplay-recovery",std::format("controller-only recovery stopped attempts={} quitReason={} error={} applicationReason=0x{:08X}",recovery.reconnects(),native.lastQuitReason,snapshot.errorCode,native.applicationReason));
                         std::lock_guard lock(mutex_);failed_=true;recovery_.active=false;
                         recovery_.message=snapshot.state==remoteplay::SessionState::LoginPinRequired?L"等待 PS5 登录 PIN 超时，请重新连接。":native.startupRetryAllowed?L"PS5 仍被串流会话占用，请结束其他串流或稍后重试；无需重新配对。":!native.automaticRetryAllowed?L"PS5 已结束或拒绝串流，请检查主机状态后重新连接。":L"PS5 手柄控制没有恢复，请检查主机及网络后重新打开；无需重新配对。";
-                        recovery_.message+=std::format(L"（终止码 {} / 错误 {}）",native.lastQuitReason,snapshot.errorCode);break;
+                        recovery_.message+=sessionFailureDetail(native,snapshot.errorCode);break;
                     }
                 }
                 now=std::chrono::steady_clock::now();
@@ -202,10 +229,10 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                         std::lock_guard lock(mutex_);recovery_.active=true;recovery_.message=L"画面中断，正在请求关键帧恢复…";
                     }else if(action==remoteplay::StreamRecovery::Action::Reconnect){retryWasRpInUse=native.startupRetryAllowed;retryAfterLiveSession=true;retry=true;break;}
                     else if(action==remoteplay::StreamRecovery::Action::Fail){
-                        log::error("remoteplay-recovery",std::format("recovery stopped attempts={} quitReason={} error={}",recovery.reconnects(),native.lastQuitReason,snapshot.errorCode));
+                        log::error("remoteplay-recovery",std::format("recovery stopped attempts={} quitReason={} error={} applicationReason=0x{:08X}",recovery.reconnects(),native.lastQuitReason,snapshot.errorCode,native.applicationReason));
                         std::lock_guard lock(mutex_);failed_=true;recovery_.active=false;
                         recovery_.message=snapshot.state==remoteplay::SessionState::LoginPinRequired?L"等待 PS5 登录 PIN 超时，请重新连接。":native.startupRetryAllowed?L"PS5 仍被串流会话占用，请结束其他串流或稍后重试；无需重新配对。":!native.automaticRetryAllowed?L"PS5 已结束或拒绝串流，请检查主机状态后重新连接。":L"PS5 串流未恢复，请检查主机及网络后点击连接；无需重新配对。";
-                        recovery_.message+=std::format(L"（终止码 {} / 错误 {}）",native.lastQuitReason,snapshot.errorCode);break;
+                        recovery_.message+=sessionFailureDetail(native,snapshot.errorCode);break;
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }

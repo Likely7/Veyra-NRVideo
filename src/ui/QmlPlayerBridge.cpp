@@ -123,6 +123,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     updateLiveCompanionCompat();
     applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
+    applyPreference(QStringLiteral("fullscreenFrameStats"));
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    impl_->engine.setRemotePlayTouchpadPressOnly(impl_->prefBool("ps5TouchpadPressOnly",false));
+#endif
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
     // 游戏模式. The native filter also keeps windows shown during a monitor capture

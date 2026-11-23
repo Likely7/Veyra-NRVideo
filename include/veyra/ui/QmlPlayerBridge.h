@@ -84,6 +84,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgEnabled READ fgEnabled WRITE setFgEnabled NOTIFY chainChanged)
     Q_PROPERTY(QString submitFpsLabel READ submitFpsLabel NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureHalfRateSuggested READ captureHalfRateSuggested NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool fgStrict READ fgStrict WRITE setFgStrict NOTIFY settingsChanged)
     Q_PROPERTY(bool fgLowQueue READ fgLowQueue WRITE setFgLowQueue NOTIFY settingsChanged)
@@ -141,6 +142,7 @@ class QmlPlayerBridge : public QObject {
     // dialog never searches captureFormats itself (logs(18): 15474 formats hung it).
     Q_PROPERTY(QString captureFormatLabel READ captureFormatLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureFormatCostHint READ captureFormatCostHint NOTIFY captureChanged)
+    Q_PROPERTY(bool captureMjpegSelected READ captureMjpegSelected NOTIFY captureChanged)
     // Resolution, frame rate and pixel format are three views of captureFormatKey.
     // Changing one retargets that key to a media type the device actually enumerated.
     Q_PROPERTY(QVariantList captureResolutionOptions READ captureResolutionOptions NOTIFY captureChanged)
@@ -719,6 +721,7 @@ public:
     bool fgEnabled() const;
     void setFgEnabled(bool enabled);
     QString submitFpsLabel() const;
+    bool captureHalfRateSuggested() const;
     QVariantList fgMultiplierChoices() const;
     bool fgStrict() const;
     void setFgStrict(bool value);
@@ -767,6 +770,7 @@ public:
     QString captureFormatKey() const;
     QString captureFormatLabel() const;
     bool captureFormatCostHint() const;
+    bool captureMjpegSelected() const;
     void setCaptureFormatKey(const QString& key);
     QVariantList captureResolutionOptions() const;
     QString captureResolutionId() const;

@@ -862,6 +862,11 @@ Window {
     // application event filter because it needs the key release too.
     Shortcut { sequence: veyra.shortcuts.playPause; enabled: !screenCrop.editing; onActivated: veyra.togglePlayPause() }
     Shortcut { sequence: veyra.shortcuts.fullscreen; onActivated: root.toggleFullscreen() }
+    Shortcut {
+        sequence: veyra.shortcuts.fullscreenStats
+        enabled: root.fullscreen && dialogs.dialog === "" && !screenCrop.editing
+        onActivated: veyra.setPreference("fullscreenFrameStats", !veyra.preferences.fullscreenFrameStats)
+    }
     Shortcut { sequence: veyra.shortcuts.screenshot; onActivated: veyra.takeScreenshot() }
     Shortcut { sequence: veyra.shortcuts.record; autoRepeat: false; onActivated: veyra.toggleRecording("shortcut") } // a held key must not toggle at the repeat rate
     Shortcut { sequence: veyra.shortcuts.replay; autoRepeat: false; onActivated: veyra.saveReplay("shortcut") }

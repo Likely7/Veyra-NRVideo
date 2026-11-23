@@ -1856,8 +1856,17 @@ bool EnhanceGraph::initNgxFeatures()
     const bool fgAvailable = fgBackend_->queryCapability(*coreHost_, fgCaps, st);
     fgInitResult_=uint64_t(fgCaps.featureInitResult);
     driverRequirementNotice_.clear();
-    if(fgCaps.needsUpdatedDriver&&fgCaps.minDriverVersionMajor>0)
-        driverRequirementNotice_=std::format(L"当前 DLSS 补帧运行库要求至少 {}.{:02} 驱动（NGX 能力查询）",fgCaps.minDriverVersionMajor,fgCaps.minDriverVersionMinor);
+    if(!fgAvailable){
+        if(fgCaps.needsUpdatedDriver){
+            if(fgCaps.minDriverVersionMajor>0&&fgCaps.minDriverVersionMinor>=0)
+                driverRequirementNotice_=std::format(L"当前 DLSS 补帧运行库要求至少 {}.{:02} 驱动（NGX 能力查询）",fgCaps.minDriverVersionMajor,fgCaps.minDriverVersionMinor);
+            else driverRequirementNotice_=L"DLSS 补帧需要更新 NVIDIA 驱动";
+        }else if(fgCaps.hagsRegistryMode==1){
+            driverRequirementNotice_=L"硬件加速 GPU 计划已关闭。请到 Windows 设置 → 系统 → 显示 → 图形开启并重启电脑";
+        }else if(uint64_t(fgCaps.featureInitResult)==uint64_t(NVSDK_NGX_Result_FAIL_FeatureNotSupported)){
+            driverRequirementNotice_=L"当前显卡和运行库组合不支持 DLSS 补帧";
+        }
+    }
     if (!fgAvailable) {
         veyra::log::error("graph", "FG capability startup failed; see native results and compatibility stage above");
         return false;

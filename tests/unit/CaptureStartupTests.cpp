@@ -2,6 +2,7 @@
 #include "veyra/engine/CaptureReconnectBudget.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/source/CaptureStartFallback.h"
+#include "veyra/source/CaptureDriverCadence.h"
 #include <windows.h>
 #include <vfwmsgs.h>
 #include <cstdio>
@@ -19,7 +20,29 @@ void expect(bool ok, const char* description) {
     else ++failed;
 }
 
+void testDriverCadence(){
+    using veyra::source::CaptureDriverCadence;
+    constexpr int64_t period=333333,second=CaptureDriverCadence::kSecond;
+    auto simulate=[](int64_t callbackInterval,int64_t ptsStep,int64_t age,bool appDrops){
+        CaptureDriverCadence watch;
+        int64_t host=second,pts=period,first=0;
+        uint64_t dropped=0;
+        for(int i=0;i<270;++i){
+            if(appDrops&&i%8==0)++dropped;
+            if(watch.observe(host,pts,age,period,dropped)&&!first)first=host-second;
+            host+=callbackInterval;pts+=ptsStep;
+        }
+        return first;
+    };
+    expect(simulate(period,period,9*second,false)==0,"9 s timestamp drift alone does not reopen");
+    const auto detected=simulate(period*2,period,9*second,false);
+    expect(detected>=5*second&&detected<=6*second,"30 to 15 callback drop at nominal PTS recovers after five seconds");
+    expect(simulate(period*2,period*2,9*second,false)==0,"a genuinely negotiated lower cadence is not mistaken for sample drift");
+    expect(simulate(period*2,period,9*second,true)==0,"mailbox pressure does not trigger a device reopen");
+    expect(simulate(period*2,period,second/2,false)==0,"low callback rate without clock drift does not reopen");
+}
 void testReconnectBudget() {
+
     using Budget = veyra::engine::CaptureReconnectBudget;
     using namespace std::chrono_literals;
     auto now = Budget::Clock::time_point{};
@@ -82,6 +105,7 @@ void testReconnectBudget() {
 int main(int argc, char** argv) {
     using namespace veyra::source;
     testReconnectBudget();
+    testDriverCadence();
     int runs = 0, detaches = 0;
     auto audioFallback = startCaptureGraph(true, [&] { return ++runs == 1 ? E_FAIL : S_OK; },
                                            [&] { ++detaches; return true; });

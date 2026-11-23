@@ -1880,3 +1880,11 @@ RTX 5070 同帧对照，DLSS 2X/4X 拖影 7/13、19/39 → 0，FSR 3.1 和 ANR 2
 从本地 main `eb5fd6d0` 建立 `codex/half-rate-variants-20261121`。兼容自动去重保留 ID 5 与 #156 行为，原版用 ID 6。保留首份相位、PTS 和半速送显策略。两档实时切换只重置采样器。新档的预设 v24 / 会话 v19 在 `.half-rate-variants` 保存，HUD 的预设 v23 / 会话 v18 保留。列表、节点、预设摘要和状态统一显示九语档位名。
 
 `scripts/acceptance/build-recording-handoff.py --task codex-half-rate-variants-20261121 --jobs 2` 构建主程序和相关测试，91 个 shader 校验一致。时序 506 项通过，1,048,576 项对拍差异 0。生产引擎回放菜单原版/兼容档每秒保留 30/20 张，锁 30 时均取首份。来回切换只创建一次图，revision 保持 2。真应用中英文 320 px 界面、老偏好、两档存档与旧应用的版本错误提示通过。历史预设负对照改用未分配后端号，QA stage 补齐 QtQuick 测试依赖后重跑，控件 7 项和全量 238 项通过。命令、诊断和截图见 [验收](<E:/项目/Veyra/reports/codex-half-rate-variants-20261121/RESULTS.md>)。临时文件和日志位于 E 盘同任务目录。实际采集卡和实体主机待测。本地测试分支。
+
+### 2026-11-22 GitHub Issue 跟进
+
+从整合版 `bf0aacd6` 建立 `codex/github-issue-followup-20261122`。处理新虚拟摄像机授权重入、采集补帧准入的相位反馈、采集驱动时钟漂移与自动重连、静止画面去重节奏、MJPEG 残留色彩设置、全屏提交 FPS、NR 窄面板、PS5 触摸板与会话诊断、DLSS 不可用提示以及 DRED 的按进程开关。WAVLINK 现场日志是原生直连，重连按回调频率、时间戳和丢帧共同判断。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-github-issue-followup-20261122 --jobs 2` 构建 16 个目标。已有 ASCII Qt Junction 指向 E 盘物理依赖以避开 MSVC 链接乱码。107 个 shader 与构建校验一致，翻译缺失与占位异常均为 0。补帧预算的 1,800 对夹具与 1440p29.97 DLSS 2X 回放拒绝均为 0。回放提交约 59.9 FPS，1% Low 58.50 FPS。静止 1440p30 开 VFG 2X 后提交约 60 FPS，1% Low 58.98。全屏帧率首版绘制在本机快速失败，改用单个 GPU 绘制后四角像素对照通过。
+
+构建、日志、私有测试程序及临时文件分属 E 盘同名任务目录。逐条处理、复现命令、数据与现场边界见 [验收记录](<E:/项目/Veyra/reports/codex-github-issue-followup-20261122/RESULTS.md>)。

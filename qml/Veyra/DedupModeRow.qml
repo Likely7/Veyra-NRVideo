@@ -20,7 +20,12 @@ VRow {
     onCurrentModeChanged: if(currentMode!==0)lastMode=currentMode
     Component.onCompleted: if(currentMode!==0)lastMode=currentMode
     label: qsTr("去除重复帧")
-    hint: showHelp?qsTr("60→30 每两帧取一帧，保持约 30 帧的节奏，游戏低于 30 帧时可能顿卡。兼容自动去重会跳过短时间重复的画面，菜单可能低于 30 帧。自动去除按画面变化识别帧率。"):""
+    hint: {
+        if (!showHelp) return ""
+        if (currentMode === 1 && backend?.captureHalfRateSuggested)
+            return qsTr("检测到约两帧一组的画面。主机锁定 30 帧时，可试用 60→30 保持固定节奏。")
+        return qsTr("60→30 每两帧取一帧，保持约 30 帧的节奏，游戏低于 30 帧时可能顿卡。兼容自动去重会跳过短时间重复的画面，菜单可能低于 30 帧。自动去除按画面变化识别帧率。")
+    }
     hintBelow: true
     RowLayout {
         spacing: 8

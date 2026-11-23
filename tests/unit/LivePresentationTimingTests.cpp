@@ -845,15 +845,15 @@ int main(){
          check(r.kept==n&&r.droppedReal==0,"dedup 30-in-60 with noise beyond the band: every sample kept, nothing lost");}
         {// Hitch: one picture shown for four samples, then the 30 fps cadence resumes one slot later.
          const auto r=run(60.0,[](int i){return int64_t(i<301?i/2:(i<304?150:(i-1)/2));},n,0,0,333333);
-         check(r.keptRepeats==0&&r.droppedReal==0&&r.monotonic&&r.neverLate,"dedup hitch: no real picture lost, timestamps stay ordered and never late");}
+         check(r.keptRepeats==1&&r.droppedReal==0&&r.monotonic&&r.neverLate,"dedup hitch: one static refresh, no lost picture or nonmonotonic timestamp");}
         {// Mailbox overwrite: the first sample of a picture is never read; its second still counts as new.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<120;++i){if(i%4==2)continue;const uint64_t shown=uint64_t(i/2);kept+=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;}
          check(kept==60,"dedup keeps a picture whose first sample the engine never read");}
-        {// Still picture after 30 fps content: held on the 33.3 ms cadence (steady GPU work), not once per 150-250 ms.
+        {// Still picture after 30 fps content returns to its transport cadence.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<600;++i){const uint64_t shown=i<240?uint64_t(i/2):1000u;const bool keep=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;if(i>=300)kept+=keep;}
-         check(kept>=148&&kept<=152&&dedup.stats().held>=140,"dedup still picture after 30 fps content is held at a steady 30 fps");}
+         check(kept==300&&dedup.stats().held>=350,"dedup still picture returns to 60 Hz without gaps");}
         {
             ContentDedup recovering;constexpr int64_t dt=166667;const uint64_t picture=7;
             int64_t firstHeldSpan=0,firstHeldCadence=0;
@@ -861,19 +861,44 @@ int main(){
                 const auto d=recovering.observe(&picture,i*dt,dt,i==0);
                 if(d.keep&&d.holdInterval&&!firstHeldSpan){firstHeldSpan=d.interval;firstHeldCadence=d.holdInterval;}
             }
-            check(firstHeldSpan>firstHeldCadence&&firstHeldCadence==2*dt,
-                  "static refresh distinguishes its preceding hold gap from the ongoing content cadence");
+            check(firstHeldSpan>firstHeldCadence&&firstHeldCadence==dt,
+                  "static refresh distinguishes its preceding hole from the transport cadence");
             const auto phase=veyra::engine::capturePairInterval100ns({firstHeldCadence,10000000},60,0,double(firstHeldSpan)/10000,true);
-            check(phase==2*dt,"post-boundary static hold cannot stretch subsequent pair scheduling to the hitch duration");
+            check(phase==dt,"post-boundary static hold cannot stretch subsequent pair scheduling to the hitch duration");
         }
-        {// Still picture after 40 fps content in 60 Hz: held on the 25 ms grid (33/17 ms samples).
+        {// Still picture after 40 fps content also follows transport.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<600;++i){const uint64_t shown=i<240?uint64_t(std::floor(i*40.0/60.0+1e-9)):1000u;const bool keep=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;if(i>=300)kept+=keep;}
-         check(kept>=196&&kept<=204,"dedup still picture after 40 fps content is held at 40 fps");}
-        {// Still picture from the start, no learned rate: half the 60 Hz transport.
+         check(kept==300,"dedup still picture after 40 fps content follows transport");}
+        {// Still picture from the start, no learned rate.
          ContentDedup dedup;const uint64_t shown=3;int kept=0;
          for(int i=0;i<240;++i)kept+=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;
-         check(kept>=116&&kept<=122,"dedup still picture with no learned rate keeps 30 of a 60 Hz capture");}
+         check(kept==238,"dedup with no learned rate holds after two ordinary repeat slots");}
+        {
+            ContentDedup menu;
+            constexpr int64_t dt=333333;
+            bool all=true;
+            for(uint64_t i=0;i<360;++i){
+                const auto picture=i/11;
+                const auto frame=menu.observe(&picture,i*dt,dt,i==0);
+                all&=frame.keep&&(!i||frame.interval==dt);
+            }
+            check(all,"near-static 30 Hz map with 2.7 new pictures per second keeps every transport slot");
+        }
+        {
+            ContentDedup locked;
+            constexpr int64_t dt=166667;
+            uint64_t picture=0;
+            for(uint64_t i=0;i<180;++i){
+                // Noise makes some real repeats look like changes, always on
+                // the repeat side of the 30-in-60 sampling pattern.
+                if(i%2==0||i%6==1)++picture;
+                locked.observe(&picture,i*dt,dt,i==0,0,i+1);
+            }
+            check(locked.suggestHalfRate(),"sporadic false new pictures retain the half-rate cadence hint");
+            for(uint64_t i=180;i<300;++i)locked.observe(&picture,i*dt,dt,false,0,i+1);
+            check(!locked.suggestHalfRate(),"still pictures on both parities do not trigger a lock-30 hint");
+        }
         {// No CPU picture: everything is kept.
          ContentDedup dedup;int kept=0;for(int i=0;i<60;++i)kept+=dedup.observe(nullptr,i*166667+1000,166667,i==0).keep;
          check(kept==60,"dedup without a picture keeps every sample");}

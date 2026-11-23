@@ -168,7 +168,7 @@ struct PlayerSnapshot {
     uint64_t frames=0,generated=0;
     uint64_t captureReceived=0,captureDropped=0,nrEvaluated=0,nvofExecuted=0;
     uint64_t captureRateSkipped=0,processedCompleted=0;
-    bool captureHalfRate=false;
+    bool captureHalfRate=false,captureHalfRateSuggested=false;
     bool captureSampledBlack=false; // Sparse CPU-source samples, not no-signal detection.
     bool captureRecovering=false;unsigned captureReconnectAttempts=0;
     uint64_t captureDriverWaitMs=0;
@@ -203,6 +203,8 @@ struct PlayerSnapshot {
     // now, 3 possible, 4 active. presentationVrrSync: the 可变刷新 switch made
     // Automatic present like Vsync for it.
     unsigned displayVrr=0;
+    double displayVrrMinimumHz=0;
+    int displayCompositionMode=-1;
     TearingHint tearingHint=TearingHint::None;
     bool presentationVrrSync=false;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
@@ -250,6 +252,7 @@ public:
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
     void remotePlayController(const remoteplay::ControllerState&);
+    void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
     // (the console's keepalive video and audio are dropped on receipt). Start and
@@ -292,6 +295,7 @@ public:
     void pause(bool p);
     bool setPlaybackRate(double rate);
     void setFullscreenMemoryProtection(bool enabled);
+    void setFullscreenFrameStats(int corner){fullscreenFrameStatsCorner_=corner;}
     void observeHdrCoverage(bool on){hdrCoverageObserved_=on;}
     void previewView(PreviewView view){if(!std::isfinite(view.zoom)||!std::isfinite(view.centerX)||!std::isfinite(view.centerY)||!std::isfinite(view.displayAspect)||view.displayAspect<0||view.mode<0||view.mode>6)return;std::lock_guard lock(mutex_);view.zoom=std::clamp(view.zoom,.05f,64.0f);if(view.displayAspect==0)view.displayAspect=previewView_.displayAspect;view.rotationDegrees=previewView_.rotationDegrees;view.userQuarterTurns=previewView_.userQuarterTurns;previewView_=view;}
     bool rotatePreviewClockwise(uint64_t session){std::lock_guard lock(mutex_);if(session!=snapshot_.sessionId||(!snapshot_.running&&!snapshot_.image))return false;previewView_.rotateClockwise();return true;}
@@ -390,6 +394,10 @@ private:
     std::atomic<double> seekSeconds_{-1};
     std::atomic<double> requestedPlaybackRate_{1};
     std::atomic<bool> fullscreenMemoryProtection_{false};
+    std::atomic<int> fullscreenFrameStatsCorner_{-1};
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    std::atomic<bool> remotePlayTouchpadPressOnly_{false};
+#endif
     std::atomic<bool> hdrCoverageObserved_{false};
     int pendingAudioTrack_=-1;uint64_t pendingAudioSession_=0; // mutex_
     std::atomic<int> comparisonMode_{0};std::atomic<bool> comparisonBase_{false};std::atomic<float> comparisonSplit_{.5f};
