@@ -45,7 +45,7 @@ std::wstring widen(const std::string& text) {
 }
 
 pipeline::SourcePixelFormat pixelFormatOf(const AVFrame& frame) {
-    if (frame.format == AV_PIX_FMT_D3D12 && frame.hw_frames_ctx) {
+    if ((frame.format == AV_PIX_FMT_D3D12 || frame.format == AV_PIX_FMT_D3D11) && frame.hw_frames_ctx) {
         const auto* context = reinterpret_cast<const AVHWFramesContext*>(frame.hw_frames_ctx->data);
         return context->sw_format == AV_PIX_FMT_NV12 ? pipeline::SourcePixelFormat::NV12
              : context->sw_format == AV_PIX_FMT_P010 ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::Unknown;
@@ -139,8 +139,10 @@ struct XboxSessionSource::Impl {
     CaptureCompressedDecoder decoder;
     bool decoderOpen = false;
     std::atomic<bool> hardwareDecodeStatus{false}; // stats never inspect the worker-owned decoder
+    std::atomic<bool> softwareDecodeActive{false};
     AVFrame* dummyTarget = nullptr;
     unsigned width = 1920, height = 1080;
+    int keepaliveSeconds = 30;
     Clock::time_point lastKeyframeRequest{};
 
     struct Meta { int64_t pts,arrival; uint32_t rtp=0; int64_t submitted=0,decoded=0; };
@@ -239,12 +241,23 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         const xbox::StreamingAccess access = p.desc.account->streamingAccess();
         p.http = xbox::makeWinHttpTransport(&cancel_);
         p.api = std::make_unique<xbox::StreamApi>(p.http, access.host, access.gsToken);
+        p.api->setProfile(p.desc.profile);
+        // A gsToken can expire mid-session; the API refreshes once and replays on 401/403.
+        p.api->setTokenRefresh([&account = p.desc.account] { return account->refreshStreamingAccess().gsToken; });
         p.host = access.host;
         p.gsToken = access.gsToken;
         log::info("xbox", "streaming region " + access.regionName + " host " + access.host);
 
         setState(XboxStats::State::Starting, L"正在唤醒主机并准备串流…");
-        p.sessionId = p.api->play(p.desc.serverId, p.desc.locale);
+        p.sessionId = p.api->play(p.desc.serverId, p.desc.locale, p.desc.profile);
+        {
+            std::lock_guard lock(mutex_);
+            stats_.qualityTier = int(p.desc.profile.tier);
+        }
+        p.softwareDecodeActive.store(p.desc.softwareDecode);
+        log::info("xbox", std::format("profile tier={} bitrateKbps={} stun={} fullTeredo={} softwareDecode={} decodeBackend={}",
+            int(p.desc.profile.tier), p.desc.profile.videoBitrateKbps, p.desc.profile.useStun,
+            p.desc.profile.fullTeredo, p.desc.softwareDecode, int(p.desc.profile.decodeBackend)));
         log::info("xbox", "session " + p.sessionId);
         bool connectSent = false;
         const auto deadline = Clock::now() + std::chrono::seconds(120);
@@ -346,7 +359,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 
         ApiSignaling signaling(*p.api, p.sessionId);
         std::string error;
-        if (!p.rtc.start(signaling, &error)) {
+        if (!p.rtc.start(signaling, &error, std::chrono::seconds(20), p.desc.profile)) {
             // SDP/service failures happen before an ICE/UDP connection is attempted.
             // Keep the actual stage instead of diagnosing every failure as a firewall.
             fail(L"Xbox 连接失败：" + widen(error));
@@ -354,16 +367,29 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         }
         if (!p.rtc.waitReady(std::chrono::seconds(10))) { fail(L"主机连上了，但没有完成握手。请重试。"); return; }
 
+        // The service's advisory pulse; keep the historical 30 s unless it asks for faster.
+        try {
+            const int pulse = p.api->keepAlivePulseInSeconds(p.sessionId);
+            if (pulse > 0) p.keepaliveSeconds = std::min(30, std::max(1, pulse / 2));
+        } catch (const std::exception& e) {
+            log::warn("xbox", std::string("configuration: ") + e.what());
+        }
+        {
+            int vw = 1920, vh = 1080;
+            xbox::viewportForTier(p.desc.profile.tier, &vw, &vh);
+            p.width = unsigned(vw);
+            p.height = unsigned(vh);
+        }
         // Decode and keepalive.
         p.stopDecode = false;
         p.decodeThread = std::thread([this] { decodeLoop(); });
         p.keepaliveThread = std::thread([this] {
             auto& q = *p_;
-            auto next = Clock::now() + std::chrono::seconds(30);
+            auto next = Clock::now() + std::chrono::seconds(q.keepaliveSeconds);
             while (!cancel_.load() && !q.ended.load()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 if (Clock::now() < next) continue;
-                next = Clock::now() + std::chrono::seconds(30);
+                next = Clock::now() + std::chrono::seconds(q.keepaliveSeconds);
                 try {
                     q.api->keepalive(q.sessionId);
                 } catch (const xbox::ServiceError& e) {
@@ -449,6 +475,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 void XboxSessionSource::decodeLoop() {
     auto& p = *p_;
     bool seenKeyframe = false, recovering = false, forceSoftware = p.desc.softwareDecode;
+    p.softwareDecodeActive.store(forceSoftware);
     xbox::VideoDecodeRecovery recovery;
     int64_t lastPts = -1;
     uint32_t lastRtp = 0;
@@ -485,6 +512,7 @@ void XboxSessionSource::decodeLoop() {
         if (!seenKeyframe && !startsDecoding(unit.data)) { ++p.dropped; requestKeyframe(); continue; }
         if (!p.decoderOpen) {
             p.decoder.setStreamProfile(true);
+            p.decoder.setPreferD3D11VA(p.desc.profile.decodeBackend == xbox::DecodeBackend::D3D11VA);
             if (!p.decoder.open(CaptureCodec::H264, p.width, p.height, nullptr, 0,
                                 forceSoftware ? nullptr : p.desc.decodeDevice.get(),
                                 forceSoftware ? nullptr : p.desc.decodeQueue.get())) {
@@ -495,6 +523,7 @@ void XboxSessionSource::decodeLoop() {
             }
             p.decoderOpen = true;
             p.hardwareDecodeStatus.store(p.decoder.hardwareActive(), std::memory_order_relaxed);
+            p.softwareDecodeActive.store(!p.decoder.hardwareActive(), std::memory_order_relaxed);
             if (!p.dummyTarget) p.dummyTarget = allocNv12(16, 16);
             log::info("xbox", std::string("decoder ") + p.decoder.backendName());
         }
@@ -515,6 +544,7 @@ void XboxSessionSource::decodeLoop() {
         bool hardware = false;
         const bool produced = target && p.decoder.decode(unit.data.data(), unit.data.size(), pts, target, &out, hardware);
         p.hardwareDecodeStatus.store(p.decoder.hardwareActive(), std::memory_order_relaxed);
+        p.softwareDecodeActive.store(!p.decoder.hardwareActive(), std::memory_order_relaxed);
         const double decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - begin).count();
         if (!produced) {
             if (needsTarget && target) av_frame_free(&target);
@@ -541,7 +571,7 @@ void XboxSessionSource::decodeLoop() {
                     p.hardwareDecodeStatus.store(false, std::memory_order_relaxed);
                     p.decoder.close();
                     p.decoderOpen = false;
-                    if (action == xbox::VideoDecodeRecoveryAction::UseSoftware) forceSoftware = true;
+                    if (action == xbox::VideoDecodeRecoveryAction::UseSoftware) { forceSoftware = true; p.softwareDecodeActive.store(true); }
                 }
                 requestKeyframe();
             }
@@ -585,6 +615,11 @@ void XboxSessionSource::decodeLoop() {
         packet.colorInfo = pipeline::resolveFrameColor(*frame, fallback);
         packet.colorInfo.pixelFormat = pixelFormatOf(*frame);
         if (packet.colorInfo.pixelFormat == pipeline::SourcePixelFormat::Unknown) { ++p.errors; continue; }
+        // D3D11VA pictures reach the graph through a borrowed shared-texture view, not the AVFrame.
+        if (hardware && frame->format == AV_PIX_FMT_D3D11 && !p.decoder.hardwareSurface(packet.hardwareSurface)) {
+            ++p.errors;
+            continue;
+        }
 
         SourceInfo info;
         {
@@ -594,8 +629,8 @@ void XboxSessionSource::decodeLoop() {
             stats_.height = unsigned(frame->height);
         }
         info.color = packet.colorInfo;
-        info.hardwareDecodeActive = frame->format == AV_PIX_FMT_D3D12;
-        info.videoDecodePath = info.hardwareDecodeActive ? "d3d12va" : "software";
+        info.hardwareDecodeActive = frame->format == AV_PIX_FMT_D3D12 || frame->format == AV_PIX_FMT_D3D11;
+        info.videoDecodePath = p.decoder.backendName();
         if (info.width != unsigned(frame->width) || info.height != unsigned(frame->height)) {
             info.width = unsigned(frame->width);
             info.height = unsigned(frame->height);
@@ -706,8 +741,12 @@ XboxStats XboxSessionSource::stats() const {
     s.dropped = p.dropped.load() + skipped();
     s.decodeErrors = p.errors.load();
     s.hardwareDecode = p.hardwareDecodeStatus.load(std::memory_order_relaxed);
+    s.softwareDecodeActive = p.softwareDecodeActive.load(std::memory_order_relaxed);
     const xbox::WebRtcStats r = p.rtc.stats();
     s.keyframeRequests = r.keyframeRequests;
+    s.nacksSent = r.nacksSent;
+    s.packetsRecovered = r.packetsRecovered;
+    s.framesDroppedIncomplete = r.framesDroppedIncomplete;
     s.rttMs = r.rttMs;
     std::lock_guard lock(p.statsMutex);
     s.decodeMs = p.decodeMs;

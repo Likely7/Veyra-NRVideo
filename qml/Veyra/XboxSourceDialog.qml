@@ -143,6 +143,76 @@ DialogLayer {
             hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
             VSwitch { objectName: "xbox-software-decode"; checked: xbDialog.st.softwareDecode === true; onToggled: checked => xbDialog.xb.set("softwareDecode", checked) }
         }
+        VRow {
+            label: qsTr("硬件解码接口")
+            hint: qsTr("自动 = D3D12VA。Intel 核显花屏时选 D3D11VA（DXVA），仍用核显硬解、不占 CPU。断开后重新连接生效。")
+            hintBelow: true
+            VSelect {
+                objectName: "xbox-decode-backend"
+                implicitWidth: 170
+                title: qsTr("硬件解码接口")
+                options: [{id:"0",label:qsTr("自动 (D3D12VA)")},{id:"1",label:qsTr("D3D11VA (DXVA)")}]
+                value: xbDialog.st.decodeBackend === 1 ? qsTr("D3D11VA (DXVA)") : qsTr("自动 (D3D12VA)")
+                onPicked: id => xbDialog.xb.set("decodeBackend", Number(id))
+            }
+        }
+        VRow {
+            label: qsTr("串流方案")
+            hint: qsTr("方案1：现行连接方式。方案2：高码率档（1080p HQ）+ 公网 STUN + 完整 Teredo 直连候选，源码率更高、复杂网络下更稳。断开后重新连接生效。")
+            hintBelow: true
+            VSelect {
+                objectName: "xbox-plan"
+                implicitWidth: 170
+                title: qsTr("串流方案")
+                options: [{id:"1",label:qsTr("方案1 · 标准")},{id:"2",label:qsTr("方案2 · 高清增强")}]
+                value: xbDialog.st.plan === 2 ? qsTr("方案2 · 高清增强") : qsTr("方案1 · 标准")
+                onPicked: id => xbDialog.xb.set("plan", Number(id))
+            }
+        }
+        VRow {
+            visible: xbDialog.st.plan === 2
+            label: qsTr("码率上限 (Mbps)")
+            hint: qsTr("0 = 由主机决定。建议 15–30；过高可能被主机钳制。")
+            DialogTextField {
+                objectName: "xbox-bitrate"
+                implicitWidth: 110
+                placeholder: "0"
+                text: String(Math.round((xbDialog.st.videoBitrateKbps || 0) / 1000))
+                onEdited: text => xbDialog.xb.set("videoBitrateKbps", Math.max(0, Math.min(40, parseInt(text) || 0)) * 1000)
+            }
+        }
+        VRow {
+            visible: xbDialog.st.plan === 2
+            label: qsTr("自定义 TURN（可选）")
+            hint: qsTr("格式 turn:主机:端口；复杂 NAT 下的兜底中继。用户名/密码可留空。")
+            DialogTextField {
+                objectName: "xbox-turn-url"
+                implicitWidth: 190
+                placeholder: "turn:host:3478"
+                text: xbDialog.st.turnUrl || ""
+                onEdited: text => xbDialog.xb.set("turnUrl", text)
+            }
+        }
+        VRow {
+            visible: xbDialog.st.plan === 2 && (xbDialog.st.turnUrl || "").length > 0
+            label: qsTr("TURN 用户名")
+            DialogTextField {
+                objectName: "xbox-turn-user"
+                implicitWidth: 150
+                text: xbDialog.st.turnUser || ""
+                onEdited: text => xbDialog.xb.set("turnUser", text)
+            }
+        }
+        VRow {
+            visible: xbDialog.st.plan === 2 && (xbDialog.st.turnUrl || "").length > 0
+            label: qsTr("TURN 密码")
+            DialogTextField {
+                objectName: "xbox-turn-pass"
+                implicitWidth: 150
+                text: xbDialog.st.turnPass || ""
+                onEdited: text => xbDialog.xb.set("turnPass", text)
+            }
+        }
     }
     DialogNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? qsTr("处理中 · ") : "") + (xbDialog.st.status || "") }
 }

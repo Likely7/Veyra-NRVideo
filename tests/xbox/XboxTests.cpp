@@ -27,6 +27,7 @@
 #include "veyra/xbox/Account.h"
 #include "veyra/xbox/Protocol.h"
 #include "veyra/xbox/StreamApi.h"
+#include "veyra/xbox/StreamProfile.h"
 #include "veyra/xbox/WebRtcSession.h"
 #include "veyra/xbox/DisconnectPolicy.h"
 #include "veyra/xbox/VideoDecodeRecovery.h"
@@ -107,6 +108,100 @@ void protocolTests() {
     check(parseServerMetadata(meta2, sizeof(meta2), &w, &h) && w == 1920 && h == 1080, "server metadata: height then width");
 }
 
+// ---------------------------------------------------------------- quality / ICE profile
+
+void profileTests() {
+    check(std::string(osNameForTier(QualityTier::P720)) == "android" &&
+          std::string(osNameForTier(QualityTier::P1080)) == "windows" &&
+          std::string(osNameForTier(QualityTier::P1080Hq)) == "tizen",
+          "the quality tiers map to the reference clients' osName values");
+    int w = 0, h = 0;
+    viewportForTier(QualityTier::P720, &w, &h);
+    check(w == 1280 && h == 720, "the 720p tier reports a 1280x720 viewport");
+    viewportForTier(QualityTier::P1080Hq, &w, &h);
+    check(w == 1920 && h == 1080, "HQ keeps the 1080p viewport; the bitrate comes from the identity");
+
+    // The default device info must stay byte-identical to the historical constant.
+    const std::string historical = R"({"appInfo":{"env":{"clientAppId":"Microsoft.GamingApp","clientAppType":"native","clientAppVersion":"2203.1001.4.0","clientSdkVersion":"8.5.2","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"Surface Pro","sdktype":"native"},"os":{"name":"Windows 11","ver":"22631.2715","platform":"desktop"},"displayInfo":{"dimensions":{"widthInPixels":1920,"heightInPixels":1080},"pixelDensity":{"dpiX":1,"dpiY":1}}}})";
+    check(deviceInfoForTier(QualityTier::P1080) == historical, "the default tier's device info is byte-identical to the historical constant");
+    const json hq = json::parse(deviceInfoForTier(QualityTier::P1080Hq));
+    check(hq["dev"]["os"]["name"] == "tizen" && hq["dev"]["displayInfo"]["dimensions"]["widthInPixels"] == 4096 &&
+          hq["dev"]["displayInfo"]["dimensions"]["heightInPixels"] == 2160 &&
+          hq["appInfo"]["env"]["clientAppId"] == "Microsoft.GamingApp",
+          "the HQ tier changes only os.name and the display dimensions");
+
+    std::string host; uint16_t port = 0; bool turn = true;
+    check(parseIceServerUrl("stun:stun.l.google.com:19302", &host, &port, &turn) && host == "stun.l.google.com" && port == 19302 && !turn,
+          "a STUN URL parses with its port");
+    check(parseIceServerUrl("turn:relay.example.com", &host, &port, &turn) && host == "relay.example.com" && port == 3478 && turn,
+          "a TURN URL without a port defaults to 3478");
+    check(parseIceServerUrl("stun:[2001:db8::1]:3478", &host, &port, &turn) && host == "2001:db8::1" && port == 3478,
+          "bracketed IPv6 literals parse");
+    check(!parseIceServerUrl("turns:secure.example.com:5349", &host, &port, &turn) &&
+          !parseIceServerUrl("stun:", &host, &port, &turn) &&
+          !parseIceServerUrl("stun:host:0", &host, &port, &turn) &&
+          !parseIceServerUrl("stun:host:99999", &host, &port, &turn) &&
+          !parseIceServerUrl("http:host:80", &host, &port, &turn),
+          "unknown schemes, empty hosts and invalid ports are rejected");
+    check(defaultStunServers().size() == 7, "the reference STUN list has seven entries");
+
+    // Full Teredo expansion: client4/server4 x decoded/candidate/3074 ports, deduplicated.
+    const auto full = StreamApi::parseIce(R"([{"candidate":"a=candidate:1 1 UDP 100 2001:0:4136:e378:8000:63bf:3fff:fdd2 9002 typ host","sdpMid":"0","sdpMLineIndex":"0"},{"candidate":"a=end-of-candidates"}])", true);
+    check(full.size() == 6, "full expansion adds five IPv4 candidates and keeps the Teredo one");
+    std::string server4, client4;
+    int teredoPort = 0;
+    check(StreamApi::teredoIpv4("2001:0:4136:e378:8000:63bf:3fff:fdd2", &client4, &teredoPort, &server4) && server4 == "65.54.227.120",
+          "the Teredo server IPv4 is bytes 4..7, unobfuscated");
+    bool hasClientPort = false, hasServerCandidate = false, hasClientCandidate = false, hasServer3074 = false, hasClient3074 = false;
+    for (const auto& c : full) {
+        hasClientPort |= c.candidate.find("192.0.2.45 40000") != std::string::npos;
+        hasServerCandidate |= c.candidate.find("65.54.227.120 9002") != std::string::npos;
+        hasClientCandidate |= c.candidate.find("192.0.2.45 9002") != std::string::npos;
+        hasServer3074 |= c.candidate.find("65.54.227.120 3074") != std::string::npos;
+        hasClient3074 |= c.candidate.find("192.0.2.45 3074") != std::string::npos;
+    }
+    check(hasClientPort && hasServerCandidate && hasClientCandidate && hasServer3074 && hasClient3074,
+          "the five combinations cover client/server addresses and the decoded/candidate/3074 ports");
+    const auto dedup = StreamApi::parseIce(R"([{"candidate":"a=candidate:1 1 UDP 100 2001:0:4136:e378:8000:63bf:3fff:fdd2 3074 typ host","sdpMid":"0","sdpMLineIndex":"0"}])", true);
+    check(dedup.size() == 4, "a candidate already on port 3074 does not duplicate the 3074 pairs");
+}
+
+// ---------------------------------------------------------------- token refresh / pulse
+
+void resilienceTests() {
+    auto http = std::make_shared<FakeTransport>();
+    const std::string host = "uks.core.gssv-play-prodxhome.xboxlive.com";
+    StreamApi api(http, host, "OLD");
+    api.setRetryDelayMs(1);
+    int refreshes = 0;
+    api.setTokenRefresh([&] { ++refreshes; return std::string("NEW"); });
+    http->add(host, "/v5/sessions/home/S1/keepalive", 401, R"({"code":"Unauthorized"})");
+    http->add(host, "/v5/sessions/home/S1/keepalive", 200, "{}");
+    api.keepalive("S1");
+    check(refreshes == 1 && http->seen.size() == 2 && http->seen.back().headers["Authorization"] == "Bearer NEW",
+          "a 401 refreshes the token once and replays the request");
+    http->add(host, "/v5/sessions/home/S1/keepalive", 401, "{}");
+    http->add(host, "/v5/sessions/home/S1/keepalive", 401, "{}");
+    bool threw = false;
+    try { api.keepalive("S1"); } catch (const ServiceError& e) { threw = e.status == 401; }
+    check(threw && refreshes == 2, "a second refusal is a real error; the refresh is not looped");
+
+    auto plain = std::make_shared<FakeTransport>();
+    StreamApi noRefresh(plain, host, "GS");
+    noRefresh.setRetryDelayMs(1);
+    plain->add(host, "/v5/sessions/home/S1/keepalive", 403, "{}");
+    threw = false;
+    try { noRefresh.keepalive("S1"); } catch (const ServiceError& e) { threw = e.status == 403; }
+    check(threw && plain->seen.size() == 1, "without a refresh callback a 403 is not retried");
+
+    http->add(host, "/v5/sessions/home/S1/configuration", 200, R"({"keepAlivePulseInSeconds":120})");
+    check(api.keepAlivePulseInSeconds("S1") == 120, "the configuration pulse is read");
+    http->add(host, "/v5/sessions/home/S1/configuration", 200, R"({"serverDetails":{}})");
+    check(api.keepAlivePulseInSeconds("S1") == 0, "a missing pulse falls back to the caller's default");
+    http->add(host, "/v5/sessions/home/S1/configuration", 200, "not json");
+    check(api.keepAlivePulseInSeconds("S1") == 0, "a malformed configuration does not break the session");
+}
+
 // ---------------------------------------------------------------- session API
 
 void apiTests() {
@@ -135,6 +230,18 @@ void apiTests() {
         const json body = json::parse(http->seen.back().body);
         check(body["serverId"] == "F1" && body["settings"]["nanoVersion"] == "V3;WebrtcTransport.dll" && !http->seen.back().headers["X-MS-Device-Info"].empty(),
               "play sends the server id, nano V3 and the device info header");
+    }
+    // The HQ tier must reach both the play settings and the device-info header, consistently.
+    http->add(host, "/v5/sessions/home/play", 200, R"({"sessionPath":"v5/sessions/home/HQ-1","state":"Provisioning"})");
+    StreamProfile hq;
+    hq.tier = QualityTier::P1080Hq;
+    check(api.play("F1", "zh-CN", hq) == "HQ-1", "play accepts the HQ profile");
+    {
+        const json body = json::parse(http->seen.back().body);
+        const json info = json::parse(http->seen.back().headers["X-MS-Device-Info"]);
+        check(body["settings"]["osName"] == "tizen" && info["dev"]["os"]["name"] == "tizen" &&
+              info["dev"]["displayInfo"]["dimensions"]["widthInPixels"] == 4096,
+              "the HQ tier is consistent across settings.osName and the device-info header");
     }
     http->add(host, "/v5/sessions/home/ABC-123/state", 200, R"({"state":"Failed","errorDetails":{"code":"WNSError","message":"WaitingForServerToRegister"}})");
     const auto st = api.state("ABC-123");
@@ -316,6 +423,7 @@ public:
                     const json j = json::parse(text);
                     std::lock_guard l(mutex);
                     messages.push_back(j.value("type", "") + " " + j.value("target", ""));
+                    rawMessages.push_back(text);
                     if (j.value("type", "") == "Handshake") {
                         const std::string ack = json{{"type", "HandshakeAck"}, {"id", j.value("id", "")}, {"cv", ""}}.dump();
                         message->send(ack);
@@ -381,7 +489,7 @@ public:
     std::vector<std::shared_ptr<rtc::DataChannel>> channels;
     std::mutex mutex;
     std::condition_variable cv;
-    std::vector<std::string> labels, messages, control;
+    std::vector<std::string> labels, messages, rawMessages, control;
     std::vector<std::vector<uint8_t>> reports;
     std::string offerSdp;
 };
@@ -537,6 +645,136 @@ void webrtcTests() {
     check(!session.ready(), "remote/local close with active sends is contained and clears readiness");
 }
 
+// The explicit-offer path: b=AS hints must survive createOffer -> setLocalDescription and the
+// peer must still connect and handshake. The 720p tier must reach dimensionschanged.
+void webrtcProfileTests() {
+    FakeConsole console;
+    WebRtcSession session;
+    session.setBindAddress("127.0.0.1");
+    StreamProfile profile;
+    profile.tier = QualityTier::P720;
+    profile.videoBitrateKbps = 15000;
+    profile.audioBitrateKbps = 128;
+    std::string error;
+    const bool started = session.start(console, &error, std::chrono::seconds(15), profile);
+    check(started, ("the munged-offer client connects to the local peer: " + error).c_str());
+    if (!started) return;
+    check(console.offerSdp.find("b=AS:15000") != std::string::npos && console.offerSdp.find("b=AS:128") != std::string::npos,
+          "the exchanged offer carries the video and audio bandwidth hints");
+    check(console.offerSdp.find("profile-level-id=4d001f") != std::string::npos,
+          "the explicit offer keeps the reference codec order");
+    check(session.waitReady(std::chrono::seconds(5)), "the handshake completes on the munged offer");
+    check(console.waitFor([&] {
+        for (const auto& s : console.rawMessages) {
+            if (s.find("/streaming/characteristics/dimensionschanged") == std::string::npos) continue;
+            // The content field is a JSON-encoded string: parse the outer message, then the content.
+            const json outer = json::parse(s);
+            const json dims = json::parse(outer.value("content", ""));
+            if (dims.value("horizontal", 0) == 1280 && dims.value("vertical", 0) == 720 &&
+                dims.value("preferredWidth", 0) == 1280 && dims.value("safeAreaRight", 0) == 1280)
+                return true;
+        }
+        return false;
+    }), "the 720p tier reports a 1280x720 viewport on the message channel");
+    session.close();
+}
+
+// ---------------------------------------------------------------- loss recovery
+
+// Builds one RTP packet carrying a single-NAL payload (no fragmentation needed to
+// exercise ordering/NACK; the FU-A path is covered by the loopback test).
+rtc::message_ptr rtpPacket(uint16_t seq, uint32_t timestamp, bool marker, uint8_t payload = 0x41) {
+    auto m = std::make_shared<rtc::Message>(sizeof(rtc::RtpHeader) + 4);
+    auto* h = reinterpret_cast<rtc::RtpHeader*>(m->data());
+    std::memset(h, 0, sizeof(*h));
+    h->preparePacket();
+    h->setPayloadType(102);
+    h->setSeqNumber(seq);
+    h->setTimestamp(timestamp);
+    h->setSsrc(0x12345678);
+    h->setMarker(marker);
+    m->data()[sizeof(rtc::RtpHeader)] = std::byte(payload);
+    return m;
+}
+
+struct RecoveryHarness {
+    VideoLossRecovery recovery{std::chrono::milliseconds(40), 2048};
+    rtc::message_vector delivered;
+    std::vector<rtc::message_ptr> nacks;
+    void feed(rtc::message_vector packets) {
+        recovery.incoming(packets, [this](rtc::message_ptr m) { nacks.push_back(std::move(m)); });
+        for (auto& m : packets) delivered.push_back(std::move(m));
+    }
+};
+
+void lossRecoveryTests() {
+    // 1. In-order complete frame passes through with zero added latency.
+    {
+        RecoveryHarness h;
+        h.feed({rtpPacket(100, 1000, false), rtpPacket(101, 1000, false), rtpPacket(102, 1000, true)});
+        check(h.delivered.size() == 3 && h.nacks.empty(), "a complete in-order frame passes straight through");
+        check(h.recovery.stats().framesDropped == 0, "no drops on a clean frame");
+    }
+    // 2. Out-of-order packets within a frame are reordered before depacketization.
+    {
+        RecoveryHarness h;
+        h.feed({rtpPacket(102, 2000, true), rtpPacket(100, 2000, false), rtpPacket(101, 2000, false)});
+        check(h.delivered.size() == 3, "an out-of-order complete frame is released once whole");
+        bool ordered = true;
+        uint16_t prev = 99;
+        for (auto& m : h.delivered) {
+            const auto* hdr = reinterpret_cast<const rtc::RtpHeader*>(m->data());
+            if (hdr->seqNumber() != uint16_t(prev + 1)) ordered = false;
+            prev = hdr->seqNumber();
+        }
+        check(ordered, "released packets are in sequence order");
+        check(h.recovery.stats().packetsReordered >= 1, "reordering is counted");
+    }
+    // 3. A lost packet triggers NACK; the retransmission completes the frame.
+    {
+        RecoveryHarness h;
+        h.feed({rtpPacket(200, 3000, false), rtpPacket(202, 3000, true)}); // 201 missing
+        check(h.delivered.empty(), "an incomplete frame is held, not fed torn");
+        check(!h.nacks.empty(), "the hole triggers a NACK request");
+        bool nackHas201 = false;
+        for (auto& n : h.nacks) {
+            auto* nack = reinterpret_cast<rtc::RtcpNack*>(n->data());
+            for (unsigned i = 0; i < nack->getSeqNoCount(); ++i)
+                for (auto s : nack->parts[i].getSequenceNumbers())
+                    if (s == 201) nackHas201 = true;
+        }
+        check(nackHas201, "the NACK names the missing sequence 201");
+        h.feed({rtpPacket(201, 3000, false)}); // retransmission
+        check(h.delivered.size() == 3, "the retransmission completes and releases the frame");
+        check(h.recovery.stats().packetsRecovered == 1, "the recovered packet is counted");
+    }
+    // 4. A frame still incomplete after the wait window is dropped whole.
+    {
+        RecoveryHarness h;
+        h.feed({rtpPacket(300, 4000, false), rtpPacket(302, 4000, true)});
+        std::this_thread::sleep_for(std::chrono::milliseconds(60));
+        h.feed({rtpPacket(400, 5000, true)}); // next frame forces the flush
+        check(h.recovery.stats().framesDropped == 1, "the expired incomplete frame is dropped whole");
+        bool sawTorn = false;
+        for (auto& m : h.delivered) {
+            const auto* hdr = reinterpret_cast<const rtc::RtpHeader*>(m->data());
+            if (hdr->timestamp() == 4000) sawTorn = true;
+        }
+        check(!sawTorn, "no packet of the dropped frame reaches the depacketizer");
+    }
+    // 5. NACK rounds are bounded.
+    {
+        RecoveryHarness h;
+        h.feed({rtpPacket(500, 6000, false), rtpPacket(505, 6000, true)});
+        for (int i = 0; i < 10; ++i) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(20));
+            rtc::message_vector empty;
+            h.feed(std::move(empty));
+        }
+        check(h.nacks.size() <= 8, "NACK requests stay bounded (max 4 rounds x 2 packets)");
+    }
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -598,8 +836,12 @@ int main(int argc, char** argv) {
     }
     protocolTests();
     apiTests();
+    profileTests();
+    resilienceTests();
     accountTests();
     webrtcTests();
+    webrtcProfileTests();
+    lossRecoveryTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
     rtc::Cleanup();
     return g_failures == 0 ? 0 : 1;

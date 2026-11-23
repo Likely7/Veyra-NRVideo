@@ -46,6 +46,12 @@ public:
     // the original behaviour.
     void setStreamProfile(bool enabled);
 
+    // Streaming sources may prefer D3D11VA for H.264 as well (the HEVC stream
+    // path already uses it). Intel's D3D12VA H.264 output can be silently
+    // damaged while its D3D11VA/DXVA path is clean; the decoded surfaces still
+    // reach the graph through the same borrowed shared-texture view.
+    void setPreferD3D11VA(bool enabled);
+
     bool open(CaptureCodec codec, unsigned width, unsigned height,
         const uint8_t* extradata, size_t extradataBytes,
         ID3D12Device* device, ID3D12CommandQueue* queue);

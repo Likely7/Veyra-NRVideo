@@ -10,6 +10,8 @@ find_package(nlohmann_json CONFIG REQUIRED)
 
 add_library(veyra_xbox_protocol STATIC
   "${VEYRA_ROOT}/src/xbox/Https.cpp"
+  "${VEYRA_ROOT}/src/xbox/StreamProfile.cpp"
+  "${VEYRA_ROOT}/src/xbox/VideoLossRecovery.cpp"
   "${VEYRA_ROOT}/src/xbox/Account.cpp"
   "${VEYRA_ROOT}/src/xbox/StreamApi.cpp"
   "${VEYRA_ROOT}/src/xbox/WebRtcSession.cpp")

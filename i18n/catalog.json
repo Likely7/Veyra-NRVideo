@@ -118,19 +118,6 @@
    "ru": "  ·  потеряно "
   },
   {
-   "zh": "  ·  关键帧请求 ",
-   "src": "qml/StreamHud.qml",
-   "zh-TW": "  ·  關鍵幀請求 ",
-   "en": "  ·  keyframe requests ",
-   "ja": "  ·  キーフレーム要求 ",
-   "ko": "  · 키프레임 요청 ",
-   "es": "  ·  solicitudes de fotograma clave ",
-   "fr": "  ·  demandes d'image clé ",
-   "de": "  ·  Keyframe-Anfragen ",
-   "pt-BR": "  ·  pedidos de quadro-chave ",
-   "ru": "  ·  запросы ключевых кадров "
-  },
-  {
    "zh": "  ·  往返 ",
    "src": "qml/StreamHud.qml",
    "zh-TW": "  ·  往返 ",
@@ -170,6 +157,19 @@
    "ru": "  ·  получено "
   },
   {
+   "zh": "  ·  整帧丢弃 ",
+   "src": "qml/StreamHud.qml",
+   "zh-TW": "  ·  整幀丟棄 ",
+   "en": "  ·  whole-frame drops ",
+   "ja": "  ·  フレーム破棄 ",
+   "ko": "  ·  전체 프레임 폐기 ",
+   "es": "  ·  descartes de fotograma ",
+   "fr": "  ·  images rejetées ",
+   "de": "  ·  Frame-Verwürfe ",
+   "pt-BR": "  ·  descartes de quadro ",
+   "ru": "  ·  отброшено кадров "
+  },
+  {
    "zh": "  ·  未恢复 ",
    "src": "qml/StreamHud.qml",
    "zh-TW": "  ·  未恢復 ",
@@ -207,6 +207,19 @@
    "de": "  ·  Dekodierung ",
    "pt-BR": "  ·  decodificação ",
    "ru": "  ·  декодирование "
+  },
+  {
+   "zh": "  ·  重传恢复 ",
+   "src": "qml/StreamHud.qml",
+   "zh-TW": "  ·  重傳恢復 ",
+   "en": "  ·  NACK recovered ",
+   "ja": "  ·  再送回復 ",
+   "ko": "  ·  재전송 복구 ",
+   "es": "  ·  recuperados por retransmisión ",
+   "fr": "  ·  récupérés par retransmission ",
+   "de": "  ·  per Retransmission wiederhergestellt ",
+   "pt-BR": "  ·  recuperados por retransmissão ",
+   "ru": "  ·  восстановлено повторной передачей "
   },
   {
    "zh": " / 4 个区域",
@@ -1056,7 +1069,7 @@
   {
    "zh": "**采集原生 HDR10 时，P010 要配 HDR · PQ。** 主机开启 HDR，采集页「像素格式」选 **P010**，「输入色彩（SDR / HDR）」选 **HDR · PQ**，然后重新连接。**NV12、YUY2 和 RGB 在这套指南里都用 SDR · 709。**",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "**擷取原生 HDR10 時，P010 要搭配 HDR · PQ。** 在主機開啟 HDR，擷取頁「像素格式」選 **P010**，「輸入色彩（SDR / HDR）」選 **HDR · PQ**，然後重新連線。**本指南的 NV12、YUY2 和 RGB 都使用 SDR · 709。**",
+   "zh-TW": "**擷取原生 HDR10 時，P010 要配 HDR · PQ。** 主機開啟 HDR，擷取頁「像素格式」選 **P010**，「輸入色彩（SDR / HDR）」選 **HDR · PQ**，然後重新連接。**NV12、YUY2 和 RGB 在這套指南裡都用 SDR · 709。**",
    "en": "**Use P010 with HDR · PQ for native HDR10 capture.** Enable HDR on your console, choose **P010** under Pixel format and **HDR · PQ** under Input color (SDR / HDR), then reconnect. **For NV12, YUY2 and RGB, use SDR · 709 in this setup.**",
    "ja": "**ネイティブ HDR10 のキャプチャでは P010 と HDR · PQ を組み合わせます。** ゲーム機で HDR を有効にし、「ピクセルフォーマット」で **P010**、「入力の色（SDR / HDR）」で **HDR · PQ** を選んで再接続してください。**この手順で NV12、YUY2、RGB を使う場合は SDR · 709 を選びます。**",
    "ko": "**네이티브 HDR10을 캡처할 때는 P010과 HDR · PQ를 함께 사용합니다.** 콘솔에서 HDR을 켜고 캡처 화면의 ‘픽셀 형식’에서 **P010**, ‘입력 색상(SDR/HDR)’에서 **HDR · PQ**를 선택한 뒤 다시 연결하세요. **이 가이드에서 NV12, YUY2, RGB는 SDR · 709를 사용합니다.**",
@@ -1130,6 +1143,19 @@
    "de": "0 = Verwenden des ausgewählten Formats; ein Gerät, das eine andere Bildrate zurückgibt, meldet einen Fehler, anstatt dass Frames stillschweigend gelöscht werden",
    "pt-BR": "0 = usar o formato selecionado; um dispositivo que retorna outra taxa de quadros relata um erro em vez de quadros sendo deixados em silêncio",
    "ru": "0 = использовать выбранный формат; устройство, которое возвращает другую частоту кадров, сообщает об ошибке вместо того, чтобы кадры сбрасывались бесшумно"
+  },
+  {
+   "zh": "0 = 由主机决定。建议 15–30；过高可能被主机钳制。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "0 = 由主機決定。建議 15–30；過高可能被主機鉗制。",
+   "en": "0 = the console decides. 15–30 recommended; higher values may be clamped by the console.",
+   "ja": "0 = コンソール側で決定。15–30 を推奨。高すぎるとコンソール側に制限される場合があります。",
+   "ko": "0 = 콘솔이 결정합니다. 15–30 권장. 너무 높으면 콘솔에서 제한될 수 있습니다.",
+   "es": "0 = decide la consola. Se recomienda 15–30; valores altos pueden ser limitados por la consola.",
+   "fr": "0 = la console décide. 15–30 recommandé ; trop élevé peut être limité par la console.",
+   "de": "0 = Konsole entscheidet. 15–30 empfohlen; zu hohe Werte können von der Konsole begrenzt werden.",
+   "pt-BR": "0 = o console decide. 15–30 recomendado; valores altos podem ser limitados pelo console.",
+   "ru": "0 = решает консоль. Рекомендуется 15–30; слишком высокие значения могут ограничиваться консолью."
   },
   {
    "zh": "0 = 自动使用系统报告值",
@@ -1212,7 +1238,7 @@
   {
    "zh": "10 位 4:2:0 · 这四种里，采集原生 HDR10 要选 P010。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "10 位元 4:2:0 · 這四種格式中，擷取原生 HDR10 要選 P010。",
+   "zh-TW": "10 位 4:2:0 · 這四種裡，擷取原生 HDR10 要選 P010。",
    "en": "10-bit 4:2:0 · Of these four formats, use P010 for native HDR10 capture.",
    "ja": "10 ビット 4:2:0 · この 4 種類の中では、HDR10 をそのまま取り込む場合に P010 を使います。",
    "ko": "10비트 4:2:0 · 이 네 형식 중 네이티브 HDR10 캡처에는 P010을 사용합니다.",
@@ -1225,7 +1251,7 @@
   {
    "zh": "10 位 4:2:0，主机确实在输出 HDR10 时配 **HDR · PQ**。P010 传 SDR 时仍按 SDR 读。卡带不动 4K60 HDR 的话，我会先试 1440p60 HDR。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "10 位元 4:2:0。主機確實輸出 HDR10 時搭配 **HDR · PQ**。P010 傳送 SDR 時仍按 SDR 讀取。擷取卡跑不動 4K60 HDR 的話，我會先試 1440p60 HDR。",
+   "zh-TW": "10 位 4:2:0，主機確實在輸出 HDR10 時配 **HDR · PQ**。P010 傳 SDR 時仍按 SDR 讀。卡帶不動 4K60 HDR 的話，我會先試 1440p60 HDR。",
    "en": "10-bit 4:2:0. Pair it with **HDR · PQ** when the console is sending HDR10. If the P010 signal is SDR, read it as SDR. I'd try 1440p60 HDR first on a card that can't do 4K60 HDR.",
    "ja": "10 ビット 4:2:0。ゲーム機が実際に HDR10 を出力している場合は **HDR · PQ** を選びます。P010 で SDR が送られているときは SDR として扱います。4K60 HDR が難しければ、私は 1440p60 HDR を先に試します。",
    "ko": "10비트 4:2:0입니다. 콘솔이 실제로 HDR10을 출력할 때 **HDR · PQ**를 선택하세요. P010 신호가 SDR이면 SDR로 처리합니다. 4K60 HDR이 어려우면 1440p60 HDR부터 써 봅니다.",
@@ -1355,7 +1381,7 @@
   {
    "zh": "30 FPS 游戏示例",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "30 FPS 遊戲範例",
+   "zh-TW": "30 FPS 遊戲示例",
    "en": "30 FPS game example",
    "ja": "30 FPS のゲームの例",
    "ko": "30 FPS 게임 예시",
@@ -1368,7 +1394,7 @@
   {
    "zh": "30 帧游戏，我还是建议采 60 帧",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "30 幀遊戲，我還是建議擷取 60 幀",
+   "zh-TW": "30 幀遊戲，我還是建議采 60 幀",
    "en": "Why I still capture 30 fps games at 60",
    "ja": "30 fps のゲームでも 60 fps で取り込む理由",
    "ko": "30 fps 게임도 60 fps로 캡처하는 이유",
@@ -1381,7 +1407,7 @@
   {
    "zh": "30 帧源我更喜欢 **VFG**。在我试过的场景里，低帧率用 DLSS 或 XeSS 更容易看到拖影和果冻感。我会先开 **VFG 中档 2X**，跑稳了再试高档。如果本机没有 VFG，就从可用后端的 2X 试起。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "30 幀來源我比較喜歡 **VFG**。我試過的場景在低幀率用 DLSS 或 XeSS 時，更容易看到殘影和果凍感。我會先用 **VFG 中檔 2X**，穩定後再試高檔。裝置沒有 VFG 時，就從可用後端的 2X 試起。",
+   "zh-TW": "30 幀源我更喜歡 **VFG**。在我試過的場景裡，低幀率用 DLSS 或 XeSS 更容易看到拖影和果凍感。我會先開 **VFG 中檔 2X**，跑穩了再試高檔。如果本機沒有 VFG，就從可用後端的 2X 試起。",
    "en": "For a 30 fps source, I prefer **VFG**. In the scenes I tried, DLSS and XeSS showed more ghosting and wobble at low input rates. Start at **VFG Medium 2X**. If that runs smoothly, try High. If VFG is unavailable, start at 2X with a backend your GPU supports.",
    "ja": "30 fps の素材では **VFG** が好みです。私のテストでは、低い入力レートで DLSS や XeSS の残像やゆがみが目立つ場面がありました。まず **VFG の中設定で 2X**、安定したら高設定を試します。VFG が使えない場合は、使える方式の 2X から始めます。",
    "ko": "30 fps 소스에는 **VFG**를 선호합니다. 제가 테스트한 장면에선 입력 속도가 낮을 때 DLSS나 XeSS에서 잔상과 일렁임이 더 잘 보였습니다. **VFG 보통 2X**로 시작하고 안정적이면 높음도 시험해 보세요. VFG를 쓸 수 없다면 지원되는 방식의 2X로 시작하세요.",
@@ -1472,7 +1498,7 @@
   {
    "zh": "60→30：每两帧保留一帧，游戏不足30帧时跳过重复画面。自动去除：检测并跳过重复画面。",
    "src": "qml/DedupModeRow.qml",
-   "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：偵測並跳過重複畫面。",
+   "zh-TW": "60→30：每兩幀保留一幀，遊戲不足30幀時跳過重複畫面。自動去除：檢測並跳過重複畫面。",
    "en": "60→30 keeps every other frame and skips repeated images when the game runs below 30 fps. Automatic removal detects and skips duplicate images.",
    "ja": "60→30 は2フレームに1枚を保持し、ゲームが30fpsを下回るときは重複した映像をスキップします。自動除去は重複した映像を検出してスキップします。",
    "ko": "60→30은 두 프레임마다 한 프레임을 남기고, 게임이 30fps 아래로 떨어지면 반복된 화면을 건너뜁니다. 자동 제거는 같은 화면이 반복되는 프레임을 찾아 건너뜁니다.",
@@ -1485,7 +1511,7 @@
   {
    "zh": "8 位 4:2:0 · SDR，所需带宽较低。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "8 位元 4:2:0 · SDR，所需頻寬較低。",
+   "zh-TW": "8 位 4:2:0 · SDR，所需帶寬較低。",
    "en": "8-bit 4:2:0 · SDR with lower bandwidth requirements.",
    "ja": "8 ビット 4:2:0 · SDR。必要な帯域が少なめです。",
    "ko": "8비트 4:2:0 · 더 적은 대역폭을 사용하는 SDR.",
@@ -1498,7 +1524,7 @@
   {
    "zh": "8 位 4:2:0。带宽省，跑高分辨率和高帧率时我优先用它。采集卡支持 4K60 NV12，也可以直接用。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "8 位元 4:2:0。省頻寬，高解析度、高幀率時我會優先用它。擷取卡支援 4K60 NV12，也可以直接用。",
+   "zh-TW": "8 位 4:2:0。帶寬省，跑高解析度和高幀率時我優先用它。擷取卡支援 4K60 NV12，也可以直接用。",
    "en": "8-bit 4:2:0. It's light on bandwidth and my first choice for high resolution and high frame rates. If your card offers 4K60 NV12, give it a try.",
    "ja": "8 ビット 4:2:0。帯域を抑えられるので、高解像度や高フレームレートでは私の第一候補です。カードが 4K60 NV12 をサポートしているなら試してみてください。",
    "ko": "8비트 4:2:0입니다. 대역폭을 덜 사용해서 고해상도와 높은 프레임 속도에 먼저 써 봅니다. 카드가 4K60 NV12를 지원한다면 그 모드도 좋습니다.",
@@ -1511,7 +1537,7 @@
   {
    "zh": "8 位 4:2:2 · SDR，保留更多纵向色彩细节。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "8 位元 4:2:2 · SDR，保留較多垂直色彩細節。",
+   "zh-TW": "8 位 4:2:2 · SDR，保留更多縱向色彩細節。",
    "en": "8-bit 4:2:2 · SDR with more vertical color detail.",
    "ja": "8 ビット 4:2:2 · SDR。垂直方向の色の細部を多く残せます。",
    "ko": "8비트 4:2:2 · 세로 방향 색상 디테일을 더 많이 보존하는 SDR.",
@@ -1524,7 +1550,7 @@
   {
    "zh": "8 位 4:2:2，保留更多纵向色彩细节。卡上没有合适的 NV12 档位，或细小彩色文字确实需要 4:2:2 时，可以试它。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "8 位元 4:2:2，保留較多縱向色彩細節。擷取卡沒有合適的 NV12 模式，或細小彩色文字確實需要 4:2:2 時，可以試試。",
+   "zh-TW": "8 位 4:2:2，保留更多縱向色彩細節。卡上沒有合適的 NV12 檔位，或細小彩色文字確實需要 4:2:2 時，可以試它。",
    "en": "8-bit 4:2:2, with more vertical color detail. Try it if there's no suitable NV12 mode or you need 4:2:2 for fine colored text.",
    "ja": "8 ビット 4:2:2。色の縦方向の解像度が高くなります。適した NV12 モードがなく、小さな色付き文字に 4:2:2 が必要な場合などに試せます。",
    "ko": "8비트 4:2:2로 세로 방향 색상 세부 정보를 더 많이 유지합니다. 알맞은 NV12 모드가 없거나 작은 컬러 글씨에 4:2:2가 필요할 때 써 보세요.",
@@ -1537,7 +1563,7 @@
   {
    "zh": "8 位 RGB · SDR，每像素有完整的 RGB 分量，带宽较高。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "8 位元 RGB · SDR，每個像素都有完整的 RGB 分量，所需頻寬較高。",
+   "zh-TW": "8 位 RGB · SDR，每像素有完整的 RGB 分量，帶寬較高。",
    "en": "8-bit RGB · SDR with a full set of RGB components per pixel and higher bandwidth.",
    "ja": "8 ビット RGB · SDR。画素ごとに RGB の全成分を持ち、より広い帯域が必要です。",
    "ko": "8비트 RGB · 픽셀마다 모든 RGB 성분이 있는 SDR. 더 많은 대역폭이 필요합니다.",
@@ -2980,7 +3006,7 @@
   {
    "zh": "HUD 自动锁定 · 当前补帧方式不支持",
    "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "HUD 自動鎖定 · 目前補幀方式不支援",
+   "zh-TW": "HUD 自動鎖定 · 當前補幀方式不支援",
    "en": "Auto HUD lock · not available with this frame generation",
    "ja": "HUD 自動ロック · 現在のフレーム生成方式では使えません",
    "ko": "HUD 자동 고정 · 현재 프레임 생성 방식에서 지원 안 됨",
@@ -4514,7 +4540,7 @@
   {
    "zh": "SDR 转 HDR 在这里",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "在這裡將 SDR 轉為 HDR",
+   "zh-TW": "SDR 轉 HDR 在這裡",
    "en": "Convert SDR to HDR here",
    "ja": "SDR から HDR へ変換",
    "ko": "SDR을 HDR로 변환",
@@ -4575,6 +4601,32 @@
    "de": "Sunshine-Host",
    "pt-BR": "Host Sunshine",
    "ru": "Хост Sunshine"
+  },
+  {
+   "zh": "TURN 密码",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "TURN 密碼",
+   "en": "TURN password",
+   "ja": "TURN パスワード",
+   "ko": "TURN 비밀번호",
+   "es": "Contraseña TURN",
+   "fr": "Mot de passe TURN",
+   "de": "TURN-Passwort",
+   "pt-BR": "Senha TURN",
+   "ru": "Пароль TURN"
+  },
+  {
+   "zh": "TURN 用户名",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "TURN 使用者名",
+   "en": "TURN username",
+   "ja": "TURN ユーザー名",
+   "ko": "TURN 사용자 이름",
+   "es": "Usuario TURN",
+   "fr": "Utilisateur TURN",
+   "de": "TURN-Benutzername",
+   "pt-BR": "Usuário TURN",
+   "ru": "Имя пользователя TURN"
   },
   {
    "zh": "UI 修正 · 未证实",
@@ -4722,7 +4774,7 @@
   {
    "zh": "VFG 高档在显卡跑得动时真挺丝滑，但开销很大。我用 RTX 5070 在 4K 实测，高档单次补帧约 **20 ms**，中档开销约是高档的 **1/3–1/4**。多转几次镜头，看看耗时和帧节奏，再决定哪一档适合你的显卡。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "顯示卡跑得動的話，VFG 高檔真的很滑順，但負載很高。我用 RTX 5070 在 4K 實測，高檔單次補幀約 **20 ms**，中檔約是高檔的 **1/3–1/4**。多轉幾次鏡頭，看處理時間和出幀節奏，再決定哪檔適合你的顯示卡。",
+   "zh-TW": "VFG 高檔在顯示卡跑得動時真挺絲滑，但開銷很大。我用 RTX 5070 在 4K 實測，高檔單次補幀約 **20 ms**，中檔開銷約是高檔的 **1/3–1/4**。多轉幾次鏡頭，看看耗時和幀節奏，再決定哪一檔適合你的顯示卡。",
    "en": "VFG High can look incredibly smooth and it's demanding. At 4K on my RTX 5070, a generated frame took about **20 ms** in High. Medium took around **one-third to one-quarter** as much time. Pan the camera a few times and check the timings and pacing to see which setting works on your GPU.",
    "ja": "VFG の高設定は GPU に余裕があると本当になめらかですが、負荷は高めです。RTX 5070 で 4K を試したとき、高設定で 1 フレームの生成に約 **20 ms**、中設定はその **約 1/3～1/4** でした。カメラを何度か振って、処理時間とフレーム間隔を見て決めてください。",
    "ko": "VFG 높음은 GPU가 감당하면 정말 부드럽지만 부담도 큽니다. RTX 5070에서 4K로 시험했을 때 높음은 생성 프레임 한 장에 약 **20 ms**, 보통은 그 **1/3~1/4** 정도였습니다. 시점을 몇 번 돌리면서 시간과 프레임 간격을 확인해 보세요.",
@@ -4735,7 +4787,7 @@
   {
    "zh": "Veyra 处理手上这张已经渲染好的画面，DLSS SR 在这里能发挥的空间有限。有 NVIDIA 显卡的话，我更推荐 **RTX 视频超分 · 标准 · 中**，画面变清楚，开销也比较好控。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "Veyra 處理的是已經渲染好的畫面，DLSS SR 在這裡能發揮的空間有限。有 NVIDIA 顯示卡的話，我更推薦 **RTX 影片超解析 · 標準 · 中**，畫面清楚，負載也比較好控制。",
+   "zh-TW": "Veyra 處理手上這張已經渲染好的畫面，DLSS SR 在這裡能發揮的空間有限。有 NVIDIA 顯示卡的話，我更推薦 **RTX 影片超解析 · 標準 · 中**，畫面變清楚，開銷也比較好控。",
    "en": "Veyra works with a finished image, which limits what DLSS SR can do here. On an NVIDIA GPU, I reach for **RTX Video Super Resolution · Standard · Medium**. It sharpens up the picture without taking a big bite out of the GPU budget.",
    "ja": "Veyra が扱うのはレンダリング済みの映像なので、ここでの DLSS SR の効果には限りがあります。NVIDIA GPU なら私は **RTX ビデオ超解像 · 標準 · 中** を選びます。画面がくっきりして、GPU の負荷も抑えやすいです。",
    "ko": "Veyra는 렌더링이 끝난 화면을 받아 처리하므로 DLSS SR의 효과는 제한적입니다. NVIDIA GPU라면 **RTX 비디오 초해상도 · 표준 · 보통**을 추천합니다. 영상이 또렷해지고 GPU 부담도 비교적 적습니다.",
@@ -4995,7 +5047,7 @@
   {
    "zh": "Windows 已阻止本次更新，请查看保护历史",
    "src": "src/ui/PortableUpdate.cpp",
-   "zh-TW": "Windows 已封鎖此更新，請查看保護歷程記錄",
+   "zh-TW": "Windows 已阻止本次更新，請查看保護歷史",
    "en": "Windows blocked the update. Check Protection History.",
    "ja": "Windows が更新をブロックしました。保護の履歴を確認してください。",
    "ko": "Windows가 업데이트를 차단했습니다. 보호 기록을 확인하세요.",
@@ -5541,7 +5593,7 @@
   {
    "zh": "「像素格式」会列出当前分辨率和帧率下可以用的选项。这几种常见格式的区别如下。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "「像素格式」會列出目前解析度和幀率下可用的選項。以下是幾種常見格式的差異。",
+   "zh-TW": "「像素格式」會列出當前解析度和幀率下可以用的選項。這幾種常見格式的區別如下。",
    "en": "Pixel format lists the options available at the selected resolution and frame rate. Here is what the common formats carry.",
    "ja": "「ピクセルフォーマット」には、選択した解像度とフレームレートで使える形式が表示されます。主な形式には次の違いがあります。",
    "ko": "‘픽셀 형식’에 현재 해상도와 프레임률에서 사용 가능한 옵션이 표시됩니다. 자주 쓰는 형식의 차이는 다음과 같습니다.",
@@ -5944,7 +5996,7 @@
   {
    "zh": "下载并在退出后更新",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "下載並在結束後更新",
+   "zh-TW": "下載並在退出後更新",
    "en": "Download and update on exit",
    "ja": "ダウンロードして終了時に更新",
    "ko": "다운로드 후 종료 시 업데이트",
@@ -5957,7 +6009,7 @@
   {
    "zh": "下载文件校验失败，请重新下载",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "下載檔案驗證失敗，請重新下載",
+   "zh-TW": "下載檔案校驗失敗，請重新下載",
    "en": "The download failed verification. Download it again.",
    "ja": "ダウンロードの検証に失敗しました。再度ダウンロードしてください。",
    "ko": "다운로드 검증에 실패했습니다. 다시 다운로드하세요.",
@@ -6566,6 +6618,19 @@
    "ru": "Не удалось слить перед переключением размера потока"
   },
   {
+   "zh": "串流方案",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "串流方案",
+   "en": "Streaming plan",
+   "ja": "ストリーミング方式",
+   "ko": "스트리밍 방식",
+   "es": "Plan de streaming",
+   "fr": "Plan de streaming",
+   "de": "Streaming-Plan",
+   "pt-BR": "Plano de streaming",
+   "ru": "План стриминга"
+  },
+  {
    "zh": "串流设置（只影响串流本身，按主机保存）",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "串流設定（只影響串流本身，按主機儲存）",
@@ -6620,7 +6685,7 @@
   {
    "zh": "为什么 30 帧游戏也采 60？60 帧采集约每 16.7 ms 取一次画面，30 帧约每 33.3 ms 取一次。新画面有机会更早被采到，实际延迟还看采集卡和驱动。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "為什麼 30 幀遊戲也擷取 60？60 幀擷取約每 16.7 ms 取一次畫面，30 幀約每 33.3 ms 取一次。新畫面有機會更早被擷取，實際延遲還得看擷取卡和驅動程式。",
+   "zh-TW": "為什麼 30 幀遊戲也采 60？60 幀擷取約每 16.7 ms 取一次畫面，30 幀約每 33.3 ms 取一次。新畫面有機會更早被采到，實際延遲還看擷取卡和驅動。",
    "en": "Why capture a 30 fps game at 60? At 60 fps there's a capture opportunity about every 16.7 ms, compared with 33.3 ms at 30 fps. New frames can reach the PC sooner. The actual delay depends on your card and driver.",
    "ja": "30 fps のゲームでも 60 fps にするのはなぜか。60 fps なら約 16.7 ms ごと、30 fps なら約 33.3 ms ごとに映像を取り込む機会が来ます。新しいフレームを早く受け取れることがあり、実際の遅延はカードとドライバーによって変わります。",
    "ko": "30 fps 게임을 왜 60 fps로 캡처할까요? 60 fps에선 약 16.7 ms마다, 30 fps에선 약 33.3 ms마다 화면을 받을 기회가 옵니다. 새 화면을 더 일찍 받을 수 있고 실제 지연은 카드와 드라이버에 따라 달라집니다.",
@@ -6958,7 +7023,7 @@
   {
    "zh": "主机正在输出 HDR10 时，选 P010，再把这里设为「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改后重新连接才生效。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "主機正在輸出 HDR10 時，選擇 P010，再將這裡設為「HDR · PQ」。NV12、YUY2 和 RGB24 請選「SDR · 709」。變更後重新連線才會生效。",
+   "zh-TW": "主機正在輸出 HDR10 時，選 P010，再把這裡設為「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改後重新連接才生效。",
    "en": "When your console is outputting HDR10, choose P010 and set the input to HDR · PQ. Use SDR · 709 for NV12, YUY2, or RGB24. Reconnect to apply the change.",
    "ja": "ゲーム機が HDR10 を出力している場合は P010 を選び、ここを「HDR · PQ」に設定します。NV12、YUY2、RGB24 は「SDR · 709」を使います。変更は再接続すると反映されます。",
    "ko": "콘솔이 HDR10을 출력 중이면 P010을 선택하고 입력을 ‘HDR · PQ’로 설정하세요. NV12, YUY2, RGB24에는 ‘SDR · 709’를 사용하세요. 변경 후 다시 연결해야 적용됩니다.",
@@ -7140,7 +7205,7 @@
   {
    "zh": "举个例子。游戏原帧是 `ABCDEFG`，采到的可能是 `AABBCCDDEEFFGG`。相同的两张图之间补不出新的运动。在「补帧」里选 **60→30** 或 **自动去除**，让补帧从 `A→B→C` 这样的不同画面开始。锁 30 帧可先试 60→30，帧率经常变化就对照自动去除和实际内容帧率。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "舉個例子。遊戲原幀是 `ABCDEFG`，擷取到的可能是 `AABBCCDDEEFFGG`。相同畫面之間沒有新的動作可以補。在「補幀」裡選 **60→30** 或 **自動去除**，讓補幀從 `A→B→C` 這樣不同的畫面開始。鎖 30 幀可先試 60→30，幀率常變就對照自動去除和實際內容幀率。",
+   "zh-TW": "舉個例子。遊戲原幀是 `ABCDEFG`，采到的可能是 `AABBCCDDEEFFGG`。相同的兩張圖之間補不出新的運動。在「補幀」裡選 **60→30** 或 **自動去除**，讓補幀從 `A→B→C` 這樣的不同畫面開始。鎖 30 幀可先試 60→30，幀率經常變化就對照自動去除和實際內容幀率。",
    "en": "Say the game outputs `ABCDEFG` and the card sends `AABBCCDDEEFFGG`. Two identical pictures give the interpolator no new motion to work with. In Frame Gen, choose **60→30** or **Automatic removal** so it handles distinct frames such as `A→B→C`. Start with 60→30 on a locked 30 fps game. If the rate moves around, compare Automatic removal with the game's actual frame rate.",
    "ja": "ゲームのフレームが `ABCDEFG` なら、取り込んだ映像は `AABBCCDDEEFFGG` になることがあります。同じ映像が並ぶ区間には新しい動きがありません。「フレーム生成」で **60→30** または **自動除去** を選び、`A→B→C` のような異なるフレーム間で補間します。30 fps 固定なら 60→30 から。変動が大きいなら自動除去の結果をゲームの実際のフレームレートと比べてください。",
    "ko": "게임 프레임이 `ABCDEFG`라면 캡처 프레임은 `AABBCCDDEEFFGG`가 될 수 있습니다. 같은 화면 두 장 사이에는 보간할 새 움직임이 없습니다. ‘프레임 생성’에서 **60→30** 또는 **자동 제거**를 선택하면 `A→B→C`처럼 서로 다른 프레임을 사용합니다. 30 fps 고정은 60→30부터 써 보고, 변동이 잦으면 자동 제거 결과를 게임의 실제 프레임 속도와 비교하세요.",
@@ -7517,7 +7582,7 @@
   {
    "zh": "从这张采集卡列出的分辨率里选你要用的那一档。帧率列表会随这项选择更新。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "從擷取卡支援的解析度中選擇要使用的項目。幀率清單會跟著更新。",
+   "zh-TW": "從這張擷取卡列出的解析度裡選你要用的那一檔。幀率列表會隨這項選擇更新。",
    "en": "Pick one of the resolutions your capture card reports. The list of frame rates updates with your selection.",
    "ja": "キャプチャーカードが対応する解像度の中から選びます。選択に応じてフレームレートの一覧が更新されます。",
    "ko": "캡처 카드가 지원하는 해상도 중 원하는 항목을 고르세요. 선택에 따라 프레임률 목록이 업데이트됩니다.",
@@ -7777,7 +7842,7 @@
   {
    "zh": "使用 Windows 实时字幕识别系统播放的声音，译文显示在 Veyra 预览画面内。",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "使用 Windows 即時字幕辨識系統播放的聲音，譯文顯示在 Veyra 預覽畫面內。",
+   "zh-TW": "使用 Windows 即時字幕識別系統播放的聲音，譯文顯示在 Veyra 預覽畫面內。",
    "en": "Windows Live Captions transcribes system audio. Translations appear in the Veyra preview.",
    "ja": "Windows のライブ キャプションがシステム音声を認識し、訳文を Veyra のプレビューに表示します。",
    "ko": "Windows 라이브 캡션으로 시스템 오디오를 인식하고 Veyra 미리 보기에 번역을 표시합니다.",
@@ -7829,7 +7894,7 @@
   {
    "zh": "便携版更新 · %1",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "可攜版更新 · %1",
+   "zh-TW": "便攜版更新 · %1",
    "en": "Portable update · %1",
    "ja": "ポータブル版の更新 · %1",
    "ko": "포터블 업데이트 · %1",
@@ -8808,11 +8873,11 @@
    "en": "Close",
    "ja": "閉じる",
    "ko": "닫기",
-   "es": "Cerrar",
-   "fr": "Fermer",
-   "de": "Schließen",
-   "pt-BR": "Fechar",
-   "ru": "Закрыть"
+   "es": "Desactivado",
+   "fr": "Désactivé",
+   "de": "Aus",
+   "pt-BR": "Desativado",
+   "ru": "Выкл."
   },
   {
    "zh": "关闭",
@@ -9702,7 +9767,7 @@
   {
    "zh": "切到「补帧」，在这里选算法、倍率和档位。倍率决定每组原始画面之间生成多少帧。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "切換到「補幀」，在這裡選擇演算法、倍率和品質。倍率決定兩張原始畫面之間會生成多少幀。",
+   "zh-TW": "切到「補幀」，在這裡選算法、倍率和檔位。倍率決定每組原始畫面之間生成多少幀。",
    "en": "Go to Frame Gen to choose an algorithm, a multiplier, and a quality mode. The multiplier controls how many frames are generated between source frames.",
    "ja": "「フレーム生成」でアルゴリズム、倍率、品質を選びます。倍率によって元のフレーム間に生成する枚数が決まります。",
    "ko": "‘프레임 생성’에서 알고리즘, 배율, 품질을 고르세요. 배율에 따라 원본 프레임 사이에 생성할 프레임 수가 결정됩니다.",
@@ -10664,7 +10729,7 @@
   {
    "zh": "原帖里记录的大致量级，具体会随设备和采集档位变化。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "這是原文記錄的大致數值，實際數字會隨裝置和擷取模式變化。",
+   "zh-TW": "原帖裡記錄的大致量級，具體會隨裝置和擷取檔位變化。",
    "en": "These are approximate readings from the original post. Your card and capture mode will affect the numbers.",
    "ja": "元の投稿で記録した目安です。実際の値は機材とキャプチャモードによって変わります。",
    "ko": "원문에서 기록한 대략적인 수치입니다. 장비와 캡처 모드에 따라 달라집니다.",
@@ -11665,7 +11730,7 @@
   {
    "zh": "可视化裁剪",
    "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "視覺化裁剪",
+   "zh-TW": "可視化裁剪",
    "en": "Visual crop",
    "ja": "プレビューでクロップ",
    "ko": "미리보기 자르기",
@@ -12068,7 +12133,7 @@
   {
    "zh": "启用后会把系统字幕文本发送给所选服务。",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "啟用後會將系統字幕文字傳送至所選服務。",
+   "zh-TW": "啟用後會把系統字幕文字發送給所選服務。",
    "en": "Enabling this sends system caption text to the selected service.",
    "ja": "有効にするとシステムの字幕テキストが選択したサービスに送信されます。",
    "ko": "활성화하면 시스템 자막 텍스트를 선택한 서비스로 전송합니다.",
@@ -12627,7 +12692,7 @@
   {
    "zh": "在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "在「NR 畫面增強」新增一層。Veyra 對已擷取的畫面使用實驗性神經渲染，增強光照、材質和視覺細節。",
+   "zh-TW": "在「NR 畫面增強」裡添加一層。Veyra 對已擷取的畫面使用實驗性神經渲染，增強光照、材質和視覺細節。",
    "en": "Add a layer under NR enhancement. Veyra applies experimental neural rendering to the captured picture to enhance lighting, materials, and visual details.",
    "ja": "「NR 画質補正」でレイヤーを追加します。Veyra は取り込んだ映像に実験的なニューラルレンダリングを適用して、光の表現、素材の質感、細部を補正します。",
    "ko": "‘NR 화질 개선’에서 레이어를 추가하세요. Veyra는 캡처 영상에 실험적인 신경 렌더링을 적용해 조명, 재질, 세부 묘사를 개선합니다.",
@@ -12640,7 +12705,7 @@
   {
    "zh": "在「光流 · 运动估算」打开「去除重复帧」，下拉选「自动去除」。软件比较画面内容，跳过重复帧，让补帧用不同画面生成中间帧。游戏帧率波动时也按画面内容判断。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "在「光流 · 運動估算」開啟「去除重複幀」，再選「自動去除」。Veyra 會比較畫面內容並跳過重複幀，讓補幀使用不同的畫面生成中間幀。遊戲幀率變動時也會依畫面內容判斷。",
+   "zh-TW": "在「光流 · 運動估算」開啟「去除重複幀」，下拉選「自動去除」。軟體比較畫面內容，跳過重複幀，讓補幀用不同畫面生成中間幀。遊戲幀率波動時也按畫面內容判斷。",
    "en": "Under Optical flow · motion estimation, turn on Remove duplicate frames and select Automatic removal. Veyra compares images and skips repeats so frame generation uses different source frames. It checks the picture even when the game's frame rate varies.",
    "ja": "「オプティカルフロー · 動き推定」で「重複フレームを除去」をオンにし、「自動除去」を選びます。Veyra が映像を比較して同じフレームを飛ばすので、異なる映像から中間フレームを生成できます。ゲームのフレームレートが変動しても、映像の内容をもとに判断します。",
    "ko": "‘광학 흐름·모션 추정’에서 ‘중복 프레임 제거’를 켜고 ‘자동 제거’를 선택하세요. Veyra는 영상을 비교해 중복 프레임을 건너뛰므로 서로 다른 원본 프레임으로 중간 영상을 생성할 수 있습니다. 게임 프레임률이 달라져도 영상 내용을 기준으로 판단합니다.",
@@ -12653,7 +12718,7 @@
   {
    "zh": "在「视频输入设备」里选你实际连接的采集卡。选定后会读取它支持的采集档位。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "在「影片輸入裝置」選擇你實際連接的擷取卡，接著就能看到它支援的擷取規格。",
+   "zh-TW": "在「影片輸入裝置」裡選你實際連接的擷取卡。選定後會讀取它支援的擷取檔位。",
    "en": "Under Video input device, pick the capture card you connected. Veyra will list the capture modes it supports.",
    "ja": "「映像入力デバイス」で接続したキャプチャーカードを選ぶと、対応するキャプチャーモードが表示されます。",
    "ko": "‘영상 입력 장치’에서 연결한 캡처 카드를 선택하세요. Veyra에 카드가 지원하는 캡처 모드가 표시됩니다.",
@@ -13862,7 +13927,7 @@
   {
    "zh": "如果设备提供 60 FPS，优先选它。59.94 FPS 也是常见的近 60 档。游戏本身跑 30 FPS，也可以按 60 FPS 采集。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "如果裝置支援 60 FPS，優先選它。59.94 FPS 也是常見的近 60 幀選項。即使遊戲本身只有 30 FPS，也可以用 60 FPS 擷取。",
+   "zh-TW": "如果裝置提供 60 FPS，優先選它。59.94 FPS 也是常見的近 60 檔。遊戲本身跑 30 FPS，也可以按 60 FPS 擷取。",
    "en": "Use 60 FPS if your card offers it. 59.94 FPS is another common option close to 60. You can capture at 60 FPS even if the game runs at 30 FPS.",
    "ja": "対応していれば 60 FPS を選びます。59.94 FPS も一般的な 60 FPS に近い選択肢です。ゲームが 30 FPS でも 60 FPS でキャプチャーできます。",
    "ko": "장치가 60 FPS를 지원하면 우선 선택하세요. 59.94 FPS도 흔히 쓰이는 60 FPS에 가까운 옵션입니다. 게임이 30 FPS여도 60 FPS로 캡처할 수 있습니다.",
@@ -14681,7 +14746,7 @@
   {
    "zh": "对照输入帧率、输出帧率和 GPU 耗时，看看设置能否稳定运行。全屏按 Home 可以看详细耗时。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "對照輸入幀率、輸出幀率和 GPU 耗時，確認設定能否穩定運作。全螢幕按 Home 可查看詳細耗時。",
+   "zh-TW": "對照輸入幀率、輸出幀率和 GPU 耗時，看看設定能否穩定執行。全螢幕按 Home 可以看詳細耗時。",
    "en": "Compare input FPS, output FPS, and GPU timings to check whether your settings are running steadily. In fullscreen, press Home for detailed timings.",
    "ja": "入力 FPS、出力 FPS、GPU の処理時間を見比べて、設定した状態で安定しているか確認します。全画面で Home キーを押すと詳しい処理時間が見られます。",
    "ko": "입력 FPS, 출력 FPS, GPU 처리 시간을 비교해 설정이 안정적으로 작동하는지 확인하세요. 전체 화면에서 Home 키를 누르면 자세한 처리 시간을 볼 수 있습니다.",
@@ -17255,7 +17320,7 @@
   {
    "zh": "常见的是 RGB24，带宽更高。确实需要 RGB 或设备在该档只有 RGB 时再选。若自动去重一直报 60 帧，可以用 NV12 对照一下。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "常見的是 RGB24，頻寬需求較高。確實需要 RGB 或裝置在該模式只提供 RGB 時再選。若自動去除一直回報 60 幀，可以用 NV12 對照。",
+   "zh-TW": "常見的是 RGB24，帶寬更高。確實需要 RGB 或裝置在該檔只有 RGB 時再選。若自動去重一直報 60 幀，可以用 NV12 對照一下。",
    "en": "Usually RGB24, with a higher bandwidth cost. Pick it when the device offers only RGB for that mode or when you specifically need RGB. If automatic removal keeps reporting 60 fps, compare it with NV12.",
    "ja": "一般的には RGB24 で、必要な帯域は大きめです。そのモードでカードが RGB しか出せない場合や、RGB が必要な場合に選びます。自動除去が 60 fps のままなら NV12 と比較してみてください。",
    "ko": "보통 RGB24이며 대역폭을 더 많이 사용합니다. 해당 모드에서 RGB만 지원하거나 RGB가 필요할 때 선택하세요. 자동 제거 결과가 계속 60 fps라면 NV12와 비교해 보세요.",
@@ -17359,7 +17424,7 @@
   {
    "zh": "应用裁剪",
    "src": "qml/ScreenCropEditor.qml",
-   "zh-TW": "套用裁剪",
+   "zh-TW": "應用裁剪",
    "en": "Apply crop",
    "ja": "クロップを適用",
    "ko": "자르기 적용",
@@ -18555,7 +18620,7 @@
   {
    "zh": "录制分段",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "錄製分段",
+   "zh-TW": "錄制分段",
    "en": "Recording split",
    "ja": "録画の分割",
    "ko": "녹화 분할",
@@ -18867,7 +18932,7 @@
   {
    "zh": "很在意手感，我会选 **1440p60 NV12 再超分**。想兼顾预算和 HDR 观感，可以在 SDR 采集后开 **RTX 视频 HDR**。如果目标是原生 4K60 HDR 采集，我会看 PCIe 卡。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "很在意操作回應，我會選 **1440p60 NV12 再超解析**。想兼顧預算和 HDR 觀感，可以在 SDR 擷取後開 **RTX 影片 HDR**。目標是原生 4K60 HDR 擷取的話，我會看 PCIe 擷取卡。",
+   "zh-TW": "很在意手感，我會選 **1440p60 NV12 再超解析**。想兼顧預算和 HDR 觀感，可以在 SDR 擷取後開 **RTX 影片 HDR**。如果目標是原生 4K60 HDR 擷取，我會看 PCIe 卡。",
    "en": "If you care most about responsiveness, I'd capture at **1440p60 NV12 and upscale**. For an HDR look on a budget, try **RTX Video HDR** after SDR capture. For native 4K60 HDR capture, I'd look at PCIe cards.",
    "ja": "操作の反応を重視するなら、私は **1440p60 NV12 で取り込んでから超解像** を使います。予算を抑えて HDR らしい見た目にするなら、SDR キャプチャ後に **RTX Video HDR** を試してください。ネイティブ 4K60 HDR を取り込むなら PCIe カードを検討します。",
    "ko": "조작 반응이 중요하면 **1440p60 NV12로 캡처한 뒤 초해상도**를 적용합니다. 비용을 아끼면서 HDR 느낌을 원한다면 SDR 캡처에 **RTX Video HDR**을 써 보세요. 네이티브 4K60 HDR 캡처가 목표라면 PCIe 카드를 살펴봅니다.",
@@ -18893,7 +18958,7 @@
   {
    "zh": "心理视觉调优",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "心理視覺調校",
+   "zh-TW": "心理視覺調優",
    "en": "Psycho-visual tuning",
    "ja": "視覚心理チューニング",
    "ko": "심리시각 튜닝",
@@ -18958,7 +19023,7 @@
   {
    "zh": "性能与耗时",
    "src": "qml/FullscreenTimingPanel.qml",
-   "zh-TW": "效能與耗時",
+   "zh-TW": "性能與耗時",
    "en": "Performance and timing",
    "ja": "パフォーマンスと処理時間",
    "ko": "성능 및 처리 시간",
@@ -19062,7 +19127,7 @@
   {
    "zh": "想把 SDR 画面转换为 HDR，可以在支持的显卡和 HDR 显示器上试用 RTX Video HDR。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "若要將 SDR 畫面轉為 HDR，可以在支援的顯示卡和 HDR 顯示器上試用 RTX Video HDR。",
+   "zh-TW": "想把 SDR 畫面轉換為 HDR，可以在支援的顯示卡和 HDR 顯示器上試用 RTX Video HDR。",
    "en": "Try RTX Video HDR to convert SDR to HDR when you have a supported GPU and an HDR display.",
    "ja": "対応 GPU と HDR ディスプレイがあれば、RTX Video HDR で SDR 映像を HDR に変換できます。",
    "ko": "지원 GPU와 HDR 모니터가 있으면 RTX Video HDR로 SDR을 HDR로 변환해 볼 수 있습니다.",
@@ -19075,7 +19140,7 @@
   {
    "zh": "想要 4K60 HDR，可以看这些卡",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "想要 4K60 HDR，可以看這幾張卡",
+   "zh-TW": "想要 4K60 HDR，可以看這些卡",
    "en": "For 4K60 HDR, I'd look at these cards",
    "ja": "4K60 HDR なら、例えばこのカードです",
    "ko": "4K60 HDR이 필요하면 이 카드들을 살펴보세요",
@@ -19088,7 +19153,7 @@
   {
    "zh": "我主要看 1440p60、4K30 的 SDR 档位。原帖举例",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "我主要看 1440p60、4K30 的 SDR 模式。原文舉例",
+   "zh-TW": "我主要看 1440p60、4K30 的 SDR 檔位。原帖舉例",
    "en": "I mainly look at 1440p60 and 4K30 SDR modes. Examples from the post",
    "ja": "主に 1440p60 と 4K30 の SDR モードを見ます。元の投稿の例",
    "ko": "주로 1440p60과 4K30 SDR 모드를 봅니다. 원문에 나온 예시",
@@ -19101,7 +19166,7 @@
   {
    "zh": "我是 Veyra 的开发者。玩 GTA 6 这类 30 帧主机游戏，我会用下面这套设置。感谢大家一直在用，也把各种设备的实际效果告诉我。如果你之前用 OBS 或 PotPlayer 预览觉得有延迟，可以拿同一张卡、同一个档位在 Veyra 里试一下。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "我是 Veyra 的開發者。玩 GTA 6 這類 30 幀主機遊戲，我會用下面這套設定。謝謝大家一直使用，也回報各種裝置的實際效果。如果你用 OBS 或 PotPlayer 預覽時覺得有延遲，可以拿同一張卡、同一個模式在 Veyra 裡試試。",
+   "zh-TW": "我是 Veyra 的開發者。玩 GTA 6 這類 30 幀主機遊戲，我會用下面這套設定。感謝大家一直在用，也把各種裝置的實際效果告訴我。如果你之前用 OBS 或 PotPlayer 預覽覺得有延遲，可以拿同一張卡、同一個檔位在 Veyra 裡試一下。",
    "en": "I develop Veyra. Here's what I'd use for GTA 6 or another console game running at 30 fps. Thanks for using it and telling me how it runs on your gear. If previewing in OBS or PotPlayer felt laggy, try the same card and capture mode in Veyra.",
    "ja": "Veyra の開発者です。GTA 6 のような 30 fps の家庭用ゲームなら、私はこの設定で遊びます。使ってくれて、いろいろな機材での結果を教えてくれてありがとう。OBS や PotPlayer のプレビューで遅延が気になったら、同じカードとモードで Veyra を試してみてください。",
    "ko": "Veyra를 만든 개발자입니다. GTA 6처럼 30 fps로 돌아가는 콘솔 게임에는 아래 설정을 씁니다. 사용해 주시고 여러 장비에서 어떤지 알려 주셔서 감사합니다. OBS나 PotPlayer의 미리보기가 느리게 느껴졌다면 같은 카드와 캡처 모드를 Veyra에서 써 보세요.",
@@ -19114,7 +19179,7 @@
   {
    "zh": "我测过的同规格卡，延迟差通常在 5 ms 左右以内。先看你的分辨率、帧率和色彩模式能不能跑稳，再选牌子。祝你玩得开心！",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "我測過的同規格擷取卡，延遲差異通常在約 5 ms 以內。先看解析度、幀率和色彩模式能否穩定，再選品牌。玩得開心！",
+   "zh-TW": "我測過的同規格卡，延遲差通常在 5 ms 左右以內。先看你的解析度、幀率和色彩模式能不能跑穩，再選牌子。祝你玩得開心！",
    "en": "Comparable cards in my tests were usually within about 5 ms of each other. Pick one that handles your resolution, frame rate and color mode reliably. Enjoy your games!",
    "ja": "同等仕様のカードを試した際、遅延差はおおむね 5 ms 以内でした。使いたい解像度、フレームレート、色モードで安定してから、好みのメーカーを選んでください。ゲームを楽しんで！",
    "ko": "제가 테스트한 비슷한 사양의 카드들은 보통 지연 차이가 약 5 ms 이내였습니다. 원하는 해상도, 프레임 속도, 색상 모드가 안정적인지 먼저 확인하고 브랜드를 고르세요. 즐겁게 플레이하세요!",
@@ -19153,7 +19218,7 @@
   {
    "zh": "我选卡先看它能把哪种画面采进电脑。同一张卡的 HDMI 直通规格和实际采集规格分开看。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "我先看擷取卡能把哪種畫面送進電腦。同一張卡的 HDMI 直通和實際擷取規格要分開看。",
+   "zh-TW": "我選卡先看它能把哪種畫面采進電腦。同一張卡的 HDMI 直通規格和實際擷取規格分開看。",
    "en": "Check what the card can deliver to the PC. HDMI passthrough and capture have separate specifications.",
    "ja": "PC にどんな映像を取り込めるかを先に確認します。HDMI パススルーとキャプチャの仕様は個別に見てください。",
    "ko": "카드가 PC로 어떤 영상을 넘길 수 있는지 먼저 봅니다. 같은 카드라도 HDMI 패스스루와 캡처 사양은 따로 확인하세요.",
@@ -19738,7 +19803,7 @@
   {
    "zh": "打开自动去重",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "開啟自動去除重複幀",
+   "zh-TW": "開啟自動去重",
    "en": "Turn on automatic deduplication",
    "ja": "自動で重複フレームを除去",
    "ko": "중복 프레임 자동 제거",
@@ -20375,7 +20440,7 @@
   {
    "zh": "接口地址",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "介面位址",
+   "zh-TW": "接口地址",
    "en": "API endpoint",
    "ja": "API のアドレス",
    "ko": "API 주소",
@@ -20388,7 +20453,7 @@
   {
    "zh": "接口模型名",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "介面模型名稱",
+   "zh-TW": "接口模型名",
    "en": "API model name",
    "ja": "API のモデル名",
    "ko": "API 모델 이름",
@@ -20639,11 +20704,11 @@
    "en": "Play",
    "ja": "再生",
    "ko": "재생",
-   "es": "Reproducir",
-   "fr": "Lire",
-   "de": "Abspielen",
-   "pt-BR": "Reproduzir",
-   "ru": "Воспроизвести"
+   "es": "Reproducción",
+   "fr": "Lecture",
+   "de": "Wiedergabe",
+   "pt-BR": "Reprodução",
+   "ru": "Воспроизведение"
   },
   {
    "zh": "播放",
@@ -21505,6 +21570,71 @@
    "ru": "Способ"
   },
   {
+   "zh": "方案1",
+   "src": "qml/StreamHud.qml",
+   "zh-TW": "方案1",
+   "en": "Plan 1",
+   "ja": "方式1",
+   "ko": "방식 1",
+   "es": "Plan 1",
+   "fr": "Plan 1",
+   "de": "Plan 1",
+   "pt-BR": "Plano 1",
+   "ru": "План 1"
+  },
+  {
+   "zh": "方案1 · 标准",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "方案1 · 標準",
+   "en": "Plan 1 · Standard",
+   "ja": "方式1 · 標準",
+   "ko": "방식 1 · 표준",
+   "es": "Plan 1 · Estándar",
+   "fr": "Plan 1 · Standard",
+   "de": "Plan 1 · Standard",
+   "pt-BR": "Plano 1 · Padrão",
+   "ru": "План 1 · Стандарт"
+  },
+  {
+   "zh": "方案1：现行连接方式。方案2：高码率档（1080p HQ）+ 公网 STUN + 完整 Teredo 直连候选，源码率更高、复杂网络下更稳。断开后重新连接生效。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "方案1：現行連接方式。方案2：高位元率檔（1080p HQ）+ 公網 STUN + 完整 Teredo 直連候選，源位元率更高、複雜網路下更穩。斷開後重新連接生效。",
+   "en": "Plan 1: the current connection method. Plan 2: high-bitrate tier (1080p HQ) + public STUN + full Teredo direct candidates — higher source bitrate and more reliable on complex networks. Takes effect on the next connection.",
+   "ja": "方式1：現在の接続方式。方式2：高ビットレート帯（1080p HQ）＋公開 STUN＋完全な Teredo 直接候補。ソースビットレートが高く、複雑なネットワークでも安定します。切断後の再接続で有効になります。",
+   "ko": "방식 1: 현재 연결 방식. 방식 2: 고비트레이트 등급(1080p HQ) + 공용 STUN + 전체 Teredo 직접 후보. 소스 비트레이트가 높고 복잡한 네트워크에서 더 안정적입니다. 연결을 끊었다 다시 연결하면 적용됩니다.",
+   "es": "Plan 1: método de conexión actual. Plan 2: nivel de alto bitrate (1080p HQ) + STUN público + candidatos Teredo completos; mayor bitrate de origen y más estable en redes complejas. Se aplica al reconectar.",
+   "fr": "Plan 1 : méthode de connexion actuelle. Plan 2 : niveau haut débit (1080p HQ) + STUN public + candidats Teredo complets ; débit source plus élevé et plus stable sur réseaux complexes. Appliqué à la reconnexion.",
+   "de": "Plan 1: aktuelles Verbindungsverfahren. Plan 2: Hochbitraten-Stufe (1080p HQ) + öffentliches STUN + vollständige Teredo-Kandidaten; höhere Quellbitrate und stabiler in komplexen Netzwerken. Wirkt beim Wiederverbinden.",
+   "pt-BR": "Plano 1: método de conexão atual. Plano 2: nível de alta taxa (1080p HQ) + STUN público + candidatos Teredo completos; maior taxa de origem e mais estável em redes complexas. Aplica ao reconectar.",
+   "ru": "План 1: текущий способ подключения. План 2: высокий битрейт (1080p HQ) + публичный STUN + полные кандидаты Teredo; выше исходный битрейт и стабильнее в сложных сетях. Применяется при переподключении."
+  },
+  {
+   "zh": "方案2 HQ",
+   "src": "qml/StreamHud.qml",
+   "zh-TW": "方案2 HQ",
+   "en": "Plan 2 HQ",
+   "ja": "方式2 HQ",
+   "ko": "방식 2 HQ",
+   "es": "Plan 2 HQ",
+   "fr": "Plan 2 HQ",
+   "de": "Plan 2 HQ",
+   "pt-BR": "Plano 2 HQ",
+   "ru": "План 2 HQ"
+  },
+  {
+   "zh": "方案2 · 高清增强",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "方案2 · 高清增強",
+   "en": "Plan 2 · HD enhanced",
+   "ja": "方式2 · 高画質強化",
+   "ko": "방식 2 · 고화질 강화",
+   "es": "Plan 2 · HD mejorado",
+   "fr": "Plan 2 · HD amélioré",
+   "de": "Plan 2 · HD erweitert",
+   "pt-BR": "Plano 2 · HD aprimorado",
+   "ru": "План 2 · HD улучшенный"
+  },
+  {
    "zh": "旋转显示器请使用 Windows 采集方式",
    "src": "src/source/ScreenCaptureSource.cpp",
    "zh-TW": "旋轉顯示器請使用 Windows 擷取方式",
@@ -21728,7 +21858,7 @@
   {
    "zh": "无法写入更新目录",
    "src": "src/ui/PortableUpdate.cpp",
-   "zh-TW": "無法寫入更新資料夾",
+   "zh-TW": "無法寫入更新目錄",
    "en": "Cannot write to the update folder",
    "ja": "更新フォルダーに書き込めません",
    "ko": "업데이트 폴더에 쓸 수 없습니다",
@@ -22066,7 +22196,7 @@
   {
    "zh": "无法启动本地翻译进程",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "無法啟動本機翻譯程序",
+   "zh-TW": "無法啟動本地翻譯處理程序",
    "en": "Could not start the local translator",
    "ja": "ローカル翻訳を開始できません",
    "ko": "로컬 번역기를 시작할 수 없습니다",
@@ -22404,7 +22534,7 @@
   {
    "zh": "无法解压翻译运行库",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "無法解壓縮翻譯執行庫",
+   "zh-TW": "無法解壓翻譯執行庫",
    "en": "Could not extract the translation runtime",
    "ja": "翻訳ランタイムを展開できません",
    "ko": "번역 런타임을 압축 해제할 수 없습니다",
@@ -23236,7 +23366,7 @@
   {
    "zh": "普通 SDR 游戏，我会先试 **1440p60 · NV12 · SDR · 709**。1080p 屏就从 1080p60 开始。先确认基础画面和帧率稳定，再开补帧和超分。",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "一般 SDR 遊戲，我會先試 **1440p60 · NV12 · SDR · 709**。1080p 螢幕就從 1080p60 開始。先確認基本畫面和幀率穩定，再開補幀和超解析。",
+   "zh-TW": "普通 SDR 遊戲，我會先試 **1440p60 · NV12 · SDR · 709**。1080p 屏就從 1080p60 開始。先確認基礎畫面和幀率穩定，再開補幀和超解析。",
    "en": "For a regular SDR game, I start with **1440p60 · NV12 · SDR · 709**. On a 1080p display, start at 1080p60. Check that the raw picture and capture rate are stable, then turn on frame generation and super resolution.",
    "ja": "一般的な SDR ゲームなら、私は **1440p60 · NV12 · SDR · 709** から試します。1080p の画面なら 1080p60 から。まず映像とキャプチャのフレームレートが安定していることを確認し、その後でフレーム生成と超解像を有効にします。",
    "ko": "일반 SDR 게임이라면 **1440p60 · NV12 · SDR · 709**부터 써 봅니다. 1080p 화면이라면 1080p60으로 시작하세요. 원본 화면과 캡처 프레임 속도가 안정적인지 확인한 뒤 프레임 생성과 초해상도를 켜세요.",
@@ -23561,7 +23691,7 @@
   {
    "zh": "更新下载或校验失败，请重试",
    "src": "src/ui/PortableUpdate.cpp",
-   "zh-TW": "更新下載或驗證失敗，請重試",
+   "zh-TW": "更新下載或校驗失敗，請重試",
    "en": "Update download or verification failed. Try again.",
    "ja": "更新のダウンロードまたは検証に失敗しました。再試行してください。",
    "ko": "업데이트 다운로드 또는 검증에 실패했습니다. 다시 시도하세요.",
@@ -23574,7 +23704,7 @@
   {
    "zh": "更新已就绪，将在退出后安装",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "更新已準備就緒，將在結束後安裝",
+   "zh-TW": "更新已就緒，將在退出後安裝",
    "en": "Update ready. It will be installed after exit.",
    "ja": "更新の準備が完了しました。終了後にインストールします。",
    "ko": "업데이트 준비가 완료되었습니다. 종료 후 설치합니다.",
@@ -23613,7 +23743,7 @@
   {
    "zh": "最后看帧率和耗时",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "最後查看幀率和耗時",
+   "zh-TW": "最後看幀率和耗時",
    "en": "Check frame rates and timings",
    "ja": "フレームレートと処理時間を確認",
    "ko": "프레임률과 처리 시간 확인",
@@ -24458,7 +24588,7 @@
   {
    "zh": "本地模型",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "本機模型",
+   "zh-TW": "本地模型",
    "en": "Local model",
    "ja": "ローカルモデル",
    "ko": "로컬 모델",
@@ -24471,7 +24601,7 @@
   {
    "zh": "本地模型已就绪",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "本機模型已就緒",
+   "zh-TW": "本地模型已就緒",
    "en": "Local model ready",
    "ja": "ローカルモデルを利用できます",
    "ko": "로컬 모델 준비 완료",
@@ -24484,7 +24614,7 @@
   {
    "zh": "本地翻译服务启动超时，请重新启用",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "本機翻譯服務啟動逾時，請重新啟用",
+   "zh-TW": "本地翻譯服務啟動超時，請重新啟用",
    "en": "Local translator timed out. Enable it again.",
    "ja": "ローカル翻訳の開始がタイムアウトしました。再度有効にしてください。",
    "ko": "로컬 번역 시작 시간이 초과되었습니다. 다시 활성화하세요.",
@@ -24497,7 +24627,7 @@
   {
    "zh": "本地翻译进程已停止，请重新启用",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "本機翻譯程序已停止，請重新啟用",
+   "zh-TW": "本地翻譯處理程序已停止，請重新啟用",
    "en": "Local translator stopped. Enable it again.",
    "ja": "ローカル翻訳が停止しました。再度有効にしてください。",
    "ko": "로컬 번역기가 중지되었습니다. 다시 활성화하세요.",
@@ -24510,7 +24640,7 @@
   {
    "zh": "本地运行库校验失败，请重新下载",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "本機執行庫驗證失敗，請重新下載",
+   "zh-TW": "本地執行庫校驗失敗，請重新下載",
    "en": "Local runtime failed verification. Download it again.",
    "ja": "ローカルランタイムの検証に失敗しました。再度ダウンロードしてください。",
    "ko": "로컬 런타임 검증에 실패했습니다. 다시 다운로드하세요.",
@@ -24757,7 +24887,7 @@
   {
    "zh": "查看新手引导",
    "src": "qml/HomePage.qml",
-   "zh-TW": "查看新手導覽",
+   "zh-TW": "查看新手引導",
    "en": "Open the quick tour",
    "ja": "クイックガイドを見る",
    "ko": "시작 가이드 보기",
@@ -24831,6 +24961,19 @@
    "de": "Stil",
    "pt-BR": "Estilo",
    "ru": "Стиль"
+  },
+  {
+   "zh": "格式 turn:主机:端口；复杂 NAT 下的兜底中继。用户名/密码可留空。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "格式 turn:主機:端口；複雜 NAT 下的兜底中繼。使用者名/密碼可留空。",
+   "en": "Format turn:host:port; a fallback relay for complex NATs. Username/password may be left empty.",
+   "ja": "形式 turn:ホスト:ポート。複雑な NAT 環境向けのフォールバック中継。ユーザー名/パスワードは空でもかまいません。",
+   "ko": "형식 turn:호스트:포트. 복잡한 NAT 환경용 대체 릴레이입니다. 사용자 이름/비밀번호는 비워 둘 수 있습니다.",
+   "es": "Formato turn:host:puerto; relé de respaldo para NAT complejos. Usuario/contraseña pueden quedar vacíos.",
+   "fr": "Format turn:hôte:port ; relais de secours pour NAT complexes. Utilisateur/mot de passe peuvent être vides.",
+   "de": "Format turn:Host:Port; Fallback-Relay für komplexe NATs. Benutzername/Passwort dürfen leer bleiben.",
+   "pt-BR": "Formato turn:host:porta; relé de reserva para NATs complexos. Usuário/senha podem ficar vazios.",
+   "ru": "Формат turn:хост:порт; резервный релей для сложных NAT. Имя/пароль можно оставить пустыми."
   },
   {
    "zh": "格式与画面",
@@ -25316,7 +25459,7 @@
   {
    "zh": "正在下载本地推理运行库…",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "正在下載本機推論執行庫…",
+   "zh-TW": "正在下載本地推理執行庫…",
    "en": "Downloading the CPU runtime…",
    "ja": "CPU ランタイムをダウンロード中…",
    "ko": "CPU 런타임 다운로드 중…",
@@ -25433,7 +25576,7 @@
   {
    "zh": "正在加载本地翻译模型…",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "正在載入本機翻譯模型…",
+   "zh-TW": "正在載入本地翻譯模型…",
    "en": "Loading the local translation model…",
    "ja": "ローカル翻訳モデルを読み込み中…",
    "ko": "로컬 번역 모델 로드 중…",
@@ -25888,7 +26031,7 @@
   {
    "zh": "正在等待 Windows 字幕响应…",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "正在等待 Windows 字幕回應…",
+   "zh-TW": "正在等待 Windows 字幕響應…",
    "en": "Waiting for Windows Live Captions…",
    "ja": "ライブ キャプションの応答を待機中…",
    "ko": "Windows 라이브 캡션 응답 대기 중…",
@@ -27214,7 +27357,7 @@
   {
    "zh": "源帧预算 %1 ms",
    "src": "qml/FullscreenTimingPanel.qml",
-   "zh-TW": "來源影格預算 %1 ms",
+   "zh-TW": "源幀預算 %1 ms",
    "en": "Source frame budget %1 ms",
    "ja": "入力フレーム予算 %1 ms",
    "ko": "원본 프레임 예산 %1 ms",
@@ -27227,7 +27370,7 @@
   {
    "zh": "源帧预算 —",
    "src": "qml/FullscreenTimingPanel.qml",
-   "zh-TW": "來源影格預算 —",
+   "zh-TW": "源幀預算 —",
    "en": "Source frame budget —",
    "ja": "入力フレーム予算 —",
    "ko": "원본 프레임 예산 —",
@@ -27929,7 +28072,7 @@
   {
    "zh": "画面未收齐即可开始传输。持续丢帧时按原格式切回普通采集。重新连接后生效。",
    "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "畫面未收齊即可開始傳輸。持續掉幀時按原格式切回一般擷取。重新連接後生效。",
+   "zh-TW": "畫面未收齊即可開始傳輸。持續丟幀時按原格式切回普通擷取。重新連接後生效。",
    "en": "Transfer starts before the full frame arrives. Sustained drops switch back to normal capture in the same format. Reconnect to apply.",
    "ja": "フレーム全体が届く前に転送を開始します。フレーム落ちが続く場合は同じ形式の通常キャプチャーに戻ります。再接続すると適用されます。",
    "ko": "프레임이 모두 들어오기 전에 전송을 시작합니다. 프레임 누락이 계속되면 같은 형식의 일반 캡처로 돌아갑니다. 다시 연결하면 적용됩니다.",
@@ -28449,7 +28592,7 @@
   {
    "zh": "直接打开 HTTP、HTTPS、RTSP、RTP 或 UDP 视频流",
    "src": "qml/NetworkSourceDialog.qml",
-   "zh-TW": "直接開啟 HTTP、HTTPS、RTSP、RTP 或 UDP 影片串流",
+   "zh-TW": "直接開啟 HTTP、HTTPS、RTSP、RTP 或 UDP 影片流",
    "en": "Open a video stream over HTTP, HTTPS, RTSP, RTP, or UDP.",
    "ja": "HTTP、HTTPS、RTSP、RTP、UDP の動画ストリームを開きます。",
    "ko": "HTTP, HTTPS, RTSP, RTP 또는 UDP 영상 스트림을 엽니다.",
@@ -28579,7 +28722,7 @@
   {
    "zh": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原帖举例",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原文舉例",
+   "zh-TW": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原帖舉例",
    "en": "Look for 4K60 NV12, 1440p60 HDR or 4K30 HDR. Examples from the post",
    "ja": "4K60 NV12、1440p60 HDR、4K30 HDR が目安です。元の投稿の例",
    "ko": "4K60 NV12, 1440p60 HDR 또는 4K30 HDR을 확인하세요. 원문에 나온 예시",
@@ -28642,6 +28785,19 @@
    "ru": "Битрейт (Мбит/с)"
   },
   {
+   "zh": "码率上限 (Mbps)",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "位元率上限 (Mbps)",
+   "en": "Bitrate cap (Mbps)",
+   "ja": "ビットレート上限 (Mbps)",
+   "ko": "비트레이트 상한 (Mbps)",
+   "es": "Límite de bitrate (Mbps)",
+   "fr": "Limite de débit (Mbps)",
+   "de": "Bitraten-Obergrenze (Mbps)",
+   "pt-BR": "Limite de taxa (Mbps)",
+   "ru": "Предел битрейта (Mbps)"
+  },
+  {
    "zh": "硬件解码",
    "src": "qml/StreamHud.qml",
    "zh-TW": "硬體解碼",
@@ -28653,6 +28809,19 @@
    "de": "Hardware-Dekodierung",
    "pt-BR": "Decodificação por hardware",
    "ru": "Аппаратное декодирование"
+  },
+  {
+   "zh": "硬件解码接口",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "硬體解碼接口",
+   "en": "Hardware decode API",
+   "ja": "ハードウェアデコード API",
+   "ko": "하드웨어 디코드 API",
+   "es": "API de decodificación por hardware",
+   "fr": "API de décodage matériel",
+   "de": "Hardware-Decodier-API",
+   "pt-BR": "API de decodificação por hardware",
+   "ru": "API аппаратного декодирования"
   },
   {
    "zh": "硬件解码输出格式无法导入，且软件回退失败",
@@ -28722,7 +28891,7 @@
   {
    "zh": "磁盘可用空间不足，下载需要约 1.2 GB",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "磁碟可用空間不足，下載需要約 1.2 GB",
+   "zh-TW": "磁盤可用空間不足，下載需要約 1.2 GB",
    "en": "About 1.2 GB of free disk space is needed",
    "ja": "約 1.2 GB の空き容量が必要です",
    "ko": "약 1.2 GB의 여유 공간이 필요합니다",
@@ -28735,7 +28904,7 @@
   {
    "zh": "磁盘空间不足，无法下载并解压更新",
    "src": "src/ui/PortableUpdate.cpp",
-   "zh-TW": "磁碟空間不足，無法下載並解壓縮更新",
+   "zh-TW": "磁盤空間不足，無法下載並解壓更新",
    "en": "Insufficient disk space to download and extract the update",
    "ja": "更新のダウンロードと展開に必要な空き容量がありません",
    "ko": "업데이트를 다운로드하고 압축을 풀 공간이 부족합니다",
@@ -29879,7 +30048,7 @@
   {
    "zh": "编码器先快速分析一遍画面再分配码率，同样码率下快速运动和复杂画面更清晰；仅 NVIDIA（NVENC），四分之一分辨率首遍更轻，完整分辨率最好但更重 · 默认关闭",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "編碼器先快速分析一遍畫面再分配碼率，同樣碼率下快速運動和複雜畫面更清晰；僅 NVIDIA（NVENC），四分之一解析度首遍更輕，完整解析度最好但更重 · 預設關閉",
+   "zh-TW": "編碼器先快速分析一遍畫面再分配位元率，同樣位元率下快速運動和複雜畫面更清晰；僅 NVIDIA（NVENC），四分之一解析度首遍更輕，完整解析度最好但更重 · 預設關閉",
    "en": "The encoder looks at each frame once before spending its bits, so fast motion and busy scenes look sharper at the same bitrate; NVIDIA (NVENC) only. A quarter-resolution first pass is lighter, full resolution is best but heavier · off by default",
    "ja": "エンコーダーが先に画面をすばやく解析してからビットレートを配分するため、同じビットレートで速い動きや複雑な画面がより鮮明になります。NVIDIA（NVENC）のみ。1/4 解像度の 1 パス目は軽く、フル解像度は最も高画質ですが重くなります · 既定はオフ",
    "ko": "인코더가 먼저 화면을 빠르게 분석한 뒤 비트레이트를 배분하므로 같은 비트레이트에서 빠른 움직임과 복잡한 장면이 더 선명합니다. NVIDIA(NVENC) 전용. 1/4 해상도 첫 패스는 가볍고, 전체 해상도는 가장 좋지만 더 무겁습니다 · 기본값 끔",
@@ -30100,7 +30269,7 @@
   {
    "zh": "美乐威低延迟模式持续丢帧，已回到普通采集",
    "src": "src/source/MagewellCapture.cpp",
-   "zh-TW": "美樂威低延遲模式持續掉幀，已回到一般擷取",
+   "zh-TW": "美樂威低延遲模式持續丟幀，已回到普通擷取",
    "en": "Magewell low-latency capture kept dropping frames. Normal capture resumed.",
    "ja": "Magewell の低遅延モードでフレーム落ちが続いたため、通常キャプチャーに戻りました。",
    "ko": "Magewell 저지연 모드에서 프레임 누락이 지속되어 일반 캡처로 돌아갔습니다.",
@@ -30113,7 +30282,7 @@
   {
    "zh": "美乐威低延迟采集失败，已回到普通采集",
    "src": "src/source/MagewellCapture.cpp",
-   "zh-TW": "美樂威低延遲擷取失敗，已回到一般擷取",
+   "zh-TW": "美樂威低延遲擷取失敗，已回到普通擷取",
    "en": "Magewell low-latency capture failed. Normal capture resumed.",
    "ja": "Magewell の低遅延キャプチャーが失敗し、通常キャプチャーに戻りました。",
    "ko": "Magewell 저지연 캡처에 실패하여 일반 캡처로 돌아갔습니다.",
@@ -30126,7 +30295,7 @@
   {
    "zh": "美乐威低延迟采集超时，已回到普通采集",
    "src": "src/source/MagewellCapture.cpp",
-   "zh-TW": "美樂威低延遲擷取逾時，已回到一般擷取",
+   "zh-TW": "美樂威低延遲擷取超時，已回到普通擷取",
    "en": "Magewell low-latency capture timed out. Normal capture resumed.",
    "ja": "Magewell の低遅延キャプチャーがタイムアウトし、通常キャプチャーに戻りました。",
    "ko": "Magewell 저지연 캡처 시간이 초과되어 일반 캡처로 돌아갔습니다.",
@@ -30386,7 +30555,7 @@
   {
    "zh": "翻译接口未返回译文",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "翻譯介面未回傳譯文",
+   "zh-TW": "翻譯接口未返回譯文",
    "en": "The API returned no translation",
    "ja": "API から訳文が返りませんでした",
    "ko": "API가 번역문을 반환하지 않았습니다",
@@ -30399,7 +30568,7 @@
   {
    "zh": "翻译接口返回 HTTP %1",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "翻譯介面傳回 HTTP %1",
+   "zh-TW": "翻譯接口返回 HTTP %1",
    "en": "The translation API returned HTTP %1",
    "ja": "翻訳 API が HTTP %1 を返しました",
    "ko": "번역 API가 HTTP %1을 반환했습니다",
@@ -30412,7 +30581,7 @@
   {
    "zh": "翻译请求失败，请检查连接",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "翻譯請求失敗，請檢查連線",
+   "zh-TW": "翻譯請求失敗，請檢查連接",
    "en": "Translation request failed. Check the connection.",
    "ja": "翻訳リクエストに失敗しました。接続を確認してください。",
    "ko": "번역 요청에 실패했습니다. 연결을 확인하세요.",
@@ -30425,7 +30594,7 @@
   {
    "zh": "翻译运行库校验失败",
    "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "翻譯執行庫驗證失敗",
+   "zh-TW": "翻譯執行庫校驗失敗",
    "en": "Translation runtime failed verification",
    "ja": "翻訳ランタイムの検証に失敗しました",
    "ko": "번역 런타임 검증 실패",
@@ -30551,6 +30720,32 @@
    "de": "Automatisch",
    "pt-BR": "Automático",
    "ru": "Авто"
+  },
+  {
+   "zh": "自动 (D3D12VA)",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "自動 (D3D12VA)",
+   "en": "Auto (D3D12VA)",
+   "ja": "自動 (D3D12VA)",
+   "ko": "자동 (D3D12VA)",
+   "es": "Auto (D3D12VA)",
+   "fr": "Auto (D3D12VA)",
+   "de": "Auto (D3D12VA)",
+   "pt-BR": "Auto (D3D12VA)",
+   "ru": "Авто (D3D12VA)"
+  },
+  {
+   "zh": "自动 = D3D12VA。Intel 核显花屏时选 D3D11VA（DXVA），仍用核显硬解、不占 CPU。断开后重新连接生效。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "自動 = D3D12VA。Intel 核顯花屏時選 D3D11VA（DXVA），仍用核顯硬解、不占 CPU。斷開後重新連接生效。",
+   "en": "Auto = D3D12VA. If an Intel iGPU shows artifacts, pick D3D11VA (DXVA): still hardware-decoded on the iGPU, no CPU load. Takes effect on the next connection.",
+   "ja": "自動 = D3D12VA。Intel 内蔵 GPU で画面が乱れる場合は D3D11VA（DXVA）を選択。内蔵 GPU のハードウェアデコードのままで CPU を使いません。切断後の再接続で有効になります。",
+   "ko": "자동 = D3D12VA. Intel 내장 GPU에서 화면이 깨지면 D3D11VA(DXVA)를 선택하세요. 내장 GPU 하드웨어 디코드를 그대로 사용하며 CPU를 쓰지 않습니다. 연결을 끊었다 다시 연결하면 적용됩니다.",
+   "es": "Auto = D3D12VA. Si la iGPU Intel muestra artefactos, elige D3D11VA (DXVA): sigue decodificando por hardware en la iGPU sin carga de CPU. Se aplica al reconectar.",
+   "fr": "Auto = D3D12VA. Si l’iGPU Intel affiche des artefacts, choisissez D3D11VA (DXVA) : décodage matériel sur l’iGPU sans charge CPU. Appliqué à la reconnexion.",
+   "de": "Auto = D3D12VA. Bei Artefakten auf Intel-iGPU D3D11VA (DXVA) wählen: weiter Hardware-Decodierung auf der iGPU ohne CPU-Last. Wirkt beim Wiederverbinden.",
+   "pt-BR": "Auto = D3D12VA. Se a iGPU Intel mostrar artefatos, escolha D3D11VA (DXVA): continua decodificando por hardware na iGPU sem carga de CPU. Aplica ao reconectar.",
+   "ru": "Авто = D3D12VA. При артефактах на iGPU Intel выберите D3D11VA (DXVA): аппаратное декодирование на iGPU без нагрузки на CPU. Применяется при переподключении."
   },
   {
    "zh": "自动 = 优先硬解，失败回退软解；下次打开文件生效",
@@ -30919,7 +31114,7 @@
   {
    "zh": "自动识别原文",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "自動辨識原文",
+   "zh-TW": "自動識別原文",
    "en": "Detect source language",
    "ja": "原文の言語を検出",
    "ko": "원문 언어 감지",
@@ -31127,7 +31322,7 @@
   {
    "zh": "自定义 API（OpenAI 兼容）",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "自訂 API（OpenAI 相容）",
+   "zh-TW": "自定義 API（OpenAI 相容）",
    "en": "Custom API (OpenAI compatible)",
    "ja": "カスタム API (OpenAI 互換)",
    "ko": "사용자 지정 API (OpenAI 호환)",
@@ -31136,6 +31331,19 @@
    "de": "Eigene API (OpenAI-kompatibel)",
    "pt-BR": "API personalizada (compatível com OpenAI)",
    "ru": "Свой API (совместимый с OpenAI)"
+  },
+  {
+   "zh": "自定义 TURN（可选）",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "自定義 TURN（可選）",
+   "en": "Custom TURN (optional)",
+   "ja": "カスタム TURN（任意）",
+   "ko": "사용자 지정 TURN (선택)",
+   "es": "TURN personalizado (opcional)",
+   "fr": "TURN personnalisé (optionnel)",
+   "de": "Benutzerdefiniertes TURN (optional)",
+   "pt-BR": "TURN personalizado (opcional)",
+   "ru": "Свой TURN (необязательно)"
   },
   {
    "zh": "自定义…",
@@ -31270,7 +31478,7 @@
   {
    "zh": "自适应 · 现在 %1X",
    "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "自適應 · 目前 %1X",
+   "zh-TW": "自適應 · 現在 %1X",
    "en": "Adaptive · now %1X",
    "ja": "適応 · 現在 %1X",
    "ko": "적응형 · 현재 %1X",
@@ -31296,7 +31504,7 @@
   {
    "zh": "自适应量化：把码率挪到眼睛更敏感的地方（平坦天空、暗部、静止细节），减少色块；仅 NVIDIA（NVENC），显卡支持时再加时间自适应量化 · 默认关闭",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "自適應量化：把碼率挪到眼睛更敏感的地方（平坦天空、暗部、靜止細節），減少色塊；僅 NVIDIA（NVENC），顯示卡支援時再加時間自適應量化 · 預設關閉",
+   "zh-TW": "自適應量化：把位元率挪到眼睛更敏感的地方（平坦天空、暗部、靜止細節），減少色塊；僅 NVIDIA（NVENC），顯示卡支援時再加時間自適應量化 · 預設關閉",
    "en": "Adaptive quantization moves bits to where the eye notices (flat skies, shadows, still detail) and reduces blocking; NVIDIA (NVENC) only, with temporal adaptive quantization added where the card supports it · off by default",
    "ja": "適応量子化：目が敏感な部分（平坦な空、暗部、静止したディテール）にビットレートを回してブロックノイズを減らします。NVIDIA（NVENC）のみ。対応する GPU では時間方向の適応量子化も加えます · 既定はオフ",
    "ko": "적응형 양자화: 눈이 더 민감한 곳(평평한 하늘, 어두운 부분, 정지된 디테일)으로 비트레이트를 옮겨 블록 노이즈를 줄입니다. NVIDIA(NVENC) 전용이며 그래픽 카드가 지원하면 시간적 적응형 양자화도 더합니다 · 기본값 끔",
@@ -32453,7 +32661,7 @@
   {
    "zh": "补帧在这里设置",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "在這裡設定補幀",
+   "zh-TW": "補幀在這裡設定",
    "en": "Set up frame generation",
    "ja": "フレーム生成を設定",
    "ko": "프레임 생성 설정",
@@ -32492,7 +32700,7 @@
   {
    "zh": "补帧模型和档位怎么挑",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "補幀模型和畫質怎麼選",
+   "zh-TW": "補幀模型和檔位怎麼挑",
    "en": "Picking a frame generation model and quality",
    "ja": "フレーム生成のモデルと品質の選び方",
    "ko": "프레임 생성 모델과 품질 고르기",
@@ -32726,7 +32934,7 @@
   {
    "zh": "视频已编码，但保存文件名失败（Windows错误 {}）；下面保留的临时文件就是完整视频",
    "src": "src/engine/VideoExportJob.cpp",
-   "zh-TW": "影片已編碼，但無法儲存檔名（Windows 錯誤 {}）。下方的暫存檔是完整影片",
+   "zh-TW": "影片已編碼，但儲存檔名失敗（Windows錯誤 {}）；下面保留的臨時檔案就是完整影片",
    "en": "Video encoded. Windows error {} blocked renaming. The temporary file contains the complete video.",
    "ja": "エンコードが完了しました。Windows エラー {} により名前変更できません。下記の一時ファイルが完全な動画です。",
    "ko": "인코딩이 완료되었습니다. Windows 오류 {}로 이름을 바꿀 수 없습니다. 아래 임시 파일에 전체 영상이 있습니다.",
@@ -33415,7 +33623,7 @@
   {
    "zh": "语音识别",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "語音辨識",
+   "zh-TW": "語音識別",
    "en": "Speech recognition",
    "ja": "音声認識",
    "ko": "음성 인식",
@@ -33454,7 +33662,7 @@
   {
    "zh": "请使用直接媒体地址。RTP 和 UDP 的 MPEG-TS 地址需要包含端口。",
    "src": "qml/NetworkSourceDialog.qml",
-   "zh-TW": "請使用直接媒體網址。RTP 和 UDP 的 MPEG-TS 網址需要包含連接埠。",
+   "zh-TW": "請使用直接媒體地址。RTP 和 UDP 的 MPEG-TS 地址需要包含端口。",
    "en": "Use a direct media URL. Include a port in RTP and UDP MPEG-TS URLs.",
    "ja": "メディアの直接 URL を入力してください。RTP と UDP の MPEG-TS URL にはポートが必要です。",
    "ko": "직접 미디어 URL을 입력하세요. RTP 및 UDP MPEG-TS URL에는 포트가 필요합니다.",
@@ -33467,7 +33675,7 @@
   {
    "zh": "请先下载本地翻译模型",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "請先下載本機翻譯模型",
+   "zh-TW": "請先下載本地翻譯模型",
    "en": "Download the local translation model first",
    "ja": "先にローカル翻訳モデルをダウンロードしてください",
    "ko": "먼저 로컬 번역 모델을 다운로드하세요",
@@ -33740,7 +33948,7 @@
   {
    "zh": "请填写 HTTPS 接口地址和模型名，本机服务可使用 HTTP",
    "src": "src/ui/LiveTranslation.cpp",
-   "zh-TW": "請填寫 HTTPS 介面位址和模型名稱，本機服務可使用 HTTP",
+   "zh-TW": "請填寫 HTTPS 接口地址和模型名，本機服務可使用 HTTP",
    "en": "Enter an HTTPS API address and model name. Local services can use HTTP.",
    "ja": "HTTPS の API アドレスとモデル名を入力してください。ローカルサービスは HTTP を使用できます。",
    "ko": "HTTPS API 주소와 모델 이름을 입력하세요. 로컬 서비스는 HTTP를 사용할 수 있습니다.",
@@ -33896,7 +34104,7 @@
   {
    "zh": "请输入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 视频地址",
    "src": "src/ui/bridge/Playback.cpp",
-   "zh-TW": "請輸入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 影片網址",
+   "zh-TW": "請輸入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 影片地址",
    "en": "Enter a valid HTTP, HTTPS, RTSP, RTP, or UDP video URL.",
    "ja": "有効な HTTP、HTTPS、RTSP、RTP または UDP の動画 URL を入力してください。",
    "ko": "유효한 HTTP, HTTPS, RTSP, RTP 또는 UDP 영상 URL을 입력하세요.",
@@ -34143,7 +34351,7 @@
   {
    "zh": "调度等待",
    "src": "src/ui/bridge/Status.cpp",
-   "zh-TW": "排程等待",
+   "zh-TW": "調度等待",
    "en": "Scheduling wait",
    "ja": "スケジューリング待ち",
    "ko": "스케줄링 대기",
@@ -34637,7 +34845,7 @@
   {
    "zh": "超分，我常用这一档",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "我常用的超解析設定",
+   "zh-TW": "超解析，我常用這一檔",
    "en": "The super resolution setting I use",
    "ja": "私がよく使う超解像設定",
    "ko": "제가 주로 쓰는 초해상도 설정",
@@ -35781,7 +35989,7 @@
   {
    "zh": "达到任一限制后，在下一关键帧分段。0 表示关闭，设置在下次录制时生效。",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "達到任一限制後，在下一個關鍵影格分段。0 表示關閉，設定於下次錄製時生效。",
+   "zh-TW": "達到任一限制後，在下一關鍵幀分段。0 表示關閉，設定在下次錄制時生效。",
    "en": "Split at the next keyframe after either limit is reached. Enter 0 to disable a limit. Settings apply to the next recording.",
    "ja": "どちらかの上限に達すると、次のキーフレームで分割します。0 は無効です。設定は次回録画から適用されます。",
    "ko": "하나의 한도에 도달하면 다음 키프레임에서 분할합니다. 0은 끄기이며 다음 녹화부터 적용됩니다.",
@@ -36522,7 +36730,7 @@
   {
    "zh": "连接并开始采集",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "連線並開始擷取",
+   "zh-TW": "連接並開始擷取",
    "en": "Connect and start capture",
    "ja": "接続してキャプチャーを開始",
    "ko": "연결하여 캡처 시작",
@@ -36587,7 +36795,7 @@
   {
    "zh": "退出引导",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "關閉導覽",
+   "zh-TW": "退出引導",
    "en": "Exit tour",
    "ja": "ガイドを終了",
    "ko": "가이드 닫기",
@@ -36678,7 +36886,7 @@
   {
    "zh": "选好设备和格式后，在这里连接。先确认预览有画面、采集帧率符合预期，再看专业模式里的增强选项。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "選好裝置和格式後，在這裡連線。先確認預覽有畫面、擷取幀率符合預期，再看專業模式的增強選項。",
+   "zh-TW": "選好裝置和格式後，在這裡連接。先確認預覽有畫面、擷取幀率符合預期，再看專業模式裡的增強選項。",
    "en": "After you choose a device and format, connect here. Check that the preview has a picture and the capture rate looks right, then explore enhancements in Pro mode.",
    "ja": "デバイスと形式を選んだら、ここで接続します。プレビューに映像が出て、想定したフレームレートで取り込めていることを確認してから、プロモードで画質を調整します。",
    "ko": "장치와 형식을 고른 후 여기서 연결하세요. 미리보기에 영상이 표시되고 캡처 프레임률이 예상과 일치하는지 확인한 뒤 전문가 모드에서 화질 개선 기능을 살펴보세요.",
@@ -36704,7 +36912,7 @@
   {
    "zh": "选择你接入的采集卡",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "選擇已連接的擷取卡",
+   "zh-TW": "選擇你接入的擷取卡",
    "en": "Choose your capture card",
    "ja": "キャプチャーカードを選択",
    "ko": "연결한 캡처 카드 선택",
@@ -37744,7 +37952,7 @@
   {
    "zh": "重置",
    "src": "qml/ScreenCropEditor.qml",
-   "zh-TW": "重設",
+   "zh-TW": "重置",
    "en": "Reset",
    "ja": "リセット",
    "ko": "초기화",
@@ -37861,7 +38069,7 @@
   {
    "zh": "锁 30 帧但送帧不均（17/50 ms 交替）的主机游戏，补帧前把真实帧排回均匀间隔；只处理能确认是不均匀送帧的情况，最多晚一个采集刷新 · 需自动去重 · 默认关闭",
    "src": "qml/NodePage.qml",
-   "zh-TW": "鎖 30 幀但送幀不均（17/50 ms 交替）的主機遊戲，補幀前把真實幀排回均勻間隔；只處理能確認是不均勻送幀的情況，最多晚一個擷取更新 · 需自動去重 · 預設關閉",
+   "zh-TW": "鎖 30 幀但送幀不均（17/50 ms 交替）的主機遊戲，補幀前把真實幀排回均勻間隔；只處理能確認是不均勻送幀的情況，最多晚一個擷取刷新 · 需自動去重 · 預設關閉",
    "en": "For console games locked to 30 FPS whose frames arrive unevenly (17/50 ms in turn), puts the real frames back on an even spacing before frames are generated; it only acts on what it can confirm as uneven delivery and shows a frame at most one capture refresh later · needs automatic duplicate removal · off by default",
    "ja": "30 FPS 固定なのにフレームの届き方が不均一（17/50 ms の交互）なゲーム機のゲームで、フレーム生成の前に実フレームを均等な間隔へ並べ直します。不均一な送出と確認できる場合だけ働き、遅れは最大でキャプチャ 1 回のリフレッシュ分です · 自動重複除去が必要 · 既定はオフ",
    "ko": "30 FPS로 고정됐지만 프레임이 고르지 않게 들어오는(17/50 ms 교대) 콘솔 게임에서 프레임 생성 전에 실제 프레임을 고른 간격으로 다시 배치합니다. 고르지 않은 전송으로 확인되는 경우에만 작동하며 최대 캡처 주사 한 번만큼 늦어집니다 · 자동 중복 제거 필요 · 기본값 끔",
@@ -37978,7 +38186,7 @@
   {
    "zh": "阅读 Reddit 原帖",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "閱讀 Reddit 原文",
+   "zh-TW": "閱讀 Reddit 原帖",
    "en": "Read the Reddit post",
    "ja": "Reddit の元の投稿を読む",
    "ko": "Reddit 원문 읽기",
@@ -38446,7 +38654,7 @@
   {
    "zh": "需要改变输出尺寸时，在「超分辨率」里选择算法和目标尺寸。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "需要調整輸出大小時，在「超解析度」選擇演算法和目標大小。",
+   "zh-TW": "需要改變輸出尺寸時，在「超解析度」裡選擇算法和目標尺寸。",
    "en": "In Super resolution, pick an algorithm and a target size when you want to change the output resolution.",
    "ja": "出力解像度を変えたいときは、「超解像」でアルゴリズムと出力サイズを選びます。",
    "ko": "출력 해상도를 바꾸려면 ‘초해상도’에서 알고리즘과 목표 크기를 선택하세요.",
@@ -38992,7 +39200,7 @@
   {
    "zh": "预览并拖拽",
    "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "預覽並拖曳",
+   "zh-TW": "預覽並拖拽",
    "en": "Preview and drag",
    "ja": "プレビューして調整",
    "ko": "미리보기에서 끌기",
@@ -40110,7 +40318,7 @@
   {
    "zh": "首次使用需要在 Windows 中下载语音包，并把字幕语言设成原文语言。",
    "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "首次使用需要在 Windows 中下載語音套件，並將字幕語言設為原文語言。",
+   "zh-TW": "首次使用需要在 Windows 中下載語音包，並把字幕語言設成原文語言。",
    "en": "Download the speech pack in Windows on first use and set its caption language to the source language.",
    "ja": "初回は Windows で音声パックをダウンロードし、字幕の言語を原文の言語に設定してください。",
    "ko": "처음 사용할 때 Windows에서 음성 팩을 다운로드하고 자막 언어를 원문 언어로 설정하세요.",

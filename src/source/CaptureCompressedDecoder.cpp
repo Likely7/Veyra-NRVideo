@@ -62,6 +62,7 @@ struct CaptureCompressedDecoder::Impl {
     AVCodecParameters* parameters = nullptr;
     SwsContext* sws = nullptr;
     bool stream = false;               // setStreamProfile(): PC / Xbox streaming
+    bool preferD3D11VA = false;        // setPreferD3D11VA(): H.264 also takes the D3D11VA path
     bool hardwareRequested = false;
     bool hardware = false;
     bool hardwareChecked = false;
@@ -251,7 +252,7 @@ bool CaptureCompressedDecoder::open(CaptureCodec codec, unsigned width, unsigned
     if (codec != CaptureCodec::Mjpeg && device != nullptr && queue != nullptr) {
         p.hardwareRequested = true;
         bool opened = false;
-        if (p.stream && codec == CaptureCodec::Hevc) {
+        if (p.stream && (codec == CaptureCodec::Hevc || p.preferD3D11VA)) {
             const LUID luid = device->GetAdapterLuid();
             opened = p.decoder.openD3D11VA(p.parameters, 1, 10000000,
                 (uint64_t(uint32_t(luid.HighPart)) << 32) | uint64_t(luid.LowPart), device, true);
@@ -393,7 +394,7 @@ bool CaptureCompressedDecoder::waitingForInput() const { return p_->waiting; }
 void CaptureCompressedDecoder::recoverAtKeyframe() { p_->decoder.recoverAtKeyframe(); }
 const char* CaptureCompressedDecoder::backendName() const
 {
-    if (p_->hardware) return p_->stream && p_->codec == CaptureCodec::Hevc ? "d3d11va" : "d3d12va";
+    if (p_->hardware) return p_->stream && (p_->codec == CaptureCodec::Hevc || p_->preferD3D11VA) ? "d3d11va" : "d3d12va";
     if (p_->hardwareRequested) return "software(after d3d12va)";
     return p_->decoder.opened() ? "software" : "none";
 }
@@ -405,6 +406,7 @@ double CaptureCompressedDecoder::decodeMsAverage() const { return p_->decodeMs; 
 double CaptureCompressedDecoder::convertMsAverage() const { return p_->convertMs; }
 void CaptureCompressedDecoder::close() { p_->close(); }
 void CaptureCompressedDecoder::setStreamProfile(bool enabled) { p_->stream = enabled; }
+void CaptureCompressedDecoder::setPreferD3D11VA(bool enabled) { p_->preferD3D11VA = enabled; }
 bool CaptureCompressedDecoder::hardwareSurface(pipeline::HardwareSurfaceInput& out) const
 {
     const auto& view = p_->decoder.hardwareSurface();
