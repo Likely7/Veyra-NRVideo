@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-23 2.2.1 本地整包
+
+- 核对 `v2.2.0` 到构建提交 `f6ba1f22` 的 119 个提交和 52 个本地分支。2.2.0 后的 23 个开发分支均已进入构建历史。包内包含准星形状保护、播放条按钮布局、节点参数同步和视频降噪的最终提交。 [分支核对](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/branch-inventory.json>) · [双语更新说明](RELEASE_NOTES_2.2.1.md)
+- 在 `E:/项目/Veyra/build/codex-magpie-perf-20261122` 使用 `build-recording-handoff.py --task codex-build-2.2.1-final-20261123 --label 2.2.1 --jobs 2` 构建 25 个目标。播放器、启动器和更新工具的产品版本均为 2.2.1。两套包各对照构建产物核验 108 个 DXIL。9 种语言的缺译和占位符错误均为 0。对应源码和依赖源码的哈希已核对。 [构建回执](<E:/项目/Veyra/logs/codex-build-2.2.1-final-20261123/build-20261123-105845/receipt.json>) · [源码核验](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/SOURCES.json>)
+- 私有配置下运行 25 组回归，全部通过。Qt Quick 257 项，更新组件 29 项，虚拟摄像机 GPU 523 项。初次脚本重复复制刚退出的测试程序时遇到 Windows 文件共享锁，改用独立的测试目录且每个 exe 只复制一次后完整重跑。NVIDIA 和 AMD 便携 ZIP 分别核验 1,806 和 2,430 个文件，从解压结果验证播放和字幕窗口。AMD 安装版完成安装、播放和卸载。NVIDIA 安装器做构建和文件检查。 [回归](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/test-results.json>) · [整包实测](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/packaged-smoke.json>)
+- 用用户的 1440p 游戏录屏执行 VFG 2× 中档和高档。每档生成 159 帧，导出的 60 FPS 结果各解码 320 帧。此前对同一准星实现的逐帧对照显示中央背景锁帧由每档 75 降到 0，片头还有个别单准星残影。采集回归使用夹具，实体采集卡未跑。 [最终导出核验](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/vfg-final-decoded.json>) · [准星逐帧报告](<E:/项目/Veyra/reports/codex-vfg-crosshair-local-blend-20261123/FINAL.md>)
+- 四个成品包、更新索引、校验和及对应源码在 `E:/项目/Veyra/test-packages/codex-build-2.2.1-final-20261123`。在线更新清单使用现有 Ed25519 信任根签名，成品索引签名和两个 ZIP 的 SHA-256 均已复核。两个安装 EXE 的 Authenticode 状态是 `NotSigned`。构建、测试和打包输出在本轮同名 E 盘子目录。临时 staging 和解压副本保留，工具策略拦截了递归清理。 [成品哈希](<E:/项目/Veyra/test-packages/codex-build-2.2.1-final-20261123/SHA256SUMS.txt>) · [资产检验](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/ASSETS.json>)
+
 ## 2026-11-23 视频降噪
 
 - 移植 Magpie 的 Anime4K Bilateral Mean，使用 5×5、单帧 D3D12 计算。亮度和彩噪初始强度分别为 20% 和 60%。列表卡片默认关闭，节点可独立添加，强度可实时调整。列表在源尺寸运行并先于调色、超分和补帧，节点按实际有效接线运行。SDR 与 P010 HDR 使用各自的阈值，保留线性工作域中的高光和负通道。新增一个 8,152 字节的着色器。 [来源及许可证](THIRD_PARTY_NOTICES.md)
