@@ -13,7 +13,8 @@
 
 ### 补帧、超分与画质
 
-- 新增可选的准星/HUD 保护和更精细的框内 HUD 模式。补帧前分离确认的静态图形，再按原位置合成；支持带抗锯齿的宽圆点。用户提供的 1440p、约 30 FPS 原录屏中，VFG 2× 中档和高档各检查 159 个生成帧，筛查命中的准星重影分别由 81、120 张降至 0 张。
+- 新增可选的准星/HUD 保护和更精细的框内 HUD 模式。宽圆点和细十字的保护按准星轮廓合成，避免中央背景出现被锁住的方块。原 1440p 录屏在 VFG 2× 中、高档各检查 159 个生成帧，方块内背景锁帧均从 75 张降到 0 张。开头仍有个别单准星残影，筛查未检出三准星。
+- 新增视频降噪，默认关闭。列表模式在源尺寸先处理，节点模式可添加独立节点。亮度颗粒和彩噪分别调节，支持 SDR 和 P010 HDR。RTX 5070 实播 60 FPS 测试片的降噪 GPU P95 为 1080p 0.114 ms、4K 1.516 ms。
 - ANR FG 可在补帧或组件页面下载官方运行组件并启用。AMD FRC 在符合条件的独显和分辨率使用 SUPER 档。RIFE 提供 DirectML 的 SDR 2×/3×，使用[单独配置的组件和模型](RIFE_DIRECTML.md)。
 - 增加 NVIDIA Image Scaling 与 AMD VideoSR。FSR 修复 HDR/BGRA 等输入、较小光流及双重超分的运动采样。FSR 3.1 兼容和 FSR 4 ML 适用范围按 GPU 能力显示。Ada VFG 中档故障可降档恢复，RX 7000 NR 初始化放到工作线程并记录 HIP 错误。
 - 移植 Magpie 提供的三项优化：FSR 光流按源尺寸和像素单位重采样、减少逐帧的百分位统计、补帧只维护历史时跳过无用的镜头检测。开发者可按需记录有限长度的逐帧诊断。
@@ -22,7 +23,7 @@
 
 - PS5 串流使用独立的 4 MiB Takion UDP 接收缓冲，断流后延时重连并记录 FFmpeg 解码细节。FFmpeg 包含 PS5 256 slice 与 D3D12VA 参考帧池补丁。PSN Account ID 指南改为索尼登录相关途径。Xbox 软件解码保留真实协商尺寸。
 - 实时翻译可选画面文字 OCR、Veyra 音频语音识别或 Windows 字幕。缩短部分语种定稿等待，在积压时有序更新字幕。字幕字号、颜色、阴影与行数可调。本地模型与推理所需组件按需安装。网络 MKV/WebM 内封字幕载入与地址栏粘贴得到修复。
-- 播放列表支持清空历史。增加带鱼屏两侧背景选项，默认黑色。界面动画与部分统计刷新提高到约 60 Hz，修复性能光晕裁切及多处窄窗控件。
+- 播放列表支持清空历史。增加带鱼屏两侧背景选项，默认黑色。界面动画与部分统计刷新提高到约 60 Hz，修复性能光晕裁切及多处窄窗控件。极简和全屏的播放条眼睛按钮留在框内，节点调色滑条松手后显示实际保存的值。
 - 修正虚拟摄像机安装确认时的锁重入崩溃。便携启动器增加现有实例唤起、采集占用恢复和失败日志。新增固定依赖的 Windows CI 构建与 32 位虚拟摄像机打包。
 
 ### 更新方式
@@ -40,7 +41,8 @@
 
 ### Frame generation and upscaling
 
-- Optional crosshair/HUD protection handles wide, antialiased centre dots and can protect marked regions. On the supplied 1440p game clip, the dot-template check flagged 81 medium and 120 high VFG 2× generated frames before the fix and zero after it, out of 159 per mode.
+- Optional HUD and crosshair protection uses the shape of wide centre dots and thin crosshairs to preserve background motion. On the supplied 1440p clip, the background lock check dropped from 75 to 0 out of 159 generated frames for each VFG 2× quality tested (Medium and High). Isolated reticle ghosts still appear at the start of the clip.
+- Added optional video denoise with independent luma and chroma controls for SDR and P010 HDR. List mode runs it at the source resolution, and node mode offers a dedicated stage. It starts disabled. Measured denoise GPU P95 on the RTX 5070 was 0.114 ms at 1080p60 and 1.516 ms at 4K60.
 - ANR FG can fetch its official runtime from the app. Added the AMD FRC SUPER profile for eligible GPUs. RIFE SDR 2×/3× runs through the separately installed DirectML components and models. [RIFE setup](RIFE_DIRECTML.md)
 - Added NVIDIA Image Scaling and AMD VideoSR. Fixed FSR motion resampling, dual upscaling and HDR/format compatibility. Improved VFG quality recovery on Ada and startup diagnostics for experimental RX 7000 NR.
 - Ported Magpie's FSR motion resizing, optional per-frame percentile calculation and reduced work on VFG history-only frames. Added opt-in frame timing traces for diagnosis.
@@ -49,7 +51,7 @@
 
 - PS5 Remote Play uses a 4 MiB Takion receiver buffer, a reconnect delay and better decode logs. Patched FFmpeg retains PS5 slice handling and includes the D3D12VA reference pool fix. Updated PSN Account ID guidance. Xbox software decode respects the negotiated frame size.
 - Live translation accepts on-screen OCR, Veyra audio or Windows captions. Faster ordered speech captions, adjustable size, colour, shadow and line count. Models download on demand. Fixed network container subtitles and network field focus.
-- Clear playlist history in one action, choose optional ultrawide side backgrounds and use the smoother UI cadence. Fixed virtual-camera setup re-entrancy and improved existing-window activation and launch errors. Added a pinned Windows CI build with both virtual-camera architectures.
+- Clear playlist history in one action, choose optional ultrawide side backgrounds and use the smoother UI cadence. The hide button fits in the cinema and fullscreen controls, and node colour sliders show the committed value after release. Fixed virtual-camera setup re-entrancy and improved existing-window activation and launch errors. Added a pinned Windows CI build with both virtual-camera architectures.
 - Use the full installer or portable ZIP to pick up the revised launcher. Start `Veyra.exe` at the package root. In-app updates replace the versioned application directory. Hardware and optional runtimes determine which effects are available.
 
 ## 支持 / Support
