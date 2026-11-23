@@ -5825,6 +5825,19 @@
    "ru": "{} · {} x {} @ {:.3f} fps · {} Коренная BMD"
   },
   {
+   "zh": "{} 初始化失败，已改用兼容设置",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "{} 初始化失敗，已改用相容設定",
+   "en": "{} could not start. Compatible settings are now active.",
+   "ja": "{} の初期化に失敗したため、互換性のある設定に切り替えました。",
+   "ko": "{} 초기화에 실패하여 호환되는 설정을 적용했습니다.",
+   "es": "No se pudo iniciar {}. Se aplicaron ajustes compatibles.",
+   "fr": "{} n’a pas démarré. Des réglages compatibles sont actifs.",
+   "de": "{} konnte nicht gestartet werden. Kompatible Einstellungen sind jetzt aktiv.",
+   "pt-BR": "Não foi possível iniciar {}. As configurações compatíveis estão ativas.",
+   "ru": "Не удалось запустить {}. Применены совместимые настройки."
+  },
+  {
    "zh": "{}×{} · 分块NR（非整图上下文）· 保存保留完整尺寸",
    "src": "src/engine/EngineControllerImage.cpp",
    "zh-TW": "{}×{} · 分塊NR（非整圖上下文）· 儲存保留完整尺寸",
@@ -11533,6 +11546,19 @@
    "ru": "Оригинальное восстановление + естественное сглаживание"
   },
   {
+   "zh": "原画预览 · 正在准备增强",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "原畫預覽 · 正在準備增強",
+   "en": "Original picture · Preparing enhancements",
+   "ja": "元の映像 · 拡張処理を準備中",
+   "ko": "원본 미리보기 · 향상 기능 준비 중",
+   "es": "Imagen original · Preparando mejoras",
+   "fr": "Image d’origine · Préparation des améliorations",
+   "de": "Originalbild · Verbesserungen werden vorbereitet",
+   "pt-BR": "Imagem original · Preparando aprimoramentos",
+   "ru": "Исходное изображение · Подготовка улучшений"
+  },
+  {
    "zh": "去专业模式管理预设…",
    "src": "qml/CineBar.qml",
    "zh-TW": "去專業模式管理預設…",
@@ -13884,6 +13910,19 @@
    "de": "Erweiterung, Frame-Generierung und Export laufen auf \" %1 \"; öffnen Sie das Video nach dem Wechsel",
    "pt-BR": "Melhoria, geração de quadros e exportação executar em \" %1 \"; reabrir o vídeo após a mudança",
    "ru": "Улучшение, генерация кадров и экспорт работают на «%1»; повторно открывайте видео после переключения"
+  },
+  {
+   "zh": "增强初始化失败，继续播放原画。详细原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "增強初始化失敗，繼續播放原畫。詳細原因見日誌",
+   "en": "Enhancements could not start. The original picture is still playing. See the log for details.",
+   "ja": "拡張処理を開始できませんでした。元の映像の再生を続けます。詳細はログを確認してください。",
+   "ko": "향상 기능을 시작하지 못했습니다. 원본 영상은 계속 재생됩니다. 자세한 내용은 로그를 확인하세요.",
+   "es": "No se pudieron iniciar las mejoras. La imagen original sigue en reproducción. Consulta el registro.",
+   "fr": "Les améliorations n’ont pas démarré. La lecture de l’image d’origine continue. Consultez le journal.",
+   "de": "Die Verbesserungen konnten nicht gestartet werden. Das Originalbild läuft weiter. Details stehen im Protokoll.",
+   "pt-BR": "Não foi possível iniciar os aprimoramentos. A imagem original continua em reprodução. Consulte o log.",
+   "ru": "Улучшения не запустились. Воспроизведение исходного изображения продолжается. Подробности в журнале."
   },
   {
    "zh": "增强前底图",
@@ -21750,6 +21789,19 @@
    "de": "Konnte keine playlist lesen; mit einer leeren liste.",
    "pt-BR": "Não foi possível ler a lista; usando uma lista vazia.",
    "ru": "Не мог читать плейлист, используя пустой список."
+  },
+  {
+   "zh": "播放原画",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "播放原畫",
+   "en": "Playing the original picture",
+   "ja": "元の映像を再生中",
+   "ko": "원본 영상 재생 중",
+   "es": "Reproduciendo la imagen original",
+   "fr": "Lecture de l’image d’origine",
+   "de": "Originalbild wird wiedergegeben",
+   "pt-BR": "Reproduzindo a imagem original",
+   "ru": "Воспроизводится исходное изображение"
   },
   {
    "zh": "播放地址",

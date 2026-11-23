@@ -1244,13 +1244,13 @@ include_directories(${FFMPEG_INCLUDE_DIRS})
   file(READ "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}" _amd_nr_graph)
   # A pattern that stops matching must stop the build: the fixture then runs on
   # the real adapter, and every AMD case fails with "requires an AMD adapter".
-  set(_amd_nr_open "ring_.queue(),context_.adapter().vendorId,instance->model.performance))return false;")
+  set(_amd_nr_open "ring_->queue(),context_.adapter().vendorId,instance->model.performance))return false;")
   string(FIND "${_amd_nr_graph}" "${_amd_nr_open}" _amd_nr_open_at)
   if(_amd_nr_open_at EQUAL -1)
     message(FATAL_ERROR "AMD NR identity fixture: the backend open call in EnhanceGraph.cpp changed; update this pattern")
   endif()
   string(REPLACE "${_amd_nr_open}"
-    "ring_.queue(),0x1002 /* identity fixture only */,instance->model.performance))return false;" _amd_nr_graph "${_amd_nr_graph}")
+    "ring_->queue(),0x1002 /* identity fixture only */,instance->model.performance))return false;" _amd_nr_graph "${_amd_nr_graph}")
   file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/amd-nr-graph-test")
   file(WRITE "${CMAKE_BINARY_DIR}/amd-nr-graph-test/EnhanceGraph.cpp" "${_amd_nr_graph}")
   set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${VEYRA_AMD_NR_TEST_GRAPH_SOURCE}")
@@ -1809,7 +1809,7 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   target_link_libraries(veyra_repair_fg_tests PRIVATE veyra_pipeline veyra_sinks veyra_nvof)
 
   # Headless quality-core runner (Playbook R3.3): the phase5 gate's quality
-  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp src/engine/ReplayBuffer.cpp src/engine/MicrophoneCapture.cpp)
+  add_library(veyra_engine STATIC src/engine/EngineController.cpp src/engine/EngineWatchdog.cpp src/engine/PreviewGpuSession.cpp src/engine/CaptureGraphPreparation.cpp src/engine/EngineControllerImage.cpp src/engine/PosterFrame.cpp src/engine/EffectChain.cpp src/engine/PresetLibrary.cpp src/ui/PlayerUiFacade.cpp src/engine/TiledImageProcessor.cpp src/engine/PresetStore.cpp src/engine/VideoPresenter.cpp src/engine/DisplayStateService.cpp src/engine/VideoExportJob.cpp src/engine/ExportStreams.cpp src/engine/ExportQueue.cpp src/engine/ExportJobManager.cpp src/engine/Subtitles.cpp src/engine/FgCompatibilityProbe.cpp src/engine/LiveRecorder.cpp src/engine/ReplayBuffer.cpp src/engine/MicrophoneCapture.cpp)
   target_sources(veyra_pipeline PRIVATE src/guidance/AmdOpticalFlow.cpp
     src/guidance/GpuDisOpticalFlow.cpp third_party/gpu-dis/src/gpu/native_strict_dis_provider.cpp)
   target_include_directories(veyra_pipeline PRIVATE third_party/gpu-dis/src/gpu)

@@ -102,6 +102,9 @@ struct XessPresenter::Impl {
 XessPresenter::XessPresenter():p_(std::make_unique<Impl>()){}
 XessPresenter::~XessPresenter()=default;
 bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,IDXGIFactory2* factory,HWND window,const DXGI_SWAP_CHAIN_DESC1& desc,IDXGISwapChain3** swapchain,uint32_t fgMultiplier,bool lowLatencySleep){
+    return prepare(device,fgMultiplier,lowLatencySleep,false)&&bindSwapChain(queue,factory,window,desc,swapchain);
+}
+bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowLatencySleep,bool buildPipelines){
     if(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_INIT_FAILURE",nullptr,0)){
         log::warn("xess-fg","test-only initialization rejection; runtime not loaded");return false;
     }
@@ -178,6 +181,23 @@ bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,ID
             return false;
         }
     }
+    if(buildPipelines){
+        const auto build=reinterpret_cast<decltype(&xefgSwapChainD3D12BuildPipelines)>(
+            GetProcAddress(p.fgDll,"xefgSwapChainD3D12BuildPipelines"));
+        if(build)return p.check(build(p.fg,nullptr,1,0),"BuildPipelines",true);
+        log::warn("xess-fg","pipeline prebuild unavailable in this runtime");
+    }
+    return true;
+#else
+    (void)device;(void)fgMultiplier;(void)lowLatencySleep;(void)buildPipelines;
+    log::error("xess-fg","Intel XeSS SDK unavailable at build time");return false;
+#endif
+}
+bool XessPresenter::bindSwapChain(ID3D12CommandQueue* queue,IDXGIFactory2* factory,HWND window,
+                                  const DXGI_SWAP_CHAIN_DESC1& desc,IDXGISwapChain3** swapchain){
+#ifdef VEYRA_HAS_XESS
+    auto& p=*p_;
+    if(!p.fg||!p.ll)return false;
     xefg_swapchain_d3d12_init_params_t init{};init.maxInterpolatedFrames=p.requestedGenerated>0?p.requestedGenerated:1;init.uiMode=XEFG_SWAPCHAIN_UI_MODE_AUTO;
     xefg_swapchain_properties_t properties{};
     // The API can wrap a caller-owned native swapchain if one is supplied.
@@ -205,8 +225,8 @@ bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,ID
     }
     return p.check(p.xefgSwapChainD3D12GetSwapChainPtrFn(p.fg,__uuidof(IDXGISwapChain3),reinterpret_cast<void**>(swapchain)),"GetSwapChain",true);
 #else
-    (void)device;(void)queue;(void)factory;(void)window;(void)desc;(void)swapchain;(void)fgMultiplier;(void)lowLatencySleep;
-    log::error("xess-fg","Intel XeSS SDK unavailable at build time");return false;
+    (void)queue;(void)factory;(void)window;(void)desc;(void)swapchain;
+    return false;
 #endif
 }
 uint32_t XessPresenter::beginInput(){

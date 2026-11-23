@@ -586,6 +586,13 @@ public:
     // created between the two phases - static descriptor views are only
     // safe after every allocation in the process has happened.
     bool initialize(const EnhanceGraphDesc& desc);
+    // Startup preparation can use a separate allocator/fence ring on the same
+    // queue. Transfer only a prepared graph whose private ring has drained.
+    bool warmCapture();
+    bool useRenderRing(gfx::CommandSlotRing& ring);
+    // After draining the presenter, retire the provisional graph on a private
+    // ring on the same queue.
+    void shutdownCapturePreview(gfx::CommandSlotRing& retirementRing);
     // Uploads a .cube payload (size^3 RGB triples, 0..1) into the optional 3D
     // LUT the ingest shader samples. Without a LUT the strength stays 0.
     bool setColorLut(const float* rgb,unsigned size,unsigned instance=0);
@@ -925,7 +932,7 @@ private:
     bool createComputePasses();
 
     gfx::D3D12DeviceContext& context_;
-    gfx::CommandSlotRing& ring_;
+    gfx::CommandSlotRing* ring_;
     ngx::NgxCoreCache* coreCache_ = nullptr; // non-owning; device session outlives graph
     EnhanceGraphDesc desc_{};
     bool initialized_ = false;
@@ -1241,6 +1248,7 @@ private:
     int fgMultiFrameMax_ = 0;
 
     // Per-run state.
+    ID3D12DescriptorHeap* captureWarmupHeap_ = nullptr; // borrowed during warmCapture
     uint64_t realFrameIndex_ = 0;
     uint64_t sceneLastSourceId_ = 0; // source id of the last scene-analysed frame
     // Only a successful explicit paused/still-frame reset may seed this.
