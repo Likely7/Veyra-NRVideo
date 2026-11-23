@@ -80,6 +80,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
     Q_PROPERTY(int vfgQuality READ vfgQuality WRITE setVfgQuality NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices NOTIFY effectCapabilitiesChanged)
+    Q_PROPERTY(QVariantMap anrDownload READ anrDownload NOTIFY anrDownloadChanged)
     Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgEnabled READ fgEnabled WRITE setFgEnabled NOTIFY chainChanged)
@@ -713,6 +714,9 @@ public:
     int fgMaxMultiplier() const;
     bool fgEnabled() const;
     void setFgEnabled(bool enabled);
+    QVariantMap anrDownload() const;
+    Q_INVOKABLE void downloadAnr();
+    Q_INVOKABLE void cancelAnrDownload();
     QString submitFpsLabel() const;
     bool captureHalfRateSuggested() const;
     QVariantList fgMultiplierChoices() const;
@@ -1537,6 +1541,7 @@ signals:
     // bindings do not re-evaluate 60 times a second for nothing.
     void snapshotChanged();
     void componentListChanged();
+    void anrDownloadChanged();
     void perfChanged();
     void protectionDrawChanged();
     void presentationChanged();

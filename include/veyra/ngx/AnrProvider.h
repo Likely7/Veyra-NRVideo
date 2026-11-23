@@ -1,5 +1,6 @@
 #pragma once
 #include <nvsdk_ngx.h>
+#include <filesystem>
 #include <memory>
 #include <string>
 
@@ -8,8 +9,10 @@ namespace veyra::ngx {
 // This host adapter is Veyra code; no upstream implementation is copied.
 class AnrProvider {
 public:
+    static constexpr char downloadVersion[] = "FG-V.B15";
     AnrProvider();
     ~AnrProvider();
+    static std::filesystem::path downloadRoot();
     static std::wstring directory(const std::wstring& runtimeRoot);
     static bool available(const std::wstring& runtimeRoot);
     bool open(ID3D12Device*,const std::wstring& runtimeRoot,unsigned& maxGenerated);

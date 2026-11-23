@@ -1769,6 +1769,19 @@
    "ru": "Интерполяция видеокадра, встроенная в драйвер AMD (AMF FRC); он оценивает движение только с двух изображений, зафиксированных в 2X"
   },
   {
+   "zh": "ANR FG 组件已就绪",
+   "src": "src/ui/bridge/AnrDownload.cpp",
+   "zh-TW": "ANR FG 元件已就緒",
+   "en": "ANR FG components are ready",
+   "ja": "ANR FG コンポーネントの準備ができました",
+   "ko": "ANR FG 구성 요소가 준비되었습니다",
+   "es": "Los componentes de ANR FG están listos",
+   "fr": "Les composants ANR FG sont prêts",
+   "de": "Die ANR-FG-Komponenten sind bereit",
+   "pt-BR": "Os componentes do ANR FG estão prontos",
+   "ru": "Компоненты ANR FG готовы"
+  },
+  {
    "zh": "ANR FG（极差质量） · 本地实验",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "ANR FG（極差品質） · 本機實驗",
@@ -6382,6 +6395,19 @@
    "de": "Herunterladen —",
    "pt-BR": "Baixar —",
    "ru": "Скачать —"
+  },
+  {
+   "zh": "下载并启用",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "下載並啟用",
+   "en": "Download and enable",
+   "ja": "ダウンロードして有効化",
+   "ko": "다운로드하고 사용 설정",
+   "es": "Descargar y activar",
+   "fr": "Télécharger et activer",
+   "de": "Herunterladen und aktivieren",
+   "pt-BR": "Baixar e ativar",
+   "ru": "Скачать и включить"
   },
   {
    "zh": "下载并在退出后更新",
@@ -11963,7 +11989,7 @@
   },
   {
    "zh": "取消",
-   "src": "qml/CaptureSourceDialog.qml",
+   "src": "qml/AnrDownloadRow.qml",
    "zh-TW": "取消",
    "en": "Cancel",
    "ja": "キャンセル",
@@ -28549,6 +28575,19 @@
    "de": "Klicken Sie auf einen Schieberegler und verwenden Sie ← → um durch diesen Schritt anzupassen; Esc oder klicken Sie auf das Bild gibt die Pfeiltasten zurück zu suchen",
    "pt-BR": "Clique em uma barra deslizante e use ← → para ajustar por este passo; Esc ou clicando na imagem dá as setas de volta à procura",
    "ru": "Нажмите на ползунок и используйте ← → для настройки на этом шаге; Esc или нажатие на картинку возвращает ключи стрелки к поиску"
+  },
+  {
+   "zh": "点击从 Apex Compute 下载并启用（约 3.2 MB）",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "按一下即可從 Apex Compute 下載並啟用（約 3.2 MB）",
+   "en": "Download from Apex Compute and enable (about 3.2 MB)",
+   "ja": "Apex Compute からダウンロードして有効化（約 3.2 MB）",
+   "ko": "Apex Compute에서 다운로드하고 사용 설정 (약 3.2 MB)",
+   "es": "Descargar desde Apex Compute y activar (aprox. 3,2 MB)",
+   "fr": "Télécharger depuis Apex Compute et activer (environ 3,2 Mo)",
+   "de": "Von Apex Compute herunterladen und aktivieren (ca. 3,2 MB)",
+   "pt-BR": "Baixar da Apex Compute e ativar (cerca de 3,2 MB)",
+   "ru": "Скачать с Apex Compute и включить (около 3,2 МБ)"
   },
   {
    "zh": "点击右侧按键，再按下新的组合键即可重新绑定；Esc 取消。",

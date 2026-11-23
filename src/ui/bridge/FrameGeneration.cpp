@@ -32,8 +32,10 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
     for (auto& choice : choices) {
         auto row = choice.toMap();
         const auto cap = caps.value(row.value("id").toString()).toMap();
-        row["disabled"] = !cap.value("available").toBool();
-        row["note"] = cap.value("reason");
+        const bool downloadable = cap.value("downloadable").toBool();
+        row["download"] = downloadable;
+        row["disabled"] = !cap.value("available").toBool() && !downloadable;
+        row["note"] = downloadable ? tr("点击从 Apex Compute 下载并启用（约 3.2 MB）") : cap.value("reason");
         choice = row;
     }
     return choices;
@@ -76,6 +78,7 @@ int xessCeiling(const engine::PlayerSnapshot& s) {
 void QmlPlayerBridge::setFgBackendName(const QString& value) {
     if(value!=QLatin1String("anr")&&value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")&&value!=QLatin1String("amdfrc")&&value!=QLatin1String("rife")){emit notice(tr("未知补帧后端"),true);return;}
     const auto availability = effectCapabilities().value(value).toMap();
+    if (availability.value("downloadable").toBool()) { downloadAnr(); return; }
     if (!availability.value("available").toBool()) { emit notice(availability.value("reason").toString(), true); emit settingsChanged(); return; }
     auto s = settings();
     const auto want = value == QLatin1String("anr") ? engine::FrameGenerationBackend::Anr

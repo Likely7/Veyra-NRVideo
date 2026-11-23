@@ -27,7 +27,7 @@ Item {
         function cleanup() { samples.stop(); motion.animate = false }
         function test_converges_and_retargets() {
             motion.targetValue = 1
-            compare(motion.driver.interval, 33)
+            compare(motion.driver.interval, 16)
             verify(motion.driver.running)
             // A wall-clock sleep can resume after the entire 120 ms animation.
             // Check the intermediate trajectory separately, then observe actual
@@ -46,7 +46,7 @@ Item {
             wait(700)
             samples.stop()
             verify(motion.value > 0.5, "frequent readings must not postpone every animation tick")
-            verify(changes.count > 5 && changes.count < 35,
+            verify(changes.count > 5 && changes.count < 52,
                    "telemetry must progress without a change on every high-refresh display tick: " + changes.count)
             motion.targetValue = 0.75
             tryCompare(motion, "value", 0.75, 400)

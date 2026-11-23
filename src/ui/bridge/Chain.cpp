@@ -392,7 +392,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if(type==QLatin1String("frame-generation")&&
        !effectAvailability(type).value("available").toBool()){
         for(const auto& choice:fgBackendChoices()){
-            const auto row=choice.toMap();if(row.value("disabled").toBool())continue;
+            const auto row=choice.toMap();if(row.value("disabled").toBool()||row.value("download").toBool())continue;
             return addEffect(row.value("id").toString()+QStringLiteral("-fg"));
         }
     }

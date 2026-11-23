@@ -1910,6 +1910,7 @@ VPage {
                                     onPicked: id => veyra.fgBackendName = id
                                 }
                             }
+                            AnrDownloadRow {}
                             VRow {
                                 label: qsTr("补帧运动来源")
                                 visible: veyra.fgBackendName !== "vfg"

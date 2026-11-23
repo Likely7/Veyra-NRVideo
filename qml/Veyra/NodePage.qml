@@ -1652,6 +1652,7 @@ VPage {
                         onPicked: id => veyra.fgBackendName = id
                     }
                 }
+                AnrDownloadRow {}
                 VRow {
                     label: qsTr("倍率")
                     // 档位与作者原版一致（只有数字档）；自动选择由下方独立开关控制。

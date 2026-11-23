@@ -37,6 +37,7 @@ struct ModelAsset {
     int stripComponents = 0;
     bool verifyExisting = false;
     std::span<const ModelSource> fallbacks{};
+    bool allowAdditionalFiles = false;
 };
 
 class ModelAssets final : public QObject {

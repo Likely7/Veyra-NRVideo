@@ -1383,10 +1383,26 @@ VPage {
                         Repeater {
                             model: veyra.componentList
                             delegate: VRow {
+                                id: componentRow
                                 required property var modelData
+                                readonly property bool anr: modelData.id === "anr"
+                                readonly property var download: veyra.anrDownload || ({})
+                                readonly property bool downloading: anr && !!download.active
+                                readonly property bool downloadable: anr
+                                    && !!((veyra.effectCapabilities || {}).anr || {}).downloadable
                                 label: modelData.name
-                                hint: modelData.detail
+                                hint: downloading ? download.status : modelData.detail
+                                value: downloading ? download.percent + "%" : ""
+                                VButton {
+                                    visible: componentRow.downloading || componentRow.downloadable
+                                    text: componentRow.downloading ? qsTr("取消") : qsTr("下载并启用")
+                                    onClicked: {
+                                        if (componentRow.downloading) veyra.cancelAnrDownload()
+                                        else veyra.downloadAnr()
+                                    }
+                                }
                                 VTag {
+                                    visible: !componentRow.downloading && !componentRow.downloadable
                                     text: modelData.experimental ? qsTr("实验") : (modelData.loaded ? qsTr("已加载") : qsTr("未加载"))
                                     kind: modelData.experimental ? "exp" : (modelData.loaded ? "ok" : "")
                                 }

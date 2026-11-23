@@ -81,9 +81,12 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
-    const auto anrDirectory=ngx::AnrProvider::directory(runtime::localRuntimeDirectory().wstring());
-    out<<QVariantMap{{"name",QStringLiteral("ANR FG")},{"detail",QString::fromStdWString(anrDirectory)},
-        {"loaded",ngx::AnrProvider::available(runtime::localRuntimeDirectory().wstring())},{"experimental",true}};
+    const auto runtimeRoot = runtime::localRuntimeDirectory().wstring();
+    const bool anrInstalled = ngx::AnrProvider::available(runtimeRoot);
+    const auto anrDirectory = anrInstalled ? ngx::AnrProvider::directory(runtimeRoot) :
+        (ngx::AnrProvider::downloadRoot() / ngx::AnrProvider::downloadVersion).wstring();
+    out<<QVariantMap{{"id",QStringLiteral("anr")},{"name",QStringLiteral("ANR FG")},
+        {"detail",QString::fromStdWString(anrDirectory)},{"loaded",anrInstalled},{"experimental",true}};
     // AMD FRC: the AMF runtime of the AMD driver, never shipped with Veyra.
     wchar_t systemDirectory[MAX_PATH]{};GetSystemDirectoryW(systemDirectory,MAX_PATH);
     out<<QVariantMap{{"name",QStringLiteral("AMD FRC (AMF)")},{"detail",QString::fromWCharArray(systemDirectory)+QStringLiteral("\\amfrt64.dll")},

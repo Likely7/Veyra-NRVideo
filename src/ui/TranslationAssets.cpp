@@ -83,10 +83,15 @@ bool verifyFile(const QString& path, qint64 bytes, const char* sha256, bool cont
 bool verifyMembers(const QString& directory, const ModelAsset& asset, bool contents) {
     if (!regularPath(directory, true)) return false;
     const QDir dir(directory);
-    if (dir.entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot).size()
+    if (!asset.allowAdditionalFiles &&
+        dir.entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot).size()
         != qsizetype(asset.members.size())) return false;
     return std::ranges::all_of(asset.members, [&](const ModelFile& file) {
-        return verifyFile(dir.filePath(QString::fromLatin1(file.name)), file.bytes, file.sha256, contents);
+        const auto name = QString::fromLatin1(file.name);
+        for (auto parent = name.lastIndexOf(u'/'); parent >= 0; parent = name.lastIndexOf(u'/', parent - 1)) {
+            if (!parent || !regularPath(dir.filePath(name.left(parent)), true)) return false;
+        }
+        return verifyFile(dir.filePath(name), file.bytes, file.sha256, contents);
     });
 }
 

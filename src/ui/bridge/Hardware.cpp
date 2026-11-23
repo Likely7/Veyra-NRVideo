@@ -114,7 +114,11 @@ static QVariantMap scanEffectCapabilities() {
         QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add(srId(engine::kVideoSrAmf10), H::AmdFrc, gfx::AmfVideoSrBackend::available(),
         QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
-    add("anr", H::CrossVendor, ngx::AnrProvider::available(nr.wstring()), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    const bool anrInstalled = ngx::AnrProvider::available(nr.wstring());
+    add("anr", H::CrossVendor, anrInstalled, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    auto anr = out.value("anr").toMap();
+    anr["downloadable"] = !anrInstalled && ui::hardwareSupports(H::CrossVendor, gpu);
+    out["anr"] = anr;
     add("dlss", H::Nvidia, exists(nr / "nvngx_dlssg.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"));
     add("xess", H::CrossVendor, exists(data / "intel/experimental/libxess_fg.dll") && exists(data / "intel/experimental/libxell.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
