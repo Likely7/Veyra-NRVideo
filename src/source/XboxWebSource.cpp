@@ -135,10 +135,13 @@ json gamepadStateJson(const remoteplay::ControllerState& s) {
         {"LeftShoulder", button(B::L1)}, {"RightShoulder", button(B::R1)},
         {"LeftThumb", button(B::L3)}, {"RightThumb", button(B::R3)},
         {"Menu", button(B::Options)}, {"View", button(B::Share)}, {"Nexus", button(B::PS)},
+        // SDL sticks are down-positive. The player's Packet.ts already negates
+        // the Y axes on the wire (-input.LeftThumbYAxis), so pass the SDL value
+        // through unchanged; negating here too would invert up/down in game.
         {"LeftThumbXAxis", active ? axis(s.leftX) : 0.0},
-        {"LeftThumbYAxis", active ? -axis(s.leftY) : 0.0},
+        {"LeftThumbYAxis", active ? axis(s.leftY) : 0.0},
         {"RightThumbXAxis", active ? axis(s.rightX) : 0.0},
-        {"RightThumbYAxis", active ? -axis(s.rightY) : 0.0},
+        {"RightThumbYAxis", active ? axis(s.rightY) : 0.0},
         {"LeftTrigger", active ? double(s.l2) / 255.0 : 0.0},
         {"RightTrigger", active ? double(s.r2) / 255.0 : 0.0},
     };

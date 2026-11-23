@@ -39,13 +39,14 @@ json gamepadStateJson(const remoteplay::ControllerState& s) {
     btn(B::L1, "LeftShoulder"); btn(B::R1, "RightShoulder");
     btn(B::L3, "LeftThumb"); btn(B::R3, "RightThumb");
     btn(B::Options, "Menu"); btn(B::Share, "View"); btn(B::PS, "Nexus");
-    const auto flip = [](int16_t v) { return v == INT16_MIN ? int16_t(INT16_MAX) : int16_t(-v); };
     const auto clamp = [](int16_t v) { return v < -32767 ? int16_t(-32767) : v; };
     const auto axis = [&](int16_t v) { return double(clamp(v)) / 32767.0; };
+    // SDL sticks are down-positive; Packet.ts negates Y on the wire, so the
+    // InputFrame Y must pass the SDL value through UNCHANGED (no flip here).
     st["LeftThumbXAxis"] = axis(s.leftX);
-    st["LeftThumbYAxis"] = double(flip(s.leftY)) / 32767.0;
+    st["LeftThumbYAxis"] = axis(s.leftY);
     st["RightThumbXAxis"] = axis(s.rightX);
-    st["RightThumbYAxis"] = double(flip(s.rightY)) / 32767.0;
+    st["RightThumbYAxis"] = axis(s.rightY);
     st["LeftTrigger"] = double(s.l2) / 255.0;
     st["RightTrigger"] = double(s.r2) / 255.0;
     return st;
@@ -66,20 +67,27 @@ remoteplay::ControllerState stateFromJson(const json& st) {
     bit("Menu", B::Options); bit("View", B::Share); bit("Nexus", B::PS);
     const auto unaxis = [](double v) { return int16_t(v * 32767.0); };
     s.leftX = unaxis(st.value("LeftThumbXAxis", 0.0));
-    s.leftY = int16_t(-unaxis(st.value("LeftThumbYAxis", 0.0)));   // undo the flip
+    s.leftY = unaxis(st.value("LeftThumbYAxis", 0.0));
     s.rightX = unaxis(st.value("RightThumbXAxis", 0.0));
-    s.rightY = int16_t(-unaxis(st.value("RightThumbYAxis", 0.0)));
+    s.rightY = unaxis(st.value("RightThumbYAxis", 0.0));
     s.l2 = uint8_t(st.value("LeftTrigger", 0.0) * 255.0);
     s.r2 = uint8_t(st.value("RightTrigger", 0.0) * 255.0);
     return s;
 }
 
+// Simulate the player's Packet.ts wire serialization: X as-is, Y NEGATED.
+int16_t wireX(double v) { return int16_t(v * 32767.0); }
+int16_t wireY(double v) { return int16_t(-v * 32767.0); }
+
+// The v2 path (SDL -> InputFrame -> Packet.ts wire) must produce the SAME
+// stick bytes as v1's gamepadFromController for the same SDL state.
 void roundTrip(const remoteplay::ControllerState& in, const char* what) {
     const json st = gamepadStateJson(in);
-    const auto back = stateFromJson(st);
-    const auto a = xbox::gamepadFromController(in);
-    const auto b = xbox::gamepadFromController(back);
-    check(a == b, what);
+    const auto v1 = xbox::gamepadFromController(in);
+    check(wireX(st.value("LeftThumbXAxis", 0.0)) == v1.leftX &&
+          wireY(st.value("LeftThumbYAxis", 0.0)) == v1.leftY &&
+          wireX(st.value("RightThumbXAxis", 0.0)) == v1.rightX &&
+          wireY(st.value("RightThumbYAxis", 0.0)) == v1.rightY, what);
 }
 } // namespace
 
@@ -98,19 +106,21 @@ int main() {
         roundTrip(s, "single button round-trip");
     }
 
-    // Y-axis sign: SDL down-positive must become JS up-positive and back.
+    // Y-axis sign: SDL down-positive passes through to InputFrame unchanged;
+    // Packet.ts negates it on the wire, so SDL up -> wire up (positive).
     remoteplay::ControllerState up; up.inputActive = true; up.leftY = -32767; up.rightY = -20000;
     {
         const json st = gamepadStateJson(up);
-        check(st["LeftThumbYAxis"].get<double>() > 0.99, "SDL up (negative) -> JS positive ~+1");
-        check(st["RightThumbYAxis"].get<double>() > 0.6, "SDL right up -> JS positive");
-        roundTrip(up, "up sticks round-trip");
+        check(st["LeftThumbYAxis"].get<double>() < -0.99, "SDL up (negative) -> InputFrame negative (pass-through)");
+        check(wireY(st["LeftThumbYAxis"].get<double>()) > 32000, "SDL up -> wire positive (up) after Packet.ts negate");
+        roundTrip(up, "up sticks match v1 wire bytes");
     }
     remoteplay::ControllerState down; down.inputActive = true; down.leftY = 32767; down.rightY = 12345;
     {
         const json st = gamepadStateJson(down);
-        check(st["LeftThumbYAxis"].get<double>() < -0.99, "SDL down (positive) -> JS negative ~-1");
-        roundTrip(down, "down sticks round-trip");
+        check(st["LeftThumbYAxis"].get<double>() > 0.99, "SDL down (positive) -> InputFrame positive (pass-through)");
+        check(wireY(st["LeftThumbYAxis"].get<double>()) < -32000, "SDL down -> wire negative (down) after Packet.ts negate");
+        roundTrip(down, "down sticks match v1 wire bytes");
     }
 
     // INT16_MIN edge: flip must saturate to INT16_MAX, not overflow.
