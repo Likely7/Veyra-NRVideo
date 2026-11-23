@@ -350,6 +350,7 @@ void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerO
 #endif
 void EngineController::stop(){
     {std::lock_guard lock(mutex_);stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;
+     snapshot_.captureEnhancementLoading=false;
      if(!busy_)pending_=[this]{prewarmed_.reset();};}
     wake_.notify_one();
 }
@@ -1172,7 +1173,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 captureSource.setAudioSync(unsigned(options.settings.audioSync),options.settings.audioOffsetMs);
                 if(!captureSource.start()){status(captureSource.errorMessage().empty()?L"无法启动采集，请查看诊断":captureSource.errorMessage(),true);break;}
             }
-            {std::lock_guard lock(mutex_);snapshot_.duration=duration;snapshot_.nominalSourceFps=isImage?0:activeSource->info().averageFps;snapshot_.running=true;snapshot_.nrPreparing=graph->nrPreparing();snapshot_.transport=TransportState::Playing;snapshot_.image=isImage;snapshot_.capture=isCapture;snapshot_.applied=options.snapshot();snapshot_.desired=desired_;}
+            {std::lock_guard lock(mutex_);snapshot_.duration=duration;snapshot_.nominalSourceFps=isImage?0:activeSource->info().averageFps;snapshot_.running=true;snapshot_.nrPreparing=graph->nrPreparing();snapshot_.transport=TransportState::Playing;snapshot_.image=isImage;snapshot_.capture=isCapture;snapshot_.applied=options.snapshot();snapshot_.desired=desired_;
+             snapshot_.captureEnhancementLoading=captureStarting;}
             status(captureStarting?L"原画预览 · 正在准备增强":isImage?L"图片已增强，可保存PNG/JPEG":std::format(L"{} | 输入 {}×{} / 底图 {}×{} / NR {}×{} / 光流 {}×{} / FG与输出 {}×{} | {}",isRemote?L"PS5 串流":isMoonlight?L"PC 串流":isXbox?L"Xbox 串流":isCapture?L"实时采集":L"播放",width,height,gd.workWidth,gd.workHeight,gd.nrWidth,gd.nrHeight,graph->flowWidth(),graph->flowHeight(),gd.workWidth,gd.workHeight,gd.nrBeforeSr?L"低延迟 · NR先行后超分":gd.nrWidth<gd.workWidth?L"实时内部处理并回填":L"原生NR（性能成本较高）"));
             pipeline::EnhanceGraph::FrameOutputs out;bool reset=true,hasOutput=false,audioRebuffering=false,seekPreviewPending=false;
             bool initialRemoteFramePending=isStream;
@@ -2089,7 +2091,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // after a successful rebuild. Keep its status acknowledgement
             // until the first successfully processed frame, across loop turns.
             bool pendingSettingsAck=false;
-            OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();}}};
+            OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();snapshot_.captureEnhancementLoading=false;}}};
             while(!stop_){
                 watchdog_->beat();
                 if(testHangMs&&testHangsLeft&&frames>=testHangAt){
@@ -2837,6 +2839,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(desired_.revision==target.revision)desiredNodeOrder_=options.nodeOrder;
                         snapshot_.desired=desired_;snapshot_.backendWarning=startupWarning;
                         snapshot_.status=L"播放原画";snapshot_.applying=desired_!=options.snapshot();
+                        snapshot_.captureEnhancementLoading=false;
                     }
                 }
                 if(!captureStarting){
@@ -3829,11 +3832,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                             rawFirstPresent,item.identity.settingsRevision,item.identity.sourceFrameId));
                                     }
                                 }
-                                if(firstEnhancedRevision&&item.identity.settingsRevision==firstEnhancedRevision&&!generated){
-                                    log::info("capture-startup",std::format("event=enhanced-first host={} revision={} source={} rawMs={:.3f} switchGapMs={:.3f}",
-                                        presentEndHost,firstEnhancedRevision,item.identity.sourceFrameId,
-                                        double(presentEndHost-rawFirstPresent)/10000,double(presentEndHost-lastRawPresent)/10000));
+                                if(firstEnhancedRevision&&!generated){
+                                    if(item.identity.settingsRevision==firstEnhancedRevision)
+                                        log::info("capture-startup",std::format("event=enhanced-first host={} revision={} source={} rawMs={:.3f} switchGapMs={:.3f}",
+                                            presentEndHost,firstEnhancedRevision,item.identity.sourceFrameId,
+                                            double(presentEndHost-rawFirstPresent)/10000,double(presentEndHost-lastRawPresent)/10000));
                                     firstEnhancedRevision=0;
+                                    std::lock_guard lock(mutex_);
+                                    if(snapshot_.sessionId==runSessionId)snapshot_.captureEnhancementLoading=false;
                                 }
                                 cadence.submitted(optionalNow);
                                 cadence.rateSubmitted(optionalNow,capInterval);

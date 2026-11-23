@@ -299,6 +299,11 @@ VPage {
             width: head.compact ? head.width : Math.max(0, head.width - actionViewport.width - 16)
             height: 32
             spacing: 8
+            readonly property real loadingSpace: sourceLoading.visible ? sourceLoading.implicitWidth + spacing : 0
+            // The source button uses 68 px for its two icons and padding.
+            readonly property real titleAndFormatSpace: width - 68 - spacing * (formatTag.visible ? 2 : 1)
+                - loadingSpace - (outputTag.visible ? outputTag.implicitWidth + spacing : 0)
+            readonly property real formatLimit: Math.max(40, titleAndFormatSpace - 32)
 
             // pages-pro.js data-srcbtn: what is playing, with a chevron for the menu.
             VButton {
@@ -308,8 +313,11 @@ VPage {
                         : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
                 text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
                 tip: text
-                maxTextWidth: Math.max(64, Math.min(260, sourceInfo.width - formatTag.implicitWidth
-                                                  - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
+                maxTextWidth: sourceLoading.visible
+                    ? Math.max(32, Math.min(260, sourceInfo.titleAndFormatSpace
+                        - (formatTag.visible ? Math.min(formatTag.implicitWidth, sourceInfo.formatLimit) : 0)))
+                    : Math.max(64, Math.min(260, sourceInfo.width - formatTag.implicitWidth
+                                           - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
                 trailingIcon: "down"
                 onClicked: sourceMenu.openAt(this, "down")
             }
@@ -318,11 +326,73 @@ VPage {
                 id: formatTag
                 objectName: "pro-format-tag"
                 text: veyra.sourceFormatText.length > 0 ? veyra.sourceFormatText : qsTr("未打开")
+                visible: veyra.openingSource !== true || veyra.sourceFormatText.length > 0
+                Layout.maximumWidth: sourceLoading.visible ? sourceInfo.formatLimit : Infinity
+                elideText: sourceLoading.visible
+                ToolTip.visible: formatHover.hovered && width < implicitWidth
+                ToolTip.text: text
+                HoverHandler { id: formatHover }
+            }
+            Item {
+                id: sourceLoading
+                objectName: "pro-source-loading"
+                visible: veyra.openingSource === true || veyra.captureEnhancementLoading === true
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: Math.max(68, Math.min(144, loadingLabel.implicitWidth, sourceInfo.width * 0.36))
+                implicitHeight: loadingLabel.implicitHeight + 3 + loadingProgress.height
+
+                Text {
+                    id: loadingLabel
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    text: veyra.captureEnhancementLoading === true ? qsTr("正在准备增强") : qsTr("正在打开")
+                    color: Theme.t2
+                    font.family: Theme.fontUi
+                    font.pixelSize: 11
+                    elide: Text.ElideRight
+                }
+
+                Basic.ProgressBar {
+                    id: loadingProgress
+                    objectName: "pro-source-loading-progress"
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 4
+                    padding: 0
+                    indeterminate: true
+                    Accessible.name: loadingLabel.text
+                    background: Rectangle { radius: 2; color: Theme.stroke2 }
+                    contentItem: Item {
+                        clip: true
+                        Rectangle {
+                            width: parent.width * 0.42
+                            height: parent.height
+                            radius: 2
+                            color: Theme.accent
+                            x: Theme.reduced ? (parent.width - width) / 2
+                                             : travel * (parent.width + width) - width
+                            property real travel: 0
+                            NumberAnimation on travel {
+                                from: 0; to: 1
+                                duration: 1450
+                                loops: Animation.Infinite
+                                running: loadingProgress.visible && !Theme.reduced
+                            }
+                        }
+                    }
+                }
+                ToolTip.visible: loadingHover.hovered && loadingLabel.truncated
+                ToolTip.text: loadingLabel.text
+                HoverHandler { id: loadingHover }
             }
             VTag {
                 id: outputTag
                 objectName: "pro-output-summary"
                 visible: veyra.outputSummary.length > 0
+                    && (!sourceLoading.visible || sourceInfo.width >= 100 + sourceInfo.spacing * 4
+                        + sourceLoading.implicitWidth + formatTag.implicitWidth + implicitWidth)
                 text: qsTr("输出 ") + veyra.outputSummary.replace("x", "×")
             }
             Item { Layout.fillWidth: true }

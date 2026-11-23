@@ -1,5 +1,12 @@
 # 当前工作日志
 
+## 2026-11-22 专业模式片源加载进度
+
+- 在专业模式顶部片源状态旁显示加载条，从打开片源切到增强准备。冷启动状态取自引擎快照，第一帧增强送显后清除。停采和失败回退时收起。减少动态效果开启时显示静态标记。加载条只改变横向标题分配，顶部高度保持。
+- `scripts/acceptance/build-recording-handoff.py --task codex-pro-loading-progress-20261122 --jobs 2` 构建 UI 和 Qt Quick Test。最终日志 [compile.log](<E:/项目/Veyra/logs/codex-pro-loading-progress-20261122/build-20261122-230328/compile.log>)。定位并修复了 QML `Column` 的只读 `implicitWidth` 赋值，改用可设置尺寸的 `Item`。同步核对 107 个着色器和新版专业模式 QML。
+- 使用私有配置和持续运动的 WGC 源实测。中文 720×600 以及英文 1280×800 的片源行显示、动画、隐藏及行内几何通过。德文减少动态效果和停采、注入 NR 故障后的原画回退通过。九种语言零缺失、零占位符错误。 [实测记录](<E:/项目/Veyra/reports/codex-pro-loading-progress-20261122/FINAL.md>)
+- Qt Quick 全量 250 通过、2 失败、1 跳过。两项美颜末层删除断言在修改前的 QML 同样失败，均复现实际剩 1 层、预期 0 层。跳过项是软件渲染专用的菜单弹簧测试。 [本轮 Qt Quick 记录](<E:/项目/Veyra/logs/codex-pro-loading-progress-20261122/quick-report-patched.txt>) · [修改前对照](<E:/项目/Veyra/logs/codex-pro-loading-progress-20261122/quick-report-baseline-beauty.txt>)
+
 ## 2026-11-22 采集冷启动先播原画
 
 - 采集卡和屏幕采集先初始化原画预览。后台在同一设备与生产队列上用独立命令槽准备增强图、首帧和呈现管线，当前采集源继续送帧。有 XeSS 或 SDR 转 HDR 交换链变更时，保留原画到新交换链第一次正常送显。加载中设置或输入变化会淘汰旧候选。

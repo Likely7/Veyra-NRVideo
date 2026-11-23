@@ -89,6 +89,7 @@ struct PlayerSnapshot {
     // from the request (HDR screenshots are JXR); no UI-thread file polling.
     std::wstring savedFramePath;
     EnhancementSettings desired,applied;bool applying=false;
+    bool captureEnhancementLoading=false;
     bool nrActive=false,srActive=false,fgActive=false;
     bool nrAutoActive=false;
     uint32_t nrAutoPercent=0,nrAutoWidth=0,nrAutoHeight=0;

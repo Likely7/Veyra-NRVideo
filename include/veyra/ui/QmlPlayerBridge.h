@@ -296,6 +296,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool timelineSeekable READ timelineSeekable NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantMap liveTimeshift READ liveTimeshift NOTIFY snapshotChanged)
     Q_PROPERTY(bool openingSource READ openingSource NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureEnhancementLoading READ captureEnhancementLoading NOTIFY snapshotChanged)
     Q_PROPERTY(bool running READ running NOTIFY snapshotChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY snapshotChanged)
     Q_PROPERTY(bool failed READ failed NOTIFY snapshotChanged)
@@ -947,6 +948,7 @@ public:
     bool isCapture() const;
     bool hasSource() const;
     bool openingSource() const;
+    bool captureEnhancementLoading() const;
     double position() const;
     double duration() const;
     double progress() const;

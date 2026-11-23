@@ -53,7 +53,8 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.duration == b.duration && a.frames == b.frames && a.generated == b.generated &&
         a.captureHalfRateSuggested == b.captureHalfRateSuggested &&
         a.status == b.status && a.savedFramePath == b.savedFramePath && a.backendWarning == b.backendWarning && a.nrPreparing == b.nrPreparing && a.sourceNotice == b.sourceNotice &&
-        a.applying == b.applying && a.rejectedRevision == b.rejectedRevision &&
+        a.applying == b.applying && a.captureEnhancementLoading == b.captureEnhancementLoading &&
+        a.rejectedRevision == b.rejectedRevision &&
         a.desired == b.desired && a.applied == b.applied && a.nrActive == b.nrActive &&
         a.srActive == b.srActive && a.fgActive == b.fgActive && a.failed == b.failed &&
         a.volume == b.volume && a.muted == b.muted && a.selectedAudioTrack == b.selectedAudioTrack &&

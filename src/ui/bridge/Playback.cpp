@@ -22,6 +22,7 @@ bool QmlPlayerBridge::isImage() const { return impl_->snapshot.image; }
 bool QmlPlayerBridge::isCapture() const { return impl_->snapshot.capture; }
 bool QmlPlayerBridge::hasSource() const { return impl_->snapshot.running || impl_->snapshot.image; }
 bool QmlPlayerBridge::openingSource() const { return impl_->openingSource; }
+bool QmlPlayerBridge::captureEnhancementLoading() const { return impl_->snapshot.captureEnhancementLoading && !impl_->snapshot.failed; }
 double QmlPlayerBridge::position() const { return impl_->snapshot.position; }
 double QmlPlayerBridge::duration() const { return impl_->snapshot.duration; }
 double QmlPlayerBridge::progress() const {

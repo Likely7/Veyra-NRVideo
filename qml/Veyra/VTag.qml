@@ -5,6 +5,7 @@ Rectangle {
     id: tag
     property string text: ""
     property string kind: ""   // "" | "exp" | "acc" | "warn" | "ok"
+    property bool elideText: false
     implicitWidth: tagText.implicitWidth + 14
     implicitHeight: Theme.tagHeight
     radius: 6
@@ -17,6 +18,8 @@ Rectangle {
         id: tagText
         anchors.centerIn: parent
         text: tag.text
+        width: tag.elideText ? Math.max(0, Math.min(implicitWidth, tag.width - 14)) : implicitWidth
+        elide: tag.elideText ? Text.ElideRight : Text.ElideNone
         color: tag.kind === "exp" ? Theme.exp
              : tag.kind === "acc" ? Theme.accent
              : tag.kind === "warn" ? Theme.warn

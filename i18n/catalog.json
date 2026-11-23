@@ -26614,6 +26614,19 @@
    "ru": "Подготовка NR для RX 7000. Пока идёт запуск, видео воспроизводится без NR."
   },
   {
+   "zh": "正在准备增强",
+   "src": "qml/Veyra/ProPage.qml",
+   "zh-TW": "正在準備增強",
+   "en": "Preparing enhancements",
+   "ja": "拡張処理を準備中",
+   "ko": "향상 기능 준비 중",
+   "es": "Preparando mejoras",
+   "fr": "Préparation des améliorations",
+   "de": "Effekte werden vorbereitet",
+   "pt-BR": "Preparando aprimoramentos",
+   "ru": "Подготовка улучшений"
+  },
+  {
    "zh": "正在准备独立导出任务",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "正在準備獨立匯出任務",
