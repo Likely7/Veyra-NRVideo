@@ -14,6 +14,7 @@
 
 #include "veyra/remoteplay/Types.h"
 #include "veyra/xbox/Protocol.h"
+#include "veyra/xbox/GamepadBridge.h"
 
 using namespace veyra;
 using json = nlohmann::json;
@@ -26,54 +27,9 @@ void check(bool ok, const char* what) {
     std::fflush(stdout);
 }
 
-// The v2 bridge conversion under test. Mirrors the contract sent to CppHostV2:
-// invert gamepadFromController (Protocol.h:102). Kept here as the reference the
-// XboxWebSource implementation must match; if the impl diverges, this test and
-// the impl disagree and the build's smoke comparison catches it.
-json gamepadStateJson(const remoteplay::ControllerState& s) {
-    using B = remoteplay::ControllerState;
-    json st;
-    const auto btn = [&](uint32_t bit, const char* name) { st[name] = (s.buttons & bit) ? 1 : 0; };
-    btn(B::Cross, "A"); btn(B::Circle, "B"); btn(B::Square, "X"); btn(B::Triangle, "Y");
-    btn(B::Up, "DPadUp"); btn(B::Down, "DPadDown"); btn(B::Left, "DPadLeft"); btn(B::Right, "DPadRight");
-    btn(B::L1, "LeftShoulder"); btn(B::R1, "RightShoulder");
-    btn(B::L3, "LeftThumb"); btn(B::R3, "RightThumb");
-    btn(B::Options, "Menu"); btn(B::Share, "View"); btn(B::PS, "Nexus");
-    const auto clamp = [](int16_t v) { return v < -32767 ? int16_t(-32767) : v; };
-    const auto axis = [&](int16_t v) { return double(clamp(v)) / 32767.0; };
-    // SDL sticks are down-positive; Packet.ts negates Y on the wire, so the
-    // InputFrame Y must pass the SDL value through UNCHANGED (no flip here).
-    st["LeftThumbXAxis"] = axis(s.leftX);
-    st["LeftThumbYAxis"] = axis(s.leftY);
-    st["RightThumbXAxis"] = axis(s.rightX);
-    st["RightThumbYAxis"] = axis(s.rightY);
-    st["LeftTrigger"] = double(s.l2) / 255.0;
-    st["RightTrigger"] = double(s.r2) / 255.0;
-    return st;
-}
-
-// Reconstruct a ControllerState from the JS JSON (the reverse direction), then
-// run it through the REAL v1 gamepadFromController and compare GamepadFrames.
-// If the JSON mapping is the true inverse, the frames match bit-for-bit.
-remoteplay::ControllerState stateFromJson(const json& st) {
-    using B = remoteplay::ControllerState;
-    remoteplay::ControllerState s;
-    s.inputActive = true;
-    const auto bit = [&](const char* name, uint32_t b) { if (st.value(name, 0)) s.buttons |= b; };
-    bit("A", B::Cross); bit("B", B::Circle); bit("X", B::Square); bit("Y", B::Triangle);
-    bit("DPadUp", B::Up); bit("DPadDown", B::Down); bit("DPadLeft", B::Left); bit("DPadRight", B::Right);
-    bit("LeftShoulder", B::L1); bit("RightShoulder", B::R1);
-    bit("LeftThumb", B::L3); bit("RightThumb", B::R3);
-    bit("Menu", B::Options); bit("View", B::Share); bit("Nexus", B::PS);
-    const auto unaxis = [](double v) { return int16_t(v * 32767.0); };
-    s.leftX = unaxis(st.value("LeftThumbXAxis", 0.0));
-    s.leftY = unaxis(st.value("LeftThumbYAxis", 0.0));
-    s.rightX = unaxis(st.value("RightThumbXAxis", 0.0));
-    s.rightY = unaxis(st.value("RightThumbYAxis", 0.0));
-    s.l2 = uint8_t(st.value("LeftTrigger", 0.0) * 255.0);
-    s.r2 = uint8_t(st.value("RightTrigger", 0.0) * 255.0);
-    return s;
-}
+// The production mapper (shared header) is what XboxWebSource sends; the test
+// exercises it directly rather than a local copy.
+using xbox::gamepadStateJson;
 
 // Simulate the player's Packet.ts wire serialization: X as-is, Y NEGATED.
 int16_t wireX(double v) { return int16_t(v * 32767.0); }

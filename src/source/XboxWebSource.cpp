@@ -33,6 +33,7 @@ extern "C" {
 #include "veyra/source/CaptureCompressedDecoder.h"
 #include "veyra/xbox/Account.h"
 #include "veyra/xbox/Protocol.h"
+#include "veyra/xbox/GamepadBridge.h"
 #include "veyra/xbox/StreamApi.h"
 
 namespace veyra::source {
@@ -112,39 +113,6 @@ std::wstring describeSessionFailure(const std::string& code, const std::string& 
     if (message.find("InUse") != std::string::npos || message.find("busy") != std::string::npos)
         return L"这台主机正在被别的设备串流。请先在那边断开。";
     return std::format(L"主机拒绝了串流（{} {}）。", widen(code), widen(message));
-}
-
-// SDL controller state -> the player's InputFrame JSON (the inverse of
-// Protocol.h gamepadFromController; the player's Packet.ts serializes it into
-// the same xcloud input report as v1). Axes: SDL is down-positive, the
-// InputFrame convention is up-positive (Packet.ts negates Y before writing).
-json gamepadStateJson(const remoteplay::ControllerState& s) {
-    using B = remoteplay::ControllerState;
-    const auto button = [&](uint32_t mask) { return (s.inputActive && (s.buttons & mask)) ? 1 : 0; };
-    const auto axis = [](int16_t v) {
-        if (v == INT16_MIN) v = INT16_MAX;
-        if (v < -32767) v = -32767;
-        return double(v) / 32767.0;
-    };
-    const bool active = s.inputActive;
-    return json{
-        {"GamepadIndex", 0},
-        {"A", button(B::Cross)}, {"B", button(B::Circle)}, {"X", button(B::Square)}, {"Y", button(B::Triangle)},
-        {"DPadUp", button(B::Up)}, {"DPadDown", button(B::Down)},
-        {"DPadLeft", button(B::Left)}, {"DPadRight", button(B::Right)},
-        {"LeftShoulder", button(B::L1)}, {"RightShoulder", button(B::R1)},
-        {"LeftThumb", button(B::L3)}, {"RightThumb", button(B::R3)},
-        {"Menu", button(B::Options)}, {"View", button(B::Share)}, {"Nexus", button(B::PS)},
-        // SDL sticks are down-positive. The player's Packet.ts already negates
-        // the Y axes on the wire (-input.LeftThumbYAxis), so pass the SDL value
-        // through unchanged; negating here too would invert up/down in game.
-        {"LeftThumbXAxis", active ? axis(s.leftX) : 0.0},
-        {"LeftThumbYAxis", active ? axis(s.leftY) : 0.0},
-        {"RightThumbXAxis", active ? axis(s.rightX) : 0.0},
-        {"RightThumbYAxis", active ? axis(s.rightY) : 0.0},
-        {"LeftTrigger", active ? double(s.l2) / 255.0 : 0.0},
-        {"RightTrigger", active ? double(s.r2) / 255.0 : 0.0},
-    };
 }
 
 } // namespace
@@ -840,7 +808,7 @@ void XboxWebSource::videoPresented(double ptsMs, int64_t host, bool /*sourceFram
 void XboxWebSource::controller(const remoteplay::ControllerState& state) {
     if (!p_) return;
     auto& p = *p_;
-    const std::string message = gamepadStateJson(state).dump();
+    const std::string message = xbox::gamepadStateJson(state).dump();
     std::lock_guard lock(p.inputMutex);
     if (!p.streaming.load() || !p.desc.gamepad) return;
     const auto now = Clock::now();
@@ -920,7 +888,7 @@ void XboxWebSource::close() noexcept {
         {
             std::lock_guard lock(p.inputMutex);
             if (p.streaming.exchange(false) && p.padSent)
-                p.web.sendGamepad(gamepadStateJson(remoteplay::ControllerState{}).dump());   // release everything
+                p.web.sendGamepad(xbox::gamepadStateJson(remoteplay::ControllerState{}).dump());   // release everything
         }
         {
             std::lock_guard lock(p.queueMutex);
