@@ -1,5 +1,17 @@
 # Third-party dependencies
 
+## Magpie author’s private Veyra patches (2026-11-22)
+
+The Magpie author supplied two source patches against Veyra `c6633121`.
+`veyra-optimizations.patch` informed the FSR motion resampling, optional
+present percentile and VFG history-only capture. `veyra-frame-trace.patch`
+informed the bounded recorder, timing hooks and CSV event schema. The ports
+retain Veyra's crosshair processing, intentional idle exclusion and current
+graphics scheduling. The offline Python analyzer and its tests retain their
+GPL-3.0-only notices. Its embedded HTML template comes from the same source
+package, whose analyzer adapted the Magpie workflow at
+`91080c48752a1face38eb32e5444b12185ea84ae`.
+
 ## RIFE frame generation through ONNX Runtime DirectML (2026-11-22)
 
 `src/gfx/RifeDmlBackend.cpp` runs RIFE video frame interpolation (Practical-RIFE,

@@ -109,6 +109,7 @@ endif()
 # ---------------------------------------------------------------------------
 add_library(veyra_base STATIC
   src/base/Log.cpp
+  src/base/PrivateFrameTrace.cpp
   src/base/NgxResult.cpp
   src/base/FileIdentity.cpp
   src/base/InstanceWindow.cpp
@@ -135,6 +136,10 @@ add_executable(veyra_instance_recovery_tests tests/unit/InstanceRecoveryTests.cp
 target_compile_features(veyra_instance_recovery_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_instance_recovery_tests PRIVATE veyra_base user32)
 veyra_apply_warnings(veyra_logger_tests)
+
+add_executable(veyra_private_frame_trace_tests tests/unit/PrivateFrameTraceTests.cpp)
+target_compile_features(veyra_private_frame_trace_tests PRIVATE cxx_std_20)
+target_link_libraries(veyra_private_frame_trace_tests PRIVATE veyra_base)
 
 # On-screen text reading for live translation (OCR passes, cleanup, line timing),
 # with a scripted OCR engine: no GPU, no Windows OCR language needed.

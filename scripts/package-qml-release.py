@@ -56,6 +56,8 @@ def relative(name):
 def validate_payload(name):
     p = relative(name)
     parts = {part.lower() for part in p.parts}
+    if 'frame_analyzer' in parts or p.stem.casefold() in {'veyra_frame_analyzer', 'test_frame_analyzer'}:
+        raise ValueError('Developer frame analyzer in candidate: ' + name)
     if (p.suffix.lower() in FORBIDDEN and name not in MODELS) or parts & {'logs', 'captures', 'qml-tests', '.git', 'third_party_local'}:
         raise ValueError('Forbidden candidate payload: ' + name)
     if any(part.startswith(('user-data', 'qml-preferences', 'last-applied', 'presets.v1')) for part in parts):

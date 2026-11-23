@@ -1910,3 +1910,12 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 - 构建用 `scripts/acceptance/build-recording-handoff.py --jobs 2 --timeout 870`，编译 QML 应用和 VFG、LiveTiming、SrQuality、LivePresentation、Yuy2Color、GpuTiming 测试。首次增补单测的变量重名修复后通过。目录为 `E:/项目/Veyra/{build,tests,logs,tmp}/codex-magpie-perf-20261122`，stage 核对 107 张着色器、零差异。
 - RTX 5070 实测 NVOF、FidelityFX 全分辨率和半分辨率、双重 FSR 第一遍、4K RGB 夹具加 NR 并将 NVOF 限制到 1080p。移动画面 64 次、HDR 双重 FSR 6 次评估，零次派发拒绝。初版夹具手动关掉计划中的 NR，导致计划校验失败，保持生产计划后通过。移动纹理按位移对齐后的像素 MAE 为零运动 1.758、NVOF 0.281，保留实际输出 PNG。
 - VFG 异步路径 SDR 和 HDR 两种纹理共 2521 项检查通过，包含跳过帧对、切镜和恢复插值。节拍单测 522 项、HDR 全屏统计图层和 GPU 时间戳测试通过。320 FPS 十秒样本的统计快照 P95 为完整计算 3.7 μs、跳过分位计算 0.1 μs。
+
+### 逐帧记录器与补测
+
+- 记录器依据 Magpie 作者私有 `veyra-frame-trace.patch` 适配，使用当前调度、暂停排除和 XeSS 周期。新建文件与最终改名均防覆盖。分析器和测试保留 GPL-3.0-only，HTML 模板内嵌于 Python，用户包审核拒绝分析器源文件和可执行文件。
+- 同一私有 App 的 1440p30 播放 A/B，录制开关两档均为 29.97 次送显每秒。记录模式取得 16813 条事件，记录器丢失 0。与闭环日志对拍为 701 个输入、692 次送显、退出时 9 个未送显任务取消、稳态预览丢弃 0。生成 HTML 报告。半速重放对拍 631 个取样舍弃、1259 次送显和退出时取消 4 个帧。XeSS 确认实际生成，记录到 371 个 Sleep、370 个 Bind、370 个 Present 周期。
+- 构建使用同一 build 脚本和两路并发，耗时 275 秒，含 QML App、Native recorder、Logger、LivePresentation 和 PresentPacing 目标。原生记录器 10 例、Python 分析器 4 例及 Logger 回归均通过，覆盖计时落盘、提前退出、空文件、两种输出文件冲突、溢出和排除暂停。用户包审核的三个分析器拒绝用例通过。
+- T900 实卡使用设备提供的 4K60 MJPEG。实际应用送显约 60 FPS，NR 与 FSR 均运行，NVOF 从 1920×1080 转回 3840×2160。462 次 FSR 评估，0 次派发失败和采集丢帧。RGB 夹具也通过 4K 至 1080p 光流的几何验证。实卡 4K60 NV12 尚未验证。
+- WGC 320 Hz 跟随默认 NR 实测约 125.8 个原始帧、12.5 个生成帧每秒。在本次 HDR 测试场景每秒均有生成帧，数量波动 5 至 29。50% NR 内部尺寸时生成约 95.5 帧每秒。WGC 本轮保持既有节拍策略。冷启动从 WGC 打开到首轮送显，DLSS SR 24.34 秒、RTX Video SR 15.67 秒、Video Effects SR 14.71 秒，模型加载期的原画预览仍待实现。
+- 确认可用管理员权限启动 PresentMon。2.6.0 和 2.5.1 分别只输出 6 条和 2 条记录，无法验收稳定的屏幕显示间隔。完整命令、日志及产物路径见 `E:/项目/Veyra/reports/codex-magpie-perf-20261122/RESULTS.md`。

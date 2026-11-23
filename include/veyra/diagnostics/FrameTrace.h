@@ -5,7 +5,8 @@
 #include <vector>
 
 namespace veyra::diagnostics {
-enum class TraceKind { Submitted, Ready, Present, Gpu, Reset, Cancelled, FrameReady, Discarded, XessSleep, XessBind, XessPresent, ProviderOutput, ProviderDeadline };
+enum class TraceKind { Submitted, Ready, Present, Gpu, Reset, Cancelled, FrameReady, Discarded, XessSleep, XessBind, XessPresent, ProviderOutput, ProviderDeadline,
+    Source, SourceSkipped, Cpu, GpuUnavailable };
 inline const char* traceKindName(TraceKind kind) {
     switch(kind){
     case TraceKind::Submitted:return "Submitted";
@@ -21,6 +22,10 @@ inline const char* traceKindName(TraceKind kind) {
     case TraceKind::XessPresent:return "XessPresent";
     case TraceKind::ProviderOutput:return "ProviderOutput";
     case TraceKind::ProviderDeadline:return "ProviderDeadline";
+    case TraceKind::Source:return "Source";
+    case TraceKind::SourceSkipped:return "SourceSkipped";
+    case TraceKind::Cpu:return "Cpu";
+    case TraceKind::GpuUnavailable:return "GpuUnavailable";
     }
     return "Unknown";
 }
@@ -47,7 +52,18 @@ struct FrameTraceEvent {
     int64_t providerScheduleBeginHost=0;
     bool providerFenceSampled=false;
     uint64_t providerFenceBefore=0,providerFenceAtDeadline=0,providerFenceTarget=0;
+    // Private recorder labels point to static strings. Never include a title,
+    // filename or other source data in these categorical fields.
+    const char* frameKind="";
+    const char* stage="";
+    int64_t arrivalHost=0,deadlineHost=0;
+    uint64_t sourceA=0;
+    int64_t sourceAHost=0;
+    uint64_t gpuBegin=0,gpuEnd=0,gpuFrequency=0;
+    int64_t presentCallHost=0;
 };
+bool privateFrameTraceActive() noexcept;
+void recordPrivateFrame(const FrameTraceEvent&) noexcept;
 // Owned by the logger, independent of the deduplicated error history. No
 // allocation, formatting or disk I/O occurs when an event is recorded.
 class FrameTrace {
