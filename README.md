@@ -166,6 +166,8 @@ Start with effects off, check picture/sound, then enable effects individually. H
 
 Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images can also be dropped into the window. Move to the bottom edge to reveal navigation between Home, Cinema, Professional, Colour, Export and Settings.
 
+**Screen capture** is for viewing video from a window or display. Choose **Continue to capture** in the notice to select a source. Mouse click-through has been removed. For PC games, older titles and emulators, see [Magpie Experimental](https://github.com/SAOG0721/Magpie).
+
 - Cinema prioritises the picture with a floating source/transport/audio/fullscreen bar, optionally hidden in settings.
 - Professional List has Picture, Frame generation, Colour, Sound and Display tabs. The order strip locates effects; bottom panels report source/output, GPU stage time and load.
 - Click a file's picture to pause/resume; left/right arrows seek five seconds. Double-click or use the fullscreen button. The fullscreen top-edge bar switches Cinema/Professional; **Home** opens quick controls in fullscreen List mode, **Ctrl+L** locks controls. Shortcuts are configurable.
@@ -204,7 +206,7 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 | Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
 | Screen | Select a window/display; avoid recursively capturing Veyra itself. |
 
-For **Screen Capture → Game mode**, choose a borderless game window or monitor. **Home** opens adjustments, Home/Esc closes them, **Ctrl+Alt+Home** exits passthrough. For **Capture card → PS5 controller control**, pair the console first; third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the2.0.8 update for setup and hardware limits. Hotkeys are now customizable in Settings → Shortcuts; defaults stay Home/Ctrl+Alt+Home. Windowed game pictures follow the original visible bounds; use borderless fullscreen to fill the display.
+For **Capture card → PS5 controller control**, pair the console first. Third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the 2.0.8 update for setup and hardware limits.
 
 Pausing capture/streaming freezes the preview while keeping the session, not the host game. Physical hardware, networks, HDR and controllers need individual validation.
 

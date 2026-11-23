@@ -10,6 +10,7 @@ Rectangle {
     property string sub: ""
     property string glyph: ""
     property int dialogWidth: 640
+    property real minimumBodyWidth: dialogWidth - 40
     readonly property real bodyWidth: Math.max(1, width - 40)
     property var actions: []
     // dialogs.js `foot`: a quiet note at the left of the button row.
@@ -150,7 +151,7 @@ Rectangle {
             Layout.rightMargin: 20
             // Very narrow film windows still need access to fixed-width device
             // address and format controls. Keep the header and actions in view.
-            contentWidth: dlg.width < 520 ? Math.max(dlg.bodyWidth, dlg.dialogWidth - 40) : dlg.bodyWidth
+            contentWidth: dlg.width < 520 ? Math.max(dlg.bodyWidth, dlg.minimumBodyWidth) : dlg.bodyWidth
             contentHeight: bodyCol.implicitHeight + (contentWidth > dlg.bodyWidth ? 12 : 0)
             flickableDirection: Flickable.AutoFlickIfNeeded
             boundsBehavior: Flickable.StopAtBounds

@@ -886,7 +886,7 @@ VPage {
                     HoverHandler { id: fullHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.requestFullscreen() }
                     ToolTip.visible: fullHover.hovered
-                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
+                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节").arg("Home")
                 }
             }
         }

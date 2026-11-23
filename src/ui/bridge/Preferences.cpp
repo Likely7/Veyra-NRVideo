@@ -525,8 +525,7 @@ namespace {
 const QVariantMap& shortcutDefaults() {
     // Screenshot was Ctrl+S before 2026-10-27; saved custom keys are kept.
     static const QVariantMap d{{"playPause", "Space"}, {"fullscreen", "F"}, {"lock", "Ctrl+L"},
-                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"replay", "F9"}, {"fullscreenStats", "F10"}, {"toggleMode", "Tab"},
-                               {"gamePanel", "Home"}, {"gameExit", "Ctrl+Alt+Home"}};
+                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"replay", "F9"}, {"fullscreenStats", "F10"}, {"toggleMode", "Tab"}};
     return d;
 }
 }
@@ -536,7 +535,6 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
     QStringList taken;
     for (auto it = custom.begin(); it != custom.end(); ++it)
         if (out.contains(it.key())) {
-            if ((it.key()=="gamePanel"||it.key()=="gameExit") && !ui::gameKey(QKeySequence(it.value().toString(),QKeySequence::PortableText)).vk) continue;
             out[it.key()] = it.value();
             taken << it.value().toString();
         }
@@ -546,10 +544,8 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
         if (!custom.contains(it.key()) && taken.contains(it.value().toString())) it.value() = QString();
     return out;
 }
-void QmlPlayerBridge::applyGameHotkeys() {
+void QmlPlayerBridge::logShortcuts() {
     const auto keys = shortcuts();
-    const auto key = [&keys](const char* action) { return ui::gameKey(QKeySequence(keys.value(action).toString(), QKeySequence::PortableText)); };
-    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"), key("replay"));
     // At start and after every change: a field log then says which key each
     // action answers to (the 2026-11-08 recording report had no way to tell).
     const auto custom = impl_->prefs.value("shortcuts").toMap();
@@ -566,15 +562,8 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     const QKeySequence seq(sequence, QKeySequence::PortableText);
     if (seq.isEmpty() || seq.count() != 1) { emit notice(tr("无效的按键"), true); return false; }
     const QString text = seq.toString(QKeySequence::PortableText);
-    if ((action=="gamePanel"||action=="gameExit") && !ui::gameKey(seq).vk) {
-        emit notice(tr("无效的按键"),true); return false;
-    }
-    if ((action=="gamePanel"||action=="gameExit") &&
-        (text=="Ctrl+Alt+Del"||text=="Alt+Tab"||text=="Alt+F4"||text=="Ctrl+Shift+Esc"||text=="Alt+Enter")) {
-        emit notice(tr("%1 已被固定功能占用").arg(text),true); return false;
-    }
     // Keys the shell already owns cannot be taken over.
-    static const QStringList reserved{"Esc", "F11", "Left", "Right", "Up", "Down", "Ctrl+O", "Ctrl+E",
+    static const QStringList reserved{"Esc", "F11", "Home", "Left", "Right", "Up", "Down", "Ctrl+O", "Ctrl+E",
                                       "B", "Z", "X", "T", "Y", "Shift+Z", "Shift+X", "Alt+Return"};
     if (reserved.contains(text)) { emit notice(tr("%1 已被固定功能占用").arg(text), true); return false; }
     const auto current = shortcuts();
@@ -588,7 +577,7 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     impl_->prefs["shortcuts"] = custom;
     if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("快捷键保存失败"), true); return false; }
     veyra::log::info("ui-prefs", std::format("shortcut {}={}", action.toStdString(), text.toStdString()));
-    applyGameHotkeys();
+    logShortcuts();
     emit preferencesChanged();
     return true;
 }
@@ -596,7 +585,7 @@ void QmlPlayerBridge::resetShortcuts() {
     const auto previous = impl_->prefs;
     impl_->prefs.remove("shortcuts");
     if (!impl_->savePrefs()) { impl_->prefs = previous; return; }
-    applyGameHotkeys();
+    logShortcuts();
     emit preferencesChanged();
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
@@ -663,16 +652,6 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
 QObject* QmlPlayerBridge::updates() const { return updates_; }
 bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     const auto type = event->type();
-    if (watched == impl_->gameWindow && (type == QEvent::WinIdChange ||
-        (type == QEvent::PlatformSurface && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
-                                          QPlatformSurfaceEvent::SurfaceCreated))) {
-        // Rebind after Qt's platform-window transition, never during teardown.
-        QMetaObject::invokeMethod(this, [this] {
-            if (!impl_->gameWindow || !impl_->gameWindow->handle()) return;
-            impl_->game.attach(reinterpret_cast<HWND>(impl_->gameWindow->winId()));
-            updateGameGeometry(); updateGameMode();
-        }, Qt::QueuedConnection);
-    }
     // Remembered for the record trigger log only; the event goes on unchanged.
     if (type == QEvent::ShortcutOverride) {
         const auto* key = static_cast<QKeyEvent*>(event);

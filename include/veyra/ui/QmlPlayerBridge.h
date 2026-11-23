@@ -179,14 +179,6 @@ class QmlPlayerBridge : public QObject {
     // method 0 WGC / 1 DXGI (monitor only), fps cap index into {follow,30,60,120,144,240},
     // pointer, crop margins in source pixels, and "fill the window".
     Q_PROPERTY(QVariantMap screenOptions READ screenOptions NOTIFY captureChanged)
-    // 游戏模式 (screen option "passthrough", ui/GamePassthrough.h): gameMode while the
-    // current source is such a capture (opening or live); passthroughActive while the
-    // fullscreen picture is click-through and the captured program has the input.
-    Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
-    Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
-    Q_PROPERTY(bool gameInputActive READ gameInputActive NOTIFY gameModeChanged)
-    Q_PROPERTY(bool gameScaledPreview READ gameScaledPreview NOTIFY gameModeChanged)
-    Q_PROPERTY(QRectF gameVideoRect READ gameVideoRect NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
     // the same-name external file; the old shell's SubtitleOverlay draws them as a
@@ -814,17 +806,6 @@ public:
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
     Q_INVOKABLE bool startScreenCapture(bool cropPreview = false);
     Q_INVOKABLE bool applyScreenCrop(int left, int top, int right, int bottom);
-    bool gameMode() const;
-    bool passthroughActive() const;
-    bool gameInputActive() const;
-    bool gameScaledPreview() const;
-    QRectF gameVideoRect() const;
-    // The Home panel is open: the picture stays on top but takes the input back.
-    Q_INVOKABLE void setGamePanelOpen(bool open);
-    // Index into Qt.application.screens of the monitor 游戏模式 covers, or -1.
-    Q_INVOKABLE int gameModeScreenIndex() const;
-    // Test only (VEYRA_TEST_UI_BLOCK): blocks the GUI thread to exercise the hang release.
-    Q_INVOKABLE void testBlockUi(int ms);
 
     QVariantList screenTargets() const;
     QString screenTargetId() const;
@@ -1384,8 +1365,6 @@ public:
     // window of the QML window and hands it over; the bridge never draws QML
     // into it and Qt never touches its swapchain.
     void attachVideoWindow(qulonglong nativeHandle);
-    // The QML main window: 游戏模式 changes its styles and owns its hotkeys.
-    void attachMainWindow(qulonglong nativeHandle);
 
     // Run immediately before the engine opens a source. The presenter reads the
     // host window's client size once, when it initialises, and builds the
@@ -1593,22 +1572,13 @@ signals:
     void overlayRestartSuggested(const QString& kind);
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
-    void gameModeChanged();
-    // Configurable game hotkeys: 0 = adjust panel, 1 = leave.
-    void gameHotkey(int which);
-    // The game-mode capture ended or failed, or the GUI hung, while the picture was in
-    // front: the UI leaves fullscreen and shows the reason.
-    void gameModeStopped(const QString& reason);
 
 private:
     // Structural change: every chain-derived property notifies.
     void emitChainChanged();
     // Value edit of one group; a change of the chain's validity notifies everything.
     void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
-    void updateGameMode();
-    void updateGameGeometry();
-    // Game mode's keyboard hook gets the current panel, exit, screenshot, record and replay keys.
-    void applyGameHotkeys();
+    void logShortcuts();
     // The recording settings both recorders follow, and the replay buffer
     // armed (or not) with them; its state for the interface.
     engine::RecordingSettings recordingOptions() const;

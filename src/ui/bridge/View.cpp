@@ -338,12 +338,10 @@ void QmlPlayerBridge::setAspectMode(int value) {
     impl_->prefs[QStringLiteral("aspect")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "aspect mode not saved");
     applyAspect(true);
-    if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }
     emit compareChanged();
 }
 void QmlPlayerBridge::applyAspect(bool force) {
     auto& i = *impl_;
-    const bool aligned=gameMode()&&i.presentation.fullscreen&&!gameScaledPreview();
     const int mode = i.screenCropPreview ? 0 : i.screenFillActive ? 2 : i.aspectMode;
     if (!i.videoWindow) return;
     RECT r{}; GetClientRect(i.videoWindow, &r);
@@ -352,7 +350,7 @@ void QmlPlayerBridge::applyAspect(bool force) {
     const double dar=sourceAspect();
     if (!force && mode == i.aspectApplied && client == i.screenFitClient && image == i.screenFitImage && dar == i.screenFitAspect) return;
     i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode; i.screenFitAspect = dar;
-    auto view=force||aligned||i.screenCropPreview?engine::PreviewView{}:i.engine.previewView();
+    auto view=force||i.screenCropPreview?engine::PreviewView{}:i.engine.previewView();
     view.mode=mode;
     view.displayAspect=dar>0&&image.height()>0&&std::abs(dar-double(image.width())/image.height())>.001?dar:0;
     i.engine.previewView(view);
@@ -483,7 +481,7 @@ void QmlPlayerBridge::resumeLastSource() {
             const auto map = item.toMap();
             if (map.value(QStringLiteral("label")).toString() == label) {
                 setScreenTargetId(map.value(QStringLiteral("id")).toString());
-                startScreenCapture();
+                emit navigate(QStringLiteral("screen"));
                 return;
             }
         }

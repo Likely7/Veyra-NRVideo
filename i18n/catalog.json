@@ -4980,6 +4980,32 @@
    "ru": "Veyra запускается или закрывается. Подождите немного и повторите попытку."
   },
   {
+   "zh": "Veyra 的屏幕捕获已移除鼠标穿透，仅保留用于观看视频的窗口和显示器采集。",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "Veyra 的螢幕擷取已移除滑鼠穿透，僅保留用於觀看影片的視窗與顯示器擷取。",
+   "en": "Mouse click-through has been removed. Window and display capture remain available for viewing video.",
+   "ja": "Veyra の画面キャプチャからマウスのクリック透過を削除しました。動画視聴には引き続きウィンドウやディスプレイをキャプチャできます。",
+   "ko": "Veyra 화면 캡처에서 마우스 클릭 통과 기능을 제거했습니다. 영상 시청을 위한 창 및 디스플레이 캡처는 계속 사용할 수 있습니다.",
+   "es": "La captura de pantalla de Veyra ya no permite pasar los clics del ratón a la ventana de origen. Sigue disponible la captura de ventanas y pantallas para ver videos.",
+   "fr": "Les clics de souris ne traversent plus la fenêtre de capture de Veyra. La capture de fenêtres et d’écrans reste disponible pour regarder des vidéos.",
+   "de": "Die Weiterleitung von Mausklicks bei der Bildschirmaufnahme von Veyra wurde entfernt. Fenster und Bildschirme lassen sich weiterhin zum Ansehen von Videos aufnehmen.",
+   "pt-BR": "A captura de tela do Veyra deixou de repassar cliques do mouse. A captura de janelas e monitores continua disponível para assistir a vídeos.",
+   "ru": "В захвате экрана Veyra убрана передача щелчков мыши. Захват окна или монитора по-прежнему доступен для просмотра видео."
+  },
+  {
+   "zh": "Veyra 目前由我一人开发和维护，我没有精力继续跟进 PC 游戏捕获和兼容性。",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "Veyra 目前由我一人開發和維護，我沒有餘力繼續跟進 PC 遊戲擷取與相容性。",
+   "en": "I develop and maintain Veyra on my own. I cannot keep up with PC game capture and compatibility.",
+   "ja": "Veyra は私一人で開発と保守を行っています。PC ゲームのキャプチャや互換性の対応を続ける余裕がありません。",
+   "ko": "Veyra는 저 혼자 개발하고 유지보수합니다. PC 게임 캡처와 호환성에 계속 대응할 여력이 없습니다.",
+   "es": "Soy la única persona que desarrolla y mantiene Veyra. No tengo tiempo para seguir manteniendo la captura de juegos de PC y su compatibilidad.",
+   "fr": "Je développe et maintiens Veyra seul. Je manque de temps pour continuer à gérer la capture des jeux PC et leur compatibilité.",
+   "de": "Ich entwickle und pflege Veyra allein. Für die Aufnahme von PC-Spielen und die laufende Kompatibilitätspflege fehlt mir die Zeit.",
+   "pt-BR": "Eu desenvolvo e mantenho o Veyra sozinho. Não tenho tempo para continuar mantendo a captura de jogos de PC e a compatibilidade.",
+   "ru": "Я разрабатываю и поддерживаю Veyra один. У меня нет времени дальше поддерживать захват игр на ПК и их совместимость."
+  },
+  {
    "zh": "Veyra 虚拟扬声器",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "Veyra 虛擬揚聲器",
@@ -7879,19 +7905,6 @@
    "ru": "Только лица"
   },
   {
-   "zh": "仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "僅在遊戲模式中接管按鍵；支援 Ctrl、Alt、Shift 組合",
-   "en": "Keys are captured only in game mode; Ctrl, Alt and Shift combinations are supported",
-   "ja": "ゲームモード中のみキーを使用します。Ctrl、Alt、Shift の組み合わせに対応",
-   "ko": "게임 모드에서만 키 입력을 받습니다. Ctrl·Alt·Shift 조합도 사용할 수 있습니다.",
-   "es": "Las claves se capturan sólo en modo de juego; Ctrl, Alt y Shift combinaciones son compatibles",
-   "fr": "Les clés sont capturées uniquement en mode jeu; Ctrl, Alt et Shift combinaisons sont supportées",
-   "de": "Schlüssel werden nur im Spielmodus erfasst; Ctrl, Alt und Shift Kombinationen werden unterstützt",
-   "pt-BR": "As chaves são capturadas apenas no modo de jogo; Ctrl, Alt e Shift são suportadas combinações",
-   "ru": "Ключи захватываются только в игровом режиме; Ctrl, Alt и Shift поддерживаются комбинации"
-  },
-  {
    "zh": "仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "僅接受驅動尺寸範圍與步進支援的值；連線時核對實際格式",
@@ -9203,19 +9216,6 @@
    "de": "Vollbild (Doppelklick auf das Bild / F11)",
    "pt-BR": "Tela cheia (clique duas vezes na imagem / F11)",
    "ru": "Полный экран (двойной щелчок по картинке / F11)"
-  },
-  {
-   "zh": "全屏缩放已启用：键盘和手柄控制源窗口，鼠标点击已拦截以免错位；需要鼠标穿透时切回贴合原窗口",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "全螢幕縮放已啟用：鍵盤和手把控制來源視窗，滑鼠點擊已攔截以免錯位；需要滑鼠穿透時切回貼合原視窗",
-   "en": "Fullscreen scaling is active. Keyboard and gamepad control the source window; mouse clicks are blocked to avoid misalignment. Return to original-window alignment for mouse passthrough.",
-   "ja": "全画面拡大を有効にしました。キーボードとゲームパッドは元のウィンドウを操作し、位置ずれを防ぐためマウスクリックを遮断します。マウス透過には元のウィンドウに合わせる表示へ戻してください。",
-   "ko": "전체 화면 크기 조절 중입니다. 키보드·게임패드 입력은 대상 창으로 보내지만 위치 오차를 막기 위해 마우스 클릭은 차단합니다. 마우스를 전달하려면 원본 창 정렬로 돌아가세요.",
-   "es": "El escalado de pantalla completa está activo. El teclado y el gamepad controlan la ventana fuente; los clics del ratón se bloquean para evitar la desalineación. Volver a la alineación original-ventana para el paso del ratón.",
-   "fr": "L'échelle en plein écran est active. Clavier et gamepad contrôlent la fenêtre source; les clics de souris sont bloqués pour éviter un désalignement. Retour à l'alignement de la fenêtre originale pour la passe de souris.",
-   "de": "Die Fullscreen-Skalierung ist aktiv. Tastatur und Gamepad steuern das Quellfenster; Mausklicks werden blockiert, um Fehlausrichtungen zu vermeiden. Zurück zur ursprünglichen Fensterausrichtung für den Mausdurchgang.",
-   "pt-BR": "A escala de ecrã completo está activa. Teclado e Gamepad controlar a janela de origem; cliques do mouse são bloqueados para evitar desalinhamento. Voltar ao alinhamento da janela original para a passagem do mouse.",
-   "ru": "Полноэкранное масштабирование является активным. Клавиатура и геймпад контролируют окно источника; щелчки мыши блокируются, чтобы избежать смещения. Вернитесь к выравниванию исходного окна для прохождения мыши."
   },
   {
    "zh": "全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节",
@@ -13782,32 +13782,6 @@
    "ru": "Заполнить и обрезать"
   },
   {
-   "zh": "填满屏幕",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "填滿螢幕",
-   "en": "Fill screen",
-   "ja": "画面全体に表示",
-   "ko": "화면 채우기",
-   "es": "Llenar la pantalla",
-   "fr": "Remplir l'écran",
-   "de": "Bildschirm füllen",
-   "pt-BR": "Preencher a tela",
-   "ru": "Заполнить экран"
-  },
-  {
-   "zh": "填满屏幕支持键盘和手柄；需要精确鼠标穿透时请选择贴合原窗口",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "填滿螢幕支援鍵盤和手把；需要精確滑鼠穿透時請選擇貼合原視窗",
-   "en": "Fill screen supports keyboard and gamepad. Choose original-window alignment for precise mouse passthrough.",
-   "ja": "画面全体に表示する場合はキーボードとゲームパッドを使用できます。正確なマウス透過には元のウィンドウに合わせてください。",
-   "ko": "화면 채우기에서는 키보드와 게임패드를 사용할 수 있습니다. 마우스 위치를 정확히 전달하려면 원본 창 정렬을 선택하세요.",
-   "es": "La pantalla de relleno soporta teclado y gamepad. Elija la alineación original-ventana para el paso preciso del ratón.",
-   "fr": "Remplir l'écran prend en charge le clavier et le gamepad. Choisissez l'alignement de la fenêtre originale pour un passage précis de la souris.",
-   "de": "Der Füllbildschirm unterstützt Tastatur und Gamepad. Wählen Sie die Original-Fensterausrichtung für einen präzisen Mausdurchgang.",
-   "pt-BR": "Fill tela suporta teclado e gamepad. Escolha o alinhamento da janela original para a passagem precisa do mouse.",
-   "ru": "Экран Fill поддерживает клавиатуру и геймпад. Выберите выравнивание оригинального окна для точного прохождения мыши."
-  },
-  {
    "zh": "填满窗口",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "填滿視窗",
@@ -16499,6 +16473,19 @@
    "ru": "Захват экрана…"
   },
   {
+   "zh": "屏幕捕获说明",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "螢幕擷取說明",
+   "en": "About screen capture",
+   "ja": "画面キャプチャについて",
+   "ko": "화면 캡처 안내",
+   "es": "Captura de pantalla",
+   "fr": "Capture d’écran",
+   "de": "Bildschirmaufnahme",
+   "pt-BR": "Sobre a captura de tela",
+   "ru": "О захвате экрана"
+  },
+  {
    "zh": "屏幕支持可变刷新，但当前显示模式不可用；请检查连接、刷新率及驱动设置",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "螢幕支援可變更新率，但目前顯示模式不可用；請檢查連接、更新率及驅動設定",
@@ -18486,19 +18473,6 @@
    "de": "Geschätzt aus dem, was geschrieben wurde, sobald das Schreiben beginnt",
    "pt-BR": "Estimado a partir do que foi escrito uma vez que a escrita começa",
    "ru": "Оценивается из того, что было написано, как только началось письмо"
-  },
-  {
-   "zh": "开始后 Veyra 在这块屏幕上全屏，键鼠和手柄直接操作屏幕上的程序；%1 调整画面，%2 退出",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "開始後 Veyra 在此螢幕全螢幕顯示，鍵鼠與手把直接操作螢幕上的程式；%1 調整畫面，%2 退出",
-   "en": "Veyra opens fullscreen on this display. Keyboard, mouse and controller operate its programs; %1 adjusts the picture and %2 exits.",
-   "ja": "この画面で全画面表示し、キーボード・マウス・コントローラーで背後のアプリを操作します。%1 で画面調整、%2 で解除。",
-   "ko": "이 디스플레이에 전체 화면으로 표시합니다. 키보드·마우스·컨트롤러 입력은 대상 프로그램으로 전달됩니다. %1로 화면을 조절하고 %2로 종료합니다.",
-   "es": "Veyra abre pantalla completa en esta pantalla. Teclado, ratón y controlador operan sus programas; %1 ajusta la imagen y salidas %2.",
-   "fr": "Veyra ouvre plein écran sur cet écran. Clavier, souris et contrôleur actionnent ses programmes ; %1 ajuste l'image et %2 sort.",
-   "de": "Veyra öffnet Vollbild auf diesem Display. Tastatur, Maus und Controller bedienen ihre Programme; %1 passt das Bild an und %2 Ausgänge.",
-   "pt-BR": "Veyra  abre tela cheia neste display. Teclado, mouse e controlador operam seus programas; %1 ajusta a imagem e %2  Saídas.",
-   "ru": "Veyra открывает полный экран на этом дисплее. Клавиатура, мышь и контроллер управляют его программами; %1 настраивает картинку и %2 выходит."
   },
   {
    "zh": "开始后键鼠交给主机；Ctrl+Alt+Shift+Z 释放，+Q 断开，+S 统计",
@@ -20542,6 +20516,19 @@
    "ru": "Открытие GitHub Проблемы; диагностика была скопирована для вас"
   },
   {
+   "zh": "打开 Magpie",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "開啟 Magpie",
+   "en": "Open Magpie",
+   "ja": "Magpie を開く",
+   "ko": "Magpie 열기",
+   "es": "Abrir Magpie",
+   "fr": "Ouvrir Magpie",
+   "de": "Magpie öffnen",
+   "pt-BR": "Abrir Magpie",
+   "ru": "Открыть Magpie"
+  },
+  {
    "zh": "打开 Windows 录制设置",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "開啟 Windows 錄制設定",
@@ -21320,19 +21307,6 @@
    "de": "Automatisch an Audiospur ausrichten",
    "pt-BR": "Alinhar automaticamente pela faixa de áudio",
    "ru": "Автовыравнивание по звуковой дорожке"
-  },
-  {
-   "zh": "捕获已结束，已退出游戏模式",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "擷取已結束，已退出遊戲模式",
-   "en": "The capture ended; game mode was left",
-   "ja": "キャプチャが終了したため、ゲームモードを終了しました",
-   "ko": "캡처가 종료되어 게임 모드를 해제했습니다.",
-   "es": "La captura terminó; modo de juego se dejó",
-   "fr": "La capture s'est terminée; le mode de jeu a été laissé",
-   "de": "Der Capture endete; der Spielmodus wurde verlassen",
-   "pt-BR": "A captura terminou; o modo de jogo foi deixado",
-   "ru": "Захват закончился, игровой режим остался"
   },
   {
    "zh": "捕获目标",
@@ -26276,19 +26250,6 @@
    "ru": "Douyin Live Companion обнаружил: приоритет GPU на данный момент снижен с Realtime до High, поэтому две программы не висят при совместном использовании GPU; он возвращается, когда компаньон выходит."
   },
   {
-   "zh": "检测到独占全屏的游戏：Windows 不允许其它窗口盖在它上面，请把游戏改成无边框窗口或窗口化",
-   "src": "src/ui/bridge/Capture.cpp",
-   "zh-TW": "偵測到獨佔全螢幕的遊戲：Windows 不允許其他視窗蓋在它上面，請把遊戲改成無邊框視窗或視窗化",
-   "en": "An exclusive-fullscreen game is running: Windows lets no other window cover it. Switch the game to borderless or windowed mode",
-   "ja": "排他的フルスクリーンのゲームを検出しました。Windows は他のウィンドウを重ねられません。ゲームをボーダーレスまたはウィンドウモードにしてください",
-   "ko": "독점 전체 화면 게임이 실행 중이라 Veyra 창을 위에 표시할 수 없습니다. 게임을 테두리 없는 창이나 일반 창 모드로 바꾸세요.",
-   "es": "Un juego de pantalla completa está funcionando: Windows no deja ninguna otra ventana cubrirlo. Switch el juego al modo sin fronteras o sin ventanas",
-   "fr": "Un jeu exclusif plein écran fonctionne: Windows ne laisse aucune autre fenêtre la couvrir. Switch le jeu en mode sans bordure ou en mode fenêtre",
-   "de": "Ein exklusives Fullscreen-Spiel läuft: Windows lässt kein anderes Fenster es abdecken. Switch das Spiel im randlosen oder Fenstermodus",
-   "pt-BR": "Um jogo de tela cheia exclusiva está rodando: Windows não permite que nenhuma outra janela o cubra. Switch o jogo para o modo sem bordas ou janelas",
-   "ru": "Эксклюзивная полноэкранная игра работает: Windows Другого окна не закрывает. Switch Игра в безрамочный или оконный режим"
-  },
-  {
    "zh": "检测到约两帧一组的画面。主机锁定 30 帧时，可试用 60→30 保持固定节奏。",
    "src": "qml/DedupModeRow.qml",
    "zh-TW": "偵測到約兩幀一組的畫面。主機鎖定 30 幀時，可試用 60→30 維持固定節奏。",
@@ -26615,7 +26576,7 @@
   },
   {
    "zh": "正在准备增强",
-   "src": "qml/Veyra/ProPage.qml",
+   "src": "qml/ProPage.qml",
    "zh-TW": "正在準備增強",
    "en": "Preparing enhancements",
    "ja": "拡張処理を準備中",
@@ -28356,19 +28317,6 @@
    "ru": "Очистить память"
   },
   {
-   "zh": "游戏",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "遊戲",
-   "en": "Game",
-   "ja": "ゲーム",
-   "ko": "게임",
-   "es": "Juego",
-   "fr": "Jeu",
-   "de": "Spiel",
-   "pt-BR": "Jogo",
-   "ru": "Игра"
-  },
-  {
    "zh": "游戏与程序 · ",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "遊戲與程式 · ",
@@ -28393,110 +28341,6 @@
    "de": "GamePP",
    "pt-BR": "GamePP",
    "ru": "Игровой автомат"
-  },
-  {
-   "zh": "游戏模式",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "遊戲模式",
-   "en": "Game mode",
-   "ja": "ゲームモード",
-   "ko": "게임 모드",
-   "es": "Modo juego",
-   "fr": "Mode jeu",
-   "de": "Spielmodus",
-   "pt-BR": "Modo jogo",
-   "ru": "Игровой режим"
-  },
-  {
-   "zh": "游戏模式下在游戏里也能用",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "遊戲模式下在遊戲裡也能用",
-   "en": "Also works inside the game in game mode",
-   "ja": "ゲームモード中はゲーム内でも使えます",
-   "ko": "게임 모드의 게임 내부에서도 작동합니다.",
-   "es": "También funciona dentro del juego en modo de juego",
-   "fr": "Fonctionne également dans le jeu en mode jeu",
-   "de": "Funktioniert auch im Spielmodus",
-   "pt-BR": "Também funciona dentro do jogo em modo de jogo",
-   "ru": "Также работает внутри игры в игровом режиме"
-  },
-  {
-   "zh": "游戏模式不裁剪；贴合原窗口时画面与鼠标位置一一对应",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "遊戲模式不裁剪；貼合原視窗時畫面與滑鼠位置一一對應",
-   "en": "Game mode does not crop the source. Original-window alignment preserves exact mouse positions.",
-   "ja": "ゲームモードではソースを切り抜きません。元のウィンドウに合わせると映像とマウス位置が一致します。",
-   "ko": "게임 모드에서는 영상을 자르지 않습니다. 원본 창 정렬을 사용하면 마우스 위치를 정확히 전달할 수 있습니다.",
-   "es": "El modo de juego no recorta la fuente. La alineación de la ventana original preserva las posiciones exactas del ratón.",
-   "fr": "Le mode jeu ne recoupe pas la source. L'alignement original de la fenêtre préserve les positions exactes de la souris.",
-   "de": "Der Spielmodus beschneidet die Quelle nicht. Original-Fenster-Ausrichtung behält genaue Mauspositionen.",
-   "pt-BR": "O modo de jogo não corta a fonte. O alinhamento da janela original preserva as posições exatas do mouse.",
-   "ru": "Режим игры не обрабатывает источник. Оригинальное выравнивание окон сохраняет точные положения мыши."
-  },
-  {
-   "zh": "游戏模式用真实指针，画面里不再画一个",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "遊戲模式使用真實指標，畫面裡不再畫一個",
-   "en": "Game mode uses the real pointer, so the picture does not draw a second one",
-   "ja": "ゲームモードでは実際のポインターを使い、映像には描きません",
-   "ko": "게임 모드는 실제 마우스 포인터를 사용하므로 영상 안에 포인터를 따로 그리지 않습니다.",
-   "es": "El modo de juego utiliza el puntero real, por lo que la imagen no dibuja un segundo",
-   "fr": "Mode jeu utilise le pointeur réel, de sorte que l'image ne dessine pas un second",
-   "de": "Der Spielmodus verwendet den echten Zeiger, so dass das Bild keinen zweiten zeichnet",
-   "pt-BR": "O modo de jogo usa o ponteiro real, para que a imagem não desenhe uma segunda",
-   "ru": "Режим игры использует реальный указатель, поэтому картинка не рисует второй"
-  },
-  {
-   "zh": "游戏模式键盘监听不可用，已退出鼠标穿透；请退出全屏后重试",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "遊戲模式鍵盤監聽無法使用，已退出滑鼠穿透；請退出全螢幕後重試",
-   "en": "Game-mode keyboard listener is unavailable. Mouse passthrough has been released; leave fullscreen and retry.",
-   "ja": "ゲームモードのキーボード監視を利用できません。マウス透過を解除しました。全画面を終了して再試行してください。",
-   "ko": "게임 모드의 키보드 입력 처리를 사용할 수 없어 마우스 전달을 해제했습니다. 전체 화면을 종료한 뒤 다시 시도하세요.",
-   "es": "El oyente del teclado de modo de juego no está disponible. Mouse passthrough ha sido liberado; dejar pantalla completa y reingresar.",
-   "fr": "L'auditeur du clavier en mode jeu n'est pas disponible. La transmission de la souris a été relâchée; laissez l'écran complet et réessayer.",
-   "de": "Der Keyboard-Hörer im Spielmodus ist nicht verfügbar. Mausdurchgang wurde freigegeben; lassen Sie Vollbild und versuchen Sie es erneut.",
-   "pt-BR": "O ouvinte de teclado em modo de jogo está indisponível. A passagem do mouse foi liberada; deixe a tela cheia e tente novamente.",
-   "ru": "Прослушиватель клавиатуры в игровом режиме недоступен. Пропуск мыши был выпущен; оставьте полный экран и повторите."
-  },
-  {
-   "zh": "游戏模式需要窗口和 Veyra 在同一个虚拟桌面：请把窗口移到当前桌面，或关闭游戏模式后直接捕获",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "遊戲模式需要視窗和 Veyra 在同一個虛擬桌面：請把視窗移到目前桌面，或關閉遊戲模式後直接擷取",
-   "en": "Game mode needs the window on the same virtual desktop as Veyra: move the window to the current desktop, or turn game mode off and capture it directly",
-   "ja": "ゲームモードではウィンドウと Veyra が同じ仮想デスクトップにある必要があります。ウィンドウを現在のデスクトップに移すか、ゲームモードをオフにしてそのままキャプチャーしてください",
-   "ko": "게임 모드를 사용하려면 창과 Veyra가 같은 가상 데스크톱에 있어야 합니다. 창을 현재 데스크톱으로 옮기거나, 게임 모드를 끄고 바로 캡처하세요.",
-   "es": "El modo de juego necesita la ventana en el mismo escritorio virtual que Veyra: mover la ventana al escritorio actual, o apagar el modo de juego y capturarlo directamente",
-   "fr": "Le mode de jeu a besoin de la fenêtre sur le même bureau virtuel que Veyra : déplacez la fenêtre sur le bureau actuel, ou éteignez le mode de jeu et capturez-le directement",
-   "de": "Der Spielmodus benötigt das Fenster auf dem gleichen virtuellen Desktop wie Veyra: Bewegen Sie das Fenster auf den aktuellen Desktop oder schalten Sie den Spielmodus aus und erfassen Sie es direkt",
-   "pt-BR": "O modo de jogo precisa da janela na mesma área de trabalho virtual que o Veyra: mova a janela para a área de trabalho actual ou desligue o modo de jogo e capture- a directamente",
-   "ru": "Игровой режим нуждается в окне на том же виртуальном рабочем столе, что и Veyra: переместите окно на текущий рабочий стол или выключите игровой режим и захватите его напрямую."
-  },
-  {
-   "zh": "游戏模式：调整画面",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "遊戲模式：調整畫面",
-   "en": "Game mode: adjust picture",
-   "ja": "ゲームモード：画面調整",
-   "ko": "게임 모드: 화면 조절",
-   "es": "Modo juego: ajustar imagen",
-   "fr": "Mode jeu : ajuster l'image",
-   "de": "Spielmodus: Bild anpassen",
-   "pt-BR": "Modo jogo: ajustar imagem",
-   "ru": "Игровой режим: настройка изображения"
-  },
-  {
-   "zh": "游戏模式：退出鼠标穿透",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "遊戲模式：退出滑鼠穿透",
-   "en": "Game mode: exit mouse passthrough",
-   "ja": "ゲームモード：マウス透過を解除",
-   "ko": "게임 모드: 마우스 전달 해제",
-   "es": "Modo de juego: paso del ratón de salida",
-   "fr": "Mode jeu: sortie de la souris passthrough",
-   "de": "Spielmodus: Exit Maus Passthrough",
-   "pt-BR": "Modo de jogo: saída da passagem do rato",
-   "ru": "Режим игры: exit mouse passthrough"
   },
   {
    "zh": "源 %1 fps",
@@ -28913,6 +28757,19 @@
    "de": "Separate Capture-Audio-Konfiguration fehlgeschlagen; natives BMD-Video geht weiter.",
    "pt-BR": "A configuração de áudio de captura separada falhou; o vídeo BMD nativo continua.",
    "ru": "Отдельная настройка захвата аудио не удалась; родное видео BMD продолжается."
+  },
+  {
+   "zh": "玩 PC 游戏，我强烈推荐上游的 Magpie。它有更多缩放器和画面效果，也更侧重 PC 捕获性能。尤其推荐给玩带反作弊的网游、老游戏或使用模拟器的用户。",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "玩 PC 遊戲，我強烈推薦上游的 Magpie。它提供更多縮放器和畫面效果，也更重視 PC 擷取效能。尤其推薦給玩有反作弊機制的線上遊戲、老遊戲或使用模擬器的使用者。",
+   "en": "For PC games, I highly recommend the upstream Magpie project. It offers more scaling filters and effects and focuses on PC capture performance. I especially recommend it for online games with anti-cheat, older games, and emulators.",
+   "ja": "PC ゲームには upstream の Magpie を強くおすすめします。拡大フィルターやエフェクトが豊富で、PC でのキャプチャ性能に重点を置いています。特にアンチチートを使うオンラインゲーム、古いゲーム、エミュレーターにおすすめです。",
+   "ko": "PC 게임에는 업스트림 프로젝트인 Magpie를 적극 추천합니다. 더 다양한 업스케일링 필터와 효과를 제공하며 PC 캡처 성능에 중점을 둡니다. 특히 안티치트를 사용하는 온라인 게임, 오래된 게임, 에뮬레이터에 추천합니다.",
+   "es": "Para juegos de PC recomiendo mucho Magpie, el proyecto en el que se basa esta función. Ofrece más filtros de escalado y efectos, con especial atención al rendimiento de captura en PC. Lo recomiendo en particular para juegos en línea con antitrampas, títulos antiguos y emuladores.",
+   "fr": "Pour les jeux PC, je recommande vivement le projet amont Magpie. Il propose davantage de filtres de mise à l’échelle et d’effets, et privilégie les performances de capture sur PC. Je le recommande surtout pour les jeux en ligne avec anti-triche, les anciens jeux et les émulateurs.",
+   "de": "Für PC-Spiele empfehle ich das Upstream-Projekt Magpie. Es bietet mehr Skalierungsfilter und Effekte und legt den Schwerpunkt auf die Aufnahmeleistung am PC. Ich empfehle es besonders für Online-Spiele mit Anti-Cheat, ältere Spiele und Emulatoren.",
+   "pt-BR": "Para jogos de PC, recomendo muito o projeto Magpie, que serviu de base para este recurso. Ele oferece mais filtros de escala e efeitos e dá prioridade ao desempenho da captura no PC. Recomendo especialmente para jogos on-line com antitrapaça, jogos antigos e emuladores.",
+   "ru": "Для игр на ПК я настоятельно рекомендую исходный проект Magpie. В нём больше фильтров масштабирования и эффектов, а особое внимание уделяется производительности захвата на ПК. Особенно рекомендую его для сетевых игр с античитом, старых игр и эмуляторов."
   },
   {
    "zh": "环境光补偿：屋里亮（开灯/白天）就补偿一点，屋里暗（关灯）就不补偿",
@@ -29407,19 +29264,6 @@
    "de": "Bildkorrektur steuert die zeitliche Stabilität; diese Einstellung kehrt zurück, wenn die Korrektur ausgeschaltet ist",
    "pt-BR": "A correção da imagem controla a estabilidade temporal; esta configuração retorna quando a correção está desligada",
    "ru": "Коррекция изображения контролирует временную стабильность; эта настройка возвращается, когда коррекция отключена."
-  },
-  {
-   "zh": "界面卡住超过 3 秒，已退出游戏模式",
-   "src": "src/ui/QmlPlayerBridge.cpp",
-   "zh-TW": "介面卡住超過 3 秒，已退出遊戲模式",
-   "en": "The interface stopped responding for more than 3 s; game mode was left",
-   "ja": "画面が 3 秒以上応答しなかったため、ゲームモードを終了しました",
-   "ko": "화면이 3초 이상 응답하지 않아 게임 모드를 해제했습니다.",
-   "es": "La interfaz dejó de responder durante más de 3 s; el modo de juego se dejó",
-   "fr": "L'interface a cessé de répondre pendant plus de 3 s; mode de jeu a été laissé",
-   "de": "Das Interface reagierte mehr als 3 s nicht mehr; der Spielmodus wurde verlassen",
-   "pt-BR": "A interface parou de responder por mais de 3 s; o modo de jogo foi deixado",
-   "ru": "Интерфейс перестал отвечать более чем на 3 с; остался игровой режим"
   },
   {
    "zh": "界面始终用显卡绘制；小飞机 OSD 不在 Veyra 里显示；开着 NVIDIA 信息浮窗或游戏加加时可能卡死",
@@ -31253,6 +31097,19 @@
    "de": "Export fortsetzen",
    "pt-BR": "Continuar exportação",
    "ru": "Продолжить экспорт"
+  },
+  {
+   "zh": "继续普通采集",
+   "src": "qml/DialogHost.qml",
+   "zh-TW": "繼續一般擷取",
+   "en": "Continue to capture",
+   "ja": "通常のキャプチャへ",
+   "ko": "일반 캡처 계속",
+   "es": "Continuar a la captura",
+   "fr": "Continuer la capture",
+   "de": "Zur Aufnahme",
+   "pt-BR": "Continuar para a captura",
+   "ru": "Перейти к захвату"
   },
   {
    "zh": "绿",
@@ -36247,32 +36104,6 @@
    "ru": "Управление битрейтом"
   },
   {
-   "zh": "贴合原窗口",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "貼合原視窗",
-   "en": "Align to source window",
-   "ja": "元のウィンドウに合わせる",
-   "ko": "소스 창에 정렬",
-   "es": "Alinear con la ventana de origen",
-   "fr": "Aligner sur la fenêtre source",
-   "de": "An Quellfenster ausrichten",
-   "pt-BR": "Alinhar à janela de origem",
-   "ru": "Выровнять по окну источника"
-  },
-  {
-   "zh": "贴合原窗口时可精确穿透鼠标；填满或拉伸支持键盘和手柄，鼠标点击会被拦截以免错位。%1 调整画面，%2 退出；独占全屏请改为无边框窗口",
-   "src": "qml/ScreenSourceDialog.qml",
-   "zh-TW": "貼合原視窗時可精確穿透滑鼠；填滿或拉伸支援鍵盤和手把，滑鼠點擊會被攔截以免錯位。%1 調整畫面，%2 退出；獨佔全螢幕請改為無邊框視窗",
-   "en": "Original-window alignment supports precise mouse passthrough. Fill/stretch supports keyboard and gamepad; mouse clicks are blocked to prevent misalignment. %1 adjusts the picture; %2 exits. Use borderless instead of exclusive fullscreen.",
-   "ja": "元のウィンドウに合わせると正確なマウス透過を利用できます。塗りつぶし・引き伸ばしではキーボードとゲームパッドに対応し、位置ずれを防ぐためマウスクリックを遮断します。%1 で画面調整、%2 で終了。排他全画面ではなくボーダーレスにしてください。",
-   "ko": "원본 창 정렬은 마우스 위치를 정확히 전달합니다. 채우기·늘리기는 키보드와 게임패드를 지원하며 위치 오차를 막기 위해 마우스 클릭을 차단합니다. %1로 화면을 조절하고 %2로 종료합니다. 독점 전체 화면 대신 테두리 없는 창 모드를 사용하세요.",
-   "es": "La alineación de ventana original admite un paso preciso del ratón. Fill/stretch admite teclado y gamepad; los clics del ratón se bloquean para evitar la desalineación. %1 ajusta la imagen; %2 sale. Utilice sin fronteras en lugar de pantalla completa exclusiva.",
-   "fr": "L'alignement de la fenêtre d'origine prend en charge le passage précis de la souris. Remplir/stretch prend en charge le clavier et le gamepad; les clics de souris sont bloqués pour éviter un désalignement. %1 règle l'image; %2 sort. Utilisez sans bordure au lieu de plein écran exclusif.",
-   "de": "Original-Fenster-Ausrichtung unterstützt präzise Mausdurchgang. Fill/Stretch unterstützt Tastatur und Gamepad; Mausklicks werden blockiert, um Fehlausrichtungen zu verhindern. %1 passt das Bild an; %2 verlässt. Verwenden Sie Borderless anstelle von exklusivem Vollbild.",
-   "pt-BR": "Alinhamento de janela original suporta passagem precisa do mouse. O preenchimento/alongamento suporta teclado e gamepad; os cliques do mouse são bloqueados para evitar o desalinhamento. %1 ajusta a imagem; %2 sai. Use sem bordas em vez de tela cheia exclusiva.",
-   "ru": "Оригинальное выравнивание окон поддерживает точный проход мыши. Заполнение / растяжка поддерживает клавиатуру и геймпад; щелчки мыши блокируются для предотвращения смещения. %1 настраивает картинку; %2 выходит. Используйте без границ вместо эксклюзивного полноэкранного."
-  },
-  {
    "zh": "资源不可用",
    "src": "src/pipeline/EnhanceGraph.cpp",
    "zh-TW": "資源不可用",
@@ -38431,19 +38262,6 @@
    "ru": "После подключения устройства выключите улучшение, чтобы сначала проверить базовое изображение, а затем включите то, что вам нужно."
   },
   {
-   "zh": "退出全屏，恢复普通窗口操作",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "退出全螢幕，恢復一般視窗操作",
-   "en": "Leave fullscreen and restore normal window controls",
-   "ja": "全画面を解除して通常のウィンドウ操作に戻る",
-   "ko": "전체 화면을 해제하고 일반 창 조작으로 돌아갑니다.",
-   "es": "Dejar la pantalla completa y restaurar los controles de ventanas normales",
-   "fr": "Laisser plein écran et restaurer les commandes normales de la fenêtre",
-   "de": "Lassen Sie Vollbild und stellen Sie normale Fenstersteuerungen wieder her",
-   "pt-BR": "Deixar tela cheia e restaurar controles normais da janela",
-   "ru": "Оставьте полный экран и восстановите нормальное управление окнами"
-  },
-  {
    "zh": "退出引导",
    "src": "qml/OnboardingGuide.qml",
    "zh-TW": "關閉導覽",
@@ -40121,17 +39939,17 @@
    "ru": "Требуется файл 1080p SDR, SF и NVIDIA оптический поток; выключите масштабирование, генерацию кадров, антифликер, оценку, красоту и HDR"
   },
   {
-   "zh": "需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用",
+   "zh": "需先在「设置 → 播放」开启即时回放",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "需先在 設定 → 播放 開啟即時回放；遊戲模式下在遊戲裡也能用",
-   "en": "Turn on instant replay in Settings → Playback first; also works inside the game in game mode",
-   "ja": "先に 設定 → 再生 でインスタントリプレイをオンにしてください。ゲームモード中はゲーム内でも使えます",
-   "ko": "설정 → 재생에서 즉시 리플레이를 먼저 켜세요. 게임 모드에서는 게임 안에서도 사용할 수 있습니다.",
-   "es": "Enciende la repetición instantánea en Ajustes → Playback primero; también funciona dentro del juego en modo de juego",
-   "fr": "Activer le replay instantané dans Paramètres → Playback first; fonctionne également dans le jeu en mode jeu",
-   "de": "Sofortige Wiedergabe in Einstellungen einschalten → Playback first; funktioniert auch im Spielmodus",
-   "pt-BR": "Ative o replay instantâneo em Configurações → Playback primeiro; também funciona dentro do jogo no modo de jogo",
-   "ru": "Включите мгновенное воспроизведение в настройках → Воспроизведение сначала; также работает внутри игры в игровом режиме"
+   "zh-TW": "需先在「設定 → 播放」開啟即時重播",
+   "en": "Enable Instant Replay in Settings → Playback first",
+   "ja": "先に「設定 → 再生」でインスタントリプレイを有効にしてください",
+   "ko": "먼저 설정 → 재생에서 즉시 다시 보기를 켜세요",
+   "es": "Activa primero la repetición instantánea en Ajustes → Reproducción",
+   "fr": "Activez d’abord le replay instantané dans Paramètres → Lecture",
+   "de": "Aktiviere zuerst die Sofortwiederholung unter Einstellungen → Wiedergabe",
+   "pt-BR": "Ative a repetição instantânea em Configurações → Reprodução primeiro",
+   "ru": "Сначала включите мгновенный повтор в разделе «Настройки → Воспроизведение»"
   },
   {
    "zh": "需系统解码/转换",

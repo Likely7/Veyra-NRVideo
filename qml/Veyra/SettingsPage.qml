@@ -1276,13 +1276,11 @@ VPage {
                                 { id: "fullscreen", a: qsTr("全屏"), note: qsTr("F11 / Alt+Enter 也可以") },
                                 { id: "lock", a: qsTr("锁定全屏控制条") },
                                 { id: "hold", a: qsTr("按住查看原画") },
-                                { id: "screenshot", a: qsTr("截图"), note: qsTr("游戏模式下在游戏里也能用") },
-                                { id: "record", a: qsTr("开始 / 停止录制"), note: qsTr("游戏模式下在游戏里也能用") },
-                                { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用") },
+                                { id: "screenshot", a: qsTr("截图") },
+                                { id: "record", a: qsTr("开始 / 停止录制") },
+                                { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在「设置 → 播放」开启即时回放") },
                                 { id: "fullscreenStats", a: qsTr("显示 / 隐藏全屏帧率") },
-                                { id: "toggleMode", a: qsTr("切换极简 / 专业") },
-                                { id: "gamePanel", a: qsTr("游戏模式：调整画面"), note: qsTr("仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合") },
-                                { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") }
+                                { id: "toggleMode", a: qsTr("切换极简 / 专业") }
                             ]
                             delegate: VRow {
                                 id: keyRow

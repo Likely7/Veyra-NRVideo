@@ -89,7 +89,6 @@ void QmlPlayerBridge::rotatePictureClockwise() {
     // An in-progress protection selection uses the previous coordinate system.
     beginProtectionDraw(QString());
     tickSubtitles();
-    if(gameMode()){updateGameGeometry();updateGameMode();emit gameModeChanged();}
     veyra::log::info("ui-rotation",std::format("session={} clockwise={}",impl_->snapshot.sessionId,previewRotation()));
     emit compareChanged();
 }

@@ -95,7 +95,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     const bool mute=impl_->prefBool("audioMuted",false);
     impl_->engine.setVolume(gain,mute);impl_->snapshot.volume=gain;impl_->snapshot.muted=mute;
     veyra::log::info("ui-prefs",std::format("volume restored={:.3f} muted={}",gain,mute));
-    applyGameHotkeys();
+    logShortcuts();
     syncReplay();
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -129,45 +129,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 #endif
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
-    // 游戏模式. The native filter also keeps windows shown during a monitor capture
-    // out of that capture, so it is installed for every run.
-    if (qApp) qApp->installNativeEventFilter(&impl_->game);
-    impl_->displayChangeFilter.changed = &impl_->displayChanged;
-    if (qApp) qApp->installNativeEventFilter(&impl_->displayChangeFilter);
-    impl_->game.onEvent = [this](ui::GamePassthrough::Event event) {
-        using E = ui::GamePassthrough::Event;
-        switch (event) {
-        case E::PanelHotkey: emit gameHotkey(0); break;
-        case E::ExitHotkey:
-        case E::ExitUnavailable:
-            // Restore input before QML processes its fullscreen notification.
-            impl_->gameRefused = true;
-            impl_->gameInputShown = impl_->passthroughShown = false;
-            emit gameModeChanged();
-            impl_->game.apply(ui::GamePassthrough::Mode::Off);
-            if (event == E::ExitHotkey) emit gameHotkey(1);
-            else emit notice(tr("游戏模式键盘监听不可用，已退出鼠标穿透；请退出全屏后重试"), true);
-            break;
-        case E::HangReleased:
-            // Publish Off before the foreground goes back to Veyra; stay out of
-            // click-through until fullscreen is left.
-            impl_->gameRefused = true;
-            impl_->gameInputShown = impl_->passthroughShown = false;
-            emit gameModeChanged();
-            impl_->game.apply(ui::GamePassthrough::Mode::Off);
-            emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
-        // The game has the keyboard in game mode; the hook hands these over.
-        case E::ScreenshotHotkey: takeScreenshot(); break;
-        case E::RecordHotkey: toggleRecording(QStringLiteral("game-hotkey")); break;
-        case E::ReplayHotkey: saveReplay(QStringLiteral("game-hotkey")); break;
-        }
-    };
-    auto* gameBeat = new QTimer(this);
-    connect(gameBeat, &QTimer::timeout, this, [this] {
-        impl_->game.heartbeat();
-        updateGameGeometry();
-    });
-    gameBeat->start(250);
+    impl_->displayEventFilter.changed = &impl_->displayChanged;
+    if (qApp) qApp->installNativeEventFilter(&impl_->displayEventFilter);
 #ifdef VEYRA_ENABLE_MOONLIGHT
     setupMoonlight();
 #endif
@@ -646,7 +609,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // snapshot is not part of the player snapshot.
         if (impl_->exportQueue.queue().needsTick()) pollExport();
         tickPlaylist();
-        updateGameMode();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -772,7 +734,7 @@ QmlPlayerBridge::~QmlPlayerBridge() {
     // The overlay is a child window: it has to go before the video window does.
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
-    if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
+    if (qApp) qApp->removeNativeEventFilter(&impl_->displayEventFilter);
     // rememberPosition(true) writes every preference, a pending volume included.
     if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->stop();
     rememberPosition(true);

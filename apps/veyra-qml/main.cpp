@@ -224,12 +224,10 @@ bool syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
     // spans the window must use its actual physical client extent: Qt rounds
     // the HWND at fractional DPI, whereas flooring width*dpr can leave a
     // one-pixel strip outside the video (for example 642 DIP at 125%).
-    const bool aligned = window->property("gameAligned").toBool();
-    const auto physical = [aligned](qreal value) { return int(aligned ? std::round(value) : std::floor(value)); };
-    const int x = physical(topLeft.x() * dpr);
-    const int y = physical(topLeft.y() * dpr);
-    int w = std::max(1, physical(host->width() * dpr));
-    int h = std::max(1, physical(host->height() * dpr));
+    const int x = int(std::floor(topLeft.x() * dpr));
+    const int y = int(std::floor(topLeft.y() * dpr));
+    int w = std::max(1, int(std::floor(host->width() * dpr)));
+    int h = std::max(1, int(std::floor(host->height() * dpr)));
     RECT parentClient{};
     if (GetClientRect(reinterpret_cast<HWND>(window->winId()), &parentClient)) {
         if (std::abs(topLeft.x()) < 0.001 && std::abs(host->width() - window->width()) < 0.001)
@@ -1113,7 +1111,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         return 1;
     }
     if (testSize.isValid()) window->resize(testSize);
-    bridge.attachMainWindow(static_cast<qulonglong>(window->winId()));
 
     // Fullscreen must own the whole monitor. Without telling the shell, the taskbar
     // stayed above the fullscreen picture on some systems (field report with the

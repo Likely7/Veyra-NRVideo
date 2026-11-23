@@ -338,14 +338,6 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     impl_->presentation.fullscreen=value;
     impl_->engine.requestPresentation(impl_->presentation);
     emit presentationChanged();
-    // QML's visibility notification runs inside Qt's fullscreen transition.
-    // Let Qt finish its activation request before applying no-focus/through
-    // flags and handing the foreground to the game. One queued transition,
-    // without changing polling or presentation cadence.
-    if(value&&gameMode()) QMetaObject::invokeMethod(this,[this]{
-        if(impl_->presentation.fullscreen)updateGameMode();
-    },Qt::QueuedConnection);
-    else updateGameMode();
 }
 double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;

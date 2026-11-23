@@ -20,7 +20,7 @@ Item {
             if (test.phase === 0) {
                 if (test.ticks < 8) return
                 const fps = test.limits[test.limitIndex]
-                for (const [k, v] of [["kind", 0], ["method", 0], ["fps", fps], ["cursor", false], ["passthrough", false], ["fill", false]])
+                for (const [k, v] of [["kind", 0], ["method", 0], ["fps", fps], ["cursor", false], ["fill", false]])
                     if (!veyra.setScreenOption(k, v)) throw new Error("setScreenOption " + k)
                 veyra.refreshCaptureTargets()
                 veyra.screenTargetId = test.targetId

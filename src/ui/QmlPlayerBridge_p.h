@@ -9,11 +9,9 @@
 #include "veyra/media/FormatBadgeWindow.h"
 #include "veyra/ngx/DlssgLite.h"
 #include "veyra/RuntimePaths.h"
-#include "veyra/ui/GamePassthrough.h"
 #include <QAbstractNativeEventFilter>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QtGui/qscreen_platform.h>
 #include <shellapi.h>
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
@@ -32,8 +30,6 @@
 #include <QCursor>
 #include <QScreen>
 #include <QWindow>
-#include <QPlatformSurfaceEvent>
-#include <QPointer>
 
 #include <QDateTime>
 #include <QDir>
@@ -192,10 +188,21 @@ namespace bridge_detail {
 // WM_DISPLAYCHANGE reaches every top-level window when a display mode, refresh
 // rate or HDR state, or the set of screens, changes: the 可变刷新 state is then
 // read once more (DisplayStateService) instead of on a timer.
-struct DisplayChangeFilter final : QAbstractNativeEventFilter {
+struct DisplayEventFilter final : QAbstractNativeEventFilter {
     bool* changed = nullptr;
     bool nativeEventFilter(const QByteArray& type, void* message, qintptr*) override {
-        if (changed && type == "windows_generic_MSG" && static_cast<const MSG*>(message)->message == WM_DISPLAYCHANGE) *changed = true;
+        if (type != "windows_generic_MSG") return false;
+        const auto* msg = static_cast<const MSG*>(message);
+        if (msg->message == WM_DISPLAYCHANGE && changed) *changed = true;
+        // Windows created or shown after monitor capture starts must also be
+        // excluded so the preview and controls never feed back into the source.
+        if (msg->message == WM_SHOWWINDOW && msg->wParam)
+            source::excludeWindowFromScreenCapture(msg->hwnd);
+        if (msg->message == WM_WINDOWPOSCHANGING) {
+            const auto* pos = reinterpret_cast<const WINDOWPOS*>(msg->lParam);
+            if (pos && (pos->flags & SWP_SHOWWINDOW))
+                source::excludeWindowFromScreenCapture(msg->hwnd);
+        }
         return false;
     }
 };
@@ -549,7 +556,7 @@ struct QmlPlayerBridge::Impl {
     bool displayChecking=false,displayRecheckPending=false,displayChanged=false;
     uint64_t displayRecheckGeneration=0;
     std::chrono::steady_clock::time_point displayRecheckSince{};
-    DisplayChangeFilter displayChangeFilter;
+    DisplayEventFilter displayEventFilter;
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
     // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
@@ -601,15 +608,6 @@ struct QmlPlayerBridge::Impl {
                 id.toStdString(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart, d.DedicatedVideoMemory >> 20));
         }
     }
-    // 游戏模式: the native side, the capture it belongs to and what the UI reported.
-    ui::GamePassthrough game;
-    std::wstring gameModeUri;          // the screen URI startScreenCapture opened in game mode
-    uint64_t gameModeSessionId = 0;    // its engine session once the open ran
-    bool gameModeLive = false, gamePanelOpen = false, gameRefused = false;
-    bool gameModeShown = false, passthroughShown = false, gameInputShown = false;
-    QRectF gameVideoRect;
-    QPointer<QWindow> gameWindow;
-    HMONITOR gameMonitor = nullptr;
     // The monitored GPU also computes when 设置 -> "同时用这块显卡运算" is on
     // and a specific GPU (not 自动) is chosen; otherwise the default order.
     QString computeGpuName;
