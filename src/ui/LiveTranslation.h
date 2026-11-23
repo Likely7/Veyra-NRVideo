@@ -216,7 +216,7 @@ private:
     std::optional<SpeechRow> speechShown_;
     std::optional<Work> speechRequest_;
     QString speechDraft_;
-    qint64 speechSwapAt_ = 0, speechHideAt_ = 0, draftHideAt_ = 0;
+    qint64 speechSwapAt_ = 0, speechBurstSwapAt_ = 0, speechHideAt_ = 0, draftHideAt_ = 0;
     QStringList context_;
     QCache<QString, QString> cache_{200};
     std::vector<qint64> requestTimes_, displayDelays_, spokenDelays_;

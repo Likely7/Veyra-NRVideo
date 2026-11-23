@@ -235,9 +235,12 @@ void LiveAsr::tick() {
         }
         const bool changed = renderer_ != block.renderer || block.format != format_;
         const bool gap = lastAudioEndUs_ && std::abs(block.playoutUs - lastAudioEndUs_) > 150000;
-        if ((renderer_ && changed) || gap || gapPending_) {
+        if (renderer_ && changed) {
             resetStream();
             emit audioDiscontinuity();
+        } else if (gap || gapPending_) {
+            resampler_.reset();
+            gapPending_ = true;
         }
         if (changed || !renderer_) {
             log::info("live-asr-audio", std::format("pcm rate={} channels={} layout=0x{:x} queuedMs={}",
@@ -247,9 +250,9 @@ void LiveAsr::tick() {
         }
         lastAudioEndUs_ = block.playoutUs + qint64(block.frames) * 1000000 / asr::inputRate;
         lastAudioAt_ = now;
+        if (!sendStreamMarker()) return;
         if (!resampler_.convert(block, samples_)) { fail(QStringLiteral("resample")); return; }
         if (samples_.empty()) continue;
-        if (!sendStreamMarker()) return;
         const QByteArrayView pcm(reinterpret_cast<const char*>(samples_.data()), qsizetype(samples_.size() * sizeof(float)));
         if (pcm.size() > maxPcmBlockBytes) { fail(QStringLiteral("audio-window")); return; }
         inFlightBytes_ += uint32_t(pcm.size());

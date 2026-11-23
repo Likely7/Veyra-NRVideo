@@ -64,9 +64,11 @@ void sentenceChecks() {
     output = sentences.appendFinal(QStringLiteral("Ask Dr. I. Brown to wait."), "en", 2200000, 120);
     check(output.size() == 1 && output[0].text == QStringLiteral("Ask Dr. I. Brown to wait."),
           "a personal initial stays with the name");
-    check(sentences.appendFinal(QStringLiteral("A short fragment"), QStringLiteral("en"), 3000000, 200).empty()
-          && sentences.flush(799).empty() && sentences.flush(800).size() == 1,
-          "unpunctuated audio is finalized after 600 ms");
+    const auto unpunctuated = sentences.appendFinal(QStringLiteral("Get down"), QStringLiteral("en"), 3000000, 200);
+    const auto nextSpoken = sentences.appendFinal(QStringLiteral("Cover me"), QStringLiteral("en"), 3480000, 680);
+    check(unpunctuated.size() == 1 && unpunctuated.front().text == QStringLiteral("Get down") &&
+          nextSpoken.size() == 1 && nextSpoken.front().text == QStringLiteral("Cover me") && sentences.flush(1280).empty(),
+          "rapid unpunctuated acoustic finals are submitted immediately and independently");
     sentences.reset();
     const QString first = QStringLiteral("A very long sentence in the live subtitle window. ");
     const QString prefix = first.repeated(8);

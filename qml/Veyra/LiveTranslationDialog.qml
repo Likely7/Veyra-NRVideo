@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs as NativeDialogs
 import QtQuick.Layouts
 
 DialogLayer {
@@ -9,8 +10,17 @@ DialogLayer {
     title: qsTr("实时翻译")
     glyph: "type"
     dialogWidth: 580
-    actions: [{ label: qsTr("完成"), primary: true }]
-    onActionTriggered: dialogHost.close()
+    actions: root.supported
+        ? [{ label: qsTr("字幕样式") }, { label: qsTr("完成"), primary: true }]
+        : [{ label: qsTr("完成"), primary: true }]
+    onActionTriggered: label => {
+        if (label !== qsTr("字幕样式")) {
+            dialogHost.close()
+            return
+        }
+        bodyViewport.contentY = Math.min(styleSection.y,
+            Math.max(0, bodyViewport.contentHeight - bodyViewport.height))
+    }
 
     readonly property var translation: veyra.liveTranslation || null
     readonly property bool supported: translation !== null && translation.supported
@@ -36,6 +46,18 @@ DialogLayer {
         {id: "4", label: "4"}, {id: "5", label: "5"}, {id: "6", label: "6"}, {id: "7", label: "7"}, {id: "8", label: "8"}
     ]
     readonly property var subtitleLineOptions: [{id: "1", label: "1"}, {id: "2", label: "2"}, {id: "3", label: "3"}]
+    readonly property int subtitleSize: veyra.preferences.liveSubtitleSize || veyra.preferences.subtitleSize || 22
+    readonly property color subtitleColor: veyra.preferences.liveSubtitleColor || "#ffffff"
+    readonly property real subtitleShadow: (veyra.preferences.liveSubtitleShadow ?? -1) >= 0
+        ? veyra.preferences.liveSubtitleShadow : ((veyra.preferences.subtitleOutline ?? 2) > 0 ? 1.8 : 0)
+    readonly property int subtitleLines: Math.min(3, Math.max(1,
+        veyra.preferences.liveSubtitleLines || (veyra.preferences.subtitleLines ?? 2)))
+    NativeDialogs.ColorDialog {
+        id: captionColor
+        title: qsTr("选择字幕颜色")
+        onAccepted: veyra.setPreference("liveSubtitleColor",
+            Qt.rgba(selectedColor.r, selectedColor.g, selectedColor.b, 1).toString())
+    }
     readonly property var regions: [
         {id: "0", label: qsTr("底部字幕")},
         {id: "1", label: qsTr("底部整行")},
@@ -233,15 +255,6 @@ DialogLayer {
                 onToggled: value => { root.translation.showOriginal = value }
             }
         }
-        VRow {
-            visible: root.supported
-            label: qsTr("译文行数上限")
-            VSelect {
-                options: root.subtitleLineOptions
-                value: String(Math.min(3, Math.max(1, Number(veyra.preferences.subtitleLines ?? 2))))
-                onPicked: id => { veyra.setPreference("subtitleLines", Number(id)) }
-            }
-        }
     }
 
     DialogGroup {
@@ -405,6 +418,114 @@ DialogLayer {
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsBody
         wrapMode: Text.Wrap
+    }
+
+    DialogSection { id: styleSection; visible: root.supported; text: qsTr("字幕样式") }
+    DialogGroup {
+        visible: root.supported
+        Rectangle {
+            objectName: "live-subtitle-preview"
+            Layout.fillWidth: true
+            implicitHeight: Math.max(92, sample.contentHeight + 22)
+            radius: 10
+            color: Theme.videoBlack
+            border.width: 1
+            border.color: Theme.stroke
+            clip: true
+            Text {
+                anchors.centerIn: parent
+                anchors.horizontalCenterOffset: root.subtitleShadow
+                anchors.verticalCenterOffset: root.subtitleShadow
+                visible: root.subtitleShadow > 0
+                width: sample.width
+                text: sample.text
+                font: sample.font
+                color: Qt.rgba(0, 0, 0, 0.59)
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+            }
+            // A lighter sample background makes both the dark shadow and the
+            // foreground colour visible while editing.
+            gradient: Gradient {
+                GradientStop { position: 0; color: "#6c7685" }
+                GradientStop { position: 1; color: "#404b60" }
+            }
+            Text {
+                id: sample
+                objectName: "live-subtitle-sample"
+                anchors.centerIn: parent
+                width: parent.width - 32
+                text: qsTr("字幕预览")
+                color: root.subtitleColor
+                font.family: "Microsoft YaHei UI"
+                font.pixelSize: Math.round(root.subtitleSize * 24 / 22)
+                style: (veyra.preferences.subtitleOutline ?? 2) > 0 ? Text.Outline : Text.Normal
+                styleColor: "#c0000000"
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+            }
+        }
+        VRow {
+            label: qsTr("字号")
+            value: root.subtitleSize + " px"
+            VSlider {
+                objectName: "live-subtitle-size"
+                from: 16; to: 56; stepSize: 1
+                value: root.subtitleSize
+                valueFromModel: true
+                onMoved: value => veyra.setPreference("liveSubtitleSize", Math.round(value))
+            }
+        }
+        VRow {
+            label: qsTr("文字颜色")
+            RowLayout {
+                Rectangle {
+                    width: 18; height: 18; radius: 4
+                    color: root.subtitleColor
+                    border.width: 1
+                    border.color: Theme.stroke2
+                }
+                VButton {
+                    objectName: "live-subtitle-color"
+                    text: root.subtitleColor.toString().toUpperCase()
+                    onClicked: {
+                        captionColor.selectedColor = root.subtitleColor
+                        captionColor.open()
+                    }
+                }
+            }
+        }
+        VRow {
+            label: qsTr("阴影距离")
+            value: root.subtitleShadow + " px"
+            VSlider {
+                objectName: "live-subtitle-shadow"
+                from: 0; to: 8; stepSize: 1
+                value: root.subtitleShadow
+                valueFromModel: true
+                onMoved: value => veyra.setPreference("liveSubtitleShadow", Math.round(value))
+            }
+        }
+        VRow {
+            label: qsTr("译文行数上限")
+            VSelect {
+                options: root.subtitleLineOptions
+                value: String(root.subtitleLines)
+                onPicked: id => veyra.setPreference("liveSubtitleLines", Number(id))
+            }
+        }
+        VButton {
+            objectName: "live-subtitle-reset"
+            Layout.alignment: Qt.AlignRight
+            text: qsTr("恢复默认")
+            ghost: true
+            onClicked: {
+                veyra.setPreference("liveSubtitleSize", 0)
+                veyra.setPreference("liveSubtitleColor", "#ffffff")
+                veyra.setPreference("liveSubtitleShadow", -1)
+                veyra.setPreference("liveSubtitleLines", 0)
+            }
+        }
     }
 
 }

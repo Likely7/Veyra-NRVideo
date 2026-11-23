@@ -21,6 +21,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <cmath>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -32,13 +33,13 @@
 namespace veyra::ui::asr {
 namespace {
 constexpr int window = 512;
-constexpr int previewIntervalMs = 1000;
+constexpr int previewIntervalMs = 900;
 constexpr int previewBudgetMs = previewIntervalMs * 3 / 10;
 constexpr int previewPadding = 10 * window;
 constexpr int cutLookbackWindows = sampleRate / window;
 constexpr int cutOverlapWindows = 6; // 192 ms on each side of the cut.
 constexpr int noiseTrackingWindows = 96;
-constexpr int quietPauseWindows = 6;
+constexpr size_t maxPendingSegments = 4;
 constexpr int languageSilenceUs = 10000000;
 
 qint64 processCpuMs() {
@@ -146,9 +147,14 @@ public:
 
         threads = std::clamp(threads, 1, 8);
         model_ = model;
-        maxSpeechWindows_ = (model == Whisper ? 3800 : 6500) * sampleRate / (1000 * window);
-        previewSamples_.reserve(size_t(maxSpeechWindows_ * window + previewPadding));
         language_ = model == Parakeet ? QStringLiteral("en") : whisperLanguage(language);
+        const bool englishWhisper = model == Whisper && language_ == QLatin1String("en");
+        const int maxUtteranceMs = model == Parakeet ? 4200 : englishWhisper ? 2800 : 3800;
+        const int minUtteranceMs = model == Parakeet ? 2000 : englishWhisper ? 800 : 1150;
+        maxSpeechWindows_ = maxUtteranceMs * sampleRate / (1000 * window);
+        minSpeechWindows_ = minUtteranceMs * sampleRate / (1000 * window);
+        quietPauseWindows_ = model == Parakeet ? 7 : englishWhisper ? 5 : 6;
+        previewSamples_.reserve(size_t(maxSpeechWindows_ * window + previewPadding));
         const QDir dir(ModelAssets::path(folder, bundle[2]));
         const auto& files = bundle[2].members;
         const auto encoder = dir.filePath(QString::fromLatin1(files[0].name)).toUtf8();
@@ -182,8 +188,12 @@ public:
 
         const auto vadPath = ModelAssets::path(folder, bundle[1]).toUtf8();
         SherpaOnnxVadModelConfig vadConfig{};
-        vadConfig.silero_vad = {vadPath.constData(), 0.5f, model == Whisper ? 0.20f : 0.25f, 0.20f, window,
-            model == Whisper ? 4.5f : 7.0f};
+        // English can use a shorter endpoint. Preserve the acoustic context
+        // for other and unknown Whisper languages.
+        const float silenceDuration = model == Parakeet ? 0.25f : englishWhisper ? 0.16f : 0.20f;
+        const float minimum = englishWhisper ? 0.16f : 0.20f;
+        const float maximum = model == Parakeet ? 5.0f : englishWhisper ? 3.6f : 4.5f;
+        vadConfig.silero_vad = {vadPath.constData(), 0.5f, silenceDuration, minimum, window, maximum};
         vadConfig.sample_rate = sampleRate;
         vadConfig.num_threads = 1;
         vadConfig.provider = "cpu";
@@ -207,11 +217,16 @@ public:
         decoder_ = std::jthread([this, testDecodeDelayMs](std::stop_token stop) {
             while (!stop.stop_requested()) {
                 std::unique_lock lock(pendingLock_);
-                if (!pendingReady_.wait(lock, stop, [this] { return pending_ || preview_; }) ||
+                if (!pendingReady_.wait(lock, stop, [this] { return !pending_.empty() || preview_; }) ||
                     stop.stop_requested()) return;
-                auto& next = pending_ ? pending_ : preview_;
-                Segment segment = std::move(*next);
-                next.reset();
+                Segment segment;
+                if (pending_.empty()) {
+                    segment = std::move(*preview_);
+                    preview_.reset();
+                } else {
+                    segment = std::move(pending_.front());
+                    pending_.pop_front();
+                }
                 decoderBusy_ = true;
                 lock.unlock();
                 bool ok = true;
@@ -234,16 +249,28 @@ public:
 
     void reset(uint64_t epoch) {
         epoch_ = epoch;
-        gap();
-    }
-
-    void gap() {
         {
             std::lock_guard lock(pendingLock_);
             ++streamGeneration_;
-            pending_.reset();
+            pending_.clear();
             preview_.reset();
         }
+        resetVad();
+    }
+
+    bool gap() {
+        // A short PCM gap is still the same source. Finish the available
+        // utterance and keep completed speech waiting for the decoder.
+        if (!flushInput()) return false;
+        {
+            std::lock_guard lock(pendingLock_);
+            preview_.reset();
+        }
+        resetVad();
+        return true;
+    }
+
+    void resetVad() {
         runtime_.SherpaOnnxVoiceActivityDetectorReset(vad_);
         vadInputSamples_ = 0;
         vadOriginUs_ = 0;
@@ -278,9 +305,14 @@ public:
             runtime_.SherpaOnnxReadWaveFromBinaryData(bytes.constData(), int32_t(bytes.size())),
             runtime_.SherpaOnnxFreeWave);
         if (!wave || wave->sample_rate != sampleRate || wave->num_samples <= 0) return fail("wav-format");
-        if (!accept(std::span(wave->samples, size_t(wave->num_samples)), 0)) return false;
+        return accept(std::span(wave->samples, size_t(wave->num_samples)), 0) && flushInput();
+    }
+
+    bool flushInput() {
+        if (!haveOrigin_) return true;
         if (fill_) {
             std::fill(buffer_.begin() + fill_, buffer_.end(), 0.0f);
+            fill_ = 0;
             if (!acceptWindow()) return false;
         }
         runtime_.SherpaOnnxVoiceActivityDetectorFlush(vad_);
@@ -433,11 +465,7 @@ private:
         const bool quiet = noiseFloor_ > 0.0f && voicePower_ > noiseFloor_ * 12.0f &&
             power <= noiseFloor_ * 3.0f;
         quietWindows_ = quiet ? quietWindows_ + 1 : 0;
-        // The faster model already sends partials. Its pause detector can
-        // wait for more useful context before freezing a whole utterance.
-        const int minUtteranceMs = model_ == Whisper ? 1150 : 2200;
-        const int pauseWindows = model_ == Whisper ? quietPauseWindows : quietPauseWindows + 1;
-        return speechWindows_ >= minUtteranceMs * sampleRate / (1000 * window) && quietWindows_ >= pauseWindows;
+        return speechWindows_ >= minSpeechWindows_ && quietWindows_ >= quietPauseWindows_;
     }
 
     static float windowPower(std::span<const float> samples) {
@@ -471,7 +499,7 @@ private:
         nextPreviewAt_ = end + previewIntervalMs * 1000;
         {
             std::lock_guard lock(pendingLock_);
-            if (decoderBusy_ || pending_ || preview_) return;
+            if (decoderBusy_ || !pending_.empty() || preview_) return;
             preview_ = Segment{previewSamples_, end - sampleUs(previewSamples_.size()), end,
                 epoch_, streamGeneration_.load(), segmentId_, true};
         }
@@ -496,13 +524,16 @@ private:
 
     bool submit(Segment segment) {
         if (!decoder_.joinable()) return decodeSegment(segment, 0);
-        // Finals take precedence. Bounded latest waiting work under overload
-        // keeps the reader consuming PCM while a decode is in progress.
+        // Keep short consecutive lines in order while a previous line is
+        // decoding. Discard old work only when the queue reaches its bound.
         {
             std::lock_guard lock(pendingLock_);
             preview_.reset();
-            if (pending_) ++skippedSegments_;
-            pending_ = std::move(segment);
+            if (pending_.size() >= maxPendingSegments) {
+                pending_.pop_front();
+                ++skippedSegments_;
+            }
+            pending_.push_back(std::move(segment));
         }
         pendingReady_.notify_one();
         return true;
@@ -584,12 +615,14 @@ private:
     mutable std::mutex outputLock_;
     std::mutex pendingLock_;
     std::condition_variable_any pendingReady_;
-    std::optional<Segment> pending_, preview_;
+    std::deque<Segment> pending_;
+    std::optional<Segment> preview_;
     bool decoderBusy_ = false;
     std::jthread decoder_;
     std::array<float, window> buffer_{};
     size_t fill_ = 0;
     int speechWindows_ = 0, maxSpeechWindows_ = 0, quietWindows_ = 0;
+    int minSpeechWindows_ = 0, quietPauseWindows_ = 0;
     size_t noiseWindows_ = 0;
     std::array<float, noiseTrackingWindows> noisePowers_{};
     float noiseFloor_ = 0.0f, voicePower_ = 0.0f;
@@ -633,7 +666,7 @@ int runWorker(unsigned testDecodeDelayMs) {
             break;
         case FrameType::Gap:
             if (header.bytes || header.epoch != epoch) return 2;
-            worker.gap();
+            if (!worker.gap()) return 0;
             waitingForFreshPcm = false;
             break;
         case FrameType::Audio: {
@@ -641,7 +674,7 @@ int runWorker(unsigned testDecodeDelayMs) {
             if (!readBytes(input, pcm.data(), header.bytes)) return 0;
             const bool stale = header.playoutUs < sink::recordingClockUs() - maxAudioAgeUs;
             if (stale) {
-                if (!waitingForFreshPcm) worker.gap();
+                if (!waitingForFreshPcm && !worker.gap()) return 0;
                 waitingForFreshPcm = true;
             } else {
                 waitingForFreshPcm = false;

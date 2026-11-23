@@ -1,5 +1,6 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include <QColor>
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
 #include "veyra/gfx/RifeDmlBackend.h"
@@ -197,6 +198,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
+        {"liveSubtitleSize", {0, 56}}, {"liveSubtitleShadow", {-1, 8}}, {"liveSubtitleLines", {0, 3}},
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
@@ -222,9 +224,15 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         bool ok = false; const int n = value.toInt(&ok);
         const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) return false;
+        if (key == QLatin1String("liveSubtitleSize") && n != 0 && n < 16) return false;
         stored = n;
     } else if (flags.contains(key)) {
         stored = value.toBool();
+    } else if (key == QLatin1String("liveSubtitleColor")) {
+        const auto valueText = value.toString().trimmed();
+        const auto color = QColor::fromString(valueText);
+        if (!color.isValid() || valueText.size() != 7 || !valueText.startsWith(u'#')) return false;
+        stored = color.name(QColor::HexRgb);
     } else if (key == QLatin1String("nrResidualView") || key == QLatin1String("nrCorrectionView")) {
         const auto view = value.toString();
         if (view != QLatin1String("web") && view != QLatin1String("list")) return false;

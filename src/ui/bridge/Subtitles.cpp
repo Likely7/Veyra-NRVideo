@@ -1,6 +1,7 @@
 // QML bridge: Subtitles responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "../LiveTranslation.h"
+#include <QColor>
 
 namespace veyra::ui {
 // --- subtitles (P4-c) --------------------------------------------------------
@@ -230,36 +231,36 @@ void QmlPlayerBridge::tickSubtitles() {
     }
     // Live text is never copied into subtitle diagnostics or the export graph.
     const auto [original, translated, draft] = liveTranslation_->displayCaption();
+    if (original.isEmpty() && translated.isEmpty() && draft.isEmpty()) {
+        updateSubtitleOverlay(i.subOverlay, draw, view);
+        return;
+    }
     const int alignment = draw.empty() ? 2 : 8;
     const auto beginLive = draw.size();
-    if (liveTranslation_->showOriginal() && !original.isEmpty() && original != translated) {
+    const int liveSize = i.prefInt("liveSubtitleSize", 0);
+    const double liveScale = liveSize > 0 ? double(std::clamp(liveSize, 16, 56)) / 22.0 : view.scale;
+    const auto liveColor = QColor::fromString(i.prefString("liveSubtitleColor"));
+    const uint32_t liveRgb = liveColor.isValid() ? liveColor.rgb() & 0x00ffffffu : 0x00ffffffu;
+    const int liveShadow = i.prefInt("liveSubtitleShadow", -1);
+    const int liveLines = i.prefInt("liveSubtitleLines", 0);
+    const auto appendLive = [&](const QString& text, double scale, uint32_t alpha, int lines, bool italic = false) {
         SubtitleLine line;
-        line.text = original.toStdWString();
+        line.text = text.toStdWString();
         line.style.alignment = alignment;
-        line.style.size *= 0.8;
-        line.style.primary = 0xb3ffffff;
-        line.maximumLines = 1;
+        line.style.italic = italic;
+        line.style.primary = (alpha << 24) | liveRgb;
+        line.scaleOverride = liveScale * scale;
+        if (liveShadow >= 0) line.shadowOffset = std::min(liveShadow, 8);
+        line.maximumLines = lines;
         draw.push_back(std::move(line));
-    }
-    if (!translated.isEmpty()) {
-        SubtitleLine line;
-        line.text = translated.toStdWString();
-        line.style.alignment = alignment;
-        line.maximumLines = std::clamp(view.targetLines, 1, 3);
-        draw.push_back(std::move(line));
-    }
+    };
+    if (liveTranslation_->showOriginal() && !original.isEmpty() && original != translated)
+        appendLive(original, 0.8, 0xb3, 1);
+    if (!translated.isEmpty())
+        appendLive(translated, 1.0, 0xff, std::clamp(liveLines > 0 ? liveLines : view.targetLines, 1, 3));
     if (alignment == 8 && draw.size() - beginLive == 2)
         std::swap(draw[beginLive], draw[beginLive + 1]);
-    if (!draft.isEmpty()) {
-        SubtitleLine line;
-        line.text = draft.toStdWString();
-        line.style.alignment = alignment;
-        line.style.size *= 0.75;
-        line.style.italic = true;
-        line.style.primary = 0x99ffffff;
-        line.maximumLines = 1;
-        draw.push_back(std::move(line));
-    }
+    if (!draft.isEmpty()) appendLive(draft, 0.75, 0x99, 1, true);
     updateSubtitleOverlay(i.subOverlay, draw, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {

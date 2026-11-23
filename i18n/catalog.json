@@ -14758,7 +14758,7 @@
   },
   {
    "zh": "字号",
-   "src": "qml/SubtitleSettingsDialog.qml",
+   "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "字號",
    "en": "Font size",
    "ja": "文字サイズ",
@@ -14926,6 +14926,19 @@
    "ru": "Источник субтитров"
   },
   {
+   "zh": "字幕样式",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "字幕樣式",
+   "en": "Subtitle style",
+   "ja": "字幕スタイル",
+   "ko": "자막 스타일",
+   "es": "Estilo de subtítulos",
+   "fr": "Style des sous-titres",
+   "de": "Untertitelstil",
+   "pt-BR": "Estilo das legendas",
+   "ru": "Стиль субтитров"
+  },
+  {
    "zh": "字幕缓存已达上限，后续字幕未加载",
    "src": "src/engine/Subtitles.cpp",
    "zh-TW": "字幕快取已達上限，後續字幕未載入",
@@ -15015,6 +15028,19 @@
    "de": "Untertitelspur {}",
    "pt-BR": "Faixa de legendas {}",
    "ru": "Трек субтитров {}"
+  },
+  {
+   "zh": "字幕预览",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "字幕預覽",
+   "en": "Subtitle preview",
+   "ja": "字幕プレビュー",
+   "ko": "자막 미리보기",
+   "es": "Vista previa de subtítulos",
+   "fr": "Aperçu des sous-titres",
+   "de": "Untertitelvorschau",
+   "pt-BR": "Prévia da legenda",
+   "ru": "Предпросмотр субтитров"
   },
   {
    "zh": "字幕默认字号",
@@ -19997,7 +20023,7 @@
   },
   {
    "zh": "恢复默认",
-   "src": "qml/NrLayerEditor.qml",
+   "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "恢復預設",
    "en": "Reset to default",
    "ja": "既定に戻す",
@@ -22452,6 +22478,19 @@
    "de": "Nicht unterstütztes Format, beschädigte Daten oder kein Untertitelinhalt",
    "pt-BR": "Formato não suportado, dados danificados ou sem conteúdo de legendas",
    "ru": "Неподдерживаемый формат, поврежденные данные или отсутствие субтитров"
+  },
+  {
+   "zh": "文字颜色",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "文字顏色",
+   "en": "Text colour",
+   "ja": "文字色",
+   "ko": "텍스트 색상",
+   "es": "Color del texto",
+   "fr": "Couleur du texte",
+   "de": "Textfarbe",
+   "pt-BR": "Cor do texto",
+   "ru": "Цвет текста"
   },
   {
    "zh": "文本字幕 · PGS/SUP · VobSub（IDX+SUB）",
@@ -38405,6 +38444,19 @@
    "ru": "Выберите папку для сохранения…"
   },
   {
+   "zh": "选择字幕颜色",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "選擇字幕顏色",
+   "en": "Choose subtitle colour",
+   "ja": "字幕の色を選択",
+   "ko": "자막 색상 선택",
+   "es": "Elegir color de subtítulos",
+   "fr": "Choisir la couleur des sous-titres",
+   "de": "Untertitelfarbe auswählen",
+   "pt-BR": "Escolher cor da legenda",
+   "ru": "Выбрать цвет субтитров"
+  },
+  {
    "zh": "选择导出目录",
    "src": "src/ui/bridge/Recording.cpp",
    "zh-TW": "選擇匯出目錄",
@@ -39807,6 +39859,19 @@
    "de": "Schattentönung",
    "pt-BR": "Tom das sombras",
    "ru": "Оттенок теней"
+  },
+  {
+   "zh": "阴影距离",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "陰影距離",
+   "en": "Shadow offset",
+   "ja": "影の距離",
+   "ko": "그림자 거리",
+   "es": "Desplazamiento de sombra",
+   "fr": "Décalage de l’ombre",
+   "de": "Schattenversatz",
+   "pt-BR": "Distância da sombra",
+   "ru": "Смещение тени"
   },
   {
    "zh": "陀螺仪",

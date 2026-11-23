@@ -40,7 +40,9 @@ std::wstring signatureOf(const std::vector<SubtitleLine>& lines,const SubtitleVi
     for(const auto& line:lines){
         signature+=std::format(L"{}:{}|{:08X}|{:08X}|{}:{}|{}|{}|{}|{}|",line.text.size(),line.text,line.style.primary,line.style.outline,line.style.font.size(),line.style.font,
             line.style.size,line.style.alignment,line.alignOverride,line.secondary?1:0);
-        signature+=std::format(L"{}:{}:{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),reinterpret_cast<uintptr_t>(line.ass.get()),line.posX,line.posY,line.maximumLines);
+        signature+=std::format(L"{}:{}:{}:{}:{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),
+            reinterpret_cast<uintptr_t>(line.ass.get()),line.posX,line.posY,line.maximumLines,
+            line.scaleOverride.value_or(-1),line.shadowOffset.value_or(-1));
         const auto& s=line.style;
         signature+=std::format(L"{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|",s.back,s.outlineWidth,s.shadow,s.marginL,s.marginR,s.marginV,s.bold,s.italic,s.background,s.font.size());
     }
@@ -54,6 +56,7 @@ struct Line {
     std::unique_ptr<Gdiplus::GraphicsPath> path;
     Gdiplus::RectF bounds{};
     engine::SubtitleStyle style;
+    double shadowOffset=0;
     bool positioned=false;
     float positionX=0,positionY=0;
 };
@@ -144,9 +147,10 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             Line entry;
             entry.path=std::make_unique<Gdiplus::GraphicsPath>();
             entry.style=line.style;
+            entry.shadowOffset=line.shadowOffset.value_or(line.style.shadow>0?line.style.shadow:(view.outline?1.8:0.0));
             if(line.alignOverride>=1&&line.alignOverride<=9)entry.style.alignment=line.alignOverride;
             if(entry.style.alignment<1||entry.style.alignment>9)entry.style.alignment=2;
-            const double logicalSize=std::max(8.0,(line.style.size>0?line.style.size:24.0)*view.scale);
+            const double logicalSize=std::max(8.0,(line.style.size>0?line.style.size:24.0)*line.scaleOverride.value_or(view.scale));
             const std::wstring family=!view.fontOverride.empty()?view.fontOverride:(line.style.font.empty()?L"Microsoft YaHei UI":line.style.font);
             FontFamily requested(family.c_str());
             FontFamily* use=requested.IsAvailable()?&requested:&fallbackFamily;
@@ -256,7 +260,7 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
                 SolidBrush back(Color::MakeARGB(byte((style.back>>24)&0xFF),byte((style.back>>16)&0xFF),byte((style.back>>8)&0xFF),byte(style.back&0xFF)));
                 graphics.FillRectangle(&back,box);
             }
-            const float shadow=float(dip(h,style.shadow>0?style.shadow:(view.outline?1.8:0.0)));
+            const float shadow=float(dip(h,entry.shadowOffset));
             if(shadow>0.5f){
                 GraphicsPath shadowPath;
                 shadowPath.AddPath(entry.path.get(),FALSE);

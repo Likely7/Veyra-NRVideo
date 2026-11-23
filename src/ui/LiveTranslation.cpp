@@ -37,9 +37,10 @@ constexpr auto localAlias = "veyra-translation";
 constexpr qint64 captionLifetimeMs = 7000;
 constexpr qint64 maxQueuedAgeUs = 4000000;
 constexpr qint64 maxSpeechAgeUs = 6000000;
-constexpr qint64 minSpeechShowMs = 1500;
+constexpr qint64 minSpeechShowMs = 950;
+constexpr qint64 minBurstShowMs = 520;
 constexpr qsizetype maxSpeechQueue = 24;
-constexpr qsizetype maxJoinedSpeech = 96;
+constexpr qsizetype maxJoinedSpeech = 72;
 constexpr qint64 maxResponseBytes = 128 * 1024;
 constexpr int localScreenTimeoutMs = 30000, screenRetryDelayMs = 1500, maxScreenRetries = 2;
 constexpr qint64 screenClearMs = 800;
@@ -780,7 +781,8 @@ void LiveTranslation::pruneSpeech(qint64 now) {
 }
 
 void LiveTranslation::advanceSpeech(qint64 now) {
-    if (speechShown_ && now < speechSwapAt_) return;
+    const auto nextSwapAt = speechReady_.size() >= 2 ? speechBurstSwapAt_ : speechSwapAt_;
+    if (speechShown_ && now < nextSwapAt) return;
     while (!speechReady_.empty()) {
         // A fallback created under backlog pressure must not jump over an
         // older in-flight translation.
@@ -798,7 +800,10 @@ void LiveTranslation::advanceSpeech(qint64 now) {
         if (fallback && (!showOriginal_ || now - row.readyAt > minSpeechShowMs)) continue;
         const auto& line = fallback ? row.work.sentence.text : row.translated;
         speechSwapAt_ = now + (fallback ? minSpeechShowMs
-            : std::clamp<qint64>(line.size() * 1000 / 32, minSpeechShowMs, 2500));
+            : std::clamp<qint64>(line.size() * 1000 / 32, minSpeechShowMs, 2200));
+        // Catch up on dense dialogue without shortening a lone caption's
+        // lifetime or skipping a translated phrase already ready to display.
+        speechBurstSwapAt_ = now + std::clamp<qint64>(line.size() * 1000 / 52, minBurstShowMs, 1200);
         speechHideAt_ = now + (fallback ? minSpeechShowMs : displayDuration(line));
         if (!fallback) {
             const auto clockUs = sink::recordingClockUs();
@@ -888,7 +893,7 @@ void LiveTranslation::resetCaption() {
     rows_.clear();
     speechReady_.clear();
     speechShown_.reset();
-    speechSwapAt_ = speechHideAt_ = draftHideAt_ = 0;
+    speechSwapAt_ = speechBurstSwapAt_ = speechHideAt_ = draftHideAt_ = 0;
     speechDraft_.clear();
     if (wasShown) emit captionChanged();
 }

@@ -12,7 +12,7 @@ inline constexpr uint32_t frameMagic = 0x52534156; // 'VASR'
 inline constexpr uint32_t maxPayload = 8192;
 inline constexpr uint32_t audioCreditBytes = 8192; // 128 ms of 16 kHz float PCM.
 inline constexpr int64_t maxAudioAgeUs = 500000;
-inline constexpr int64_t maxPendingSegmentAgeUs = 950000;
+inline constexpr int64_t maxPendingSegmentAgeUs = 1600000;
 inline constexpr int64_t maxResultAgeUs = 4000000;
 struct FrameHeader {
     uint32_t magic = frameMagic;

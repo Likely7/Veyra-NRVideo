@@ -221,7 +221,9 @@ std::vector<LiveSentence> LiveSentences::appendFinal(const QString& text, const 
     language_ = language;
     endUs_ = endUs;
     changedAt_ = nowMs;
-    auto completed = take(false, false);
+    // An acoustic endpoint finishes the phrase even if the recognizer
+    // returned no punctuation. Snapshot sources still wait for revisions.
+    auto completed = take(true, false);
     sentences.insert(sentences.end(), std::make_move_iterator(completed.begin()), std::make_move_iterator(completed.end()));
     return sentences;
 }
