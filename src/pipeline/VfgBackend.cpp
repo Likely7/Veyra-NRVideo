@@ -670,7 +670,7 @@ bool VfgBackend::created()const{
     return false;
 #endif
 }
-bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture,unsigned parity,bool comparePrevious){
+bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture,unsigned parity,CaptureMode mode){
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;if(!p.ready||p.failed.load()||!list||!texture||parity>1)return false;
     const auto desc=texture->GetDesc();if(desc.Width!=p.width||desc.Height!=p.height||desc.Format!=p.format)return false;
@@ -680,7 +680,8 @@ bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture
     D3D12_TEXTURE_COPY_LOCATION src{};src.pResource=texture;src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=buffer;dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=p.footprint;
     list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
-    if(p.gpuShotChange)p.recordShotChangeTest(list,parity,comparePrevious);
+    if(p.gpuShotChange&&mode!=CaptureMode::HistoryOnly)
+        p.recordShotChangeTest(list,parity,mode==CaptureMode::ComparePair);
     else{std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);}
     ++p.inputRevision;return true;
 #else

@@ -32,11 +32,11 @@ public:
     // by that time, as RTSS and PresentMon do; rates count completions at now.
     void presented(bool generated,int64_t now,int64_t paceAt=0){std::lock_guard lock(mutex_);presented_.complete(now);presentPace_.complete(paceAt>0&&paceAt<=now?paceAt:now);(generated?generatedPresented_:realPresented_).complete(now);}
     void xess(uint64_t count,int64_t now){std::lock_guard lock(mutex_);xess_.complete(now,count);}
-    void snapshot(diagnostics::FrameFlowMetrics& m,int64_t now)const{
+    void snapshot(diagnostics::FrameFlowMetrics& m,int64_t now,bool includePresentPace=true)const{
         std::lock_guard lock(mutex_);m.validGeneratedFps=generated_.rate(now);m.presentSubmitFps=presented_.rate(now);
         m.sourceCompletedFps=source_.rate(now);m.outputCompletedFps=output_.rate(now);m.xessSdkSubmitFps=xess_.rate(now);m.rateWindowReady=now-start_>=10000000;
         m.realPresentFps=realPresented_.rate(now);m.generatedPresentFps=generatedPresented_.rate(now);
-        m.presentLow1Fps=presentPace_.lowFps(now);
+        m.presentLow1Fps=includePresentPace?presentPace_.lowFps(now):std::nullopt;
     }
 };
 // Each asynchronous job retains its own window. Replacing the current window
@@ -139,8 +139,8 @@ public:
         metrics_.latest.consumerFence=fence;rates_->presented(generated,now,paceAt);
         metrics_.lastPresent100ns=now;
     }
-    diagnostics::FrameFlowMetrics snapshot(int64_t now)const{
-        std::lock_guard lock(mutex_);auto m=metrics_;rates_->snapshot(m,now);
+    diagnostics::FrameFlowMetrics snapshot(int64_t now,bool includePresentPace=true)const{
+        std::lock_guard lock(mutex_);auto m=metrics_;rates_->snapshot(m,now,includePresentPace);
         if(now>=latencyRefresh_){
             std::vector<double> values;double sum=0;
             for(const auto& sample:latency_)if(sample.time>now-10000000){values.push_back(sample.ms);sum+=sample.ms;}

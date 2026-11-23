@@ -15,6 +15,9 @@ namespace veyra::engine {
 // No extra window, font texture, CPU readback or queue submission.
 class FullscreenFrameStats {
 public:
+    bool needsUpdate() const {
+        return std::chrono::steady_clock::now()>=nextUpdate_;
+    }
     void update(std::optional<double> fps,std::optional<double> low) {
         const auto now=std::chrono::steady_clock::now();
         if(now<nextUpdate_)return;

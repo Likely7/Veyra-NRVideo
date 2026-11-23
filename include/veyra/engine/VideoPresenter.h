@@ -118,6 +118,9 @@ public:
     TearingHint tearingHint()const { return tearingHint_; }
     int displayCompositionMode()const{return displayCompositionMode_;}
     void setFullscreenFrameStats(int corner){frameStatsCorner_=corner;}
+    bool frameStatsNeedsUpdate() const {
+        return frameStatsCorner_>=0&&frameStats_.needsUpdate();
+    }
     void updateFrameStats(std::optional<double> fps,std::optional<double> low){
         if(frameStatsCorner_>=0)frameStats_.update(fps,low);
     }

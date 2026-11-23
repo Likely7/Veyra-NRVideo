@@ -938,6 +938,12 @@ int main(){
         check(startMetrics.presentLow1Fps&&*startMetrics.presentLow1Fps>119.9&&returnMetrics.presentLow1Fps&&*returnMetrics.presentLow1Fps<116,
               "1% low spaces presents by the call start, as RTSS and PresentMon, not by the call's return");
         check(std::abs(startMetrics.presentSubmitFps-returnMetrics.presentSubmitFps)<0.2,"the submit rate counts the same presents either way");
+        const auto fullLow=startMetrics.presentLow1Fps;
+        const auto fps=startMetrics.presentSubmitFps;
+        byStart.snapshot(startMetrics,t,false);
+        check(!startMetrics.presentLow1Fps&&startMetrics.presentSubmitFps==fps,"cheap stats skip the percentile and keep submit FPS");
+        byStart.snapshot(startMetrics,t);
+        check(startMetrics.presentLow1Fps==fullLow,"cheap stats preserve the history used by a full snapshot");
     }
     {// PictureCompare.h: a new picture stops the comparison early; its reference copy can wait.
         using veyra::pipeline::PictureReference;using veyra::pipeline::PicturePlane;using veyra::pipeline::PictureComponents;

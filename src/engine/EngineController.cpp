@@ -2407,7 +2407,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         autoNrControl.reset(now,graph->autoNrLevel());autoNrRevision=options.settings.revision;
                     }
                     if(reset)autoNrControl.discardObservations(now);
-                    const auto timing=frameFlow->snapshot(now).enhancementProcessing;
+                    const auto timing=frameFlow->snapshot(now,false).enhancementProcessing;
                     const double transportFps=activeSource->info().averageFps*playbackRate;
                     const double budget=std::isfinite(transportFps)&&transportFps>0?800.0/transportFps:0;
                     const auto next=autoNrControl.observe(now,timing.p95,timing.samples,budget);
@@ -2446,7 +2446,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         nrReuseControl.reset(now,graph->nrReuseLevel());nrReuseRevision=options.settings.revision;
                     }
                     if(reset)nrReuseControl.discardObservations(now);
-                    const auto flow=frameFlow->snapshot(now);
+                    const auto flow=frameFlow->snapshot(now,false);
                     std::optional<double> nrMs;
                     for(auto stage:{diagnostics::GpuStage::NrLayer0,diagnostics::GpuStage::NrLayer1,diagnostics::GpuStage::NrLayer2,diagnostics::GpuStage::NrLayer3}){
                         const auto& a=flow.gpuTiming[size_t(stage)];
@@ -3046,7 +3046,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             const auto began=std::chrono::duration_cast<std::chrono::nanoseconds>(previous->processStart.time_since_epoch()).count()/100;
                             auto cost=previous->output.fgEvaluated?fgBudget.predicted(start,previous->output.historyReset||previous->output.fgRecovery):fgBudget.baseCost(start);
                             if(vfgMeasuredReducedQueue&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&previous->output.fgReduced){
-                                const auto first=frameFlow->snapshot(start).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+                                const auto first=frameFlow->snapshot(start,false).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
                                 const auto measured=vfgQueuedGroupCost(cost,fgBudget.baseCost(start),first,true,previous->output.fgEvaluated,previous->output.historyReset||previous->output.fgRecovery);
                                 if(cost&&measured&&*measured<*cost&&start>=nextVfgQueueLog){nextVfgQueueLog=start+10000000;
                                     veyra::log::info("vfg-queue-budget",std::format("source={} queuedReduced=2X requested={} fullEstimateMs={:.3f} singleEstimateMs={:.3f} (base plus measured first interpolation; deadlines unchanged)",previous->output.batch.identity.sourceFrameId,options.fgMultiplier,*cost,*measured));}
@@ -3065,7 +3065,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto media=int64_t(nowMs()*10000.0);
                         const auto firstPts=pipeline::FrameBatch::interpolate(a,batch.b100ns,1,previewFgMultiplier);
                         const auto firstDeadline=now+int64_t((firstPts-media)/playbackRate),deadline=now+int64_t((lastGenerated-media)/playbackRate);
-                        const auto first=frameFlow->snapshot(now).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+                        const auto first=frameFlow->snapshot(now,false).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
                         const auto elapsed=elapsedMs(processStart),blit=livePresentGpu.p95();
                         const auto outputInterval=int64_t(interval/playbackRate)/previewFgMultiplier;
                         bool retainedFits=true;
@@ -3572,7 +3572,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                                 if(physicalCapture&&age>=80.0)veyra::log::info("capture-age-stall",std::format("source={} epoch={} revision={} callbackToReturnMs={:.3f} readyObservedAgeMs={:.3f} gpuSpanMs={:.3f} deadlineAgeMs={:.3f} decisionLateMs={:.3f} deadlineWaitMs={:.3f} presentMs={:.3f} (CPU observation includes scheduling; not scanout; -1 means unknown or no paced deadline)",item.identity.sourceFrameId,item.identity.epoch,item.identity.settingsRevision,age,watch->frameReadyObserved[s.next]?double(watch->frameReadyObserved[s.next]-captureArrival)/10000:-1.0,watch->gpuExecutionMs.value_or(-1.0),timeline.paced()?double(timeline.deadline(item.pts100ns)-captureArrival)/10000:-1.0,timeline.paced()?double(optionalNow-timeline.deadline(item.pts100ns))/10000:-1.0,waited,elapsed));
                             }
                             if(didPresent&&!generated&&!rereadCached&&!paused_){
-                                const auto stamp=host100ns();const auto stats=flow->snapshot(stamp);
+                                const auto stamp=host100ns();const auto stats=flow->snapshot(stamp,false);
                                 const auto color=stats.gpuTiming[size_t(diagnostics::GpuStage::Color)].mean;
                                 const auto blit=stats.gpuTiming[size_t(diagnostics::GpuStage::Blit)].mean;
                                 std::optional<double> basic;
@@ -3687,8 +3687,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 frameFlow->update([&](auto& m){m.slotWaitPerFrameMs=processSlotWaitMs;});
                 captureFlowLast=captureStats;
                 loopTrace.mark("flowUpdate");
-                measured.flow=frameFlow->snapshot(host100ns());
-                presenter.updateFrameStats(measured.flow.presentSubmitFps,measured.flow.presentLow1Fps);
+                const bool updateFrameStats=presenter.frameStatsNeedsUpdate();
+                measured.flow=frameFlow->snapshot(host100ns(),updateFrameStats);
+                if(updateFrameStats)
+                    presenter.updateFrameStats(measured.flow.presentSubmitFps,measured.flow.presentLow1Fps);
                 recorder_->setPresentRateHint(measured.flow.presentSubmitFps);
                 replay_->setPresentRateHint(measured.flow.presentSubmitFps);
                 loopTrace.mark("flowSnapshot");
@@ -3796,7 +3798,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // present-deviation / output-queue are folded into the
                 // player-timing line below (sweep E5); the separate lines stay
                 // available under VEYRA_VERBOSE_FRAME_LOGS for old tooling.
-                const auto dashboard=frameFlow->snapshot(host100ns());
+                const auto dashboard=frameFlow->snapshot(host100ns(),false);
                 if(veyra::log::verboseFrameLogs()){
                 veyra::log::info("present-deviation",std::format("samples={} entryAbsP95Ms={:.3f} returnAbsP95Ms={:.3f} (one sample per actual submission; media-clock deviation, not scanout latency)",presentReturnDeviation.size(),presentEntryDeviation.p95(),presentReturnDeviation.p95()));
                 veyra::log::info("output-queue",std::format("pendingFrames={} enhancementProcessingMs={:.3f} extraDelayEstimateMs={:.3f}",dashboard.pendingOutputFrames,dashboard.enhancementProcessing.mean.value_or(-1),dashboard.cpuTiming[size_t(diagnostics::CpuStage::EnhancementDelayEstimate)].mean.value_or(-1)));}

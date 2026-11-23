@@ -904,6 +904,7 @@ private:
     bool createResources();
     bool initZeroAndDepthTextures();
     bool initNvof();
+    Extent firstSrMotionExtent() const;
     bool initNgxFeatures();
     bool initFsrSr();
     bool initSpatialSr();
