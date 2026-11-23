@@ -5019,6 +5019,32 @@
    "ru": "WASAPI конечная точка аудио недоступна; видео продолжается."
   },
   {
+   "zh": "WebView2 启动失败。请确认已安装 Microsoft Edge WebView2 运行时。",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "WebView2 啟動失敗。請確認已安裝 Microsoft Edge WebView2 執行時。",
+   "en": "WebView2 failed to start. Make sure the Microsoft Edge WebView2 runtime is installed.",
+   "ja": "WebView2 の起動に失敗しました。Microsoft Edge WebView2 ランタイムがインストールされているか確認してください。",
+   "ko": "WebView2 시작에 실패했습니다. Microsoft Edge WebView2 런타임이 설치되어 있는지 확인하세요.",
+   "es": "WebView2 no pudo iniciarse. Asegúrate de tener instalado el runtime Microsoft Edge WebView2.",
+   "fr": "Échec du démarrage de WebView2. Vérifiez que le runtime Microsoft Edge WebView2 est installé.",
+   "de": "WebView2 konnte nicht starten. Prüfen Sie, ob die Microsoft Edge WebView2-Runtime installiert ist.",
+   "pt-BR": "Falha ao iniciar o WebView2. Verifique se o runtime Microsoft Edge WebView2 está instalado.",
+   "ru": "Не удалось запустить WebView2. Убедитесь, что установлена среда выполнения Microsoft Edge WebView2."
+  },
+  {
+   "zh": "WebView2 运行出错（",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "WebView2 執行出錯（",
+   "en": "WebView2 runtime error (",
+   "ja": "WebView2 実行エラー（",
+   "ko": "WebView2 실행 오류(",
+   "es": "Error del runtime WebView2 (",
+   "fr": "Erreur du runtime WebView2 (",
+   "de": "WebView2-Laufzeitfehler (",
+   "pt-BR": "Erro do runtime WebView2 (",
+   "ru": "Ошибка среды WebView2 ("
+  },
+  {
    "zh": "Windows GPU 引擎占用率（",
    "src": "qml/ProPerfOrbs.qml",
    "zh-TW": "Windows GPU 引擎占用率（",
@@ -5253,6 +5279,19 @@
    "ru": "Xbox Декодирование видео неоднократно терпело неудачу и не могло восстановить изображение. Соедините и сохраните бревна."
   },
   {
+   "zh": "Xbox 连接失败。",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "Xbox 連接失敗。",
+   "en": "Xbox connection failed.",
+   "ja": "Xbox 接続に失敗しました。",
+   "ko": "Xbox 연결에 실패했습니다.",
+   "es": "Falló la conexión con Xbox.",
+   "fr": "Échec de la connexion Xbox.",
+   "de": "Xbox-Verbindung fehlgeschlagen.",
+   "pt-BR": "Falha na conexão com o Xbox.",
+   "ru": "Не удалось подключиться к Xbox."
+  },
+  {
    "zh": "Xbox 连接失败：",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "Xbox 連線失敗：",
@@ -5264,6 +5303,32 @@
    "de": "Xbox Verbindung fehlgeschlagen: ",
    "pt-BR": "Xbox ligação falhou: ",
    "ru": "Xbox соединение не удалось: "
+  },
+  {
+   "zh": "Xbox 连接失败：ICE 交换出错（",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "Xbox 連接失敗：ICE 交換出錯（",
+   "en": "Xbox connection failed: ICE exchange error (",
+   "ja": "Xbox 接続失敗：ICE 交換エラー（",
+   "ko": "Xbox 연결 실패: ICE 교환 오류(",
+   "es": "Falló la conexión con Xbox: error de intercambio ICE (",
+   "fr": "Échec de la connexion Xbox : erreur d’échange ICE (",
+   "de": "Xbox-Verbindung fehlgeschlagen: ICE-Austauschfehler (",
+   "pt-BR": "Falha na conexão com o Xbox: erro na troca ICE (",
+   "ru": "Не удалось подключиться к Xbox: ошибка обмена ICE ("
+  },
+  {
+   "zh": "Xbox 连接失败：SDP 交换出错（",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "Xbox 連接失敗：SDP 交換出錯（",
+   "en": "Xbox connection failed: SDP exchange error (",
+   "ja": "Xbox 接続失敗：SDP 交換エラー（",
+   "ko": "Xbox 연결 실패: SDP 교환 오류(",
+   "es": "Falló la conexión con Xbox: error de intercambio SDP (",
+   "fr": "Échec de la connexion Xbox : erreur d’échange SDP (",
+   "de": "Xbox-Verbindung fehlgeschlagen: SDP-Austauschfehler (",
+   "pt-BR": "Falha na conexão com o Xbox: erro na troca SDP (",
+   "ru": "Не удалось подключиться к Xbox: ошибка обмена SDP ("
   },
   {
    "zh": "Xbox 重连失败：",
@@ -6616,19 +6681,6 @@
    "de": "Konnte nicht vor dem Umschalten der Streamgröße ablaufen",
    "pt-BR": "Não foi possível drenar antes de mudar o tamanho do fluxo",
    "ru": "Не удалось слить перед переключением размера потока"
-  },
-  {
-   "zh": "串流方案",
-   "src": "qml/XboxSourceDialog.qml",
-   "zh-TW": "串流方案",
-   "en": "Streaming plan",
-   "ja": "ストリーミング方式",
-   "ko": "스트리밍 방식",
-   "es": "Plan de streaming",
-   "fr": "Plan de streaming",
-   "de": "Streaming-Plan",
-   "pt-BR": "Plano de streaming",
-   "ru": "План стриминга"
   },
   {
    "zh": "串流设置（只影响串流本身，按主机保存）",
@@ -21583,32 +21635,6 @@
    "ru": "План 1"
   },
   {
-   "zh": "方案1 · 标准",
-   "src": "qml/XboxSourceDialog.qml",
-   "zh-TW": "方案1 · 標準",
-   "en": "Plan 1 · Standard",
-   "ja": "方式1 · 標準",
-   "ko": "방식 1 · 표준",
-   "es": "Plan 1 · Estándar",
-   "fr": "Plan 1 · Standard",
-   "de": "Plan 1 · Standard",
-   "pt-BR": "Plano 1 · Padrão",
-   "ru": "План 1 · Стандарт"
-  },
-  {
-   "zh": "方案1：现行连接方式。方案2：高码率档（1080p HQ）+ 公网 STUN + 完整 Teredo 直连候选，源码率更高、复杂网络下更稳。断开后重新连接生效。",
-   "src": "qml/XboxSourceDialog.qml",
-   "zh-TW": "方案1：現行連接方式。方案2：高位元率檔（1080p HQ）+ 公網 STUN + 完整 Teredo 直連候選，源位元率更高、複雜網路下更穩。斷開後重新連接生效。",
-   "en": "Plan 1: the current connection method. Plan 2: high-bitrate tier (1080p HQ) + public STUN + full Teredo direct candidates — higher source bitrate and more reliable on complex networks. Takes effect on the next connection.",
-   "ja": "方式1：現在の接続方式。方式2：高ビットレート帯（1080p HQ）＋公開 STUN＋完全な Teredo 直接候補。ソースビットレートが高く、複雑なネットワークでも安定します。切断後の再接続で有効になります。",
-   "ko": "방식 1: 현재 연결 방식. 방식 2: 고비트레이트 등급(1080p HQ) + 공용 STUN + 전체 Teredo 직접 후보. 소스 비트레이트가 높고 복잡한 네트워크에서 더 안정적입니다. 연결을 끊었다 다시 연결하면 적용됩니다.",
-   "es": "Plan 1: método de conexión actual. Plan 2: nivel de alto bitrate (1080p HQ) + STUN público + candidatos Teredo completos; mayor bitrate de origen y más estable en redes complejas. Se aplica al reconectar.",
-   "fr": "Plan 1 : méthode de connexion actuelle. Plan 2 : niveau haut débit (1080p HQ) + STUN public + candidats Teredo complets ; débit source plus élevé et plus stable sur réseaux complexes. Appliqué à la reconnexion.",
-   "de": "Plan 1: aktuelles Verbindungsverfahren. Plan 2: Hochbitraten-Stufe (1080p HQ) + öffentliches STUN + vollständige Teredo-Kandidaten; höhere Quellbitrate und stabiler in komplexen Netzwerken. Wirkt beim Wiederverbinden.",
-   "pt-BR": "Plano 1: método de conexão atual. Plano 2: nível de alta taxa (1080p HQ) + STUN público + candidatos Teredo completos; maior taxa de origem e mais estável em redes complexas. Aplica ao reconectar.",
-   "ru": "План 1: текущий способ подключения. План 2: высокий битрейт (1080p HQ) + публичный STUN + полные кандидаты Teredo; выше исходный битрейт и стабильнее в сложных сетях. Применяется при переподключении."
-  },
-  {
    "zh": "方案2 HQ",
    "src": "qml/StreamHud.qml",
    "zh-TW": "方案2 HQ",
@@ -21620,19 +21646,6 @@
    "de": "Plan 2 HQ",
    "pt-BR": "Plano 2 HQ",
    "ru": "План 2 HQ"
-  },
-  {
-   "zh": "方案2 · 高清增强",
-   "src": "qml/XboxSourceDialog.qml",
-   "zh-TW": "方案2 · 高清增強",
-   "en": "Plan 2 · HD enhanced",
-   "ja": "方式2 · 高画質強化",
-   "ko": "방식 2 · 고화질 강화",
-   "es": "Plan 2 · HD mejorado",
-   "fr": "Plan 2 · HD amélioré",
-   "de": "Plan 2 · HD erweitert",
-   "pt-BR": "Plano 2 · HD aprimorado",
-   "ru": "План 2 · HD улучшенный"
   },
   {
    "zh": "旋转显示器请使用 Windows 采集方式",
@@ -41263,6 +41276,19 @@
    "de": " (Ausreisecode) {} / Fehler {})",
    "pt-BR": " (código de saída {} / erro {})",
    "ru": " (код выхода) {} Ошибка {}"
+  },
+  {
+   "zh": "）。请确认已安装 WebView2 运行时。",
+   "src": "src/source/XboxWebSource.cpp",
+   "zh-TW": "）。請確認已安裝 WebView2 執行時。",
+   "en": "). Make sure the WebView2 runtime is installed.",
+   "ja": "）。WebView2 ランタイムがインストールされているか確認してください。",
+   "ko": "). WebView2 런타임이 설치되어 있는지 확인하세요.",
+   "es": "). Asegúrate de tener instalado el runtime WebView2.",
+   "fr": "). Vérifiez que le runtime WebView2 est installé.",
+   "de": "). Prüfen Sie, ob die WebView2-Runtime installiert ist.",
+   "pt-BR": "). Verifique se o runtime WebView2 está instalado.",
+   "ru": "). Убедитесь, что установлена среда выполнения WebView2."
   },
   {
    "zh": "，最忙的引擎类型，全系统），每秒采样；在 设置 → 通用与外观 中更换监控的显卡",

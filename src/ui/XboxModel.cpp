@@ -66,7 +66,6 @@ void XboxModel::loadSettings() {
     lastName_ = o.value("lastName").toString();
     gamepad_ = o.value("gamepad").toBool(true);
     softwareDecode_ = o.value("softwareDecode").toBool(false);
-    plan_ = o.value("plan").toInt(1);
     videoBitrateKbps_ = o.value("videoBitrateKbps").toInt(0);
     decodeBackend_ = o.value("decodeBackend").toInt(0);
     turnUrl_ = o.value("turnUrl").toString();
@@ -80,7 +79,7 @@ void XboxModel::saveSettings() const {
     QSaveFile file(settingsPath());
     if (!file.open(QIODevice::WriteOnly)) return;
     file.write(QJsonDocument(QJsonObject{{"lastConsole", lastId_}, {"lastName", lastName_}, {"gamepad", gamepad_}, {"softwareDecode", softwareDecode_},
-                                         {"plan", plan_}, {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_},
+                                         {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_},
                                          {"turnUrl", turnUrl_}, {"turnUser", turnUser_}, {"turnPass", turnPass_}}).toJson());
     file.commit();
 }
@@ -90,7 +89,7 @@ QVariantMap XboxModel::state() const {
         {"signedIn", account_->signedIn()}, {"busy", busy_}, {"status", status_}, {"code", code_},
         {"verificationUri", verificationUri_}, {"signingIn", signingIn_}, {"selected", selected_}, {"gamepad", gamepad_},
         {"streaming", streamActive_}, {"stream", stream_}, {"lastLabel", lastName_}, {"softwareDecode", softwareDecode_},
-        {"plan", plan_}, {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_},
+        {"videoBitrateKbps", videoBitrateKbps_}, {"decodeBackend", decodeBackend_},
         {"turnUrl", turnUrl_}, {"turnUser", turnUser_}, {"turnPass", turnPass_},
     };
 }
@@ -217,7 +216,6 @@ void XboxModel::select(const QString& id) {
 bool XboxModel::set(const QString& key, const QVariant& value) {
     if (key == "gamepad") { gamepad_ = value.toBool(); saveSettings(); emit changed(); return true; }
     if (key == "softwareDecode") { softwareDecode_ = value.toBool(); saveSettings(); emit changed(); return true; }
-    if (key == "plan") { plan_ = value.toInt() == 2 ? 2 : 1; saveSettings(); emit changed(); return true; }
     if (key == "videoBitrateKbps") { videoBitrateKbps_ = std::clamp(value.toInt(), 0, 40000); saveSettings(); emit changed(); return true; }
     if (key == "decodeBackend") { decodeBackend_ = value.toInt() == 1 ? 1 : 0; saveSettings(); emit changed(); return true; }
     if (key == "turnUrl") { turnUrl_ = value.toString().trimmed(); saveSettings(); emit changed(); return true; }
@@ -235,16 +233,15 @@ bool XboxModel::launchConsole(const QString& id, const QString& name) {
     launch.desc.consoleName = name.toStdString();
     launch.desc.gamepad = gamepad_;
     launch.desc.softwareDecode = softwareDecode_;
-    // The decode API choice applies to both plans; Intel iGPUs need D3D11VA even on plan 1.
+    // Fixed streaming profile: 1080p HQ tier + public STUN + full Teredo
+    // expansion (the old plan-2 configuration is now the only configuration).
     launch.desc.profile.decodeBackend = decodeBackend_ == 1 ? xbox::DecodeBackend::D3D11VA : xbox::DecodeBackend::Auto;
-    if (plan_ == 2) {
-        launch.desc.profile.tier = xbox::QualityTier::P1080Hq;
-        launch.desc.profile.videoBitrateKbps = videoBitrateKbps_;
-        launch.desc.profile.useStun = true;
-        launch.desc.profile.fullTeredo = true;
-        if (!turnUrl_.isEmpty())
-            launch.desc.profile.iceServers.push_back({turnUrl_.toStdString(), turnUser_.toStdString(), turnPass_.toStdString()});
-    }
+    launch.desc.profile.tier = xbox::QualityTier::P1080Hq;
+    launch.desc.profile.videoBitrateKbps = videoBitrateKbps_;
+    launch.desc.profile.useStun = true;
+    launch.desc.profile.fullTeredo = true;
+    if (!turnUrl_.isEmpty())
+        launch.desc.profile.iceServers.push_back({turnUrl_.toStdString(), turnUser_.toStdString(), turnPass_.toStdString()});
     launch.label = name.isEmpty() ? QStringLiteral("Xbox") : name;
     if (!launch_(std::move(launch))) { status_ = tr("无法开始串流，请查看日志。"); emit changed(); return false; }
     lastId_ = id;

@@ -1,12 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Offline tests for the Xbox streaming core: the input/report formats, the session API and the sign-in
-// chain against scripted service replies, and the WebRTC session against a second local libdatachannel
-// peer that plays the console (real ICE, DTLS, SCTP and RTP on loopback). None of this proves that
-// Microsoft's services or a real console accept the client; it proves the client does what the reference
-// client does and survives the replies it can get.
+// chain against scripted service replies. None of this proves that Microsoft's services or a real
+// console accept the client; it proves the client does what the reference client does and survives
+// the replies it can get. The media plane (Chromium/WebView2) is covered by the gamepad mapping tests
+// and the on-device probes.
 #include <windows.h>
-
-#include <rtc/rtc.hpp>
 
 #include <atomic>
 #include <chrono>
@@ -28,7 +26,6 @@
 #include "veyra/xbox/Protocol.h"
 #include "veyra/xbox/StreamApi.h"
 #include "veyra/xbox/StreamProfile.h"
-#include "veyra/xbox/WebRtcSession.h"
 #include "veyra/xbox/DisconnectPolicy.h"
 #include "veyra/xbox/VideoDecodeRecovery.h"
 
@@ -121,14 +118,14 @@ void profileTests() {
     viewportForTier(QualityTier::P1080Hq, &w, &h);
     check(w == 1920 && h == 1080, "HQ keeps the 1080p viewport; the bitrate comes from the identity");
 
-    // The default device info must stay byte-identical to the historical constant.
-    const std::string historical = R"({"appInfo":{"env":{"clientAppId":"Microsoft.GamingApp","clientAppType":"native","clientAppVersion":"2203.1001.4.0","clientSdkVersion":"8.5.2","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"Surface Pro","sdktype":"native"},"os":{"name":"Windows 11","ver":"22631.2715","platform":"desktop"},"displayInfo":{"dimensions":{"widthInPixels":1920,"heightInPixels":1080},"pixelDensity":{"dpiX":1,"dpiY":1}}}})";
-    check(deviceInfoForTier(QualityTier::P1080) == historical, "the default tier's device info is byte-identical to the historical constant");
+    // The device info must match the reference browser client identity: the service
+    // picks its encoder policy from it, so any drift changes the delivered stream.
+    const std::string reference = R"({"appInfo":{"env":{"clientAppId":"www.xbox.com","clientAppType":"browser","clientAppVersion":"26.1.97","clientSdkVersion":"10.3.7","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"unknown","sdktype":"web"},"os":{"name":"windows","ver":"22631.2715","platform":"desktop"},"displayInfo":{"dimensions":{"widthInPixels":1920,"heightInPixels":1080},"pixelDensity":{"dpiX":1,"dpiY":1}},"browser":{"browserName":"chrome","browserVersion":"130.0"}}})";
+    check(deviceInfoForTier(QualityTier::P1080) == reference, "the default tier's device info matches the reference browser client");
     const json hq = json::parse(deviceInfoForTier(QualityTier::P1080Hq));
-    check(hq["dev"]["os"]["name"] == "tizen" && hq["dev"]["displayInfo"]["dimensions"]["widthInPixels"] == 4096 &&
-          hq["dev"]["displayInfo"]["dimensions"]["heightInPixels"] == 2160 &&
-          hq["appInfo"]["env"]["clientAppId"] == "Microsoft.GamingApp",
-          "the HQ tier changes only os.name and the display dimensions");
+    check(hq["dev"]["os"]["name"] == "tizen" && hq["appInfo"]["env"]["clientAppId"] == "www.xbox.com" &&
+          hq["dev"]["browser"]["browserName"] == "chrome",
+          "the HQ tier keeps the browser identity and switches os.name to tizen");
 
     std::string host; uint16_t port = 0; bool turn = true;
     check(parseIceServerUrl("stun:stun.l.google.com:19302", &host, &port, &turn) && host == "stun.l.google.com" && port == 19302 && !turn,
@@ -240,7 +237,7 @@ void apiTests() {
         const json body = json::parse(http->seen.back().body);
         const json info = json::parse(http->seen.back().headers["X-MS-Device-Info"]);
         check(body["settings"]["osName"] == "tizen" && info["dev"]["os"]["name"] == "tizen" &&
-              info["dev"]["displayInfo"]["dimensions"]["widthInPixels"] == 4096,
+              info["dev"]["displayInfo"]["dimensions"]["widthInPixels"] == 1920,
               "the HQ tier is consistent across settings.osName and the device-info header");
     }
     http->add(host, "/v5/sessions/home/ABC-123/state", 200, R"({"state":"Failed","errorDetails":{"code":"WNSError","message":"WaitingForServerToRegister"}})");
@@ -380,401 +377,6 @@ void accountTests() {
     std::filesystem::remove_all(dir, ec);
 }
 
-// ---------------------------------------------------------------- WebRTC loopback
-
-// A second libdatachannel peer playing the console: answers the offer, sends H.264 and Opus, speaks the
-// message-channel handshake and records what the client sends.
-class FakeConsole final : public Signaling {
-public:
-    FakeConsole() {
-        rtc::Configuration config;
-        config.disableAutoNegotiation = true;
-        config.bindAddress = "127.0.0.1";   // loopback only: VPN/TUN adapters must not take the test's packets
-        pc = std::make_shared<rtc::PeerConnection>(config);
-        pc->onGatheringStateChange([this](rtc::PeerConnection::GatheringState) { cv.notify_all(); });
-        pc->onTrack([this](std::shared_ptr<rtc::Track> track) {
-            auto desc = track->description();
-            if (desc.type() == "video") {
-                desc.addSSRC(4242, "video");
-                track->setDescription(desc);
-                auto config = std::make_shared<rtc::RtpPacketizationConfig>(4242, "video", 102, rtc::H264RtpPacketizer::ClockRate);
-                track->setMediaHandler(std::make_shared<rtc::H264RtpPacketizer>(rtc::NalUnit::Separator::LongStartSequence, config, 1200));
-                video = track;
-                videoConfig = config;
-            } else if (desc.type() == "audio") {
-                desc.addSSRC(4343, "audio");
-                track->setDescription(desc);
-                auto config = std::make_shared<rtc::RtpPacketizationConfig>(4343, "audio", 111, 48000);
-                track->setMediaHandler(std::make_shared<rtc::OpusRtpPacketizer>(config));
-                audio = track;
-                audioConfig = config;
-            }
-        });
-        pc->onDataChannel([this](std::shared_ptr<rtc::DataChannel> dc) {
-            std::lock_guard lock(mutex);
-            channels.push_back(dc);   // libdatachannel drops the callbacks of a channel nobody holds
-            labels.push_back(dc->label() + "/" + dc->protocol());
-            if (dc->label() == "message") {
-                message = dc;
-                dc->onMessage([this](rtc::message_variant data) {
-                    std::string text;
-                    if (auto* b = std::get_if<rtc::binary>(&data)) text.assign(reinterpret_cast<const char*>(b->data()), b->size());
-                    else text = std::get<std::string>(data);
-                    const json j = json::parse(text);
-                    std::lock_guard l(mutex);
-                    messages.push_back(j.value("type", "") + " " + j.value("target", ""));
-                    rawMessages.push_back(text);
-                    if (j.value("type", "") == "Handshake") {
-                        const std::string ack = json{{"type", "HandshakeAck"}, {"id", j.value("id", "")}, {"cv", ""}}.dump();
-                        message->send(ack);
-                    }
-                    cv.notify_all();
-                });
-            } else if (dc->label() == "control") {
-                dc->onMessage([this](rtc::message_variant data) {
-                    std::string text;
-                    if (auto* b = std::get_if<rtc::binary>(&data)) text.assign(reinterpret_cast<const char*>(b->data()), b->size());
-                    else text = std::get<std::string>(data);
-                    std::lock_guard l(mutex);
-                    control.push_back(json::parse(text).value("message", ""));
-                    cv.notify_all();
-                });
-            } else if (dc->label() == "input") {
-                input = dc;
-                dc->onMessage([this](rtc::message_variant data) {
-                    if (auto* b = std::get_if<rtc::binary>(&data)) {
-                        std::lock_guard l(mutex);
-                        reports.emplace_back(reinterpret_cast<const uint8_t*>(b->data()), reinterpret_cast<const uint8_t*>(b->data()) + b->size());
-                        cv.notify_all();
-                    }
-                });
-            }
-        });
-    }
-    ~FakeConsole() override { if (pc) pc->close(); }
-
-    std::string exchangeSdp(const std::string& offer) override {
-        offerSdp = offer;
-        pc->setRemoteDescription(rtc::Description(offer, rtc::Description::Type::Offer));
-        pc->setLocalDescription(rtc::Description::Type::Answer);
-        std::unique_lock lock(mutex);
-        cv.wait_for(lock, std::chrono::seconds(5), [&] { return pc->gatheringState() == rtc::PeerConnection::GatheringState::Complete; });
-        std::string sdp = std::string(*pc->localDescription());
-        // Answer without candidates: they go through the ICE exchange, as with the service.
-        std::string out, line;
-        std::istringstream in(sdp);
-        while (std::getline(in, line)) {
-            if (line.rfind("a=candidate", 0) == 0 || line.rfind("a=end-of-candidates", 0) == 0) continue;
-            out += line + "\n";
-        }
-        return out;
-    }
-
-    std::vector<IceCandidate> exchangeIce(const std::vector<IceCandidate>& local) override {
-        for (const auto& c : local) pc->addRemoteCandidate(rtc::Candidate(c.candidate, c.sdpMid));
-        std::vector<IceCandidate> out;
-        for (const auto& c : pc->localDescription()->candidates()) out.push_back({"a=" + std::string(c.candidate()), "0", 0});
-        return out;
-    }
-
-    template <typename F> bool waitFor(F f, int ms = 5000) {
-        std::unique_lock lock(mutex);
-        return cv.wait_for(lock, std::chrono::milliseconds(ms), f);
-    }
-
-    std::shared_ptr<rtc::PeerConnection> pc;
-    std::shared_ptr<rtc::Track> video, audio;
-    std::shared_ptr<rtc::RtpPacketizationConfig> videoConfig, audioConfig;
-    std::shared_ptr<rtc::DataChannel> message, input;
-    std::vector<std::shared_ptr<rtc::DataChannel>> channels;
-    std::mutex mutex;
-    std::condition_variable cv;
-    std::vector<std::string> labels, messages, rawMessages, control;
-    std::vector<std::vector<uint8_t>> reports;
-    std::string offerSdp;
-};
-
-std::vector<uint8_t> nal(uint8_t header, size_t size, uint8_t seed) {
-    std::vector<uint8_t> out = {0, 0, 0, 1, header};
-    for (size_t i = 0; i < size; ++i) out.push_back(uint8_t((i * 31 + seed) | 1));   // never a start-code pattern
-    return out;
-}
-
-void webrtcTests() {
-    FakeConsole console;
-    WebRtcSession session;
-    session.setBindAddress("127.0.0.1");
-    std::mutex m;
-    std::vector<std::vector<uint8_t>> units;
-    std::vector<std::vector<uint8_t>> opus;
-    std::optional<Vibration> vibration;
-    std::string endedReason;
-    uint32_t serverW = 0, serverH = 0;
-    WebRtcCallbacks callbacks;
-    callbacks.video = [&](std::vector<uint8_t>&& unit, uint32_t, int64_t arrival) { std::lock_guard l(m); if (arrival > 0) units.push_back(std::move(unit)); };
-    callbacks.audio = [&](const uint8_t* d, size_t n, uint32_t) { std::lock_guard l(m); opus.emplace_back(d, d + n); };
-    callbacks.vibration = [&](const Vibration& v) { std::lock_guard l(m); vibration = v; };
-    callbacks.serverVideoSize = [&](uint32_t w, uint32_t h) { std::lock_guard l(m); serverW = w; serverH = h; };
-    callbacks.ended = [&](const std::string& reason) { std::lock_guard l(m); endedReason=reason; };
-    session.setCallbacks(callbacks);
-
-    std::string error;
-    const bool started = session.start(console, &error, std::chrono::seconds(15));
-    check(started, ("the client connects to a local peer playing the console: " + error).c_str());
-    if (!started) return;
-    check(console.offerSdp.find("profile-level-id=4d001f") != std::string::npos && console.offerSdp.find("profile-level-id=42e01f") != std::string::npos,
-          "the offer lists H.264 Main and Constrained Baseline");
-    check(console.offerSdp.find("a=candidate") == std::string::npos, "the offer carries no candidates (they go through the ICE exchange)");
-    check(session.waitReady(std::chrono::seconds(5)), "the message-channel handshake completes");
-    check(console.waitFor([&] { return console.labels.size() == 4; }), "four data channels arrive");
-    {
-        std::lock_guard l(console.mutex);
-        std::vector<std::string> sorted = console.labels;
-        std::sort(sorted.begin(), sorted.end());
-        check(sorted == std::vector<std::string>{"chat/chatV1", "control/controlV1", "input/1.0", "message/messageV1"}, "channel labels and protocols as the reference client");
-    }
-    check(console.waitFor([&] { return console.control.size() >= 4; }), "control messages arrive");
-    {
-        std::lock_guard l(console.mutex);
-        check(console.control.size() >= 2 && console.control[0] == "authorizationRequest" && console.control[1] == "gamepadChanged", "control: authorization, then the pad");
-    }
-    check(console.waitFor([&] { return !console.reports.empty(); }), "the input channel receives the client metadata report");
-    {
-        std::lock_guard l(console.mutex);
-        check(!console.reports.empty() && console.reports[0].size() == 15 && console.reports[0][0] == 8, "first input report is client metadata");
-    }
-    check(console.waitFor([&] {
-        for (const auto& s : console.messages) if (s.find("/streaming/characteristics/dimensionschanged") != std::string::npos) return true;
-        return false;
-    }), "the client sends its configuration messages");
-
-    GamepadFrame pad;
-    pad.buttons = BtnA;
-    pad.leftX = 1234;
-    session.sendGamepad(pad);
-    check(console.waitFor([&] { return console.reports.size() >= 2; }), "a gamepad report arrives");
-    {
-        std::lock_guard l(console.mutex);
-        const auto r = console.reports.empty() ? std::vector<uint8_t>{} : console.reports.back();
-        const auto expected = gamepadReport(1, 0, {pad});
-        check(r.size() == expected.size() && std::equal(r.begin() + 14, r.end(), expected.begin() + 14) && r[0] == 2, "gamepad report bytes as built");
-    }
-
-    // Console -> client: a vibration report and the server's video size on the input channel.
-    const uint8_t vib[] = {128, 0, 0, 0, 60, 40, 0, 0, 100, 0, 0, 0, 0};
-    console.input->send(reinterpret_cast<const std::byte*>(vib), sizeof(vib));
-    const uint8_t size[] = {16, 0, 0x38, 0x04, 0, 0, 0x80, 0x07, 0, 0};
-    console.input->send(reinterpret_cast<const std::byte*>(size), sizeof(size));
-
-    // Media: wait until the console's tracks are open, then send an IDR access unit larger than one
-    // packet (fragmented) and a P frame, and two Opus packets.
-    check(console.waitFor([&] { return console.video && console.video->isOpen() && console.audio && console.audio->isOpen(); }), "the console's media tracks open");
-    std::vector<std::vector<uint8_t>> sent;
-    std::vector<uint8_t> idr;
-    for (const auto& part : {nal(0x67, 12, 1), nal(0x68, 4, 2), nal(0x65, 5000, 3)}) idr.insert(idr.end(), part.begin(), part.end());
-    const auto p1 = nal(0x41, 800, 4);
-    sent.push_back(idr);
-    sent.push_back(p1);
-    uint32_t ts = 0;
-    for (const auto& unit : sent) {
-        console.videoConfig->timestamp = ts;
-        console.video->sendFrame(reinterpret_cast<const std::byte*>(unit.data()), unit.size(), rtc::FrameInfo(ts));
-        ts += 1500;
-    }
-    // A third frame: the depacketizer emits a frame once the next timestamp starts.
-    const auto p2 = nal(0x41, 100, 5);
-    console.video->sendFrame(reinterpret_cast<const std::byte*>(p2.data()), p2.size(), rtc::FrameInfo(ts));
-    const std::vector<uint8_t> opus1 = {0xFC, 1, 2, 3}, opus2 = {0xFC, 4, 5, 6, 7};
-    console.audio->sendFrame(reinterpret_cast<const std::byte*>(opus1.data()), opus1.size(), rtc::FrameInfo(uint32_t(0)));
-    console.audio->sendFrame(reinterpret_cast<const std::byte*>(opus2.data()), opus2.size(), rtc::FrameInfo(uint32_t(960)));
-
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
-    while (std::chrono::steady_clock::now() < deadline) {
-        {
-            std::lock_guard l(m);
-            if (units.size() >= 2 && opus.size() >= 2 && vibration && serverW) break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    {
-        std::lock_guard l(m);
-        check(units.size() >= 2, "access units arrive");
-        check(units.size() >= 2 && units[0] == sent[0], "the fragmented IDR access unit (SPS, PPS, IDR) arrives byte for byte, Annex-B");
-        check(units.size() >= 2 && units[1] == sent[1], "the P frame arrives byte for byte");
-        check(opus.size() >= 2 && opus[0] == opus1 && opus[1] == opus2, "Opus packets arrive unchanged");
-        check(vibration && vibration->leftMotor == 60 && vibration->rightMotor == 40 && vibration->durationMs == 100, "vibration reaches the callback");
-        check(serverW == 1920 && serverH == 1080, "server video size reaches the callback");
-    }
-    session.requestKeyframe();
-    check(console.waitFor([&] { for (const auto& c : console.control) if (c == "videoKeyframeRequested") return true; return false; }), "a keyframe request goes out on the control channel");
-    const auto stats = session.stats();
-    if (!(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000))
-        std::printf("stats: units=%llu audio=%llu handshake=%d bytes=%llu\n", (unsigned long long)stats.videoUnits, (unsigned long long)stats.audioPackets, int(stats.handshakeDone), (unsigned long long)stats.bytesReceived);
-    check(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000, "statistics");
-    // Malformed fields used to throw through the asynchronous callback.
-    console.message->send(std::string("{\"type\":null}"));
-    console.message->send(std::string("{\"type\":\"Message\",\"target\":null}"));
-    session.videoPresented(0xFABCDE12,1000000,1100000,1200000,1300000);
-    check(console.waitFor([&]{for(const auto& report:console.reports)if(report.size()==43&&report[0]==ReportMetadata)return true;return false;}),"rendered video feedback is sent even without a gamepad change");
-    {
-        std::lock_guard lock(console.mutex);
-        bool valid=false;
-        for(const auto& report:console.reports)if(report.size()==43&&report[0]==ReportMetadata)
-            valid=report[14]==1&&detail::get32(report.data()+15)==0xFABCDE12;
-        check(valid,"feedback preserves the original RTP key and count");
-    }
-    const auto encoded=videoFeedbackReport(7,1234,{0xFABCDE12,101,102,103,104});
-    check(encoded.size()==43&&detail::get32(encoded.data()+2)==7&&detail::get32(encoded.data()+19)==101&&
-          detail::get32(encoded.data()+23)==102&&detail::get32(encoded.data()+27)==103&&
-          detail::get32(encoded.data()+31)==104&&detail::get32(encoded.data()+35)==1234&&
-          detail::get32(encoded.data()+39)==1234,"frame feedback matches Greenlight's seven-field wire format");
-    // Exercise real transport shutdown while the caller sends input/keyframe
-    console.message->send(json{{"type","TransactionStart"},{"target","/streaming/sessionLifetimeManagement/serverInitiatedDisconnect"},{"id","shutdown-test"},{"content",json{{"reason","KickForServerShutdown"}}.dump()}}.dump());
-    for(unsigned i=0;i<100;++i){ {std::lock_guard l(m);if(!endedReason.empty())break;} std::this_thread::sleep_for(std::chrono::milliseconds(10)); }
-    {std::lock_guard l(m);check(endedReason=="KickForServerShutdown","specific server shutdown reason survives the real message channel");}
-
-    // Exercise real transport shutdown while the caller sends input/keyframe
-    // requests. This covers both the isOpen/send race and local close racing
-    // callbacks; exceptions escaping any thread terminate this test process.
-    std::atomic<bool> stopped=false;
-    std::thread sender([&]{while(!stopped){session.sendGamepad(pad);session.requestKeyframe();std::this_thread::sleep_for(std::chrono::milliseconds(1));}});
-    console.pc->close();
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    session.close();stopped=true;sender.join();
-    session.sendGamepad(pad);session.requestKeyframe();session.close();
-    check(!session.ready(), "remote/local close with active sends is contained and clears readiness");
-}
-
-// The explicit-offer path: b=AS hints must survive createOffer -> setLocalDescription and the
-// peer must still connect and handshake. The 720p tier must reach dimensionschanged.
-void webrtcProfileTests() {
-    FakeConsole console;
-    WebRtcSession session;
-    session.setBindAddress("127.0.0.1");
-    StreamProfile profile;
-    profile.tier = QualityTier::P720;
-    profile.videoBitrateKbps = 15000;
-    profile.audioBitrateKbps = 128;
-    std::string error;
-    const bool started = session.start(console, &error, std::chrono::seconds(15), profile);
-    check(started, ("the munged-offer client connects to the local peer: " + error).c_str());
-    if (!started) return;
-    check(console.offerSdp.find("b=AS:15000") != std::string::npos && console.offerSdp.find("b=AS:128") != std::string::npos,
-          "the exchanged offer carries the video and audio bandwidth hints");
-    check(console.offerSdp.find("profile-level-id=4d001f") != std::string::npos,
-          "the explicit offer keeps the reference codec order");
-    check(session.waitReady(std::chrono::seconds(5)), "the handshake completes on the munged offer");
-    check(console.waitFor([&] {
-        for (const auto& s : console.rawMessages) {
-            if (s.find("/streaming/characteristics/dimensionschanged") == std::string::npos) continue;
-            // The content field is a JSON-encoded string: parse the outer message, then the content.
-            const json outer = json::parse(s);
-            const json dims = json::parse(outer.value("content", ""));
-            if (dims.value("horizontal", 0) == 1280 && dims.value("vertical", 0) == 720 &&
-                dims.value("preferredWidth", 0) == 1280 && dims.value("safeAreaRight", 0) == 1280)
-                return true;
-        }
-        return false;
-    }), "the 720p tier reports a 1280x720 viewport on the message channel");
-    session.close();
-}
-
-// ---------------------------------------------------------------- loss recovery
-
-// Builds one RTP packet carrying a single-NAL payload (no fragmentation needed to
-// exercise ordering/NACK; the FU-A path is covered by the loopback test).
-rtc::message_ptr rtpPacket(uint16_t seq, uint32_t timestamp, bool marker, uint8_t payload = 0x41) {
-    auto m = std::make_shared<rtc::Message>(sizeof(rtc::RtpHeader) + 4);
-    auto* h = reinterpret_cast<rtc::RtpHeader*>(m->data());
-    std::memset(h, 0, sizeof(*h));
-    h->preparePacket();
-    h->setPayloadType(102);
-    h->setSeqNumber(seq);
-    h->setTimestamp(timestamp);
-    h->setSsrc(0x12345678);
-    h->setMarker(marker);
-    m->data()[sizeof(rtc::RtpHeader)] = std::byte(payload);
-    return m;
-}
-
-struct RecoveryHarness {
-    VideoLossRecovery recovery{std::chrono::milliseconds(40), 2048};
-    rtc::message_vector delivered;
-    std::vector<rtc::message_ptr> nacks;
-    void feed(rtc::message_vector packets) {
-        recovery.incoming(packets, [this](rtc::message_ptr m) { nacks.push_back(std::move(m)); });
-        for (auto& m : packets) delivered.push_back(std::move(m));
-    }
-};
-
-void lossRecoveryTests() {
-    // 1. In-order complete frame passes through with zero added latency.
-    {
-        RecoveryHarness h;
-        h.feed({rtpPacket(100, 1000, false), rtpPacket(101, 1000, false), rtpPacket(102, 1000, true)});
-        check(h.delivered.size() == 3 && h.nacks.empty(), "a complete in-order frame passes straight through");
-        check(h.recovery.stats().framesDropped == 0, "no drops on a clean frame");
-    }
-    // 2. Out-of-order packets within a frame are reordered before depacketization.
-    {
-        RecoveryHarness h;
-        h.feed({rtpPacket(102, 2000, true), rtpPacket(100, 2000, false), rtpPacket(101, 2000, false)});
-        check(h.delivered.size() == 3, "an out-of-order complete frame is released once whole");
-        bool ordered = true;
-        uint16_t prev = 99;
-        for (auto& m : h.delivered) {
-            const auto* hdr = reinterpret_cast<const rtc::RtpHeader*>(m->data());
-            if (hdr->seqNumber() != uint16_t(prev + 1)) ordered = false;
-            prev = hdr->seqNumber();
-        }
-        check(ordered, "released packets are in sequence order");
-        check(h.recovery.stats().packetsReordered >= 1, "reordering is counted");
-    }
-    // 3. A lost packet triggers NACK; the retransmission completes the frame.
-    {
-        RecoveryHarness h;
-        h.feed({rtpPacket(200, 3000, false), rtpPacket(202, 3000, true)}); // 201 missing
-        check(h.delivered.empty(), "an incomplete frame is held, not fed torn");
-        check(!h.nacks.empty(), "the hole triggers a NACK request");
-        bool nackHas201 = false;
-        for (auto& n : h.nacks) {
-            auto* nack = reinterpret_cast<rtc::RtcpNack*>(n->data());
-            for (unsigned i = 0; i < nack->getSeqNoCount(); ++i)
-                for (auto s : nack->parts[i].getSequenceNumbers())
-                    if (s == 201) nackHas201 = true;
-        }
-        check(nackHas201, "the NACK names the missing sequence 201");
-        h.feed({rtpPacket(201, 3000, false)}); // retransmission
-        check(h.delivered.size() == 3, "the retransmission completes and releases the frame");
-        check(h.recovery.stats().packetsRecovered == 1, "the recovered packet is counted");
-    }
-    // 4. A frame still incomplete after the wait window is dropped whole.
-    {
-        RecoveryHarness h;
-        h.feed({rtpPacket(300, 4000, false), rtpPacket(302, 4000, true)});
-        std::this_thread::sleep_for(std::chrono::milliseconds(60));
-        h.feed({rtpPacket(400, 5000, true)}); // next frame forces the flush
-        check(h.recovery.stats().framesDropped == 1, "the expired incomplete frame is dropped whole");
-        bool sawTorn = false;
-        for (auto& m : h.delivered) {
-            const auto* hdr = reinterpret_cast<const rtc::RtpHeader*>(m->data());
-            if (hdr->timestamp() == 4000) sawTorn = true;
-        }
-        check(!sawTorn, "no packet of the dropped frame reaches the depacketizer");
-    }
-    // 5. NACK rounds are bounded.
-    {
-        RecoveryHarness h;
-        h.feed({rtpPacket(500, 6000, false), rtpPacket(505, 6000, true)});
-        for (int i = 0; i < 10; ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(20));
-            rtc::message_vector empty;
-            h.feed(std::move(empty));
-        }
-        check(h.nacks.size() <= 8, "NACK requests stay bounded (max 4 rounds x 2 packets)");
-    }
-}
-
 } // namespace
 
 int main(int argc, char** argv) {
@@ -839,10 +441,6 @@ int main(int argc, char** argv) {
     profileTests();
     resilienceTests();
     accountTests();
-    webrtcTests();
-    webrtcProfileTests();
-    lossRecoveryTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
-    rtc::Cleanup();
     return g_failures == 0 ? 0 : 1;
 }

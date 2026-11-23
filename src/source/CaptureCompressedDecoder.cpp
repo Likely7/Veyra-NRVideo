@@ -329,7 +329,7 @@ bool CaptureCompressedDecoder::decode(const uint8_t* data, size_t bytes, int64_t
         const AVFrame* frame = p.decoder.receiveFrame();
         // Damaged compressed input can be concealed into a frame without a
         // fatal avcodec error. Reject it before it reaches the stream mailbox;
-        // XboxSessionSource then flushes references and requests an IDR.
+        // XboxWebSource then flushes references and requests an IDR.
         if (frame && p.stream &&
             ((frame->flags & AV_FRAME_FLAG_CORRUPT) || frame->decode_error_flags)) {
             p.error = "damaged compressed stream frame";

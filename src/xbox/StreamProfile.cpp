@@ -7,18 +7,20 @@
 namespace veyra::xbox {
 
 std::string deviceInfoForTier(QualityTier tier) {
-    // The P1080 string is the historical kDeviceInfo constant, byte for byte. The other tiers
-    // change only dev.os.name and the display dimensions, as the reference clients do.
-    const char* name = tier == QualityTier::P1080 ? "Windows 11" : osNameForTier(tier);
-    const int w = tier == QualityTier::P1080 ? 1920 : 4096;
-    const int h = tier == QualityTier::P1080 ? 1080 : 2160;
-    std::string s = R"({"appInfo":{"env":{"clientAppId":"Microsoft.GamingApp","clientAppType":"native","clientAppVersion":"2203.1001.4.0","clientSdkVersion":"8.5.2","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"Surface Pro","sdktype":"native"},"os":{"name":")";
+    // The reference clients identify as the xbox.com browser player, not the native
+    // GamingApp: the service picks its encoder policy from this identity. Matching
+    // it byte-for-byte (www.xbox.com / browser / chrome) is what makes the console
+    // deliver the same stream it gives XStreaming. os.name follows the quality tier.
+    const char* name = osNameForTier(tier);
+    const int w = tier == QualityTier::P720 ? 1280 : 1920;
+    const int h = tier == QualityTier::P720 ? 720 : 1080;
+    std::string s = R"({"appInfo":{"env":{"clientAppId":"www.xbox.com","clientAppType":"browser","clientAppVersion":"26.1.97","clientSdkVersion":"10.3.7","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"unknown","sdktype":"web"},"os":{"name":")";
     s += name;
     s += R"(","ver":"22631.2715","platform":"desktop"},"displayInfo":{"dimensions":{"widthInPixels":)";
     s += std::to_string(w);
     s += R"(,"heightInPixels":)";
     s += std::to_string(h);
-    s += R"(},"pixelDensity":{"dpiX":1,"dpiY":1}}}})";
+    s += R"(},"pixelDensity":{"dpiX":1,"dpiY":1}},"browser":{"browserName":"chrome","browserVersion":"130.0"}}})";
     return s;
 }
 

@@ -10,7 +10,7 @@
 #include <memory>
 #include <thread>
 
-#include "veyra/source/XboxSessionSource.h"
+#include "veyra/source/XboxStats.h"
 #include "veyra/xbox/Account.h"
 
 namespace veyra::ui {
@@ -66,8 +66,7 @@ private:
     QVariantList consoles_;
     QString selected_, status_, code_, verificationUri_, lastId_, lastName_;
     bool busy_ = false, gamepad_ = true, softwareDecode_ = false, loaded_ = false, streamActive_ = false, signingIn_ = false;
-    // Streaming plan: 1 = historical behaviour, 2 = HQ tier + public STUN + full Teredo expansion.
-    int plan_ = 1, videoBitrateKbps_ = 0, decodeBackend_ = 0; // 0=Auto(D3D12VA) 1=D3D11VA
+    int videoBitrateKbps_ = 0, decodeBackend_ = 0;
     QString turnUrl_, turnUser_, turnPass_;
     QVariantMap stream_;
     std::atomic<bool> cancel_{false};

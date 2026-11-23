@@ -68,7 +68,7 @@ option(VEYRA_ENABLE_EXPERIMENTAL_DLSSNR
   "Enable local-only experimental Feature 18 adapter" OFF)
 option(VEYRA_ENABLE_REMOTEPLAY "Build PS5 Remote Play with pinned Chiaki source" OFF)
 option(VEYRA_ENABLE_MOONLIGHT "Build the Moonlight / Sunshine streaming core (pinned moonlight-common-c)" OFF)
-option(VEYRA_ENABLE_XBOX "Build Xbox home streaming (unofficial; libdatachannel from the vcpkg tree)" OFF)
+option(VEYRA_ENABLE_XBOX "Build Xbox home streaming (unofficial; Chromium reference player in WebView2)" OFF)
 option(VEYRA_ENABLE_DLSS_SR "Enable public DLSS SR backend" OFF)
 option(VEYRA_ENABLE_DLSS_FG "Enable public DLSSG backend" OFF)
 option(VEYRA_ENABLE_NVOF "Enable NVIDIA Optical Flow guidance" OFF)
@@ -837,13 +837,16 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     target_link_libraries(veyra_sources PUBLIC veyra_moonlight_protocol veyra_moonlight_common_c PRIVATE Opus::opus)
   endif()
 
+  # Xbox home streaming: the Chromium reference player inside WebView2 is the
+  # only transport (the old native libdatachannel source was removed).
   if(VEYRA_ENABLE_XBOX)
     set(VEYRA_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
     include(VeyraXbox)
+    include(cmake/VeyraXboxWeb.cmake)
     find_package(Opus CONFIG REQUIRED)
     target_compile_definitions(veyra_sources PUBLIC VEYRA_ENABLE_XBOX=1)
-    target_sources(veyra_sources PRIVATE src/source/XboxSessionSource.cpp)
-    target_link_libraries(veyra_sources PUBLIC veyra_xbox_protocol PRIVATE Opus::opus)
+    target_sources(veyra_sources PRIVATE src/source/XboxWebSource.cpp)
+    target_link_libraries(veyra_sources PUBLIC veyra_xbox_protocol veyra_xbox_web PRIVATE Opus::opus)
   endif()
 
   add_executable(veyra_source_tests
@@ -1410,6 +1413,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     target_compile_definitions(veyra_moonlight_model PUBLIC VEYRA_ENABLE_MOONLIGHT=1 PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
     target_link_libraries(veyra_moonlight_model PUBLIC veyra_moonlight_protocol veyra_base veyra_ui_i18n Qt6::Core Qt6::Gui)
     target_link_libraries(veyra_qml_bridge PUBLIC veyra_moonlight_model)
+    endif()
+    # The Xbox model is independent of Moonlight: it builds whenever Xbox is
+    # enabled, regardless of the Moonlight option (v2 transport needs it too).
     if(VEYRA_ENABLE_XBOX)
       add_library(veyra_xbox_model STATIC src/ui/XboxModel.cpp include/veyra/ui/XboxModel.h)
       set_target_properties(veyra_xbox_model PROPERTIES AUTOMOC ON)
@@ -1419,6 +1425,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
       target_link_libraries(veyra_xbox_model PUBLIC veyra_xbox_protocol veyra_base veyra_ui_i18n Qt6::Core Qt6::Gui)
       target_link_libraries(veyra_qml_bridge PUBLIC veyra_xbox_model)
     endif()
+    if(VEYRA_ENABLE_MOONLIGHT)
 
     add_executable(veyra_moonlight_model_tests tests/moonlight/ModelTests.cpp)
     target_compile_features(veyra_moonlight_model_tests PRIVATE cxx_std_20)

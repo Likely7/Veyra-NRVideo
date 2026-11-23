@@ -2,7 +2,7 @@
 // The Xbox home-streaming (xHome) session API on the region host the streaming sign-in returned.
 // Ported from Greenlight (unknownskl/greenlight, MIT): xcloudapi.ts and streammanager.ts. The signalling
 // goes through Microsoft's servers even when the console is on the same network; the media then flows
-// over WebRTC (see XboxSessionSource).
+// over WebRTC (terminated by the Chromium player, see XboxWebSource).
 #pragma once
 #include <functional>
 #include <memory>
