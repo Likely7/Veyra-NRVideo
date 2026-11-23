@@ -986,6 +986,31 @@ decode submission/completion and presentation-return times.
 `WebRtcSession.cpp` sends one bounded report per presented source frame, without
 an unbounded metadata queue. These CPU timestamps do not claim physical scanout.
 
+
+## Xbox V2 transport: WebView2 + XStreaming-player (2026-11-23)
+
+The selectable V2 engine (`-DVEYRA_ENABLE_XBOX=ON`, `XboxWebSource`) terminates
+WebRTC inside an offscreen **Microsoft Edge WebView2** and exports encoded
+H.264/Opus frames via `RTCRtpScriptTransform` before decode.
+
+- **WebView2 SDK**: vcpkg port `unofficial-webview2` (static loader
+  `WebView2LoaderStatic.lib`; no loader DLL ships). The Evergreen runtime must
+  be installed on the user's machine (standard on Windows 11). Microsoft SDK /
+  redistribution terms apply to the runtime; it is not bundled in source Git.
+  The SDK loader's BSD-style copyright is preserved in
+  `licenses/xbox/webview2.txt` and shipped in portable packages.
+- **XStreaming-player** (https://github.com/Geocld/XStreaming-player, MIT per
+  `package.json`, v0.3.4): the V2 player is a fork at base commit
+  `8e178aef067ec31625311865e5ee51a6924823e2` plus one local patch
+  `e4c12bd27f73e99b08b7f54eeccd2c27c330bff9` (attach the encoded transform before
+  negotiation; export via `self.postMessage`; wait for ICE gathering). Only the
+  **built** bundle `resources/xbox-player/veyra-xbox-player.js` is vendored;
+  provenance and rebuild steps are in `resources/xbox-player/README.md`, MIT
+  text in `licenses/xbox/xstreaming-player-MIT.txt`. The upstream repo ships no
+  LICENSE file; the MIT text is reproduced for attribution.
+- The V1 native engine (libdatachannel) and its notices above are unchanged and
+  remain selectable; V2 adds no libdatachannel usage of its own.
+
 ## NVIDIA original NR restored in 2.0.2
 
 The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E) is distributed only as a release runtime at runtime/experimental/nr-original/nvngx_dlssnr.dll. Existing community Lecram/SF-v2 choices and notices remain. See docs/RUNTIME_COMPONENTS_2.0.2.md and the publisher manifest. This experimental integration is not NVIDIA certification or complete official DLSS 5 support. No proprietary binary has been added to source Git.

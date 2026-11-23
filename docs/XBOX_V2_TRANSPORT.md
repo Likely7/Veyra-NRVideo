@@ -71,8 +71,10 @@ Xbox console ⇄ WebRTC ⇄ Chromium (WebView2, invisible)
   vcpkg `unofficial-webview2` (static loader — no DLL ships; the Evergreen
   runtime must be installed, standard on Windows 11).
 - `XboxWebSource.cpp` lives in `veyra_sources` (it needs the shared decoder).
-- `veyra_xbox_protocol` is now services only (WinHTTP + nlohmann-json);
-  libdatachannel is no longer a dependency.
+- `veyra_xbox_protocol` keeps the services (WinHTTP + nlohmann-json) **and** the
+  V1 native session (`WebRtcSession.cpp`, `VideoLossRecovery.cpp`), so
+  libdatachannel remains a dependency for the selectable V1 engine. V2 adds no
+  libdatachannel usage of its own.
 - Build switch: `-DVEYRA_ENABLE_XBOX=ON`.
 - Player source: `xstreaming-player/` (MIT fork). Build with `npm run build`,
   stage `dist/assets/veyra-xbox-player.js` into
