@@ -1,5 +1,11 @@
 # 当前工作日志
 
+## 2026-11-23 Veyra 2.2.1 发布候选
+
+- 以 `v2.2.0` 和 GitHub main `c6633121` 核验各分支祖先与产品差异。综合整合树收齐 17 项社区 PR、采集与音频、两档 60→30、字幕与超分、Magpie 优化、ANR 下载及游戏圆点准星修复。保留旧专用研究和未提交工作。
+- `build-recording-handoff.py --task codex-release-2.2.1-20261123 --reconfigure --label 2.2.1 --jobs 2` 复用已核验构建目录。重编播放器、启动器、更新 worker、RX 7000 worker 与回归目标。FFmpeg 使用 256 slice、D3D12VA 参考池补丁，Chiaki 使用 0001–0005，在线更新使用原发行公钥。 [构建日志](<E:/项目/Veyra/logs/codex-release-2.2.1-20261123/build-20261123-050601/compile.log>)
+- 测试候选目录为 `E:/项目/Veyra/test-packages/codex-release-2.2.1-20261123`。源版本和手测范围见 [更新说明](RELEASE_NOTES_2.2.1.md)、[构建记录](BUILD_2.2.1.md) 及 [本轮验收回执](<E:/项目/Veyra/reports/codex-release-2.2.1-20261123/FINAL.md>)。
+
 ## 2026-11-23 游戏实录 VFG 准星重影
 
 - 用用户原始 2560×1440、约 30 FPS 的 160 帧录屏复现。旧版中档、高档 2× 各有 159 张有效生成帧，打开和关闭自动保护的读回逐像素一致。旧规则从中心跨 3 像素仍采到这枚圆点的边缘，160 张源帧未建立掩码。

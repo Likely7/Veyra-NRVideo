@@ -1,6 +1,8 @@
 # 当前项目状态
 
-更新于 2026-11-20。Veyra 2.2.0 的下载、升级方法、完整更新与对比图见 [GitHub Release](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)。[对应源码与发行构建](BUILD_2.2.0.md)。
+更新于 2026-11-23。本地 main 准备 2.2.1 发布前测试。见 [完整更新](RELEASE_NOTES_2.2.1.md) 和 [2.2.1 构建与对应源码](BUILD_2.2.1.md)。
+
+公开下载仍为 [Veyra 2.2.0](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)。[2.2.0 对应源码与发行构建](BUILD_2.2.0.md)。
 
 ## 2.2.0
 
