@@ -29,6 +29,20 @@ std::filesystem::path modules(){
     if(GetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_MODULE_DIR",path,32768))return path;
     GetModuleFileNameW(nullptr,path,32768);return std::filesystem::path(path).parent_path()/L"virtualcam";
 }
+DWORD launchCameraSetup(const std::filesystem::path& file,bool remove,HANDLE& process){
+    SHELLEXECUTEINFOW launch{sizeof(launch)};
+    launch.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_FLAG_NO_UI;
+    launch.lpVerb=L"runas";
+    launch.lpFile=file.c_str();
+    launch.lpParameters=remove?L"--uninstall":L"--install";
+    launch.nShow=SW_HIDE;
+    if(!ShellExecuteExW(&launch)){
+        const DWORD code=GetLastError();
+        return code?code:ERROR_GEN_FAILURE;
+    }
+    process=launch.hProcess;
+    return process?ERROR_SUCCESS:ERROR_INVALID_HANDLE;
+}
 bool machineRegistered(){
     for(bool x86:{false,true}){
         const auto path=virtualcam::registeredModule(x86,true);std::error_code ec;
@@ -139,6 +153,7 @@ struct VirtualCamera::State {
     mutable std::mutex textMutex;
     std::wstring error;
     std::wstring setupError;
+    SetupLauncher setupLauncher;
     HANDLE setupProcess=nullptr;
     bool setupRemoves=false;
     HANDLE wake=CreateEventW(nullptr,FALSE,FALSE,nullptr),done=CreateEventW(nullptr,TRUE,FALSE,nullptr),ownership=nullptr;
@@ -175,18 +190,53 @@ struct VirtualCamera::State {
         else log::info("virtual-camera",std::format("setup completed remove={} machineRegistered={}",setupRemoves,systemInstalled.load()));
     }
     bool setup(bool remove,std::wstring& why){
-        std::lock_guard lock(control);pollSetupLocked();if(setupProcess){why=L"正在安装摄像机组件，请等待";return false;}
-        const auto file=modules()/L"veyra-camera-setup.exe";std::error_code ec;
-        if(!std::filesystem::is_regular_file(file,ec)){why=L"虚拟摄像机组件不完整，请完整解压Veyra软件包";return false;}
-        SHELLEXECUTEINFOW launch{sizeof(launch)};launch.fMask=SEE_MASK_NOCLOSEPROCESS|SEE_MASK_FLAG_NO_UI;
-        launch.lpVerb=L"runas";launch.lpFile=file.c_str();launch.lpParameters=remove?L"--uninstall":L"--install";launch.nShow=SW_HIDE;
-        if(!ShellExecuteExW(&launch)){
-            const auto code=GetLastError();why=code==ERROR_CANCELLED?L"已取消摄像机组件的管理员授权":L"无法启动摄像机安装程序，请查看日志";
-            log::warn("virtual-camera",std::format("setup launch remove={} win32={}",remove,code));return false;
+        const auto file=modules()/L"veyra-camera-setup.exe";
+        {
+            std::lock_guard lock(control);
+            pollSetupLocked();
+            if(installing){why=L"正在安装摄像机组件，请等待";return false;}
+            std::error_code ec;
+            if(!std::filesystem::is_regular_file(file,ec)){
+                why=L"虚拟摄像机组件不完整，请完整解压Veyra软件包";
+                return false;
+            }
+            std::lock_guard text(textMutex);
+            setupError.clear();
+            setupRemoves=remove;
+            installing=true;
         }
-        setupProcess=launch.hProcess;setupRemoves=remove;installing=true;
-        {std::lock_guard text(textMutex);setupError.clear();}
-        log::info("virtual-camera",std::format("setup requested remove={} elevation=Windows-consent",remove));return true;
+
+        // Shell and COM can dispatch Qt events while Windows asks for consent.
+        // A reentrant status read must see "installing" without locking itself out.
+        HANDLE process=nullptr;
+        DWORD code=ERROR_GEN_FAILURE;
+        try{code=setupLauncher(file,remove,process);}
+        catch(...){
+            if(process)CloseHandle(process);
+            std::lock_guard lock(control);
+            installing=false;
+            std::lock_guard text(textMutex);
+            setupError=L"无法启动摄像机安装程序，请查看日志";
+            throw;
+        }
+        if(!code&&!process)code=ERROR_INVALID_HANDLE;
+        std::lock_guard lock(control);
+        if(code){
+            if(process)CloseHandle(process);
+            installing=false;
+            why=code==ERROR_CANCELLED?L"已取消摄像机组件的管理员授权":L"无法启动摄像机安装程序，请查看日志";
+            {std::lock_guard text(textMutex);setupError=why;}
+            log::warn("virtual-camera",std::format("setup launch remove={} win32={}",remove,code));
+            return false;
+        }
+        setupProcess=process;
+        log::info("virtual-camera",std::format("setup requested remove={} elevation=Windows-consent",remove));
+        return true;
+    }
+    void stopLocked(){
+        if(armed.exchange(false)){++epoch;log::info("virtual-camera","disabled; old picture invalidated");}
+        if(ownership){CloseHandle(ownership);ownership=nullptr;}
+        SetEvent(wake);
     }
     void fail(std::wstring why){
         const int length=WideCharToMultiByte(CP_UTF8,0,why.data(),int(why.size()),nullptr,0,nullptr,nullptr);
@@ -275,7 +325,8 @@ struct VirtualCamera::State {
     }
 };
 struct VirtualCamera::Worker {std::thread thread;};
-VirtualCamera::VirtualCamera():state_(std::make_shared<State>()),worker_(std::make_unique<Worker>()){
+VirtualCamera::VirtualCamera(SetupLauncher launcher):state_(std::make_shared<State>()),worker_(std::make_unique<Worker>()){
+    state_->setupLauncher=launcher?std::move(launcher):SetupLauncher(launchCameraSetup);
     state_->systemInstalled=machineRegistered();
     state_->systemOutdated=state_->systemInstalled.load()&&!machineCurrent();
     state_->installed=state_->systemInstalled.load()||!virtualcam::registeredModule(false).empty();
@@ -293,6 +344,8 @@ bool VirtualCamera::start(uint32_t rate,std::wstring& error){
     if(s.armed.load()){
         if(s.fps.exchange(rate)!=rate){++s.epoch;SetEvent(s.wake);}return true;
     }
+    s.pollSetupLocked();
+    if(s.installing){error=L"正在安装摄像机组件，请等待";return false;}
     if(s.ownership){CloseHandle(s.ownership);s.ownership=nullptr;}
     const auto directory=modules();
     const auto x64=directory/L"veyra-virtualcam64.dll",x86=directory/L"veyra-virtualcam32.dll";
@@ -305,7 +358,7 @@ bool VirtualCamera::start(uint32_t rate,std::wstring& error){
     if(!owner||last==ERROR_ALREADY_EXISTS){
         if(owner)CloseHandle(owner);error=L"另一个Veyra实例已启用虚拟摄像机";s.fail(error);return false;
     }
-    s.pollSetupLocked();s.systemInstalled=machineRegistered();
+    s.systemInstalled=machineRegistered();
     s.systemOutdated=s.systemInstalled.load()&&!machineCurrent();
     HRESULT hr=S_OK;
     // An older system component: this package's modules for this user as well, which a
@@ -332,20 +385,30 @@ bool VirtualCamera::start(uint32_t rate,std::wstring& error){
         s.systemInstalled.load()?(s.systemOutdated.load()?"machine-outdated+current-user":"machine"):"current-user"));return true;
 }
 void VirtualCamera::stop(){
-    auto& s=*state_;std::lock_guard lock(s.control);
-    if(s.armed.exchange(false)){++s.epoch;log::info("virtual-camera","disabled; old picture invalidated");}
-    if(s.ownership){CloseHandle(s.ownership);s.ownership=nullptr;}SetEvent(s.wake);
+    auto& s=*state_;
+    std::lock_guard lock(s.control);
+    s.stopLocked();
 }
 bool VirtualCamera::uninstall(std::wstring& error){
-    stop();
-    if(machineRegistered())return state_->setup(true,error);
-    const auto a=virtualcam::unregisterModule(false),b=virtualcam::unregisterModule(true);
-    if(FAILED(a)||FAILED(b)){
-        log::error("virtual-camera",std::format("unregister HRESULT64=0x{:X} HRESULT32=0x{:X}",unsigned(a),unsigned(b)));
-        error=L"虚拟摄像机卸载失败，请查看日志";return false;
+    auto& s=*state_;
+    {
+        std::lock_guard lock(s.control);
+        s.pollSetupLocked();
+        if(s.installing){error=L"正在安装摄像机组件，请等待";return false;}
+        s.stopLocked();
+        if(!machineRegistered()){
+            const auto a=virtualcam::unregisterModule(false),b=virtualcam::unregisterModule(true);
+            if(FAILED(a)||FAILED(b)){
+                log::error("virtual-camera",std::format("unregister HRESULT64=0x{:X} HRESULT32=0x{:X}",unsigned(a),unsigned(b)));
+                error=L"虚拟摄像机卸载失败，请查看日志";return false;
+            }
+            s.installed=false;s.failed=false;
+            std::lock_guard text(s.textMutex);
+            s.error.clear();
+            return true;
+        }
     }
-    state_->installed=false;state_->failed=false;
-    {std::lock_guard lock(state_->textMutex);state_->error.clear();}return true;
+    return s.setup(true,error);
 }
 bool VirtualCamera::installForAllUsers(std::wstring& error){return state_->setup(false,error);}
 void VirtualCamera::sessionEnded(){++state_->epoch;state_->width=state_->height=0;SetEvent(state_->wake);}

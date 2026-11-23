@@ -1893,3 +1893,12 @@ RTX 5070 的实际 4K 文件逐帧对照中，VFG 中档 2×、VFG 高档 2×、
 e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。同片段 DLSS 2× 额外 GPU 开销 P95 从 0.739 ms 降至 0.646 ms，仍有 11/252 张超过 0.7 ms。VFG 输入、输出和诊断表的逐文件 SHA-256 对照一致，中档 2× 额外开销 P95 为 0.537 ms。实际程序录制 10 段，加优化后复测 3 段，全部核对为 3840×2160，包含 VFG 中档 2× 与 NR 同时运行。第一次录制脚本仅添加 NR 层，补上显式启用后才计入结果。暂停脚本复核时区分收到暂停请求前正在处理的那一帧和后续轮询。
 
 [T911Ultra 实卡边界、录制、计时与验收](<E:/项目/Veyra/reports/codex-crosshair-recovery-20261122/RESULTS.md>)
+### 2026-11-22 GitHub Issue 跟进
+
+从整合版 `bf0aacd6` 建立 `codex/github-issue-followup-20261122`。处理新虚拟摄像机授权重入、采集补帧准入的相位反馈、采集驱动时钟漂移与自动重连、静止画面去重节奏、MJPEG 残留色彩设置、全屏提交 FPS、NR 窄面板、PS5 触摸板与会话诊断、DLSS 不可用提示以及 DRED 的按进程开关。WAVLINK 现场日志是原生直连，重连按回调频率、时间戳和丢帧共同判断。
+
+`scripts/acceptance/build-recording-handoff.py --task codex-github-issue-followup-20261122 --jobs 2` 构建 16 个目标。已有 ASCII Qt Junction 指向 E 盘物理依赖以避开 MSVC 链接乱码。107 个 shader 与构建校验一致，翻译缺失与占位异常均为 0。补帧预算的 1,800 对夹具与 1440p29.97 DLSS 2X 回放拒绝均为 0。回放提交约 59.9 FPS，1% Low 58.50 FPS。静止 1440p30 开 VFG 2X 后提交约 60 FPS，1% Low 58.98。全屏帧率首版绘制在本机快速失败，改用单个 GPU 绘制后四角像素对照通过。
+
+构建、日志、私有测试程序及临时文件分属 E 盘同名任务目录。逐条处理、复现命令、数据与现场边界见 [验收记录](<E:/项目/Veyra/reports/codex-github-issue-followup-20261122/RESULTS.md>)。
+
+断流夹具中，尾帧已呈现，结束状态却一度读到上一份 50 ms 缓存。结束后改用排空时发布的快照，实时统计缓存继续用于播放中。

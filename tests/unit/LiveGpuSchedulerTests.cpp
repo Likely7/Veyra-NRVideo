@@ -236,7 +236,37 @@ int main(){
     check(phase.select(10000200,420000,333333,4)==375000,"4X keeps measured readiness plus jitter margin");
     phase.observe(10000201,415000); // legacy 420000 minus the 0.5 ms margin
     check(phase.select(10000202,420000,333333,4)==420000,"slow batch immediately restores conservative phase");
-    check(phase.select(21000000,420000,333333,4)==420000,"stale readiness cannot shorten a new pair");
+    check(phase.select(21000000,420000,333333,4)==420000,"stale readiness retains the previous phase");
+    {
+        using namespace veyra::engine;
+        LivePairLatency adaptive;
+        FgRecoveryBudget budget;
+        constexpr int64_t interval=333667,legacy=360000;
+        unsigned rejected=0;
+        int64_t minimum=legacy,previous=legacy;
+        for(int i=0;i<1800;++i){
+            const int64_t now=22000000+int64_t(i)*interval;
+            const int64_t callback=now-6000-(i%30==0?12000:0);
+            budget.complete(12.7,true,false,now,6.8);
+            const auto required=budget.requiredDeadlineLead(now,.35,.25);
+            const auto needed=now+required-callback+interval/2;
+            auto delay=adaptive.select(now,legacy,interval,2);
+            delay=adaptive.enforceAdmissionFloor(needed,legacy);
+            if(!budget.admitBy(callback+delay-interval/2,now+required)){
+                ++rejected;
+                adaptive.observe(now,needed);
+            }else adaptive.observe(now,interval/2+1400); // a lower ready-time estimate
+            if(i>=60){
+                minimum=std::min(minimum,delay);
+                if(i%30==0)check(delay-previous<20000,"no starvation phase jump");
+            }
+            previous=delay;
+        }
+        check(rejected==0&&minimum<legacy-100000,"reported 29.97 Hz loop converges below legacy with no rejection");
+        check(adaptive.select(800000000,legacy,interval,2)==previous,"a long sample gap retains the settled phase");
+        check(adaptive.enforceAdmissionFloor(legacy+20000,legacy)==legacy,"overload cannot extend the phase beyond its bound");
+        check(!budget.admitBy(100,101),"one tick of missing deadline budget rejects");
+    }
     for(unsigned multiplier:{2u,4u,6u}){
         phase.reset();
         const int64_t interval=333667,ready=120000;

@@ -87,6 +87,10 @@ bool QmlPlayerBridge::captureFormatCostHint() const {
         if (f.key == impl_->captureFormatKey) return source::captureFormatNeedsCostHint(static_cast<source::CaptureFormatTier>(f.tier));
     return false;
 }
+bool QmlPlayerBridge::captureMjpegSelected() const {
+    const auto* format=source::selectCaptureFormat(impl_->captureFormatList,-1,impl_->captureFormatKey);
+    return format&&source::captureMjpegFormat(*format);
+}
 void QmlPlayerBridge::setCaptureFormatKey(const QString& key) {
     const auto* format=source::selectCaptureFormat(impl_->captureFormatList,-1,wideOf(key));
     if(!format){

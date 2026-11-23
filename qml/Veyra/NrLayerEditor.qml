@@ -90,8 +90,11 @@ ColumnLayout {
         }
     }
 
-    RowLayout {
+    Flow {
+        objectName: "nr-layer-actions"
         Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        spacing: 6
         visible: editor.listControls
         VButton {
             objectName: "nr-copy"
@@ -372,6 +375,9 @@ ColumnLayout {
         }
         VButton {
             objectName: "nr-use-auto-defaults"
+            // German and other long labels must not set the group's minimum width.
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
             visible: (editor.layerData.correctionEnabled ?? false) && !(editor.layerData.correctionAuto ?? true)
             text: qsTr("采用当前风格的自动参数"); ghost: true
             onClicked: editor.edited(editor.layerData.index,"correctionUseAuto",1)

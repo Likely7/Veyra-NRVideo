@@ -8,6 +8,9 @@ constexpr unsigned captureColorSpace(unsigned value) { return value & 3u; }
 constexpr unsigned captureColorRange(unsigned value) { return value >> 2; }
 constexpr unsigned captureColorOverride(unsigned space,unsigned range) { return space | (range << 2); }
 constexpr bool validCaptureColorOverride(unsigned value) { return value <= 11; }
+constexpr unsigned effectiveCaptureColorOverride(unsigned value,bool compressed) {
+    return compressed?captureColorOverride(0,captureColorRange(value)):value;
+}
 inline void applyCaptureColorOverride(pipeline::ColorDescription& color,unsigned value) {
     using namespace pipeline;
     const auto space=captureColorSpace(value),range=captureColorRange(value);

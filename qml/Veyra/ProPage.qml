@@ -1402,14 +1402,14 @@ VPage {
                 ScrollBar.vertical: VScrollBar {
                     id: inspectorScroll
                     objectName: "pro-inspector-scrollbar"
-                    wide: root.tab === "color"
+                    wide: root.tab === "color" || root.tab === "quality"
                 }
 
                 ColumnLayout {
                     id: body
                     // CSS thin scrollbars consume 10px on the reference host;
                     // reserve their gutter instead of drawing over the colour card.
-                    width: parent.width - 20 - (root.tab === "color" && inspectorScroll.size < 1 ? inspectorScroll.implicitWidth : 0)
+                    width: parent.width - 20 - ((root.tab === "quality" || (root.tab === "color" && inspectorScroll.size < 1)) ? inspectorScroll.implicitWidth : 0)
                     x: 10
                     spacing: 6
 

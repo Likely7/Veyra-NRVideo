@@ -75,6 +75,11 @@ int main(){
         check(gfx::vrrLevel(gfx::amdFreeSyncState(-1,0,-1,0))==1,"AMD display without FreeSync is unsupported");
         check(gfx::amdFreeSyncState(-1,0,-1,0).status==0,"AMD display without FreeSync is an answer, not a retried failure");
         check(!gfx::amdFreeSyncState(0,0xf,0,7).enabled&&!gfx::amdFreeSyncState(0,0xf,0,7).inVrrMode,"AMD FreeSync never fabricates active VRR flags");
+        check(std::abs(gfx::amdFreeSyncState(0,0xf,0,7,59940000,119880000).minimumHz-59.94)<.000001,
+              "AMD FreeSync keeps the lower bound in Hz");
+        check(gfx::amdFreeSyncState(0,0xf,0,0,59940000,119880000).minimumHz==0&&
+              gfx::amdFreeSyncState(0,0xf,0,7,119880000,59940000).minimumHz==0,
+              "VRR off or inverted driver data never reports an active floor");
     }
     {
         engine::PreviewView v;v.displayAspect=16.0/9;

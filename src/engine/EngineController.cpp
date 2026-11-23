@@ -235,7 +235,13 @@ void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc 
 }
 // A PS5 stream (activeRemote_) takes precedence; otherwise PS5 手柄控制.
 remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(activeRemote_)return activeRemote_->takeFeedback();return controlRemote_?controlRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
-void EngineController::remotePlayController(const remoteplay::ControllerState& state){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->controller(state);else if(controlRemote_)controlRemote_->controller(state);}
+void EngineController::remotePlayController(const remoteplay::ControllerState& state){
+    std::lock_guard lock(mutex_);
+    const auto& target=activeRemote_?activeRemote_:controlRemote_;
+    if(!target)return;
+    if(remotePlayTouchpadPressOnly_)target->controller(remoteplay::touchpadPressOnly(state));
+    else target->controller(state);
+}
 void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
 void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){
     desc.controlOnly=true;desc.request.viewOnly=false;
@@ -469,7 +475,9 @@ PlayerSnapshot EngineController::snapshot()const{
     }
     copy.volume=volume_;copy.muted=muted_;
     const bool playing=copy.running&&!copy.image&&copy.transport==TransportState::Playing;
-    if(flowWindow){
+    // EOF publishes the drained counters before marking the transport ended.
+    // A cached live reading can still precede the last Present by one frame.
+    if(flowWindow&&copy.transport!=TransportState::Ended){
         static std::mutex cacheMutex;static diagnostics::FrameFlowMetrics cached;static const FrameFlowWindow* cachedFor=nullptr;static int64_t cachedAt=0;
         const auto now=monotonic100ns();
         std::lock_guard lock(cacheMutex);
@@ -1541,6 +1549,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto applyPresentation=[&]{
                 PresentationSettings requested;uint64_t revision;
                 {std::lock_guard lock(mutex_);requested=presentation_;revision=presentationRevision_;}
+                presenter.setFullscreenFrameStats(requested.fullscreen&&!isImage?fullscreenFrameStatsCorner_.load():-1);
                 // Poll completed display/VRR queries before comparing policy.
                 // It must not make synchronous driver calls on the GPU owner.
                 const double refreshHz=presenter.displayRefreshHz();
@@ -2549,7 +2558,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         captureRetries.frameDelivered();
                         captureDisconnectReason.clear();
                         {std::lock_guard lock(mutex_);snapshot_.captureRecovering=false;snapshot_.captureReconnectAttempts=0;}
-                        status(L"采集画面已恢复");
+                        status(L"采集卡已自动重连，画面已恢复");
                     }
                 }
                 if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}
@@ -2953,8 +2962,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // generated frames before this change), so their bound stays as it was;
                 // the FG allowance is for 60->30 and transport pairs.
                 const int64_t fgPhaseAllowance=marginPair&&!smoothContentAnchor?fgBudget.phaseAllowance(host100ns(),liveInterval):0;
-                const auto pairDelay=marginPair?
-                    pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier,std::max(transportInterval/2,fgPhaseAllowance))+pairExtra:legacyPairDelay;
+                const auto phaseAllowance=std::max(transportInterval/2,fgPhaseAllowance);
+                const auto phaseLimit=legacyPairDelay+phaseAllowance;
+                auto pairDelay=marginPair?
+                    pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier,phaseAllowance)+pairExtra:legacyPairDelay;
                 std::optional<int64_t> pairPresentAnchor;
                 const auto presentAnchorFor=[&](int64_t source){
                     if(!pairPresentAnchor){
@@ -2983,9 +2994,19 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto interval=liveInterval;
                         const auto a=(historyReset||batch.b100ns<=batch.a100ns||batch.b100ns-batch.a100ns>10000000)?batch.b100ns-interval:batch.a100ns;
                         const auto lastGenerated=pipeline::FrameBatch::interpolate(a,batch.b100ns,previewFgMultiplier-1,previewFgMultiplier);
-                        const auto now=host100ns(),deadline=liveTimeline.deadline(lastGenerated);
+                        const auto now=host100ns();
                         const double elapsed=elapsedMs(processStart);
-                        const bool admitted=!vfgCostSettling.holding(now)&&fgBudget.admit(now,deadline,elapsed,presentP95,warmingHistory);
+                        const auto earliest=now+fgBudget.requiredDeadlineLead(now,elapsed,presentP95,warmingHistory);
+                        const bool held=vfgCostSettling.holding(now);
+                        const bool adjustPhase=marginPair&&pairAnchoredLive&&!warmingHistory&&!historyReset&&!held;
+                        const auto neededPhase=earliest-liveInputReady+batch.b100ns-lastGenerated-pairExtra;
+                        if(adjustPhase){
+                            pairDelay=pairLatency.enforceAdmissionFloor(neededPhase,phaseLimit)+pairExtra;
+                            liveTimeline.resetPair(batch.identity.epoch,batch.b100ns,liveInputReady,pairDelay);
+                        }
+                        const auto deadline=liveTimeline.deadline(lastGenerated);
+                        const bool admitted=!held&&fgBudget.admitBy(deadline,earliest);
+                        if(adjustPhase&&!admitted)pairLatency.observe(now,neededPhase);
                         logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous");
                         auto decision=admitted?pipeline::EnhanceGraph::FgDecision::Evaluate:pipeline::EnhanceGraph::FgDecision::Skip;
                         if(smoothTransportAnchor&&options.settings.vfgAutoRegulate&&previewFgMultiplier==2&&!warmingHistory&&graph->vfgFastReady()){
@@ -3667,6 +3688,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 captureFlowLast=captureStats;
                 loopTrace.mark("flowUpdate");
                 measured.flow=frameFlow->snapshot(host100ns());
+                presenter.updateFrameStats(measured.flow.presentSubmitFps,measured.flow.presentLow1Fps);
                 recorder_->setPresentRateHint(measured.flow.presentSubmitFps);
                 replay_->setPresentRateHint(measured.flow.presentSubmitFps);
                 loopTrace.mark("flowSnapshot");
@@ -3741,6 +3763,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.hdrInRollOffPercent=coverage.inRollOffPercent();
                     snapshot_.hdrInLiftPercent=coverage.inLiftPercent();
                     snapshot_.displayVrr=gfx::vrrLevel(presenter.displayVrr());snapshot_.presentationVrrSync=presenter.vrrSync();
+                    snapshot_.displayVrrMinimumHz=presenter.displayVrr().minimumHz;
+                    snapshot_.displayCompositionMode=presenter.displayCompositionMode();
                     snapshot_.tearingHint=presenter.tearingHint();
                     snapshot_.nrActive=graph->nrEnabled()&&graphStats.nrEvaluateCount>0;
                     snapshot_.nrAutoActive=graph->autoNrPoolReady();
@@ -3755,6 +3779,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.srActive=gd.enableSr&&graphStats.srEvaluateCount>0;
                     snapshot_.fgActive=options.fg&&(graph->xessEnabled()?presenter.xessActive()&&graphStats.fgGeneratedFrames>0:graph->fgEnabled()&&measured.flow.counters.fgReadyValid>0);
                     if(transaction&&backendRecoveryWarning.empty()&&nvidiaAdapter&&(!graph->xessEnabled()||presenter.xessActive()))snapshot_.backendWarning.clear();
+                    snapshot_.captureHalfRateSuggested=dedupActive&&contentDedup.suggestHalfRate();
                     snapshot_.flowPerf=graph->actualFlowPerf();snapshot_.contentFps=isCapture&&!legacyCadence&&dedupContent(options.settings.content)&&contentDedup.contentFps()>0?int(std::lround(contentDedup.contentFps())):out.measuredContentRate;
                     snapshot_.nrEvaluated=graphStats.nrEvaluateCount;snapshot_.nvofExecuted=graphStats.nvofExecuteCount;
                     snapshot_.captureReceived=captureStats.received;snapshot_.captureDropped=captureStats.dropped;snapshot_.captureFps=captureStats.callbackFps;snapshot_.captureReadAgeMs=captureStats.readAgeMs;snapshot_.captureAgeMs=liveScheduler?completed.ageMs:captureStats.frameAgeMs;snapshot_.captureAgeP95Ms=ageP95;

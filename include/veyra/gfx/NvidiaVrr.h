@@ -33,6 +33,7 @@ struct VrrState {
     bool trueGsync=false;        // G-SYNC module, not adaptive sync
     bool simulated=false;        // VEYRA_TEST_VRR_LEVEL override
     bool amd=false;              // answered by the AMD driver (ADL FreeSync), not NVAPI
+    double minimumHz=0;    // current mode, when reported by the display driver
     int status=0;          // last NvAPI status (0 = OK)
     bool operator==(const VrrState&)const=default;
 };
@@ -62,7 +63,7 @@ constexpr unsigned vrrLevel(const VrrState& s){
 // The driver rejects the caps query for a display without FreeSync (seen as
 // -1 on a non-FreeSync monitor), so that is an answer, not a failed query:
 // status stays 0 and DisplayStateService does not retry it.
-inline VrrState amdFreeSyncState(int capStatus,int caps,int stateStatus,int current){
+inline VrrState amdFreeSyncState(int capStatus,int caps,int stateStatus,int current,int minMicroHz=0,int maxMicroHz=0){
     constexpr int displaySupported=1<<2,currentModeSupported=1<<3; // ADL_FREESYNC_CAP_*
     VrrState s;s.known=true;s.amd=true;
     if(capStatus!=0)return s;
@@ -70,6 +71,8 @@ inline VrrState amdFreeSyncState(int capStatus,int caps,int stateStatus,int curr
     // vrrPresentationAvailable treats requested alone as enough, so it is set
     // only together with possible (FreeSync on and usable in this mode).
     s.possible=s.requested=s.supportsVrr&&s.currentlyCapable&&stateStatus==0&&current!=0;
+    if(s.requested&&minMicroHz>=1000000&&maxMicroHz>minMicroHz)
+        s.minimumHz=double(minMicroHz)/1000000.0;
     return s;
 }
 // Minimal ADL2 declarations checked against GPUOpen display-library (MIT,
@@ -124,7 +127,7 @@ inline VrrState queryAmdFreeSync(const wchar_t* gdiDevice){
         Cap cap{};int current=0,defaults=0,minMicroHz=0,maxMicroHz=0;
         const int capStatus=getCap(context,list[a].index,display,&cap);
         const int stateStatus=capStatus==0?getState(context,list[a].index,display,&current,&defaults,&minMicroHz,&maxMicroHz):capStatus;
-        return amdFreeSyncState(capStatus,cap.caps,stateStatus,current);
+        return amdFreeSyncState(capStatus,cap.caps,stateStatus,current,minMicroHz,maxMicroHz);
     }
     return {};
 }

@@ -92,7 +92,7 @@ Rectangle {
     // starts with buttons or text (NR 层's 复制此层 row) sat on the line itself
     // (field report 2026-10-05).
     readonly property int bodyTopGap: 8
-    implicitHeight: headerHeight + (open ? body.implicitHeight + bodyTopGap + 8 : 0)
+    implicitHeight: headerHeight + (open ? body.implicitHeight + bodyTopGap + body.Layout.bottomMargin : 0)
     radius: 12
     color: Theme.card2
     border.width: 1

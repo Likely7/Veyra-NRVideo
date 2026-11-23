@@ -3,6 +3,7 @@
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFormatSelection.h"
 #include "veyra/source/CaptureDriverStage.h"
+#include <chrono>
 #include <functional>
 #include <memory>
 #include <string_view>
@@ -114,6 +115,7 @@ private:
     long lastFailureCode_ = 0;
     bool deviceRemoved_ = false;
     bool noVideoAfterRun_ = false;
+    std::chrono::steady_clock::time_point nextCadenceReconnect_{};
     void clearFailure();
     void setFailure(const wchar_t* stage, long code);
     void closeGraph(bool stopped = false) noexcept;

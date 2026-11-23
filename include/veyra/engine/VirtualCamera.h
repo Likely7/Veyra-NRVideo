@@ -1,5 +1,7 @@
 #pragma once
 #include "veyra/engine/PresentCapture.h"
+#include <filesystem>
+#include <functional>
 #include <memory>
 #include <string>
 
@@ -20,7 +22,9 @@ struct VirtualCameraStatus {
 // readback. It never waits on a camera consumer or a CPU fence in record().
 class VirtualCamera final : public PresentCapture {
 public:
-    VirtualCamera();
+    // The launcher returns a Win32 error, or transfers a process handle on success.
+    using SetupLauncher=std::function<DWORD(const std::filesystem::path&,bool,HANDLE&)>;
+    explicit VirtualCamera(SetupLauncher setupLauncher={});
     ~VirtualCamera() override;
     // fps: 0 follows the rate the consumer negotiated (60 until one does); 30/60/120 cap it.
     bool start(uint32_t fps,std::wstring& error);

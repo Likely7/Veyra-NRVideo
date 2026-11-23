@@ -56,7 +56,7 @@ DialogLayer {
     DialogGroup {
         VRow {
             label: "PSN Account ID"
-            hint: qsTr("点击获取 Account ID，在网页查询后复制到这里。支持数字 ID 或 8 字节 Base64，不是 PSN 昵称。")
+            hint: qsTr("使用要配对的 PS5 用户对应的 PSN 账号查询，在这里填入数字 ID 或 8 字节 Base64。")
             hintBelow: true
             RowLayout {
                 spacing: 6
@@ -121,6 +121,15 @@ DialogLayer {
             label: qsTr("仅观看")
             hint: qsTr("不向 PS5 转发电脑手柄输入")
             VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }
+        }
+        VRow {
+            label: qsTr("触摸板仅转发按压")
+            hint: qsTr("保留按下触摸板的操作，忽略轻触和滑动。")
+            VSwitch {
+                checked: veyra.ps5.touchpadPressOnly === true
+                enabled: veyra.ps5.viewOnly !== true
+                onToggled: checked => veyra.ps5Set("touchpadPressOnly", checked)
+            }
         }
         // The mirror of 仅观看: only the pad, the picture from a capture card.
         VRow {

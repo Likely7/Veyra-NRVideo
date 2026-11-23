@@ -2341,6 +2341,19 @@
    "ru": "Модель DLSS"
   },
   {
+   "zh": "DLSS 补帧需要更新 NVIDIA 驱动",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "DLSS 補幀需要更新 NVIDIA 驅動程式",
+   "en": "Update the NVIDIA driver to use DLSS Frame Generation",
+   "ja": "DLSS フレーム生成には NVIDIA ドライバーの更新が必要です",
+   "ko": "DLSS 프레임 생성을 사용하려면 NVIDIA 드라이버를 업데이트하세요",
+   "es": "Actualiza el controlador NVIDIA para usar la generación de fotogramas DLSS",
+   "fr": "Mettez à jour le pilote NVIDIA pour utiliser la génération d’images DLSS",
+   "de": "Aktualisiere den NVIDIA-Treiber für die DLSS Frame Generation",
+   "pt-BR": "Atualize o driver da NVIDIA para usar a geração de quadros DLSS",
+   "ru": "Обновите драйвер NVIDIA для использования генерации кадров DLSS"
+  },
+  {
    "zh": "DLSS、FSR、ANR 补帧，及运动来源选“光流”的 XeSS 生效：修人物边缘果冻，背景不再被人物拖着晃",
    "src": "qml/ProPage.qml",
    "zh-TW": "DLSS、FSR、ANR 補幀，及運動來源選「光流」的 XeSS 生效：修人物邊緣果凍，背景不再被人物拖著晃",
@@ -3210,6 +3223,19 @@
    "de": "Limited = 16–235, Full = 0–255. Wenn das bild ausgewaschen aussieht, wählen sie limited; wenn schatten zu schwarz zertreten und highlights ausblasen, wählen sie full.",
    "pt-BR": "Limitado = 16–235, Total = 0–255. Se a imagem parece lavada escolha limitada; se as sombras esmagam para preto e destaques sopram para fora escolha Full",
    "ru": "Ограниченный = 16-235, полный = 0-255. Если изображение выглядит вымытым, выберите Limited; если тени раздавливаются до черного цвета, а выделения выдуваются, выберите Full"
+  },
+  {
+   "zh": "MJPEG 采集的输入色彩跟随码流，可在下方单独调整色彩范围。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "MJPEG 擷取的輸入色彩依照位元流，可在下方單獨調整色彩範圍。",
+   "en": "MJPEG uses the stream’s color metadata. You can adjust the color range below.",
+   "ja": "MJPEG キャプチャの色はビットストリームに従います。色範囲は下で調整できます。",
+   "ko": "MJPEG 캡처 색상은 스트림 정보를 따릅니다. 색 범위는 아래에서 조정할 수 있습니다.",
+   "es": "MJPEG usa los metadatos de color del flujo. Puedes ajustar el rango de color abajo.",
+   "fr": "MJPEG utilise les métadonnées de couleur du flux. Vous pouvez régler la plage de couleurs ci-dessous.",
+   "de": "MJPEG verwendet die Farbdaten aus dem Bitstream. Den Farbbereich kannst du unten separat einstellen.",
+   "pt-BR": "MJPEG usa os metadados de cor do fluxo. Você pode ajustar a faixa de cores abaixo.",
+   "ru": "Цвет MJPEG определяется метаданными потока. Диапазон можно настроить ниже."
   },
   {
    "zh": "MKV 不支持直接保留此编码，请排除此轨",
@@ -7255,6 +7281,32 @@
    "ru": "Адрес хоста"
   },
   {
+   "zh": "主机报告远程游玩协议版本不匹配，请检查主机系统和 Veyra 版本。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "主機回報遠端遊玩通訊協定版本不符，請檢查主機系統和 Veyra 版本。",
+   "en": "The console reported a Remote Play protocol mismatch. Check the console software and Veyra version.",
+   "ja": "本体からリモートプレイのプロトコルが一致しないと報告されました。本体ソフトウェアと Veyra のバージョンを確認してください。",
+   "ko": "콘솔에서 리모트 플레이 프로토콜 버전이 일치하지 않는다고 보고했습니다. 콘솔 시스템과 Veyra 버전을 확인하세요.",
+   "es": "La consola informó una incompatibilidad del protocolo de Uso a distancia. Revisa el sistema de la consola y la versión de Veyra.",
+   "fr": "La console signale une incompatibilité du protocole de Lecture à distance. Vérifiez le logiciel système et la version de Veyra.",
+   "de": "Die Konsole meldet einen Versionskonflikt beim Remote-Play-Protokoll. Prüfe Systemsoftware und Veyra-Version.",
+   "pt-BR": "O console informou incompatibilidade no protocolo do Uso remoto. Confira o sistema do console e a versão do Veyra.",
+   "ru": "Консоль сообщила о несовместимой версии протокола Remote Play. Проверьте ПО консоли и версию Veyra."
+  },
+  {
+   "zh": "主机拒绝了 Account ID，请在获取指南中使用当前配对用户的 PSN 账号重新查询。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "主機拒絕了 Account ID，請依照取得指南，使用目前配對使用者的 PSN 帳號重新查詢。",
+   "en": "The console rejected the Account ID. Follow the lookup guide with the PSN account of the user you want to pair.",
+   "ja": "本体が Account ID を拒否しました。取得ガイドに従い、ペアリングするユーザーの PSN アカウントで調べ直してください。",
+   "ko": "콘솔이 Account ID를 거부했습니다. 찾기 안내에 따라 페어링할 사용자의 PSN 계정으로 다시 확인하세요.",
+   "es": "La consola rechazó el Account ID. Sigue la guía de búsqueda con la cuenta PSN del usuario que quieres vincular.",
+   "fr": "La console a refusé l’Account ID. Suivez le guide avec le compte PSN de l’utilisateur à associer.",
+   "de": "Die Konsole hat die Account-ID abgelehnt. Verwende die Anleitung mit dem PSN-Konto des zu koppelnden Benutzers.",
+   "pt-BR": "O console rejeitou o Account ID. Siga o guia de consulta com a conta PSN do usuário que deseja parear.",
+   "ru": "Консоль отклонила Account ID. Выполните поиск по инструкции с учётной записью PSN пользователя для сопряжения."
+  },
+  {
    "zh": "主机拒绝了串流（{} {}）。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "主機拒絕了串流（{} {}）。",
@@ -7279,6 +7331,19 @@
    "de": "Der Host lehnte die Startanforderung ab ({}).",
    "pt-BR": "A máquina recusou o pedido inicial ({}).",
    "ru": "Хозяин отказался от стартовой заявки {}."
+  },
+  {
+   "zh": "主机拒绝了已保存的配对，请使用同一 PSN 账号和主机新生成的配对码重新配对。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "主機拒絕了已儲存的配對，請使用相同的 PSN 帳號和主機新產生的配對碼重新配對。",
+   "en": "The console rejected the saved pairing. Pair again with the same PSN account and a new code from the console.",
+   "ja": "本体が保存済みのペアリングを拒否しました。同じ PSN アカウントと本体で発行した新しいコードでペアリングしてください。",
+   "ko": "콘솔이 저장된 페어링을 거부했습니다. 동일한 PSN 계정과 콘솔의 새 코드로 다시 페어링하세요.",
+   "es": "La consola rechazó la vinculación guardada. Vuelve a vincular con la misma cuenta PSN y un código nuevo de la consola.",
+   "fr": "La console a refusé l’association enregistrée. Associez-la de nouveau avec le même compte PSN et un nouveau code de la console.",
+   "de": "Die Konsole hat die gespeicherte Kopplung abgelehnt. Kopple erneut mit demselben PSN-Konto und einem neuen Code der Konsole.",
+   "pt-BR": "O console rejeitou o pareamento salvo. Pareie novamente com a mesma conta PSN e um novo código do console.",
+   "ru": "Консоль отклонила сохранённое сопряжение. Используйте ту же учётную запись PSN и новый код консоли."
   },
   {
    "zh": "主机拒绝了请求（%1）。",
@@ -7318,6 +7383,19 @@
    "de": "Host-Suche traf einen Fehler ({}); Details im Protokoll. Sie können die IP von Hand eingeben.",
    "pt-BR": "A pesquisa da máquina atingiu um erro ({}); detalhes no registro. Você pode inserir o IP à mão.",
    "ru": "Поиск хоста нажал на ошибку {}; подробности в журнале. Вы можете ввести IP вручную."
+  },
+  {
+   "zh": "主机未提供可识别的拒绝原因，请将本次连接的诊断日志提供给维护者。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "主機未提供可辨識的拒絕原因，請將這次連線的診斷記錄提供給維護者。",
+   "en": "The console did not provide a recognized reason. Share the diagnostic log for this connection with the maintainers.",
+   "ja": "本体から判別可能な拒否理由が得られませんでした。この接続の診断ログを開発者に共有してください。",
+   "ko": "콘솔에서 확인 가능한 거부 사유를 보내지 않았습니다. 이번 연결의 진단 로그를 유지보수 담당자에게 공유하세요.",
+   "es": "La consola no envió un motivo reconocido. Comparte el registro de diagnóstico de esta conexión con los responsables.",
+   "fr": "La console n’a fourni aucun motif reconnu. Partagez le journal de diagnostic de cette connexion avec les mainteneurs.",
+   "de": "Die Konsole hat keinen erkennbaren Grund gemeldet. Teile das Diagnoseprotokoll dieser Verbindung mit dem Entwicklerteam.",
+   "pt-BR": "O console não forneceu um motivo reconhecido. Envie o log de diagnóstico desta conexão aos mantenedores.",
+   "ru": "Консоль не сообщила распознаваемую причину. Передайте разработчикам журнал диагностики этого подключения."
   },
   {
    "zh": "主机正在和另一台设备配对，请稍后再试。",
@@ -8217,6 +8295,19 @@
    "ru": "Динамические субтитры Windows распознают звук системы. Перевод отображается в окне просмотра Veyra."
   },
   {
+   "zh": "使用要配对的 PS5 用户对应的 PSN 账号查询，在这里填入数字 ID 或 8 字节 Base64。",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "使用要配對的 PS5 使用者所對應的 PSN 帳號查詢，再填入數字 ID 或 8 位元組 Base64。",
+   "en": "Look up the PSN account of the PS5 user you want to pair. Enter the numeric ID or the 8-byte Base64 value here.",
+   "ja": "ペアリングする PS5 ユーザーの PSN アカウントで検索し、数値 ID または 8 バイトの Base64 を入力してください。",
+   "ko": "페어링할 PS5 사용자의 PSN 계정으로 조회한 뒤 숫자 ID 또는 8바이트 Base64 값을 입력하세요.",
+   "es": "Busca la cuenta PSN del usuario de PS5 que quieres vincular. Introduce aquí el ID numérico o el valor Base64 de 8 bytes.",
+   "fr": "Recherchez le compte PSN de l’utilisateur PS5 à associer. Saisissez ici l’ID numérique ou la valeur Base64 de 8 octets.",
+   "de": "Suche das PSN-Konto des zu koppelnden PS5-Benutzers. Gib hier die numerische ID oder den 8-Byte-Base64-Wert ein.",
+   "pt-BR": "Consulte a conta PSN do usuário do PS5 que deseja parear. Insira aqui o ID numérico ou o valor Base64 de 8 bytes.",
+   "ru": "Найдите учётную запись PSN пользователя PS5 для сопряжения. Введите числовой ID или значение Base64 из 8 байтов."
+  },
+  {
    "zh": "使用说明",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "使用說明",
@@ -8579,6 +8670,19 @@
    "de": "Quellton beibehalten; wenig Änderung, wenn der Farbton bereits übereinstimmt",
    "pt-BR": "Manter o matiz do código; pouca alteração quando o matiz já corresponde",
    "ru": "Сохраняйте оттенок источника; небольшое изменение, когда оттенок уже совпадает"
+  },
+  {
+   "zh": "保留按下触摸板的操作，忽略轻触和滑动。",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "保留按下觸控板的操作，忽略輕觸和滑動。",
+   "en": "Forward touchpad clicks and ignore taps and swipes.",
+   "ja": "タッチパッドのクリックを送信し、タップとスワイプを無視します。",
+   "ko": "터치패드 클릭만 전달하고 탭과 스와이프를 무시합니다.",
+   "es": "Envía las pulsaciones del panel táctil e ignora los toques y deslizamientos.",
+   "fr": "Transmet les clics du pavé tactile et ignore les effleurements et les balayages.",
+   "de": "Leitet Klicks auf dem Touchpad weiter und ignoriert Tippen und Wischen.",
+   "pt-BR": "Envia cliques no touchpad e ignora toques e deslizes.",
+   "ru": "Передаёт нажатия сенсорной панели и игнорирует касания и свайпы."
   },
   {
    "zh": "保留最近的直播内容。最多使用 256 MiB 内存，高码率时可回看时间会缩短。",
@@ -9023,6 +9127,19 @@
    "ru": "Полноэкранный режим"
   },
   {
+   "zh": "全屏帧率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "全螢幕幀率",
+   "en": "Fullscreen frame rate",
+   "ja": "全画面フレームレート",
+   "ko": "전체 화면 프레임 속도",
+   "es": "FPS en pantalla completa",
+   "fr": "FPS en plein écran",
+   "de": "Bildrate im Vollbild",
+   "pt-BR": "FPS em tela cheia",
+   "ru": "Частота кадров в полноэкранном режиме"
+  },
+  {
    "zh": "全屏显存增长保护",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "全螢幕顯存增長保護",
@@ -9047,6 +9164,19 @@
    "de": "VRAM wuchs im Vollbild um %1 GB. Die Wiedergabe ist für diese Sitzung in ein Fenster zurückgekehrt, wobei die Erweiterungseinstellungen beibehalten wurden. Die Ursache ist nicht bestätigt. Sie können die OBS-Spielerfassungskompatibilität in den Einstellungen aktivieren, neu starten und den Vollbildmodus erneut testen.",
    "pt-BR": "VRAM continuou a crescer em %1 GB em tela cheia. A reprodução retornou a uma janela para esta sessão, mantendo as configurações de realce. A causa não está confirmada. Você pode ativar OBS a compatibilidade de captura de jogo em Configurações, reiniciar e testar tela cheia novamente.",
    "ru": "VRAM продолжает расти %1 GB в полноэкранном режиме. Воспроизведение возвратилось к окну для этой сессии, сохраняя настройки улучшения. Причина неподтверждена. Вы можете включить совместимость захвата игры OBS в настройках, перезагрузить и снова протестировать полный экран."
+  },
+  {
+   "zh": "全屏画面仍由 Windows 合成。若出现卡顿，可试用显示器支持的其他刷新率。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "全螢幕畫面仍由 Windows 合成。若出現卡頓，可試用顯示器支援的其他更新率。",
+   "en": "Windows is compositing the fullscreen video. If it stutters, try another refresh rate supported by the monitor.",
+   "ja": "全画面映像は Windows で合成されています。カクつく場合は、モニターが対応する別のリフレッシュレートを試してください。",
+   "ko": "Windows가 전체 화면 영상을 합성하고 있습니다. 끊기면 모니터에서 지원하는 다른 새로 고침 빈도를 사용해 보세요.",
+   "es": "Windows está componiendo el vídeo a pantalla completa. Si hay tirones, prueba otra frecuencia compatible con el monitor.",
+   "fr": "Windows compose la vidéo en plein écran. En cas de saccades, essayez une autre fréquence prise en charge par le moniteur.",
+   "de": "Windows setzt das Vollbildvideo per Compositing zusammen. Probiere bei Rucklern eine andere vom Monitor unterstützte Bildwiederholrate.",
+   "pt-BR": "O Windows está compondo o vídeo em tela cheia. Se houver engasgos, teste outra taxa de atualização compatível com o monitor.",
+   "ru": "Windows выполняет композитинг полноэкранного видео. При рывках попробуйте другую частоту обновления, поддерживаемую монитором."
   },
   {
    "zh": "全屏画面（双击画面 / F11）",
@@ -11208,19 +11338,6 @@
    "ru": "Защищать света"
   },
   {
-   "zh": "压缩采集的色彩空间由码流决定。可以单独指定色彩范围。",
-   "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "壓縮擷取的色彩空間由位元流決定。可以單獨指定色彩範圍。",
-   "en": "Compressed capture takes its color space from the bitstream. The color range can be set separately.",
-   "ja": "圧縮キャプチャーの色空間はビットストリームで決まります。色範囲は個別に指定できます。",
-   "ko": "압축 캡처의 색 공간은 비트스트림을 따릅니다. 색 범위는 따로 지정할 수 있습니다.",
-   "es": "El espacio de color de la captura comprimida lo determina el flujo. El rango de color se puede ajustar por separado.",
-   "fr": "L’espace colorimétrique de la capture compressée est défini par le flux. La plage de couleurs peut être réglée séparément.",
-   "de": "Der Farbraum bei komprimierter Aufnahme folgt dem Bitstream. Der Wertebereich lässt sich separat einstellen.",
-   "pt-BR": "O espaço de cor da captura comprimida vem do fluxo. A faixa de cor pode ser definida separadamente.",
-   "ru": "Цветовое пространство сжатого захвата определяется потоком. Цветовой диапазон можно задать отдельно."
-  },
-  {
    "zh": "原图色彩保留",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "原圖色彩保留",
@@ -12337,6 +12454,32 @@
    "de": "Optional · Für Capture-Karten mit leisem direkten Audio",
    "pt-BR": "Opcional · Para cartões de captura com áudio direto silencioso",
    "ru": "Для карт захвата с бесшумным прямым звуком"
+  },
+  {
+   "zh": "右上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "右上",
+   "en": "Top right",
+   "ja": "右上",
+   "ko": "오른쪽 위",
+   "es": "Arriba a la derecha",
+   "fr": "En haut à droite",
+   "de": "Oben rechts",
+   "pt-BR": "Superior direito",
+   "ru": "Справа вверху"
+  },
+  {
+   "zh": "右下",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "右下",
+   "en": "Bottom right",
+   "ja": "右下",
+   "ko": "오른쪽 아래",
+   "es": "Abajo a la derecha",
+   "fr": "En bas à droite",
+   "de": "Unten rechts",
+   "pt-BR": "Inferior direito",
+   "ru": "Справа внизу"
   },
   {
    "zh": "右键空白添加 · 拖到连线上插入 · 拖远（上下超过一截）或按住 Alt 松手即断开 · 端口拖拽/点击连线 · 中键平移 · 滚轮缩放",
@@ -13481,6 +13624,19 @@
    "de": "Kopieren Sie die PSN-Account-ID von der Website in das Pairing-Feld und geben Sie dann den 8-stelligen Pairing-Code der Konsole ein.",
    "pt-BR": "Copie o ID da conta PSN do site para o campo de emparelhamento e, em seguida, digite o código de emparelhamento de 8 dígitos do console.",
    "ru": "Скопируйте идентификатор учетной записи PSN с веб-сайта в поле сопряжения, а затем введите 8-значный код сопряжения консоли."
+  },
+  {
+   "zh": "在视频上显示提交 FPS 和 1% Low。全屏时按 %1 切换。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "在影片上顯示提交 FPS 和 1% Low。全螢幕時按 %1 切換。",
+   "en": "Show submitted FPS and 1% low on the video. Press %1 in fullscreen to toggle.",
+   "ja": "映像に送信 FPS と 1% Low を表示します。全画面で %1 を押して切り替えます。",
+   "ko": "영상에 제출 FPS와 1% Low를 표시합니다. 전체 화면에서 %1 키로 전환하세요.",
+   "es": "Muestra los FPS enviados y el 1% bajo sobre el vídeo. Pulsa %1 a pantalla completa para alternar.",
+   "fr": "Affiche les FPS soumis et le 1% low sur la vidéo. Appuyez sur %1 en plein écran pour basculer.",
+   "de": "Zeigt übermittelte FPS und 1% Low im Video an. Im Vollbild mit %1 umschalten.",
+   "pt-BR": "Mostra os FPS enviados e o 1% low no vídeo. Pressione %1 em tela cheia para alternar.",
+   "ru": "Показывает число отправленных кадров в секунду и 1% Low поверх видео. В полноэкранном режиме нажмите %1 для переключения."
   },
   {
    "zh": "在首页打开「采集卡」，进入 HDMI 画面的采集设置。",
@@ -16486,6 +16642,32 @@
    "ru": "Левый / верхний / правый / нижний в исходных пикселях"
   },
   {
+   "zh": "左上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "左上",
+   "en": "Top left",
+   "ja": "左上",
+   "ko": "왼쪽 위",
+   "es": "Arriba a la izquierda",
+   "fr": "En haut à gauche",
+   "de": "Oben links",
+   "pt-BR": "Superior esquerdo",
+   "ru": "Слева вверху"
+  },
+  {
+   "zh": "左下",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "左下",
+   "en": "Bottom left",
+   "ja": "左下",
+   "ko": "왼쪽 아래",
+   "es": "Abajo a la izquierda",
+   "fr": "En bas à gauche",
+   "de": "Unten links",
+   "pt-BR": "Inferior esquerdo",
+   "ru": "Слева внизу"
+  },
+  {
    "zh": "已从上次位置 %1 继续",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已從上次位置 %1 繼續",
@@ -17877,6 +18059,19 @@
    "ru": "Частота и ритм кадров"
   },
   {
+   "zh": "帧率显示位置",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "幀率顯示位置",
+   "en": "Frame rate position",
+   "ja": "フレームレートの表示位置",
+   "ko": "프레임 속도 표시 위치",
+   "es": "Posición de los FPS",
+   "fr": "Position des FPS",
+   "de": "Position der FPS-Anzeige",
+   "pt-BR": "Posição dos FPS",
+   "ru": "Положение счётчика кадров"
+  },
+  {
    "zh": "帧生成",
    "src": "include/veyra/engine/BackendRecovery.h",
    "zh-TW": "幀生成",
@@ -18980,6 +19175,19 @@
    "de": "Diese GPU kann die gewählte Superauflösung nicht verwenden; sie ist für diesen Export ausgeschaltet",
    "pt-BR": "Isto GPU não pode usar a super resolução seleccionada; está desligado para esta exportação",
    "ru": "Это GPU не может использовать выбранное супер-разрешение; оно выключено для этого экспорта."
+  },
+  {
+   "zh": "当前显卡和运行库组合不支持 DLSS 补帧",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "目前的顯示卡與執行階段組合不支援 DLSS 補幀",
+   "en": "This GPU and runtime combination does not support DLSS Frame Generation",
+   "ja": "この GPU とランタイムの組み合わせは DLSS フレーム生成に対応していません",
+   "ko": "현재 GPU와 런타임 조합은 DLSS 프레임 생성을 지원하지 않습니다",
+   "es": "Esta combinación de GPU y entorno de ejecución no admite la generación de fotogramas DLSS",
+   "fr": "Cette combinaison de GPU et de bibliothèque ne prend pas en charge la génération d’images DLSS",
+   "de": "Diese Kombination aus GPU und Laufzeit unterstützt keine DLSS Frame Generation",
+   "pt-BR": "Esta combinação de GPU e runtime não é compatível com a geração de quadros DLSS",
+   "ru": "Это сочетание видеокарты и среды выполнения не поддерживает генерацию кадров DLSS"
   },
   {
    "zh": "当前显卡和驱动的 VFG 中档发生显存访问错误，已改用低档。",
@@ -21229,6 +21437,19 @@
    "de": "Übergaberate",
    "pt-BR": "Taxa de envio",
    "ru": "Частота передачи"
+  },
+  {
+   "zh": "提交帧率接近可变刷新下限 %1 Hz。若全屏卡顿，可试用垂直同步并关闭可变刷新。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "提交幀率接近可變更新率下限 %1 Hz。若全螢幕卡頓，可試用垂直同步並關閉可變更新率。",
+   "en": "Submitted FPS is near the variable refresh floor of %1 Hz. If fullscreen stutters, try VSync with variable refresh off.",
+   "ja": "送信 FPS が可変リフレッシュレートの下限 %1 Hz に近づいています。全画面でカクつく場合は、可変リフレッシュを無効にして垂直同期を試してください。",
+   "ko": "제출 FPS가 가변 주사율 하한인 %1 Hz에 가깝습니다. 전체 화면이 끊기면 가변 주사율을 끄고 수직 동기화를 사용해 보세요.",
+   "es": "Los FPS enviados están cerca del límite inferior de refresco variable de %1 Hz. Si hay tirones, prueba VSync con el refresco variable desactivado.",
+   "fr": "Les FPS soumis approchent le seuil de rafraîchissement variable de %1 Hz. En cas de saccades en plein écran, essayez la VSync avec le rafraîchissement variable désactivé.",
+   "de": "Die übermittelten FPS liegen nahe der VRR-Untergrenze von %1 Hz. Probiere bei Vollbildrucklern VSync mit deaktivierter variabler Bildwiederholrate.",
+   "pt-BR": "Os FPS enviados estão próximos do limite inferior de atualização variável de %1 Hz. Se houver engasgos, teste o VSync com a atualização variável desativada.",
+   "ru": "Частота отправки кадров близка к нижней границе VRR в %1 Гц. При рывках в полноэкранном режиме попробуйте VSync с отключённой VRR."
   },
   {
    "zh": "提亮暗部与中间调，保留高光峰值。",
@@ -23767,6 +23988,19 @@
    "ru": "Экран"
   },
   {
+   "zh": "显示 / 隐藏全屏帧率",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "顯示 / 隱藏全螢幕幀率",
+   "en": "Toggle fullscreen frame rate",
+   "ja": "全画面のフレームレート表示を切り替え",
+   "ko": "전체 화면 프레임 속도 표시 전환",
+   "es": "Mostrar u ocultar FPS en pantalla completa",
+   "fr": "Afficher ou masquer les FPS en plein écran",
+   "de": "Bildrate im Vollbild ein- oder ausblenden",
+   "pt-BR": "Mostrar ou ocultar FPS em tela cheia",
+   "ru": "Показать или скрыть частоту кадров в полноэкранном режиме"
+  },
+  {
    "zh": "显示全部可用帧率",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "顯示全部可用幀率",
@@ -26001,6 +26235,19 @@
    "de": "Ein exklusives Fullscreen-Spiel läuft: Windows lässt kein anderes Fenster es abdecken. Switch das Spiel im randlosen oder Fenstermodus",
    "pt-BR": "Um jogo de tela cheia exclusiva está rodando: Windows não permite que nenhuma outra janela o cubra. Switch o jogo para o modo sem bordas ou janelas",
    "ru": "Эксклюзивная полноэкранная игра работает: Windows Другого окна не закрывает. Switch Игра в безрамочный или оконный режим"
+  },
+  {
+   "zh": "检测到约两帧一组的画面。主机锁定 30 帧时，可试用 60→30 保持固定节奏。",
+   "src": "qml/DedupModeRow.qml",
+   "zh-TW": "偵測到約兩幀一組的畫面。主機鎖定 30 幀時，可試用 60→30 維持固定節奏。",
+   "en": "Frames appear in pairs. If the console is locked to 30 FPS, try 60→30 for steady pacing.",
+   "ja": "同じ映像が約 2 フレームずつ続いています。本体が 30 fps 固定なら、60→30 で一定の間隔を試せます。",
+   "ko": "같은 화면이 약 두 프레임씩 감지됩니다. 콘솔이 30 FPS로 고정된 경우 60→30을 사용해 일정한 간격을 유지해 보세요.",
+   "es": "Los fotogramas parecen llegar por pares. Si la consola está limitada a 30 FPS, prueba 60→30 para mantener un ritmo estable.",
+   "fr": "Les images semblent arriver par paires. Si la console est verrouillée à 30 FPS, essayez 60→30 pour une cadence régulière.",
+   "de": "Die Bilder erscheinen paarweise. Bei fest eingestellten 30 FPS auf der Konsole sorgt 60→30 für einen gleichmäßigen Takt.",
+   "pt-BR": "Os quadros parecem chegar em pares. Se o console estiver fixo em 30 FPS, teste 60→30 para manter uma cadência constante.",
+   "ru": "Кадры поступают парами. Если на консоли зафиксировано 30 FPS, попробуйте 60→30 для ровной подачи кадров."
   },
   {
    "zh": "检测到网络丢包，已自动跳过 %1 处",
@@ -28408,19 +28655,6 @@
    "ru": "Нажмите на картинку, чтобы выбрать источник"
   },
   {
-   "zh": "点击获取 Account ID，在网页查询后复制到这里。支持数字 ID 或 8 字节 Base64，不是 PSN 昵称。",
-   "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "點選取得 Account ID，在網頁查詢後複製到這裡。支援數字 ID 或 8 位元組 Base64，不是 PSN 暱稱。",
-   "en": "Click Get Account ID and copy the result here. Accepts a numeric ID or 8-byte Base64, not your PSN nickname.",
-   "ja": "「Account ID を取得」から調べた ID をここに貼り付けてください。数字の ID または8バイトの Base64 に対応しています。PSN のニックネームではありません。",
-   "ko": "‘계정 ID 받기’를 눌러 얻은 값을 입력하세요. PSN 닉네임이 아니라 숫자 ID 또는 8바이트 Base64 값이어야 합니다.",
-   "es": "Haga clic en Obtener ID de cuenta y copiar el resultado aquí. Acepta un ID numérico o Base64 de 8 bytes, no su apodo PSN.",
-   "fr": "Cliquez sur Obtenir l'ID de compte et copiez le résultat ici. Accepte un ID numérique ou 8-octets Base64, pas votre pseudo du PSN.",
-   "de": "Akzeptiert eine numerische ID oder 8-Byte Base64, nicht Ihren PSN-Spitznamen.",
-   "pt-BR": "Clique em Obter ID da conta e copie o resultado aqui. Aceita um ID numérico ou 8-byte Base64, não o seu apelido PSN.",
-   "ru": "Нажмите, чтобы получить идентификатор учетной записи и скопируйте результат здесь. Принимает цифровой идентификатор или 8-байтовый Base64, а не ваш псевдоним PSN."
-  },
-  {
    "zh": "点左侧文件可重新预览（会和导出抢显卡）",
    "src": "qml/ExportPage.qml",
    "zh-TW": "點左側檔案可重新預覽（會和匯出搶顯示卡）",
@@ -29617,6 +29851,19 @@
    "ru": "Не удалось включить режим совместимости потокового вещания; восстановлен"
   },
   {
+   "zh": "直播建议开启 Veyra 虚拟摄像机，在 OBS 中添加「视频采集设备」，选择 Veyra Virtual Camera。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "直播建議開啟 Veyra 虛擬攝影機，在 OBS 中新增「視訊擷取裝置」，選擇 Veyra Virtual Camera。",
+   "en": "For streaming, enable Veyra Virtual Camera, add a Video Capture Device in OBS and select Veyra Virtual Camera.",
+   "ja": "配信する場合は Veyra 仮想カメラを有効にし、OBS で「映像キャプチャデバイス」を追加して Veyra Virtual Camera を選択してください。",
+   "ko": "방송하려면 Veyra 가상 카메라를 켜고 OBS에서 비디오 캡처 장치를 추가한 뒤 Veyra Virtual Camera를 선택하세요.",
+   "es": "Para transmitir, activa la cámara virtual de Veyra, añade un dispositivo de captura de vídeo en OBS y selecciona Veyra Virtual Camera.",
+   "fr": "Pour diffuser, activez la caméra virtuelle Veyra. Dans OBS, ajoutez un périphérique de capture vidéo et choisissez Veyra Virtual Camera.",
+   "de": "Aktiviere fürs Streaming die virtuelle Veyra-Kamera. Füge in OBS ein Videoaufnahmegerät hinzu und wähle Veyra Virtual Camera.",
+   "pt-BR": "Para transmitir, ative a câmera virtual do Veyra, adicione um dispositivo de captura de vídeo no OBS e selecione Veyra Virtual Camera.",
+   "ru": "Для трансляции включите виртуальную камеру Veyra. В OBS добавьте устройство захвата видео и выберите Veyra Virtual Camera."
+  },
+  {
    "zh": "直播时移",
    "src": "qml/NetworkSourceDialog.qml",
    "zh-TW": "直播時移",
@@ -29758,6 +30005,19 @@
    "de": "Bitrate (Mbit/s)",
    "pt-BR": "Taxa de bits (Mbps)",
    "ru": "Битрейт (Мбит/с)"
+  },
+  {
+   "zh": "硬件加速 GPU 计划已关闭。请到 Windows 设置 → 系统 → 显示 → 图形开启并重启电脑",
+   "src": "src/pipeline/EnhanceGraph.cpp",
+   "zh-TW": "硬體加速 GPU 排程已關閉。請到 Windows 設定 → 系統 → 顯示器 → 圖形開啟並重新啟動電腦",
+   "en": "Hardware-accelerated GPU scheduling is off. Enable it in Windows Settings → System → Display → Graphics and restart the PC.",
+   "ja": "ハードウェア アクセラレータによる GPU スケジューリングがオフです。Windows の設定 → システム → ディスプレイ → グラフィックでオンにし、PC を再起動してください。",
+   "ko": "하드웨어 가속 GPU 일정 예약이 꺼져 있습니다. Windows 설정 → 시스템 → 디스플레이 → 그래픽에서 켠 뒤 PC를 다시 시작하세요.",
+   "es": "La programación de GPU acelerada por hardware está desactivada. Actívala en Configuración de Windows → Sistema → Pantalla → Gráficos y reinicia el PC.",
+   "fr": "La planification de processeur graphique à accélération matérielle est désactivée. Activez-la dans Paramètres Windows → Système → Affichage → Graphiques, puis redémarrez le PC.",
+   "de": "Die hardwarebeschleunigte GPU-Planung ist deaktiviert. Aktiviere sie in den Windows-Einstellungen unter System → Anzeige → Grafik und starte den PC neu.",
+   "pt-BR": "O agendamento de GPU com aceleração de hardware está desativado. Ative-o nas Configurações do Windows → Sistema → Tela → Gráficos e reinicie o PC.",
+   "ru": "Аппаратное планирование GPU отключено. Включите его в Параметры Windows → Система → Дисплей → Графика и перезагрузите ПК."
   },
   {
    "zh": "硬件解码",
@@ -33023,6 +33283,19 @@
    "ru": "Пресет узлов: "
   },
   {
+   "zh": "若系统提供 119.88 Hz，可与当前 120 Hz 对照测试。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "若系統提供 119.88 Hz，可與目前的 120 Hz 對照測試。",
+   "en": "If Windows offers 119.88 Hz, compare it with the current 120 Hz mode.",
+   "ja": "Windows で 119.88 Hz を選べる場合は、現在の 120 Hz と比較してください。",
+   "ko": "Windows에서 119.88 Hz를 제공하면 현재 120 Hz 모드와 비교해 보세요.",
+   "es": "Si Windows ofrece 119,88 Hz, compáralos con el modo actual de 120 Hz.",
+   "fr": "Si Windows propose 119,88 Hz, comparez ce mode au mode actuel à 120 Hz.",
+   "de": "Wenn Windows 119,88 Hz anbietet, vergleiche den Modus mit den aktuellen 120 Hz.",
+   "pt-BR": "Se o Windows oferecer 119,88 Hz, compare com o modo atual de 120 Hz.",
+   "ru": "Если Windows предлагает 119,88 Гц, сравните этот режим с текущими 120 Гц."
+  },
+  {
    "zh": "英伟达低延迟",
    "src": "qml/NvidiaLowLatencyEditor.qml",
    "zh-TW": "NVIDIA 低延遲",
@@ -33346,6 +33619,19 @@
    "de": "Virtuelle Kamera aktiviert. Wählen Sie Veyra Virtual Camera in Ihrer Streaming-App aus.",
    "pt-BR": "Câmera virtual ativada. Selecione Veyra Câmera Virtual em seu aplicativo de streaming.",
    "ru": "Виртуальная камера включена. Выберите Veyra Virtual Camera в своем потоковом приложении."
+  },
+  {
+   "zh": "虚拟摄像机操作失败，请查看日志",
+   "src": "src/ui/bridge/VirtualCamera.cpp",
+   "zh-TW": "虛擬攝影機操作失敗，請查看記錄",
+   "en": "Virtual camera operation failed. Check the log.",
+   "ja": "仮想カメラの操作に失敗しました。ログを確認してください。",
+   "ko": "가상 카메라 작업이 실패했습니다. 로그를 확인하세요.",
+   "es": "Falló la operación de la cámara virtual. Revisa el registro.",
+   "fr": "L’opération de la caméra virtuelle a échoué. Consultez le journal.",
+   "de": "Vorgang für die virtuelle Kamera fehlgeschlagen. Prüfe das Protokoll.",
+   "pt-BR": "A operação da câmera virtual falhou. Consulte o log.",
+   "ru": "Сбой операции с виртуальной камерой. Проверьте журнал."
   },
   {
    "zh": "虚拟摄像机无法访问显卡",
@@ -34102,6 +34388,19 @@
    "ru": "Жесткая крышка %1% · выделение сжатия %2% · поднятие тени %3%"
   },
   {
+   "zh": "触摸板仅转发按压",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "觸控板只轉發按壓",
+   "en": "Touchpad clicks only",
+   "ja": "タッチパッドのクリックのみ",
+   "ko": "터치패드 클릭만 전달",
+   "es": "Solo pulsaciones del panel táctil",
+   "fr": "Clics du pavé tactile uniquement",
+   "de": "Nur Touchpad-Klicks",
+   "pt-BR": "Apenas cliques do touchpad",
+   "ru": "Только нажатия сенсорной панели"
+  },
+  {
    "zh": "让主机切换到串流分辨率",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "讓主機切換到串流解析度",
@@ -34347,6 +34646,19 @@
    "de": "Einstellungen",
    "pt-BR": "Configurações",
    "ru": "Настройки"
+  },
+  {
+   "zh": "设置保存失败，请查看日志",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "無法儲存設定，請查看記錄",
+   "en": "Could not save settings. Check the log.",
+   "ja": "設定を保存できませんでした。ログを確認してください。",
+   "ko": "설정을 저장하지 못했습니다. 로그를 확인하세요.",
+   "es": "No se pudo guardar la configuración. Revisa el registro.",
+   "fr": "Impossible d’enregistrer les paramètres. Consultez le journal.",
+   "de": "Einstellungen konnten nicht gespeichert werden. Prüfe das Protokoll.",
+   "pt-BR": "Não foi possível salvar as configurações. Consulte o log.",
+   "ru": "Не удалось сохранить настройки. Проверьте журнал."
   },
   {
    "zh": "设置切换呈现排空失败，已停止",
@@ -35335,6 +35647,19 @@
    "de": "Warten Sie, bis die Geräteerkennung abgeschlossen ist, bevor Sie die Schnittstellen wechseln.",
    "pt-BR": "Aguarde que a descoberta do dispositivo termine antes de alternar as interfaces.",
    "ru": "Дождитесь завершения обнаружения устройства перед переключением интерфейсов."
+  },
+  {
+   "zh": "请结束其他远程游玩会话，等待主机释放连接后重试。",
+   "src": "src/source/RemotePlaySessionSource.cpp",
+   "zh-TW": "請結束其他遠端遊玩工作階段，等主機釋放連線後再試一次。",
+   "en": "End other Remote Play sessions, wait for the console to release the connection and try again.",
+   "ja": "他のリモートプレイを終了し、本体が接続を解放してから再試行してください。",
+   "ko": "다른 리모트 플레이 세션을 종료한 뒤 콘솔이 연결을 해제하면 다시 시도하세요.",
+   "es": "Finaliza las otras sesiones de Uso a distancia, espera a que la consola libere la conexión y vuelve a intentarlo.",
+   "fr": "Fermez les autres sessions de Lecture à distance, attendez que la console libère la connexion, puis réessayez.",
+   "de": "Beende andere Remote-Play-Sitzungen. Warte, bis die Konsole die Verbindung freigibt, und versuche es erneut.",
+   "pt-BR": "Encerre outras sessões do Uso remoto, aguarde o console liberar a conexão e tente novamente.",
+   "ru": "Завершите другие сеансы Remote Play, дождитесь освобождения подключения и повторите попытку."
   },
   {
    "zh": "请输入 0.25～4.00 之间的倍速",
@@ -38717,6 +39042,32 @@
    "ru": "Карта захвата могла отключиться, или подключение USB нестабильно. Подключите её напрямую к порту USB 3 и попробуйте другой кабель. Избегайте док-станций и удлинителей. Подключите ноутбук к питанию и проверьте выборочное приостановление USB. Если проблема осталась, сравните с программой производителя или OBS."
   },
   {
+   "zh": "采集卡回调帧率持续偏低，正在自动重连原设备",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "擷取卡回呼幀率持續偏低，正在自動重新連線原裝置",
+   "en": "The capture callback rate stayed low. Reconnecting to the same device.",
+   "ja": "キャプチャのコールバックレートが低い状態が続いています。同じデバイスに自動で再接続しています。",
+   "ko": "캡처 콜백 속도가 계속 낮습니다. 같은 장치에 자동으로 다시 연결하는 중입니다.",
+   "es": "La tasa de callbacks de captura sigue baja. Reconectando al mismo dispositivo.",
+   "fr": "La fréquence des rappels de capture reste faible. Reconnexion au même appareil.",
+   "de": "Die Rate der Capture-Callbacks bleibt niedrig. Dasselbe Gerät wird neu verbunden.",
+   "pt-BR": "A taxa de callbacks da captura continua baixa. Reconectando ao mesmo dispositivo.",
+   "ru": "Частота колбэков захвата остаётся низкой. Выполняется переподключение к тому же устройству."
+  },
+  {
+   "zh": "采集卡已自动重连，画面已恢复",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "擷取卡已自動重新連線，畫面已恢復",
+   "en": "Capture card reconnected automatically. Video restored.",
+   "ja": "キャプチャカードに自動で再接続し、映像が復旧しました。",
+   "ko": "캡처 카드가 자동으로 다시 연결되어 영상이 복구되었습니다.",
+   "es": "La capturadora se reconectó automáticamente. Se recuperó el vídeo.",
+   "fr": "La carte de capture s’est reconnectée automatiquement. La vidéo est rétablie.",
+   "de": "Die Capture-Karte wurde automatisch neu verbunden. Das Bild ist wieder da.",
+   "pt-BR": "A placa de captura foi reconectada automaticamente. O vídeo voltou.",
+   "ru": "Плата захвата автоматически переподключена. Видео восстановлено."
+  },
+  {
    "zh": "采集卡怎么挑",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "擷取卡怎麼挑",
@@ -39040,19 +39391,6 @@
    "de": "Das aufgenommene Bild wird vertikal umgedreht (betrifft nur diese PC Aufnahme)",
    "pt-BR": "A imagem capturada é virada verticalmente (afeta apenas esta captura PC)",
    "ru": "Захваченный снимок переворачивается вертикально (влияет только на этот PC снимок)"
-  },
-  {
-   "zh": "采集画面已恢复",
-   "src": "src/engine/EngineController.cpp",
-   "zh-TW": "擷取畫面已恢復",
-   "en": "Capture video restored",
-   "ja": "キャプチャー映像が復旧しました",
-   "ko": "캡처 영상이 복구되었습니다",
-   "es": "Imagen de captura recuperada",
-   "fr": "Image de capture rétablie",
-   "de": "Aufnahmebild wiederhergestellt",
-   "pt-BR": "Vídeo de captura restabelecido",
-   "ru": "Изображение с карты захвата восстановлено"
   },
   {
    "zh": "采集画面方向已恢复",

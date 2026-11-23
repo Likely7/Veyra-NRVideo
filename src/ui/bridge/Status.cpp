@@ -3,6 +3,7 @@
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
+bool QmlPlayerBridge::captureHalfRateSuggested() const{return impl_->snapshot.captureHalfRateSuggested;}
 // --- professional-page readouts ---------------------------------------------
 // These read fields the engine genuinely publishes. Where it publishes nothing,
 // the getter says so and the UI shows an explicit "unmeasured" rather than a
@@ -466,6 +467,18 @@ void QmlPlayerBridge::updateRunStatus() {
     }
     QStringList detail;
     if (secondaryFgWarning) detail << tr("补帧降档");
+    if(s.transport==engine::TransportState::Playing&&!s.image&&i.presentation.fullscreen){
+        const double fps=s.submissionFps.value_or(0);
+        if(i.presentation.variableRefresh&&vrrLevel>=3&&fps>0&&s.displayVrrMinimumHz>0&&
+                std::abs(fps-s.displayVrrMinimumHz)<=0.25)
+            detail<<tr("提交帧率接近可变刷新下限 %1 Hz。若全屏卡顿，可试用垂直同步并关闭可变刷新。")
+                        .arg(s.displayVrrMinimumHz,0,'f',2);
+        if(s.displayCompositionMode==0){
+            detail<<tr("全屏画面仍由 Windows 合成。若出现卡顿，可试用显示器支持的其他刷新率。");
+            if(std::abs(refreshHz-120.0)<0.04)
+                detail<<tr("若系统提供 119.88 Hz，可与当前 120 Hz 对照测试。");
+        }
+    }
     // Live output hint: also shown under the 倍率 control (fgDisplayHint).
     QString fgHint;
     if (s.running && !s.image && s.applied.multiplier > 1 && i.compareMode == 0 && s.displayFgSuggestion > 0 &&

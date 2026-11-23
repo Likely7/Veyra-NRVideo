@@ -81,17 +81,25 @@ public:
         if(!base||!fg||interval<=0||(*base+*fg)*10000>double(interval))return 0;
         return int64_t(*fg*10000);
     }
-    bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0)const{
+    // The minimal signed deadline lead, in host-clock ticks, with the
+    // same grace and CPU/queue accounting as the capture admission check.
+    int64_t requiredDeadlineLead(int64_t now,double elapsed,double present,bool warmingHistory=false,double queuedMs=0)const{
         const auto cost=predicted(now,warmingHistory);
         // FG has not been submitted at admission. CPU time can at most cover
         // the base work; it must never erase the cost of future FG calls.
         const double queued=std::isfinite(queuedMs)?std::max(0.0,queuedMs):0.0;
-        const double progress=std::clamp(elapsed,0.0,queued+baseCost(now).value_or(0));
-        const bool fits=double(deadline-now)/10000+10>=std::max(0.0,queued+cost.value_or(0)-progress)+std::max(0.0,present);
-        return fits;
+        const double progress=std::clamp(std::isfinite(elapsed)?elapsed:0.0,0.0,queued+baseCost(now).value_or(0));
+        const double need=std::max(0.0,queued+cost.value_or(0)-progress)+std::max(0.0,present);
+        return int64_t(std::ceil((need-10.0)*10000));
+    }
+    bool canAdmit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0)const{
+        return deadline-now>=requiredDeadlineLead(now,elapsed,present,warmingHistory,queuedMs);
     }
     bool admit(int64_t now,int64_t deadline,double elapsed,double present,bool warmingHistory=false,double queuedMs=0){
-        return recordAdmission(canAdmit(now,deadline,elapsed,present,warmingHistory,queuedMs));
+        return admitBy(deadline,now+requiredDeadlineLead(now,elapsed,present,warmingHistory,queuedMs));
+    }
+    bool admitBy(int64_t deadline,int64_t earliestDeadline){
+        return recordAdmission(deadline>=earliestDeadline);
     }
     // strictFirstOutput=false reproduces the 1.4.0 rule: only the whole group
     // against its last deadline. true additionally requires the first output to
