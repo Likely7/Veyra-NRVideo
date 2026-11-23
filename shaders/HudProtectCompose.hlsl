@@ -65,7 +65,7 @@ bool stableCentredInk(int2 p,float3 held) {
                     previousCounts.Load(int3(hudCounter(0,HudCentredMark),0));
     const uint body=currentCounts.Load(int3(hudCounter(0,HudCore),0))+
                     previousCounts.Load(int3(hudCounter(0,HudCore),0));
-    return (seen&HudFreshMark)!=0&&body>=6&&hudRegion(p)==0&&
+    return (seen&HudFreshMark)!=0&&(seen&HudDotMark)==0&&body>=6&&hudRegion(p)==0&&
         colorError(comparisonColor(held),comparisonColor(otherTex.Load(int3(p,0)).rgb))<=0.13;
 }
 

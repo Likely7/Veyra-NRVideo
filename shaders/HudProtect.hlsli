@@ -21,10 +21,16 @@ static const uint HudCounterCount = 7;
 static const uint HudMarkLifetime = 8u;
 static const uint HudMarkAgeMask = 15u;
 static const uint HudFreshMark = 16u;
+static const uint HudDotMark = 32u;
 uint2 hudCounter(uint region,uint field) {
     return uint2(region*HudCounterCount+field,0);
 }
 
+int hudDotProbeRadius() {
+    // Sample beyond the antialiased rim, including six-to-eight-pixel dots
+    // at 1440p. The thin-arm detector uses a smaller radius.
+    return clamp(int(round(float(frameSize.y)/360.0)),3,12);
+}
 int2 boundPixel(int2 pixel) {
     return clamp(pixel, int2(0,0), int2(frameSize)-1);
 }

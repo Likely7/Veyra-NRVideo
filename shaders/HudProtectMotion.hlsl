@@ -97,7 +97,7 @@ bool strokeInk(int2 p,int2 normal,int radius,out float3 color) {
     // Test both sides of the mark. A single background edge is insufficient.
     return min(colorError(lo,color),colorError(hi,color))>0.10;
 }
-bool centredMark(float4 box) {
+uint centredMark(float4 box) {
     const int2 center=int2((box.xy+box.zw)*0.5);
     const int step=clamp(int(round(float(frameSize.y)/1080.0)),1,4);
     const int side=clamp(int(round(float(frameSize.y)/540.0)),2,8);
@@ -116,7 +116,7 @@ bool centredMark(float4 box) {
         singleHorizontal+=uint(left)+uint(right);
         singleVertical+=uint(top)+uint(bottom);
         if((pairedHorizontal>=2&&pairedVertical>=2)||
-           (pairedHorizontal>=4&&singleVertical>=4)||(pairedVertical>=4&&singleHorizontal>=4))return true;
+           (pairedHorizontal>=4&&singleVertical>=4)||(pairedVertical>=4&&singleHorizontal>=4))return HudFreshMark;
     }
 
     // A small isolated centre dot also works without opposing arms. Use
@@ -124,17 +124,24 @@ bool centredMark(float4 box) {
     const float3 dotColor=colorAt(currentTex,center);
     const float high=max(dotColor.r,max(dotColor.g,dotColor.b));
     const float low=min(dotColor.r,min(dotColor.g,dotColor.b));
-    if(high<0.58&&high-low<0.16)return false;
-    if(colorError(dotColor,colorAt(previousTex,center))>0.075)return false;
-    // Step beyond the chroma footprint of a two-pixel dot on subsampled
-    // video. Radius two reads into the same ink on one side at 720p.
-    const int dotRadius=max(3,side);
+    if(high<0.58&&high-low<0.16)return 0;
+    if(colorError(dotColor,colorAt(previousTex,center))>0.075)return 0;
     const int2 directions[8]={horizontal,-horizontal,vertical,-vertical,
                               int2(1,1),int2(-1,1),int2(1,-1),int2(-1,-1)};
+    const int legacyRadius=max(3,side);
     uint edges=0;
     [unroll] for(int k=0;k<8;++k)
+        edges+=uint(colorError(dotColor,colorAt(currentTex,center+legacyRadius*directions[k]))>0.12);
+    if(edges>=7)return HudFreshMark;
+
+    // The wider probe is a second path for dots with a larger footprint.
+    // Keep the existing thin-mark path and its stroke-tip recovery intact.
+    const int dotRadius=hudDotProbeRadius();
+    if(dotRadius<=legacyRadius)return 0;
+    edges=0;
+    [unroll] for(int k=0;k<8;++k)
         edges+=uint(colorError(dotColor,colorAt(currentTex,center+dotRadius*directions[k]))>0.12);
-    return edges>=7;
+    return edges>=7?(HudFreshMark|HudDotMark):0;
 }
 
 [numthreads(kTaps,1,1)]
@@ -150,7 +157,8 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
             // Preserve a learned outline over a brief occlusion or drop in
             // contrast. Appearance must still match before a pixel is used.
             const uint age=last&HudMarkAgeMask;
-            shape=centredMark(box)?(HudMarkLifetime|HudFreshMark):(age>0?age-1:0);
+            const uint fresh=centredMark(box);
+            shape=fresh?(HudMarkLifetime|fresh):(age>1?((age-1)|(last&HudDotMark)):0);
         }
         counts[hudCounter(region,HudCentredMark)]=shape;
     }

@@ -137,6 +137,8 @@ void main(uint3 id : SV_DispatchThreadID) {
     const float2 centerDistance=abs(float2(p)+0.5-(centerBox.xy+centerBox.zw)*0.5);
     const float centerReach=max(27.0,float(frameSize.y)/36.0);
     const bool axial=min(centerDistance.x,centerDistance.y)<=max(2.0,float(frameSize.y)/300.0);
+    const float dotReach=hudDotProbeRadius()+1;
+    const bool insideDot=dot(centerDistance,centerDistance)<=dotReach*dotReach;
     float confidence=0;
     float4 appearance=0;
     bool active=false, remembered=false, pending=false;
@@ -150,6 +152,7 @@ void main(uint3 id : SV_DispatchThreadID) {
         const float prior=previousConfidence.Load(int3(id.xy,0));
         const bool confirmed=prior>=0.61&&prior<0.998;
         const uint shape=counts[hudCounter(region,HudCentredMark)];
+        const bool dotMark=region==0&&(shape&HudDotMark)!=0;
         const bool visible=region>0||shape!=0;
         const bool learn=region>0||(shape&HudFreshMark)!=0;
         const float4 known=previousAppearance.Load(int3(id.xy,0));
@@ -162,7 +165,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             const bool recolor=!sameColor&&sharedRecolor(p,region,b,known.rgb);
             const bool matchesStroke=thinContrast(p,b,step,false)||
                 (region==0&&axial&&sameColor&&still<=0.073);
-            if(visible&&(sameColor||recolor)&&matchesStroke) {
+            if(visible&&(!dotMark||insideDot)&&(sameColor||recolor)&&matchesStroke) {
                 // Median of the previous template and two pictures filters
                 // an isolated flicker without delaying coherent recolours.
                 appearance=float4(recolor?b:medianColor(known.rgb,a,b),0);
@@ -176,7 +179,7 @@ void main(uint3 id : SV_DispatchThreadID) {
             }
         } else {
             appearance=float4(b,0);
-            const bool thin=learn&&(region>0||axial)&&still<0.045&&thinContrast(p,b,step,false);
+            const bool thin=learn&&(region>0||(dotMark?insideDot:axial))&&still<0.045&&thinContrast(p,b,step,false);
             if(!visible)confidence=0;
             if(thin&&haveMotion&&moving>0.075&&thinStroke(p,shift,b)) {
                 const bool symmetric=frameContains(p-shift)&&colorError(a,currentAt(p-shift))>0.075;

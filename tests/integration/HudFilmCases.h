@@ -1,17 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Native 2160p movie scenes with a precisely registered synthetic crosshair.
 // The caller supplies RGBA frames and per-scene counts with an optional clean
-// interval. Crops and frame IDs permit the same background to be compared
-// with and without a reticle for each provider.
+// interval. With explicit dimensions the input is replayed without drawing a
+// reticle. Crops and frame IDs permit direct comparison between providers.
 static int hudFilmCases(int argc,wchar_t** argv) {
     using namespace veyra;
     using diagnostics::GpuStage;
-    if(argc!=7)return 2;
+    if(argc!=7&&argc!=9)return 2;
+    const bool recorded=argc==9;
     const std::wstring mode=argv[1],provider=argv[4];
     const auto has=[&](std::wstring_view token){return mode.find(token)!=mode.npos;};
     const bool protect=has(L"-on"), reference=has(L"-reference"), tagged=has(L"-tag");
     const bool coloured=has(L"-color");
-    constexpr unsigned width=3840,height=2160,cropWidth=640,cropHeight=512;
+    const unsigned width=recorded?std::stoul(argv[7]):3840;
+    const unsigned height=recorded?std::stoul(argv[8]):2160;
+    constexpr unsigned cropWidth=640,cropHeight=512;
+    if(width<cropWidth||height<cropHeight||width>8192||height>8192)return 2;
     const D3D12_BOX crop{(width-cropWidth)/2,(height-cropHeight)/2,0,(width+cropWidth)/2,(height+cropHeight)/2,1};
     const D3D12_BOX reticle{width/2-27,height/2-27,0,width/2+27,height/2+27,1};
     const std::filesystem::path artifacts(argv[2]);
@@ -42,7 +45,8 @@ static int hudFilmCases(int argc,wchar_t** argv) {
     if(protect&&tagged){
         desc.hudProtect=engine::HudProtectMode::Regions;
         desc.exclusion.enabled=true;
-        desc.exclusion.regions[0]={1890.f/width,1050.f/height,1950.f/width,1110.f/height,
+        const float radius=float(height)/72.f;
+        desc.exclusion.regions[0]={.5f-radius/width,.5f-radius/height,.5f+radius/width,.5f+radius/height,
                                    true,engine::ExclusionContent::Hud};
     }else if(protect)desc.hudProtect=engine::HudProtectMode::Center;
 
@@ -80,7 +84,7 @@ static int hudFilmCases(int argc,wchar_t** argv) {
             for(unsigned y=0;y<height;++y)
                 input.read(reinterpret_cast<char*>(frame->data[0]+size_t(y)*frame->linesize[0]),width*4);
             if(!input){ok=false;break;}
-            if(visible){
+            if(visible&&!recorded){
                 draw(1900,1078,15,4,false);draw(1927,1078,15,4,false);draw(1918,1060,4,15,false);
                 draw(1918,1087,4,15,false);draw(1918,1078,4,4,false);
                 draw(1901,1079,13,2,true);draw(1928,1079,13,2,true);draw(1919,1061,2,13,true);

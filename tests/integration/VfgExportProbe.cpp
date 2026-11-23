@@ -18,6 +18,7 @@ int wmain(int argc,wchar_t** argv){
         else if(flag==L"--nr")s.nr=true;
         else if(flag==L"--sr"){s.sr=true;s.videoSrQuality=4;s.srTarget=veyra::pipeline::SrTarget::Uhd4K;}
         else if(flag==L"--dynamic-hud")s.dynamicHud=true;
+        else if(flag==L"--hud-protect")s.hudProtect=HudProtectMode::Center;
         else if(flag==L"--cancel")cancelTest=true;
         else return 2;
     }
