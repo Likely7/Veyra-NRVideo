@@ -41265,17 +41265,17 @@
    "ru": "ИИ-интерполяция видео RIFE 4.26 (4.22 lite при 3X) через DirectML на любой GPU с DirectX 12, только по двум соседним кадрам; чище, чем AMD FRC, но выше нагрузка на GPU и немного больше задержка"
   },
   {
-   "zh": "需要 runtime\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
+   "zh": "需要 runtime\\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
    "src": "src/ui/bridge/Hardware.cpp",
-   "zh-TW": "需要 runtime\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
-   "en": "Requires ONNX Runtime, DirectML and the RIFE models in runtime\rife",
-   "ja": "runtime\rife に ONNX Runtime、DirectML、RIFE モデルが必要です",
-   "ko": "runtime\rife에 ONNX Runtime, DirectML, RIFE 모델이 필요합니다",
-   "es": "Requiere ONNX Runtime, DirectML y los modelos RIFE en runtime\rife",
-   "fr": "Nécessite ONNX Runtime, DirectML et les modèles RIFE dans runtime\rife",
-   "de": "Benötigt ONNX Runtime, DirectML und die RIFE-Modelle in runtime\rife",
-   "pt-BR": "Requer ONNX Runtime, DirectML e os modelos RIFE em runtime\rife",
-   "ru": "Нужны ONNX Runtime, DirectML и модели RIFE в runtime\rife"
+   "zh-TW": "需要 runtime\\rife 中的 ONNX Runtime、DirectML 和 RIFE 模型",
+   "en": "Requires ONNX Runtime, DirectML and the RIFE models in runtime\\rife",
+   "ja": "runtime\\rife に ONNX Runtime、DirectML、RIFE モデルが必要です",
+   "ko": "runtime\\rife에 ONNX Runtime, DirectML, RIFE 모델이 필요합니다",
+   "es": "Requiere ONNX Runtime, DirectML y los modelos RIFE en runtime\\rife",
+   "fr": "Nécessite ONNX Runtime, DirectML et les modèles RIFE dans runtime\\rife",
+   "de": "Benötigt ONNX Runtime, DirectML und die RIFE-Modelle in runtime\\rife",
+   "pt-BR": "Requer ONNX Runtime, DirectML e os modelos RIFE em runtime\\rife",
+   "ru": "Нужны ONNX Runtime, DirectML и модели RIFE в runtime\\rife"
   }
  ]
 }

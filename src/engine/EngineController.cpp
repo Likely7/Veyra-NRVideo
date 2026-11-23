@@ -965,7 +965,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::AmdFrc&&failure==FailedBackend::Fg)
                         backendRecoveryWarning+=L"AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Rife&&failure==FailedBackend::Fg)
-                        backendRecoveryWarning+=L"RIFE 未能启用（需要 runtime\rife 运行组件和 SDR 输出），已关闭补帧；原因见日志";
+                        backendRecoveryWarning+=L"RIFE 未能启用（需要 runtime\\rife 运行组件和 SDR 输出），已关闭补帧；原因见日志";
                     else if(selected.settings.frameGenerationBackend==FrameGenerationBackend::Fsr4&&failure==FailedBackend::Fg)
                     {
                         backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志";
