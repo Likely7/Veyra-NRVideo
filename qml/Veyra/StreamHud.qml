@@ -36,6 +36,7 @@ Rectangle {
         Text {
             text: (hud.xboxOn ? "Xbox · " : "PC · ") + (s.width > 0 ? s.width + "×" + s.height : "") + " · " + (s.codec || "")
                 + (s.hdr ? " HDR" : "") + " · " + (s.hardware ? qsTr("硬件解码") : qsTr("软件解码"))
+                + (hud.xboxOn ? " · " + (s.tier === 2 ? qsTr("方案2 HQ") : s.tier === 0 ? qsTr("720p") : qsTr("方案1")) : "")
             color: Theme.t1
             font.family: Theme.fontMono
             font.pixelSize: 12
@@ -59,7 +60,7 @@ Rectangle {
         }
         Text {
             text: hud.xboxOn
-                ? qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  丢帧 ") + (s.dropped || 0) + qsTr("  ·  关键帧请求 ") + (s.keyframes || 0)
+                ? qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  丢帧 ") + (s.dropped || 0) + qsTr("  ·  重传恢复 ") + (s.recovered || 0) + qsTr("  ·  整帧丢弃 ") + (s.incompleteDrops || 0)
                 : qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  包 ") + (s.packets || 0)
                   + qsTr("  ·  FEC 恢复 ") + (s.recovered || 0) + qsTr("  ·  未恢复 ") + (s.lost || 0) + qsTr("  ·  丢帧 ") + (s.dropped || 0)
             color: (s.lost || 0) > 0 ? Theme.warn : Theme.t2

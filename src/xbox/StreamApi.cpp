@@ -17,7 +17,7 @@ namespace {
 using json = nlohmann::json;
 
 // What the session API expects to hear about the client (Greenlight sends the same).
-const char* kDeviceInfo = R"({"appInfo":{"env":{"clientAppId":"Microsoft.GamingApp","clientAppType":"native","clientAppVersion":"2203.1001.4.0","clientSdkVersion":"8.5.2","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"Surface Pro","sdktype":"native"},"os":{"name":"Windows 11","ver":"22631.2715","platform":"desktop"},"displayInfo":{"dimensions":{"widthInPixels":1920,"heightInPixels":1080},"pixelDensity":{"dpiX":1,"dpiY":1}}}})";
+// The tier variants live in StreamProfile.cpp; P1080 is byte-identical to the historical constant.
 
 json parse(const HttpsResponse& response, const std::string& what) {
     try {
@@ -65,7 +65,22 @@ HttpsResponse StreamApi::call(const std::string& method, const std::string& path
     r.headers["Authorization"] = "Bearer " + token_;
     for (const auto& [k, v] : extraHeaders) r.headers[k] = v;
     if (method == "POST") r.body = body.empty() ? "{}" : body;
-    const HttpsResponse response = http_->send(r);
+    HttpsResponse response = http_->send(r);
+    // A 401/403 on the streaming API usually means the gsToken expired mid-session.
+    // Refresh once and replay; a second refusal is a real error.
+    if ((response.status == 401 || response.status == 403) && tokenRefresh_) {
+        try {
+            const std::string fresh = tokenRefresh_();
+            if (!fresh.empty()) {
+                token_ = fresh;
+                r.headers["Authorization"] = "Bearer " + token_;
+                log::info("xbox", "streaming token refreshed after HTTP " + std::to_string(response.status));
+                response = http_->send(r);
+            }
+        } catch (const std::exception& e) {
+            log::warn("xbox", std::string("token refresh failed: ") + e.what());
+        }
+    }
     if (response.status < 200 || response.status > 299)
         throw ServiceError(response.status, response.body, method + " " + path + " returned HTTP " + std::to_string(response.status));
     return response;
@@ -95,15 +110,16 @@ std::vector<Console> StreamApi::consoles() {
     }
 }
 
-std::string StreamApi::play(const std::string& serverId, const std::string& locale) {
+std::string StreamApi::play(const std::string& serverId, const std::string& locale, const StreamProfile& profile) {
     const json body = {
         {"titleId", ""}, {"systemUpdateGroup", ""}, {"clientSessionId", ""},
         {"settings", {{"nanoVersion", "V3;WebrtcTransport.dll"}, {"enableTextToSpeech", false}, {"highContrast", 0},
                       {"locale", locale}, {"useIceConnection", false}, {"timezoneOffsetMinutes", 480},
-                      {"sdkType", "web"}, {"osName", "windows"}}},
+                      {"sdkType", "web"}, {"osName", osNameForTier(profile.tier)}}},
         {"serverId", serverId}, {"fallbackRegionNames", json::array()},
     };
-    const json j = parse(call("POST", "/v5/sessions/home/play", body.dump(), {{"X-MS-Device-Info", kDeviceInfo}}), "play");
+    const json j = parse(call("POST", "/v5/sessions/home/play", body.dump(),
+                              {{"X-MS-Device-Info", deviceInfoForTier(profile.tier)}}), "play");
     const std::string path = j.value("sessionPath", "");
     // "v5/sessions/home/<id>"
     const auto slash = path.find_last_of('/');
@@ -187,7 +203,7 @@ std::string StreamApi::exchangeSdp(const std::string& sessionId, const std::stri
     return sdp;
 }
 
-bool StreamApi::teredoIpv4(const std::string& ipv6, std::string* ipv4, int* port) {
+bool StreamApi::teredoIpv4(const std::string& ipv6, std::string* ipv4, int* port, std::string* serverIpv4) {
     in6_addr address{};
     if (InetPtonA(AF_INET6, ipv6.c_str(), &address) != 1) return false;
     const uint8_t* b = address.s6_addr;
@@ -197,13 +213,19 @@ bool StreamApi::teredoIpv4(const std::string& ipv6, std::string* ipv4, int* port
     std::snprintf(text, sizeof(text), "%u.%u.%u.%u", b[12] ^ 0xFFu, b[13] ^ 0xFFu, b[14] ^ 0xFFu, b[15] ^ 0xFFu);
     if (ipv4) *ipv4 = text;
     if (port) *port = p;
+    if (serverIpv4) {
+        char server[INET_ADDRSTRLEN] = {};
+        std::snprintf(server, sizeof(server), "%u.%u.%u.%u", b[4], b[5], b[6], b[7]);
+        *serverIpv4 = server;
+    }
     return true;
 }
 
-std::vector<IceCandidate> StreamApi::parseIce(const std::string& exchangeResponse) {
+std::vector<IceCandidate> StreamApi::parseIce(const std::string& exchangeResponse, bool fullTeredo) {
     std::vector<IceCandidate> out;
     const json list = json::parse(exchangeResponse);
     if (!list.is_array()) throw std::runtime_error("the console's ICE candidates are not an array");
+    int foundation = 10;
     for (const auto& c : list) {
         IceCandidate candidate;
         candidate.candidate = text(c, "candidate");
@@ -216,15 +238,30 @@ std::vector<IceCandidate> StreamApi::parseIce(const std::string& exchangeRespons
             else if (index.is_number_integer()) candidate.sdpMLineIndex = index.get<int>();
         }
         // Greenlight: a Teredo candidate also reaches the console on the IPv4 address and port it hides,
-        // and on port 9002 of that address.
+        // and on port 9002 of that address. The reference mobile client additionally tries the Teredo
+        // server's IPv4 and the Xbox game port 3074 (teredoCandidates.ts); fullTeredo enables those.
         std::istringstream fields(candidate.candidate);
         std::vector<std::string> parts;
         for (std::string part; fields >> part;) parts.push_back(part);
-        std::string ipv4;
+        std::string ipv4, server4;
         int port = 0;
-        if (parts.size() > 4 && parts[4].rfind("2001", 0) == 0 && teredoIpv4(parts[4], &ipv4, &port)) {
-            out.push_back({"a=candidate:10 1 UDP 1 " + ipv4 + " 9002 typ host ", candidate.sdpMid, candidate.sdpMLineIndex});
-            out.push_back({"a=candidate:11 1 UDP 1 " + ipv4 + " " + std::to_string(port) + " typ host ", candidate.sdpMid, candidate.sdpMLineIndex});
+        if (parts.size() > 5 && parts[4].rfind("2001", 0) == 0 && teredoIpv4(parts[4], &ipv4, &port, &server4)) {
+            const int candidatePort = std::atoi(parts[5].c_str());
+            const auto add = [&](const std::string& ip, int p) {
+                const std::string line = "a=candidate:" + std::to_string(foundation++) + " 1 UDP 1 " + ip + " " + std::to_string(p) + " typ host ";
+                for (const auto& existing : out) if (existing.candidate == line) return;
+                out.push_back({line, candidate.sdpMid, candidate.sdpMLineIndex});
+            };
+            if (fullTeredo) {
+                add(ipv4, port);
+                add(server4, candidatePort);
+                add(ipv4, candidatePort);
+                if (candidatePort != 3074) { add(server4, 3074); add(ipv4, 3074); }
+            } else {
+                // Historical two-candidate form, kept byte for byte for the default profile.
+                out.push_back({"a=candidate:10 1 UDP 1 " + ipv4 + " 9002 typ host ", candidate.sdpMid, candidate.sdpMLineIndex});
+                out.push_back({"a=candidate:11 1 UDP 1 " + ipv4 + " " + std::to_string(port) + " typ host ", candidate.sdpMid, candidate.sdpMLineIndex});
+            }
         }
         out.push_back(std::move(candidate));
     }
@@ -237,7 +274,7 @@ std::vector<IceCandidate> StreamApi::exchangeIce(const std::string& sessionId, c
     const std::string path = "/v5/sessions/home/" + sessionId + "/ice";
     call("POST", path, json{{"messageType", "iceCandidate"}, {"candidate", candidates}}.dump());
     try {
-        return parseIce(getExchange(path));
+        return parseIce(getExchange(path), profile_.fullTeredo);
     } catch (const json::exception&) {
         throw std::runtime_error("the console's ICE candidates are not JSON");
     }
@@ -245,6 +282,17 @@ std::vector<IceCandidate> StreamApi::exchangeIce(const std::string& sessionId, c
 
 void StreamApi::keepalive(const std::string& sessionId) {
     call("POST", "/v5/sessions/home/" + sessionId + "/keepalive", "{}");
+}
+
+int StreamApi::keepAlivePulseInSeconds(const std::string& sessionId) {
+    const HttpsResponse response = call("GET", "/v5/sessions/home/" + sessionId + "/configuration", "");
+    try {
+        const json j = json::parse(response.body);
+        const int pulse = j.value("keepAlivePulseInSeconds", 0);
+        return pulse > 0 ? pulse : 0;
+    } catch (const json::exception&) {
+        return 0; // the pulse is advisory; a malformed configuration must not break the session
+    }
 }
 
 void StreamApi::stop(const std::string& sessionId) {

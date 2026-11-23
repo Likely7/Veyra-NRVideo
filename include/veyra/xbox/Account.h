@@ -70,6 +70,8 @@ public:
     // A streaming token for the home (console) offering. Refreshes everything that has expired.
     // Throws ServiceError / NetworkError / std::runtime_error.
     StreamingAccess streamingAccess();
+    // Drops the cached streaming token and signs in to the offering again (mid-session 401/403).
+    StreamingAccess refreshStreamingAccess();
     // The token the session's /connect step wants (MSAL "console transfer" token).
     std::string transferToken();
 

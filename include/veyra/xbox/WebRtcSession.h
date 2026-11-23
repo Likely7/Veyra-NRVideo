@@ -16,6 +16,8 @@
 
 #include "veyra/xbox/Protocol.h"
 #include "veyra/xbox/StreamApi.h"
+#include "veyra/xbox/StreamProfile.h"
+#include "veyra/xbox/VideoLossRecovery.h"
 
 namespace rtc {
 class PeerConnection;
@@ -47,6 +49,7 @@ struct WebRtcStats {
     uint64_t bytesReceived = 0;      // data channels (libdatachannel's count)
     uint64_t videoBytes = 0;         // access units handed to the decoder
     uint64_t videoUnits = 0, audioPackets = 0, keyframeRequests = 0;
+    uint64_t nacksSent = 0, packetsRecovered = 0, framesDroppedIncomplete = 0;
     double rttMs = 0;
     bool handshakeDone = false;
 };
@@ -63,7 +66,10 @@ public:
     void setBindAddress(std::string address) { bindAddress_ = std::move(address); }
 
     // Offer, signalling, ICE; returns once connected, false (with `error`) on failure or timeout.
-    bool start(Signaling& signaling, std::string* error, std::chrono::milliseconds timeout = std::chrono::seconds(20));
+    // The profile selects the viewport report, b=AS hints and the ICE servers; the default
+    // reproduces the historical offer byte for byte.
+    bool start(Signaling& signaling, std::string* error, std::chrono::milliseconds timeout = std::chrono::seconds(20),
+               const StreamProfile& profile = {});
     // True once the console acknowledged the message-channel handshake (input is accepted from then on).
     bool ready() const { return handshakeDone_.load(); }
     bool waitReady(std::chrono::milliseconds timeout);
@@ -96,6 +102,7 @@ private:
     uint32_t lastFeedbackRtp_=0;
     std::shared_ptr<rtc::PeerConnection> pc_;
     std::shared_ptr<rtc::Track> audio_, video_;
+    std::shared_ptr<VideoLossRecovery> lossRecovery_;
     std::shared_ptr<rtc::DataChannel> chat_, control_, input_, message_;
     std::mutex mutex_;
     std::condition_variable changed_;
@@ -105,6 +112,7 @@ private:
     std::chrono::steady_clock::time_point origin_ = std::chrono::steady_clock::now();
     std::string failure_;
     std::string bindAddress_;
+    int viewportW_ = 1920, viewportH_ = 1080;
 };
 
 } // namespace veyra::xbox

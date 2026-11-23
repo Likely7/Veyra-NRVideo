@@ -20,7 +20,7 @@
 #include "veyra/source/MoonlightSessionSource.h"
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-#include "veyra/source/XboxSessionSource.h"
+#include "veyra/source/IXboxSource.h"
 #endif
 #include "veyra/media/AudioTrack.h"
 #include "veyra/media/NetworkSettings.h"
@@ -29,7 +29,7 @@
 #include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/VirtualCamera.h"
 #include "veyra/engine/DisplayStateService.h"
-namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
+namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
@@ -344,7 +344,7 @@ private:
     std::jthread controlThread_; // started on first use; joined (bounded) in the destructor
 #endif
     std::shared_ptr<source::MoonlightSessionSource> activeMoonlight_;
-    std::shared_ptr<source::XboxSessionSource> activeXbox_;
+    std::shared_ptr<source::IXboxSource> activeXbox_;
     PreviewView previewView_;
     std::wstring savePath_;
     // Live recorder: every session's presenter records into it; it owns its

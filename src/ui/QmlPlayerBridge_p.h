@@ -979,7 +979,7 @@ struct QmlPlayerBridge::Impl {
 #ifdef VEYRA_ENABLE_MOONLIGHT
     // --- PC streaming (Moonlight). Last, so they are destroyed first: the model joins its workers.
     QTimer* moonlightTimer = nullptr;
-    bool moonlightWantCapture = false, moonlightStatsVisible = false, moonlightWasActive = false;
+    bool moonlightWantCapture = false, moonlightWasActive = false;
     int moonlightStatsTicks = 0;
     std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
     std::unique_ptr<ui::MoonlightModel> moonlight;
@@ -990,6 +990,9 @@ struct QmlPlayerBridge::Impl {
     int xboxStatsTicks = 0;
     std::unique_ptr<ui::XboxModel> xbox;   // last: joins its worker first
 #endif
+    // Stream statistics HUD toggle (Ctrl+Alt+Shift+S). Shared by Moonlight and
+    // Xbox, so it lives outside either engine's guard.
+    bool moonlightStatsVisible = false;
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.

@@ -307,6 +307,14 @@ StreamingAccess Account::streamingAccess() {
     return access;
 }
 
+StreamingAccess Account::refreshStreamingAccess() {
+    {
+        std::lock_guard lock(mutex_);
+        streaming_.reset();
+    }
+    return streamingAccess();
+}
+
 std::string Account::transferToken() {
     std::lock_guard lock(mutex_);
     if (!tokens_) throw std::runtime_error("not signed in");

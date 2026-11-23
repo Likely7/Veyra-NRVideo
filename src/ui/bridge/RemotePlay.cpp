@@ -45,20 +45,12 @@ bool QmlPlayerBridge::moonlightCaptured() const {
 #endif
 }
 bool QmlPlayerBridge::moonlightStatsVisible() const {
-#ifdef VEYRA_ENABLE_MOONLIGHT
     return impl_->moonlightStatsVisible;
-#else
-    return false;
-#endif
 }
 void QmlPlayerBridge::setMoonlightStatsVisible(bool visible) {
-#ifdef VEYRA_ENABLE_MOONLIGHT
     if (impl_->moonlightStatsVisible == visible) return;
     impl_->moonlightStatsVisible = visible;
     emit moonlightUiChanged();
-#else
-    (void)visible;
-#endif
 }
 void QmlPlayerBridge::openMoonlightDialog() { emit navigate(QStringLiteral("moonlight")); }
 

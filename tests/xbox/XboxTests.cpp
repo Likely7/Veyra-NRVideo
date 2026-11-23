@@ -27,6 +27,7 @@
 #include "veyra/xbox/Account.h"
 #include "veyra/xbox/Protocol.h"
 #include "veyra/xbox/StreamApi.h"
+#include "veyra/xbox/StreamProfile.h"
 #include "veyra/xbox/WebRtcSession.h"
 #include "veyra/xbox/DisconnectPolicy.h"
 #include "veyra/xbox/VideoDecodeRecovery.h"
@@ -136,6 +137,18 @@ void apiTests() {
         check(body["serverId"] == "F1" && body["settings"]["nanoVersion"] == "V3;WebrtcTransport.dll" && !http->seen.back().headers["X-MS-Device-Info"].empty(),
               "play sends the server id, nano V3 and the device info header");
     }
+    // The HQ tier must reach both the play settings and the device-info header, consistently.
+    http->add(host, "/v5/sessions/home/play", 200, R"({"sessionPath":"v5/sessions/home/HQ-1","state":"Provisioning"})");
+    StreamProfile hq;
+    hq.tier = QualityTier::P1080Hq;
+    check(api.play("F1", "zh-CN", hq) == "HQ-1", "play accepts the HQ profile");
+    {
+        const json body = json::parse(http->seen.back().body);
+        const json info = json::parse(http->seen.back().headers["X-MS-Device-Info"]);
+        check(body["settings"]["osName"] == "tizen" && info["dev"]["os"]["name"] == "tizen" &&
+              info["dev"]["displayInfo"]["dimensions"]["widthInPixels"] == 1920,
+              "the HQ tier is consistent across settings.osName and the device-info header");
+    }
     http->add(host, "/v5/sessions/home/ABC-123/state", 200, R"({"state":"Failed","errorDetails":{"code":"WNSError","message":"WaitingForServerToRegister"}})");
     const auto st = api.state("ABC-123");
     check(st.state == "Failed" && st.errorCode == "WNSError" && st.errorMessage == "WaitingForServerToRegister", "state with error details");
@@ -197,6 +210,100 @@ void apiTests() {
         check(nullableIce.size() == 1 && nullableIce[0].sdpMid == "0" && nullableIce[0].sdpMLineIndex == 0,
               "null ICE metadata and end markers do not abort the connection after SDP succeeds");
     } catch (const std::exception&) { check(false, "null ICE metadata and end markers do not abort the connection after SDP succeeds"); }
+}
+
+// ---------------------------------------------------------------- quality / ICE profile
+
+void profileTests() {
+    check(std::string(osNameForTier(QualityTier::P720)) == "android" &&
+          std::string(osNameForTier(QualityTier::P1080)) == "windows" &&
+          std::string(osNameForTier(QualityTier::P1080Hq)) == "tizen",
+          "the quality tiers map to the reference clients' osName values");
+    int w = 0, h = 0;
+    viewportForTier(QualityTier::P720, &w, &h);
+    check(w == 1280 && h == 720, "the 720p tier reports a 1280x720 viewport");
+    viewportForTier(QualityTier::P1080Hq, &w, &h);
+    check(w == 1920 && h == 1080, "HQ keeps the 1080p viewport; the bitrate comes from the identity");
+
+    // The device info must match the reference browser client identity: the service
+    // picks its encoder policy from it, so any drift changes the delivered stream.
+    const std::string reference = R"({"appInfo":{"env":{"clientAppId":"www.xbox.com","clientAppType":"browser","clientAppVersion":"26.1.97","clientSdkVersion":"10.3.7","httpEnvironment":"prod","sdkInstallId":""}},"dev":{"hw":{"make":"Microsoft","model":"unknown","sdktype":"web"},"os":{"name":"windows","ver":"22631.2715","platform":"desktop"},"displayInfo":{"dimensions":{"widthInPixels":1920,"heightInPixels":1080},"pixelDensity":{"dpiX":1,"dpiY":1}},"browser":{"browserName":"chrome","browserVersion":"130.0"}}})";
+    check(deviceInfoForTier(QualityTier::P1080) == reference, "the default tier's device info matches the reference browser client");
+    const json hq = json::parse(deviceInfoForTier(QualityTier::P1080Hq));
+    check(hq["dev"]["os"]["name"] == "tizen" && hq["appInfo"]["env"]["clientAppId"] == "www.xbox.com" &&
+          hq["dev"]["browser"]["browserName"] == "chrome",
+          "the HQ tier keeps the browser identity and switches os.name to tizen");
+
+    std::string host; uint16_t port = 0; bool turn = true;
+    check(parseIceServerUrl("stun:stun.l.google.com:19302", &host, &port, &turn) && host == "stun.l.google.com" && port == 19302 && !turn,
+          "a STUN URL parses with its port");
+    check(parseIceServerUrl("turn:relay.example.com", &host, &port, &turn) && host == "relay.example.com" && port == 3478 && turn,
+          "a TURN URL without a port defaults to 3478");
+    check(parseIceServerUrl("stun:[2001:db8::1]:3478", &host, &port, &turn) && host == "2001:db8::1" && port == 3478,
+          "bracketed IPv6 literals parse");
+    check(!parseIceServerUrl("turns:secure.example.com:5349", &host, &port, &turn) &&
+          !parseIceServerUrl("stun:", &host, &port, &turn) &&
+          !parseIceServerUrl("stun:host:0", &host, &port, &turn) &&
+          !parseIceServerUrl("stun:host:99999", &host, &port, &turn) &&
+          !parseIceServerUrl("http:host:80", &host, &port, &turn),
+          "unknown schemes, empty hosts and invalid ports are rejected");
+    check(defaultStunServers().size() == 7, "the reference STUN list has seven entries");
+
+    // Full Teredo expansion: client4/server4 x decoded/candidate/3074 ports, deduplicated.
+    const auto full = StreamApi::parseIce(R"([{"candidate":"a=candidate:1 1 UDP 100 2001:0:4136:e378:8000:63bf:3fff:fdd2 9002 typ host","sdpMid":"0","sdpMLineIndex":"0"},{"candidate":"a=end-of-candidates"}])", true);
+    check(full.size() == 6, "full expansion adds five IPv4 candidates and keeps the Teredo one");
+    std::string server4, client4;
+    int teredoPort = 0;
+    check(StreamApi::teredoIpv4("2001:0:4136:e378:8000:63bf:3fff:fdd2", &client4, &teredoPort, &server4) && server4 == "65.54.227.120",
+          "the Teredo server IPv4 is bytes 4..7, unobfuscated");
+    bool hasClientPort = false, hasServerCandidate = false, hasClientCandidate = false, hasServer3074 = false, hasClient3074 = false;
+    for (const auto& c : full) {
+        hasClientPort |= c.candidate.find("192.0.2.45 40000") != std::string::npos;
+        hasServerCandidate |= c.candidate.find("65.54.227.120 9002") != std::string::npos;
+        hasClientCandidate |= c.candidate.find("192.0.2.45 9002") != std::string::npos;
+        hasServer3074 |= c.candidate.find("65.54.227.120 3074") != std::string::npos;
+        hasClient3074 |= c.candidate.find("192.0.2.45 3074") != std::string::npos;
+    }
+    check(hasClientPort && hasServerCandidate && hasClientCandidate && hasServer3074 && hasClient3074,
+          "the five combinations cover client/server addresses and the decoded/candidate/3074 ports");
+    const auto dedup = StreamApi::parseIce(R"([{"candidate":"a=candidate:1 1 UDP 100 2001:0:4136:e378:8000:63bf:3fff:fdd2 3074 typ host","sdpMid":"0","sdpMLineIndex":"0"}])", true);
+    check(dedup.size() == 4, "a candidate already on port 3074 does not duplicate the 3074 pairs");
+}
+
+// ---------------------------------------------------------------- token refresh / pulse
+
+void resilienceTests() {
+    auto http = std::make_shared<FakeTransport>();
+    const std::string host = "uks.core.gssv-play-prodxhome.xboxlive.com";
+    StreamApi api(http, host, "OLD");
+    api.setRetryDelayMs(1);
+    int refreshes = 0;
+    api.setTokenRefresh([&] { ++refreshes; return std::string("NEW"); });
+    http->add(host, "/v5/sessions/home/S1/keepalive", 401, R"({"code":"Unauthorized"})");
+    http->add(host, "/v5/sessions/home/S1/keepalive", 200, "{}");
+    api.keepalive("S1");
+    check(refreshes == 1 && http->seen.size() == 2 && http->seen.back().headers["Authorization"] == "Bearer NEW",
+          "a 401 refreshes the token once and replays the request");
+    http->add(host, "/v5/sessions/home/S1/keepalive", 401, "{}");
+    http->add(host, "/v5/sessions/home/S1/keepalive", 401, "{}");
+    bool threw = false;
+    try { api.keepalive("S1"); } catch (const ServiceError& e) { threw = e.status == 401; }
+    check(threw && refreshes == 2, "a second refusal is a real error; the refresh is not looped");
+
+    auto plain = std::make_shared<FakeTransport>();
+    StreamApi noRefresh(plain, host, "GS");
+    noRefresh.setRetryDelayMs(1);
+    plain->add(host, "/v5/sessions/home/S1/keepalive", 403, "{}");
+    threw = false;
+    try { noRefresh.keepalive("S1"); } catch (const ServiceError& e) { threw = e.status == 403; }
+    check(threw && plain->seen.size() == 1, "without a refresh callback a 403 is not retried");
+
+    http->add(host, "/v5/sessions/home/S1/configuration", 200, R"({"keepAlivePulseInSeconds":120})");
+    check(api.keepAlivePulseInSeconds("S1") == 120, "the configuration pulse is read");
+    http->add(host, "/v5/sessions/home/S1/configuration", 200, R"({"serverDetails":{}})");
+    check(api.keepAlivePulseInSeconds("S1") == 0, "a missing pulse falls back to the caller's default");
+    http->add(host, "/v5/sessions/home/S1/configuration", 200, "not json");
+    check(api.keepAlivePulseInSeconds("S1") == 0, "a malformed configuration does not break the session");
 }
 
 // ---------------------------------------------------------------- sign-in
@@ -598,6 +705,8 @@ int main(int argc, char** argv) {
     }
     protocolTests();
     apiTests();
+    profileTests();
+    resilienceTests();
     accountTests();
     webrtcTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
