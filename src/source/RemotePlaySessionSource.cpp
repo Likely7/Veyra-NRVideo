@@ -35,6 +35,10 @@ std::wstring sessionFailureDetail(const remoteplay::NativeSnapshot& native, int 
 }
 }
 
+RemotePlaySessionSource::RemotePlaySessionSource(bool wakeOnFrame) {
+    if(wakeOnFrame)frameEvent_.reset(CreateEventW(nullptr,TRUE,FALSE,nullptr));
+}
+
 bool RemotePlaySessionSource::connect(RemotePlayConnectDesc desc) {
     close();
     { std::lock_guard lock(mutex_); initialized_=started_=failed_=false; skipped_=publishedSequence_=0; recovery_={}; rates_={}; feedback_={}; controller_={}; pendingControllers_.clear(); snapshot_={}; }
@@ -251,6 +255,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             :desc.controlOnly?std::format(L"PS5 手柄控制中断，正在重新连接（{}/3）…",recovery.episodeRetries())
             :std::format(L"串流中断，正在重新连接（{}/3）…",recovery.episodeRetries())};
         latest_.reset();pendingControllers_.clear();controller_={};feedback_={};
+        if(frameEvent_)ResetEvent(frameEvent_.get());
     }
     log::info("remoteplay-recovery",std::format("teardown begin attempt={} retry={} cancelled={}",recovery.reconnects(),retry,stop.stop_requested()));
     if(monitor.joinable()){monitor.request_stop();monitor.join();}
@@ -279,6 +284,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     {std::lock_guard lock(mutex_);recovery_.active=false;}
     // run() has no early return: the owner loop and its retries are over.
     alive_.store(false);
+    if(frameEvent_&&!stop.stop_requested())SetEvent(frameEvent_.get());
 }
 void RemotePlaySessionSource::publishDecoded(const AVFrame* frame,pipeline::FramePacket packet,const SourceInfo& info){
     auto* cloned=av_frame_clone(frame);if(!cloned)throw std::bad_alloc();
@@ -289,6 +295,8 @@ void RemotePlaySessionSource::publishDecoded(const AVFrame* frame,pipeline::Fram
     if(latest_){++skipped_;item.packet.flags|=latest_->packet.flags;
         item.packet.flags|=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Drop);}
     latest_=std::move(item);
+    // Keep the notification set until the same lock protects consumption.
+    if(frameEvent_)SetEvent(frameEvent_.get());
 }
 SourceReadStatus RemotePlaySessionSource::read(pipeline::FramePacket& packet,const AVFrame** frame) {
     if(frame)*frame=nullptr;
@@ -296,11 +304,13 @@ SourceReadStatus RemotePlaySessionSource::read(pipeline::FramePacket& packet,con
     if(failed_)return SourceReadStatus::Error;
     if(!latest_)return started_?SourceReadStatus::Waiting:SourceReadStatus::Error;
     packet=latest_->packet;info_=latest_->info;view_=std::move(latest_->frame);latest_.reset();
+    if(frameEvent_)ResetEvent(frameEvent_.get());
     if(frame)*frame=view_.get();return SourceReadStatus::Frame;
 }
 void RemotePlaySessionSource::close() noexcept {
     if(owner_.joinable()){owner_.request_stop();owner_.join();}
     std::lock_guard lock(mutex_);latest_.reset();view_.reset();info_={};started_=false;
+    if(frameEvent_)ResetEvent(frameEvent_.get());
     SecureZeroMemory(pin_.data(),pin_.size());pin_.clear();
 }
 void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
