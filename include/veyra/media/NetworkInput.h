@@ -1,6 +1,7 @@
 #pragma once
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <cwctype>
 #include <string>
 #include <string_view>
@@ -43,6 +44,19 @@ bool forceDemuxSessionForTest();
 // (export, tools) pass playback=false and keep the direct file path for NAS files.
 inline bool sharedDemuxInput(std::wstring_view path, bool playback) {
     return networkMediaInput(path) || (playback && remoteMediaPath(path)) || forceDemuxSessionForTest();
+}
+
+inline int seekMediaInput(AVFormatContext& input, int64_t targetUs, int64_t startTimeUs) {
+    // In MPEG-TS the first video keyframe's DTS can precede the first PTS.
+    // Rewind the byte stream so a timestamp seek cannot skip the initial GOP.
+    if (targetUs == 0 && input.pb && (input.pb->seekable & AVIO_SEEKABLE_NORMAL) &&
+        input.iformat == av_find_input_format("mpegts")) {
+        const int64_t position = avio_seek(input.pb, 0, SEEK_SET);
+        if (position < 0) return static_cast<int>(position);
+        return avformat_flush(&input);
+    }
+    // With stream index -1 the target is in AV_TIME_BASE units.
+    return av_seek_frame(&input, -1, targetUs + startTimeUs, AVSEEK_FLAG_BACKWARD);
 }
 
 // Per-operation deadlines only on networks; immediate owner cancellation on all inputs.

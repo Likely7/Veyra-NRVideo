@@ -530,13 +530,8 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     // make the first frames after a seek pair against stale layer pictures.
     for (auto*& stale : elPending_) av_packet_free(&stale);
     elPending_.clear();
-    // In MPEG-TS the first video keyframe can be before the container's start PTS
-    // in decode order. A timestamp seek to zero can land inside the first GOP.
-    const bool rewind = targetUs == 0 && seekable() && context_->iformat == av_find_input_format("mpegts");
-    const int64_t target = rewind ? 0 : av_rescale_q(targetUs + startTimeUs(), { 1, 1000000 },
-        AVRational{1, AV_TIME_BASE});
     interrupt_.arm();
-    const int result = av_seek_frame(context_, -1, target, rewind ? AVSEEK_FLAG_BYTE : AVSEEK_FLAG_BACKWARD);
+    const int result = seekMediaInput(*context_, targetUs, startTimeUs());
     interrupt_.disarm();
     if (result < 0) {
         char errorText[AV_ERROR_MAX_STRING_SIZE]{};
