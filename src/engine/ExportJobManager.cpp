@@ -36,7 +36,8 @@ struct Shared {
     // shrink) is honoured again; a version 13 worker would silently ignore it.
     // 15: final exclusion mask and independent output-control node payloads.
     // 16: the spatial video-denoise stage and strength controls.
-    static constexpr DWORD kVersion=16;
+    // 17：NR 差分叠层参数加入共享结构。
+    static constexpr DWORD kVersion=17;
     DWORD signature=magic,version=kVersion,bytes=sizeof(Shared);
     EnhancementSettings settings;
     EffectChain chain;

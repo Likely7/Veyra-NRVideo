@@ -2,6 +2,23 @@
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
+namespace {
+bool nrStackDependsOn(const engine::EffectChain& chain,const engine::NodeGraphLayout& layout,int index){
+    const auto& nr=chain.nodes[index];
+    if(nr.type!=engine::EffectType::NrEnhance||!nr.enabled||nr.nr.residualStack)return false;
+    const auto advance=[&](int i){
+        if(chain.mode==engine::ChainMode::Node)return layout.indexOf(chain,layout.next[i]);
+        return uint32_t(i+1)<chain.nodeCount?i+1:-1;
+    };
+    for(int i=advance(index);i>=0;i=advance(i)){
+        const auto& node=chain.nodes[i];
+        if(!node.enabled)continue;
+        if(node.type==engine::EffectType::NrEnhance){if(node.nr.residualStack)return true;}
+        else if(chain.mode==engine::ChainMode::Node)break;
+    }
+    return false;
+}
+}
 // --- chain ------------------------------------------------------------------
 // The settings the UI is showing: the facade's pending copy, which the engine
 // has been asked to apply. One accessor so every property reads the same value.
@@ -28,7 +45,8 @@ QVariantList QmlPlayerBridge::chain() const {
                 const auto option=choice.toMap();
                 if(option.value("id").toString()==fgBackendName())item["label"]=option.value("label");
             }
-        if(node.type==engine::EffectType::NrEnhance)item["label"]=tr("NR 画面增强 · 第 %1 层").arg(++nrOrdinal);
+        if(node.type==engine::EffectType::NrEnhance)
+            item["label"]=(node.nr.residualStack?tr("性能 NR 层 %1"):tr("NR 画面增强 · 第 %1 层")).arg(++nrOrdinal);
         item["enabled"] = node.enabled;
         item["x"] = double(node.viewX);
         item["y"] = double(node.viewY);
@@ -46,7 +64,12 @@ QVariantList QmlPlayerBridge::nrLayers() const {
     for(uint32_t i=0;i<impl_->chain.nodeCount;++i){const auto& node=impl_->chain.nodes[i];
         if(node.type!=engine::EffectType::NrEnhance)continue;
         const auto& n=node.nr;
-        out<<QVariantMap{{"index",int(i)},{"enabled",node.enabled},{"sizePolicy",int(n.sizePolicy)},{"runtime",int(engine::currentNrRuntime(n.runtime))},
+        out<<QVariantMap{{"index",int(i)},{"id",impl_->chain.mode==engine::ChainMode::Node?impl_->layout.ids[i]:i+2},
+            {"enabled",node.enabled},{"sizePolicy",int(n.sizePolicy)},{"runtime",int(engine::currentNrRuntime(n.runtime))},
+            {"residualStack",n.residualStack},{"stackStrength",n.stackStrength},
+            {"stackColor",n.stackControls.color},{"stackBrighten",n.stackControls.brighten},
+            {"stackDarken",n.stackControls.darken},{"stackLimit",n.stackControls.limit},{"stackDetail",n.stackControls.detail},
+            {"stackRequired",nrStackDependsOn(impl_->chain,impl_->layout,int(i))},
             {"manualSize",pipeline::manualNrSizePolicy(n.sizePolicy)},{"sizePercent",int(pipeline::nrSizePercent(n.sizePolicy))},
             {"intensity",n.model.intensity},{"tone",n.model.tone},{"structure",n.model.structure},
             {"skin",n.model.skin},{"style",n.model.style},{"autoMask",bool(n.model.autoMask)},
@@ -103,7 +126,17 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
         emit settingsChanged();emitChainChanged();return accepted;
     }
     auto& node=impl_->chain.nodes[index];const auto before=node;auto& n=node.nr;const bool wasValid=chainValid();
-    if(key=="intensity")n.model.intensity=float(value);
+    if(n.residualStack){
+        if(key=="stackStrength")n.stackStrength=float(value);
+        else if(key=="stackColor")n.stackControls.color=float(value);
+        else if(key=="stackBrighten")n.stackControls.brighten=float(value);
+        else if(key=="stackDarken")n.stackControls.darken=float(value);
+        else if(key=="stackLimit")n.stackControls.limit=float(value);
+        else if(key=="stackDetail")n.stackControls.detail=float(value);
+        else if(key=="resetStack"&&value==1){n.stackStrength=1;n.stackControls={};}
+        else return false;
+    }
+    else if(key=="intensity")n.model.intensity=float(value);
     else if(key=="tone")n.model.tone=float(value);
     else if(key=="structure")n.model.structure=float(value);
     else if(key=="skin")n.model.skin=float(value);
@@ -149,7 +182,9 @@ bool QmlPlayerBridge::setNrLayerParameter(int index,const QString& key,double va
     if(node==before)return true;
     const bool accepted=impl_->revalidate(true);
     if(!accepted){const auto error=impl_->validation.message;node=before;impl_->revalidate();emit notice(uiText(error),true);}
-    emit settingsChanged();emitParameterChanged(&QmlPlayerBridge::nrLayersChanged,wasValid);return accepted;
+    emit settingsChanged();
+    emitParameterChanged(&QmlPlayerBridge::nrLayersChanged,wasValid);
+    return accepted;
 }
 
 QVariantMap QmlPlayerBridge::nrStabilizerState() const {
@@ -386,7 +421,7 @@ QString QmlPlayerBridge::videoHdrStatus() const { return uiText(impl_->snapshot.
 // The validator is the authority: an edit that would put frame generation or
 // RTX Video HDR where the pipeline cannot honour them is refused with a reason,
 // not silently dropped.
-int QmlPlayerBridge::addEffect(const QString& type) {
+int QmlPlayerBridge::addEffect(const QString& type, bool residualStack) {
     // The generic list entry means "add an available FG stage". A saved,
     // disabled NVIDIA choice must not make FSR/XeSS impossible to add on AMD.
     if(type==QLatin1String("frame-generation")&&
@@ -436,6 +471,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
             node.viewX = float(index % 4) * 260; node.viewY = float(index / 4) * 300;
             if (info->type == engine::EffectType::NrEnhance) {
                 node.nr.runtime = previous.nrRuntime; node.nr.lowLatencyPairing = previous.lowLatency;
+                node.nr.residualStack = residualStack;
             }
             const uint32_t id = impl_->layout.nextId++; impl_->layout.ids[index] = id; impl_->layout.next[index] = 0;
             auto projected = std::make_unique<engine::EffectChain>();
@@ -552,6 +588,7 @@ int QmlPlayerBridge::addEffect(const QString& type) {
     if(wanted==engine::EffectType::NrEnhance){
         c.nodes[insertAt].nr.runtime=settings().nrRuntime;
         c.nodes[insertAt].nr.lowLatencyPairing=settings().lowLatency;
+        c.nodes[insertAt].nr.residualStack=residualStack;
         impl_->selectedNr=int(insertAt);
     }
     // A new node lands below the others in node mode, in a stable column.
@@ -614,6 +651,7 @@ bool QmlPlayerBridge::resetNode(uint id) {
     const int index = nodeIndexForId(id);
     if (index < 0) return false;
     auto& node = impl_->chain.nodes[index];
+    if(node.type==engine::EffectType::NrEnhance&&node.nr.residualStack)return setNrLayerParameter(index,"resetStack",1);
     const auto before = node; const auto multiplier = impl_->chain.fgMultiplier;
     const auto strict = impl_->chain.fgStrictAdmission;
     const auto previous = impl_->facade.pendingSettings();
@@ -701,6 +739,9 @@ int QmlPlayerBridge::duplicateNrLayer(int index){
 bool QmlPlayerBridge::removeEffect(int index) {
     auto& c = impl_->chain;
     if (index < 0 || uint32_t(index) >= c.nodeCount) return false;
+    if(nrStackDependsOn(c,impl_->layout,index)){
+        emit notice(tr("请先关闭下方性能 NR 层"),true);return false;
+    }
     const auto& info = engine::effectInfo(c.nodes[index].type);
     if (info.mustBeLast) { emit notice(tr("补帧固定为最后一步，不能删除"), true); return false; }
     const auto before=c; const int selected=impl_->selectedNr,colourSelected=impl_->selectedColour;
@@ -772,6 +813,9 @@ bool QmlPlayerBridge::setEffectEnabled(int index, bool enabled) {
     auto& c = impl_->chain;
     if (index < 0 || uint32_t(index) >= c.nodeCount) return false;
     if (c.nodes[index].enabled == enabled) return true;
+    if(!enabled&&nrStackDependsOn(c,impl_->layout,index)){
+        emit notice(tr("请先关闭下方性能 NR 层"),true);return false;
+    }
     c.nodes[index].enabled = enabled;
     if(!impl_->revalidate(true)){
         const auto error=impl_->validation.message;c.nodes[index].enabled=!enabled;

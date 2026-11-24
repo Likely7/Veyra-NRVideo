@@ -12,6 +12,7 @@ ColumnLayout {
     // The list page owns copy/delete and the list-wide NR->SR order; the node
     // page uses its node menu and wiring instead.
     property bool listControls: true
+    readonly property bool residualStack: layerData.residualStack === true
     // Read the previous global choice only as a migration fallback.
     function usesWeb(key) {
         const prefs = veyra.preferences
@@ -90,12 +91,28 @@ ColumnLayout {
         }
     }
 
+    Repeater {
+        model: editor.residualStack ? [
+            {key:"stackStrength",label:qsTr("叠加强度"),min:0,max:1,defaultValue:1},
+            {key:"stackColor",label:qsTr("色彩叠加"),hint:qsTr("0 只叠加明暗差分"),min:0,max:2,defaultValue:1},
+            {key:"stackBrighten",label:qsTr("提亮叠加"),min:0,max:2,defaultValue:1},
+            {key:"stackDarken",label:qsTr("压暗叠加"),min:0,max:2,defaultValue:1},
+            {key:"stackLimit",label:qsTr("差分限幅"),hint:qsTr("软化过大的新增差分 · 0 关闭"),min:0,max:1,defaultValue:0},
+            {key:"stackDetail",label:qsTr("细节叠加"),hint:qsTr("优先叠加边缘与纹理 · 0 不区分 · 启用后增加 GPU 采样"),min:0,max:1,defaultValue:0}
+        ] : []
+        delegate: NrValueRow {
+            required property var modelData
+            spec: modelData
+            amount: editor.layerData[modelData.key] ?? modelData.defaultValue
+            onEdited: amount => editor.edited(editor.layerData.index, modelData.key, amount)
+        }
+    }
     Flow {
         objectName: "nr-layer-actions"
         Layout.fillWidth: true
         Layout.minimumWidth: 0
         spacing: 6
-        visible: editor.listControls
+        visible: editor.listControls && !editor.residualStack
         VButton {
             objectName: "nr-copy"
             text: qsTr("复制此层"); enabled: editor.layerCount < 4
@@ -113,6 +130,7 @@ ColumnLayout {
         }
     }
     VRow {
+        visible: !editor.residualStack
         label: qsTr("NR 版本")
         hint: qsTr("全链共享 · 切换会重建 NR 管线")
         VSelect {
@@ -126,6 +144,7 @@ ColumnLayout {
     }
     VRow {
         objectName: "nr-performance-row"
+        visible: !editor.residualStack
         label: qsTr("启用性能优化版")
         hint: editor.amdNr ? qsTr("开启使用 Small 模型；关闭使用原模型。每层独立选择，切换会重建 NR，画面可能有所不同。")
                            : qsTr("开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。")
@@ -138,6 +157,7 @@ ColumnLayout {
         }
     }
     VRow {
+        visible: !editor.residualStack
         label: qsTr("NR 运动来源")
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
         opacity: enabled ? 1 : 0.4
@@ -150,6 +170,7 @@ ColumnLayout {
         }
     }
     VRow {
+        visible: !editor.residualStack
         label: qsTr("内部处理分辨率")
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
         opacity: enabled ? 1 : 0.4
@@ -163,7 +184,7 @@ ColumnLayout {
     }
     VRow {
         objectName: "nr-manual-size-row"
-        visible: editor.manualSize
+        visible: !editor.residualStack && editor.manualSize
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
         opacity: enabled ? 1 : 0.4
         label: qsTr("处理比例")
@@ -183,7 +204,7 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        visible: editor.manualSize
+        visible: !editor.residualStack && editor.manualSize
         text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。")
                           : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
@@ -191,7 +212,7 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        visible: editor.layerData.sizePolicy === 6
+        visible: !editor.residualStack && editor.layerData.sizePolicy === 6
         text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。视频导出固定按最高 1440p 处理，输出尺寸不变。") +
               (veyra.nrAutoStatus.length > 0 ? "\n" + veyra.nrAutoStatus : "")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
@@ -199,6 +220,7 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
+        visible: !editor.residualStack
         text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
                           : qsTr("预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
@@ -206,13 +228,14 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        visible: !editor.amdNr && editor.layerCount > 1 &&
+        visible: !editor.residualStack && !editor.amdNr && editor.layerCount > 1 &&
                  (!editor.listControls || (veyra.nrLayers.length > 0 && editor.layerData.index === veyra.nrLayers[0].index))
         text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
     }
     NrValueRow {
+        visible: !editor.residualStack
         spec: ({key:"intensity",label:qsTr("模型强度"),min:0,max:1})
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
         opacity: enabled ? 1 : 0.4
@@ -221,12 +244,13 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        visible: editor.amdNr || !Support.available(veyra, "nr" + editor.layerData.runtime)
+        visible: !editor.residualStack && (editor.amdNr || !Support.available(veyra, "nr" + editor.layerData.runtime))
         text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：RX 7000 / 9000 使用各自运行组件，需要 HIP 7 驱动。性能模式使用 Small，关闭使用原模型；内部最高 1080p 像素预算，支持百分比尺寸。7000 系风格固定默认，9000 系沿用运行时配置。原生 HDR 保留基底，通过 SDR 代理增强后还原。7000 系仍需实卡验收。")
         color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
     }
     VSubGroup {
         objectName: "nr-model-group"
+        visible: !editor.residualStack
         enabled: !editor.amdNr && Support.available(veyra, "nr" + editor.layerData.runtime)
         opacity: enabled ? 1 : 0.4
         Layout.fillWidth: true
@@ -283,6 +307,7 @@ ColumnLayout {
     }
     VSubGroup {
         objectName: "nr-residual-group"
+        visible: !editor.residualStack
         Layout.fillWidth: true
         label: qsTr("增强变化量"); count: 5
         VRow {
@@ -316,6 +341,7 @@ ColumnLayout {
     }
     VSubGroup {
         objectName: "nr-correction-group"
+        visible: !editor.residualStack
         Layout.fillWidth: true
         label: qsTr("画面调控"); count: editor.layerData.correctionEnabled ? (editor.layerData.correctionAuto ? 1 : 9) : 0
         VRow {
@@ -391,6 +417,7 @@ ColumnLayout {
     }
     VSubGroup {
         objectName: "nr-experimental-group"
+        visible: !editor.residualStack
         Layout.fillWidth: true
         label: qsTr("实验"); count: editor.layerData.temporal ? 3 : 2
         VRow {

@@ -9,7 +9,18 @@ cbuffer Params:register(b0){
     float correctionEnabled;float hueProtection;float chromaProtection;float highlightProtection;
     float localCompression;float temporalStability;float correctionAutomatic;float correctionPad;
     float neutralProtection;float colorRetention;float luminanceRetention;float shadowProtection;
-    float4 correctionReserved;
+    float stackLimit;float stackDetail;float stackStrength;float residualStack;
+}
+static const float3 kResidualLuma=float3(0.2126,0.7152,0.0722);
+
+float stackDetailWeight(int2 p,int2 last,float center){
+    float4 neighbors=float4(
+        dot(nrInput[int2(max(p.x-1,0),p.y)].rgb,kResidualLuma),
+        dot(nrInput[int2(min(p.x+1,last.x),p.y)].rgb,kResidualLuma),
+        dot(nrInput[int2(p.x,max(p.y-1,0))].rgb,kResidualLuma),
+        dot(nrInput[int2(p.x,min(p.y+1,last.y))].rgb,kResidualLuma));
+    float4 contrasts=abs(neighbors-center)/max(max(abs(neighbors),abs(center)),0.0625);
+    return smoothstep(0.02,0.20,max(max(contrasts.x,contrasts.y),max(contrasts.z,contrasts.w)));
 }
 // Extrapolating a negative linear-light residual can cross zero even when
 // both input images contain shadow detail. Continue below the unboosted
@@ -29,6 +40,33 @@ float shadowSafe(float base,float rawDelta,float requestedDelta){
     uint w,h,nw,nh;baseTex.GetDimensions(w,h);nrInput.GetDimensions(nw,nh);
     if(id.x>=w||id.y>=h)return;
     float4 base=baseTex[id.xy];
+    if(residualStack>0){
+        if(stackStrength==0){outputTex[id.xy]=base;return;}
+        float3 original=nrInput[id.xy].rgb;
+        float3 delta=base.rgb-original;
+        if(darken!=1||brighten!=1||color!=1){
+            float dy=dot(delta,kResidualLuma);
+            delta=(delta-dy)*color+dy*(dy<0?darken:brighten);
+        }
+        delta*=stackStrength;
+        // 以本段入口画面的局部亮度对比度选择细节，默认不读取邻域。
+        [branch] if(stackDetail>0){
+            delta*=lerp(1,stackDetailWeight(int2(id.xy),int2(nw,nh)-1,dot(original,kResidualLuma)),stackDetail);
+        }
+        if(stackLimit>0){
+            // 只软压这次新增的差分，三个通道共用倍率以保留差分方向。
+            float3 magnitude=abs(delta);
+            float peak=max(magnitude.r,max(magnitude.g,magnitude.b));
+            float3 reference=abs(base.rgb);
+            float knee=0.125*max(1,max(reference.r,max(reference.g,reference.b)))/stackLimit;
+            if(peak>knee){
+                float excess=peak-knee;
+                delta*=(knee+excess/(1+excess/knee))/peak;
+            }
+        }
+        outputTex[id.xy]=float4(base.rgb+delta,base.a);
+        return;
+    }
     float protection=NrProtection(float2(id.xy)+0.5,uint2(w,h),protectionEnabled,featherPixels,regions);
     if(total==0||protection>=1){outputTex[id.xy]=base;return;}
     float2 pos=(float2(id.xy)+0.5)*float2(nw,nh)/float2(w,h)-0.5;

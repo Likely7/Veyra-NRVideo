@@ -893,8 +893,11 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     // so a deep chain can genuinely exhaust a small adapter; the estimate has to
     // count the layers or the check would pass and allocation would fail later.
     uint64_t nrTextureBytes=0;
-    for(const auto extent:desc_.nrLayersExtent)
+    for(size_t i=0;i<desc_.nrLayersExtent.size();++i){
+        if(desc_.nrStackStrength(i)>=0)continue;
+        const auto extent=desc_.nrLayersExtent[i];
         nrTextureBytes+=uint64_t(extent.width)*extent.height*(extent.width==nrW_&&extent.height==nrH_?32u:36u);
+    }
     uint64_t fullLayerBytes=0,temporalBytes=0;
     for(size_t i=0;i<desc_.nrLayersExtent.size();++i){
         const auto full=desc_.nrFullExtent(i);const uint64_t pixels=uint64_t(full.width)*full.height;
@@ -2068,6 +2071,11 @@ bool EnhanceGraph::initNgxFeatures()
             const auto extent=desc_.nrLayersExtent[index];
             const auto full=desc_.nrFullExtent(index);
             const uint32_t fullW=full.width,fullH=full.height;
+            if(desc_.nrStackStrength(index)>=0){
+                if(!instance->createStack(context_.device(),fullW,fullH))return false;
+                nrInstances_.push_back(std::move(instance));
+                continue;
+            }
             // Only a single layer may alias the graph's stage input, and only
             // when the extents already match: that is what the original graph
             // did, and the path has to stay byte-identical. Extra layers read
@@ -2131,6 +2139,7 @@ bool EnhanceGraph::initNgxFeatures()
     // NR feature create (8.5 create parameter contract), one handle per layer.
     for (size_t layerIndex = 0; nrEnabled_ && !lmxxfNr_ && layerIndex < nrInstances_.size(); ++layerIndex) {
         auto* layer = nrInstances_[layerIndex].get();
+        if(!layer->created())continue;
         if(!createNrFeature(*layer))return false;
     }
     if(desc_.nrAutoPoolLayer&&!createAutoNrPool())return false;
@@ -2416,7 +2425,7 @@ std::string EnhanceGraph::nrReuseIneligibility() const
     if(desc_.stillImage)return "still image";
     if(!nrEnabled_||!nrCreated())return "NR not created";
     if(lmxxfNr_||!context_.adapter().isNvidia)return "NVIDIA NGX NR only";
-    for(const auto& layer:nrInstances_)if(layer->amd||layer->handle()==nullptr)return "NVIDIA NGX NR only";
+    for(const auto& layer:nrInstances_)if(layer->created()&&(layer->amd||layer->handle()==nullptr))return "NVIDIA NGX NR only";
     if(desc_.hdrWorking())return "SDR only";
     if(!desc_.nrUsesFlow()||!nvofStandalone_)return "NR motion must use optical flow";
     if(desc_.splitNrAcrossSr())return "NR split across SR";
@@ -2438,7 +2447,7 @@ bool EnhanceGraph::createNrReusePass()
     }
     std::vector<NrReusePass::MotionTarget> targets{{nrFlow_.Get(),nrW_,nrH_}};
     for(const auto& layer:nrInstances_)
-        if(layer->motion()!=nrFlow_.Get())targets.push_back({layer->motion(),layer->width(),layer->height()});
+        if(layer->created()&&layer->motion()!=nrFlow_.Get())targets.push_back({layer->motion(),layer->width(),layer->height()});
     auto* source=nrBaseInput();
     const auto extent=residualRgba_->GetDesc();
     auto pass=std::make_unique<NrReusePass>();
@@ -2615,6 +2624,7 @@ bool EnhanceGraph::createViews()
         const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
         for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
             auto* layer = nrInstances_[layerIndex].get();
+            if(!layer->created())continue;
             const UINT k = UINT(layerIndex);
             ID3D12Resource* source = nrLayerBase(layerIndex);
             stagedSrv(source, DXGI_FORMAT_R16G16B16A16_FLOAT, downsamplePass_, 2 * k);
@@ -2636,9 +2646,10 @@ bool EnhanceGraph::createViews()
         // The shader reads base (t0), the NR-extent input (t1) and the neural
         // result (t2); the heap keeps those three per layer, in order.
         ID3D12Resource* base=nrLayerBase(layerIndex);
+        const auto& layer=*nrInstances_[layerIndex];
         stagedSrv(base,DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+0);
-        stagedSrv(nrInstances_[layerIndex]->input(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+1);
-        stagedSrv(nrInstances_[layerIndex]->finalRgba(),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+2);
+        stagedSrv(layer.created()?layer.input():nrStackBase(layerIndex),DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+1);
+        stagedSrv(layer.created()?layer.finalRgba():base,DXGI_FORMAT_R16G16B16A16_FLOAT,residualPass_,3*k+2);
     }
     // Temporal stabilisation belongs to a layer, and its output is that layer's
     // composite target: what the residual pass writes, what the next layer reads,
@@ -2688,7 +2699,7 @@ bool EnhanceGraph::createViews()
     makeUav(context_.device(),nrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,1));
     makeUav(context_.device(),baseFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,2));
     for(size_t i=0;i<nrInstances_.size();++i)
-        makeUav(context_.device(),nrInstances_[i]->motion(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,3+UINT(i)));
+        if(nrInstances_[i]->created())makeUav(context_.device(),nrInstances_[i]->motion(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,3+UINT(i)));
     if(firstSrFlow_)makeUav(context_.device(),firstSrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,firstSrFlowSet()));
     if(secondSrFlow_)makeUav(context_.device(),secondSrFlow_.Get(),DXGI_FORMAT_R16G16_FLOAT,cpu(flowAdaptPass_,secondSrFlowSet()));
     for(UINT i=0;i<dlaa_.size();++i)if(dlaa_[i].adaptedMotion)
@@ -2786,6 +2797,7 @@ bool EnhanceGraph::createViews()
         const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
         for (size_t layerIndex = 0; layerIndex < nrInstances_.size(); ++layerIndex) {
             auto* layer = nrInstances_[layerIndex].get();
+            if(!layer->created())continue;
             const UINT k = UINT(layerIndex);
             if (viewsTex) stagedSrv(layer->input(), DXGI_FORMAT_R16G16B16A16_FLOAT, encPass_, k);
             if (viewsUav) makeUav(context_.device(), layer->proxy(), DXGI_FORMAT_R8G8B8A8_UNORM, cpu(encPass_, layers + k));
@@ -3944,7 +3956,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             gpuTimer_.mark(list,GpuStage::Flow,true);
         }
         for(size_t i=0;i<nrInstances_.size();++i){const auto* layer=nrInstances_[i].get();
-            if(layer->motion()!=nrFlow_.Get())adapt(layer->motion(),layer->width(),layer->height(),3+UINT(i));
+            if(layer->created()&&layer->motion()!=nrFlow_.Get())adapt(layer->motion(),layer->width(),layer->height(),3+UINT(i));
         }
     }
     frameFlowValid_=haveFlow;
@@ -4187,9 +4199,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // not in a second loop after all layers have already evaluated.
     auto compositeNrLayer = [&](size_t layerIndex) {
         auto* layer=nrInstances_[layerIndex].get();
+        const float stackStrength=desc_.nrStackStrength(layerIndex);
         // AMD owns a ready lmxxf context rather than an NGX feature handle.
         // Skipping this pass leaves the downstream fullTarget unwritten.
-        if((layer->handle()==nullptr&&(!layer->amd||!layer->amd->ready()))||!layer->enabled)return;
+        if((stackStrength<0&&layer->handle()==nullptr&&(!layer->amd||!layer->amd->ready()))||!layer->enabled)return;
         const bool temporallyStabilised=layer->stabilised;
         ID3D12Resource* destination=temporallyStabilised?layer->temporal().raw():layer->fullTarget();
         const auto& r=layer->residualSettings;
@@ -4201,12 +4214,23 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         for(size_t i=0;i<4;++i){const auto q=engine::protectionConstants(protection.regions[i]);c[8+i*4]=q[0];c[9+i*4]=q[1];c[10+i*4]=q[2];c[11+i*4]=q[3];}
         const auto controls=r.correction.constants(desc_.hdrWorking(),layer->model.style);
         std::copy(controls.begin(),controls.end(),c+24);
+        if(stackStrength>=0){
+            // 性能层使用本段 NR 的输入计算累计差分，保留线性空间的有符号值。
+            tracker_.transition(list,nrLayerBase(layerIndex),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            tracker_.transition(list,nrStackBase(layerIndex),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            const auto& stack=desc_.nrStackControls[layerIndex];
+            c[1]=stack.darken;c[2]=stack.brighten;c[3]=stack.color;
+            c[36]=stack.limit;c[37]=stack.detail;
+            c[38]=stackStrength;c[39]=1;
+            gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(layerIndex)));
+        }
         const UINT residualLayers=UINT(std::max<size_t>(1,nrInstances_.size()));
         residualPass_.bind(list,c,gpuHandleOf(residualPass_,3u*UINT(layerIndex)).ptr,
                            gpuHandleOf(residualPass_,3u*residualLayers+UINT(layerIndex)).ptr);
         list->Dispatch((layer->fullWidth()+15)/16,(layer->fullHeight()+15)/16,1);
         tracker_.uavBarrier(list,destination);
         tracker_.transition(list,destination,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        if(stackStrength>=0)gpuTimer_.mark(list,diagnostics::nrLayerStage(unsigned(layerIndex)),true);
         // After a reused frame the stabiliser's history is two source frames old.
         const double sinceHistoryMs=nrAfterReuse?ptsMs-nrReuseInferredPts_:ptsMs-prevPtsMs_;
         if(temporallyStabilised)layer->temporal().run(list,tracker_,reset,haveFlow,sinceHistoryMs,r.total,protection,r.correction,desc_.hdrWorking());
@@ -4254,10 +4278,15 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             }
             auto* layer = nrInstances_[layerIndex].get();
             const uint32_t sourceW=layer->fullWidth(),sourceH=layer->fullHeight();
-            if ((layer->handle() == nullptr && !layer->amd) || !layer->enabled) continue;
+            if ((layer->created()&&layer->handle()==nullptr&&!layer->amd)||!layer->enabled)continue;
             if(size_t(layerIndex)<interNrPasses_.size()&&!interNrPasses_[layerIndex].empty()){
                 if(!dispatchSlotPasses(list,interNrPasses_[layerIndex],slot,"inter-NR",!interNrColorExecutionLogged_,reset))return false;
                 if(desc_.stageMark)desc_.stageMark("inter-nr-color");
+            }
+            if(!layer->created()){
+                if(layerIndex+1<nrInstances_.size())compositeNrLayer(layerIndex);
+                if(desc_.splitNrAcrossSr()&&desc_.stageMark)desc_.stageMark("nr-layer");
+                continue;
             }
             const uint32_t nrW=layer->width(),nrH=layer->height();
             ID3D12Resource* stageInput = nrLayerBase(layerIndex);
@@ -4922,8 +4951,10 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(desc_.enableNr&&(nextNr.nrTemporal!=desc_.nrTemporal||
        (nextNr.nrTemporal&&nextNr.nrAntiFlicker!=desc_.nrAntiFlicker)))return false;
     if(s.nr&&desc_.enableNr){
-        if(s.activeNrLayerCount()!=nrInstances_.size())return false;
+        if(std::max<size_t>(1,nextNr.nrLayersModel.size())!=nrInstances_.size())return false;
         for(size_t i=0;i<nrInstances_.size();++i){
+            if((nextNr.nrStackStrength(i)>=0)!=(desc_.nrStackStrength(i)>=0))return false;
+            if(nextNr.nrStackStrength(i)>=0)continue;
             const auto& model=i<nextNr.nrLayersModel.size()?nextNr.nrLayersModel[i]:nextNr.model;
             if(engine::nrModelSelection(s.nrRuntime,model)!=
                 engine::nrModelSelection(desc_.nrRuntime,nrInstances_[i]->model))return false;
@@ -5048,6 +5079,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     nrReuseScheduler_.reset();nrReuseKeyValid_=false;
     desc_.nrLayersModel=std::move(nextNr.nrLayersModel);
     desc_.nrLayersResidual=std::move(nextNr.nrLayersResidual);
+    desc_.nrStackStrengths=std::move(nextNr.nrStackStrengths);
+    desc_.nrStackControls=std::move(nextNr.nrStackControls);
     desc_.nrLayersTemporal=std::move(nextNr.nrLayersTemporal);
     desc_.nrLayersAntiFlicker=std::move(nextNr.nrLayersAntiFlicker);
     desc_.nrLayersProtection=std::move(nextNr.nrLayersProtection);

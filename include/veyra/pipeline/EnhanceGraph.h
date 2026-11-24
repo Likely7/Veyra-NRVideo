@@ -181,6 +181,9 @@ struct EnhanceGraphDesc {
     std::vector<NrSizePolicy> nrLayersSizePolicy;
     std::vector<Extent> nrLayersExtent; // active instances; full output stays unchanged
     std::vector<engine::ResidualSettings> nrLayersResidual;
+    std::vector<float> nrStackStrengths; // 负数表示使用原 NR 推理。
+    std::vector<engine::NrStackControls> nrStackControls;
+    float nrStackStrength(size_t layer) const {return layer<nrStackStrengths.size()?nrStackStrengths[layer]:-1.f;}
     std::vector<bool> nrLayersTemporal;
     // Per-layer anti-flicker tier, parallel to nrLayersTemporal. Empty means the
     // flat nrAntiFlicker applies to every layer.
@@ -1197,6 +1200,13 @@ private:
         if(interNrProtectionRgba_&&layer==desc_.interNrProtectionTarget())return interNrProtectionRgba_.Get();
         if(desc_.splitNrAcrossSr()&&layer==desc_.nrBeforeSrLayerCount())return preNrColorOutput_?preNrColorOutput_:workRgba_.Get();
         return layer?nrInstances_[layer-1]->fullTarget():nrBaseInput();
+    }
+    ID3D12Resource* nrStackBase(size_t layer) const {
+        if(const auto& plan=desc_.fixedExecutionPlan)for(uint32_t i=0;i<plan->stepCount;++i){
+            const auto& step=plan->steps[i];
+            if(step.type==engine::EffectType::NrEnhance&&step.resourceIndex==layer)return nrLayerBase(step.nrStackBase);
+        }
+        return nrBaseInput();
     }
     void refreshColorTables();
     bool uploadColorTables(ID3D12GraphicsCommandList* list,uint32_t slot);

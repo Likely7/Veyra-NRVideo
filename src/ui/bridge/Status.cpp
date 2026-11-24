@@ -3,7 +3,37 @@
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
+namespace {
+std::optional<std::vector<int>> timingPath(const engine::EffectChain& chain, const engine::NodeGraphLayout& layout,
+                                           const engine::EffectChain& acceptedChain) {
+    std::vector<int> path;
+    if (chain.mode == engine::ChainMode::List) {
+        for (uint32_t i = 0; i < chain.nodeCount; ++i) path.push_back(int(i));
+    } else {
+        uint32_t id = layout.inputNext;
+        while (id > engine::NodeGraphLayout::Output && path.size() <= chain.nodeCount) {
+            const int index = layout.indexOf(chain, id);
+            if (index < 0) break;
+            path.push_back(index);
+            id = layout.next[size_t(index)];
+        }
+        engine::EffectChain projected;
+        if (id != engine::NodeGraphLayout::Output || !layout.project(chain, projected).accepted ||
+            engine::runtimeOrder(projected) != engine::runtimeOrder(acceptedChain)) return std::nullopt;
+    }
+    return path;
+}
+
+std::optional<diagnostics::GpuStage> nrTimingStage(const engine::ChainNode& node, unsigned& nextLayer) {
+    // 首个原 NR 之前的性能层没有 GPU 槽位。跨段旁路层仍有槽位。
+    if (!node.enabled || (node.nr.residualStack && nextLayer == 0) || nextLayer >= diagnostics::kTimedNrLayers)
+        return std::nullopt;
+    return diagnostics::nrLayerStage(nextLayer++);
+}
+}
+
 bool QmlPlayerBridge::captureHalfRateSuggested() const{return impl_->snapshot.captureHalfRateSuggested;}
+
 // --- professional-page readouts ---------------------------------------------
 // These read fields the engine genuinely publishes. Where it publishes nothing,
 // the getter says so and the UI shows an explicit "unmeasured" rather than a
@@ -82,8 +112,6 @@ bool QmlPlayerBridge::setOpticalFlowChoice(int backend) {
 }
 
 QVariantList QmlPlayerBridge::stageTimings() const {
-    // Consume the existing GPU timestamp aggregates. Repeated NR layers share
-    // a timestamp slot: this is stage sampling, NOT per-node attribution.
     // XeSS-internal FG is not measured by the graph's DLSS FG batch query.
     const auto& s = impl_->snapshot;
     QVariantList out;
@@ -110,43 +138,57 @@ QVariantList QmlPlayerBridge::stageTimings() const {
         {"呈现", Stage::Blit, "#58CAD4"},
     };
     const double budget = stageBudgetMs();
-    // Several NR layers: every layer marks the shared NR slot, so it only ever held the last
-    // layer's time (field report 2026-10-01). Each layer also has its own slot; with two or
-    // more layers measured, show those instead of the shared row.
-    std::vector<Row> shown;
-    unsigned measuredLayers = 0;
-    for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
-        if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0) ++measuredLayers;
+    const auto& chain = impl_->chain;
+    const auto path = timingPath(chain, impl_->layout, impl_->acceptedChain);
+    std::array<unsigned, engine::kMaxChainNodes> ordinals{};
+    unsigned ordinal = 0;
+    for (uint32_t i = 0; i < chain.nodeCount; ++i)
+        if (chain.nodes[i].type == engine::EffectType::NrEnhance) ordinals[i] = ++ordinal;
+    struct NrRow { unsigned ordinal; bool residualStack; Stage stage; };
+    std::vector<NrRow> nrRows;
+    bool measuredStack = false;
+    unsigned enabledNr = 0;
+    // 层号沿用卡片顺序，计时槽位按实际运行顺序分配。
+    if (path) for (const int i : *path) {
+        const auto& node = chain.nodes[i];
+        if (!ordinals[i]) continue;
+        const auto stage = nrTimingStage(node, enabledNr);
+        if (!stage || s.metrics.flow.gpuTiming[size_t(*stage)].samples == 0) continue;
+        nrRows.push_back({ordinals[i], node.nr.residualStack, *stage});
+        measuredStack |= node.nr.residualStack;
+    }
     static const char* const layerLabels[] = {"NR 第1层", "NR 第2层", "NR 第3层", "NR 第4层"};
     static const char* const layerColors[] = {"#FF8A3D", "#FFA866", "#FFC28F", "#FFD9B8"};
-    for (const auto& r : rows) {
-        // Anti-aliasing and beauty rows appear only while those nodes run.
-        const bool optional = r.stage == Stage::AaNode0 || r.stage == Stage::AaNode1 ||
-            (r.stage >= Stage::BeautyNode0 && r.stage <= Stage::BeautyDetect);
-        if (optional && s.metrics.flow.gpuTiming[size_t(r.stage)].samples == 0) continue;
-        if (r.stage == Stage::Nr && measuredLayers >= 2) {
-            for (unsigned i = 0; i < diagnostics::kTimedNrLayers; ++i)
-                if (s.metrics.flow.gpuTiming[size_t(diagnostics::nrLayerStage(i))].samples > 0)
-                    shown.push_back({layerLabels[i], diagnostics::nrLayerStage(i), layerColors[i]});
-        } else shown.push_back(r);
-    }
-    for (const auto& r : shown) {
-        const auto& sample = s.metrics.flow.gpuTiming[size_t(r.stage)];
+    const auto append = [&](const QString& label, Stage stage, const char* color) {
+        const auto& sample = s.metrics.flow.gpuTiming[size_t(stage)];
         // The mean of the last second, as 1.4.4's dashboard showed; P95 rides along for the
         // tooltip. Showing P95 alone read as "slower than 1.4.4" for the same work.
         const bool measured = queuedFramesKnown() && sample.samples > 0 &&
             sample.mean && std::isfinite(*sample.mean) && *sample.mean >= 0.0;
         const double ms = measured ? *sample.mean : 0.0;
         QVariantMap item;
-        item["label"] = uiText(std::string_view(r.label));
+        item["label"] = label;
         item["ms"] = ms;
         item["p95"] = measured && sample.p95 ? *sample.p95 : 0.0;
         item["measured"] = measured;
         item["samples"] = measured ? QVariant::fromValue<qulonglong>(sample.samples) : QVariant::fromValue<qulonglong>(0);
         item["domain"] = QStringLiteral("GPU timestamp P95");
-        item["color"] = QString::fromUtf8(r.color);
+        item["color"] = QString::fromUtf8(color);
         item["fraction"] = (measured && budget > 0.01) ? ms / budget : 0.0;
         out << item;
+    };
+    for (const auto& r : rows) {
+        // Anti-aliasing and beauty rows appear only while those nodes run.
+        const bool optional = r.stage == Stage::AaNode0 || r.stage == Stage::AaNode1 ||
+            (r.stage >= Stage::BeautyNode0 && r.stage <= Stage::BeautyDetect);
+        if (optional && s.metrics.flow.gpuTiming[size_t(r.stage)].samples == 0) continue;
+        if (r.stage == Stage::Nr && (nrRows.size() >= 2 || measuredStack)) {
+            for (const auto& layer : nrRows) {
+                const auto label = layer.residualStack ? tr("性能 NR 层 %1").arg(layer.ordinal)
+                    : uiText(std::string_view(layerLabels[layer.ordinal - 1]));
+                append(label, layer.stage, layerColors[layer.ordinal - 1]);
+            }
+        } else append(uiText(std::string_view(r.label)), r.stage, r.color);
     }
     return out;
 }
@@ -172,23 +214,7 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
     const auto& c = impl_->chain;
     const auto& flow = impl_->snapshot.metrics.flow;
     const bool node = c.mode == engine::ChainMode::Node;
-    std::vector<int> path;
-    bool draft = false;
-    if (!node) {
-        for (uint32_t i = 0; i < c.nodeCount; ++i) path.push_back(int(i));
-    } else {
-        uint32_t id = impl_->layout.inputNext;
-        while (id > engine::NodeGraphLayout::Output && path.size() <= c.nodeCount) {
-            const int index = impl_->layout.indexOf(c, id);
-            if (index < 0) break;
-            path.push_back(index);
-            id = impl_->layout.next[size_t(index)];
-        }
-        engine::EffectChain projected;
-        draft = id != engine::NodeGraphLayout::Output || !impl_->layout.project(c, projected).accepted ||
-            engine::runtimeOrder(projected) != engine::runtimeOrder(impl_->acceptedChain);
-        if (draft) path.clear();
-    }
+    const auto path = timingPath(c, impl_->layout, impl_->acceptedChain);
     const bool live = queuedFramesKnown();
     const auto& snapshot = impl_->snapshot;
     // A failed optical-flow/NR backend can leave the requested editor layer
@@ -214,11 +240,12 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
         out[key.toString()] = item;
     };
     std::vector<bool> onPath(c.nodeCount, false);
-    for (const int i : path) onPath[size_t(i)] = true;
+    if (path) for (const int i : *path) onPath[size_t(i)] = true;
     for (uint32_t i = 0; i < c.nodeCount; ++i)
-        if (!onPath[i]) publish(i, draft ? QStringLiteral("draft") : QStringLiteral("idle"), std::nullopt);
+        if (!onPath[i]) publish(i, path ? QStringLiteral("idle") : QStringLiteral("draft"), std::nullopt);
+    if (!path) return out;
     unsigned enabledNr = 0, colour = 0, antiAlias = 0, beauty = 0;
-    for (const int index : path) {
+    for (const int index : *path) {
         const auto i = uint32_t(index);
         const auto& n = c.nodes[i];
         std::optional<Stage> stage;
@@ -226,8 +253,10 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
         switch (n.type) {
         case engine::EffectType::NrEnhance:
             if (nrRejected) waiting = QStringLiteral("failed");
-            else if (n.enabled && enabledNr < diagnostics::kTimedNrLayers) stage = diagnostics::nrLayerStage(enabledNr);
-            if (n.enabled) ++enabledNr;
+            else {
+                stage = nrTimingStage(n, enabledNr);
+                if (!stage) waiting = QStringLiteral("untimed");
+            }
             break;
         case engine::EffectType::Color:
             // Parameter 0 before any SR/NR is fused into the input conversion

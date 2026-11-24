@@ -1822,6 +1822,55 @@ int main() {
         s.videoSrQuality=kVideoSrFsr;describeStages(r,s,d);check(d.dualSr&&s.activeVideoSettings().dualSrEnabled&&d.videoSrQuality==kVideoSrFsr&&d.dualSrQuality==1,
             "an FSR base runs double SR with its own second pass");
     }
+    {
+        EnhancementSettings s;
+        s.nr=true;s.nrLayerCount=3;s.nrHoldStrength=.8f;s.protection.enabled=true;
+        s.nrReuse=NrReuseMode::Auto;
+        for(unsigned i=0;i<s.nrLayerCount;++i){
+            s.nrLayers[i].enabled=true;s.nrLayers[i].residualStack=i>0;
+        }
+        s.nrLayers[2].stackStrength=.5f;
+        s.nrLayers[2].stackControls={.5f,.75f,1.5f,.25f,.75f};
+        auto list=toChain(s);
+        EnhancementSettings restored=s;fromChain(list,restored);
+        check(restored.nrLayers==s.nrLayers,"NR stack: settings and chain round-trip all layer options");
+        auto adjusted=s;adjusted.nrLayers[2].stackStrength=.25f;adjusted.nrLayers[2].stackControls.detail=.5f;
+        auto switched=s;switched.nrLayers[2].residualStack=false;
+        check(!requiresGraphRebuild(s,adjusted)&&requiresGraphRebuild(s,switched),"NR stack: tuning is live and the layer type rebuilds");
+        auto noBase=s;noBase.nrLayers[0].enabled=false;
+        check(!validateChain(toChain(noBase)).accepted,"NR stack: an enabled list stack must have an original layer above it");
+        StageRequest request;request.width=3840;request.height=2160;request.nr=true;request.nvidiaAdapter=true;
+        veyra::pipeline::EnhanceGraphDesc desc;
+        describeStages(request,s,desc);
+        check(desc.validateFixedExecutionPlan().empty()&&desc.nrStackStrengths==std::vector<float>{-1,1,.5f}&&
+            desc.nrStackControls[2]==s.nrLayers[2].stackControls&&
+            desc.nrLayersExtent==std::vector<veyra::pipeline::Extent>{{1920,1080},{3840,2160},{3840,2160}}&&
+            desc.protection.enabled&&desc.nrHoldStrength==.8f&&desc.nrReuse==s.nrReuse,
+            "NR stack: cumulative layers have full-size composites and retain global NR controls");
+        auto node=list;node.mode=ChainMode::Node;
+        const auto color=std::find_if(node.nodes.begin(),node.nodes.begin()+node.nodeCount,[](const auto& n){return n.type==EffectType::Color;});
+        const auto original=std::find_if(node.nodes.begin(),node.nodes.begin()+node.nodeCount,[](const auto& n){return n.type==EffectType::NrEnhance;});
+        auto separator=original+1;
+        std::rotate(color,color+1,separator); --separator;
+        separator->enabled=true;
+        const auto order=*runtimeOrder(node);
+        EnhancementSettings nodeSettings=s;fromChain(node,nodeSettings);
+        request.nodeOrder=&order;
+        describeStages(request,nodeSettings,desc);
+        check(desc.validateFixedExecutionPlan().empty()&&desc.nrStackStrengths==std::vector<float>{-1,0,0},
+            "NR stack: a color node bypasses both dependent layers and preserves protection placement");
+        const auto originalAfterColor=separator+1;
+        originalAfterColor->nr.residualStack=false;
+        fromChain(node,nodeSettings);
+        describeStages(request,nodeSettings,desc);
+        const auto& plan=*desc.fixedExecutionPlan;
+        const auto lastNr=std::find_if(plan.steps.begin(),plan.steps.begin()+plan.stepCount,[](const auto& step){
+            return step.type==EffectType::NrEnhance&&step.resourceIndex==2;
+        });
+        check(desc.validateFixedExecutionPlan().empty()&&desc.nrStackStrengths==std::vector<float>{-1,-1,.5f}&&
+            lastNr!=plan.steps.begin()+plan.stepCount&&lastNr->nrStackBase==1,
+            "NR stack: a new original NR after the separator starts a new reference");
+    }
     std::printf(failures ? "effect chain: %d FAILURES\n" : "effect chain: all checks passed\n", failures);
     return failures ? 1 : 0;
 }

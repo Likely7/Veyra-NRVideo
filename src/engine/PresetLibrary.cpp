@@ -53,6 +53,17 @@ void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
     if(e.contents&presetContentMask(PresetContent::FrameGeneration))s.fgMotion=e.globals->fgMotion;
     else{s.frameGenerationBackend=fg;s.fgMotion=fgMotion;s.vfgQuality=quality;}
 }
+bool hasNrStack(const EffectChain& chain) {
+    return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+        return n.type==EffectType::NrEnhance&&(n.nr.residualStack||n.nr.stackStrength!=1||
+            n.nr.stackControls!=NrStackControls{});
+    });
+}
+bool hasNrStack(const PresetEntry& entry) {
+    return hasNrStack(entry.chain)||(entry.nodeConfiguration&&(hasNrStack(entry.nodeConfiguration->chain)||
+        (entry.nodeConfiguration->editor&&hasNrStack(entry.nodeConfiguration->editor->nodes))));
+}
+constexpr auto kNrStackSidecar=L".nr-residual-stack";
 bool hasOutputControls(const EffectChain& chain) {
     return chain.countOf(EffectType::Exclusion)||chain.countOf(EffectType::NrStabilizer);
 }
@@ -109,6 +120,9 @@ static bool hasVideoDenoise(const ChainConfiguration& config) {
     return config.chain.firstOf(EffectType::VideoDenoise) ||
         (config.editor && config.editor->nodes.firstOf(EffectType::VideoDenoise));
 }
+
+PresetLibrary::PresetLibrary(std::filesystem::path path)
+    : path_(std::move(path)), nrStackPath_(std::filesystem::path(path_).concat(kNrStackSidecar)) {}
 
 bool PresetLibrary::load() {
     error_.clear();
@@ -195,6 +209,7 @@ bool PresetLibrary::load() {
     const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
     if(std::filesystem::exists(directDenoise))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath))path_=denoisePath;
+    if(std::filesystem::exists(nrStackPath_))path_=nrStackPath_;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -287,9 +302,11 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
+    const bool nrSidecar=path_==nrStackPath_;
+    const bool upgradeNr=!nrSidecar && data.starts_with("VEYRA_PRESET_LIBRARY 27\n");
     const bool denoiseSidecar=path_.wstring().ends_with(L".video-denoise");
     const bool upgradeDenoise=!denoiseSidecar && data.starts_with("VEYRA_PRESET_LIBRARY 26\n");
-    const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
+    const bool separate=nrSidecar||upgradeNr||denoiseSidecar||path_.wstring().ends_with(L".fg-options");
     const bool upgrade=!separate && data.starts_with("VEYRA_PRESET_LIBRARY 25\n");
     if(!separate&&!upgrade&&!upgradeDenoise&&!path_.wstring().ends_with(L".exclusion-modes")&&
        !path_.wstring().ends_with(L".half-rate-variants")){
@@ -341,7 +358,8 @@ bool PresetLibrary::save() {
     } // .auto-fg / .output-controls own subsequent edits.
     }
     auto destination=path_;
-    if(upgradeDenoise)destination+=L".video-denoise";
+    if(upgradeNr)destination=nrStackPath_;
+    else if(upgradeDenoise)destination+=L".video-denoise";
     else if(upgrade)destination+=L".fg-options";
     std::error_code ec;
     std::filesystem::create_directories(destination.parent_path(), ec);
@@ -872,7 +890,8 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.chain.firstOf(EffectType::VideoDenoise) ||
             (e.nodeConfiguration && hasVideoDenoise(*e.nodeConfiguration));
     });
-    const int version=std::max(minimumVersion, denoise?26:(individualModes||originalHalfRate||rife)?25:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool nrStack=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return hasNrStack(e);});
+    const int version=std::max(minimumVersion, nrStack?27:denoise?26:(individualModes||originalHalfRate||rife)?25:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -901,6 +920,11 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
             if(version>=8){writeNrCorrection(o,n.nr.residual.correction,version>=9);o<<' ';}
             if(version>=13)o<<n.nr.model.performance<<' ';
+            if(version>=27&&n.type==EffectType::NrEnhance){
+                const auto& s=n.nr.stackControls;
+                o<<n.nr.residualStack<<' '<<n.nr.stackStrength<<' '
+                 <<s.color<<' '<<s.brighten<<' '<<s.darken<<' '<<s.limit<<' '<<s.detail<<' ';
+            }
             if (version>=2 && n.type == EffectType::Color) {
                 writeColorSettings(o, n.color, utf8(n.color.lutNameString()));
                 o << ' ';
@@ -953,7 +977,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     size_t count = 0;
     // v23 adds region modes and the standalone v24 adds cadence value 6.
     // v25 combines both layouts and adds RIFE as a provider.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,26):26;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,27):27;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) {
         error = L"预设库格式或版本不支持"; return false;
     }
@@ -1026,6 +1050,18 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(version>=13){int performance=0;
                 if(!(in>>performance)||performance<0||performance>1){error=L"预设库 NR 模型字段损坏";return false;}
                 node.nr.model.performance=performance!=0;}
+            if(version>=27&&node.type==EffectType::NrEnhance){
+                int stack=0;
+                if(!(in>>stack>>node.nr.stackStrength)||stack<0||stack>1||
+                   !std::isfinite(node.nr.stackStrength)||node.nr.stackStrength<0||node.nr.stackStrength>1){
+                    error=L"预设库 NR 叠层参数损坏";return false;
+                }
+                node.nr.residualStack=stack!=0;
+                auto& s=node.nr.stackControls;
+                if(!(in>>s.color>>s.brighten>>s.darken>>s.limit>>s.detail)||!s.valid()){
+                    error=L"预设库 NR 叠层参数损坏";return false;
+                }
+            }
             if (version >= 2 && node.type == EffectType::Color) {
                 std::string lut;
                 if (!readColorSettings(in, node.color, lut, 19) ||
@@ -1172,7 +1208,10 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         return usesRife(c)||(c.editor&&c.editor->globals&&usesRife(*c.editor->globals));
     });
     const bool denoise=std::any_of(session.configurations.begin(),session.configurations.end(),hasVideoDenoise);
-    const int version = denoise?21:(individualModes||session.originalHalfRate||rife)?20:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const bool nrStack=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
+        return hasNrStack(c.chain)||(c.editor&&hasNrStack(c.editor->nodes));
+    });
+    const int version = nrStack?22:denoise?21:(individualModes||session.originalHalfRate||rife)?20:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);
     if(version>=20)out<<' '<<session.originalHalfRate;
@@ -1228,14 +1267,15 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 21) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 22) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
     int original=version==19;
     if(version>=20&&(!(in>>original)||original<0||original>1))return false;
     parsed.originalHalfRate=original!=0;
-    const int presetVersion=version>=21?26:version>=20?25:version==18?23:version>=17?22:
+    const int presetVersion=version>=22?27:version==21?26:version==20?25:
+        version==18?23:version>=17?22:
         version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11;
     for (auto& c : parsed.configurations) {
         int target, backend, flow, optical, half, policy;
@@ -1296,6 +1336,9 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     session = std::move(parsed);
     return true;
 }
+
+ChainSessionStore::ChainSessionStore(std::filesystem::path path)
+    : path_(std::move(path)), nrStackPath_(std::filesystem::path(path_).concat(kNrStackSidecar)) {}
 
 bool ChainSessionStore::load(ChainSession& session) {
     const auto directDenoise=std::filesystem::path(path_).concat(L".video-denoise");
@@ -1378,6 +1421,7 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
     if(std::filesystem::exists(directDenoise,ec))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath,ec))path_=denoisePath;
+    if(std::filesystem::exists(nrStackPath_))path_=nrStackPath_;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1402,9 +1446,11 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    const bool nrSidecar=path_==nrStackPath_;
+    const bool upgradeNr=!nrSidecar && data.starts_with("VEYRA_CHAIN_SESSION 22\n");
     const bool denoiseSidecar=path_.wstring().ends_with(L".video-denoise");
     const bool upgradeDenoise=!denoiseSidecar && data.starts_with("VEYRA_CHAIN_SESSION 21\n");
-    const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
+    const bool separate=nrSidecar||upgradeNr||denoiseSidecar||path_.wstring().ends_with(L".fg-options");
     const bool upgrade=!separate && data.starts_with("VEYRA_CHAIN_SESSION 20\n");
     if(!separate&&!upgrade&&!upgradeDenoise&&!path_.wstring().ends_with(L".exclusion-modes")&&
        !path_.wstring().ends_with(L".half-rate-variants")){
@@ -1457,7 +1503,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
 
     auto destination=path_;
-    if(upgradeDenoise)destination+=L".video-denoise";
+    if(upgradeNr)destination=nrStackPath_;
+    else if(upgradeDenoise)destination+=L".video-denoise";
     else if(upgrade)destination+=L".fg-options";
     std::error_code ec;
     if (!destination.parent_path().empty()) std::filesystem::create_directories(destination.parent_path(), ec);

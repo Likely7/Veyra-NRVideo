@@ -1468,7 +1468,7 @@ public:
     // Chain editing. The validator decides whether an edit is allowed where it
     // was asked (frame generation is pinned last, RTX Video HDR immediately
     // before it) and reports why when it is not.
-    Q_INVOKABLE int addEffect(const QString& type);
+    Q_INVOKABLE int addEffect(const QString& type, bool residualStack = false);
     Q_INVOKABLE int duplicateNrLayer(int index);
     Q_INVOKABLE int nodeIndexForId(uint id) const;
     Q_INVOKABLE int duplicateNode(uint id);
