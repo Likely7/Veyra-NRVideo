@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-23 2.2.1 正式发布
+
+- 应用和对应源码标签指向 `b9cc86aa`。正式包继续使用 `b111dec5` 已验收的产品构建。包与版本标签之间只有文档差异。核对从旧 GitHub main 新增的 2,216 个可达对象，未发现新增的运行库、模型、私有媒体或配置文件。
+- 发布页收齐 2.2.0 以来的中英文更新、硬件与测试条件、17 项社区 PR，并感谢大理喜鹊（[SAOG0721/Magpie](https://github.com/SAOG0721/Magpie)）提供部分优化与性能分析。README 更新版本摘要和下载链接。双二维码、作者主页及零起点教程已核对。
+- 正式发行资产写入 `E:/项目/Veyra/releases/codex-release-2.2.1-20261123-publish`。依据验收包逐文件重打安装器和便携包，保留产品二进制和依赖。每个 GPU 包核对 108 个着色器。Windows 安装器 Authenticode 状态为 `NotSigned`，两个 ZIP 的 Ed25519 更新清单重新签名并验签。两套便携包解压实播，AMD 安装、播放和卸载通过。
+- 用公开 2.2.0 更新器应用正式签名的 NVIDIA 2.2.1 ZIP。安装后从旧启动入口实测打开 2.2.1，测试预设、偏好和 LUT 保持原哈希。旧程序目录保留，活动目录逐文件匹配新包。试验预设辅助程序第一次用了错误的 MSVC CRT，改成与项目一致的 `/MT` 后通过。
+- `git push --atomic` 推送 main 与两个标签。用 `gh release create --draft` 和 `gh release upload` 暂存资产，比对正文及 GitHub 的每个 SHA-256 后，先公开源码页，再公开主发行并设为 Latest。主发行 6 项、对应源码 5 项全部验证公开下载，二维码与 README 也通过公开读取核对。临时安装/解压副本已回收。 [GitHub Release](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1) · [对应源码](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1-sources) · [远端核验](<E:/项目/Veyra/reports/codex-release-2.2.1-20261123-publish/GITHUB-PUBLIC-VERIFICATION.json>)
+
 ## 2026-11-23 2.2.1 录制与 GPU 性能修复重打包
 
 - 从已验收的 2.2.1 `9e428c54` 继续，移植 Asphalt 报告确认的三项行为到现有共享链路。录制和回放以源尺寸判断换段，编码尺寸向上补齐偶数，已有单次 NV12/P010 转换延展最右列和最下一行。调色仅在需要清晰度或正向去朦胧时计算低分辨率统计。双超分首段模型旁路时以实际首段输入直接降采样，省去 RGBA16F 中间纹理和同尺寸复制。
