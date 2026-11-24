@@ -118,6 +118,15 @@ DialogLayer {
             }
         }
         VRow {
+            visible: !!veyra.ps5Input
+            label: qsTr("控制方式")
+            VButton {
+                objectName: "open-ps5-mapping"
+                text: veyra.ps5Input && veyra.ps5Input.keyboardEnabled ? qsTr("键鼠映射") : qsTr("设置键鼠映射")
+                onClicked: dialogHost.openPs5Mapping()
+            }
+        }
+        VRow {
             label: qsTr("仅观看")
             hint: qsTr("不向 PS5 转发电脑手柄输入")
             VSwitch { checked: veyra.ps5.viewOnly === true; onToggled: checked => veyra.ps5Set("viewOnly", checked) }

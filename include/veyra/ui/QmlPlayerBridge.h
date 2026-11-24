@@ -216,6 +216,7 @@ class QmlPlayerBridge : public QObject {
     // Xbox home streaming (unofficial): sign-in, consoles and stream state; null without Xbox support.
     Q_PROPERTY(QObject* xbox READ xboxModel CONSTANT)
     Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
+    Q_PROPERTY(QObject* ps5Input READ ps5Input CONSTANT)
     Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
 
     // Shell preferences that are not enhancement settings: screenshot folder,
@@ -842,6 +843,9 @@ public:
     QVariantMap ps5Control() const;
     QObject* moonlightModel() const;
     bool moonlightCaptured() const;
+    QObject* ps5Input() const;
+    Q_INVOKABLE bool ps5CaptureKeyboard();
+    uint64_t ps5InputTarget() const;
     bool moonlightStatsVisible() const;
     void setMoonlightStatsVisible(bool visible);
     Q_INVOKABLE void openMoonlightDialog();

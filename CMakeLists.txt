@@ -1471,8 +1471,10 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_options(veyra_ui_i18n_tests PRIVATE /utf-8)
   target_link_libraries(veyra_ui_i18n_tests PRIVATE veyra_ui_i18n)
   qt_add_resources(veyra_ui_i18n_tests "veyra_i18n_tests" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
+  if(VEYRA_ENABLE_MOONLIGHT OR VEYRA_ENABLE_REMOTEPLAY)
+    target_sources(veyra_qml_bridge PRIVATE src/ui/StreamInputCapture.cpp include/veyra/ui/StreamInputCapture.h)
+  endif()
   if(VEYRA_ENABLE_MOONLIGHT)
-    target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
     # The PC streaming model (hosts, pairing, apps, settings) is its own small library so it can be
     # tested against the mock host without the whole player.
     add_library(veyra_moonlight_model STATIC src/ui/MoonlightModel.cpp include/veyra/ui/MoonlightModel.h)

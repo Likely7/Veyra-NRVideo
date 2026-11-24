@@ -86,6 +86,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+    impl_->streamInput = std::make_unique<ui::StreamInputCapture>(engine,
+        QString::fromStdWString((impl_->dataDir / L"ps5-keyboard-map.v1.json").wstring()),
+        [this] { return ps5InputTarget(); });
+    connect(this, &QmlPlayerBridge::mediaOpenRequested, this, [this] { impl_->streamInput->releasePs5(); });
+#endif
     impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // Keep main's established key; also read the PR's key for users of its build.
     // Missing/invalid settings stay at unity, never an automatic boost.
@@ -730,6 +736,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 QObject* QmlPlayerBridge::liveTranslation() const { return liveTranslation_; }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+    impl_->streamInput->releasePs5();
+    impl_->streamInput->capture(false);
+#endif
     // Before anything is torn down: this reads the playback position.
     // The overlay is a child window: it has to go before the video window does.
     flushHdrMemory();

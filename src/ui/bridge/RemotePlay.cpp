@@ -40,7 +40,7 @@ QObject* QmlPlayerBridge::moonlightModel() const {
 }
 bool QmlPlayerBridge::moonlightCaptured() const {
 #ifdef VEYRA_ENABLE_MOONLIGHT
-    return impl_->moonlightCapture && impl_->moonlightCapture->captured();
+    return impl_->streamInput && impl_->streamInput->captured();
 #else
     return false;
 #endif
@@ -149,19 +149,52 @@ void QmlPlayerBridge::tickXbox() {
 void QmlPlayerBridge::tickXbox() {}
 #endif
 
+QObject* QmlPlayerBridge::ps5Input() const {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    return impl_->streamInput.get();
+#else
+    return nullptr;
+#endif
+}
+
+uint64_t QmlPlayerBridge::ps5InputTarget() const {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    const auto& i = *impl_;
+    const auto s = i.engine.snapshot();
+    if (s.remotePlay)
+        return s.running && i.controllerTimer && i.controllerTimer->isActive() ? (s.sessionId << 1) : 0;
+    if (!i.ps5ControlTimer || !i.ps5ControlTimer->isActive() || !captureCardLive()) return 0;
+    const auto st = i.engine.remoteControlStatus();
+    if (st.requested && st.alive && st.connected && !st.recovering && !st.pinRequired)
+        return (s.sessionId << 1) | 1;
+#endif
+    return 0;
+}
+
+bool QmlPlayerBridge::ps5CaptureKeyboard() {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    auto& i = *impl_;
+    if (i.streamInput && i.videoWindow && ps5InputTarget()) {
+        i.streamInput->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+        return i.streamInput->capturePs5(true);
+    }
+#endif
+    return false;
+}
+
 void QmlPlayerBridge::moonlightCapture(bool on) {
 #ifdef VEYRA_ENABLE_MOONLIGHT
     auto& i = *impl_;
-    if (!i.moonlightCapture) return;
+    if (!i.streamInput) return;
     if (!on) {
         i.moonlightWantCapture = false;
-        i.moonlightCapture->capture(false);
+        i.streamInput->capture(false);
         return;
     }
     if (!i.snapshot.moonlightActive || !i.videoWindow) return;
-    i.moonlightCapture->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+    i.streamInput->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
     // The tick keeps trying until the window is in the foreground (right after connecting it may not be yet).
-    i.moonlightWantCapture = !i.moonlightCapture->capture(true);
+    i.moonlightWantCapture = !i.streamInput->capture(true);
 #else
     (void)on;
 #endif
@@ -178,14 +211,13 @@ void QmlPlayerBridge::moonlightDisconnect() {
 void QmlPlayerBridge::setupMoonlight() {
     auto& i = *impl_;
     i.moonlight = std::make_unique<ui::MoonlightModel>();
-    i.moonlightCapture = std::make_unique<ui::MoonlightInputCapture>(i.engine);
-    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::capturedChanged, this, [this](bool) { emit moonlightUiChanged(); });
-    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::releaseRequested, this, [this] {
+    connect(i.streamInput.get(), &ui::StreamInputCapture::capturedChanged, this, [this](bool) { emit moonlightUiChanged(); });
+    connect(i.streamInput.get(), &ui::StreamInputCapture::releaseRequested, this, [this] {
         impl_->moonlightWantCapture = false;
         emit notice(tr("已释放键盘和鼠标（点击画面重新捕获）"), false);
     });
-    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::quitRequested, this, [this] { moonlightDisconnect(); });
-    connect(i.moonlightCapture.get(), &ui::MoonlightInputCapture::statsRequested, this, [this] { setMoonlightStatsVisible(!moonlightStatsVisible()); });
+    connect(i.streamInput.get(), &ui::StreamInputCapture::quitRequested, this, [this] { moonlightDisconnect(); });
+    connect(i.streamInput.get(), &ui::StreamInputCapture::statsRequested, this, [this] { setMoonlightStatsVisible(!moonlightStatsVisible()); });
     connect(i.moonlight.get(), &ui::MoonlightModel::notice, this, &QmlPlayerBridge::notice);
     i.moonlight->setLaunchHandler([this](ui::MoonlightModel::Launch launch) -> bool {
         auto& j = *impl_;
@@ -246,7 +278,7 @@ void QmlPlayerBridge::tickMoonlight() {
         i.moonlightWasActive = active;
         if (!active) {
             i.moonlightWantCapture = false;
-            if (i.moonlightCapture) i.moonlightCapture->capture(false);
+            if (i.streamInput) i.streamInput->capture(false);
         }
         i.moonlight->updateStream(active, s.moonlight);
     } else if (active && ++i.moonlightStatsTicks >= 15) {
@@ -477,7 +509,8 @@ bool QmlPlayerBridge::ps5Connect() {
                     const auto s = j.engine.snapshot();
                     if (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening)) {
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
-                        j.engine.remotePlayController(j.controller.poll(focused));
+                        const auto physical = j.controller.poll(focused);
+                        if (!j.streamInput->keyboardEnabled()) j.engine.remotePlayController(physical);
                         j.controller.feedback(j.engine.remotePlayFeedback(), focused);
                     } else {
                         j.engine.remotePlayController({}); j.releasePad(Impl::PadPs5); j.controllerTimer->stop();
@@ -698,6 +731,7 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
     i.ps5ControlProfile = profile;
     i.ps5ControlNoticed.clear();
     i.ps5ControlNoPair = false;
+    if (i.streamInput) i.streamInput->releasePs5();
     i.engine.startRemoteControl(std::move(desc));
     // The pad is read on the UI thread every 8 ms, as for the PS5 stream (the
     // session sends one state per 4 ms and queues the rest).
@@ -711,7 +745,8 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
                 j.ps5ControlTimer->stop(); j.releasePad(Impl::PadPs5Control); return;
             }
             const bool focused = QGuiApplication::focusWindow() != nullptr || j.prefBool("ps5ControlBackground", false);
-            j.engine.remotePlayController(j.controller.poll(focused));
+            const auto physical = j.controller.poll(focused);
+            if (!j.streamInput->keyboardEnabled()) j.engine.remotePlayController(physical);
             j.controller.feedback(j.engine.remotePlayFeedback(), focused);
         });
     }
@@ -726,6 +761,7 @@ void QmlPlayerBridge::stopPs5Control() {
     auto& i = *impl_;
     if (!i.engine.remoteControlRequested()) return;
     veyra::log::info("remoteplay-control", "stop");
+    if (i.streamInput) i.streamInput->releasePs5();
     i.engine.stopRemoteControl();
     i.ps5ControlProfile.clear();
     tickPs5Control(true);

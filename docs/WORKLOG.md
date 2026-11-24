@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-24 PS5 键鼠映射试用版
+
+- 从本地 main bc59d457 开 codex/ps5-keyboard-mouse-20261124。在 PS5 串流和采集卡的 PS5 手柄控制页接入可点击的 DualSense 手柄图。26 个位置可绑定键盘、修饰键组合、鼠标键及滚轮。支持自动保存、恢复默认和离线输入预览，默认仍用实体手柄。触摸板提供按下动作。
+- 用现有 PS5 手柄状态队列发送数字和摇杆输入。实体手柄和键鼠由用户切换，画面点击开始锁定，Esc 或失焦释放。键鼠和 Moonlight 共用 Windows Raw Input 入口，保留 Moonlight 原有协议和快捷键。鼠标映射到右摇杆，支持横纵增益、死区补偿、曲线、平滑和纵向反转。 [Steam Input](https://partner.steamgames.com/doc/features/steam_controller/input_source_modes?language=english) · [reWASD](https://www.help.rewasd.com/basic-functions/advanced-mouse-settings.html) · [Better xCloud](https://better-xcloud.github.io/mouse-and-keyboard/)
+- 用 build-recording-handoff.py --task codex-ps5-keyboard-mouse-20261124 --label 2.2.1-ps5-input-test --jobs 2 构建播放器、Qt Quick、PS5 边界、Moonlight 协议和 i18n 测试。第一次配置遇到 pkg-config 的中文依赖路径，重试时链接器响应文件也遇到路径编码问题。使用现有 C:/veyra-deps 兼容入口给相关依赖传入 ASCII 路径后构建通过，耗时 151.8 秒。保留 E 盘依赖实体及现有入口。 [构建回执](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/build-20261124-053437/receipt.json>)
+- Qt Quick 的 453 px 夹具重现了手柄图超出弹窗宽度，解除弹窗预设最小宽后修复。全量 261 项通过，1 项已有的独立栅格截图对照未运行。PS5 离线边界回归覆盖快按快放、组合键松手、焦点释放和鼠标批次差异，Moonlight 协议 135 项通过，9 种语言缺译和占位符错误均为 0。 [Qt Quick](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/quick-all.txt>) · [PS5 边界](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/remoteplay-boundary.log>) · [Moonlight](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/moonlight-protocol.txt>)
+- 单一测试运行目录派生自已校验的 2.2.1 NVIDIA 便携运行时，程序、QML、着色器与翻译来自本轮。构建和验证使用任务自己的临时目录及配置。实际程序打开编辑器并截图。为避开正式版占用的桌面，保存和重启测试使用实际 Qt Bridge 与 SDK 中匹配版本的 offscreen 插件。确认清除映射、启用键鼠、横向 2.4 倍和反转完成保存，重启读回参数，并读出夹具写入的 Ctrl+J 键位。系统前台物理录键和 PS5 真机手感未测。本轮仅在试用分支提交。 [保存](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/persistence-save.log>) · [重启](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/persistence-restore.log>) · [界面](<E:/项目/Veyra/reports/codex-ps5-keyboard-mouse-20261124/PS5-mapping-zh-CN-1120x760.png>) · [启动](<E:/项目/Veyra/tests/codex-ps5-keyboard-mouse-20261124/Open PS5 keyboard test.cmd>)
+
 ## 2026-11-23 2.2.1 正式发布
 
 - 应用和对应源码标签指向 `b9cc86aa`。正式包继续使用 `b111dec5` 已验收的产品构建。包与版本标签之间只有文档差异。核对从旧 GitHub main 新增的 2,216 个可达对象，未发现新增的运行库、模型、私有媒体或配置文件。

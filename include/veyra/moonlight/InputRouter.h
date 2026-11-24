@@ -26,10 +26,10 @@ public:
     explicit InputRouter(InputSink& sink) : sink_(sink) {}
 
     // True when the message was consumed (it must not reach the UI underneath).
-    bool message(UINT msg, WPARAM wParam, LPARAM lParam) {
+    bool message(UINT msg, WPARAM wParam, LPARAM lParam, bool shortcuts = true) {
         switch (msg) {
-        case WM_KEYDOWN: case WM_SYSKEYDOWN: return key(wParam, lParam, true);
-        case WM_KEYUP: case WM_SYSKEYUP: return key(wParam, lParam, false);
+        case WM_KEYDOWN: case WM_SYSKEYDOWN: return key(wParam, lParam, true, shortcuts);
+        case WM_KEYUP: case WM_SYSKEYUP: return key(wParam, lParam, false, shortcuts);
         case WM_CHAR: case WM_SYSCHAR: case WM_DEADCHAR: case WM_SYSDEADCHAR: case WM_UNICHAR: case WM_IME_CHAR:
             return true;   // typed text reaches the host as key events, not as characters
         case WM_SYSCOMMAND:
@@ -60,16 +60,16 @@ public:
     }
 
     // Forget what is held (capture ended; the session releases the host side itself).
-    void reset() { held_.clear(); reserved_ = Reserved::None; }
+    void reset() { held_.clear(); reserved_ = Reserved::None; swallowedUp_ = 0; }
 
 private:
-    bool key(WPARAM wParam, LPARAM lParam, bool down) {
+    bool key(WPARAM wParam, LPARAM lParam, bool down, bool shortcuts) {
         const uint32_t vk = uint32_t(wParam);
         const uint32_t scan = uint32_t((lParam >> 16) & 0xFF);
         const bool extended = ((lParam >> 24) & 1) != 0;
         const HostKey host = hostKey(vk, scan, extended);
         if (down) {
-            if (vk != 0x10 && vk != 0x11 && vk != 0x12) {   // a modifier alone is never a hotkey
+            if (shortcuts && vk != 0x10 && vk != 0x11 && vk != 0x12) {   // a modifier alone is never a hotkey
                 const Reserved r = reservedHotkey(vk, held_.modifiers());
                 if (r != Reserved::None) { reserved_ = r; swallowedUp_ = vk; return true; }
             }

@@ -1,6 +1,7 @@
 #include "veyra/source/RemotePlaySessionSource.h"
 #include "veyra/remoteplay/ControllerInput.h"
 #include "veyra/remoteplay/Discovery.h"
+#include "veyra/remoteplay/KeyboardMousePad.h"
 #include <string_view>
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -13,6 +14,64 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 struct RemotePlaySessionSourceTestAccess {
+static bool keyboardMouseMapping() {
+    using Pad = remoteplay::KeyboardMousePad;
+    using State = remoteplay::ControllerState;
+    Pad pad;
+    if (!pad.digital('W', true) || pad.state().leftY != -32767) return false;
+    if (pad.digital('W', true) || !pad.digital('D', true)) return false;
+    if (pad.state().leftX != 23170 || pad.state().leftY != -23170) return false;
+    pad.digital('S', true);
+    if (pad.state().leftY != 0) return false;
+    pad.reset();
+    pad.setBinding(Pad::Cross, Pad::encode('J', Pad::Ctrl));
+    pad.setBinding(Pad::Circle, 'J');
+    pad.digital(0xA2, true);
+    pad.digital('J', true);
+    if (pad.state().buttons != State::Cross) return false;
+    pad.digital(0xA2, false);
+    if (pad.state().buttons || pad.digital('J', true)) return false;
+    pad.digital('J', false);
+    pad.digital('J', true);
+    if (pad.state().buttons != State::Circle) return false;
+    pad.setBinding(Pad::Square, 'J');
+    if (pad.bindings()[Pad::Circle] || pad.setBinding(Pad::PS, 0x1b) || pad.setBinding(Pad::PS, 0x77))
+        return false;
+    pad.digital('J', true);
+    if (pad.state().buttons != State::Square) return false;
+    pad.reset();
+    pad.sample(1000);
+    for (int i = 0; i < 8; ++i) pad.mouse(8, 4, 1000 + 1000 * i);
+    const auto highPoll = pad.sample(9000);
+    pad.reset();
+    pad.sample(1000);
+    pad.mouse(64, 32, 8000);
+    const auto lowPoll = pad.sample(9000);
+    if (highPoll != lowPoll || !lowPoll.rightX || !lowPoll.rightY) return false;
+    if (pad.sample(24000).rightX != 0) return false;
+    auto tuning = pad.tuning();
+    tuning.invertY = true;
+    pad.setTuning(tuning);
+    pad.mouse(0, 32, 25100);
+    if (pad.sample(26000).rightY >= 0) return false;
+    pad.setBinding(Pad::RightLeft, 'H');
+    pad.digital('H', true);
+    if (pad.state().rightX != -32767) return false;
+    pad.resetBindings();
+    if (pad.bindings() != Pad::Defaults || pad.state().rightX != 0) return false;
+    // Use the production PS5 queue with a complete keyboard tap inside one poll.
+    RemotePlaySessionSource source;
+    source.started_ = true;
+    pad.digital(0x20, true);
+    source.controller(pad.state());
+    pad.digital(0x20, false);
+    source.controller(pad.state());
+    const auto now = remoteplay::monotonic100ns();
+    if (source.takeControllerLocked(now).buttons != State::Cross) return false;
+    if (source.takeControllerLocked(now).buttons != 0) return false;
+    source.controller({});
+    return source.takeControllerLocked(now) == State{};
+}
 static bool slowConsumer(){
     RemotePlaySessionSource s;s.started_=true;
     const auto base=remoteplay::monotonic100ns();
@@ -256,6 +315,11 @@ int main(int argc,char** argv){
     veyra::source::RemotePlaySessionSourceTestAccess::mailbox();
     veyra::source::RemotePlaySessionSourceTestAccess::controlOnlyBoundary();
     if(!veyra::source::RemotePlaySessionSourceTestAccess::slowConsumer())return 44;
+    if(!veyra::source::RemotePlaySessionSourceTestAccess::keyboardMouseMapping()) {
+        std::cerr << "PS5 keyboard/mouse mapping regression\n";
+        return 45;
+    }
+    std::cout << "PS5_KEYBOARD_MAPPING chord order payload mouse-rate and release passed\n";
     veyra::source::RemotePlaySessionSource source;
     for(int i=0;i<3;++i){
         veyra::source::RemotePlayConnectDesc request;request.request.host="invalid://host";

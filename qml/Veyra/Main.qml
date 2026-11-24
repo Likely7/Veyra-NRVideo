@@ -741,6 +741,44 @@ Window {
             veyra.moonlightCapture(true)
         }
     }
+    readonly property bool ps5KeyboardReady: !!veyra.ps5Input && veyra.ps5Input.keyboardEnabled &&
+        ((veyra.ps5.active === true && veyra.ps5.viewOnly !== true) ||
+         (veyra.ps5Control.state === "connected" && veyra.isCapture))
+    TapHandler {
+        enabled: root.ps5KeyboardReady && !veyra.ps5Input.ps5Captured && dialogs.dialog === ""
+        onTapped: eventPoint => {
+            if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
+            if (root.overVideoCover(eventPoint.scenePosition) || !root.pictureContains(eventPoint.scenePosition)) return
+            if (veyra.protectionDrawShape.length > 0 || veyra.exclusionOverlayVisible || screenCrop.editing) return
+            veyra.ps5CaptureKeyboard()
+        }
+    }
+    Rectangle {
+        objectName: "ps5-input-hint"
+        readonly property bool videoCover: true
+        readonly property real coverRadius: radius
+        visible: root.ps5KeyboardReady && dialogs.dialog === "" && veyra.hasSource
+                 && (root.page === "min" || root.page === "pro" || root.page === "node")
+        anchors.top: parent.top
+        anchors.topMargin: 55
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - 16, ps5InputHint.implicitWidth + 24)
+        height: 28
+        radius: 8
+        color: Theme.dialog
+        border.color: Theme.stroke2
+        z: 62
+        Text {
+            id: ps5InputHint
+            anchors.centerIn: parent
+            text: veyra.ps5Input && veyra.ps5Input.ps5Captured
+                ? qsTr("键鼠已锁定 · Esc 释放") : qsTr("点击画面锁定键鼠")
+            color: Theme.t1
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSmall
+        }
+    }
+
     // Stream statistics on and off. While a PC stream has the keyboard, the capture filter sees the keys
     // first and toggles the same switch.
     Shortcut {
