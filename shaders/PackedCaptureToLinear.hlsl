@@ -36,8 +36,21 @@ void main(uint3 p : SV_DispatchThreadID) {
         const uint a=wordAt(p.y,base),b=wordAt(p.y,base+1),c=wordAt(p.y,base+2),d=wordAt(p.y,base+3);
         const uint ys[6]={(a>>10)&1023,b&1023,(b>>20)&1023,(c>>10)&1023,d&1023,(d>>20)&1023};
         const uint us[3]={a&1023,(b>>10)&1023,(c>>20)&1023},vs[3]={(a>>20)&1023,c&1023,(d>>10)&1023};
-        float y=float(ys[i])/1023.0;float2 uv=(float2(us[i/2],vs[i/2])-512.0)/1023.0;
-        if(limited>0.5){y=(float(ys[i])-64.0)/876.0;uv=(float2(us[i/2],vs[i/2])-512.0)/896.0;}
+        float2 cbcr=float2(us[i/2],vs[i/2]);
+        // Odd pixels sit between co-sited chroma samples, including across
+        // six-pixel packing groups. Replicate the last visible pair at the edge.
+        if((i&1)&&p.x+1<width){
+            if(i==5){
+                const uint next=wordAt(p.y,base+4);
+                cbcr+=float2(next&1023,(next>>20)&1023);
+            }else{
+                cbcr+=float2(us[i/2+1],vs[i/2+1]);
+            }
+            cbcr*=0.5;
+        }
+        const float2 chromaDelta=cbcr-512.0;
+        float y=float(ys[i])/1023.0;float2 uv=chromaDelta/1023.0;
+        if(limited>0.5){y=(float(ys[i])-64.0)/876.0;uv=chromaDelta/896.0;}
         rgb=matrix709>1.5?float3(y+1.4746*uv.y,y-.164553*uv.x-.571353*uv.y,y+1.8814*uv.x)
             :matrix709>.5?float3(y+1.5748*uv.y,y-.187324*uv.x-.468124*uv.y,y+1.8556*uv.x)
             :float3(y+1.402*uv.y,y-.344136*uv.x-.714136*uv.y,y+1.772*uv.x);
