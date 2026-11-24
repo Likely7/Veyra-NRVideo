@@ -66,6 +66,7 @@ private:
     QVariantList consoles_;
     QString selected_, status_, code_, verificationUri_, lastId_, lastName_;
     bool busy_ = false, gamepad_ = true, softwareDecode_ = false, loaded_ = false, streamActive_ = false, signingIn_ = false;
+    xbox::StreamResolution resolution_ = xbox::StreamResolution::Auto;
     QVariantMap stream_;
     std::atomic<bool> cancel_{false};
     std::jthread worker_;

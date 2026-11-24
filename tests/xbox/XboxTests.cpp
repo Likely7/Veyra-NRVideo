@@ -135,7 +135,15 @@ void apiTests() {
         const json body = json::parse(http->seen.back().body);
         check(body["serverId"] == "F1" && body["settings"]["nanoVersion"] == "V3;WebrtcTransport.dll" && !http->seen.back().headers["X-MS-Device-Info"].empty(),
               "play sends the server id, nano V3 and the device info header");
+        const auto device = json::parse(http->seen.back().headers.at("X-MS-Device-Info"));
+        check(device["dev"]["displayInfo"]["dimensions"] == json{{"widthInPixels", 1920}, {"heightInPixels", 1080}},
+              "play retains the legacy 1080p request by default");
     }
+    http->add(host, "/v5/sessions/home/play", 200, R"({"sessionPath":"v5/sessions/home/QHD"})");
+    check(api.play("F1", "en-CA", StreamResolution::QuadHd) == "QHD", "play accepts the explicit 1440p request");
+    const auto device = json::parse(http->seen.back().headers.at("X-MS-Device-Info"));
+    check(device["dev"]["displayInfo"]["dimensions"] == json{{"widthInPixels", 2560}, {"heightInPixels", 1440}},
+          "1440p advertises a 2560 by 1440 client display");
     http->add(host, "/v5/sessions/home/ABC-123/state", 200, R"({"state":"Failed","errorDetails":{"code":"WNSError","message":"WaitingForServerToRegister"}})");
     const auto st = api.state("ABC-123");
     check(st.state == "Failed" && st.errorCode == "WNSError" && st.errorMessage == "WaitingForServerToRegister", "state with error details");
@@ -315,7 +323,7 @@ public:
                     else text = std::get<std::string>(data);
                     const json j = json::parse(text);
                     std::lock_guard l(mutex);
-                    messages.push_back(j.value("type", "") + " " + j.value("target", ""));
+                    messages.push_back(j);
                     if (j.value("type", "") == "Handshake") {
                         const std::string ack = json{{"type", "HandshakeAck"}, {"id", j.value("id", "")}, {"cv", ""}}.dump();
                         message->send(ack);
@@ -328,7 +336,7 @@ public:
                     if (auto* b = std::get_if<rtc::binary>(&data)) text.assign(reinterpret_cast<const char*>(b->data()), b->size());
                     else text = std::get<std::string>(data);
                     std::lock_guard l(mutex);
-                    control.push_back(json::parse(text).value("message", ""));
+                    control.push_back(json::parse(text));
                     cv.notify_all();
                 });
             } else if (dc->label() == "input") {
@@ -381,7 +389,8 @@ public:
     std::vector<std::shared_ptr<rtc::DataChannel>> channels;
     std::mutex mutex;
     std::condition_variable cv;
-    std::vector<std::string> labels, messages, control;
+    std::vector<std::string> labels;
+    std::vector<json> messages, control;
     std::vector<std::vector<uint8_t>> reports;
     std::string offerSdp;
 };
@@ -392,7 +401,7 @@ std::vector<uint8_t> nal(uint8_t header, size_t size, uint8_t seed) {
     return out;
 }
 
-void webrtcTests() {
+void webrtcTests(StreamResolution resolution) {
     FakeConsole console;
     WebRtcSession session;
     session.setBindAddress("127.0.0.1");
@@ -411,7 +420,7 @@ void webrtcTests() {
     session.setCallbacks(callbacks);
 
     std::string error;
-    const bool started = session.start(console, &error, std::chrono::seconds(15));
+    const bool started = session.start(console, &error, std::chrono::seconds(15), resolution);
     check(started, ("the client connects to a local peer playing the console: " + error).c_str());
     if (!started) return;
     check(console.offerSdp.find("profile-level-id=4d001f") != std::string::npos && console.offerSdp.find("profile-level-id=42e01f") != std::string::npos,
@@ -425,10 +434,22 @@ void webrtcTests() {
         std::sort(sorted.begin(), sorted.end());
         check(sorted == std::vector<std::string>{"chat/chatV1", "control/controlV1", "input/1.0", "message/messageV1"}, "channel labels and protocols as the reference client");
     }
-    check(console.waitFor([&] { return console.control.size() >= 4; }), "control messages arrive");
+    const size_t expectedControlMessages = resolution == StreamResolution::Auto ? 4 : 6;
+    const auto [w, h] = streamExtent(resolution);
+    check(console.waitFor([&] { return console.control.size() >= expectedControlMessages; }), "control messages arrive");
     {
         std::lock_guard l(console.mutex);
-        check(console.control.size() >= 2 && console.control[0] == "authorizationRequest" && console.control[1] == "gamepadChanged", "control: authorization, then the pad");
+        check(console.control.size() >= 2 && console.control[0].value("message", "") == "authorizationRequest" &&
+            console.control[1].value("message", "") == "gamepadChanged", "control: authorization, then the pad");
+        if (resolution == StreamResolution::Auto) {
+            check(console.control.size() == 4, "Auto sends no explicit resolution preference");
+        } else {
+            const json extent = {{"width", w}, {"height", h}};
+            check(console.control.size() == 6 && console.control[4] == json{{"message", "VideoPreference"}, {"type", "VideoPreference"},
+                {"resolution", extent}, {"dimensions", extent}, {"maxFPS", 60}} &&
+                console.control[5] == json{{"message", "userRequestedResolutionUpdate"}, {"resolutionAlias", std::to_string(h)}},
+                "control: both explicit resolution messages match the selected quality");
+        }
     }
     check(console.waitFor([&] { return !console.reports.empty(); }), "the input channel receives the client metadata report");
     {
@@ -436,9 +457,22 @@ void webrtcTests() {
         check(!console.reports.empty() && console.reports[0].size() == 15 && console.reports[0][0] == 8, "first input report is client metadata");
     }
     check(console.waitFor([&] {
-        for (const auto& s : console.messages) if (s.find("/streaming/characteristics/dimensionschanged") != std::string::npos) return true;
+        for (const auto& packet : console.messages) if (packet.value("target", "") == "/streaming/characteristics/dimensionschanged") return true;
         return false;
     }), "the client sends its configuration messages");
+    {
+        std::lock_guard l(console.mutex);
+        json dimensions;
+        for (const auto& packet : console.messages) {
+            if (packet.value("target", "") == "/streaming/characteristics/dimensionschanged") {
+                dimensions = json::parse(packet.at("content").get<std::string>());
+                break;
+            }
+        }
+        check(dimensions == json{{"horizontal", w}, {"vertical", h}, {"preferredWidth", w}, {"preferredHeight", h},
+            {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", w}, {"safeAreaBottom", h}, {"supportsCustomResolution", true}},
+            "the console receives matching display, preferred and safe area dimensions");
+    }
 
     GamepadFrame pad;
     pad.buttons = BtnA;
@@ -498,7 +532,7 @@ void webrtcTests() {
         check(serverW == 1920 && serverH == 1080, "server video size reaches the callback");
     }
     session.requestKeyframe();
-    check(console.waitFor([&] { for (const auto& c : console.control) if (c == "videoKeyframeRequested") return true; return false; }), "a keyframe request goes out on the control channel");
+    check(console.waitFor([&] { for (const auto& c : console.control) if (c.value("message", "") == "videoKeyframeRequested") return true; return false; }), "a keyframe request goes out on the control channel");
     const auto stats = session.stats();
     if (!(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000))
         std::printf("stats: units=%llu audio=%llu handshake=%d bytes=%llu\n", (unsigned long long)stats.videoUnits, (unsigned long long)stats.audioPackets, int(stats.handshakeDone), (unsigned long long)stats.bytesReceived);
@@ -599,7 +633,9 @@ int main(int argc, char** argv) {
     protocolTests();
     apiTests();
     accountTests();
-    webrtcTests();
+    webrtcTests(StreamResolution::Auto);
+    webrtcTests(StreamResolution::FullHd);
+    webrtcTests(StreamResolution::QuadHd);
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
     rtc::Cleanup();
     return g_failures == 0 ? 0 : 1;
