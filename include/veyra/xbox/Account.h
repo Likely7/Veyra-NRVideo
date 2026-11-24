@@ -70,6 +70,10 @@ public:
     // A streaming token for the home (console) offering. Refreshes everything that has expired.
     // Throws ServiceError / NetworkError / std::runtime_error.
     StreamingAccess streamingAccess();
+    // The service rejected `rejectedToken` (HTTP 401) or it is about to expire: get a new one even
+    // though the recorded lifetime has not run out. Returns the cached token when another thread
+    // has replaced the rejected one already.
+    StreamingAccess renewStreamingAccess(const std::string& rejectedToken);
     // The token the session's /connect step wants (MSAL "console transfer" token).
     std::string transferToken();
 

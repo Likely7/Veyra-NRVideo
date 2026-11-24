@@ -55,6 +55,16 @@ std::string serviceError(const json& response) {
 StreamApi::StreamApi(std::shared_ptr<HttpsTransport> transport, std::string host, std::string gsToken)
     : http_(std::move(transport)), host_(std::move(host)), token_(std::move(gsToken)) {}
 
+void StreamApi::setToken(std::string token) {
+    std::lock_guard lock(tokenMutex_);
+    token_ = std::move(token);
+}
+
+std::string StreamApi::token() const {
+    std::lock_guard lock(tokenMutex_);
+    return token_;
+}
+
 HttpsResponse StreamApi::call(const std::string& method, const std::string& path, const std::string& body,
                               const std::map<std::string, std::string>& extraHeaders) {
     HttpsRequest r;
@@ -62,10 +72,20 @@ HttpsResponse StreamApi::call(const std::string& method, const std::string& path
     r.host = host_;
     r.path = path;
     r.headers["Content-Type"] = "application/json";
-    r.headers["Authorization"] = "Bearer " + token_;
+    const std::string sent = token();
+    r.headers["Authorization"] = "Bearer " + sent;
     for (const auto& [k, v] : extraHeaders) r.headers[k] = v;
     if (method == "POST") r.body = body.empty() ? "{}" : body;
-    const HttpsResponse response = http_->send(r);
+    HttpsResponse response = http_->send(r);
+    if (response.status == 401 && renew_) {
+        std::string renewed;
+        try { renewed = renew_(sent); } catch (const std::exception&) {}   // the 401 below is the report
+        if (!renewed.empty() && renewed != sent) {
+            setToken(renewed);
+            r.headers["Authorization"] = "Bearer " + renewed;
+            response = http_->send(r);
+        }
+    }
     if (response.status < 200 || response.status > 299)
         throw ServiceError(response.status, response.body, method + " " + path + " returned HTTP " + std::to_string(response.status));
     return response;

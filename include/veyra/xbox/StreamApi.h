@@ -4,7 +4,10 @@
 // goes through Microsoft's servers even when the console is on the same network; the media then flows
 // over WebRTC (see XboxSessionSource).
 #pragma once
+#include <functional>
+#include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -55,6 +58,14 @@ public:
 
     void setRetryDelayMs(int ms) { retryDelayMs_ = ms; }
 
+    // The streaming token lasts about four hours and a session can run longer. When a request
+    // is answered with HTTP 401, `renew` receives the rejected token and returns a new one; the
+    // request is then repeated once. Set it before other threads use this object.
+    using TokenRenewal = std::function<std::string(const std::string& rejectedToken)>;
+    void setTokenRenewal(TokenRenewal renew) { renew_ = std::move(renew); }
+    void setToken(std::string token);
+    std::string token() const;
+
 private:
     HttpsResponse call(const std::string& method, const std::string& path, const std::string& body,
                        const std::map<std::string, std::string>& extraHeaders = {});
@@ -63,6 +74,8 @@ private:
     std::shared_ptr<HttpsTransport> http_;
     std::string host_, token_;
     int retryDelayMs_ = 750;
+    mutable std::mutex tokenMutex_;
+    TokenRenewal renew_;
 };
 
 } // namespace veyra::xbox

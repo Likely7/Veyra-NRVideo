@@ -156,6 +156,41 @@ void apiTests() {
     try { api.connect("ABC-123", "LPT"); } catch (const ServiceError& e) { threw = e.status == 401; }
     check(threw, "a refused connect is a ServiceError with the status");
 
+    // The streaming token lasts about four hours. A longer session renews it
+    // and repeats the rejected request once.
+    {
+        int renewals = 0;
+        std::string rejected;
+        api.setTokenRenewal([&](const std::string& token) { ++renewals; rejected = token; return std::string("GS2"); });
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 401, R"({"code":"Unauthorized"})");
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 200, "{}");
+        bool kept = true;
+        try { api.keepalive("ABC-123"); } catch (const std::exception&) { kept = false; }
+        check(kept && renewals == 1 && rejected == "GS", "a rejected keepalive renews the streaming token once");
+        check(http->seen.back().headers["Authorization"] == "Bearer GS2" && api.token() == "GS2", "the repeated request and later calls use the renewed token");
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 401, R"({"code":"Unauthorized"})");
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 401, R"({"code":"Unauthorized"})");
+        api.setTokenRenewal([&](const std::string&) { ++renewals; return std::string("GS3"); });
+        threw = false;
+        try { api.keepalive("ABC-123"); } catch (const ServiceError& e) { threw = e.status == 401; }
+        check(threw && renewals == 2 && http->script.empty(), "a second rejection is reported after one repeat");
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 401, R"({"code":"Unauthorized"})");
+        api.setTokenRenewal([&](const std::string& token) { ++renewals; return token; });
+        threw = false;
+        try { api.keepalive("ABC-123"); } catch (const ServiceError& e) { threw = e.status == 401; }
+        check(threw && renewals == 3 && http->script.empty(), "an unchanged token is not sent again");
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 401, R"({"code":"Unauthorized"})");
+        api.setTokenRenewal([](const std::string&) -> std::string { throw ServiceError(400, "", "sign-in expired"); });
+        threw = false;
+        try { api.keepalive("ABC-123"); } catch (const ServiceError& e) { threw = e.status == 401; }
+        check(threw, "a failed renewal reports the original rejection");
+        api.setToken("GS4");
+        http->add(host, "/v5/sessions/home/ABC-123/keepalive", 200, "{}");
+        api.keepalive("ABC-123");
+        check(http->seen.back().headers["Authorization"] == "Bearer GS4", "a token renewed ahead of expiry is used at once");
+    }
+
+
     // The xHome wrapper is nullable even on success (Greenlight's SDPResponse).
     // A pending wrapper is different from a console error; neither may be turned
     // into a json type exception or mistaken for a completed negotiation.
@@ -247,6 +282,15 @@ void accountTests() {
         const size_t before = http->seen.size();
         account.streamingAccess();
         check(http->seen.size() == before, "a valid streaming token is reused");
+        check(account.renewStreamingAccess("OTHER").gsToken == "GS" && http->seen.size() == before,
+              "a token another thread already renewed is not requested again");
+        http->add("user.auth.xboxlive.com", "/user/authenticate", 200, R"({"Token":"UT","NotAfter":"2027-01-01T00:00:00.0000000Z","DisplayClaims":{"xui":[{"uhs":"123"}]}})");
+        http->add("xsts.auth.xboxlive.com", "/xsts/authorize", 200, R"({"Token":"GSSV2","NotAfter":"2027-01-01T00:00:00Z","DisplayClaims":{"xui":[{"uhs":"123"}]}})");
+        http->add("xhome.gssv-play-prod.xboxlive.com", "/v2/login/user", 200,
+                  R"({"offeringSettings":{"regions":[{"name":"EastAsia","baseUri":"https://eas.core.gssv-play-prodxhome.xboxlive.com/","isDefault":true}]},"gsToken":"GS-RENEWED","durationInSeconds":14400})");
+        const StreamingAccess renewed = account.renewStreamingAccess("GS");
+        check(renewed.gsToken == "GS-RENEWED" && renewed.expiresAt == now + 14400, "a rejected streaming token is replaced before its recorded expiry");
+        check(account.streamingAccess().gsToken == "GS-RENEWED", "the renewed streaming token becomes the cached one");
 
         http->add("login.live.com", "/oauth20_token.srf", 200, R"({"access_token":"LPT","refresh_token":"RT-X"})");
         check(account.transferToken() == "LPT", "console transfer token");
