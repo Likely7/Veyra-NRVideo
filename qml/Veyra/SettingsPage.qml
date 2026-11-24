@@ -1280,6 +1280,7 @@ VPage {
                                 { id: "record", a: qsTr("开始 / 停止录制") },
                                 { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在「设置 → 播放」开启即时回放") },
                                 { id: "fullscreenStats", a: qsTr("显示 / 隐藏全屏帧率") },
+                                { id: "playlist", a: qsTr("播放列表") },
                                 { id: "toggleMode", a: qsTr("切换极简 / 专业") }
                             ]
                             delegate: VRow {

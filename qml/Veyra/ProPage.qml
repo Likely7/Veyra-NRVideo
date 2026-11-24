@@ -879,6 +879,16 @@ VPage {
                     visible: veyra.hasSource && (!veyra.isCapture || proAudioMenu.captureSource)
                     onTapped: proAudioMenu.openAt(proAudioButton, "up")
                 }
+                BarButton {
+                    id: proPlaylistButton
+                    objectName: "pro-playlist"
+                    glyph: "list"
+                    tip: qsTr("播放列表")
+                    Accessible.role: Accessible.Button
+                    Accessible.name: tip
+                    Accessible.onPressAction: proPlaylistButton.tapped()
+                    onTapped: veyra.showPlaylist()
+                }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
                 Item {
                     objectName: "pro-fullscreen"

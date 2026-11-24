@@ -848,6 +848,13 @@ Window {
     Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }
     Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }
     Shortcut {
+        sequence: veyra.shortcuts.playlist
+        autoRepeat: false
+        enabled: !root.fullLocked && !root.onboardingActive && !screenCrop.editing && dialogs.dialog === "" &&
+                 (!settingsPage.visible || settingsPage.capturingKey === "")
+        onActivated: veyra.showPlaylist()
+    }
+    Shortcut {
         sequence: veyra.shortcuts.lock
         enabled: root.fullscreen
         onActivated: root.toggleLock()

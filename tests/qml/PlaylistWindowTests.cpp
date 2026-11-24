@@ -60,9 +60,13 @@ void dropUrls(QQuickWindow* win, const QList<QUrl>& urls) {
 void drop(QQuickWindow* win, const QString& path) { dropUrls(win, {QUrl::fromLocalFile(path)}); }
 }
 int main(int argc, char** argv) {
-    QApplication app(argc, argv);
-    qInstallMessageHandler(messages);
     if (argc != 2) return 2;
+    // Keep the production shell's update timer out of this local UI test.
+    char disableUpdate[] = "--portable-update-probe";
+    char* appArgs[] = {argv[0], argv[1], disableUpdate, nullptr};
+    int appArgCount = 3;
+    QApplication app(appArgCount, appArgs);
+    qInstallMessageHandler(messages);
     const auto path = QString::fromLocal8Bit(argv[1]);
     if (!QDir::isAbsolutePath(path) || QFileInfo::exists(path)) return 2;
     QDir().mkpath(path);
@@ -216,6 +220,52 @@ Window {
     win->grabWindow().save(path + "/playlist.png");
     owner->close(); QTest::qWait(100);
     check(!win->isVisible(), "closing owner also hides playlist");
+
+    historyBridge.setInitialPage("pro");
+    warnings.clear();
+    engine.rootContext()->setContextProperty("veyra", &historyBridge);
+    engine.rootContext()->setContextProperty("vyMusic", QVariantMap{
+        {"available", false}, {"muted", false}, {"state", "idle"}});
+    const QString shellPath = QString::fromUtf8(VEYRA_QML_DIR) + "/Veyra/Main.qml";
+    QQmlComponent shellComponent(&engine, QUrl::fromLocalFile(shellPath));
+    std::unique_ptr<QObject> shellObject(shellComponent.create());
+    if (!shellObject) {
+        std::fprintf(stderr, "%s\n", shellComponent.errorString().toUtf8().constData());
+        return 1;
+    }
+    auto* shell = qobject_cast<QQuickWindow*>(shellObject.get());
+    auto* shellPlaylist = shellObject->findChild<QQuickWindow*>("playlistWindow");
+    if (!shell || !shellPlaylist) return 1;
+    shell->resize(1280, 800);
+    shell->requestActivate();
+    QTest::qWait(400);
+    check(shell->property("page").toString() == "pro", "production shell starts in Professional view");
+    if (click(shell, "pro-playlist"))
+        check(shellPlaylist->isVisible(), "Professional button opens the shell playlist");
+    shellPlaylist->hide();
+    shell->requestActivate();
+    QTest::qWait(100);
+    QTest::keyClick(shell, Qt::Key_P, Qt::ControlModifier);
+    QTest::qWait(100);
+    check(shellPlaylist->isVisible(), "default Ctrl+P opens the shell playlist");
+    shellPlaylist->hide();
+    check(historyBridge.setShortcut("playlist", "Ctrl+Shift+P"), "playlist shortcut can be rebound");
+    shell->requestActivate();
+    QTest::qWait(100);
+    QTest::keyClick(shell, Qt::Key_P, Qt::ControlModifier);
+    QTest::qWait(80);
+    check(!shellPlaylist->isVisible(), "old playlist shortcut does not activate after rebinding");
+    QTest::keyClick(shell, Qt::Key_P, Qt::ControlModifier | Qt::ShiftModifier);
+    QTest::qWait(100);
+    check(shellPlaylist->isVisible(), "rebound shortcut opens the same playlist");
+    shellPlaylist->hide();
+    shell->resize(720, 560);
+    shell->requestActivate();
+    QTest::qWait(150);
+    if (click(shell, "pro-playlist"))
+        check(shellPlaylist->isVisible(), "Professional button is usable in compact transport layout");
+    shell->close();
+    check(warnings.isEmpty(), "no QML warnings from the production shell");
     std::printf("%s playlist window assertions=%d\n", failures ? "FAIL" : "PASS", assertions);
     return failures ? 1 : 0;
 }
