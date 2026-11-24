@@ -1,4 +1,5 @@
 #include "veyra/engine/Subtitles.h"
+#include "veyra/media/NetworkInput.h"
 #include <chrono>
 #include <cmath>
 #include <iostream>
@@ -30,7 +31,7 @@ int wmain(int argc,wchar_t** argv){
     try{
         if(!await(cancelled).tracks.empty())return 1;
         if(twoCueFixture){
-            const bool http=subtitleHttpContainer(argv[1]);
+            const bool http=veyra::media::httpMediaInput(argv[1]);
             if(http){
                 loader.request(argv[1]);
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
