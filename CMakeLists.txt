@@ -30,16 +30,16 @@ if(NOT WIN32)
 endif()
 add_subdirectory(src/virtualcam)
 
-# Decode the localized compiler output using the current console code page.
-# CMake needs UTF-8 internally to write rules.ninja; the generator then emits
-# the matching native prefix so Ninja records header dependencies.
+# Ninja matches the localized /showIncludes prefix against the compiler's
+# piped output. Keep the bytes as emitted, which may differ from the console
+# code page.
 if(MSVC AND CMAKE_GENERATOR MATCHES "Ninja")
   set(VEYRA_INCLUDE_PROBE "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/veyra-include-probe")
   file(WRITE "${VEYRA_INCLUDE_PROBE}.h" "// Dependency parser probe\n")
   file(WRITE "${VEYRA_INCLUDE_PROBE}.cpp" "#include \"veyra-include-probe.h\"\n")
   execute_process(COMMAND "${CMAKE_CXX_COMPILER}" /nologo /utf-8 /showIncludes /c /TP "${VEYRA_INCLUDE_PROBE}.cpp" "/Fo${VEYRA_INCLUDE_PROBE}.obj"
     OUTPUT_VARIABLE VEYRA_INCLUDE_OUTPUT ERROR_VARIABLE VEYRA_INCLUDE_OUTPUT
-    RESULT_VARIABLE VEYRA_INCLUDE_RESULT ENCODING AUTO)
+    RESULT_VARIABLE VEYRA_INCLUDE_RESULT ENCODING NONE)
   if(NOT VEYRA_INCLUDE_RESULT EQUAL 0 OR NOT VEYRA_INCLUDE_OUTPUT MATCHES "(^|[\r\n])([^\r\n]*: )[ ]*[A-Za-z]:[^\r\n]*veyra-include-probe.h")
     message(FATAL_ERROR "Unable to verify MSVC/Ninja header dependency prefix")
   endif()
