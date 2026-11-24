@@ -80,7 +80,7 @@ struct ChainNode {
     float viewX = 0, viewY = 0;
     // Per-type payload; only the fields that belong to `type` are meaningful.
     ChainNrParams nr{};
-    ProtectionSettings protection{};
+    ProtectionSettings protection{}; // also holds the manual regions on a frame-generation node
     float holdStrength = 0.8f, holdTolerance = 0.02f;
     ColorSettings color{};
     VideoHdrSettings videoHdr{};
@@ -170,6 +170,8 @@ struct NodeGraphLayout {
 // Legacy node chains are ordered arrays, so removing a stage unambiguously
 // bypasses it. List chains and all remaining payload/layout fields are retained.
 uint32_t removeLegacyNodeProtection(EffectChain&, int* selectedNr = nullptr, int* selectedColour = nullptr);
+bool moveLegacyExclusionToFrameGeneration(EffectChain&, NodeGraphLayout* = nullptr,
+                                          int* selectedNr = nullptr, int* selectedColour = nullptr);
 
 // In-process topology envelope. Parameters remain in EnhancementSettings;
 // editor coordinates and persistent/export-worker layouts are unchanged.

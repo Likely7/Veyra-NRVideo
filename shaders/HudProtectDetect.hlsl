@@ -135,14 +135,29 @@ void main(uint3 id : SV_DispatchThreadID) {
     const int region=hudRegion(p);
     const float4 centerBox=regionBox(0);
     const float2 centerDistance=abs(float2(p)+0.5-(centerBox.xy+centerBox.zw)*0.5);
-    const float centerReach=max(27.0,float(frameSize.y)/36.0);
     const bool axial=min(centerDistance.x,centerDistance.y)<=max(2.0,float(frameSize.y)/300.0);
-    const float dotReach=hudDotProbeRadius()+1;
-    const bool insideDot=dot(centerDistance,centerDistance)<=dotReach*dotReach;
+    const bool insideDot=hudDotContains(p,centerBox);
+    const uint shape=region>=0?counts[hudCounter(region,HudCentredMark)]:0;
+    if((shape&HudCompactDot)!=0) {
+        const float4 box=regionBox(region);
+        if(hudDotContains(p,box)) {
+            const float3 ink=currentAt(int2(hudCenter(box)));
+            const float3 color=currentAt(p);
+            const bool core=colorError(ink,color)<0.11;
+            confidenceTex[id.xy]=core?0.86:0;
+            appearanceTex[id.xy]=float4(color,0);
+            if(core) {
+                InterlockedAdd(counts[hudCounter(region,HudDensity)],1);
+                InterlockedAdd(counts[hudCounter(region,HudCore)],1);
+                InterlockedAdd(counts[hudCounter(region,HudRemembered)],1);
+            }
+            return;
+        }
+    }
     float confidence=0;
     float4 appearance=0;
     bool active=false, remembered=false, pending=false;
-    if(!resetHistory&&region>=0&&(region>0||max(centerDistance.x,centerDistance.y)<=centerReach)) {
+    if(!resetHistory&&region>=0&&(region>0||max(centerDistance.x,centerDistance.y)<=hudCenterReach())) {
         const float4 motion=motionTex.Load(int3(region,0,0));
         const int2 shift=int2(motion.xy);
         const bool haveMotion=motion.z>0&&frameContains(p+shift);
@@ -151,7 +166,6 @@ void main(uint3 id : SV_DispatchThreadID) {
         const int step=clamp(int(round(float(frameSize.y)/180)),3,14);
         const float prior=previousConfidence.Load(int3(id.xy,0));
         const bool confirmed=prior>=0.61&&prior<0.998;
-        const uint shape=counts[hudCounter(region,HudCentredMark)];
         const bool dotMark=region==0&&(shape&HudDotMark)!=0;
         const bool visible=region>0||shape!=0;
         const bool learn=region>0||(shape&HudFreshMark)!=0;

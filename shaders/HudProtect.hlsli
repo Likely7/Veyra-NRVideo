@@ -7,7 +7,7 @@ cbuffer HudProtectConstants : register(b0) {
     uint resetHistory, outputMode; // 0 sRGB, 1 scRGB, 2 PQ
     float4 hudRegions[5];          // left > right encodes an ellipse
     uint readDenseFlow;
-    uint reserved;
+    float regionFeather;
 };
 static const uint HudDensity = 0;
 static const uint HudCore = 1;
@@ -21,6 +21,7 @@ static const uint HudMarkLifetime = 8u;
 static const uint HudMarkAgeMask = 15u;
 static const uint HudFreshMark = 16u;
 static const uint HudDotMark = 32u;
+static const uint HudCompactDot = 64u;
 uint2 hudCounter(uint region,uint field) {
     return uint2(region*HudCounterCount+field,0);
 }
@@ -28,8 +29,9 @@ uint2 hudCounter(uint region,uint field) {
 int hudDotProbeRadius() {
     // Sample beyond the antialiased rim, including six-to-eight-pixel dots
     // at 1440p. The thin-arm detector uses a smaller radius.
-    return clamp(int(round(float(frameSize.y)/360.0)),3,12);
+    return clamp(int(round(float(frameSize.y)/300.0)),3,12);
 }
+float hudCenterReach() { return max(27.0,float(frameSize.y)/32.0); }
 int2 boundPixel(int2 pixel) {
     return clamp(pixel, int2(0,0), int2(frameSize)-1);
 }
@@ -42,6 +44,12 @@ bool roiContains(int2 pixel) {
 float4 regionBox(uint index) {
     float4 r=hudRegions[index]*float4(frameSize,frameSize);
     return float4(min(r.x,r.z),r.y,max(r.x,r.z),r.w);
+}
+float2 hudCenter(float4 box) { return (box.xy+box.zw)*0.5; }
+bool hudDotContains(int2 p,float4 box) {
+    const float2 d=float2(p)+0.5-hudCenter(box);
+    const float reach=hudDotProbeRadius()+1.5;
+    return dot(d,d)<=reach*reach;
 }
 float allowedDensity(uint region) {
     const float4 b=regionBox(region);

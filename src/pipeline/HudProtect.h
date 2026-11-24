@@ -34,6 +34,7 @@ public:
     ID3D12Resource* mask(unsigned parity) const { return mask_[parity].Get(); }
     ID3D12Resource* motion(unsigned parity) const { return motion_[parity].Get(); }
     ID3D12Resource* counters(unsigned parity) const { return density_[parity].Get(); }
+    void setRegionFeather(float pixels) { constants_[29]=pixels; }
     const D3D12_BOX& bounds() const { return bounds_; }
 
     static D3D12_BOX regionBounds(uint32_t width,uint32_t height,const engine::HudProtectRegions& regions);

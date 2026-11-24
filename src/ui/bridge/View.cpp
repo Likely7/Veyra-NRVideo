@@ -32,29 +32,31 @@ void drawProtectionOutline(HWND overlay, HWND video, RECT box, bool ellipse) {
         ShowWindow(overlay, SW_SHOWNOACTIVATE);
     SelectObject(memory, previous); DeleteObject(bitmap); DeleteDC(memory); ReleaseDC(nullptr, screen);
 }
+engine::EffectType maskNodeType(bool hud) {
+    return hud?engine::EffectType::FrameGeneration:engine::EffectType::Protection;
+}
 }
 
-QVariantMap QmlPlayerBridge::maskState(bool allEffects) const {
-    const auto* node=impl_->chain.firstOf(allEffects?engine::EffectType::Exclusion:engine::EffectType::Protection);
+QVariantMap QmlPlayerBridge::maskState(bool hud) const {
+    const auto* node=impl_->chain.firstOf(maskNodeType(hud));
     const auto value=node?node->protection:engine::ProtectionSettings{};
     QVariantList regions;
     for(int index=0;index<int(value.regions.size());++index){
         const auto& q=value.regions[size_t(index)];
         if(!q.empty())regions<<QVariantMap{{"index",index},{"left",q.left},{"top",q.top},
-            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse},{"mode",int(q.content)}};
+            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse}};
     }
     const auto& first=value.regions[0];
-    return {{"overlayVisible",allEffects&&exclusionOverlayVisible()},{"selected",allEffects?impl_->exclusionSelected:-1},{"enabled",node&&node->enabled},{"feather",value.featherPixels},{"regions",regions},
+    return {{"overlayVisible",hud&&exclusionOverlayVisible()},{"selected",hud?impl_->exclusionSelected:-1},{"enabled",node&&node->enabled},{"feather",value.featherPixels},{"regions",regions},
         {"left",first.left},{"top",first.top},{"right",first.right},{"bottom",first.bottom},
-        {"drawShape",impl_->protExclusion==allEffects?impl_->protDraw:QString{}}};
+        {"drawShape",impl_->protHud==hud?impl_->protDraw:QString{}}};
 }
 QVariantMap QmlPlayerBridge::exclusionState() const {return maskState(true);}
 QVariantList QmlPlayerBridge::protectionRegions() const {return maskState(false).value("regions").toList();}
 QString QmlPlayerBridge::protectionDrawShape() const { return impl_->protDraw; }
 
-bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects) {
-    const auto type=allEffects?engine::EffectType::Exclusion:engine::EffectType::Protection;
-    if(allEffects&&!impl_->chain.firstOf(type)&&addEffect(QStringLiteral("exclusion"))<0)return false;
+bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool hud) {
+    const auto type=maskNodeType(hud);
     for (uint32_t i = 0; i < impl_->chain.nodeCount; ++i) {
         auto& node = impl_->chain.nodes[i];
         if (node.type != type) continue;
@@ -68,12 +70,12 @@ bool QmlPlayerBridge::editProtection(const std::function<bool(engine::ChainNode&
         else emitParameterChanged(&QmlPlayerBridge::protectionChanged,wasValid);
         return accepted;
     }
-    emit notice(tr("处理链中没有 NR 保护节点，未更改设置"), true);
+    if(!hud)emit notice(tr("处理链中没有 NR 保护节点，未更改设置"), true);
     return false;
 }
 
 bool QmlPlayerBridge::beginProtectionDraw(const QString& shape) {return beginMaskDraw(false,shape);}
-bool QmlPlayerBridge::beginMaskDraw(bool allEffects,const QString& shape) {
+bool QmlPlayerBridge::beginMaskDraw(bool hud,const QString& shape) {
     auto& i = *impl_;
     if (shape.isEmpty()) {
         i.maskOverlayGeometry.clear();
@@ -84,13 +86,14 @@ bool QmlPlayerBridge::beginMaskDraw(bool allEffects,const QString& shape) {
     if (shape != QLatin1String("rect") && shape != QLatin1String("ellipse")) return false;
     if (!i.snapshot.running || !i.videoWindow) { emit notice(tr("请先打开视频，再在画面上绘制保护区域"), true); return false; }
     bool space = false;
-    const auto* node=i.chain.firstOf(allEffects?engine::EffectType::Exclusion:engine::EffectType::Protection);
+    const auto* node=i.chain.firstOf(maskNodeType(hud));
+    if(hud&&(!node||hudProtect()!=int(engine::HudProtectMode::Regions)))return false;
     const auto parameters=node?node->protection:engine::ProtectionSettings{};
     for(const auto& q:parameters.regions)space|=q.empty();
     if (!space) { emit notice(tr("最多 4 个保护区域，请先删除一个"), true); return false; }
     endExclusionMove(false);
-    if(allEffects)setExclusionOverlayVisible(true);
-    i.protDraw = shape;i.protExclusion=allEffects;
+    if(hud)setExclusionOverlayVisible(true);
+    i.protDraw = shape;i.protHud=hud;
     emit protectionDrawChanged();emit protectionChanged();
     return true;
 }
@@ -109,7 +112,7 @@ void QmlPlayerBridge::updateProtectionDraw(double x0, double y0, double x1, doub
 
 bool QmlPlayerBridge::commitProtectionDraw(double x0, double y0, double x1, double y1) {
     auto& i = *impl_;
-    const bool allEffects=i.protExclusion;
+    const bool hud=i.protHud;
     const bool ellipse = i.protDraw == QLatin1String("ellipse");
     const bool armed = !i.protDraw.isEmpty();
     beginProtectionDraw(QString());
@@ -129,14 +132,18 @@ bool QmlPlayerBridge::commitProtectionDraw(double x0, double y0, double x1, doub
     if (q.empty()) return false;
     const bool ok = editProtection([&](engine::ChainNode& node) {
         for (auto& slot : node.protection.regions)
-            if (slot.empty()) { slot = q; node.enabled = true; node.protection.enabled = true; return true; }
+            if (slot.empty()) {
+                slot = q;
+                if (!hud) node.enabled = node.protection.enabled = true;
+                return true;
+            }
         emit notice(tr("最多 4 个保护区域，请先删除一个"), true);
         return false;
-    },allEffects);
-    veyra::log::info("ui-protection", std::format("{} accepted={} bounds={:.3f},{:.3f},{:.3f},{:.3f} allEffects={} source-normalized",
-                                                  ellipse ? "ellipse" : "rectangle", ok, q.left, q.top, q.right, q.bottom,allEffects));
-    if(ok&&allEffects){
-        const auto* node=i.chain.firstOf(engine::EffectType::Exclusion);
+    },hud);
+    veyra::log::info("ui-protection", std::format("{} accepted={} bounds={:.3f},{:.3f},{:.3f},{:.3f} hud={} source-normalized",
+                                                  ellipse ? "ellipse" : "rectangle", ok, q.left, q.top, q.right, q.bottom,hud));
+    if(ok&&hud){
+        const auto* node=i.chain.firstOf(engine::EffectType::FrameGeneration);
         if(node)for(int k=0;k<int(node->protection.regions.size());++k)
             if(node->protection.regions[size_t(k)]==q)i.exclusionSelected=k;
         emit protectionChanged();
@@ -145,35 +152,23 @@ bool QmlPlayerBridge::commitProtectionDraw(double x0, double y0, double x1, doub
     return ok;
 }
 
-bool QmlPlayerBridge::setMaskEnabled(bool allEffects,bool enabled) {
-    return editProtection([&](engine::ChainNode& node){node.enabled=enabled;node.protection.enabled=enabled;return true;},allEffects);
-}
-bool QmlPlayerBridge::setMaskFeather(bool allEffects,double pixels) {
+bool QmlPlayerBridge::setMaskFeather(bool hud,double pixels) {
     if(!std::isfinite(pixels)||pixels<0||pixels>64)return false;
-    return editProtection([&](engine::ChainNode& node){node.protection.featherPixels=float(pixels);return true;},allEffects);
-}
-bool QmlPlayerBridge::setExclusionRegionMode(int index,int mode) {
-    if(index<0||mode<0||mode>int(engine::ExclusionContent::Hud))return false;
-    return editProtection([&](engine::ChainNode& node){
-        auto& regions=node.protection.regions;
-        if(size_t(index)>=regions.size()||regions[size_t(index)].empty())return false;
-        regions[size_t(index)].content=engine::ExclusionContent(mode);
-        return true;
-    },true);
+    return editProtection([&](engine::ChainNode& node){node.protection.featherPixels=float(pixels);return true;},hud);
 }
 
-bool QmlPlayerBridge::clearMaskRegions(bool allEffects) {
-    if(allEffects){endExclusionMove(false);impl_->exclusionSelected=-1;}
-    return editProtection([](engine::ChainNode& node){node.protection.regions={};return true;},allEffects);
+bool QmlPlayerBridge::clearMaskRegions(bool hud) {
+    if(hud){endExclusionMove(false);impl_->exclusionSelected=-1;}
+    return editProtection([](engine::ChainNode& node){node.protection.regions={};return true;},hud);
 }
-bool QmlPlayerBridge::removeMaskRegion(bool allEffects,int index) {
-    if(allEffects){endExclusionMove(false);impl_->exclusionSelected=-1;}
+bool QmlPlayerBridge::removeMaskRegion(bool hud,int index) {
+    if(hud){endExclusionMove(false);impl_->exclusionSelected=-1;}
     if(index<0||index>=int(engine::ProtectionSettings{}.regions.size()))return false;
     return editProtection([&](engine::ChainNode& node){
         auto& regions=node.protection.regions;
         for(size_t i=size_t(index);i+1<regions.size();++i)regions[i]=regions[i+1];
         regions.back()={};return true;
-    },allEffects);
+    },hud);
 }
 
 bool QmlPlayerBridge::removeProtectionRegion(int index) {
@@ -196,7 +191,10 @@ bool QmlPlayerBridge::setProtectionFeather(double pixels) {
 
 
 // Persistent editor overlay: deliberately outside the processing/presentation textures.
-bool QmlPlayerBridge::exclusionOverlayVisible() const {return impl_->prefBool("exclusionOverlay",false);}
+bool QmlPlayerBridge::exclusionOverlayVisible() const {
+    return hudProtect()==int(engine::HudProtectMode::Regions)&&impl_->prefBool("exclusionOverlay",false)
+        &&impl_->chain.firstOf(engine::EffectType::FrameGeneration);
+}
 void QmlPlayerBridge::setExclusionOverlayVisible(bool visible) {
     if(visible==exclusionOverlayVisible())return;
     if(!visible){endExclusionMove(false);impl_->exclusionSelected=-1;}
@@ -205,7 +203,7 @@ void QmlPlayerBridge::setExclusionOverlayVisible(bool visible) {
 }
 void QmlPlayerBridge::selectExclusionRegion(int index) {
     endExclusionMove(false);
-    const auto* node=impl_->chain.firstOf(engine::EffectType::Exclusion);
+    const auto* node=impl_->chain.firstOf(engine::EffectType::FrameGeneration);
     if(!node||index<0||index>=int(node->protection.regions.size())||node->protection.regions[size_t(index)].empty())index=-1;
     impl_->exclusionSelected=index;
     if(index>=0)setExclusionOverlayVisible(true);
@@ -214,7 +212,7 @@ void QmlPlayerBridge::selectExclusionRegion(int index) {
 bool QmlPlayerBridge::beginExclusionMove(double x,double y) {
     auto& i=*impl_;
     if(!exclusionOverlayVisible()||!i.videoWindow||!i.protDraw.isEmpty()||!std::isfinite(x)||!std::isfinite(y))return false;
-    const auto* node=i.chain.firstOf(engine::EffectType::Exclusion);
+    const auto* node=i.chain.firstOf(engine::EffectType::FrameGeneration);
     if(!node)return false;
     RECT c{};GetClientRect(i.videoWindow,&c);const auto e=i.snapshot.metrics.resolution.output;
     const auto uv=i.engine.previewView().sourcePoint(float(x*c.right),float(y*c.bottom),float(c.right),float(c.bottom),float(e.width),float(e.height));
@@ -248,7 +246,7 @@ bool QmlPlayerBridge::endExclusionMove(bool commit) {
 void QmlPlayerBridge::updateMaskOverlay() {
     auto& i=*impl_;
     if(!i.protDraw.isEmpty())return;
-    const auto* node=i.chain.firstOf(engine::EffectType::Exclusion);
+    const auto* node=i.chain.firstOf(engine::EffectType::FrameGeneration);
     if(!exclusionOverlayVisible()||!node||!hasSource()||!i.videoWindow||!IsWindowVisible(i.videoWindow)){
         if(i.protOverlay)ShowWindow(i.protOverlay,SW_HIDE);
         i.maskOverlayGeometry.clear();return;

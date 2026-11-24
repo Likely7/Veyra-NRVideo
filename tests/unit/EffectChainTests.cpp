@@ -1035,6 +1035,38 @@ static void testOutputControlNodes(){
     check(!validateChain(invalid).accepted,"invalid stabilizer payload is rejected even when disabled");
 }
 
+__declspec(noinline) static void testReticleRegionMigration() {
+    EnhancementSettings previous;
+    previous.multiplier = 2;
+    previous.exclusion.enabled = true;
+    previous.exclusion.featherPixels = 7;
+    previous.exclusion.regions[0] = {.40f,.42f,.51f,.54f,true,ExclusionContent::FrameGeneration};
+    auto chain = std::make_unique<EffectChain>(toChain(previous));
+    chain->mode = ChainMode::Node;
+    NodeGraphLayout layout;
+    check(layout.initialize(*chain).accepted, "legacy exclusion graph loads");
+    const auto fgId = layout.ids[chain->firstOf(EffectType::FrameGeneration)-chain->nodes.data()];
+    check(moveLegacyExclusionToFrameGeneration(*chain, &layout) &&
+          !chain->firstOf(EffectType::Exclusion) && layout.indexOf(*chain, fgId) >= 0,
+          "removing the legacy node reconnects the existing FG card");
+    auto projected = std::make_unique<EffectChain>();
+    check(layout.project(*chain, *projected).accepted, "migrated editor still projects");
+    EnhancementSettings next;
+    next.hudProtect = HudProtectMode::Regions;
+    fromChain(*projected, next);
+    auto outline = previous.exclusion.regions[0];
+    outline.content = ExclusionContent::All;
+    const auto regions = hudProtectRegions(next.hudProtect, next.exclusion);
+    check(next.multiplier==2&&!next.exclusion.enabled&&next.exclusion.featherPixels==7&&regions[1]==outline,
+          "old geometry and feather move into FG without restoring raw pixels");
+    auto moved = next;
+    moved.exclusion.regions[0].left += .01f;
+    check(requiresGraphRebuild(next,moved)&&!next.sameActiveVideoParameters(moved),
+          "changing a manual HUD region takes effect during playback");
+    next.hudProtect = moved.hudProtect = HudProtectMode::Center;
+    check(next.sameActiveVideoParameters(moved), "stored manual geometry does not affect Auto");
+}
+
 void testNrCorrectionDescription(){
     EnhancementSettings s;s.nr=true;s.nrMotion=MotionSource::Zero;
     veyra::pipeline::EnhanceGraphDesc d;StageRequest request;request.nr=true;request.width=1280;request.height=720;
@@ -1783,6 +1815,7 @@ int main() {
     testNodePreSrProtectionDescription();
     testNodeInterNrProtectionDescription();
     testOutputControlNodes();
+    testReticleRegionMigration();
     testNativeVideoSrPolicy();
     testAntiAliasSettingsChain();
     testSameSizeSlots();

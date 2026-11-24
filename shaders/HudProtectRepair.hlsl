@@ -10,7 +10,7 @@ Texture2D<float4> motionTex : register(t4);
 Texture2D<float4> appearanceTex : register(t5);
 Texture2D<float4> previousClean : register(t6);
 RWTexture2D<float4> cleanedTex : register(u0);
-RWTexture2D<float4> maskTex : register(u1); // opacity, cleaned, dynamic pair, unused
+RWTexture2D<float4> maskTex : register(u1); // opacity, cleaned, dynamic pair, compact-dot blend
 RWTexture2D<uint> counts : register(u2);
 
 static const int tileSide=16;
@@ -149,7 +149,8 @@ void main(uint3 id : SV_DispatchThreadID,uint3 group : SV_GroupID,uint3 thread :
     const int2 tileOrigin=int2(group.xy)*tileSide-halo;
     [loop] for(uint i=lane;i<cacheSide*cacheSide;i+=tileSide*tileSide) {
         const int2 p=tileOrigin+int2(i%cacheSide,i/cacheSide);
-        const uint state=resetHistory?0:maskAt(p);
+        // On reset the detector seeds only an independently observed compact dot.
+        const uint state=maskAt(p);
         localMask[i]=state;
         if(state!=0)InterlockedOr(tileHasMask,1);
     }
@@ -161,23 +162,55 @@ void main(uint3 id : SV_DispatchThreadID,uint3 group : SV_GroupID,uint3 thread :
     const int region=hudRegion(pixel);
     if(region<0)return;
 
+    const uint shape=counts[hudCounter(region,HudCentredMark)];
+    if((shape&HudCompactDot)!=0&&hudDotContains(pixel,regionBox(region))) {
+        // Remove the compact dot on both endpoints, including reset frames.
+        // Sample outside the whole disk so its translucent rim cannot feed
+        // another copy of the reticle into the interpolator.
+        const float2 center=hudCenter(regionBox(region));
+        const bool core=coreAt(local);
+        const float4 real=currentTex.Load(int3(pixel,0));
+        const float4 motion=motionTex.Load(int3(region,0,0));
+        const int radius=hudDotProbeRadius()+1;
+        float4 background;
+        if((!resetHistory&&motion.z>0&&temporalBackground(pixel,int2(motion.xy),background))||
+           spatialBackground(pixel,2*radius+1,background)) {
+            const float3 clean=comparisonColor(background.rgb);
+            const float3 ink=comparisonColor(currentTex.Load(int3(int2(center),0)).rgb);
+            const float3 color=comparisonColor(real.rgb);
+            const float alpha=core?1:fringeOpacity(color-clean,ink-clean);
+            // A nearby highlight can make a dot's alpha estimate unstable.
+            // Keep its observed centre and feather only the few rim pixels.
+            const float distance=length(float2(pixel)+0.5-center);
+            const float dotBlend=1-smoothstep(float(radius)-1.5,float(radius),distance);
+            cleanedTex[pixel]=float4(background.rgb,real.a);
+            maskTex[id.xy]=float4(alpha,1,0,dotBlend);
+            if(core)InterlockedAdd(counts[hudCounter(region,HudRepaired)],1);
+        } else if(core)maskTex[id.xy]=float4(1,0,0,0);
+        return;
+    }
     const uint count=counts[hudCounter(region,HudDensity)];
     if(count==0||float(count)>allowedDensity(region))return;
+    const int feather=clamp(int(round(float(frameSize.y)/360)),3,halo);
+    const float4 motion=motionTex.Load(int3(region,0,0));
     const uint state=localMask[(thread.y+halo)*cacheSide+thread.x+halo];
     bool dynamic=state==2;
     if(!dynamic&&region>0&&colorError(comparisonColor(currentTex.Load(int3(pixel,0)).rgb),
         comparisonColor(previousTex.Load(int3(pixel,0)).rgb))>0.003)dynamic=nearPair(local,region);
     if(dynamic) {
-        // Rail-delimited changes belong to this A/B pair, even on a cut.
-        maskTex[id.xy]=float4(0,0,1,0);
+        // Keep the pair's appearance when compositing. Also remove changing
+        // strokes from the FG input when the selected area has enough
+        // evidence to estimate the background under them.
+        float4 background;
+        const bool repaired=region>0&&backgroundAt(pixel,motion,feather,background);
+        if(repaired)cleanedTex[pixel]=float4(background.rgb,currentTex.Load(int3(pixel,0)).a);
+        maskTex[id.xy]=float4(0,repaired?1:0,1,0);
         return;
     }
 
     const bool core=state==1;
-    const int feather=clamp(int(round(float(frameSize.y)/360)),3,halo);
     int2 anchorOffset=0;
     if(!core&&!nearestCore(int2(thread.xy)+halo,feather,anchorOffset))return;
-    const float4 motion=motionTex.Load(int3(region,0,0));
     float4 background;
     if(!backgroundAt(pixel,motion,feather,background)) {
         if(core)maskTex[id.xy]=float4(1,0,0,0);
@@ -189,17 +222,24 @@ void main(uint3 id : SV_DispatchThreadID,uint3 group : SV_GroupID,uint3 thread :
     if(!core) {
         const int2 center=pixel+anchorOffset;
         if(hudRegion(center)!=region)return;
+        const float skirt=max(2.,float(frameSize.y)/480.);
+        const bool manualEdge=region>0&&dot(float2(anchorOffset),float2(anchorOffset))<=skirt*skirt;
         float4 anchorBackground;
-        if(!backgroundAt(center,motion,feather,anchorBackground))return;
-        const float3 current=comparisonColor(real.rgb);
-        const float3 stroke=comparisonColor(currentTex.Load(int3(center,0)).rgb);
-        const float3 before=comparisonColor(previousTex.Load(int3(pixel,0)).rgb);
-        const float3 ref=stroke-comparisonColor(anchorBackground.rgb);
-        // A solid tip along a learned stroke can have too little contrast
-        // against its own background for alpha fitting.
-        const bool solid=colorError(current,stroke)<0.11&&colorError(current,before)<0.065;
-        alpha=solid?1:fringeOpacity(current-comparisonColor(background.rgb),ref);
-        if(alpha==0)return;
+        alpha=0;
+        if(backgroundAt(center,motion,feather,anchorBackground)) {
+            const float3 current=comparisonColor(real.rgb);
+            const float3 stroke=comparisonColor(currentTex.Load(int3(center,0)).rgb);
+            const float3 before=comparisonColor(previousTex.Load(int3(pixel,0)).rgb);
+            const float3 ref=stroke-comparisonColor(anchorBackground.rgb);
+            // A solid tip along a learned stroke can have too little contrast
+            // against its own background for alpha fitting.
+            const bool solid=colorError(current,stroke)<0.11&&colorError(current,before)<0.065;
+            alpha=solid?1:fringeOpacity(current-comparisonColor(background.rgb),ref);
+        }
+        // Low contrast on one edge can leave a second outline in the
+        // interpolator. Strip that narrow fringe from its input while
+        // keeping zero blend weight on unconfirmed output pixels.
+        if(alpha==0&&!manualEdge)return;
     }
     cleanedTex[pixel]=float4(background.rgb,real.a);
     maskTex[id.xy]=float4(alpha,1,0,0);

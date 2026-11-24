@@ -1140,12 +1140,10 @@ public:
     Q_INVOKABLE bool beginExclusionMove(double x,double y);
     Q_INVOKABLE void updateExclusionMove(double x,double y);
     Q_INVOKABLE bool endExclusionMove(bool commit);
-    Q_INVOKABLE bool beginMaskDraw(bool allEffects,const QString& shape);
-    Q_INVOKABLE bool setMaskEnabled(bool allEffects,bool enabled);
-    Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
-    Q_INVOKABLE bool removeMaskRegion(bool allEffects,int index);
-    Q_INVOKABLE bool clearMaskRegions(bool allEffects);
-    Q_INVOKABLE bool setExclusionRegionMode(int index,int mode);
+    Q_INVOKABLE bool beginMaskDraw(bool hud,const QString& shape);
+    Q_INVOKABLE bool setMaskFeather(bool hud,double pixels);
+    Q_INVOKABLE bool removeMaskRegion(bool hud,int index);
+    Q_INVOKABLE bool clearMaskRegions(bool hud);
     Q_INVOKABLE bool setStabilizerParameter(int index,const QString& key,double value);
     Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
@@ -1624,8 +1622,8 @@ private:
     void rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
     void updateMaskOverlay();
-    QVariantMap maskState(bool allEffects) const;
-    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects=false);
+    QVariantMap maskState(bool hud) const;
+    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool hud=false);
     engine::ColorSettings selectedColourSettings() const;
     bool commitColour(const engine::ColorSettings& colour);
     // Reads the export job's snapshot and emits exportChanged.

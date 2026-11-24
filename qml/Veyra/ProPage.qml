@@ -1810,18 +1810,6 @@ VPage {
                             }
                         }
 
-                        VAccordion {
-                            objectName: "list-effect-exclusion"
-                            Layout.fillWidth: true
-                            visible: veyra.nodeMode===0
-                            title: qsTr("全效果剔除")
-                            glyph: "shield"; hue: Theme.accent
-                            summary: qsTr("区域内恢复原始画面与帧率")
-                            on: veyra.exclusionState.enabled===true
-                            onToggled: on=>veyra.setMaskEnabled(true,on)
-                            MaskEditor { allEffects: true; namePrefix: "list-exclusion" }
-                        }
-
                         // Beauty: face restore and skin smoothing, after the whole NR group
                         // (and its protection). Layers run in order; one face detection
                         // serves all of them.

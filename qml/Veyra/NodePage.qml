@@ -91,7 +91,6 @@ VPage {
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
         case "nr-stabilizer": return "#5DCCA1"
-        case "exclusion": return "#E7B868"
         case "video-hdr": return "#FFB547"
         case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": case "amdfrc-fg": case "rife-fg": return "#3DDC84"
         }
@@ -1239,7 +1238,7 @@ VPage {
         onHeightChanged: { wires.requestPaint(); if (!headDrag.active) settleTimer.restart() }
         onWidthChanged: settleTimer.restart()
         z: root.selectedId === node.id ? 3 : (headDrag.active ? 4 : 1)
-        width: node.type === "color" ? 360 : ["nr", "protection", "exclusion"].indexOf(node.type)>=0 ? 320 : 272
+        width: node.type === "color" ? 360 : ["nr", "protection", "frame-generation"].indexOf(node.type)>=0 ? 320 : 272
         height: body.implicitHeight
         radius: 10
         color: Theme.shade(29, 29, 34)
@@ -1484,7 +1483,6 @@ VPage {
                                : card.node.type === "beauty" ? beautyEditor
                                : card.node.type === "video-hdr" ? hdrEditor
                                : card.node.type === "protection" ? protectionEditor
-                               : card.node.type === "exclusion" ? exclusionEditor
                                : card.node.type === "nr-stabilizer" ? stabilizerEditor
                                : card.node.type === "frame-generation" ? fgEditor : null
             }
@@ -1504,10 +1502,6 @@ VPage {
         Component {
             id: protectionEditor
             MaskEditor { namePrefix: "node-protection" }
-        }
-        Component {
-            id: exclusionEditor
-            MaskEditor { allEffects: true; namePrefix: "node-exclusion" }
         }
         Component {
             id: stabilizerEditor

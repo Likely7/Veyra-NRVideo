@@ -538,7 +538,7 @@ struct QmlPlayerBridge::Impl {
     int audioPollTicks = 0;
     // --- protection drawing (#8) ---
     QString protDraw;                         // "" | rect | ellipse
-    bool protExclusion=false;
+    bool protHud=false;
     HWND protOverlay = nullptr;
     int exclusionSelected = -1;
     bool exclusionDragging = false;

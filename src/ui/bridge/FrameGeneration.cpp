@@ -295,9 +295,16 @@ void QmlPlayerBridge::setHudProtect(int value) {
     if(s.hudProtect==mode)return;
     s.hudProtect=mode;
     if(!impl_->commit(std::move(s))){emit settingsChanged();return;}
+    if(mode!=engine::HudProtectMode::Regions){
+        endExclusionMove(false);
+        impl_->exclusionSelected=-1;
+        if(impl_->protHud)beginProtectionDraw({});
+    }
     impl_->prefs[QStringLiteral("hudProtect")]=value;
     if(!impl_->savePrefs())veyra::log::warn("ui-prefs","HUD protection not saved");
     emit settingsChanged();
+    emit protectionChanged();
+    updateMaskOverlay();
 }
 bool QmlPlayerBridge::dynamicHud() const { return settings().dynamicHud; }
 void QmlPlayerBridge::setDynamicHud(bool value) {

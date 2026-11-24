@@ -1773,6 +1773,7 @@ bool EnhanceGraph::initHudProtect() {
         log::error("hud-protect","could not allocate HUD protection passes");
         return false;
     }
+    pass->setRegionFeather(desc_.exclusion.featherPixels);
     hudProtect_=std::move(pass);
     return true;
 }
@@ -5033,6 +5034,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     for(size_t i=0;i<beautyPasses_.size();++i)if(beautyPasses_[i])beautyPasses_[i]->refresh(desc_.beauty[i]);
     if(faceTracker_)faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
     desc_.contentRate=s.content;desc_.model=s.model;desc_.residual=s.residual;desc_.protection=s.protection;desc_.exclusion=s.exclusion;desc_.hudProtect=s.hudProtect;desc_.settingsRevision=s.revision;
+    if(hudProtect_)hudProtect_->setRegionFeather(s.exclusion.featherPixels);
     desc_.nrHoldStrength=s.nrHoldStrength;desc_.nrHoldTolerance=s.nrHoldTolerance;
     if(desc_.nrReusePreview&&s.nr){
         const auto previousReuse=desc_.nrReuse;desc_.nrReuse=s.nrReuse;

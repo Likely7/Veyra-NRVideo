@@ -18,7 +18,7 @@ constexpr std::array<EffectInfo, effectTypeCount> kCatalog{{
     {EffectType::AntiAliasing, effectTypeName(EffectType::AntiAliasing), "抗锯齿", kMaxAntiAliasInstances, true, false, false, false, false, false},
     {EffectType::Beauty, effectTypeName(EffectType::Beauty), "美颜", kMaxBeautyInstances, true, false, false, false, false, false},
     {EffectType::NrStabilizer, effectTypeName(EffectType::NrStabilizer), "NR 输出稳定器", 1, false, false, false, false, false},
-    {EffectType::Exclusion, effectTypeName(EffectType::Exclusion), "全效果剔除", 1, false, false, true, false, false},
+    {EffectType::Exclusion, effectTypeName(EffectType::Exclusion), "全效果剔除", 1, false, false, true, false, false, true},
     {EffectType::VideoDenoise, effectTypeName(EffectType::VideoDenoise), "视频降噪"},
 }};
 } // namespace
@@ -191,6 +191,35 @@ ChainValidation NodeGraphLayout::remove(EffectChain& chain, uint32_t id) {
     return {};
 }
 
+bool moveLegacyExclusionToFrameGeneration(EffectChain& chain, NodeGraphLayout* layout,
+                                          int* selectedNr, int* selectedColour) {
+    auto* old = chain.firstOf(EffectType::Exclusion);
+    if (!old) return false;
+    const auto index = uint32_t(old - chain.nodes.data());
+    auto regions = old->protection;
+    regions.enabled = false;
+    for (auto& region : regions.regions) region.content = ExclusionContent::All;
+    auto* fg = chain.firstOf(EffectType::FrameGeneration);
+    if (!fg && regions != ProtectionSettings{}) {
+        // Keep the old card's location and edges if there was no FG node.
+        old->type = EffectType::FrameGeneration;
+        old->enabled = false;
+        old->protection = regions;
+        return true;
+    }
+    const auto before = std::make_unique<EffectChain>(chain);
+    if (fg && fg->protection == ProtectionSettings{}) fg->protection = regions;
+    if (layout) {
+        if (!layout->remove(chain, layout->ids[index]).accepted) { chain = *before; return false; }
+    } else {
+        for (uint32_t i = index; i + 1 < chain.nodeCount; ++i) chain.nodes[i] = chain.nodes[i + 1];
+        chain.nodes[--chain.nodeCount] = {};
+    }
+    for (auto* selected : {selectedNr, selectedColour})
+        if (selected && *selected > int(index)) --*selected;
+    return true;
+}
+
 ChainValidation NodeGraphLayout::insertAfter(const EffectChain& chain, uint32_t id, uint32_t after) {
     if (auto v = validate(chain); !v.accepted) return v;
     const int index = indexOf(chain, id), anchor = indexOf(chain, after);
@@ -244,7 +273,8 @@ ChainValidation validateChain(const EffectChain& chain) {
         if (index >= effectTypeCount) return {false, "未知效果类型"};
         if(node.type==EffectType::NrEnhance&&!pipeline::validNrSizePolicy(node.nr.sizePolicy))
             return {false, "NR 内部处理分辨率非法"};
-        if((node.type==EffectType::Protection||node.type==EffectType::Exclusion)&&!node.protection.validate().empty())
+        if((node.type==EffectType::Protection||node.type==EffectType::Exclusion||node.type==EffectType::FrameGeneration)
+            &&!node.protection.validate().empty())
             return {false,"保护区域参数无效"};
         if(node.type==EffectType::NrStabilizer&&(!std::isfinite(node.holdStrength)||node.holdStrength<0||node.holdStrength>1||
            !std::isfinite(node.holdTolerance)||node.holdTolerance<0||node.holdTolerance>1))
@@ -370,9 +400,10 @@ EffectChain toChain(const EnhancementSettings& settings) {
     for(uint32_t i=0;i<std::min(settings.additionalBeautyCount,kMaxBeautyInstances-1);++i)
         append(EffectType::Beauty,settings.additionalBeauty[i].enabled).beauty=settings.additionalBeauty[i];
     append(EffectType::VideoHdr, settings.videoHdr.enabled).videoHdr = settings.videoHdr;
-    if(settings.exclusion!=ProtectionSettings{})
+    if(settings.exclusion.enabled)
         append(EffectType::Exclusion,settings.exclusion.enabled).protection=settings.exclusion;
-    append(EffectType::FrameGeneration, settings.multiplier > 1);
+    auto& fg=append(EffectType::FrameGeneration, settings.multiplier > 1);
+    if(!settings.exclusion.enabled)fg.protection=settings.exclusion;
     return chain;
 }
 
@@ -522,6 +553,10 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
             break;
         case EffectType::FrameGeneration:
             settings.multiplier = node.enabled ? std::max(2u, chain.fgMultiplier) : 1;
+            if (node.protection != ProtectionSettings{}) {
+                settings.exclusion = node.protection;
+                settings.exclusion.enabled = false;
+            }
             break;
         case EffectType::AntiAliasing:
             if(firstAntiAlias){

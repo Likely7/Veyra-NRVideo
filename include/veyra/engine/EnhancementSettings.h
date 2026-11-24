@@ -591,7 +591,8 @@ struct EnhancementSettings {
         }
         if(!nr||!sr)active.lowLatency=defaults.lowLatency;
         if(!nr||!protection.enabled)active.protection=defaults.protection;
-        if(!exclusion.enabled)active.exclusion=defaults.exclusion;
+        if(!exclusion.enabled&&!(multiplier>1&&hudProtect==HudProtectMode::Regions))
+            active.exclusion=defaults.exclusion;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
         if(!usesDlaa()&&(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0))))active.dlssSrModel=defaults.dlssSrModel;
