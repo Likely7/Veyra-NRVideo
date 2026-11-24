@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-24 软件内更新进度与立即重启
+
+- 从 `main` 的 `bc59d457` 建立 `codex/in-app-update-restart-20261124`。关于页点击「立即更新」后打开进度弹窗，下载按实际字节显示。下载通过校验后在后台完成复验、解压、文件检查和私有配置启动验证，界面按实际阶段推进。点「稍后」保留已准备的版本，导出完成后可点「立即重启」。
+- 重启继续使用现有启动器的退出码和安装锁。在锁内切换活动版本记录，重启进程等锁释放后打开原启动入口。启动器可回退，显式 `--data-dir` 会带到重启后的进程。
+- 正式配置 `2.2.1` 使用 `build-recording-handoff.py --task codex-in-app-update-restart-20261124 --label 2.2.1 --jobs 2` 构建 `veyra_qml_ui` 和 `veyra_update_checker_tests`，104.7 秒通过。Qt Quick 261 通过、0 失败，1 项既有可选截图对比跳过。更新测试 29 通过，九语词库缺失与占位符异常均为零。首轮 UI 夹具修正了 staged QML 路径和信号名冲突。 [Qt Quick](<E:/项目/Veyra/logs/codex-in-app-update-restart-20261124/qml-quick-full.log>) · [更新测试](<E:/项目/Veyra/logs/codex-in-app-update-restart-20261124/update-checker-production-tests.log>)
+- 用私有签名的 2.2.1→2.2.2 回环 ZIP 跑完整下载、准备和自动重启。NVIDIA 用正式 2.2.1 根启动器，旧窗口关闭至新版提示更新完成约 2.3 秒，并通过缺失主程序的自动回退。AMD 用正式 2.2.0 根启动器，验证镜像失败转直连、普通退出后仍从旧版打开、恢复待重启版本以及自定义配置和 LUT 保留。补测无效签名、损坏 ZIP 和探针启动失败均保留活动版。首轮夹具修正换行断言及重启进程可能使用的 PID 后缀日志匹配。 [NVIDIA](<E:/项目/Veyra/logs/codex-in-app-update-restart-20261124/restart-NVIDIA-verified.log>) · [AMD](<E:/项目/Veyra/logs/codex-in-app-update-restart-20261124/restart-AMD-deferred-verified.log>)
+- 源码、构建、测试、日志和临时夹具分别位于 E 盘的同名 `worktrees`、`build`、`tests`、`logs`、`tmp` 子目录。验证使用私有配置和本机回环源。递归清理命令被工具策略拦截，解压夹具保留在任务目录。
+
 ## 2026-11-23 2.2.1 正式发布
 
 - 应用和对应源码标签指向 `b9cc86aa`。正式包继续使用 `b111dec5` 已验收的产品构建。包与版本标签之间只有文档差异。核对从旧 GitHub main 新增的 2,216 个可达对象，未发现新增的运行库、模型、私有媒体或配置文件。

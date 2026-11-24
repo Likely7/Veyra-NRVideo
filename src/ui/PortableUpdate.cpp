@@ -23,6 +23,28 @@ PortableUpdate::PortableUpdate(const QString& version, QObject* parent)
         || directory.filename().wstring() != std::filesystem::path(installedVersions(root).current).wstring()) return;
     flavor_ = QString::fromStdString(packageFlavor(root));
     updates_ = root / updateFolder;
+    workerPath_ = pathString(directory / workerName);
+    worker_.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* arguments) {
+        arguments->flags |= CREATE_NO_WINDOW;
+    });
+    connect(&worker_, &QProcess::readyReadStandardOutput, this, [this] {
+        while (worker_.canReadLine()) {
+            bool valid = false;
+            const int step = worker_.readLine().trimmed().toInt(&valid);
+            if (valid && step > installStep_ && step <= 3) {
+                installStep_ = step;
+                qInfo() << "[portable-update-install-step]" << step;
+                emit changed();
+            }
+        }
+    });
+    connect(&worker_, &QProcess::finished, this, [this](int code, QProcess::ExitStatus status) {
+        const auto result = worker_.readAllStandardError().trimmed().split('\n').last().trimmed();
+        finishInstallation(code == 0 && status == QProcess::NormalExit, result);
+    });
+    connect(&worker_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart) finishInstallation(false, "worker-start-failed");
+    });
     manifestDeadline_.setSingleShot(true);
     connect(&manifestDeadline_, &QTimer::timeout, this, [this] { if (reply_) reply_->abort(); });
 
@@ -40,17 +62,16 @@ PortableUpdate::PortableUpdate(const QString& version, QObject* parent)
     }
 
     const auto pending = updates_ / L"pending.json";
-    if (!plainPath(pending, false) || !plainPath(updates_ / L"download.zip", false)) return;
+    if (!plainPath(pending, false)) return;
     manifest_ = QByteArray::fromStdString(readSmallFile(pending, maxManifestBytes));
     package_ = readUpdateManifest(manifest_, flavor_, installed_, {}, key_);
     if (!package_) return;
-    std::error_code error;
-    scheduled_ = std::filesystem::file_size(updates_ / L"download.zip", error)
-        == static_cast<uintmax_t>(package_->archiveBytes) && !error;
-    if (!scheduled_) package_.reset();
+    ready_ = hasPreparedVersion();
+    if (!ready_ && !hasDownloadedArchive()) package_.reset();
 }
 
 PortableUpdate::~PortableUpdate() {
+    worker_.disconnect(this);
     if (reply_) {
         reply_->disconnect(this);
         reply_->abort();
@@ -68,9 +89,10 @@ QString PortableUpdate::sizeText() const {
 QString PortableUpdate::releaseNotes() const { return package_ ? package_->notes : QString{}; }
 
 void PortableUpdate::selectRelease(const QString& version) {
-    if (updates_.empty() || reply_ || scheduled_ || (package_ && package_->version == version)) return;
+    if (updates_.empty() || reply_ || installing_ || ready_ || (package_ && package_->version == version)) return;
     package_.reset();
     manifest_.clear();
+    errorText_.clear();
     selectedVersion_ = version;
     if (!version.isEmpty()) requestManifest(route_);
     emit changed();
@@ -104,26 +126,31 @@ void PortableUpdate::request(const QUrl& url, int buffer, int idleMs) {
     connect(reply_, &QNetworkReply::finished, this, &PortableUpdate::finish);
 }
 
-void PortableUpdate::downloadAndSchedule() {
+void PortableUpdate::start() {
     if (!available() || reply_) return;
+    errorText_.clear();
     if (!QDir().mkpath(pathString(updates_)) || !plainPath(updates_, true)) {
-        emit notice(tr("无法写入更新目录"), true);
+        reportError(tr("无法写入更新目录"));
+        return;
+    }
+    if (hasDownloadedArchive()) {
+        prepareInstallation();
         return;
     }
     for (const auto name : {L"download.zip", L"pending.json"}) {
         const auto path = updates_ / name;
         if (GetFileAttributesW(path.c_str()) != INVALID_FILE_ATTRIBUTES && !plainPath(path, false)) {
-            emit notice(tr("无法写入更新目录"), true);
+            reportError(tr("无法写入更新目录"));
             return;
         }
     }
     const QStorageInfo storage(pathString(updates_));
     if (!storage.isReady() || storage.bytesAvailable() < package_->archiveBytes + package_->expandedBytes + (32ll << 20)) {
-        emit notice(tr("磁盘空间不足，无法下载并解压更新"), true);
+        reportError(tr("磁盘空间不足，无法下载并解压更新"));
         return;
     }
     if (!requestArchive(route_)) {
-        emit notice(tr("无法写入更新目录"), true);
+        reportError(tr("无法写入更新目录"));
         return;
     }
     emit changed();
@@ -190,20 +217,20 @@ void PortableUpdate::finish() {
             return;
         }
     }
+    bool saved = false;
     if (verified && download_->commit()) {
         QSaveFile pending(pathString(updates_ / L"pending.json"));
-        scheduled_ = pending.open(QIODevice::WriteOnly)
+        saved = pending.open(QIODevice::WriteOnly)
             && pending.write(manifest_) == manifest_.size() && pending.commit();
     }
     download_.reset();
-    if (scheduled_) {
-        qInfo().noquote() << "[portable-update]" << package_->version << "scheduled";
-        emit notice(tr("更新已就绪，将在退出后安装"), false);
+    if (saved) {
+        prepareInstallation();
     } else {
         discardDownload();
-        if (!cancelled_) emit notice(tr("更新下载或校验失败，请重试"), true);
+        if (!cancelled_) reportError(tr("更新下载或校验失败，请重试"));
+        else emit changed();
     }
-    emit changed();
 }
 
 void PortableUpdate::discardDownload() {
@@ -218,16 +245,78 @@ void PortableUpdate::cancel() {
     if (download_ && reply_) {
         cancelled_ = true;
         reply_->abort();
-    } else if (scheduled_) {
-        const auto pending = updates_ / L"pending.json";
-        if (plainPath(pending, false) && !DeleteFileW(pending.c_str())) {
-            emit notice(tr("无法写入更新目录"), true);
-            return;
-        }
-        scheduled_ = false;
-        discardDownload();
-        emit changed();
     }
+}
+
+bool PortableUpdate::hasDownloadedArchive() const {
+    const auto pending = updates_ / L"pending.json";
+    const auto archive = updates_ / L"download.zip";
+    if (!package_ || !plainPath(pending, false) || !plainPath(archive, false)
+        || QByteArray::fromStdString(readSmallFile(pending, maxManifestBytes)) != manifest_) return false;
+    std::error_code error;
+    return std::filesystem::file_size(archive, error) == static_cast<uintmax_t>(package_->archiveBytes) && !error;
+}
+
+bool PortableUpdate::hasPreparedVersion() const {
+    return package_ && !preparedVersion(updates_.parent_path(), package_->version.toStdString(),
+                                        package_->digest.toHex().toStdString()).empty();
+}
+
+void PortableUpdate::prepareInstallation() {
+    installStep_ = 0;
+    installing_ = true;
+    emit changed();
+    worker_.start(workerPath_, {QStringLiteral("--prepare"), pathString(updates_.parent_path())});
+}
+
+void PortableUpdate::finishInstallation(bool success, const QByteArray& result) {
+    installing_ = false;
+    ready_ = success && hasPreparedVersion();
+    qInfo().noquote() << "[portable-update-prepare]" << targetVersion() << result << "ready=" << ready_;
+    if (ready_) {
+        emit changed();
+        emit installationReady();
+    } else {
+        discardDownload();
+        if (result == "windows-blocked") reportError(tr("Windows 已阻止本次更新，请查看保护历史"));
+        else if (result == "disk-space") reportError(tr("磁盘空间不足，无法下载并解压更新"));
+        else reportError(tr("更新安装失败，请重试"));
+    }
+}
+
+void PortableUpdate::restart() {
+    if (ready_ && !restarting_) emit restartRequested();
+}
+
+bool PortableUpdate::beginRestart(const QStringList& launcherArguments) {
+    if (!ready_ || restarting_) return false;
+    if (!hasPreparedVersion()) {
+        ready_ = false;
+        reportError(tr("更新安装失败，请重试"));
+        return false;
+    }
+    const auto root = pathString(updates_.parent_path());
+    QProcess reopen;
+    reopen.setProgram(workerPath_);
+    reopen.setArguments(QStringList{QStringLiteral("--reopen"), root} + launcherArguments);
+    reopen.setWorkingDirectory(root);
+    reopen.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* arguments) {
+        arguments->flags = (arguments->flags & ~CREATE_NEW_CONSOLE) | CREATE_NO_WINDOW;
+    });
+    if (!reopen.startDetached()) {
+        reportError(tr("无法重启 Veyra，请重试"));
+        return false;
+    }
+    restarting_ = true;
+    errorText_.clear();
+    emit changed();
+    return true;
+}
+
+void PortableUpdate::reportError(const QString& message) {
+    errorText_ = message;
+    emit changed();
+    emit notice(message, true);
 }
 
 } // namespace veyra::ui

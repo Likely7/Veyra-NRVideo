@@ -67,6 +67,16 @@ Item {
 
     // --- shared chrome ----------------------------------------------------
 
+    UpdateDialog {
+        dialogHost: host
+        update: veyra.updates.portable
+        exportRunning: veyra.exportRunning
+    }
+    Connections {
+        target: veyra.updates.portable
+        function onInstallationReady() { host.open("update") }
+    }
+
     NetworkSourceDialog {
         id: networkDialog
         dialogHost: host

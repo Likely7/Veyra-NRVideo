@@ -10,6 +10,7 @@
 #include <QTemporaryDir>
 #include <QUuid>
 #include <shobjidl.h>
+#include <cstdio>
 
 namespace {
 using namespace veyra::portable;
@@ -71,27 +72,44 @@ bool inspectExtractedTree(const fs::path& root, qint64 expectedSize) {
 
 struct DownloadCleanup {
     fs::path archive, manifest;
+    bool keepManifest = false;
     ~DownloadCleanup() {
         if (plainPath(archive, false)) DeleteFileW(archive.c_str());
-        if (plainPath(manifest, false)) DeleteFileW(manifest.c_str());
+        if (!keepManifest && plainPath(manifest, false)) DeleteFileW(manifest.c_str());
     }
 };
 
-const char* applyUpdate(const fs::path& root, const fs::path& updates) {
-    const auto state = installedVersions(root);
-    const auto selfDirectory = fs::path(QCoreApplication::applicationFilePath().toStdWString()).parent_path();
+bool runningFromActiveVersion(const fs::path& root, const InstalledVersions& state) {
+    const auto self = fs::path(QCoreApplication::applicationDirPath().toStdWString());
     const auto versions = root / versionsFolder;
     const auto active = versions / state.current;
     std::error_code error;
-    if (state.current.empty() || !plainPath(versions, true) || !plainPath(active, true)
-        || !fs::equivalent(selfDirectory, active, error) || error) return "invalid-layout";
-    const auto flavor = QString::fromStdString(packageFlavor(root));
+    return !state.current.empty() && plainPath(versions, true) && plainPath(active, true)
+        && fs::equivalent(self, active, error) && !error;
+}
+
+std::optional<UpdatePackage> pendingPackage(const fs::path& root, const InstalledVersions& state,
+                                             const fs::path& manifest) {
+    if (!plainPath(manifest, false)) return {};
+    const auto envelope = QByteArray::fromStdString(readSmallFile(manifest, maxManifestBytes));
     const auto installed = QString::fromStdString(std::string(versionFromDirectory(state.current)));
-    const DownloadCleanup files{updates / L"download.zip", updates / L"pending.json"};
+    return readUpdateManifest(envelope, QString::fromStdString(packageFlavor(root)),
+                              installed, {}, updatePublicKey());
+}
+
+void reportStep(int step) {
+    std::printf("%d\n", step);
+    std::fflush(stdout);
+}
+
+const char* prepareUpdate(const fs::path& root, const fs::path& updates) {
+    const auto state = installedVersions(root);
+    if (!runningFromActiveVersion(root, state)) return "invalid-layout";
+    const auto versions = root / versionsFolder;
+    DownloadCleanup files{updates / L"download.zip", updates / L"pending.json"};
     if (!plainPath(files.archive, false) || !plainPath(files.manifest, false)) return "missing-download";
 
-    const auto envelope = QByteArray::fromStdString(readSmallFile(files.manifest, maxManifestBytes));
-    const auto package = readUpdateManifest(envelope, flavor, installed, {}, updatePublicKey());
+    const auto package = pendingPackage(root, state, files.manifest);
     if (!package) return "invalid-signature";
     const auto source = assetUrl(package->version, package->asset);
     if (!checkWindowsAttachment(files.archive, source)) return "windows-blocked";
@@ -110,6 +128,7 @@ const char* applyUpdate(const fs::path& root, const fs::path& updates) {
     if (!storage.isReady() || storage.bytesAvailable() < package->expandedBytes + (32ll << 20))
         return "disk-space";
 
+    reportStep(1);
     QTemporaryDir staging(pathString(updates / L"stage-XXXXXX"));
     if (!staging.isValid()) return "stage-create-failed";
     wchar_t system[32768]{};
@@ -124,17 +143,19 @@ const char* applyUpdate(const fs::path& root, const fs::path& updates) {
                    QStringLiteral("--no-same-owner"), QStringLiteral("--no-same-permissions")}, 240000))
         return "extract-failed";
 
+    reportStep(2);
     const auto packageRoot = fs::path(staging.path().toStdWString());
     const auto versionDir = packageRoot / versionsFolder / package->version.toStdWString();
     const auto player = versionDir / playerName;
     if (!inspectExtractedTree(packageRoot, package->expandedBytes) || !plainPath(versionDir, true)
-        || packageFlavor(packageRoot) != flavor.toStdString()
+        || packageFlavor(packageRoot) != packageFlavor(root)
         || installedVersions(packageRoot).current != package->version.toStdString()
         || !plainPath(player, false) || !plainPath(versionDir / workerName, false))
         return "invalid-package-layout";
 
     if (!checkWindowsAttachment(player, source) || !checkWindowsAttachment(versionDir / workerName, source))
         return "windows-blocked";
+    reportStep(3);
     QTemporaryDir probeData(pathString(updates / L"probe-XXXXXX"));
     if (!probeData.isValid()) return "stage-create-failed";
     QProcess probe;
@@ -152,28 +173,75 @@ const char* applyUpdate(const fs::path& root, const fs::path& updates) {
                    QStringLiteral("set")}, 35000))
         return "startup-check-failed";
 
-    const auto identifier = package->version + u'-'
-        + QUuid::createUuid().toString(QUuid::Id128).left(12);
-    const auto target = versions / identifier.toStdString();
+    const auto identifier = (package->version + u'-'
+        + QUuid::createUuid().toString(QUuid::Id128).left(12)).toStdString();
+    const auto target = versions / identifier;
     if (!MoveFileExW(versionDir.c_str(), target.c_str(), MOVEFILE_WRITE_THROUGH)) return "stage-move-failed";
-    if (!setInstalledVersions(root, {identifier.toStdString(), state.current})) {
-        // A failed pointer write leaves the validated old version selected.
+    if (!writeSmallFile(updates / preparedState, identifier + "\n" + package->digest.toHex().toStdString() + "\n")) {
         MoveFileExW(target.c_str(), versionDir.c_str(), MOVEFILE_WRITE_THROUGH);
-        return "activate-failed";
+        return "stage-record-failed";
     }
+    files.keepManifest = true;
+    return "prepared";
+}
+
+const char* activateUpdate(const fs::path& root, const fs::path& updates) {
+    const auto state = installedVersions(root);
+    if (!runningFromActiveVersion(root, state)) return "invalid-layout";
+    const auto manifest = updates / L"pending.json";
+    const auto package = pendingPackage(root, state, manifest);
+    if (!package) return "invalid-signature";
+    const auto identifier = preparedVersion(root, package->version.toStdString(), package->digest.toHex().toStdString());
+    if (identifier.empty()) return "missing-prepared-version";
+    if (!setInstalledVersions(root, {identifier, state.current})) return "activate-failed";
+    DeleteFileW((updates / preparedState).c_str());
+    DeleteFileW(manifest.c_str());
     return "installed";
+}
+
+int reopenAfterUpdate(const fs::path& root, const fs::path& updates, const QStringList& arguments) {
+    // The existing launcher releases this lock only after activation finishes.
+    // Waiting here also works when the root launcher came from an older package.
+    const auto deadline = GetTickCount64() + 120000;
+    do {
+        const HANDLE lock = openRunLock(root);
+        if (lock != INVALID_HANDLE_VALUE) {
+            CloseHandle(lock);
+            const auto launcher = root / launcherName;
+            if (plainPath(launcher, false) && QProcess::startDetached(pathString(launcher), arguments, pathString(root)))
+                return 0;
+            break;
+        }
+        if (GetLastError() != ERROR_SHARING_VIOLATION) break;
+        Sleep(25);
+    } while (GetTickCount64() < deadline);
+    writeSmallFile(updates / L"result.txt", "restart-failed\n");
+    MessageBoxW(nullptr, L"Veyra 未能自动重启，请再次打开 Veyra。\nVeyra could not restart. Please open Veyra again.",
+                L"Veyra", MB_OK | MB_ICONWARNING);
+    return 1;
 }
 } // namespace
 
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
-    if (app.arguments().size() != 2) return 1;
-    const fs::path root(app.arguments().at(1).toStdWString());
+    const auto arguments = app.arguments();
+    if (arguments.size() < 2) return 1;
+    const bool prepare = arguments.at(1) == QStringLiteral("--prepare");
+    const bool reopen = arguments.at(1) == QStringLiteral("--reopen");
+    const int rootIndex = prepare || reopen ? 2 : 1;
+    if (arguments.size() <= rootIndex || (!reopen && arguments.size() != rootIndex + 1)) return 1;
+    const fs::path root(arguments.at(rootIndex).toStdWString());
     const auto updates = root / updateFolder;
     if (!root.is_absolute() || !plainPath(updates, true) || packageFlavor(root).empty()) return 1;
-    const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    const auto result = SUCCEEDED(com) ? applyUpdate(root, updates) : "windows-check-unavailable";
-    if (SUCCEEDED(com)) CoUninitialize();
+    if (reopen) return reopenAfterUpdate(root, updates, arguments.mid(rootIndex + 1));
+    if (prepare) {
+        const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+        const auto result = SUCCEEDED(com) ? prepareUpdate(root, updates) : "windows-check-unavailable";
+        if (SUCCEEDED(com)) CoUninitialize();
+        std::fprintf(stderr, "%s\n", result);
+        return std::string_view(result) == "prepared" ? 0 : 1;
+    }
+    const auto result = activateUpdate(root, updates);
     writeSmallFile(updates / L"result.txt", std::string(result) + "\n");
     return std::string_view(result) == "installed" ? 0 : 1;
 }

@@ -247,10 +247,6 @@ bool instanceNotice(instance::Notice notice, DWORD pid, const fs::path& dump) {
     return false;
 }
 
-HANDLE openRunLock(const fs::path& root) {
-    return CreateFileW((root / L".veyra-running.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
-                       0, nullptr, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
-}
 } // namespace
 
 int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {

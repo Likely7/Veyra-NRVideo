@@ -76,6 +76,7 @@ ProDisplayPanel 1.0 ProDisplayPanel.qml
 
 # Dialog components
 DialogLayer 1.0 DialogLayer.qml
+UpdateDialog 1.0 UpdateDialog.qml
 DialogSection 1.0 DialogSection.qml
 DialogGroup 1.0 DialogGroup.qml
 DialogNote 1.0 DialogNote.qml
