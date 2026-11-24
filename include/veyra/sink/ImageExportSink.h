@@ -13,6 +13,12 @@ bool readRgba8(gfx::D3D12DeviceContext&, gfx::CommandSlotRing&, ID3D12Resource*,
 // texture's alpha is not; omit it before viewers can premultiply and quantize RGB.
 // Generic image export preserves real transparency by default.
 bool saveImage(const std::wstring& path, const RgbaImage&, bool jpeg=false, ImageAlpha alpha=ImageAlpha::Preserve);
+struct HdrScreenshot {
+    RgbaImage pixels;
+    bool pq=false;
+};
+bool readHdrScreenshot(gfx::D3D12DeviceContext&, gfx::CommandSlotRing&, ID3D12Resource*, HdrScreenshot&);
+bool saveHdrScreenshot(const std::wstring& path, const HdrScreenshot&);
 bool saveHdrScreenshot(const std::wstring& path,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,ID3D12Resource*);
 bool loadImage(const std::wstring& path, RgbaImage&);
 }

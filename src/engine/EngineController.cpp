@@ -65,6 +65,7 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
+#include <future>
 #include <limits>
 #include <cmath>
 #include <deque>
@@ -79,6 +80,41 @@ namespace {
 double elapsedMs(Clock::time_point from){return std::chrono::duration<double,std::milli>(Clock::now()-from).count();}
 int64_t monotonic100ns(){return std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;}
 struct OnExit {std::function<void()> action;~OnExit(){action();}};
+struct ScreenshotResult {
+    std::wstring path;
+    std::wstring status;
+};
+struct ScreenshotJob {
+    std::wstring path;
+    sink::RgbaImage sdr;
+    std::optional<sink::HdrScreenshot> hdr;
+    sink::ImageAlpha alpha=sink::ImageAlpha::Opaque;
+    uint64_t revision=0;
+
+    ScreenshotResult failed() const {
+        return {{},hdr?L"HDR截图保存失败，请查看日志":L"保存失败（目标文件可能已存在），播放已保留"};
+    }
+
+    ScreenshotResult write() const {
+        if(hdr){
+            if(!sink::saveHdrScreenshot(path,*hdr))return failed();
+            return {path,L"HDR截图已保存："+path};
+        }
+        const auto ext=std::filesystem::path(path).extension().wstring();
+        if(!sink::saveImage(path,sdr,ext==L".jpg"||ext==L".jpeg",alpha))return failed();
+        log::info("image-save",std::format("saved extent={}x{} revision={}",sdr.width,sdr.height,revision));
+        return {path,L"图片已保存："+path};
+    }
+};
+ScreenshotResult writeLiveScreenshot(ScreenshotJob job){
+    const auto hr=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    if(FAILED(hr)){
+        log::warn("image-save",std::format("screenshot COM initialization failed hr=0x{:08X}",unsigned(hr)));
+        return job.failed();
+    }
+    OnExit uninitialize{[]{CoUninitialize();}};
+    return job.write();
+}
 bool usesVfgMedium(const EnhancementSettings& s) {
     return s.frameGenerationBackend==FrameGenerationBackend::Vfg&&s.multiplier>1&&
         (vfgPrimaryMode(s.vfgQuality)==1||(vfgMixedQuality(s.vfgQuality)&&vfgSecondaryMode(s.vfgQuality)==1)||
@@ -2091,9 +2127,26 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // after a successful rebuild. Keep its status acknowledgement
             // until the first successfully processed frame, across loop turns.
             bool pendingSettingsAck=false;
+            std::future<ScreenshotResult> screenshotWrite;
+            const auto publishScreenshot=[&](ScreenshotResult result){
+                std::lock_guard lock(mutex_);
+                if(snapshot_.sessionId!=runSessionId)return;
+                if(!result.path.empty())snapshot_.savedFramePath=std::move(result.path);
+                if(!snapshot_.failed)snapshot_.status=std::move(result.status);
+            };
+            const auto screenshotException=[&](const std::exception& e){
+                log::warn("image-save",std::format("save exception; retaining session: {}",e.what()));
+                publishScreenshot({{},L"保存异常，播放已保留；可再次保存"});
+            };
+            const auto finishScreenshot=[&](bool wait){
+                if(!screenshotWrite.valid()||(!wait&&screenshotWrite.wait_for(std::chrono::seconds(0))!=std::future_status::ready))return;
+                try{publishScreenshot(screenshotWrite.get());}
+                catch(const std::exception& e){screenshotException(e);}
+            };
             OnExit stopPresentation{[&]{liveScheduler.reset();finishReset(stop_?diagnostics::ResetOutcome::Cancelled:diagnostics::ResetOutcome::Failed);std::lock_guard lock(mutex_);if(snapshot_.sessionId==runSessionId){if(frameFlow)snapshot_.metrics.flow=frameFlow->snapshot(host100ns());activeFlow_.reset();snapshot_.captureEnhancementLoading=false;}}};
             while(!stop_){
                 watchdog_->beat();
+                finishScreenshot(false);
                 if(testHangMs&&testHangsLeft&&frames>=testHangAt){
                     if(testCaptureHang)watchdog_->setCaptureDriverStage(source::CaptureDriverStage::Stop);
                     veyra::log::warn("engine-test",std::format("blocking owner thread for {} ms captureDriver={}",testHangMs,testCaptureHang));
@@ -2207,15 +2260,28 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // Save the latest processed real frame before a settings transaction
                 // invalidates it (live rendering can be one batch behind processing).
                 std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
-                {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;if(hasOutput)save.swap(savePath_);}
-                if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();
-                    const auto saved=[this](const std::wstring& path,const std::wstring& message){
-                        {std::lock_guard lock(mutex_);snapshot_.savedFramePath=path;}
-                        status(message);
-                    };
-                    drainLivePresentation();
-                    if(graph->hdrOutput()){auto hdrPath=std::filesystem::path(save);hdrPath.replace_extension(L".jxr");if(sink::saveHdrScreenshot(hdrPath.wstring(),ctx,ring,graph->videoFrameResource(out.videoSlot)))saved(hdrPath.wstring(),L"HDR截图已保存："+hdrPath.wstring());else status(L"HDR截图保存失败，请查看日志",false);}else if(!sink::readRgba8(ctx,ring,graph->videoFrameResource(out.videoSlot),result)||!sink::saveImage(save,result,e==L".jpg"||e==L".jpeg",isImage?sink::ImageAlpha::Preserve:sink::ImageAlpha::Opaque))status(L"保存失败（目标文件可能已存在），播放已保留",false);else{saved(save,L"图片已保存："+save);veyra::log::info("image-save",std::format("saved extent={}x{} revision={}",gd.workWidth,gd.workHeight,options.settings.revision));}}
-                    catch(const std::exception& e){veyra::log::warn("image-save",std::format("save exception; retaining session: {}",e.what()));status(L"保存异常，播放已保留；可再次保存",false);}}
+                {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;if(hasOutput&&!screenshotWrite.valid())save.swap(savePath_);}
+                if(!save.empty()){
+                    try{
+                        ScreenshotJob job;
+                        job.path=std::move(save);
+                        job.alpha=isImage?sink::ImageAlpha::Preserve:sink::ImageAlpha::Opaque;
+                        job.revision=options.settings.revision;
+                        drainLivePresentation();
+                        auto* texture=graph->videoFrameResource(out.videoSlot);
+                        bool read=false;
+                        if(graph->hdrOutput()){
+                            auto hdrPath=std::filesystem::path(job.path);
+                            job.path=hdrPath.replace_extension(L".jxr").wstring();
+                            read=sink::readHdrScreenshot(ctx,ring,texture,job.hdr.emplace());
+                        }else read=sink::readRgba8(ctx,ring,texture,job.sdr);
+                        if(!read)publishScreenshot(job.failed());
+                        // Keep one live save in flight. The writer owns only CPU pixels and
+                        // uses no graph, scheduler or presentation resources.
+                        else if(isCapture)screenshotWrite=std::async(std::launch::async,writeLiveScreenshot,std::move(job));
+                        else publishScreenshot(job.write());
+                    }catch(const std::exception& e){screenshotException(e);}
+                }
                 if(captureStarting||capturePreparation.pending()){
                     // Audio settings may be edited while the model is loading.
                     // Route the video request to the background graph below,
@@ -4176,6 +4242,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 loopTrace.mark("periodicLogs");
                 if(privateTrace)loopTrace.recordPrivate(runSessionId,out.batch);
             }
+            finishScreenshot(true);
         }while(false);
     }catch(const std::exception& e){
         veyra::log::error("engine",std::format("{} (engine run loop)",e.what()));

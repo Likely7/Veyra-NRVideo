@@ -40,15 +40,33 @@ static bool readPixels(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,I
 bool readRgba8(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* tex,RgbaImage& img){
     return tex&&tex->GetDesc().Format==DXGI_FORMAT_R8G8B8A8_UNORM&&readPixels(ctx,ring,tex,img,4);
 }
-bool saveHdrScreenshot(const std::wstring& path,gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* texture){
-    const auto check=[](HRESULT hr,const char* stage){if(SUCCEEDED(hr))return true;log::error("hdr-screenshot",std::format("stage={} hr=0x{:08X}",stage,unsigned(hr)));return false;};
+static bool checkHdrScreenshot(HRESULT hr,const char* stage){
+    if(SUCCEEDED(hr))return true;
+    log::error("hdr-screenshot",std::format("stage={} hr=0x{:08X}",stage,unsigned(hr)));
+    return false;
+}
+bool readHdrScreenshot(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* texture,HdrScreenshot& result){
+    const auto check=checkHdrScreenshot;
     if(!texture)return check(E_POINTER,"source-texture");
-    if(std::filesystem::exists(path))return check(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),"destination");
-    const auto format=texture->GetDesc().Format;const bool pq=format==DXGI_FORMAT_R10G10B10A2_UNORM;
+    const auto format=texture->GetDesc().Format;
+    result.pq=format==DXGI_FORMAT_R10G10B10A2_UNORM;
     log::info("hdr-screenshot",std::format("source format={} extent={}x{}",unsigned(format),texture->GetDesc().Width,texture->GetDesc().Height));
-    if(!pq&&format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return check(E_INVALIDARG,"source-format");
-    RgbaImage raw;if(!readPixels(ctx,ring,texture,raw,pq?4:8))return check(E_FAIL,"gpu-readback");
-    const size_t count=size_t(raw.width)*raw.height;std::vector<uint16_t> pixels(count*4);
+    if(!result.pq&&format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return check(E_INVALIDARG,"source-format");
+    return readPixels(ctx,ring,texture,result.pixels,result.pq?4:8)||check(E_FAIL,"gpu-readback");
+}
+bool saveHdrScreenshot(const std::wstring& path,gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* texture){
+    if(std::filesystem::exists(path))return checkHdrScreenshot(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),"destination");
+    HdrScreenshot result;
+    return readHdrScreenshot(ctx,ring,texture,result)&&saveHdrScreenshot(path,result);
+}
+bool saveHdrScreenshot(const std::wstring& path,const HdrScreenshot& image){
+    const auto check=checkHdrScreenshot;
+    if(std::filesystem::exists(path))return check(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),"destination");
+    const auto& raw=image.pixels;
+    const bool pq=image.pq;
+    const uint64_t count=uint64_t(raw.width)*raw.height;
+    if(!count||count>UINT_MAX/8||raw.pixels.size()!=count*(pq?4:8))return check(E_INVALIDARG,"pixel-buffer");
+    std::vector<uint16_t> pixels(size_t(count)*4);
     if(!pq)memcpy(pixels.data(),raw.pixels.data(),count*8);
     else for(size_t i=0;i<count;++i){
         uint32_t packed;memcpy(&packed,raw.pixels.data()+i*4,4);double linear[3];
@@ -65,7 +83,7 @@ bool saveHdrScreenshot(const std::wstring& path,gfx::D3D12DeviceContext& ctx,gfx
     if(!check(options->Write(1,&property,&lossless),"lossless-option")||!check(frame->Initialize(options.Get()),"init-frame")||!check(frame->SetSize(raw.width,raw.height),"frame-size"))return false;
     auto pixelFormat=GUID_WICPixelFormat64bppRGBAHalf;
     if(!check(frame->SetPixelFormat(&pixelFormat),"set-format"))return false;
-    if(pixelFormat!=GUID_WICPixelFormat64bppRGBAHalf||count>UINT_MAX/8)return check(E_INVALIDARG,"negotiated-format-or-size");
+    if(pixelFormat!=GUID_WICPixelFormat64bppRGBAHalf)return check(E_INVALIDARG,"negotiated-format");
     if(!check(frame->WritePixels(raw.height,raw.width*8,UINT(count*8),reinterpret_cast<BYTE*>(pixels.data())),"write-pixels")||!check(frame->Commit(),"frame-commit")||!check(encoder->Commit(),"encoder-commit"))return false;
     frame.Reset();encoder.Reset();stream.Reset();
     // Check file integrity and floating-point format. Pixel fidelity is tested
