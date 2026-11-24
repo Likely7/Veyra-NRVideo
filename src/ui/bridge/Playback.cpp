@@ -250,11 +250,11 @@ void QmlPlayerBridge::openPath(const QString& path) {
     impl_->screenCropPreview = false;
     endExclusionMove(false);
     impl_->exclusionSelected=-1;
-    flushHdrMemory();impl_->hdrTitleApplied.clear();
     const bool network=media::networkMediaInput(wideOf(path));
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
     }
+    flushHdrMemory();impl_->hdrTitleApplied.clear();
     if (!network&&PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
     impl_->playlistPath = path;
     impl_->playlist->setPlayback(path, QStringLiteral("opening"));

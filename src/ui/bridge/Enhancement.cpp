@@ -420,9 +420,14 @@ void QmlPlayerBridge::flushHdrMemory(){
 }
 void QmlPlayerBridge::syncHdrTitleProfile(){
   auto& i=*impl_;
-  if(!i.snapshot.running||i.openingSource)return;
+  const auto session=i.snapshot.sessionId;
+  if(!i.snapshot.running||i.openingSource||i.hdrTitleLookupSession==session)return;
+  i.hdrTitleLookupSession=session;
+  if(i.snapshot.capture||i.liveKind==QLatin1String("url"))return;
+  // Resolving a canonical file path can touch the filesystem. Keep that work
+  // out of subsequent snapshot ticks for the same playback session.
   const QFileInfo file(QString::fromStdWString(i.sourceLabel));
-  if(!file.isFile())return; // Capture/stream labels are not film identities.
+  if(!file.isFile())return;
   const QString title=file.canonicalFilePath();
   if(title.isEmpty()||title==i.hdrTitleApplied)return;
   flushHdrMemory();i.hdrTitleApplied=title;
