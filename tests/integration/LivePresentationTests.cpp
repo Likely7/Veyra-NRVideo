@@ -495,7 +495,13 @@ int wmain(int argc,wchar_t**argv){
         DestroyWindow(window);CoUninitialize();
         return failures?1:0;
     }
-    if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode,!dedupNoFg,argv[2],options.nr,options.sr);DestroyWindow(window);CoUninitialize();return result;}
+    if(dedupRun){
+        const int result=runContentCadenceReplay(engine,dedupMode,!dedupNoFg,argv[2],options.nr,options.sr);
+        // The player's shutdown watchdog can exit with status 0 if the engine
+        // is still blocked. The replay has already flushed its failure log.
+        if(result&&!engine.idle())TerminateProcess(GetCurrentProcess(),static_cast<UINT>(result));
+        DestroyWindow(window);CoUninitialize();return result;
+    }
     if(settingsRebuild){
         check(until([](const auto& s){return s.frames>20&&s.nrActive&&s.fgActive;},30),"original NR 1080p and DLSS 2X start on the actual video");
         for(unsigned round=0;round<8&&!failures;++round){
