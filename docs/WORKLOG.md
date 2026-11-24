@@ -3,7 +3,8 @@
 ## 2026-11-24 无人值守启动：自动继续后全屏与随 Windows 启动
 
 - 用户希望开机后不操作电脑即可在电视上玩 PS5。核对 main：`启动后自动继续上次内容`（`autoResume`，默认关）已能在启动约 0.6 秒后重开文件、采集卡、PS5、PC、Xbox 串流；进入全屏只能手动按 F/F11/Alt+Enter，也没有随 Windows 启动的入口。
-- 新增 `startFullscreen`（默认关，依赖 `autoResume`）。只有启动自动继续确实开始打开片源时才挂起，PC/Xbox 串流后台联系主机，单独放行；在该片源首帧（`frames > 0`、Playing，同格式角标时点）发 `startupFullscreenRequested`，QML 在首页/设置页、弹窗或引导打开时不切换。失败、停止或 3 分钟未出画面即取消，之后手动打开的片源不会被全屏。全屏显存保护和既有全屏路径不变。
+- 新增 `startFullscreen`（默认关，依赖 `autoResume`）。文件和 PS5 同步开始打开，只有确实开始时才挂起；采集卡先异步查询设备，PC/Xbox 串流后台联系主机，挂起时预留一次打开请求。在该片源首帧（`frames > 0`、Playing，同格式角标时点）发 `startupFullscreenRequested`，QML 在首页/设置页、弹窗或引导打开时不切换。失败、图片、停止、额外的 `mediaOpenRequested`（用户自己换片源）或 3 分钟未出画面即取消。全屏显存保护和既有全屏路径不变。
+- 复查修正：首版以 `openingSource` 判定是否挂起，采集卡的 `resumeCaptureSession` 只发起 `queryCapture(2)`，返回时尚未打开，导致采集卡自动继续永远不会全屏；同时补上图片和 3 分钟内手动换片源的取消。
 - 新增 `登录 Windows 时启动 Veyra`：写当前用户 `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` 的 `Veyra` 值，无需管理员。安装器/便携包的 `versions/<版本>` 布局指向根目录 `Veyra.exe` 启动器，更新和回滚后仍有效；开关状态直接读注册表，其他目录的 Veyra 条目显示为关且不被删除。
 - 五条新文案补齐九种译文，`python -B scripts/i18n/extract.py --check` 缺失 0、占位符问题 0。按用户本轮要求未构建、未在 Windows 或实机上运行；QML、注册表写入、PS5 首帧触发均待构建后验证。PS5 若开机时未就绪或网络尚未连通，自动继续仍会失败一次，本次不加重试。
 

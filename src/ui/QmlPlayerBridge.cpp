@@ -378,6 +378,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         if(impl_->savePrefs())veyra::log::info("ui-prefs",std::format("volume={:.3f} saved",impl_->prefs.value(QStringLiteral("volume")).toDouble()));
         else veyra::log::warn("ui-prefs","volume not saved");
     });
+    // 自动继续后进入全屏: every open path announces itself here synchronously. Beyond the
+    // opens the resume itself still owes, an open is the user's own choice of source.
+    connect(this, &QmlPlayerBridge::mediaOpenRequested, this, [this] {
+        if (impl_->startupFullscreenUntil == std::chrono::steady_clock::time_point{}) return;
+        if (impl_->startupFullscreenOpens > 0) { --impl_->startupFullscreenOpens; return; }
+        impl_->startupFullscreenUntil = {};
+        veyra::log::info("ui-startup", "startup fullscreen dropped: another source was opened");
+    });
     impl_->timer = new QTimer(this);
     connect(impl_->timer, &QTimer::timeout, this, [this] {
         const bool had = impl_->haveSnapshot;
@@ -535,9 +543,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // 自动继续后进入全屏: the resumed source's first picture, the same `frames > 0` point
             // as the badge above, so the window never sits fullscreen over a black page.
             if (impl_->startupFullscreenUntil != std::chrono::steady_clock::time_point{}) {
-                if (s.failed || std::chrono::steady_clock::now() > impl_->startupFullscreenUntil) {
+                if (s.failed || s.image || std::chrono::steady_clock::now() > impl_->startupFullscreenUntil) {
                     impl_->startupFullscreenUntil = {};
-                    veyra::log::info("ui-startup", std::format("startup fullscreen dropped failed={}", s.failed));
+                    veyra::log::info("ui-startup", std::format("startup fullscreen dropped failed={} image={}", s.failed, s.image));
                 } else if (s.running && !s.image && !impl_->openingSource && s.frames > 0 &&
                            s.transport == engine::TransportState::Playing) {
                     impl_->startupFullscreenUntil = {};

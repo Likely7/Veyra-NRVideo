@@ -431,13 +431,17 @@ void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
     }
     veyra::log::info("ui-startup","automatically resuming the last source");
     resumeLastSource();
-    // 自动继续后进入全屏: armed only when the resume really began opening a source. PC and
-    // Xbox streaming contact the host in the background before the session opens.
+    // 自动继续后进入全屏: a file or PS5 resume opens at once, so it is armed only when it
+    // did. The capture card queries its device first and PC / Xbox streaming contact
+    // the host in the background: their open request is still to come.
     const QString kind = last.value(QStringLiteral("kind")).toString();
-    const bool asyncLaunch = kind == QLatin1String("moonlight") || kind == QLatin1String("xbox");
+    const bool asyncLaunch = kind == QLatin1String("capture") || kind == QLatin1String("moonlight") ||
+                             kind == QLatin1String("xbox");
     if (impl_->prefBool("startFullscreen", false) && (impl_->openingSource || asyncLaunch)) {
         impl_->startupFullscreenUntil = std::chrono::steady_clock::now() + std::chrono::minutes(3);
-        veyra::log::info("ui-startup", "fullscreen armed for the resumed source kind=" + kind.toStdString());
+        impl_->startupFullscreenOpens = impl_->openingSource ? 0 : 1;
+        veyra::log::info("ui-startup", std::format("fullscreen armed for the resumed source kind={} opensExpected={}",
+                                                   kind.toStdString(), impl_->startupFullscreenOpens));
     }
 }
 namespace {
