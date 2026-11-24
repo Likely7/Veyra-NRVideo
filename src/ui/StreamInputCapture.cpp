@@ -137,7 +137,12 @@ bool StreamInputCapture::begin(Route route) {
     target_ = route_ == Route::Ps5 ? ps5Target_() : 0;
     clipToWindow();
     SetCursor(nullptr);
-    if (route_ != Route::Moonlight) timer_.start();
+    if (route_ != Route::Moonlight) {
+        mouse_ = std::make_shared<remoteplay::MouseStick>(mapper_.tuning());
+        timer_.start();
+        emitPad();
+        if (route_ != route) return false;
+    }
     if (captured()) emit capturedChanged(true);
     emit stateChanged();
     return true;
@@ -148,6 +153,7 @@ void StreamInputCapture::end() {
     const Route old = route_;
     route_ = Route::None;
     timer_.stop();
+    mouse_.reset();
     RAWINPUTDEVICE device{0x01, 0x02, RIDEV_REMOVE, nullptr};
     RegisterRawInputDevices(&device, 1, sizeof(device));
     ClipCursor(nullptr);
@@ -202,8 +208,21 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
         UINT size = sizeof(raw);
         if (GetRawInputData(reinterpret_cast<HRAWINPUT>(msg->lParam), RID_INPUT, &raw, &size,
                             sizeof(RAWINPUTHEADER)) != UINT(-1) &&
-            raw.header.dwType == RIM_TYPEMOUSE && (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0)
-            router_.rawMouse(raw.data.mouse.lLastX, raw.data.mouse.lLastY);
+            raw.header.dwType == RIM_TYPEMOUSE && (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0) {
+            const auto dx = raw.data.mouse.lLastX, dy = raw.data.mouse.lLastY;
+            if (mouse_ && (dx || dy)) {
+                // MSG.time uses the coarse uptime clock. Allow one tick of
+                // skew and date queued reports so a GUI stall cannot replay
+                // a large movement as one new instantaneous turn.
+                const DWORD queueMs = GetTickCount() - msg->time;
+                if (queueMs <= 40 || queueMs >= 0x80000000u) {
+                    const auto reportMs = nowUs() / 1000 - (queueMs > 16 && queueMs <= 40 ? queueMs : 0);
+                    mouse_->move(dx, dy, reportMs * 1000);
+                }
+            } else if (captured()) {
+                router_.rawMouse(dx, dy);
+            }
+        }
         // Let the default window procedure complete foreground Raw Input cleanup.
         return false;
     }
@@ -240,13 +259,12 @@ void StreamInputCapture::key(uint32_t virtualKey, uint32_t scanCode, bool extend
     digital(uint16_t(moonlight::hostKey(virtualKey, scanCode, extended).code) & 255, down);
 }
 void StreamInputCapture::mouseMove(int dx, int dy) {
-    if (captured()) {
 #ifdef VEYRA_ENABLE_MOONLIGHT
-        engine_.moonlightMouseMove(dx, dy);
+    if (captured()) engine_.moonlightMouseMove(dx, dy);
+#else
+    (void)dx;
+    (void)dy;
 #endif
-    } else {
-        mapper_.mouse(dx, dy, nowUs());
-    }
 }
 void StreamInputCapture::mouseButton(int button, bool down) {
     if (captured()) {
@@ -283,21 +301,34 @@ void StreamInputCapture::digital(int key, bool down) {
         else if (down) bind(key, before);
         return;
     }
-    if (mapper_.digital(key, down)) emitPad(mapper_.state());
+    if (mapper_.digital(key, down)) emitPad();
 }
 
 void StreamInputCapture::tick() {
-    if (ps5Captured() && (!ps5Target_ || ps5Target_() != target_)) { end(); return; }
-    const auto now = nowUs();
-    if (wheelKey_ && now >= wheelReleaseUs_) { digital(wheelKey_, false); wheelKey_ = 0; }
-    emitPad(mapper_.sample(now));
+    if (wheelKey_ && nowUs() >= wheelReleaseUs_) {
+        mapper_.digital(wheelKey_, false);
+        wheelKey_ = 0;
+    }
+    emitPad();
 }
 
-void StreamInputCapture::emitPad(const remoteplay::ControllerState& pad) {
+void StreamInputCapture::emitPad() {
+    bool useMouse = false;
+    auto pad = mapper_.state(&useMouse);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    if (ps5Captured() && ps5Target_ && target_ && ps5Target_() == target_) engine_.remotePlayController(pad);
+    if (ps5Captured()) {
+        if (!target_ || ps5Target_() != target_) { end(); return; }
+        engine_.remotePlayController(pad, useMouse ? std::weak_ptr(mouse_) : std::weak_ptr<remoteplay::MouseStick>{});
+    }
 #endif
-    if (previewing() && pad != previewState_) { previewState_ = pad; emit padStateChanged(); }
+    if (previewing()) {
+        if (useMouse) {
+            const auto [x, y] = mouse_->sample(nowUs());
+            pad.rightX = x;
+            pad.rightY = y;
+        }
+        if (pad != previewState_) { previewState_ = pad; emit padStateChanged(); }
+    }
 }
 
 QVariantList StreamInputCapture::bindings() const {
@@ -379,6 +410,7 @@ void StreamInputCapture::setTuning(const QString& key, const QVariant& value) {
     const auto next = readTuning(map);
     if (next == mapper_.tuning()) return;
     mapper_.setTuning(next);
+    if (mouse_) mouse_->setTuning(next);
     save();
     emit mappingChanged();
 }

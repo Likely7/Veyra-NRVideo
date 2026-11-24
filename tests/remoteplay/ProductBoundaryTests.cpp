@@ -40,23 +40,22 @@ static bool keyboardMouseMapping() {
     pad.digital('J', true);
     if (pad.state().buttons != State::Square) return false;
     pad.reset();
-    pad.sample(1000);
-    for (int i = 0; i < 8; ++i) pad.mouse(8, 4, 1000 + 1000 * i);
-    const auto highPoll = pad.sample(9000);
-    pad.reset();
-    pad.sample(1000);
-    pad.mouse(64, 32, 8000);
-    const auto lowPoll = pad.sample(9000);
-    if (highPoll != lowPoll || !lowPoll.rightX || !lowPoll.rightY) return false;
-    if (pad.sample(24000).rightX != 0) return false;
+    bool useMouse = false;
+    pad.state(&useMouse);
+    if (!useMouse) return false;
     auto tuning = pad.tuning();
-    tuning.invertY = true;
+    tuning.mouseLook = false;
     pad.setTuning(tuning);
-    pad.mouse(0, 32, 25100);
-    if (pad.sample(26000).rightY >= 0) return false;
+    pad.state(&useMouse);
+    if (useMouse) return false;
+    pad.setTuning({});
     pad.setBinding(Pad::RightLeft, 'H');
     pad.digital('H', true);
-    if (pad.state().rightX != -32767) return false;
+    if (pad.state(&useMouse).rightX != -32767 || useMouse) return false;
+    pad.setBinding(Pad::RightRight, 'K');
+    pad.digital('K', true);
+    pad.digital('H', true);
+    if (pad.state(&useMouse).rightX != 0 || useMouse) return false;
     pad.resetBindings();
     if (pad.bindings() != Pad::Defaults || pad.state().rightX != 0) return false;
     // Use the production PS5 queue with a complete keyboard tap inside one poll.
@@ -72,6 +71,90 @@ static bool keyboardMouseMapping() {
     source.controller({});
     return source.takeControllerLocked(now) == State{};
 }
+static bool mouseStickPacing() {
+    using Stick = remoteplay::MouseStick;
+    using State = remoteplay::ControllerState;
+    RemotePlaySessionSource source;
+    source.started_ = true;
+    State mapped;
+    mapped.inputActive = true;
+    auto lowPoll = std::make_shared<Stick>(Stick::Tuning{});
+    Stick highPoll(Stick::Tuning{});
+    const auto base = remoteplay::monotonic100ns() / 10;
+    int16_t lowMin = 32767, lowMax = 0;
+    unsigned samples = 0, mismatches = 0;
+    // Real queue and sampler with a 4 ms consumer. UI heartbeats are uneven
+    // and miss 40 ms, while relative input keeps a constant 8,000 counts/s.
+    for (int ms = 0; ms <= 1000; ++ms) {
+        const auto now = base + ms * 1000;
+        highPoll.move(8, 4, now);
+        if (ms % 8 == 1) lowPoll->move(64, 32, now);
+        if ((ms % 18 == 0 || ms % 18 == 7) && (ms < 370 || ms > 410)) {
+            source.controller(mapped, lowPoll);
+            source.controllerStamp_ = now * 10;
+            source.pendingControllers_.back().stamp = now * 10;
+        }
+        if (ms >= 32 && ms % 4 == 0) {
+            const auto pad = source.takeControllerLocked(now * 10);
+            const auto [x, y] = highPoll.sample(now);
+            ++samples;
+            if (!pad.inputActive || !x || !y || pad.rightX != x || pad.rightY != y) ++mismatches;
+            lowMin = std::min(lowMin, pad.rightX);
+            lowMax = std::max(lowMax, pad.rightX);
+        }
+    }
+    std::cout << "PS5_MOUSE_PACING samples=" << samples << " mismatches=" << mismatches
+              << " stable_axis_min=" << lowMin << " stable_axis_max=" << lowMax << "\n";
+    if (mismatches || lowMin != lowMax) return false;
+
+    // Low-poll motion is held between reports, tapers to neutral after a
+    // stop, and can restart immediately without reusing stale counts.
+    const auto last = base + 993000;
+    const auto held = source.takeControllerLocked((last + 12000) * 10).rightX;
+    const auto fading = source.takeControllerLocked((last + 18000) * 10).rightX;
+    const auto stopped = source.takeControllerLocked((last + 24000) * 10).rightX;
+    const auto resumed = last + 33000;
+    lowPoll->move(64, 32, resumed);
+    const auto restart = source.takeControllerLocked(resumed * 10).rightX;
+    if (held != lowMax || fading <= 0 || fading >= held || stopped || restart != held) return false;
+
+    const auto send = [&](const State& state, std::weak_ptr<Stick> mouse, int64_t nowUs) {
+        source.controller(state, std::move(mouse));
+        source.controllerStamp_ = nowUs * 10;
+        source.pendingControllers_.back().stamp = nowUs * 10;
+        return source.takeControllerLocked(nowUs * 10);
+    };
+    auto keys = mapped;
+    keys.rightX = -32767;
+    if (send(keys, {}, resumed + 1000) != keys) return false;
+    if (send(mapped, lowPoll, resumed + 2000).rightX != held) return false;
+    if (send({}, lowPoll, resumed + 3000) != State{}) return false;
+    if (send(mapped, lowPoll, resumed + 4000).rightX != held) return false;
+    lowPoll.reset();
+    if (source.takeControllerLocked((resumed + 5000) * 10) != mapped) return false;
+    if (source.takeControllerLocked((resumed + 106000) * 10) != State{}) return false;
+
+    Stick batched(Stick::Tuning{}), unbatched(Stick::Tuning{});
+    batched.move(32, 16, base);
+    batched.move(32, 16, base);
+    batched.move(500, 500, base - 1000); // Out-of-order input must not be replayed.
+    unbatched.move(64, 32, base);
+    if (batched.sample(base) != unbatched.sample(base)) return false;
+    Stick::Tuning tuning;
+    tuning.invertY = true;
+    tuning.horizontal = 2.0;
+    tuning.smoothingMs = 16;
+    batched.setTuning(tuning);
+    if (batched.sample(base) != std::pair<int16_t, int16_t>{}) return false;
+    batched.move(64, 64, base);
+    const auto first = batched.sample(base);
+    batched.move(64, 64, base + 8000);
+    const auto second = batched.sample(base + 8000);
+    if (first.first <= 0 || first.second >= 0 || second.first <= first.first ||
+        second.second >= first.second || std::abs(second.first + 2 * second.second) > 1) return false;
+    if (batched.sample(base + 32000) != std::pair<int16_t, int16_t>{}) return false;
+    return true;
+}
 static bool slowConsumer(){
     RemotePlaySessionSource s;s.started_=true;
     const auto base=remoteplay::monotonic100ns();
@@ -81,7 +164,7 @@ static bool slowConsumer(){
     for(int tick=0;tick<625;++tick){
         const auto now=base+tick*80000LL;
         remoteplay::ControllerState held;held.inputActive=true;held.r2=255;held.rightX=int16_t(tick%100);
-        s.controller(held);s.controllerStamp_=now;s.pendingControllers_.back().first=now;
+        s.controller(held);s.controllerStamp_=now;s.pendingControllers_.back().stamp=now;
         highWater=std::max(highWater,s.pendingControllers_.size());
         if(tick%2==0){const auto out=s.takeControllerLocked(now);if(!out.inputActive||out.r2!=255)++neutral;if(out.rightX!=held.rightX)++lagged;}
     }
@@ -108,7 +191,7 @@ static bool slowConsumer(){
         motion.motionTimestampUs=i;motion.motionSamples[0].timestampUs=i;
         s.controller(motion);
     }
-    const auto sensor=s.pendingControllers_.back().second;
+    const auto sensor=s.pendingControllers_.back().state;
     const bool ordered=sensor.motionSampleCount==16&&sensor.motionSamples[0].timestampUs==5&&sensor.motionSamples[15].timestampUs==20;
     s.pendingControllers_.clear();auto released=current;released.r2=0;
     s.controller(released);s.controller(current);s.controller(released);
@@ -318,6 +401,10 @@ int main(int argc,char** argv){
     if(!veyra::source::RemotePlaySessionSourceTestAccess::keyboardMouseMapping()) {
         std::cerr << "PS5 keyboard/mouse mapping regression\n";
         return 45;
+    }
+    if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseStickPacing()) {
+        std::cerr << "PS5 mouse pacing regression\n";
+        return 46;
     }
     std::cout << "PS5_KEYBOARD_MAPPING chord order payload mouse-rate and release passed\n";
     veyra::source::RemotePlaySessionSource source;

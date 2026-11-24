@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <QVariant>
 #include <functional>
+#include <memory>
 #include <windows.h>
 
 #include "veyra/moonlight/InputRouter.h"
@@ -78,7 +79,7 @@ private:
     void end();
     void clipToWindow();
     void tick();
-    void emitPad(const remoteplay::ControllerState& pad);
+    void emitPad();
     void digital(int key, bool down);
     void bind(int key, int modifiers);
     void save();
@@ -91,6 +92,7 @@ private:
     HWND window_ = nullptr;
     Route route_ = Route::None;
     Mapper mapper_;
+    std::shared_ptr<remoteplay::MouseStick> mouse_;
     QTimer timer_;
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;

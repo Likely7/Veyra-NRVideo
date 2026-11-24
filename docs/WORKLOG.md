@@ -1,5 +1,12 @@
 # 当前工作日志
 
+## 2026-11-24 PS5 改键弹窗与鼠标顿挫
+
+- 在现有键鼠试用分支复现点叉键时弹窗关闭。遮罩改为只接收面板外的点击，手柄按键使用与现有按钮一致的按下和释放判定。用新版 Windows 窗口实点叉键和「改键」，录入 Ctrl+J、鼠标右键，验证 Esc 取消录键、输入预览进入与退出、面板外点击关闭。重启后在实际界面读到两个绑定。测试使用任务私有配置。
+- 鼠标以相对运动报告时间估算右摇杆速度，由 PS5 串流和仅手柄控制的现有发送端采样。采样跨过正常报告间隔并渐回中。保留用户原有灵敏度、死区、曲线和绑定。失焦立即释放手柄，界面心跳超过 100 ms 时同样回到中立输入。实体手柄与 Moonlight 走原来的输入方式。
+- 在同一恒速 125 Hz 输入、7/11 ms 界面心跳以及 40 ms 心跳暂停的模拟中，243 次提交侧采样的横轴范围从 7826–13649 收敛为恒定 9881。实际 PS5 队列测试中，125 Hz 与 1000 Hz 的 243 次采样全部一致。覆盖松手回中、再移动、键盘覆盖右摇杆、失焦和批次合并。PS5 真机游戏手感未测。 [旧新对比](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/followup-mouse-ab.txt>) · [PS5 边界](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/followup-boundary.txt>)
+- 复用原来的构建目录和测试程序，使用 `build-recording-handoff.py --task codex-ps5-keyboard-mouse-20261124 --label 2.2.1-ps5-input-test --jobs 2` 构建 5 个目标，耗时 87.7 秒。Qt Quick 262 项通过，Moonlight 协议 135 项通过，9 种语言无缺译和占位符错误。已核对测试启动器的原映射配置 SHA-256 不变。测试配置及比较夹具在同名 E 盘 tmp 目录。 [构建](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/build-20261124-092754/receipt.json>) · [界面回归](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/followup-quick.txt>) · [启动测试](<E:/项目/Veyra/tests/codex-ps5-keyboard-mouse-20261124/Open PS5 keyboard test.cmd>)
+
 ## 2026-11-24 PS5 键鼠映射试用版
 
 - 从本地 main bc59d457 开 codex/ps5-keyboard-mouse-20261124。在 PS5 串流和采集卡的 PS5 手柄控制页接入可点击的 DualSense 手柄图。26 个位置可绑定键盘、修饰键组合、鼠标键及滚轮。支持自动保存、恢复默认和离线输入预览，默认仍用实体手柄。触摸板提供按下动作。

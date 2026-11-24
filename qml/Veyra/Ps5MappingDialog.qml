@@ -193,7 +193,10 @@ DialogLayer {
                         ToolTip.text: Accessible.name
                         ToolTip.delay: 200
                         HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: panel.choose(keyCap.padKey) }
+                        TapHandler {
+                            gesturePolicy: TapHandler.WithinBounds
+                            onTapped: panel.choose(keyCap.padKey)
+                        }
                     }
                 }
             }

@@ -66,7 +66,11 @@ Item {
         opacity: host.dialog !== "" && !host.onboardingActive ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
-        TapHandler { onTapped: host.close() }
+        MouseArea {
+            anchors.fill: parent
+            enabled: host.dialog !== "" && !host.onboardingActive
+            onClicked: host.close()
+        }
     }
     // For the motion probe: the open dialog's scale.
     property real motionScale: 1

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 
+#include "veyra/remoteplay/MouseStick.h"
 #include "veyra/remoteplay/Types.h"
 
 #include <algorithm>
@@ -30,12 +31,7 @@ public:
         0x0D, 0x08, 'T', 'P', MouseRight, MouseLeft, 'W', 'S', 'A', 'D', 0, 0, 0, 0
     };
 
-    struct Tuning {
-        double horizontal = 1.0, vertical = 1.0, curve = 1.0, deadzone = 0.08, smoothingMs = 0;
-        bool invertY = false;
-        bool mouseLook = true;
-        bool operator==(const Tuning&) const = default;
-    };
+    using Tuning = MouseStick::Tuning;
 
     static int modifier(int key) {
         if (key == 0xA0 || key == 0xA1) return Shift;
@@ -63,10 +59,7 @@ public:
         return true;
     }
     void resetBindings() { bindings_ = Defaults; reset(); }
-    void setTuning(Tuning t) {
-        tuning_ = t;
-        clearMouse();
-    }
+    void setTuning(Tuning t) { tuning_ = t; }
 
     int modifiers() const {
         int mask = 0;
@@ -106,38 +99,7 @@ public:
         return changed;
     }
 
-    void mouse(int dx, int dy, int64_t nowUs) {
-        if (!tuning_.mouseLook || (dx == 0 && dy == 0)) return;
-        dx_ = std::clamp(dx_ + dx, -100000.0, 100000.0);
-        dy_ = std::clamp(dy_ + dy, -100000.0, 100000.0);
-        lastMotionUs_ = nowUs;
-    }
-
-    ControllerState sample(int64_t nowUs) {
-        const double elapsedUs = lastSampleUs_ < 0 ? 8000.0 :
-            std::clamp<double>(double(nowUs - lastSampleUs_), 1000.0, 32000.0);
-        lastSampleUs_ = nowUs;
-        if (lastMotionUs_ < 0 || nowUs - lastMotionUs_ >= 16000) {
-            dx_ = dy_ = mouseX_ = mouseY_ = 0;
-        } else if (dx_ != 0 || dy_ != 0) {
-            // Estimate velocity at the send cadence, irrespective of the number of
-            // native mouse reports received during it. 32,000 counts/s is full scale.
-            const double scale = 1000000.0 / (elapsedUs * 32000.0);
-            const double x = dx_ * scale * tuning_.horizontal;
-            const double y = dy_ * scale * tuning_.vertical * (tuning_.invertY ? -1.0 : 1.0);
-            const double magnitude = std::hypot(x, y);
-            const double response = tuning_.deadzone + (1.0 - tuning_.deadzone) *
-                std::pow(std::min(magnitude, 1.0), tuning_.curve);
-            const double alpha = tuning_.smoothingMs > 0 ?
-                1.0 - std::exp(-elapsedUs / (1000.0 * tuning_.smoothingMs)) : 1.0;
-            mouseX_ += (x / magnitude * response - mouseX_) * alpha;
-            mouseY_ += (y / magnitude * response - mouseY_) * alpha;
-            dx_ = dy_ = 0;
-        }
-        return state();
-    }
-
-    ControllerState state() const {
+    ControllerState state(bool* mouseControlsRightStick = nullptr) const {
         std::array<bool, ActionCount> on{};
         for (const int a : active_) if (a >= 0) on[a] = true;
         ControllerState pad;
@@ -150,14 +112,14 @@ public:
         const int rightX = int(on[RightRight]) - int(on[RightLeft]);
         const int rightY = int(on[RightDown]) - int(on[RightUp]);
         const bool rightKeys = on[RightRight] || on[RightLeft] || on[RightUp] || on[RightDown];
-        setStick(pad.rightX, pad.rightY, rightKeys ? rightX : mouseX_, rightKeys ? rightY : mouseY_);
+        setStick(pad.rightX, pad.rightY, rightX, rightY);
+        if (mouseControlsRightStick) *mouseControlsRightStick = tuning_.mouseLook && !rightKeys;
         return pad;
     }
 
     void reset() {
         held_.fill(false);
         active_.fill(-1);
-        clearMouse();
     }
     KeyboardMousePad() { reset(); }
 
@@ -167,17 +129,10 @@ private:
         xAxis = int16_t(std::lround(x * scale));
         yAxis = int16_t(std::lround(y * scale));
     }
-    void clearMouse() {
-        dx_ = dy_ = mouseX_ = mouseY_ = 0;
-        lastMotionUs_ = lastSampleUs_ = -1;
-    }
-
     std::array<int, ActionCount> bindings_ = Defaults;
     std::array<bool, WheelRight + 1> held_{};
     std::array<int, WheelRight + 1> active_{};
     Tuning tuning_{};
-    double dx_ = 0, dy_ = 0, mouseX_ = 0, mouseY_ = 0;
-    int64_t lastMotionUs_ = -1, lastSampleUs_ = -1;
 };
 
 } // namespace veyra::remoteplay
