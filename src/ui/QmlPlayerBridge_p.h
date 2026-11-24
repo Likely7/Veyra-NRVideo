@@ -447,6 +447,11 @@ struct QmlPlayerBridge::Impl {
     // ran smoothly again. A second GPU failure within ten minutes is left to the user.
     uint64_t gpuReconnectSession = 0;
     std::chrono::steady_clock::time_point gpuReconnectDue{}, gpuReconnectLast{};
+    // 自动继续后进入全屏: set when the startup resume began opening a source with the
+    // preference on; the first picture of that source asks the UI for fullscreen.
+    // Cleared on that picture, a failure, a stop or after the deadline, so a source
+    // the user opens by hand later never jumps to fullscreen.
+    std::chrono::steady_clock::time_point startupFullscreenUntil{};
     // Network sources (#48): damaged data is concealed or skipped without a word per packet;
     // the user hears about it once in a while, and about a successful reconnect.
     uint64_t netNoticeSession = 0, netLossReported = 0;

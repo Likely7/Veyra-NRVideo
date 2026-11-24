@@ -950,6 +950,14 @@ Window {
         function onNotice(text, isError) { toast.show(text, isError) }
         function onWarningNotice(text) { toast.show(text, false, true) }
         function onOverlayRestartSuggested(kind) { onboarding.close(); overlayRestart.kind = kind; overlayRestart.open() }
+        // 设置 → 自动继续后进入全屏: the automatically resumed source shows its first picture.
+        // The open already moved to a picture page; a dialog or the guide keeps the window.
+        function onStartupFullscreenRequested() {
+            const skip = root.fullscreen || root.page === "home" || root.page === "set"
+                         || dialogs.dialog !== "" || root.onboardingActive
+            veyra.logUi("ui-fullscreen", "startup request page=" + root.page + " skipped=" + skip)
+            if (!skip) root.toggleFullscreen()
+        }
         function onNavigate(p) {
             onboarding.close()
             // A dialog key opens the dialog; anything else is a page.

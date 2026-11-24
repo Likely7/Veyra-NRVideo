@@ -405,6 +405,7 @@ void QmlPlayerBridge::stopPlayback() {
     ++impl_->liveOpenGen; impl_->pendingLiveText.clear();
     impl_->openingSource = false;
     impl_->openingSessionId = 0;
+    impl_->startupFullscreenUntil = {};
     impl_->engine.stop();
     stopPs5Control();
 }

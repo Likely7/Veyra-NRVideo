@@ -399,6 +399,25 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("自动继续后进入全屏")
+                            hint: qsTr("自动继续的画面出现后直接全屏，无需按键；需开启上一项")
+                            VSwitch {
+                                objectName: "set-start-fullscreen"
+                                enabled: !!veyra.preferences.autoResume
+                                checked: !!veyra.preferences.startFullscreen
+                                onToggled: v => veyra.setPreference("startFullscreen", v)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("登录 Windows 时启动 Veyra")
+                            hint: qsTr("登录当前 Windows 账户后自动打开这份 Veyra，无需管理员权限")
+                            VSwitch {
+                                objectName: "set-launch-at-login"
+                                checked: veyra.launchAtLogin
+                                onToggled: v => veyra.launchAtLogin = v
+                            }
+                        }
+                        VRow {
                             label: qsTr("记住播放位置")
                             hint: qsTr("重新打开同一个文件时从上次位置继续")
                             VSwitch {

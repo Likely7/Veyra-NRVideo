@@ -28083,6 +28083,19 @@
    "ru": "Нет частей, чтобы присоединиться"
   },
   {
+   "zh": "没能更改 Windows 启动项（错误 %1）",
+   "src": "src/ui/bridge/View.cpp",
+   "zh-TW": "沒能變更 Windows 啟動項目（錯誤 %1）",
+   "en": "Could not change the Windows startup entry (error %1)",
+   "ja": "Windows のスタートアップ項目を変更できませんでした（エラー %1）",
+   "ko": "Windows 시작 항목을 변경하지 못했습니다(오류 %1).",
+   "es": "No se pudo cambiar la entrada de inicio de Windows (error %1)",
+   "fr": "Impossible de modifier l’entrée de démarrage de Windows (erreur %1)",
+   "de": "Der Windows-Autostart-Eintrag konnte nicht geändert werden (Fehler %1)",
+   "pt-BR": "Não foi possível alterar a entrada de inicialização do Windows (erro %1)",
+   "ru": "Не удалось изменить элемент автозагрузки Windows (ошибка %1)"
+  },
+  {
    "zh": "没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择",
    "src": "src/ui/bridge/View.cpp",
    "zh-TW": "沒能繼續上次的 PC 串流，請在 PC 串流視窗裡重新選擇",
@@ -29604,6 +29617,19 @@
    "ru": "PIN-код входа должен состоять из цифр."
   },
   {
+   "zh": "登录 Windows 时启动 Veyra",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "登入 Windows 時啟動 Veyra",
+   "en": "Start Veyra when signing in to Windows",
+   "ja": "Windows へのサインイン時に Veyra を起動",
+   "ko": "Windows 로그인 시 Veyra 시작",
+   "es": "Iniciar Veyra al iniciar sesión en Windows",
+   "fr": "Lancer Veyra à l’ouverture de session Windows",
+   "de": "Veyra bei der Windows-Anmeldung starten",
+   "pt-BR": "Iniciar o Veyra ao entrar no Windows",
+   "ru": "Запускать Veyra при входе в Windows"
+  },
+  {
    "zh": "登录信息加密保存在本机；退出会删除它",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "登入資訊加密儲存在本機；退出會刪除它",
@@ -29628,6 +29654,19 @@
    "de": "Anmeldung fehlgeschlagen (%1).",
    "pt-BR": "O login falhou (%1).",
    "ru": "Вход не удался (%1)."
+  },
+  {
+   "zh": "登录当前 Windows 账户后自动打开这份 Veyra，无需管理员权限",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "登入目前 Windows 帳戶後自動開啟這份 Veyra，無需系統管理員權限",
+   "en": "Opens this copy of Veyra after you sign in to this Windows account; no administrator rights needed",
+   "ja": "この Windows アカウントにサインインすると、この Veyra を自動で開きます。管理者権限は不要です",
+   "ko": "이 Windows 계정에 로그인하면 이 Veyra를 자동으로 엽니다. 관리자 권한이 필요하지 않습니다.",
+   "es": "Abre esta copia de Veyra al iniciar sesión en esta cuenta de Windows; no requiere permisos de administrador",
+   "fr": "Ouvre cette copie de Veyra après la connexion à ce compte Windows ; aucun droit d’administrateur requis",
+   "de": "Öffnet diese Veyra-Kopie nach der Anmeldung an diesem Windows-Konto; keine Administratorrechte nötig",
+   "pt-BR": "Abre esta cópia do Veyra ao entrar nesta conta do Windows; não requer privilégios de administrador",
+   "ru": "Открывает эту копию Veyra после входа в эту учётную запись Windows; права администратора не нужны"
   },
   {
    "zh": "登录码已过期，请重新点“登录”。",
@@ -32332,6 +32371,32 @@
    "de": "Eingabe automatisch erkennen · Native BMD",
    "pt-BR": "Detectar entrada automaticamente · BMD nativo",
    "ru": "Обнаружение ввода автоматически · Native BMD"
+  },
+  {
+   "zh": "自动继续后进入全屏",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動繼續後進入全螢幕",
+   "en": "Go fullscreen after resuming",
+   "ja": "自動再開後に全画面表示",
+   "ko": "자동 재개 후 전체 화면",
+   "es": "Pantalla completa tras reanudar",
+   "fr": "Plein écran après la reprise",
+   "de": "Nach dem Fortsetzen im Vollbild",
+   "pt-BR": "Tela cheia após retomar",
+   "ru": "Полный экран после продолжения"
+  },
+  {
+   "zh": "自动继续的画面出现后直接全屏，无需按键；需开启上一项",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動繼續的畫面出現後直接全螢幕，無需按鍵；需開啟上一項",
+   "en": "Switches to fullscreen once the resumed picture appears, no key press needed; requires the option above",
+   "ja": "自動再開した映像が表示されたら、キー操作なしで全画面にします。上の項目をオンにする必要があります",
+   "ko": "자동 재개된 화면이 나타나면 키 입력 없이 전체 화면으로 전환합니다. 위 항목을 켜야 합니다.",
+   "es": "Pasa a pantalla completa en cuanto aparece la imagen reanudada, sin pulsar teclas; requiere la opción anterior",
+   "fr": "Passe en plein écran dès que l’image reprise s’affiche, sans touche ; nécessite l’option ci-dessus",
+   "de": "Wechselt ins Vollbild, sobald das fortgesetzte Bild erscheint – ohne Tastendruck; erfordert die Option darüber",
+   "pt-BR": "Entra em tela cheia assim que a imagem retomada aparece, sem pressionar teclas; requer a opção acima",
+   "ru": "Переходит в полный экран, как только появляется продолженное изображение, без нажатия клавиш; требуется параметр выше"
   },
   {
    "zh": "自动识别原文",

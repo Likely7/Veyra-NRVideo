@@ -1,6 +1,7 @@
 // QML bridge: View responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/ui/MaskGeometry.h"
+#include "veyra/base/PortableLayout.h"
 
 namespace veyra::ui {
 // --- NR protection regions drawn on the picture (#8) ------------------------
@@ -430,6 +431,52 @@ void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
     }
     veyra::log::info("ui-startup","automatically resuming the last source");
     resumeLastSource();
+    // 自动继续后进入全屏: armed only when the resume really began opening a source. PC and
+    // Xbox streaming contact the host in the background before the session opens.
+    const QString kind = last.value(QStringLiteral("kind")).toString();
+    const bool asyncLaunch = kind == QLatin1String("moonlight") || kind == QLatin1String("xbox");
+    if (impl_->prefBool("startFullscreen", false) && (impl_->openingSource || asyncLaunch)) {
+        impl_->startupFullscreenUntil = std::chrono::steady_clock::now() + std::chrono::minutes(3);
+        veyra::log::info("ui-startup", "fullscreen armed for the resumed source kind=" + kind.toStdString());
+    }
+}
+namespace {
+// 设置 → 登录 Windows 时启动 Veyra: the per-user Run key, so no administrator rights are needed.
+constexpr wchar_t kLoginRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+constexpr wchar_t kLoginRunValue[] = L"Veyra";
+// A managed package (installer or portable ZIP) runs the player from versions/<version>;
+// the entry names the root launcher instead, which survives updates and rollbacks.
+std::wstring loginCommand() {
+    const std::filesystem::path player = QDir::toNativeSeparators(QCoreApplication::applicationFilePath()).toStdWString();
+    const auto root = portable::rootFromVersionDirectory(player.parent_path());
+    std::error_code error;
+    const auto launcher = root.empty() ? std::filesystem::path{} : root / portable::launcherName;
+    const auto& target = !launcher.empty() && std::filesystem::is_regular_file(launcher, error) ? launcher : player;
+    return L"\"" + target.wstring() + L"\"";
+}
+}
+bool QmlPlayerBridge::launchAtLogin() const {
+    wchar_t value[4096]{};
+    DWORD bytes = sizeof(value);
+    if (RegGetValueW(HKEY_CURRENT_USER, kLoginRunKey, kLoginRunValue, RRF_RT_REG_SZ, nullptr, value, &bytes) != ERROR_SUCCESS)
+        return false;
+    // Another Veyra folder's entry is not this copy's: it shows as off and is left alone.
+    return CompareStringOrdinal(value, -1, loginCommand().c_str(), -1, TRUE) == CSTR_EQUAL;
+}
+void QmlPlayerBridge::setLaunchAtLogin(bool enabled) {
+    if (enabled == launchAtLogin()) return;
+    LSTATUS status = ERROR_SUCCESS;
+    if (enabled) {
+        const auto command = loginCommand();
+        status = RegSetKeyValueW(HKEY_CURRENT_USER, kLoginRunKey, kLoginRunValue, REG_SZ, command.c_str(),
+                                 DWORD((command.size() + 1) * sizeof(wchar_t)));
+    } else {
+        status = RegDeleteKeyValueW(HKEY_CURRENT_USER, kLoginRunKey, kLoginRunValue);
+        if (status == ERROR_FILE_NOT_FOUND) status = ERROR_SUCCESS;
+    }
+    veyra::log::info("ui-startup", std::format("launch at login={} status={}", enabled, long(status)));
+    if (status != ERROR_SUCCESS) emit notice(tr("没能更改 Windows 启动项（错误 %1）").arg(long(status)), true);
+    emit launchAtLoginChanged();
 }
 void QmlPlayerBridge::resumeLastSource() {
     const auto last = lastSource();

@@ -532,6 +532,19 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 s.frames > 0 && !s.sourceHdrLabel.empty() &&
                 (impl_->formatBadgeSession != s.sessionId || impl_->formatBadgeLabel != s.sourceHdrLabel))
                 showFormatBadge(s);
+            // 自动继续后进入全屏: the resumed source's first picture, the same `frames > 0` point
+            // as the badge above, so the window never sits fullscreen over a black page.
+            if (impl_->startupFullscreenUntil != std::chrono::steady_clock::time_point{}) {
+                if (s.failed || std::chrono::steady_clock::now() > impl_->startupFullscreenUntil) {
+                    impl_->startupFullscreenUntil = {};
+                    veyra::log::info("ui-startup", std::format("startup fullscreen dropped failed={}", s.failed));
+                } else if (s.running && !s.image && !impl_->openingSource && s.frames > 0 &&
+                           s.transport == engine::TransportState::Playing) {
+                    impl_->startupFullscreenUntil = {};
+                    veyra::log::info("ui-startup", std::format("startup fullscreen requested session={}", s.sessionId));
+                    emit startupFullscreenRequested();
+                }
+            }
             if (had && !wasFailed && s.failed && !s.capture && !s.remotePlay &&
                 impl_->prefString("decode") == QLatin1String("hardware"))
                 emit notice(tr("已设为“强制硬解”，这个文件无法用硬件解码打开；可在 设置 → 播放 改回“自动”"), true);

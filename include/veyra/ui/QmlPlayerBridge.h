@@ -525,6 +525,9 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString exportSizeEstimate READ exportSizeEstimate NOTIFY exportChanged)
     // 继续上次: {kind: capture|ps5|screen, label, summary}; empty when none.
     Q_PROPERTY(QVariantMap lastSource READ lastSource NOTIFY preferencesChanged)
+    // 设置 → 登录 Windows 时启动 Veyra: the current user's Run entry for this executable.
+    // Read from the registry, not the preferences, so it always shows what Windows will do.
+    Q_PROPERTY(bool launchAtLogin READ launchAtLogin WRITE setLaunchAtLogin NOTIFY launchAtLoginChanged)
     // P5 (2026-09-29): what is playing, for the page headers.
     // sourceKind: "" | file | image | capture | ps5 | screen.
     Q_PROPERTY(QString sourceKind READ sourceKind NOTIFY snapshotChanged)
@@ -1228,6 +1231,8 @@ public:
     bool audioSkewKnown() const;
     QString exportSizeEstimate() const;
     QVariantMap lastSource() const;
+    bool launchAtLogin() const;
+    void setLaunchAtLogin(bool enabled);
     QString sourceKind() const;
     QString sourceTitle() const;
     QString sourceFormatText() const;
@@ -1584,6 +1589,9 @@ signals:
     void overlayRestartSuggested(const QString& kind);
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
+    // 自动继续后进入全屏: the automatically resumed source showed its first picture.
+    void startupFullscreenRequested();
+    void launchAtLoginChanged();
 
 private:
     // Structural change: every chain-derived property notifies.
