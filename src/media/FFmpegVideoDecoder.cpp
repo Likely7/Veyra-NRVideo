@@ -506,6 +506,8 @@ bool FFmpegVideoDecoder::openD3D11VA(const AVCodecParameters* codecParameters,
         close();
         return false;
     }
+    DXGI_ADAPTER_DESC1 adapterDesc{};
+    d3d11AdapterIsNvidia_ = SUCCEEDED(adapter->GetDesc1(&adapterDesc)) && adapterDesc.VendorId == 0x10DE;
     log::info("media", std::format("decoder: d3d11va decoder opened codec={} {}x{} lowLatency={} (private device, shared surfaces)",
         codec->name, context_->width, context_->height, lowLatency));
     return true;
@@ -575,6 +577,7 @@ void FFmpegVideoDecoder::close()
         avcodec_free_context(&context_);
     }
     releaseInterop();
+    d3d11AdapterIsNvidia_ = false;
     hwAccelActive_ = false;
     hwAccelKind_ = HardwareDecodeKind::None;
     lastFrameFormat_ = -1;
@@ -696,7 +699,7 @@ bool FFmpegVideoDecoder::sendPacket(const AVPacket* packet)
     return true;
 }
 
-const AVFrame* FFmpegVideoDecoder::receiveFrame()
+const AVFrame* FFmpegVideoDecoder::receiveFrame(DeinterlaceInput deinterlace)
 {
     if (context_ == nullptr) {
         receiveStatus_ = DecodeReceiveStatus::Error;
@@ -801,6 +804,22 @@ const AVFrame* FFmpegVideoDecoder::receiveFrame()
         }
         const UINT slice = static_cast<UINT>(reinterpret_cast<intptr_t>(frame_->data[1]));
         d3d11Context_->CopySubresourceRegion(slot.texture, 0, 0, 0, 0, decoded, slice, nullptr);
+        const bool filterInput = deinterlace == DeinterlaceInput::AllFrames ||
+            (deinterlace == DeinterlaceInput::InterlacedOnly && (frame_->flags & AV_FRAME_FLAG_INTERLACED));
+        constexpr UINT visibleHeight = 1080;
+        constexpr UINT extendedHeight = visibleHeight + 4;
+        if (filterInput && d3d11AdapterIsNvidia_ && desc.Format == DXGI_FORMAT_NV12 &&
+            frame_->width == 1920 && frame_->height == int(visibleHeight) &&
+            slot.width == desc.Width && extendedHeight <= slot.height && visibleHeight <= desc.Height) {
+            // The NVIDIA video processor can blend in black at the lower edge
+            // of 1080i content. Repeat a full NV12 row pair in the decoder's
+            // allocation padding, on the same queue and fence as the frame copy.
+            const D3D11_BOX edge{0, visibleHeight - 2, 0, slot.width, visibleHeight, 1};
+            for (UINT y = visibleHeight; y < extendedHeight; y += 2) {
+                d3d11Context_->CopySubresourceRegion(slot.texture, 0, 0, y, 0, decoded, slice, &edge);
+            }
+            hardwareSurface_.edgeExtendedHeight = extendedHeight;
+        }
         ++interopFenceValue_;
         const HRESULT hr = d3d11Context4_->Signal(d3d11Fence_, interopFenceValue_);
         if (SUCCEEDED(hr)) {

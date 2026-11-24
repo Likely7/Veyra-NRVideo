@@ -18,6 +18,7 @@ public:
     double observedPictureRate()const;
     int timeBaseDen()const;
     bool active()const;
+    bool usesExtendedEdge() const;
     const std::string& path()const;
     void close();
 private:

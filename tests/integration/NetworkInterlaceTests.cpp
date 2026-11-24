@@ -12,20 +12,29 @@
 #include <fstream>
 #include <iostream>
 #include <cmath>
+#include <array>
 #include <d3d12sdklayers.h>
 extern "C" {
 #include <libavutil/hwcontext.h>
+#include <libavutil/log.h>
 }
 using namespace veyra;
 // Test-only plane readback on the DIRECT queue. The upstream FFmpeg COPY
 // helper uses a mismatched barrier layout; product playback never uses either.
-bool readLuma(gfx::D3D12DeviceContext& device,gfx::CommandSlotRing& ring,const AVFrame* frame,AVFrame* output){
+bool readGpuPlane(gfx::D3D12DeviceContext& device,gfx::CommandSlotRing& ring,const AVFrame* frame,
+                  unsigned plane,std::vector<uint8_t>& pixels){
     const auto* native=reinterpret_cast<const AVD3D12VAFrame*>(frame->data[0]);
     if(!native||!native->texture)return false;
-    const auto desc=native->texture->GetDesc();if(desc.Format!=DXGI_FORMAT_NV12)return false;
+    const auto desc=native->texture->GetDesc();
+    if(desc.Format!=DXGI_FORMAT_NV12||plane>1||frame->width<=0||frame->height<=0||
+       (plane==1&&(frame->width%2||frame->height%2)))return false;
+    const unsigned subresource=native->subresource_index+plane*desc.MipLevels*desc.DepthOrArraySize;
+    const unsigned widthBytes=frame->width;
+    const unsigned height=plane?frame->height/2:frame->height;
     if(native->sync_ctx.fence&&FAILED(device.directQueue()->Wait(native->sync_ctx.fence,native->sync_ctx.fence_value)))return false;
     D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};UINT64 bytes=0;
-    device.device()->GetCopyableFootprints(&desc,native->subresource_index,1,0,&footprint,nullptr,nullptr,&bytes);
+    device.device()->GetCopyableFootprints(&desc,subresource,1,0,&footprint,nullptr,nullptr,&bytes);
+    if(footprint.Footprint.RowPitch<widthBytes||footprint.Footprint.Height<height)return false;
     D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_READBACK;
     D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;buffer.Width=bytes;buffer.Height=1;
     buffer.DepthOrArraySize=buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
@@ -35,15 +44,75 @@ bool readLuma(gfx::D3D12DeviceContext& device,gfx::CommandSlotRing& ring,const A
     D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barrier.Transition={native->texture,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};
     list->ResourceBarrier(1,&barrier);
-    D3D12_TEXTURE_COPY_LOCATION source{},target{};source.pResource=native->texture;source.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;source.SubresourceIndex=native->subresource_index;
+    D3D12_TEXTURE_COPY_LOCATION source{},target{};source.pResource=native->texture;source.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;source.SubresourceIndex=subresource;
     target.pResource=download.Get();target.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;target.PlacedFootprint=footprint;
     list->CopyTextureRegion(&target,0,0,0,&source,nullptr);std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
     if(!ring.submitAndSignal(slot)||!ring.waitIdle())return false;
+    pixels.resize(size_t(widthBytes)*height);
+    void* data=nullptr;D3D12_RANGE read{0,SIZE_T(bytes)};if(FAILED(download->Map(0,&read,&data)))return false;
+    for(unsigned y=0;y<height;++y)
+        std::memcpy(pixels.data()+size_t(y)*widthBytes,static_cast<const uint8_t*>(data)+footprint.Offset+size_t(y)*footprint.Footprint.RowPitch,widthBytes);
+    D3D12_RANGE written{};download->Unmap(0,&written);return true;
+}
+bool readLuma(gfx::D3D12DeviceContext& device,gfx::CommandSlotRing& ring,const AVFrame* frame,AVFrame* output){
+    std::vector<uint8_t> pixels;
+    if(!readGpuPlane(device,ring,frame,0,pixels))return false;
     output->format=AV_PIX_FMT_GRAY8;output->width=frame->width;output->height=frame->height;
     if(av_frame_get_buffer(output,32)<0)return false;
-    void* data=nullptr;D3D12_RANGE read{0,SIZE_T(bytes)};if(FAILED(download->Map(0,&read,&data)))return false;
-    for(int y=0;y<frame->height;++y)std::memcpy(output->data[0]+ptrdiff_t(y)*output->linesize[0],static_cast<const uint8_t*>(data)+footprint.Offset+size_t(y)*footprint.Footprint.RowPitch,frame->width);
-    D3D12_RANGE written{};download->Unmap(0,&written);return true;
+    for(int y=0;y<frame->height;++y)
+        std::memcpy(output->data[0]+ptrdiff_t(y)*output->linesize[0],pixels.data()+size_t(y)*frame->width,frame->width);
+    return true;
+}
+struct EdgeColor {
+    std::array<int,3> low{255,255,255};
+    std::array<int,3> high{};
+    unsigned samples=0;
+};
+// Independently decoded bottom color of the synthetic 1920x1080 H.264 fixture.
+constexpr std::array edgeFixture{91,86,193};
+bool inspectEdgeColor(gfx::D3D12DeviceContext& device,gfx::CommandSlotRing& ring,const AVFrame* decoded,EdgeColor& stats){
+    if(decoded->width!=1920||decoded->height!=1080)return false;
+    const auto release=[](AVFrame* f){av_frame_free(&f);};
+    std::unique_ptr<AVFrame,decltype(release)> mapped(nullptr,release);
+    std::array<std::vector<uint8_t>,2> storage;
+    std::array<const uint8_t*,3> data{};
+    std::array<int,3> stride{};
+    int format=decoded->format;
+    if(format==AV_PIX_FMT_D3D12){
+        format=AV_PIX_FMT_NV12;
+        for(unsigned plane=0;plane<2;++plane){
+            if(!readGpuPlane(device,ring,decoded,plane,storage[plane]))return false;
+            data[plane]=storage[plane].data();stride[plane]=decoded->width;
+        }
+    }else{
+        if(format==AV_PIX_FMT_D3D11){
+            mapped.reset(av_frame_alloc());
+            if(!mapped||av_hwframe_transfer_data(mapped.get(),decoded,0)<0)return false;
+            decoded=mapped.get();format=decoded->format;
+        }
+        for(unsigned plane=0;plane<3;++plane){
+            data[plane]=decoded->data[plane];stride[plane]=decoded->linesize[plane];
+        }
+    }
+    const bool interleaved=format==AV_PIX_FMT_NV12;
+    if(!interleaved&&format!=AV_PIX_FMT_YUV420P)return false;
+    for(unsigned component=0;component<3;++component){
+        const unsigned plane=component&&interleaved?1:component;
+        if(!data[plane])return false;
+        const int width=component?decoded->width/2:decoded->width;
+        const int height=component?decoded->height/2:decoded->height;
+        for(int y=height-4;y<height;++y){
+            const auto* row=data[plane]+ptrdiff_t(y)*stride[plane];
+            for(int x=0;x<width;++x){
+                const int index=component&&interleaved?x*2+int(component)-1:x;
+                const int value=row[index];
+                stats.low[component]=std::min(stats.low[component],value);
+                stats.high[component]=std::max(stats.high[component],value);
+            }
+        }
+    }
+    ++stats.samples;
+    return true;
 }
 int enginePlayback(const wchar_t* path,const wchar_t* directory,const wchar_t* effects){
     CoInitializeEx(nullptr,COINIT_MULTITHREADED);
@@ -115,6 +184,8 @@ int wmain(int argc,wchar_t** argv){
     desc.requireHardwareDecode=desc.preferHardwareDecode;
     desc.deinterlace=std::wstring_view(argv[3])==L"on";
     const int expected=_wtoi(argv[4]);const double fps=_wtof(argv[5]);
+    const bool edgeColor=argc==8&&std::wstring_view(argv[7])==L"--edge-color";
+    if(edgeColor)av_log_set_level(AV_LOG_VERBOSE);
     const std::filesystem::path out=argv[6];std::filesystem::create_directories(out);
     Logger::instance().openFile((out/L"source.log").wstring());Logger::instance().setConsoleEnabled(false);
     gfx::D3D12DeviceContext device;Status status=Status::Ok;
@@ -134,6 +205,7 @@ int wmain(int argc,wchar_t** argv){
             check(input.seek({0,1}),"seek after EOF resets decoder and filter");
         }
         unsigned count=0,pixelSamples=0,networkClockChanges=0;double last=-1e30,first=-1,comb=0;bool chronological=true,progressive=true;
+        EdgeColor edge;
         const AVFrame* decoded=nullptr;pipeline::FramePacket packet;source::SourceReadStatus result;
         while((result=input.read(packet,&decoded))==source::SourceReadStatus::Frame){
             check(decoded!=nullptr,"decoded field exists");if(!decoded)break;
@@ -150,6 +222,13 @@ int wmain(int argc,wchar_t** argv){
             }
             if(pass&&count==0)check(packet.flags&uint32_t(pipeline::FrameFlagBits::Seek),"first post-seek field carries seek reset");
             last=seconds;progressive=progressive&&!(decoded->flags&AV_FRAME_FLAG_INTERLACED);
+            if(edgeColor){
+                check(inspectEdgeColor(device,readback,decoded,edge),"visible bottom color planes can be read");
+                ++count;
+                if(expected<0&&count>=120)break;
+                if(count>1000){check(false,"output remains bounded");break;}
+                continue;
+            }
             AVFrame* downloaded=nullptr;const AVFrame* pixels=decoded;
             if(decoded->format==AV_PIX_FMT_D3D12||decoded->format==AV_PIX_FMT_D3D11){
                 downloaded=av_frame_alloc();
@@ -181,6 +260,16 @@ int wmain(int argc,wchar_t** argv){
         check(count>0&&chronological,"PTS strictly increases across every field");
         if(desc.deinterlace)check(count>0&&progressive,"interlaced fields are delivered as progressive frames");
         if(fps>0)check(std::abs(input.info().averageFps-fps)<0.01,"source metadata reports actual progressive rate");
+        if(edgeColor){
+            bool correct=edge.samples==count&&count>0;
+            for(unsigned c=0;c<3;++c)
+                correct=correct&&edge.low[c]>=edgeFixture[c]-3&&edge.high[c]<=edgeFixture[c]+3;
+            std::cout<<"EDGE pass="<<pass<<" samples="<<edge.samples
+                     <<" Y="<<edge.low[0]<<":"<<edge.high[0]<<" U="<<edge.low[1]<<":"<<edge.high[1]
+                     <<" V="<<edge.low[2]<<":"<<edge.high[2]<<" path="<<input.info().deinterlacePath
+                     <<" valid="<<correct<<std::endl;
+            check(correct,"bottom luma and chroma match the constant-color fixture");
+        }
         std::cout<<"RESULT pass="<<pass<<" count="<<count<<" first="<<first<<" last="<<last<<" comb="<<(pixelSamples?comb/pixelSamples:-1)<<" networkClockChanges="<<networkClockChanges<<" pixelSamples="<<pixelSamples<<" deinterlace="<<input.info().deinterlacePath<<" hardware="<<input.info().hardwareDecodeActive<<" failures="<<failures<<std::endl;
         if(result==source::SourceReadStatus::Error)std::wcerr<<input.errorMessage()<<std::endl;
     }

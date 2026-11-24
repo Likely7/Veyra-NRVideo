@@ -36,6 +36,7 @@ struct DecoderStats {
 };
 
 enum class DecodeReceiveStatus { NeedInput, Frame, EndOfStream, Error };
+enum class DeinterlaceInput { Disabled, InterlacedOnly, AllFrames };
 
 // Decoded surface handed to the graph ingress for paths whose texture does not
 // travel inside the AVFrame (D3D11VA). Pointers are borrowed: the decoder owns
@@ -47,6 +48,7 @@ struct HardwareSurfaceView {
     uint64_t waitValue = 0;             // signalled after this frame's decode
     uint32_t textureWidth = 0;          // includes decoder allocation padding
     uint32_t textureHeight = 0;
+    uint32_t edgeExtendedHeight = 0;   // includes the copied bottom edge for the video processor
 };
 
 class FFmpegVideoDecoder {
@@ -111,7 +113,7 @@ public:
 
     // Receive one decoded frame; false when more input is needed or at EOF.
     // The frame stays owned by the decoder and is valid until the next call.
-    const AVFrame* receiveFrame();
+    const AVFrame* receiveFrame(DeinterlaceInput deinterlace = DeinterlaceInput::Disabled);
     // nullptr can mean pending input, normal EOF, or a hard decode error.
     DecodeReceiveStatus receiveStatus() const { return receiveStatus_; }
 
@@ -202,6 +204,7 @@ private:
     uint32_t interopSlotIndex_ = 0;
     InteropSlot interopSlots_[kInteropSlotCount];
     HardwareSurfaceView hardwareSurface_{};
+    bool d3d11AdapterIsNvidia_ = false;
     struct D3D11TextureImport { ID3D12Resource* resource = nullptr; bool logged = false; };
     // One decoder pool is a single texture array, so this map stays tiny; the
     // cap only guards against a driver that rebuilds pools repeatedly.

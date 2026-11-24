@@ -1123,7 +1123,13 @@ readAgain:   // a damaged picture was dropped (corrupt policy WaitKeyframe): fet
             if(result==AVERROR_EOF)return SourceReadStatus::Eos;
             if(result!=AVERROR(EAGAIN)||filterDraining_){errorMessage_=L"去隔行输出失败，请查看诊断";return SourceReadStatus::Error;}
         }
-        frame = decoder_.receiveFrame();
+        auto deinterlaceInput = media::DeinterlaceInput::Disabled;
+        if (deinterlacer_.usesExtendedEdge()) {
+            deinterlaceInput = media::DeinterlaceInput::AllFrames;
+        } else if (deinterlaceEnabled_ && !deinterlacer_.active()) {
+            deinterlaceInput = media::DeinterlaceInput::InterlacedOnly;
+        }
+        frame = decoder_.receiveFrame(deinterlaceInput);
         if(frame){
             if(resumeAfterUs_!=INT64_MIN){
                 const auto pts=framePts(frame,decoder_.frameTimeBaseNum(),decoder_.frameTimeBaseDen(),startTimeUs_);
