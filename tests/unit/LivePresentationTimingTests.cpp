@@ -756,7 +756,7 @@ int main(){
                   "variable content reports its observed rate even when no fixed cadence fits");
         }
         const int n=1200;
-        for(double captureFps:{58.0,60000.0/1001.0,60.0}){
+        for(double captureFps:{58.0,60000.0/1001.0,60.0,120000.0/1001.0,120.0}){
             for(double fps:{24.0,25.0,30000.0/1001.0,30.0,40.0,45.0,50.0,60.0}){
                 const auto effective=std::min(fps,captureFps);
                 const auto r=run(captureFps,[&](int i){return int64_t(std::floor(i*effective/captureFps+1e-9));},n,1,0,int64_t(std::llround(1e7/effective)));
@@ -874,6 +874,20 @@ int main(){
          ContentDedup dedup;const uint64_t shown=3;int kept=0;
          for(int i=0;i<240;++i)kept+=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;
          check(kept==238,"dedup with no learned rate holds after two ordinary repeat slots");}
+        {
+            ContentDedup dedup;
+            constexpr int64_t transport=83333;
+            const uint64_t picture=1;
+            int firstHold=0;
+            bool continuous=true;
+            for(int i=0;i<120;++i){
+                const auto decision=dedup.observe(&picture,i*transport,transport,i==0);
+                if(firstHold)continuous&=decision.keep&&decision.holdInterval==transport;
+                else if(decision.holdInterval)firstHold=i;
+            }
+            check(firstHold>=5&&firstHold<=6&&continuous,
+                  "dedup 120 Hz still picture resumes transport after ordinary 24 Hz duplicate slots");
+        }
         {
             ContentDedup menu;
             constexpr int64_t dt=333333;
