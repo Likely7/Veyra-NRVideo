@@ -1,5 +1,14 @@
 # 当前工作日志
 
+## 2026-11-23 2.2.1 录制与 GPU 性能修复重打包
+
+- 从已验收的 2.2.1 `9e428c54` 继续，移植 Asphalt 报告确认的三项行为到现有共享链路。录制和回放以源尺寸判断换段，编码尺寸向上补齐偶数，已有单次 NV12/P010 转换延展最右列和最下一行。调色仅在需要清晰度或正向去朦胧时计算低分辨率统计。双超分首段模型旁路时以实际首段输入直接降采样，省去 RGBA16F 中间纹理和同尺寸复制。
+- 用 WGC 窗口夹具在 RTX 5070 复现旧版拒绝 639×359。新版覆盖奇宽、奇高、宽高均奇、偶数原尺寸及即时回放。5 个 HDR 和 4 个 SDR MP4 各解码 72 帧，共 648 帧。抽查补齐列/行的解码亮度差 P95 为 0。SDR 路径覆盖 NVENC 与 Media Foundation。Asphalt 原场景和 300 Hz 矩阵为附件中的历史数据。 [HDR 解码](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/recording-decode.json>) · [SDR 解码](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/recording-sdr-decode.json>)
+- 用旧版产品静态库和着色器与本轮构建对拍。实时切换纹理、清晰度和去朦胧的 SDR/P010 PQ 各 8 个 FP16 样本逐字节一致，D3D12 调试层 0 错误。双超分 31 组通过，同尺寸 DLSS/FSR 旁路的三帧只执行三次后段模型，首段线性误差最大 0.000488，正常放大仍执行两段。FSR 运动测试 6 组通过。 [调色对拍](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/color-detail-ab.json>) · [双超分](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/dual-sr-check.json>)
+- `build-recording-handoff.py --task codex-2.2.1-asphalt-performance-20261123 --label 2.2.1 --jobs 2` 复用 `E:/项目/Veyra/build/codex-magpie-perf-20261122`，31 个目标通过，产品和源码 ZIP 对应 `b111dec5`。第一次编译的 `firstVideoSr` 作用域错误已纠正。源码确认 CRLF 来自归档过滤，按 LF 重新生成并维持上一份源码包对项目宣传视频的排除。 [构建回执](<E:/项目/Veyra/logs/codex-2.2.1-asphalt-performance-20261123/build-20261123-212936/receipt.json>) · [源码清单](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/SOURCES.json>)
+- 25 组通用回归通过，含 Qt Quick 257 项。录制回放缓冲 37 项，视频 AI 设置 299 项。实际 HEVC 导出 540 帧解码通过，用户原录屏的 VFG 中、高档各导出并解码 320 帧。 [回归](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/test-results.json>) · [HEVC](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/hevc-export-check.json>) · [VFG](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/vfg-final-decoded.json>)
+- 四个 2.2.1 成品放在 `E:/项目/Veyra/test-packages/codex-2.2.1-asphalt-performance-20261123`。两套各核对 108 个着色器，解压后分别核验 1,806 和 2,430 个文件并实播。AMD 安装夹具走完安装、实播和卸载。NVIDIA 安装器完成构建和静态校验。更新清单重新签名并验签，安装 EXE 的 Authenticode 状态为 `NotSigned`。已回收本轮解压重复副本，保留构建、包、源码和验收证据。 [最终包实测](<E:/项目/Veyra/reports/codex-2.2.1-asphalt-performance-20261123/packaged-smoke.json>) · [成品 SHA-256](<E:/项目/Veyra/test-packages/codex-2.2.1-asphalt-performance-20261123/SHA256SUMS.txt>)
+
 ## 2026-11-23 2.2.1 本地整包
 
 - 核对 `v2.2.0` 到构建提交 `f6ba1f22` 的 119 个提交和 52 个本地分支。2.2.0 后的 23 个开发分支均已进入构建历史。包内包含准星形状保护、播放条按钮布局、节点参数同步和视频降噪的最终提交。 [分支核对](<E:/项目/Veyra/reports/codex-build-2.2.1-final-20261123/branch-inventory.json>) · [双语更新说明](RELEASE_NOTES_2.2.1.md)
