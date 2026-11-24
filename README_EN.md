@@ -17,7 +17,7 @@
 <!-- veyra-creator-and-tutorials:end -->
 
 <!-- veyra-main-pr-integration -->
-**Veyra 2.2.0** · [Download and release notes](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)
+**Veyra 2.2.1** · [Download and release notes](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
 
 
 The English README is now the [repository homepage](README.md).
