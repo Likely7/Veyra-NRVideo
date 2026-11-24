@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <vector>
@@ -9,6 +10,7 @@ namespace veyra::engine {
 // Values are host-clock 100 ns; source PTS differences only supply spacing.
 class LivePairLatency {
     struct Sample { int64_t time, delay; };
+    static constexpr size_t kMaxSamples=64;
     std::deque<Sample> samples_;
     int64_t selected_=0;
 public:
@@ -18,7 +20,7 @@ public:
     void reset(){samples_.clear();selected_=0;}
     void observe(int64_t now,int64_t requiredDelay){
         if(requiredDelay<=0||requiredDelay>20000000)return;
-        while(!samples_.empty()&&(samples_.size()>=64||samples_.front().time<now-10000000))samples_.pop_front();
+        while(!samples_.empty()&&(samples_.size()>=kMaxSamples||samples_.front().time<now-10000000))samples_.pop_front();
         samples_.push_back({now,requiredDelay});
     }
     // Apply the floor from the actual pair's deadline geometry before
@@ -28,18 +30,19 @@ public:
         return selected_;
     }
     int64_t select(int64_t now,int64_t legacyDelay,int64_t interval,unsigned multiplier,int64_t samplingAllowance=0){
-        std::vector<int64_t> current;
-        for(const auto& sample:samples_)if(sample.time>=now-10000000)current.push_back(sample.delay);
         if(interval<=0||multiplier<2){selected_=0;return legacyDelay;}
+        std::array<int64_t,kMaxSamples> current;
+        size_t count=0;
+        for(const auto& sample:samples_)if(sample.time>=now-10000000)current[count++]=sample.delay;
         const auto limit=legacyDelay+samplingAllowance;
         // A gap in readiness observations is expected when pairs are skipped.
         // Retain the last phase until enough new samples arrive.
-        if(current.size()<8){
+        if(count<8){
             selected_=std::min(selected_?selected_:legacyDelay,limit);
             return selected_;
         }
-        const auto index=(current.size()*95+99)/100-1;
-        std::nth_element(current.begin(),current.begin()+index,current.end());
+        const auto index=(count*95+99)/100-1;
+        std::nth_element(current.begin(),current.begin()+index,current.begin()+count);
         // 0.5 ms covers wake-up jitter with MMCSS. The allowance lets readiness
         // move the phase past the legacy delay: deduplicated capture, where a
         // later sample can move readiness past a deadline on the continuous
