@@ -7,5 +7,5 @@ User-mode receiver for the XCAP PCIe HDMI capture card, used by `src/source/Xcap
 - `xcap_sim.h/.cpp`: a virtual card for testing without hardware (`XCAP_SIM`).
 - `xcap_hw.h`, `xcap_ioctl.h`: register map and driver interface shared with the FPGA and the Windows driver.
 
-Origin: https://github.com/isaac-cheng-if/Veyra-NRVideo (branch `xcap`, folders `xcap/host` and `xcap/common`).
-License: GPL-3.0, the same as Veyra. No binaries, SDKs or vendor code are included.
+Origin: `host/` and `common/` of https://github.com/isaac-cheng-if/XCAP (the capture card project itself, PolyForm Noncommercial).
+License: this bundled copy is part of Veyra and is licensed under GPL-3.0, the same as Veyra. No binaries, SDKs or vendor code are included.
