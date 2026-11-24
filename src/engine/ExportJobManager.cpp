@@ -173,7 +173,7 @@ bool ExportJobManager::start(const std::wstring& input,const std::wstring& outpu
     p_->snapshot.state=ExportState::Preparing;p_->snapshot.output=output;p_->snapshot.jobId=(GetTickCount64()<<16)^pi.dwProcessId;p_->snapshot.frozenRevision=settings.revision;p_->snapshot.frozen=s.settings;p_->startTick=GetTickCount64();p_->pausedAt=p_->pausedTotal=0;
     p_->snapshot.workerPid=pi.dwProcessId;
     p_->snapshot.workerLog=std::filesystem::absolute(runtime::logsDirectory()/std::format("export-worker-{}.log",pi.dwProcessId)).wstring();
-    log::info("export-worker",std::format("started jobId={} pid={} frozenRevision={} nrRuntime={} nrPolicy={} backend={} independentPlayback=true log={}",p_->snapshot.jobId,pi.dwProcessId,settings.revision,nrRuntimeName(s.settings.nrRuntime),int(s.settings.nrPolicy),frameGenerationBackendName(s.settings.frameGenerationBackend),std::filesystem::path(p_->snapshot.workerLog).string()));return true;
+    log::info("export-worker",std::format("started jobId={} pid={} frozenRevision={} nrRuntime={} nrPolicy={} backend={} independentPlayback=true log={}",p_->snapshot.jobId,pi.dwProcessId,settings.revision,nrRuntimeName(s.settings.nrRuntime),int(s.settings.nrPolicy),frameGenerationBackendName(s.settings.frameGenerationBackend),veyra::runtime::pathUtf8(std::filesystem::path(p_->snapshot.workerLog))));return true;
 }
 bool ExportJobManager::enqueue(const std::wstring& input,const std::wstring& output,EnhancementSettings settings,bool hevc,unsigned maxFrames,int audioStreamIndex,double trimStartSeconds,double trimEndSeconds,sink::ExportRateControl rateControl){
     if(poll().active()||!p_->queue.empty()){p_->queue.push_back({input,output,settings,hevc,maxFrames,audioStreamIndex,trimStartSeconds,trimEndSeconds,rateControl});return true;}
@@ -247,7 +247,7 @@ ExportJobSnapshot ExportJobManager::poll(){
         // their paths so starting the next export cannot delete them.
         p_->parts.clear();
         const auto& final=p_->snapshot;
-        log::info("export-worker",std::format("finished jobId={} pid={} exit={} state={} source={} generated={} holds={} encoded={} log={}",final.jobId,final.workerPid,code,int(final.state),final.sourceFrames,final.generated,final.holds,final.encoded,std::filesystem::path(final.workerLog).string()));
+        log::info("export-worker",std::format("finished jobId={} pid={} exit={} state={} source={} generated={} holds={} encoded={} log={}",final.jobId,final.workerPid,code,int(final.state),final.sourceFrames,final.generated,final.holds,final.encoded,veyra::runtime::pathUtf8(std::filesystem::path(final.workerLog))));
         log::info("export-worker",utf8(final.message));
         if(final.state==ExportState::Failed)p_->snapshot.message+=L"\n日志："+final.workerLog;
         p_->clear();

@@ -18,6 +18,9 @@ Veyra modifications, 2026-09-13:
 - `native_strict_dis_provider.cpp`: stage SRV creation in a non-visible heap
   before copying into the visible heap, following Veyra's existing driver workaround.
 - Removed an extra trailing blank line from the BSD license file; its text is unchanged.
+- 2026-11-24: `native_strict_dis_provider.cpp` opens shader files from a UTF-8
+  directory string (`std::filesystem::path` from `std::u8string`) instead of the
+  ANSI code page, so a program folder with characters outside it still loads.
 - Algorithm and shader math are unchanged. `shader-recipes.json` contains the
   DIS entries selected from upstream source-manifest.json. The CMake recipe
   retains their entry points, macros and strict floating-point flags.

@@ -1,4 +1,5 @@
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/RuntimePaths.h"
 #include "veyra/pipeline/DolbyVisionP5.h"
 #include "veyra/pipeline/HdrToneMap.h"
 // EnhanceGraph implementation - the real GPU chain migrated from
@@ -981,7 +982,16 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         spatialBytes(desc_.finalSrQuality(), {srInW_, srInH_}, {srOutW_, srOutH_}) +
         (desc_.dualSr && desc_.firstSrEnlarges() ?
             spatialBytes(desc_.videoSrQuality, {srcW_, srcH_}, {desc_.firstSrWidth, desc_.firstSrHeight}) : 0);
-    const uint64_t estimate=hudBytes+spatialSrBytes+reuseBytes+temporalHdrBytes+dlaaBytes+vfxSrBytes+firstSrMotionBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
+    // Video denoise: one RGBA16F output at the source extent (createVideoDenoise).
+    const uint64_t videoDenoiseBytes=desc_.videoDenoiseEnabled?uint64_t(srcW_)*srcH_*8u:0;
+    // RIFE (RifeDmlBackend::initialize): FP32 tensors at the 64-aligned work extent,
+    // two 3-channel planes plus a 1-channel time and a 3-channel output per step
+    // (steps = the multiplier above 2X, else one), and an RGBA8 input copy. The
+    // DirectML session's own allocations come on top.
+    const uint64_t rifeSteps=desc_.fgMultiplier>2?desc_.fgMultiplier:1u;
+    const uint64_t rifeBytes=fgEnabled_&&rifeEnabled()?
+        uint64_t((workW_+63u)/64u*64u)*((workH_+63u)/64u*64u)*4u*(6u+4u*rifeSteps)+uint64_t(workW_)*workH_*4u:0;
+    const uint64_t estimate=videoDenoiseBytes+rifeBytes+hudBytes+spatialSrBytes+reuseBytes+temporalHdrBytes+dlaaBytes+vfxSrBytes+firstSrMotionBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
         +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0)
@@ -1521,7 +1531,7 @@ void EnhanceGraph::applyAdaMfgUnlock()
 HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
     if (module == nullptr) {
         veyra::log::warn("ada-mfg", std::format("DLSS-G runtime could not be opened for the unlock (path={} win32={})",
-                                                modulePath.string(), GetLastError()));
+                                                veyra::runtime::pathUtf8(modulePath), GetLastError()));
         return;
     }
     const auto scan = ngx::AdaMfgUnlock::scan(module);
@@ -1568,7 +1578,7 @@ void EnhanceGraph::prepareAmpereFgSpoof()
 HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
     if (module == nullptr) {
         veyra::log::warn("ampere-mfg", std::format("DLSS-G runtime could not be preloaded for the architecture spoof (path={} win32={})",
-                                                   modulePath.string(), GetLastError()));
+                                                   veyra::runtime::pathUtf8(modulePath), GetLastError()));
         return;
     }
     // Preserve real architecture for DL4RT's hardware-specific network choice.
@@ -1614,7 +1624,7 @@ void EnhanceGraph::applyAmpereMfgUnlock()
 HMODULE module = fgCompatibility_ ? fgCompatibility_->provider() : nullptr;
     if (module == nullptr) {
         veyra::log::warn("ampere-mfg", std::format("DLSS-G runtime could not be opened for the RTX 30 unlock (path={} win32={})",
-                                                   modulePath.string(), GetLastError()));
+                                                   veyra::runtime::pathUtf8(modulePath), GetLastError()));
         return;
     }
     const auto scan = ngx::AmpereMfgUnlock::scan(module);
@@ -2028,7 +2038,7 @@ bool EnhanceGraph::initNgxFeatures()
     auto nrDirectory=std::filesystem::path(desc_.runtimeAbsPath);
     if(selectedNr==engine::NrRuntime::Ampere)nrDirectory/=L"nr-ampere";
     if(selectedNr==engine::NrRuntime::NvidiaOriginal)nrDirectory/=L"nr-original";
-    veyra::log::info("nr-runtime",std::format("selected={} requestedId={} path={}",engine::nrRuntimeName(selectedNr),int(desc_.nrRuntime),nrDirectory.string()));
+    veyra::log::info("nr-runtime",std::format("selected={} requestedId={} path={}",engine::nrRuntimeName(selectedNr),int(desc_.nrRuntime),veyra::runtime::pathUtf8(nrDirectory)));
     nrAdapter_ = std::make_unique<ngx::DlssNrRuntimeAdapter>();
     if (!nrAdapter_->load(nrDirectory.wstring(), st) ||
         !nrAdapter_->installCallerCompatibility(st) ||
@@ -4610,6 +4620,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // pair skipped for budget never leaves an older frame as A.
     const bool rifeRecordOnly=rife_&&fgBackendAvailable&&!runFg;
     if(fgBackendAvailable&&!runFg){out.fgSkippedBeforeEval=out.fgCandidates;fgHistorySkipped_=!vfgRecordOnly&&!rifeRecordOnly;}
+    // Whether the FG lists below close this frame's GPU timing; otherwise the
+    // main list resolves it and reports its fence.
+    bool fgClosesTiming=runFg;
     if((runFg||vfgRecordOnly)&&vfgBackend_){
         // First timestamp precedes the producer signal/CUDA dependency wait;
         // the matching end follows the consumer copy. The direct-queue span
@@ -4637,14 +4650,17 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list,fgFrame,D3D12_RESOURCE_STATE_COPY_SOURCE);
         if(!rife_->capture(list,fgFrame)){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,fgFrame,D3D12_RESOURCE_STATE_COMMON);
+        // First frame after a reset: the FG loop stops before any list of its own,
+        // so the spans opened above end here and this list carries the timing.
+        if(runFg&&!rife_->hasPair()){gpuTimer_.mark(list,GpuStage::Fg1,true);gpuTimer_.mark(list,GpuStage::FgBatch,true);fgClosesTiming=false;}
     }
     composeExclusion(list,parity,parity,exclusionUi_[parity]!=nullptr,!reset&&prevValid_);
     // Live HUD Lock learns from this real frame against the previous one (enhanced colours).
     if(hudLock_&&!hudLock_->update(list,tracker_,parity,!prevValid_))veyra::log::warn("hud-lock","update skipped");
-    if(!runFg)gpuTimer_.resolve(list);
+    if(!fgClosesTiming)gpuTimer_.resolve(list);
     if (!submitGraph(slot)) return false;
     if(hudProtect_)hudProtect_->submitted(ring_->lastSignaledValue());
-    if(!runFg)gpuTimer_.submitted(ring_->lastSignaledValue());
+    if(!fgClosesTiming)gpuTimer_.submitted(ring_->lastSignaledValue());
     out.videoFenceValue = ring_->lastSignaledValue();
     out.videoFenceObject = ring_->fence();
 
@@ -5012,6 +5028,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if(desc_.doviFollow!=s.doviFollow)
         veyra::log::info("hdr-dovi",std::format("Dolby Vision follow {} -> {}",desc_.doviFollow?"on":"off",s.doviFollow?"on":"off"));
     desc_.doviFollow=s.doviFollow;
+    // Read by the presenter every frame (VideoPresenter: doviCurveFromLevel1).
+    desc_.doviFollowAverage=s.doviFollowAverage;
     if(!(s.color==desc_.color)){
         desc_.color=s.color;
         if(s.color.enabled){
@@ -5082,22 +5100,24 @@ void EnhanceGraph::setNrEnabled(bool on)
     const bool wasEnabled=nrEnabled_;
     if(nrPreparing_)pendingNrEnabled_=on;
     nrEnabled_=on&&!nrPreparing_&&nrCreated();
+    // Live colour edits also call this setter with NR unchanged: the views
+    // already name the right input, and lists still in flight read them, so
+    // nothing is rewritten. A genuine NR bypass toggle retires those lists
+    // first, as the NR-preparation handover does.
+    if(wasEnabled==nrEnabled_)return;
+    if(ring_&&!ring_->drainQueue())veyra::log::warn("nr","queue drain before NR bypass view change failed");
+    auto* input=nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get());
     if(tailColorOutput_){
-        // Live colour edits also call this setter. Keep the final blit bound
-        // to the tail, rather than silently bypassing every downstream grade.
-        // A genuine NR bypass changes only the first tail pass's input.
-        if(wasEnabled!=nrEnabled_&&!tailPasses_.empty()){
-            const auto& first=tailPasses_.front();
-            auto* input=nrEnabled_&&desc_.finalNrAfterSr()?residualRgba_.Get():(preNrColorOutput_?preNrColorOutput_:workRgba_.Get());
-            bindSlotPassInput(first,input);
-        }
+        // Keep the final blit bound to the tail, rather than silently bypassing
+        // every downstream grade. The bypass changes only the first tail pass's input.
+        if(!tailPasses_.empty())bindSlotPassInput(tailPasses_.front(),input);
         return;
     }
-    // Refresh the section-5 blit SRV exactly as the probe did at runtime
-    // (direct write into the visible heap - proven safe for this refresh).
-    makeSrv(context_.device(),
-        nrEnabled_&&desc_.finalNrAfterSr() ? residualRgba_.Get() : (preNrColorOutput_?preNrColorOutput_:workRgba_.Get()),
-        DXGI_FORMAT_R16G16B16A16_FLOAT, cpuHandleOf(blitPass_, 2));
+    // The section-5 blit SRV, through the staging heap (GpuPassUtils.h driver note).
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
+    stager_.stageSrv(input,&srv,blitPass_.heap.Get(),2);
 }
 
 ID3D12Fence* EnhanceGraph::contextFence()const{return context_.fence();}

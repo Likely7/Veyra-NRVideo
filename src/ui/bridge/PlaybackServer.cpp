@@ -30,6 +30,10 @@ PlaybackServer::PlaybackServer(PlayHandler handler,QObject* parent)
     connect(&server_,&QTcpServer::newConnection,this,&PlaybackServer::onNewConnection);
 }
 PlaybackServer::~PlaybackServer(){server_.close();}
+void PlaybackServer::close(){
+    if(!server_.isListening())return;
+    server_.close();log::info("playback-server","stopped listening");
+}
 bool PlaybackServer::listen(quint16 port){
     if(!server_.listen(QHostAddress::LocalHost,port)){
         log::warn("playback-server",std::format("loopback listen failed: {}",server_.errorString().toStdString()));return false;

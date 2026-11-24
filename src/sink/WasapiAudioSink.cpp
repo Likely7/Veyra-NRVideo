@@ -65,6 +65,7 @@ bool AudioPipeline::open(const std::wstring& path,const std::atomic<bool>* cance
     AVDictionary* options=nullptr;
     if(media::networkMediaInput(path)){
         media::networkMediaOptions(&options);
+        media::networkProtocolWhitelist(&options,path);
         // The DASH audio address is a separate CDN request and needs the same
         // Referer/UA the video one carries; the shared helper spells them.
         media::networkMediaHeaders(&options,requestHeaders,userAgent);

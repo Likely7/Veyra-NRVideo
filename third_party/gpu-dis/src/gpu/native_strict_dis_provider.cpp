@@ -14,6 +14,7 @@
 #include <array>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <utility>
@@ -63,7 +64,8 @@ struct Pipeline {
         ComPtr<ID3DBlob> blob,errors;
         checked(D3D12SerializeRootSignature(&desc,D3D_ROOT_SIGNATURE_VERSION_1,&blob,&errors),"DIS root serialize");
         checked(d->CreateRootSignature(0,blob->GetBufferPointer(),blob->GetBufferSize(),IID_PPV_ARGS(&root)),"DIS root");
-        std::ifstream input(file,std::ios::binary|std::ios::ate);
+        // Veyra 2026-11-24: `file` is UTF-8; open it as such, not through the ANSI code page.
+        std::ifstream input(std::filesystem::path(std::u8string(file.begin(),file.end())),std::ios::binary|std::ios::ate);
         if(!input) throw std::runtime_error("Cannot open DIS shader: "+file);
         const auto length=input.tellg(); if(length<=0) throw std::runtime_error("Empty DIS shader: "+file);
         std::vector<char> bytes((size_t)length); input.seekg(0); input.read(bytes.data(),(std::streamsize)bytes.size());

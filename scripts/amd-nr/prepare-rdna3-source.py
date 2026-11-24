@@ -6,8 +6,10 @@ from pathlib import Path
 PIN='ab455d179922adc11f65675d399e1d553bf423f0'
 BLOBS={"runtime/core/network.cpp":"aa8628396dfe5d70d9f56e77072ad34596540552","runtime/core/network.h":"037a6463060c561e5baa6b66aaac26d65ccf81c1","runtime/common/cuda_min.h":"54ba01035ae482db84cd5a45aa0930025d355d67","runtime/common/ngx_cuda.h":"52593d310f2b7c3ed189e7a88c4b4aa197eeda9c","LICENSE":"ad7bd58931ae2ca601959041fdd8fb94390f04c0"}
 FILES=['runtime/core/network.cpp','runtime/core/network.h','runtime/common/cuda_min.h','runtime/common/ngx_cuda.h','LICENSE']
-p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);a=p.parse_args()
-a.out.resolve().relative_to(Path('E:/项目/Veyra').resolve())
+p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True)
+# Output must stay under the research root (AGENTS.md); --root only moves that root.
+p.add_argument('--root',type=Path,default=Path('E:/项目/Veyra'));a=p.parse_args()
+a.out.resolve().relative_to(a.root.resolve())
 rows=[]
 for name in FILES:
     source=a.out/'source-pinned'/name;source.parent.mkdir(parents=True,exist_ok=True)

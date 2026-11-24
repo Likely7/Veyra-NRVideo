@@ -630,6 +630,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
     if(options.captureReplayForTest)veyra::log::info("capture-test","file replay exercises live scheduler; no physical capture device or latency measurement");
     bool audioStarted=false;bool failed=false;
+    // The raw capture preview kept after the enhanced graph took over. Declared
+    // outside the session block so leaving it early does not release the old
+    // presenter and graph before the queue is drained below.
+    std::unique_ptr<CaptureGraphPreparation::Result> retiredCapturePreview;
     try {
         do {
             Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;
@@ -1103,7 +1107,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 ring.queue()->GetDesc().Type==D3D12_COMMAND_LIST_TYPE_DIRECT;
             int64_t rawFirstPresent=0,lastRawPresent=0;
             uint64_t firstEnhancedRevision=0;
-            std::unique_ptr<CaptureGraphPreparation::Result> retiredCapturePreview;
             Clock::time_point retireCaptureAt;
             bool rawSurfaceRevealed=false;
             const auto capturePreflight=gd.compatibilityPreflight;
@@ -2220,9 +2223,25 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // Audio settings may be edited while the model is loading.
                     // Route the video request to the background graph below,
                     // rather than rebuilding it in the synchronous settings path.
+                    // Source-level settings apply to the capture now, exactly as
+                    // the synchronous path below does once the graph is live.
+                    if(requested.audioSync!=options.settings.audioSync||requested.audioOffsetMs!=options.settings.audioOffsetMs)
+                        captureSource.setAudioSync(unsigned(requested.audioSync),requested.audioOffsetMs);
+                    if(requested.captureFlipVertical!=options.settings.captureFlipVertical)
+                        captureSource.setVerticalFlip(requested.captureFlipVertical);
+                    if(requested.captureAudio!=options.settings.captureAudio){
+                        captureSource.setAudioIngress(unsigned(requested.captureAudio));
+                        status(L"采集音频模式已记录；重新连接采集卡后生效",false);
+                    }
+                    if(requested.captureBuffer!=options.settings.captureBuffer){
+                        captureSource.setBufferMode(unsigned(requested.captureBuffer));
+                        status(L"设备缓冲模式已记录；重新连接采集卡后生效",false);
+                    }
                     options.settings.audioSync=requested.audioSync;
                     options.settings.audioOffsetMs=requested.audioOffsetMs;
                     options.settings.captureFlipVertical=requested.captureFlipVertical;
+                    options.settings.captureAudio=requested.captureAudio;
+                    options.settings.captureBuffer=requested.captureBuffer;
                     requested=options.snapshot();
                     requestedOrder=options.nodeOrder;
                 }
@@ -2715,6 +2734,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceMasteringPeakNits=resizeMastering;snapshot_.sourceMaxCllNits=resizeCll;snapshot_.sourceMaxFallNits=resizeFall;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
                     }
                     if(!presenter->prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}
+                    // Without a model load in progress a pending task is a cleanup
+                    // worker releasing an older graph through the NGX core cache
+                    // (render-thread-only): let it finish before a graph borrows it.
+                    if(!captureStarting&&capturePreparation.pending())capturePreparation.finish(capturePreviewWindow);
                     graph->shutdown();recentGraphCache.evict("source-resize");
                     graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,captureStarting?nullptr:&coreCache);graphBytes=0;out={};hasOutput=false;
                     if(!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}
@@ -2752,7 +2775,17 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         }
                         prepared.graph=std::move(raw);
                         prepared.retiringPreview=true;
-                        options=startupRequest->selected;gd=startupRequest->desc;graphBytes=prepared.bytes;
+                        {
+                            // The capture already runs with the source-level settings
+                            // edited while the graph loaded; keep them, not the older
+                            // values the request was started with.
+                            const auto live=options.settings;
+                            options=startupRequest->selected;
+                            options.settings.audioSync=live.audioSync;options.settings.audioOffsetMs=live.audioOffsetMs;
+                            options.settings.captureFlipVertical=live.captureFlipVertical;
+                            options.settings.captureAudio=live.captureAudio;options.settings.captureBuffer=live.captureBuffer;
+                        }
+                        gd=startupRequest->desc;graphBytes=prepared.bytes;
                         publishFrameGenerationCapabilities();
                         {
                             std::lock_guard lock(mutex_);
@@ -2769,7 +2802,14 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     };
                     if(auto prepared=capturePreparation.takeReady()){
                         const auto& desc=startupRequest->desc;
-                        const bool current=startupRequest->settings==target&&startupRequest->order==order&&
+                        // Source-level settings (audio sync, capture flip/audio/buffer)
+                        // never shape the graph; editing them must not throw away a
+                        // model that took seconds to load.
+                        auto graphSettings=startupRequest->settings;
+                        graphSettings.audioSync=target.audioSync;graphSettings.audioOffsetMs=target.audioOffsetMs;
+                        graphSettings.captureFlipVertical=target.captureFlipVertical;
+                        graphSettings.captureAudio=target.captureAudio;graphSettings.captureBuffer=target.captureBuffer;
+                        const bool current=graphSettings==target&&startupRequest->order==order&&
                             desc.sourceWidth==width&&desc.sourceHeight==height&&desc.hdrInput==gd.hdrInput&&
                             desc.captureBitDepth==gd.captureBitDepth&&desc.packedInput==gd.packedInput&&
                             desc.rgbInput==gd.rgbInput&&desc.yuy2Input==gd.yuy2Input&&
@@ -4197,6 +4237,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // play failure left "graph shutdown complete" as its last line.
     audioPipe.stopThread();audio.shutdown();veyra::log::info("engine","teardown: audio stopped");
     ring.drainQueue();presenter->close();graph->shutdown();recentGraphCache.evict("session-close");
+    if(retiredCapturePreview){retiredCapturePreview.reset();veyra::log::info("engine","teardown: retired capture preview released");}
     veyra::log::info("engine","teardown: closing sources");
     captureSource.close();screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);
     veyra::log::info("engine","teardown: sources closed");

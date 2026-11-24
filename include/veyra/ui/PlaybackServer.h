@@ -24,6 +24,8 @@ public:
     ~PlaybackServer() override;
 
     bool listen(quint16 port = 0);
+    void close();
+    bool listening() const { return server_.isListening(); }
     quint16 serverPort() const { return server_.serverPort(); }
 
 private:

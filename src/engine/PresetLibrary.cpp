@@ -110,6 +110,17 @@ static bool hasVideoDenoise(const ChainConfiguration& config) {
         (config.editor && config.editor->nodes.firstOf(EffectType::VideoDenoise));
 }
 
+// Each format upgrade appends a tag so an older build keeps its own file; after
+// many upgrades the name alone nears NTFS's 255-character limit and the path
+// MAX_PATH. Past that the library and session continue in one short file beside
+// the original, which every later load prefers and every later save reuses.
+static std::filesystem::path compactSidecar(const std::filesystem::path& base) {
+    return std::filesystem::path(base).concat(L".compact");
+}
+static bool sidecarTooLong(const std::filesystem::path& p) {
+    return p.filename().native().size() > 200 || p.native().size() + 5 >= MAX_PATH;
+}
+
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
@@ -183,6 +194,11 @@ bool PresetLibrary::load() {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
+    // An .output-controls file later saved with the 「自动」 flag continues as its own .auto-fg sidecar.
+    if(path_.wstring().ends_with(L".output-controls")){
+        const auto upgradedControls=std::filesystem::path(path_).concat(L".auto-fg");
+        if(std::filesystem::exists(upgradedControls))path_=upgradedControls;
+    }
     const auto modesPath=std::filesystem::path(path_).concat(L".exclusion-modes");
     if(std::filesystem::exists(directModes))path_=directModes;
     else if(std::filesystem::exists(modesPath))path_=modesPath;
@@ -195,6 +211,7 @@ bool PresetLibrary::load() {
     const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
     if(std::filesystem::exists(directDenoise))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath))path_=denoisePath;
+    if (const auto compact = compactSidecar(base_); std::filesystem::exists(compact)) path_ = compact;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -287,11 +304,13 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
+    // Once in the compact file, stay there: no further tags or upgrade copies.
+    const bool compactFile=path_==compactSidecar(base_);
     const bool denoiseSidecar=path_.wstring().ends_with(L".video-denoise");
     const bool upgradeDenoise=!denoiseSidecar && data.starts_with("VEYRA_PRESET_LIBRARY 26\n");
     const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
     const bool upgrade=!separate && data.starts_with("VEYRA_PRESET_LIBRARY 25\n");
-    if(!separate&&!upgrade&&!upgradeDenoise&&!path_.wstring().ends_with(L".exclusion-modes")&&
+    if(!compactFile&&!separate&&!upgrade&&!upgradeDenoise&&!path_.wstring().ends_with(L".exclusion-modes")&&
        !path_.wstring().ends_with(L".half-rate-variants")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 22")&&!path_.wstring().ends_with(L".auto-fg"))path_=std::filesystem::path(path_).concat(L".auto-fg");
     if(data.starts_with("VEYRA_PRESET_LIBRARY 21")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
@@ -341,8 +360,11 @@ bool PresetLibrary::save() {
     } // .auto-fg / .output-controls own subsequent edits.
     }
     auto destination=path_;
-    if(upgradeDenoise)destination+=L".video-denoise";
-    else if(upgrade)destination+=L".fg-options";
+    if(!compactFile){
+        if(upgradeDenoise)destination+=L".video-denoise";
+        else if(upgrade)destination+=L".fg-options";
+        if(sidecarTooLong(destination))destination=compactSidecar(base_);
+    }
     std::error_code ec;
     std::filesystem::create_directories(destination.parent_path(), ec);
     const auto temporary=std::filesystem::path(destination).concat(L".tmp");
@@ -597,6 +619,10 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
     auto values = settings;
     if (document.globals) document.globals->apply(values);
     const auto keepFlow = PresetFlowSettings::capture(values);
+    // The document's own frame generation (its globals included), before a
+    // preset is applied: what a preset without FG content keeps.
+    const auto keepFgBackend = values.frameGenerationBackend;
+    const auto keepVfgQuality = values.vfgQuality;
     if ((entry.contents & presetContentMask(PresetContent::Chain)) && entry.nodeConfiguration) {
         const auto& saved = *entry.nodeConfiguration;
         if (saved.editor) *next = *saved.editor;
@@ -622,9 +648,10 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
             PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
             keep.contents = presetContentMask(PresetContent::FrameGeneration);
             const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
-            keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
+            keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, keepFgBackend, keepVfgQuality};
             if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
             nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
+            nodes.fgAutoMultiplier = document.nodes.fgAutoMultiplier;
         }
         if (entry.contents & presetContentMask(PresetContent::Audio)) {
             values.audioSync = entry.audioSync; values.audioOffsetMs = entry.audioOffsetMs;
@@ -1002,7 +1029,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (!(in >> r.left >> r.top >> r.right >> r.bottom)) { error = L"预设库保护区域损坏"; return false; }
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
-            if((version==23||version>=25)&&!readExclusionModes(in,node.protection)){error=L"Invalid exclusion region mode";return false;}
+            if((version==23||version>=25)&&!readExclusionModes(in,node.protection)){error=L"预设库保护区域损坏";return false;}
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
             if (type < 0 || type >= int(EffectType::Count) || (version < 14 && type >= int(EffectType::AntiAliasing)) ||
                 (version < 21 && type >= int(EffectType::NrStabilizer)) ||
@@ -1366,6 +1393,11 @@ bool ChainSessionStore::load(ChainSession& session) {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
+    // An .output-controls file later saved with the 「自动」 flag continues as its own .auto-fg sidecar.
+    if(path_.wstring().ends_with(L".output-controls")){
+        const auto upgradedControls=std::filesystem::path(path_).concat(L".auto-fg");
+        if(std::filesystem::exists(upgradedControls,ec))path_=upgradedControls;
+    }
     const auto modesPath=std::filesystem::path(path_).concat(L".exclusion-modes");
     if(std::filesystem::exists(directModes))path_=directModes;
     else if(std::filesystem::exists(modesPath))path_=modesPath;
@@ -1378,6 +1410,7 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
     if(std::filesystem::exists(directDenoise,ec))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath,ec))path_=denoisePath;
+    if (const auto compact = compactSidecar(base_); std::filesystem::exists(compact, ec)) path_ = compact;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1402,14 +1435,19 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
+    // Once in the compact file, stay there: no further tags or upgrade copies.
+    const bool compactFile=path_==compactSidecar(base_);
     const bool denoiseSidecar=path_.wstring().ends_with(L".video-denoise");
     const bool upgradeDenoise=!denoiseSidecar && data.starts_with("VEYRA_CHAIN_SESSION 21\n");
     const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
     const bool upgrade=!separate && data.starts_with("VEYRA_CHAIN_SESSION 20\n");
-    if(!separate&&!upgrade&&!upgradeDenoise&&!path_.wstring().ends_with(L".exclusion-modes")&&
+    if(!compactFile&&!separate&&!upgrade&&!upgradeDenoise&&!path_.wstring().ends_with(L".exclusion-modes")&&
        !path_.wstring().ends_with(L".half-rate-variants")){
+    // v17 (「自动」倍率标记) gets its own file like library v22, so a v16 build
+    // never finds a version it cannot read in its .output-controls session.
+    if(data.starts_with("VEYRA_CHAIN_SESSION 17")&&!path_.wstring().ends_with(L".auto-fg"))path_=std::filesystem::path(path_).concat(L".auto-fg");
     if(data.starts_with("VEYRA_CHAIN_SESSION 16")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
-    if(!path_.wstring().ends_with(L".output-controls")){
+    if(!path_.wstring().ends_with(L".auto-fg")&&!path_.wstring().ends_with(L".output-controls")){
 
     if(data.starts_with("VEYRA_CHAIN_SESSION 15")&&!path_.wstring().ends_with(L".dlaa"))path_=std::filesystem::path(path_).concat(L".dlaa");
     if(!path_.wstring().ends_with(L".dlaa")){
@@ -1457,8 +1495,11 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
 
     auto destination=path_;
-    if(upgradeDenoise)destination+=L".video-denoise";
-    else if(upgrade)destination+=L".fg-options";
+    if(!compactFile){
+        if(upgradeDenoise)destination+=L".video-denoise";
+        else if(upgrade)destination+=L".fg-options";
+        if(sidecarTooLong(destination))destination=compactSidecar(base_);
+    }
     std::error_code ec;
     if (!destination.parent_path().empty()) std::filesystem::create_directories(destination.parent_path(), ec);
     if (ec) {

@@ -36,14 +36,23 @@ bool ColorDetailPass::prepare(ID3D12Device* device, ID3D12Resource* target)
         close();
         return false;
     }
-    makeSrv(device, copy_.Get(), kFormat, cpuHandleOf(reduce_, 0));
+    // SRVs through a non-visible staging heap (GpuPassUtils.h driver note), copied
+    // now; UAVs stay direct, as elsewhere.
+    DescriptorStager stager;
+    if (!stager.initialize(device, 5)) { close(); return false; }
+    D3D12_SHADER_RESOURCE_VIEW_DESC srv{};
+    srv.Format = kFormat;
+    srv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    srv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    srv.Texture2D.MipLevels = 1;
+    stager.stageSrv(copy_.Get(), &srv, reduce_.heap.Get(), 0);
     makeUav(device, lowA_.Get(), kFormat, cpuHandleOf(reduce_, 1));
-    makeSrv(device, lowA_.Get(), kFormat, cpuHandleOf(blur_, 0));
+    stager.stageSrv(lowA_.Get(), &srv, blur_.heap.Get(), 0);
     makeUav(device, lowB_.Get(), kFormat, cpuHandleOf(blur_, 1));
-    makeSrv(device, lowB_.Get(), kFormat, cpuHandleOf(blur_, 2));
+    stager.stageSrv(lowB_.Get(), &srv, blur_.heap.Get(), 2);
     makeUav(device, lowA_.Get(), kFormat, cpuHandleOf(blur_, 3));
-    makeSrv(device, copy_.Get(), kFormat, cpuHandleOf(apply_, 0));
-    makeSrv(device, lowA_.Get(), kFormat, cpuHandleOf(apply_, 1));
+    stager.stageSrv(copy_.Get(), &srv, apply_.heap.Get(), 0);
+    stager.stageSrv(lowA_.Get(), &srv, apply_.heap.Get(), 1);
     makeUav(device, target, kFormat, cpuHandleOf(apply_, 2));
     target_ = target;
     veyra::log::info("color-detail", std::format("texture/clarity/dehaze pass {}x{} block={} low={}x{}",

@@ -54,4 +54,15 @@ std::filesystem::path logsDirectory() {
     return (root.empty() ? applicationRoot() : root) / "logs";
 }
 
+std::string pathUtf8(const std::filesystem::path& path)
+{
+    const std::wstring& wide = path.native();
+    if (wide.empty()) return {};
+    const int size = WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
+    if (size <= 0) return {};
+    std::string text(static_cast<size_t>(size), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, wide.data(), static_cast<int>(wide.size()), text.data(), size, nullptr, nullptr);
+    return text;
+}
+
 } // namespace veyra::runtime

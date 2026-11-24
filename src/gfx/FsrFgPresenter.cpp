@@ -33,7 +33,7 @@ HMODULE loadResidentModule(const std::filesystem::path& path) {
     const auto module = LoadLibraryExW(path.c_str(), nullptr,
         LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (module) modules.emplace(key, module);
-    else log::error("fsr-fg", std::format("runtime load failed path={} win32={}", path.string(), GetLastError()));
+    else log::error("fsr-fg", std::format("runtime load failed path={} win32={}", veyra::runtime::pathUtf8(path), GetLastError()));
     return module;
 }
 
@@ -113,7 +113,7 @@ bool FsrFgPresenter::initializeIndependent(ID3D12Device* device, uint32_t width,
     p.loader = loadResidentModule(loaderPath);
     const auto provider = loadResidentModule(providerPath);
     if (!p.loader || !provider) {
-        log::error("fsr-fg", std::format("independent runtime load failed root={} win32={}", root.string(), GetLastError()));
+        log::error("fsr-fg", std::format("independent runtime load failed root={} win32={}", veyra::runtime::pathUtf8(root), GetLastError()));
         p.failed = true; return false;
     }
     ffxLoadFunctions(&p.functions, p.loader);

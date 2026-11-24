@@ -68,6 +68,19 @@ inline void networkMediaOptions(AVDictionary** options){
     av_dict_set(options,"rw_timeout","15000000",0);av_dict_set(options,"timeout","15000000",0);
     av_dict_set(options,"rtsp_transport","tcp",0);
 }
+// The protocols FFmpeg may open for a network source, nested playlists, keys and
+// redirects included: those of its own scheme family, never file: or other local
+// protocols a remote HLS/DASH manifest could name. Like Subtitles.cpp's remote open.
+inline void networkProtocolWhitelist(AVDictionary** options,std::wstring_view path){
+    const auto colon=path.find(L':');
+    std::wstring scheme(path.substr(0,colon==std::wstring_view::npos?0:colon));
+    for(auto& ch:scheme)ch=std::towlower(ch);
+    const char* allowed=nullptr;
+    if(scheme==L"http"||scheme==L"https")allowed="http,https,httpproxy,tcp,tls,crypto,data";
+    else if(scheme==L"rtsp")allowed="rtsp,rtsps,rtp,srtp,tcp,udp,tls,http,https,httpproxy";
+    else if(scheme==L"udp"||scheme==L"rtp")allowed="udp,rtp,srtp";
+    if(allowed)av_dict_set(options,"protocol_whitelist",allowed,0);
+}
 // Extra HTTP request headers, one "Name: value" per line.
 //
 // Some hosts (Bilibili's CDN among them) reject a media request that does not carry

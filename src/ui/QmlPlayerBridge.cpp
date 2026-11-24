@@ -207,6 +207,11 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         composed.doviP7Compose = true;
         commitHdrTuning(std::move(composed));
     }
+    if (impl_->prefBool("doviFollowAverage", false) && !settings().doviFollowAverage) {
+        auto averaged = settings();
+        averaged.doviFollowAverage = true;
+        commitHdrTuning(std::move(averaged));
+    }
     bool defaultFlowApplied = false;
     if (!restoreError.isEmpty()) {
         veyra::log::error("ui-session", restoreError.toStdString());

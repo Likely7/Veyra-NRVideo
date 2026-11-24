@@ -1,4 +1,5 @@
 #include "veyra/ngx/DlssFgBackend.h"
+#include "veyra/RuntimePaths.h"
 
 #include <windows.h>
 #include "veyra/ngx/AnrProvider.h"
@@ -47,7 +48,7 @@ int LogDlssgException(EXCEPTION_POINTERS* exception)
     wchar_t module[MAX_PATH]{};
     GetModuleFileNameW(static_cast<HMODULE>(memory.AllocationBase), module, MAX_PATH);
     log::error("ngx", std::format("DLSSG exception code=0x{:X} module={} rva=0x{:X} access={} address=0x{:X} rcx=0x{:X} rdx=0x{:X} r8=0x{:X} r9=0x{:X}",
-        record->ExceptionCode, std::filesystem::path(module).filename().string(),
+        record->ExceptionCode, veyra::runtime::pathUtf8(std::filesystem::path(module).filename()),
         uintptr_t(record->ExceptionAddress) - uintptr_t(memory.AllocationBase),
         record->NumberParameters ? record->ExceptionInformation[0] : 0,
         record->NumberParameters > 1 ? record->ExceptionInformation[1] : 0,
@@ -59,7 +60,7 @@ int LogDlssgException(EXCEPTION_POINTERS* exception)
         VirtualQuery(frames[i], &memory, sizeof(memory));
         GetModuleFileNameW(static_cast<HMODULE>(memory.AllocationBase), module, MAX_PATH);
         log::error("ngx", std::format("DLSSG exception stack={} module={} rva=0x{:X}",
-            i, std::filesystem::path(module).filename().string(), uintptr_t(frames[i]) - uintptr_t(memory.AllocationBase)));
+            i, veyra::runtime::pathUtf8(std::filesystem::path(module).filename()), uintptr_t(frames[i]) - uintptr_t(memory.AllocationBase)));
     }
     Logger::instance().flush();
     return EXCEPTION_EXECUTE_HANDLER;

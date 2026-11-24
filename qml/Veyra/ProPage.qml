@@ -1730,6 +1730,7 @@ VPage {
                                     value: Math.round(veyra.nrHoldStrength * 100) + "%"
                                     VSlider {
                                         objectName: "list-hold-strength"
+                                        valueFromModel: true // the model keeps its binding after user input
                                         implicitWidth: 110
                                         from: 0.1; to: 1.0; inputScale: 100
                                         value: veyra.nrHoldStrength
@@ -1743,6 +1744,7 @@ VPage {
                                     value: Number(veyra.nrHoldTolerance).toFixed(3)
                                     VSlider {
                                         objectName: "list-hold-tolerance"
+                                        valueFromModel: true // the model keeps its binding after user input
                                         implicitWidth: 110
                                         inputDecimals: 3
                                         from: 0.005; to: 0.10

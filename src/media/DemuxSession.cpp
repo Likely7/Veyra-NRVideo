@@ -392,6 +392,7 @@ bool DemuxSession::openContext(std::wstring* error, bool initial) {
     std::string name = utf8(path_);
     if (network_) {
         networkMediaOptions(&options);
+        networkProtocolWhitelist(&options, path_);
         // Site headers and UA go through the shared helper, so the demuxer and the
         // audio pipeline cannot drift apart on how they are spelled.
         networkMediaHeaders(&options, settings_.requestHeaders, settings_.userAgent);

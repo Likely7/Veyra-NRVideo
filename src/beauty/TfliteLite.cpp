@@ -1,4 +1,5 @@
 #include "veyra/beauty/TfliteLite.h"
+#include "veyra/RuntimePaths.h"
 
 #include <algorithm>
 #include <cstring>
@@ -134,7 +135,7 @@ bool loadTflite(const std::filesystem::path& path, TfliteModel& model, std::stri
 {
     model = {};
     std::ifstream file(path, std::ios::binary);
-    if (!file) { error = "cannot open " + path.filename().string(); return false; }
+    if (!file) { error = "cannot open " + veyra::runtime::pathUtf8(path.filename()); return false; }
     std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(file)), {});
     if (bytes.size() < 16 || bytes.size() > (size_t(1) << 30)) { error = "unexpected model file size"; return false; }
     if (std::memcmp(bytes.data() + 4, "TFL3", 4) != 0) { error = "not a TFLite model (identifier)"; return false; }

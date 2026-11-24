@@ -24,9 +24,10 @@ using Microsoft::WRL::ComPtr;
 constexpr unsigned count=4; // readback slots: 4K at 120 fps keeps about 33 ms of readback in flight
 // The camera module's clock (QueryPerformanceCounter, 100 ns): frame stamps are compared there.
 int64_t clock100ns(){return int64_t(video_queue_now_100ns());}
+// Always beside the executable: this folder's setup program is started elevated,
+// so no environment variable may point it elsewhere.
 std::filesystem::path modules(){
     wchar_t path[32768]{};
-    if(GetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_MODULE_DIR",path,32768))return path;
     GetModuleFileNameW(nullptr,path,32768);return std::filesystem::path(path).parent_path()/L"virtualcam";
 }
 DWORD launchCameraSetup(const std::filesystem::path& file,bool remove,HANDLE& process){

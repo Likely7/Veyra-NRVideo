@@ -108,11 +108,11 @@ struct ComputePass {
 
     bool loadShader(const char* name, std::vector<uint8_t>& bytes) const
     {
-        const std::string path = (runtime::shaderDirectory() / name).string();
-        HANDLE f = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+        const std::filesystem::path path = runtime::shaderDirectory() / name;
+        HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
             OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (f == INVALID_HANDLE_VALUE) {
-            veyra::log::error("gfx-util", std::format("shader missing: {}", path));
+            veyra::log::error("gfx-util", std::format("shader missing: {}", runtime::pathUtf8(path)));
             return false;
         }
         LARGE_INTEGER sz{};
@@ -225,11 +225,11 @@ struct ComputePass {
 
 inline bool loadShaderBytes(const char* name, std::vector<uint8_t>& bytes)
 {
-    const std::string path = (runtime::shaderDirectory() / name).string();
-    HANDLE f = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+    const std::filesystem::path path = runtime::shaderDirectory() / name;
+    HANDLE f = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (f == INVALID_HANDLE_VALUE) {
-        veyra::log::error("gfx-util", std::format("shader missing: {}", path));
+        veyra::log::error("gfx-util", std::format("shader missing: {}", runtime::pathUtf8(path)));
         return false;
     }
     LARGE_INTEGER sz{};

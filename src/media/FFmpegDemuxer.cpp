@@ -140,7 +140,7 @@ bool FFmpegDemuxer::open(const std::wstring& path,const std::atomic<bool>* cance
     interrupt_.configure(network,cancelled);
     raw->interrupt_callback={InputInterrupt::callback,&interrupt_};
     AVDictionary* options=nullptr;
-    if(network)networkMediaOptions(&options);
+    if(network){networkMediaOptions(&options);networkProtocolWhitelist(&options,path);}
     interrupt_.armConnect();
     const int openResult = avformat_open_input(&raw, utf8Path.c_str(), nullptr, &options);
     av_dict_free(&options);

@@ -11,6 +11,7 @@
 #include <QSaveFile>
 #include <QStorageInfo>
 #include <QTemporaryDir>
+#include <QTimer>
 #include <windows.h>
 #include <algorithm>
 #include <array>
@@ -347,8 +348,11 @@ void ModelAssets::extractArchive() {
         return;
     }
     const auto& asset = assets_[asset_];
+    // Same extraction contract as the portable updater: no ownership or
+    // permission bits from the archive.
     QStringList arguments{QStringLiteral("-xf"), transfer_->filePath(QStringLiteral("archive")),
-                          QStringLiteral("-C"), target};
+                          QStringLiteral("-C"), target,
+                          QStringLiteral("--no-same-owner"), QStringLiteral("--no-same-permissions")};
     if (asset.stripComponents)
         arguments << QStringLiteral("--strip-components") << QString::number(asset.stripComponents);
     for (const auto& member : asset.members)
@@ -356,6 +360,21 @@ void ModelAssets::extractArchive() {
     received_ = complete_ + asset.bytes;
     status_ = tr("正在解压并验证模型…");
     extract_.start(windowsSystemExecutable(L"tar.exe"), arguments);
+    // A stuck extractor must not hold the download forever: kill it after
+    // 10 minutes; finishArchive then sees a crash exit and tries the next source.
+    // The timer belongs to this one run only.
+    auto* limit = new QTimer(this);
+    limit->setSingleShot(true);
+    connect(limit, &QTimer::timeout, this, [this, limit] {
+        if (extract_.state() != QProcess::NotRunning) {
+            log::warn("model-assets", "archive extraction timed out; stopping tar.exe");
+            extract_.kill();
+        }
+        limit->deleteLater();
+    });
+    connect(&extract_, &QProcess::finished, limit, &QObject::deleteLater);
+    connect(&extract_, &QProcess::errorOccurred, limit, &QObject::deleteLater);
+    limit->start(10 * 60 * 1000);
     emit changed();
 }
 
@@ -437,14 +456,26 @@ bool ModelAssets::remove(const ModelAsset& asset) {
     if (!QDir().rename(storage, retired)) return false;
     QDir contents(retired);
     bool removed = true;
+    QStringList folders;
     for (const auto& member : asset.members) {
         const QString name = QString::fromLatin1(member.name);
         if (contents.exists(name) && !contents.remove(name)) removed = false;
+        // Members may live in subfolders (adapters/, kernels/): note each level.
+        for (qsizetype slash = name.lastIndexOf(QLatin1Char('/')); slash > 0;
+             slash = name.lastIndexOf(QLatin1Char('/'), slash - 1)) {
+            const QString folder = name.left(slash);
+            if (!folders.contains(folder)) folders << folder;
+        }
     }
+    // Deepest first; rmdir removes only empty folders, so user files stay.
+    std::sort(folders.begin(), folders.end(), [](const QString& a, const QString& b) {
+        return a.count(QLatin1Char('/')) > b.count(QLatin1Char('/'));
+    });
+    for (const auto& folder : folders) contents.rmdir(folder);
     if (!QDir().rmdir(retired)) {
         // Preserve user-added files and report failure if the directory could
         // not be removed. They never become part of a verified model.
-        QDir().rename(retired, storage);
+        if (QDir().rename(retired, storage)) QDir().rmdir(stage.path());
         stage.setAutoRemove(false);
         removed = false;
     }

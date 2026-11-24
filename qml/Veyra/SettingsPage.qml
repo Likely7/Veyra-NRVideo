@@ -484,6 +484,15 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("浏览器扩展连接")
+                            hint: qsTr("允许浏览器扩展通过本机端口 18765 把网页视频交给 Veyra 播放；关闭时扩展改用 veyra:// 链接打开")
+                            VSwitch {
+                                objectName: "set-browser-extension-bridge"
+                                checked: veyra.preferences.browserExtensionBridge === true
+                                onToggled: checked => veyra.setPreference("browserExtensionBridge", checked)
+                            }
+                        }
+                        VRow {
                             label: qsTr("损坏画面处理")
                             hint: (veyra.preferences.networkCorrupt || "conceal") === "keyframe"
                                   ? qsTr("等待关键帧 = 丢弃损坏的画面，停在上一帧直到下一个完好的关键帧；只对网络视频与 MPEG-TS 生效")

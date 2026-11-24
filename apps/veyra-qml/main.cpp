@@ -496,13 +496,39 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
     const auto code = info && info->ExceptionRecord ? info->ExceptionRecord->ExceptionCode : 0u;
     const auto address = info && info->ExceptionRecord
         ? reinterpret_cast<uintptr_t>(info->ExceptionRecord->ExceptionAddress) : uintptr_t(0);
+    // The minidump first, without heap allocation or the logger's lock: after a
+    // heap corruption or a fault inside the logger either could stop this handler
+    // before anything is on disk. Static buffers keep it off a nearly full stack.
+    // Thread, handle and module lists only, no heap or referenced memory: a dump
+    // users send must not carry API keys or sign-in tokens held in memory.
+    static wchar_t dumpPath[32768];
+    static wchar_t dumpName[96];
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    swprintf_s(dumpName, L"veyra-crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp", unsigned(st.wYear), unsigned(st.wMonth),
+               unsigned(st.wDay), unsigned(st.wHour), unsigned(st.wMinute), unsigned(st.wSecond), GetCurrentProcessId());
+    // _TRUNCATE: a too-long folder gives -1 instead of the invalid-parameter handler.
+    const bool pathFits = _snwprintf_s(dumpPath, _TRUNCATE, L"%s\\%s", g_crashDumpDirectory.c_str(), dumpName) > 0;
+    BOOL dumpWritten = FALSE;
+    DWORD dumpError = 0;
+    HANDLE file = pathFits ? CreateFileW(dumpPath, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)
+                           : INVALID_HANDLE_VALUE;
+    if (file != INVALID_HANDLE_VALUE) {
+        MINIDUMP_EXCEPTION_INFORMATION mei{GetCurrentThreadId(), info, FALSE};
+        dumpWritten = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
+                                        MINIDUMP_TYPE(MiniDumpWithThreadInfo | MiniDumpWithHandleData | MiniDumpWithUnloadedModules),
+                                        info ? &mei : nullptr, nullptr, nullptr);
+        CloseHandle(file);
+    } else {
+        dumpError = pathFits ? GetLastError() : ERROR_FILENAME_EXCED_RANGE;
+    }
     HMODULE module = nullptr;
     wchar_t moduleName[MAX_PATH]{};
     if (address && GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
                                       reinterpret_cast<LPCWSTR>(address), &module) && module)
         GetModuleFileNameW(module, moduleName, MAX_PATH);
     veyra::log::error("crash", std::format("unhandled exception code=0x{:08X} address=0x{:X} module={} offset=0x{:X} thread={}",
-        code, address, std::filesystem::path(moduleName).filename().string(),
+        code, address, veyra::runtime::pathUtf8(std::filesystem::path(moduleName).filename()),
         module ? address - reinterpret_cast<uintptr_t>(module) : uintptr_t(0), GetCurrentThreadId()));
     // The file offset alone only names the faulting instruction. A return-address
     // list, printed as module-relative offsets, names the callers too, so a field
@@ -530,23 +556,11 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
         }
         veyra::log::error("crash", std::format("stack(module offsets): {}", trace));
     }
-    SYSTEMTIME st{};
-    GetLocalTime(&st);
-    wchar_t name[96]{};
-    swprintf_s(name, L"veyra-crash-%04u%02u%02u-%02u%02u%02u-%lu.dmp", unsigned(st.wYear), unsigned(st.wMonth),
-               unsigned(st.wDay), unsigned(st.wHour), unsigned(st.wMinute), unsigned(st.wSecond), GetCurrentProcessId());
-    const std::wstring path = (std::filesystem::path(g_crashDumpDirectory) / name).wstring();
-    HANDLE file = CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (file != INVALID_HANDLE_VALUE) {
-        MINIDUMP_EXCEPTION_INFORMATION mei{GetCurrentThreadId(), info, FALSE};
-        const BOOL ok = MiniDumpWriteDump(GetCurrentProcess(), GetCurrentProcessId(), file,
-                                          MiniDumpWithIndirectlyReferencedMemory, info ? &mei : nullptr, nullptr, nullptr);
-        CloseHandle(file);
-        veyra::log::error("crash", std::format("minidump written={} file={}", ok != FALSE,
-                                               std::filesystem::path(name).string()));
-    } else {
-        veyra::log::error("crash", std::format("minidump open failed error={}", GetLastError()));
-    }
+    if (dumpError == 0)
+        veyra::log::error("crash", std::format("minidump written={} file={}", dumpWritten != FALSE,
+                                               veyra::runtime::pathUtf8(std::filesystem::path(dumpName))));
+    else
+        veyra::log::error("crash", std::format("minidump open failed error={}", dumpError));
     // What crashed and which known-risky injected components were loaded, for the next
     // start to explain (QmlPlayerBridge reads and deletes it).
     const std::wstring note = L"crash " + std::filesystem::path(moduleName).filename().wstring() + L"\n" +
@@ -886,7 +900,15 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     ui::PlaybackServer playbackServer([&bridge](const QString& url){
         bridge.bringToFront();bridge.openNetworkAddress(url);
     });
-    if (!updateProbe) playbackServer.listen(18765);
+    // Opt-in (设置 → 网络 → 浏览器扩展连接, default off): no local port is open
+    // unless the user asked for the extension bridge. Follows the switch live.
+    const auto followExtensionBridge = [&bridge, &playbackServer, updateProbe] {
+        const bool wanted = !updateProbe && bridge.preferences().value(QStringLiteral("browserExtensionBridge")).toBool();
+        if (wanted && !playbackServer.listening()) playbackServer.listen(18765);
+        else if (!wanted) playbackServer.close();
+    };
+    followExtensionBridge();
+    QObject::connect(&bridge, &ui::QmlPlayerBridge::preferencesChanged, &playbackServer, followExtensionBridge);
 
     // Qt reports QML failures through its own message handler. Routing them to
     // the log is the difference between "it did not load" and why.

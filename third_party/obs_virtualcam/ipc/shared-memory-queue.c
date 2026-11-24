@@ -3,7 +3,9 @@
 // Veyra: own namespace, padded rows, bounded locking, multiple consumers,
 // validation and crash heartbeat. Protocol 2 (2026-11-17): a six-frame ring in
 // write order with sequence numbers, camera-grid timestamps and write times, and
-// readers announcing their consumer's frame interval. Original fingerprint:
+// readers announcing their consumer's frame interval. 2026-11-24: size, interval
+// and slot offsets are read from the header once, at create/open, and every
+// copy uses that snapshot; the scaler must match it. Original fingerprint:
 // ../UPSTREAM.json.
 #include <windows.h>
 #include <stdlib.h>
@@ -49,6 +51,11 @@ struct video_queue {
     uint8_t* frame[SLOTS];
     uint8_t* scratch;
     size_t frame_bytes;
+    /* Fixed when the queue is created or opened. Every process maps the header
+       writable for the consumer slots, so cx/cy/interval/offsets there are never
+       trusted again after open: sizes and copies use these. */
+    uint32_t cx,cy;
+    uint64_t interval;
     bool is_writer,writable;
     LONG token;                  /* reader: the token of our consumer slot */
     int consumer;                /* reader: our consumer slot, -1 none */
@@ -78,9 +85,9 @@ static bool valid_extent(uint32_t cx,uint32_t cy){
     return cx>=2&&cy>=2&&cx<=8192&&cy<=8192&&!(cx&1)&&!(cy&1)&&(uint64_t)cx*cy<=33554432u;
 }
 static uint32_t align32(uint32_t size){return (size+31u)&~31u;}
-static void initialize_frames(video_queue_t* vq){
+static void initialize_frames(video_queue_t* vq,const uint32_t* offsets){
     for(size_t i=0;i<SLOTS;++i){
-        uint8_t* frame=(uint8_t*)vq->header+vq->header->offsets[i];
+        uint8_t* frame=(uint8_t*)vq->header+offsets[i];
         vq->info[i]=(struct frame_header*)frame;vq->frame[i]=frame+FRAME_HEADER_SIZE;
     }
 }
@@ -115,7 +122,8 @@ video_queue_t* video_queue_create(uint32_t cx,uint32_t cy,uint64_t interval){
     if(!vq->handle||GetLastError()==ERROR_ALREADY_EXISTS)goto fail;
     vq->header=MapViewOfFile(vq->handle,FILE_MAP_ALL_ACCESS,0,0,0);if(!vq->header)goto fail;
     memcpy(vq->header,&header,sizeof(header));vq->is_writer=vq->writable=true;vq->frame_bytes=frame_bytes;
-    initialize_frames(vq);
+    vq->cx=cx;vq->cy=cy;vq->interval=interval;
+    initialize_frames(vq,header.offsets);
     for(size_t i=0;i<SLOTS;++i)memset(vq->info[i],0,FRAME_HEADER_SIZE);
     return vq;
 fail:
@@ -134,26 +142,34 @@ video_queue_t* video_queue_open(void){
         vq->header=MapViewOfFile(vq->handle,FILE_MAP_READ,0,0,0);if(!vq->header)goto fail;
     }
     const struct queue_header* h=vq->header;
-    if(h->magic!=MAGIC||h->version!=VERSION||!valid_extent(h->cx,h->cy)||h->interval<10000||h->interval>10000000)goto fail;
+    /* One snapshot of everything that sizes a copy: another process mapping the
+       header writable may change it at any time after this. */
+    const uint32_t magic=*(volatile const uint32_t*)&h->magic,version=*(volatile const uint32_t*)&h->version;
+    const uint32_t cx=*(volatile const uint32_t*)&h->cx,cy=*(volatile const uint32_t*)&h->cy;
+    const uint64_t interval=*(volatile const uint64_t*)&h->interval;
+    uint32_t offsets[SLOTS];
+    for(size_t i=0;i<SLOTS;++i)offsets[i]=*(volatile const uint32_t*)&h->offsets[i];
+    if(magic!=MAGIC||version!=VERSION||!valid_extent(cx,cy)||interval<10000||interval>10000000)goto fail;
     MEMORY_BASIC_INFORMATION info={0};if(!VirtualQuery(h,&info,sizeof(info)))goto fail;
-    vq->frame_bytes=(size_t)h->cx*h->cy*3u/2u;
+    vq->cx=cx;vq->cy=cy;vq->interval=interval;
+    vq->frame_bytes=(size_t)cx*cy*3u/2u;
     for(size_t i=0;i<SLOTS;++i)
-        if(h->offsets[i]<sizeof(*h)||(uint64_t)h->offsets[i]+FRAME_HEADER_SIZE+vq->frame_bytes>info.RegionSize)goto fail;
+        if(offsets[i]<sizeof(*h)||(uint64_t)offsets[i]+FRAME_HEADER_SIZE+vq->frame_bytes>info.RegionSize)goto fail;
     object_name(name,L"FrameMutex");vq->mutex=OpenMutexW(SYNCHRONIZE|MUTEX_MODIFY_STATE,FALSE,name);if(!vq->mutex)goto fail;
     vq->owner=OpenProcess(SYNCHRONIZE,FALSE,h->owner);
     vq->token=(LONG)(((uint32_t)GetCurrentProcessId()*2654435761u)^(uint32_t)(uintptr_t)vq^GetTickCount())|1;
-    initialize_frames(vq);return vq;
+    initialize_frames(vq,offsets);return vq;
 fail:
     video_queue_close(vq);return NULL;
 }
 void video_queue_get_info(video_queue_t* vq,uint32_t* cx,uint32_t* cy,uint64_t* interval){
-    *cx=vq->header->cx;*cy=vq->header->cy;*interval=vq->header->interval;
+    *cx=vq->cx;*cy=vq->cy;*interval=vq->interval;
 }
 void video_queue_heartbeat(video_queue_t* vq){
     if(vq&&vq->is_writer)InterlockedExchange((volatile LONG*)&vq->header->alive_tick,(LONG)GetTickCount());
 }
 bool video_queue_write(video_queue_t* vq,uint8_t** data,uint32_t* pitch,uint64_t timestamp){
-    if(!vq||!vq->is_writer||!data||!data[0]||!data[1]||!pitch||pitch[0]<vq->header->cx||pitch[1]<vq->header->cx)return false;
+    if(!vq||!vq->is_writer||!data||!data[0]||!data[1]||!pitch||pitch[0]<vq->cx||pitch[1]<vq->cx)return false;
     const DWORD acquired=WaitForSingleObject(vq->mutex,2);
     if(acquired!=WAIT_OBJECT_0&&acquired!=WAIT_ABANDONED)return false;
     struct queue_header* h=vq->header;
@@ -162,9 +178,10 @@ bool video_queue_write(video_queue_t* vq,uint8_t** data,uint32_t* pitch,uint64_t
     struct frame_header* info=vq->info[index];
     info->sequence=0; /* invalid while the pixels change */
     uint8_t* dst=vq->frame[index];
-    for(uint32_t row=0;row<h->cy;++row)memcpy(dst+(size_t)row*h->cx,data[0]+(size_t)row*pitch[0],h->cx);
-    dst+=(size_t)h->cx*h->cy;
-    for(uint32_t row=0;row<h->cy/2;++row)memcpy(dst+(size_t)row*h->cx,data[1]+(size_t)row*pitch[1],h->cx);
+    const uint32_t cx=vq->cx,cy=vq->cy;
+    for(uint32_t row=0;row<cy;++row)memcpy(dst+(size_t)row*cx,data[0]+(size_t)row*pitch[0],cx);
+    dst+=(size_t)cx*cy;
+    for(uint32_t row=0;row<cy/2;++row)memcpy(dst+(size_t)row*cx,data[1]+(size_t)row*pitch[1],cx);
     info->timestamp=timestamp;info->written=video_queue_now_100ns();info->sequence=sequence;
     InterlockedExchange64(&h->sequence,(LONG64)sequence);
     h->write_idx=(LONG)sequence;InterlockedExchange(&h->read_idx,(LONG)sequence);InterlockedExchange(&h->dirty,0);
@@ -184,7 +201,11 @@ static bool lock(video_queue_t* vq){
 }
 static bool copy_out(video_queue_t* vq,nv12_scale_t* scale,void* dst,uint64_t sequence,uint64_t* timestamp){
     if(!vq||!scale||!dst||video_queue_state(vq)!=SHARED_QUEUE_STATE_READY)return false;
-    if(scale->src_cx!=(int)vq->header->cx||scale->src_cy!=(int)vq->header->cy||!valid_extent(scale->dst_cx,scale->dst_cy))return false;
+    /* The scaler must describe exactly the frames this queue was opened with;
+       dst is sized by the consumer from the scaler's dst extent and format. */
+    if(scale->src_cx<0||scale->src_cy<0||scale->dst_cx<0||scale->dst_cy<0||
+        (uint32_t)scale->src_cx!=vq->cx||(uint32_t)scale->src_cy!=vq->cy||!valid_extent((uint32_t)scale->dst_cx,(uint32_t)scale->dst_cy))return false;
+    if(scale->format!=TARGET_FORMAT_NV12&&scale->format!=TARGET_FORMAT_I420&&scale->format!=TARGET_FORMAT_YUY2)return false;
     const bool direct=scale->format==TARGET_FORMAT_NV12&&scale->src_cx==scale->dst_cx&&scale->src_cy==scale->dst_cy;
     if(!direct&&!vq->scratch){vq->scratch=malloc(vq->frame_bytes);if(!vq->scratch)return false;}
     if(!lock(vq))return false;

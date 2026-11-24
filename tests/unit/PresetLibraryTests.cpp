@@ -1611,8 +1611,38 @@ __declspec(noinline) void testVideoDenoiseStorage() {
     check(reader.load(*loaded)&&*loaded==*session,"video denoise: editor graph and detached settings restore");
 }
 
+// A sidecar name that would pass 200 characters continues in one short
+// ".compact" file beside the library, which later loads and saves keep using.
+__declspec(noinline) void testCompactSidecar() {
+    constexpr size_t kMaxPath=260; // Windows MAX_PATH
+    const auto probe=scratch(L"compact-probe");
+    const auto dirLength=probe.parent_path().native().size();
+    // Name + ".video-denoise" must pass 200 characters while the folder, name,
+    // ".compact" and ".tmp" still fit kMaxPath (no long-path opt-in on test machines).
+    if(dirLength+187+1+8+5>=kMaxPath){std::printf("SKIP compact sidecar: scratch folder too deep (%zu)\n",dirLength);return;}
+    const auto nameLength=std::min<size_t>(195,kMaxPath-1-8-5-1-dirLength);
+    const auto path=scratch((std::wstring(nameLength-3,L'p')+L".v1").c_str());
+    PresetLibrary library(path);
+    library.setIncludeBuiltins(false);
+    PresetEntry base;base.name=L"Plain";base.chain=toChain({});
+    base.contents=presetContentMask(PresetContent::Chain);
+    check(library.load()&&library.put(base),"compact sidecar: plain preset keeps the original file");
+    EnhancementSettings settings;settings.videoDenoiseEnabled=true;settings.videoDenoise={.36f,.81f};
+    auto filtered=base;filtered.name=L"Video Denoise";filtered.chain=toChain(settings);
+    const auto compact=std::filesystem::path(path).concat(L".compact");
+    check(library.put(filtered)&&std::filesystem::exists(compact)&&
+          !std::filesystem::exists(std::filesystem::path(path).concat(L".video-denoise")),
+          "compact sidecar: an over-long tag goes to the compact file");
+    PresetLibrary reopened(path);
+    reopened.setIncludeBuiltins(false);
+    check(reopened.load()&&reopened.entries().size()==2&&reopened.entries().back()==filtered,
+          "compact sidecar: reopening prefers the compact file");
+    auto renamed=filtered;renamed.name=L"Video Denoise 2";
+    check(reopened.put(renamed)&&std::filesystem::exists(compact),"compact sidecar: later saves stay in it");
+}
 int main(int argc,char** argv) {
     testVideoDenoiseStorage();
+    testCompactSidecar();
     testDisabledFrameGenerationMatch();
     if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
         testDedupModeMigration();testHalfRateVariants();testFlowStorage();testFlowApplication();return failures?1:0;

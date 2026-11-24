@@ -807,6 +807,10 @@ int main(){
     cadence.reset();for(int i=0;i<120;++i)cadence.observe(i*20.0,.01,true);check(cadence.measuredRate()==50,"moving 50fps cadence");
     cadence.reset();for(int i=0;i<120;++i)cadence.observe(i*1000.0/60,.01,true);check(cadence.measuredRate()==60,"moving 60fps cadence");check(cadence.confirmedRate(engine::ContentRate::Fps60)==60&&cadence.confirmedRate(engine::ContentRate::Fps30)==0&&cadence.conflicts(engine::ContentRate::Fps30),"manual identification target is not a resampling fiction");
     check(diagnostics::redact("failure C:\\Users\\private-user\\media file.mp4\nserial=DEVICE123\nuser=private-user").find("private-user")==std::string::npos,"redact Windows paths, usernames and serials");
+    {
+        const auto r=diagnostics::redact("GET /v1?key=SECRET1&q=1 failed\nAuthorization: Bearer SECRET2\nbearer SECRET3\nCookie: sid=SECRET4");
+        check(r.find("SECRET")==std::string::npos&&r.find("q=1")!=std::string::npos,"redact query keys, bearer tokens and auth/cookie headers");
+    }
     engine::CfrTimeline high(1000,1,.000001,0);bool highOk=true;for(unsigned i=0;i<1000;++i)highOk &= high.accepts(i,i/1000.0);check(highOk&&!high.accepts(1000,1.001),"1000fps preserves exact timestamps and rejects dropped frame");
     engine::CfrTimeline cfr(60,1,.001,0);bool quantized=true;
     for(unsigned i=0;i<6000;++i)quantized &= cfr.accepts(i,std::round(i*1000.0/60)/1000);

@@ -550,7 +550,7 @@ bool FaceMeshGpu::initialize(ID3D12Device* device, const std::filesystem::path& 
     d.description = std::format("MediaPipe face mesh: {} operators, {} GPU layers, {} weights, scratch {:.1f} MiB for {} faces",
                                 m.operators.size(), d.layers.size(), d.weights.size(), double(d.scratchFloat4s) * 16.0 / 1048576.0, kMaxFaces);
     d.ready = true;
-    log::info("beauty-mesh", d.description + "; model " + model.filename().string());
+    log::info("beauty-mesh", d.description + "; model " + veyra::runtime::pathUtf8(model.filename()));
     return true;
 }
 

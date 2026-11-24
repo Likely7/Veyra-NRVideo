@@ -112,7 +112,7 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
     auto& p=*p_;const auto root=runtime::localDataDirectory()/"intel"/"experimental";
     auto load=[&](const wchar_t* name){auto path=std::filesystem::absolute(root/name);
         auto module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_APPLICATION_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
-        log::info("xess-fg",std::format("load {} result={} win32={}",path.string(),module!=nullptr,module?0:GetLastError()));return module;};
+        log::info("xess-fg",std::format("load {} result={} win32={}",veyra::runtime::pathUtf8(path),module!=nullptr,module?0:GetLastError()));return module;};
     p.llDll=load(L"libxell.dll");if(!p.llDll)return false;
     p.fgDll=load(L"libxess_fg.dll");if(!p.fgDll)return false;
 #define LOAD(module,name) p.name##Fn=reinterpret_cast<decltype(p.name##Fn)>(GetProcAddress(p.module,#name));if(!p.name##Fn){log::error("xess-fg","missing export " #name);return false;}

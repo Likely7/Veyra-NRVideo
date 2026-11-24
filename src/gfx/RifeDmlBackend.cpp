@@ -74,7 +74,7 @@ const Runtime& runtime() {
         if (auto* s = r.api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "veyra-rife", &r.env)) {
             r.error = r.api->GetErrorMessage(s); r.api->ReleaseStatus(s); r.api = nullptr; return;
         }
-        log::info("rife", std::format("runtime loaded dir={} ort={}", dir.string(), base()->GetVersionString()));
+        log::info("rife", std::format("runtime loaded dir={} ort={}", veyra::runtime::pathUtf8(dir), base()->GetVersionString()));
     });
     return r;
 }
@@ -255,15 +255,22 @@ bool RifeDmlBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
             device->CreateUnorderedAccessView(p.cut.Get(), nullptr, &u, p.cpu(p.shot, 3 + cur * 3));
         }
     }
-    pipeline::makeSrv(device, p.input.Get(), format, p.cpu(p.pack, 0));
+    // SRVs go through a non-visible staging heap (GpuPassUtils.h driver note);
+    // the copies are made now, so the staging heap need not outlive this call.
+    pipeline::DescriptorStager stager;
+    if (!stager.initialize(device, 4)) return false;
+    D3D12_SHADER_RESOURCE_VIEW_DESC inputSrv{};
+    inputSrv.Format = format; inputSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    inputSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; inputSrv.Texture2D.MipLevels = 1;
+    stager.stageSrv(p.input.Get(), &inputSrv, p.pack.heap.Get(), 0);
     p.rawUav(p.planes[0].buffer.Get(), 3, p.cpu(p.pack, 1));
     p.rawUav(p.planes[1].buffer.Get(), 3, p.cpu(p.pack, 2));
     D3D12_SHADER_RESOURCE_VIEW_DESC nullSrv{};
     nullSrv.Format = format; nullSrv.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     nullSrv.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING; nullSrv.Texture2D.MipLevels = 1;
-    device->CreateShaderResourceView(nullptr, &nullSrv, p.cpu(p.pack, 3));
-    device->CreateShaderResourceView(nullptr, &nullSrv, p.cpu(p.unpack, 0));
-    device->CreateShaderResourceView(nullptr, &nullSrv, p.cpu(p.shot, 0));
+    stager.stageSrv(nullptr, &nullSrv, p.pack.heap.Get(), 3);
+    stager.stageSrv(nullptr, &nullSrv, p.unpack.heap.Get(), 0);
+    stager.stageSrv(nullptr, &nullSrv, p.shot.heap.Get(), 0);
     for (unsigned i = 0; i < p.times.size(); ++i) p.rawUav(p.times[i].buffer.Get(), 1, p.cpu(p.pack, 4 + i));
     p.ok = true;
     log::info("rife", std::format("ready model={} {}x{} tensor {}x{} {}X session={:.0f} ms", p.model, width, height, p.pw, p.ph, multiplier, sessionMs));

@@ -89,18 +89,18 @@ bool checkFgCompatibility(const pipeline::EnhanceGraphDesc& desc,const gfx::D3D1
     if(!AssignProcessToJobObject(job.value,process.value)||ResumeThread(thread.value)==DWORD(-1)){
         TerminateProcess(process.value,1);WaitForSingleObject(process.value,5000);return false;
     }
-    log::info("fg-probe",std::format("started pid={} multiplier={} extent={}x{} log={}",info.dwProcessId,s.multiplier,s.width,s.height,logPath(info.dwProcessId).string()));
+    log::info("fg-probe",std::format("started pid={} multiplier={} extent={}x{} log={}",info.dwProcessId,s.multiplier,s.width,s.height,veyra::runtime::pathUtf8(logPath(info.dwProcessId))));
     const auto start=GetTickCount64();DWORD wait=WAIT_TIMEOUT;
     const ULONGLONG timeout=GetEnvironmentVariableW(L"VEYRA_TEST_FG_PROBE_HANG",nullptr,0)?2000:60000;
     while(!cancel&&GetTickCount64()-start<timeout&&(wait=WaitForSingleObject(process.value,100))==WAIT_TIMEOUT){}
     if(wait!=WAIT_OBJECT_0){
         TerminateJobObject(job.value,124);WaitForSingleObject(process.value,5000);
-        log::error("fg-probe",std::format("cancelled={} timeoutOrWaitFailure=true stage={} log={}",cancel.load(),InterlockedCompareExchange(&s.stage,0,0),logPath(info.dwProcessId).string()));return false;
+        log::error("fg-probe",std::format("cancelled={} timeoutOrWaitFailure=true stage={} log={}",cancel.load(),InterlockedCompareExchange(&s.stage,0,0),veyra::runtime::pathUtf8(logPath(info.dwProcessId))));return false;
     }
     DWORD code=1;GetExitCodeProcess(process.value,&code);
     const LONG stage=InterlockedCompareExchange(&s.stage,0,0),generated=InterlockedCompareExchange(&s.generated,0,0);
     const bool ok=code==0&&stage==4&&generated==LONG(2*(s.multiplier-1));
-    log::info("fg-probe",std::format("finished pid={} exit={} stage={} generated={} passed={} log={}",info.dwProcessId,code,stage,generated,ok,logPath(info.dwProcessId).string()));
+    log::info("fg-probe",std::format("finished pid={} exit={} stage={} generated={} passed={} log={}",info.dwProcessId,code,stage,generated,ok,veyra::runtime::pathUtf8(logPath(info.dwProcessId))));
     if(ok){std::lock_guard lock(cacheMutex);passed.insert(key);}return ok&&!cancel;
 }
 int runFgCompatibilityProbe(HANDLE inherited){

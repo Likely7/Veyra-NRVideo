@@ -36,7 +36,10 @@ Item {
     }
     function commitValue(amount) {
         if (stepSize > 0)
-            amount = Math.max(from, Math.min(to, from + Math.round((amount - from) / stepSize) * stepSize))
+            amount = from + Math.round((amount - from) / stepSize) * stepSize
+        // Always inside the range: the keyboard's grid snap (nudge) can land past
+        // either end when the key step does not divide the range.
+        amount = Math.max(Math.min(from, to), Math.min(Math.max(from, to), amount))
         if (!valueFromModel) value = amount
         moved(amount)
     }
