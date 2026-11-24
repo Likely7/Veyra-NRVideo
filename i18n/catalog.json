@@ -976,6 +976,19 @@
    "ru": "%1 Закрыть"
   },
   {
+   "zh": "%1 声道",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "%1 聲道",
+   "en": "%1 channels",
+   "ja": "%1 チャンネル",
+   "ko": "%1채널",
+   "es": "%1 canales",
+   "fr": "%1 canaux",
+   "de": "%1 Kanäle",
+   "pt-BR": "%1 canais",
+   "ru": "Каналов: %1"
+  },
+  {
    "zh": "%1 已用于其他操作",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "%1 已用於其他操作",
@@ -2612,6 +2625,19 @@
    "de": "FXAA: Schnellster, insgesamt etwas weicher",
    "pt-BR": "FXAA: mais rápido, um pouco mais suave em geral",
    "ru": "FXAA: самый быстрый, немного мягкий"
+  },
+  {
+   "zh": "GC573 的 HDMI LPCM 7.1 格式不可用；视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "GC573 的 HDMI LPCM 7.1 格式無法使用，影片會繼續播放。",
+   "en": "GC573 HDMI LPCM 7.1 is unavailable. Video capture continues.",
+   "ja": "GC573 の HDMI LPCM 7.1 は利用できません。映像のキャプチャは続行します。",
+   "ko": "GC573의 HDMI LPCM 7.1을 사용할 수 없습니다. 영상 캡처는 계속됩니다.",
+   "es": "HDMI LPCM 7.1 no está disponible en la GC573. La captura de vídeo continúa.",
+   "fr": "Le format HDMI LPCM 7.1 de la GC573 est indisponible. La capture vidéo continue.",
+   "de": "HDMI-LPCM 7.1 ist auf der GC573 nicht verfügbar. Die Videoaufnahme läuft weiter.",
+   "pt-BR": "O formato HDMI LPCM 7.1 da GC573 não está disponível. A captura de vídeo continua.",
+   "ru": "Формат HDMI LPCM 7.1 недоступен на GC573. Захват видео продолжается."
   },
   {
    "zh": "GPU / 输入 / 显示资源",
@@ -8347,6 +8373,19 @@
    "ru": "Запас "
   },
   {
+   "zh": "使用 5.1 或 7.1 PCM 时，请在 Windows 的扬声器配置中选择对应布局。",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "使用 5.1 或 7.1 PCM 時，請在 Windows 的喇叭設定中選擇相對應的配置。",
+   "en": "For 5.1 or 7.1 PCM, select the matching speaker layout in Windows.",
+   "ja": "5.1 または 7.1 PCM を使うには、Windows で対応するスピーカー構成を選択します。",
+   "ko": "5.1 또는 7.1 PCM을 쓰려면 Windows 스피커 구성에서 해당 채널을 선택하세요.",
+   "es": "Para PCM 5.1 o 7.1, selecciona la configuración de altavoces correspondiente en Windows.",
+   "fr": "Pour le PCM 5.1 ou 7.1, choisissez la configuration d’enceintes correspondante dans Windows.",
+   "de": "Wähle für 5.1- oder 7.1-PCM die passende Lautsprecherkonfiguration in Windows.",
+   "pt-BR": "Para PCM 5.1 ou 7.1, selecione a configuração de alto-falantes correspondente no Windows.",
+   "ru": "Для PCM 5.1 или 7.1 выберите соответствующую конфигурацию динамиков в Windows."
+  },
+  {
    "zh": "使用 Windows 实时字幕识别系统播放的声音，译文显示在 Veyra 预览画面内。",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "使用 Windows 即時字幕辨識系統播放的聲音，譯文顯示在 Veyra 預覽畫面內。",
@@ -13522,6 +13561,19 @@
    "ru": "На хосте откройте веб-страницу Sunshine (https://host-IP:47990), перейдите на страницу PIN-кода, введите номер ниже и отправьте:"
   },
   {
+   "zh": "在主机上选择线性 PCM 7.1。重新连接采集后生效。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "在主機上選擇線性 PCM 7.1。重新連線擷取後生效。",
+   "en": "Select Linear PCM 7.1 on the console. Applies when capture reconnects.",
+   "ja": "ゲーム機でリニア PCM 7.1 を選択します。キャプチャを再接続すると適用されます。",
+   "ko": "콘솔에서 리니어 PCM 7.1을 선택하세요. 캡처를 다시 연결하면 적용됩니다.",
+   "es": "Selecciona PCM lineal 7.1 en la consola. Se aplica al reconectar la captura.",
+   "fr": "Sélectionnez PCM linéaire 7.1 sur la console. Le réglage s’applique à la reconnexion de la capture.",
+   "de": "Wähle auf der Konsole lineares PCM 7.1. Die Einstellung gilt nach dem erneuten Verbinden der Aufnahme.",
+   "pt-BR": "Selecione PCM linear 7.1 no console. A alteração é aplicada ao reconectar a captura.",
+   "ru": "Выберите линейный PCM 7.1 на консоли. Настройка вступит в силу при повторном подключении захвата."
+  },
+  {
    "zh": "在内存中保留最近一段画面和声音，按 %1 保存到录制保存位置；会多占用一路硬件编码",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "在記憶體中保留最近一段畫面和聲音，按 %1 儲存到錄製儲存位置；會多占用一路硬體編碼",
@@ -14508,19 +14560,6 @@
    "de": "Externes Untertitel-Laden fehlgeschlagen: %1 · %2",
    "pt-BR": "Falha no carregamento de legendas externas: %1 · %2",
    "ru": "Внешняя загрузка подзаголовка не удалась: %1 · %2"
-  },
-  {
-   "zh": "多声道片源混成双声道再输出（耳机）；关闭时按设备声道布局映射",
-   "src": "qml/AudioSettingsDialog.qml",
-   "zh-TW": "多聲道片源混成雙聲道再輸出（耳機）；關閉時按裝置聲道布局映射",
-   "en": "Mix multichannel sources down to stereo (headphones); when off, channels follow the device layout",
-   "ja": "マルチチャンネルのソースをステレオにまとめて出力（ヘッドホン向け）。オフ時はデバイスのチャンネル配置に従います",
-   "ko": "여러 오디오 채널을 스테레오(헤드폰)로 합칩니다. 끄면 출력 장치의 채널 구성을 따릅니다.",
-   "es": "Mezcle las fuentes multicanal hasta el estéreo (los auriculares); cuando se apaga, los canales siguen el diseño del dispositivo",
-   "fr": "Mélanger les sources multicanaux vers le bas à stéréo (headphones); lorsqu'elles sont désactivées, les canaux suivent la disposition de l'appareil",
-   "de": "Mischen Sie Mehrkanalquellen bis zu Stereo (Kopfhörer); Wenn Sie ausgeschaltet sind, folgen die Kanäle dem Gerätelayout",
-   "pt-BR": "Misture fontes multicanais até estéreo (headphones); quando desligados, os canais seguem a disposição do dispositivo",
-   "ru": "Смешайте многоканальные источники вплоть до стерео (наушники); при выключении каналы следуют за компоновкой устройства."
   },
   {
    "zh": "多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。",
@@ -30398,7 +30437,7 @@
   },
   {
    "zh": "立体声",
-   "src": "qml/PcSourceDialog.qml",
+   "src": "qml/AudioSettingsDialog.qml",
    "zh-TW": "立體聲",
    "en": "Stereo",
    "ja": "ステレオ",
@@ -30408,19 +30447,6 @@
    "de": "Stereotyp",
    "pt-BR": "Estéreo",
    "ru": "Стерео"
-  },
-  {
-   "zh": "立体声下混",
-   "src": "qml/AudioSettingsDialog.qml",
-   "zh-TW": "立體聲下混",
-   "en": "Stereo downmix",
-   "ja": "ステレオダウンミックス",
-   "ko": "스테레오 다운믹스",
-   "es": "Mezcla estéreo",
-   "fr": "Mixage stéréo",
-   "de": "Stereo-Downmix",
-   "pt-BR": "Downmix estéreo",
-   "ru": "Сведение в стерео"
   },
   {
    "zh": "立即生效；日志保持中文，方便反馈问题",
@@ -31945,7 +31971,7 @@
   },
   {
    "zh": "自动",
-   "src": "qml/CaptureSourceDialog.qml",
+   "src": "qml/AudioSettingsDialog.qml",
    "zh-TW": "自動",
    "en": "Auto",
    "ja": "自動",
@@ -37339,6 +37365,19 @@
    "ru": "Выход занимает только один вход"
   },
   {
+   "zh": "输出声道",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "輸出聲道",
+   "en": "Output channels",
+   "ja": "出力チャンネル",
+   "ko": "출력 채널",
+   "es": "Canales de salida",
+   "fr": "Canaux de sortie",
+   "de": "Ausgabekanäle",
+   "pt-BR": "Canais de saída",
+   "ru": "Каналы вывода"
+  },
+  {
    "zh": "输出封装器不可用",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "輸出封裝器不可用",
@@ -39547,6 +39586,19 @@
    "de": "Das Capture-Audiogerät oder PCM-Format ist nicht verfügbar; Video läuft weiter",
    "pt-BR": "O dispositivo de captura de áudio ou formato PCM não está disponível; o vídeo continua em execução",
    "ru": "Звуковое устройство захвата или формат PCM недоступны; видео продолжает работать"
+  },
+  {
+   "zh": "采集音频输入",
+   "src": "qml/AudioSettingsDialog.qml",
+   "zh-TW": "擷取音訊輸入",
+   "en": "Capture audio input",
+   "ja": "キャプチャ音声入力",
+   "ko": "캡처 오디오 입력",
+   "es": "Entrada de audio de captura",
+   "fr": "Entrée audio de capture",
+   "de": "Aufnahme-Audioeingang",
+   "pt-BR": "Entrada de áudio da captura",
+   "ru": "Аудиовход захвата"
   },
   {
    "zh": "采集颜色格式发生变化，请重新连接",

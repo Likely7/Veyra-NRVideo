@@ -197,10 +197,13 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
     // Only what the user picks explicitly is ever opened (1.4.4 rule).
     QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不采集音频")}}};
     if(impl_->captureAudioMissing)out<<QVariantMap{{"id",-4},{"label",tr("上次的音频输入未连接")},{"disabled",true}};
-    for (const auto& d : impl_->captureVideo)
-        if (d.path == impl_->captureDevice)
-            out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
-                               {"label", d.hasEmbeddedAudio ? tr("视频设备内置音频（已检测）") : tr("尝试视频设备内置音频")}};
+    for (const auto& d : impl_->captureVideo) {
+        if (d.path != impl_->captureDevice) continue;
+        out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
+                           {"label", d.hasEmbeddedAudio ? tr("视频设备内置音频（已检测）") : tr("尝试视频设备内置音频")}};
+        if (source::isGc573CaptureDevice(d.path))
+            out << QVariantMap{{"id", source::kCaptureAudioGc573Lpcm}, {"label", QStringLiteral("GC573 HDMI LPCM 7.1")}, {"pcmOnly", true}};
+    }
     for (size_t i = 0; i < impl_->captureAudio.size(); ++i) {
         const auto& device = impl_->captureAudio[i];
         const auto label = device.virtualSpeaker ? tr("Veyra 虚拟扬声器 · %1").arg(utf8Of(device.name))
@@ -209,9 +212,19 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
     }
     return out;
 }
+QString QmlPlayerBridge::captureAudioInputStatus() const {
+    const auto& audio = impl_->snapshot.captureAudio;
+    if (!audio.error.empty()) return uiText(audio.error);
+    if (!audio.inputChannels) return {};
+    const auto channels = tr("%1 声道").arg(audio.inputChannels);
+    const auto format = audio.inputBitstream.empty() ? QStringLiteral("PCM") : utf8Of(audio.inputBitstream);
+    return format + QStringLiteral(" · ") + channels;
+}
 int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioMissing?-4:impl_->captureAudioChoice; }
 void QmlPlayerBridge::setCaptureAudioChoice(int choice) {
-    if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
+    if (choice == source::kCaptureAudioGc573Lpcm) {
+        if (!source::isGc573CaptureDevice(impl_->captureDevice)) return;
+    } else if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
     impl_->captureAudioChoice = choice;
     impl_->captureAudioMissing=false;
     // Remember the audio choice for this device as soon as it is picked, not only on

@@ -232,6 +232,14 @@ int wmain(int argc,wchar_t** argv){try{
         const auto virtualRestored=store.load();
         require(virtualRestored.audioMode==source::kCaptureAudioVirtualSpeaker&&virtualRestored.audioPath==virtualSpeaker.audioPath,
                 "virtual speaker transport and endpoint survive reopening preferences");
+        auto surround=p;
+        surround.videoPath=L"pci#ven_1461&dev_0054&subsys_57301461";
+        surround.audioMode=source::kCaptureAudioGc573Lpcm;
+        surround.audioPath.clear();
+        require(store.save(surround),"save GC573 HDMI LPCM input");
+        const auto surroundRestored=store.load();
+        require(surroundRestored.audioMode==surround.audioMode&&surroundRestored.videoPath==surround.videoPath&&surroundRestored.audioPath.empty(),
+                "GC573 HDMI LPCM stays selected on the video device after reopening preferences");
         for(uint32_t connection:{1u,2u}){
             auto native=p;native.videoPath=source::decklink::inputConnectionPath(L"decklink-native:p:0000000000000123:0",connection);native.formatKey=L"decklink:auto";
             require(store.save(native),"save BMD explicit connection using existing preference format");

@@ -16,6 +16,15 @@ extern "C" {
 #include <libavutil/imgutils.h>
 }
 int wmain(int argc,wchar_t** argv){
+    if(argc==2&&wcscmp(argv[1],L"--gc573-audio-selection")==0){
+        using namespace veyra::source;
+        const CaptureDevice gc573{L"Live Gamer 4K",L"PCI#VEN_1461&DEV_0054&SUBSYS_57301461&REV_00"};
+        const CaptureDevice other{L"Other card",L"PCI#VEN_1461&DEV_0054&SUBSYS_00001461"};
+        const bool encoded=CaptureCardSource::makeCapturePath(0,gc573,0,kCaptureAudioGc573Lpcm,nullptr).find(L":-6::")!=std::wstring::npos;
+        const bool scoped=CaptureCardSource::makeCapturePath(0,other,0,kCaptureAudioGc573Lpcm,nullptr).empty();
+        printf("%s GC573 HDMI LPCM audio selection is scoped to its PCI device\n",encoded&&scoped?"PASS":"FAIL");
+        return encoded&&scoped?0:1;
+    }
     if (argc == 4 && wcscmp(argv[1], L"--bitstream-capture") == 0) {
         if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 2;
         int result = 2;
@@ -192,8 +201,8 @@ int wmain(int argc,wchar_t** argv){
     check(recoveryDrop,"drop invalidates temporal history");
     check(recovered.readAgeMs<100,"latest frame callback age below 100ms");
     printf("received=%llu dropped=%llu callbackFps=%.3f readAgeMs=%.3f\n",recovered.received,recovered.dropped,recovered.callbackFps,recovered.readAgeMs);
-    printf("audioBlocks=%llu format=%uHz/%ubit validBits=%u underruns=%llu underrunFrames=%llu peak=%.5f resets=%llu\n",
-        audio.inputBlocks,audio.inputSampleRate,audio.inputContainerBits,audio.inputValidBits,audio.underruns,
+    printf("audioBlocks=%llu format=%uHz/%ubit validBits=%u inputChannels=%u outputChannels=%u underruns=%llu underrunFrames=%llu peak=%.5f resets=%llu\n",
+        audio.inputBlocks,audio.inputSampleRate,audio.inputContainerBits,audio.inputValidBits,audio.inputChannels,audio.outputChannels,audio.underruns,
         audio.underrunFrames,audio.inputPeak,audio.resets);
     source.close();CoUninitialize();return failures?1:0;
 }

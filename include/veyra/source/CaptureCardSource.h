@@ -16,9 +16,14 @@ constexpr int kCaptureAudioDisabled=-1;
 constexpr int kCaptureAudioFromVideoDevice=-2;
 constexpr int kCaptureAudioWasapi=-3; // capture2 only; requires explicit endpoint ID
 constexpr int kCaptureAudioVirtualSpeaker=-5; // capture2 only; dedicated render endpoint
+constexpr int kCaptureAudioGc573Lpcm=-6; // capture2 only; GC573 HDMI audio pin
 inline bool captureAudioIsWasapi(int mode) {
     return mode == kCaptureAudioWasapi || mode == kCaptureAudioVirtualSpeaker;
 }
+inline bool captureAudioIsEmbedded(int mode) {
+    return mode == kCaptureAudioFromVideoDevice || mode == kCaptureAudioGc573Lpcm;
+}
+bool isGc573CaptureDevice(std::wstring_view path);
 struct CaptureDevice {
     std::wstring name;
     // DirectShow moniker DevicePath/display name. This is stable across a

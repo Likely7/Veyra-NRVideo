@@ -92,6 +92,11 @@ DialogLayer {
     DialogGroup {
         visible: veyra.sourceKind === "capture"
         VRow {
+            visible: veyra.captureAudioInputStatus.length > 0
+            label: qsTr("采集音频输入")
+            hint: veyra.captureAudioInputStatus
+        }
+        VRow {
             label: qsTr("本机音频监听")
             hint: qsTr("关闭后仍可录制和保存回放；本机不播放采集声音")
             VSwitch {
@@ -154,12 +159,13 @@ DialogLayer {
             }
         }
         VRow {
-            label: qsTr("立体声下混")
-            hint: qsTr("多声道片源混成双声道再输出（耳机）；关闭时按设备声道布局映射")
-            VSwitch {
-                objectName: "audio-stereo"
-                checked: veyra.preferences.audioForceStereo === true
-                onToggled: checked => veyra.setPreference("audioForceStereo", checked)
+            label: qsTr("输出声道")
+            hint: qsTr("使用 5.1 或 7.1 PCM 时，请在 Windows 的扬声器配置中选择对应布局。")
+            VSeg {
+                objectName: "audio-output-layout"
+                options: [{ id: "auto", label: qsTr("自动") }, { id: "stereo", label: qsTr("立体声") }]
+                current: veyra.preferences.audioForceStereo === true ? "stereo" : "auto"
+                onPicked: id => veyra.setPreference("audioForceStereo", id === "stereo")
             }
         }
     }

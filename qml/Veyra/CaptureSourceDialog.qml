@@ -48,6 +48,7 @@ DialogLayer {
     }
     function labelOf(list, id, fallback) { const f = list.find(x => String(x.id) === String(id)); return f ? f.label : fallback }
     readonly property bool live: veyra.captureSignalLevel !== "idle"
+    readonly property bool pcmOnlyInput: veyra.captureAudioInputs.some(input => input.id === veyra.captureAudioChoice && input.pcmOnly === true)
     readonly property var pc: veyra.ps5Control
     readonly property bool pcOn: pc.available === true && pc.enabled === true
     readonly property string pcTag: {
@@ -324,7 +325,8 @@ DialogLayer {
     DialogGroup {
         VRow {
             label: qsTr("音频输入")
-            hint: qsTr("录制采集卡声音需选择输入；本机监听可独立关闭")
+            hint: captureDialog.pcmOnlyInput ? qsTr("在主机上选择线性 PCM 7.1。重新连接采集后生效。")
+                                            : qsTr("录制采集卡声音需选择输入；本机监听可独立关闭")
             VSelect {
                 objectName: "capture-audio"
                 implicitWidth: 260
@@ -374,6 +376,7 @@ DialogLayer {
             }
         }
         VRow {
+            visible: !captureDialog.pcmOnlyInput
             label: qsTr("Dolby / DTS 位流")
             VSeg {
                 objectName: "capture-audio-ingress"

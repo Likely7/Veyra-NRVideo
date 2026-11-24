@@ -102,6 +102,15 @@ QtObject {
     property real volume: 1
     readonly property real maximumVolume: 3
     property bool muted: false
+    property var audioTracks: []
+    property var audioDevices: []
+    property string audioOutputStatus: ""
+    property string captureAudioInputStatus: ""
+    property int audioSyncMode: 0
+    property bool audioSyncLive: false
+    property int audioOffsetMs: 0
+    property bool audioSkewKnown: false
+    function refreshAudioDevices() {}
     property real duration: 100
     property bool hasSource: true
     property bool isCapture: false

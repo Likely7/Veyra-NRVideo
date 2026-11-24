@@ -690,7 +690,7 @@ struct QmlPlayerBridge::Impl {
         captureColor=capturePrefs.colorForDevice(captureDevice);
         captureAudioChoice=source::kCaptureAudioDisabled;
         captureAudioMissing=false;
-        if(capturePrefs.audioMode==source::kCaptureAudioFromVideoDevice)captureAudioChoice=source::kCaptureAudioFromVideoDevice;
+        if(source::captureAudioIsEmbedded(capturePrefs.audioMode))captureAudioChoice=capturePrefs.audioMode;
         else if(!capturePrefs.audioPath.empty()){
             captureAudioMissing=true;
             for(size_t k=0;k<captureAudio.size();++k)
