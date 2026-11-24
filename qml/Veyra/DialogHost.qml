@@ -10,7 +10,6 @@ Item {
     anchors.fill: parent
     z: 100
 
-    // Active dialog: network/capture/ps5/moonlight/xbox/screen/subtitle/audio/save/manage.
     property string dialog: ""
     property bool onboardingActive: false
     readonly property alias captureSettings: captureDialog
@@ -109,6 +108,53 @@ Item {
         dialogHost: host    }
 
     // --- 屏幕捕获 ---------------------------------------------------------
+    DialogLayer {
+        id: screenNotice
+        dialogHost: host
+        objectName: "screen-capture-notice"
+        key: "screen"
+        title: qsTr("屏幕捕获说明")
+        glyph: "monitor"
+        dialogWidth: 560
+        minimumBodyWidth: 0
+        actions: [
+            { label: qsTr("继续普通采集") },
+            { label: qsTr("打开 Magpie"), primary: true }
+        ]
+        onActionTriggered: label => {
+            if (label === qsTr("打开 Magpie"))
+                Qt.openUrlExternally("https://github.com/SAOG0721/Magpie")
+            else if (label === qsTr("继续普通采集"))
+                host.open("screen-viewing")
+        }
+
+        Shortcut {
+            sequence: "Esc"
+            enabled: screenNotice.shown
+            onActivated: host.close()
+        }
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 12
+            Repeater {
+                model: [
+                    qsTr("Veyra 目前由我一人开发和维护，我没有精力继续跟进 PC 游戏捕获和兼容性。"),
+                    qsTr("玩 PC 游戏，我强烈推荐上游的 Magpie。它有更多缩放器和画面效果，也更侧重 PC 捕获性能。尤其推荐给玩带反作弊的网游、老游戏或使用模拟器的用户。"),
+                    qsTr("Veyra 的屏幕捕获已移除鼠标穿透，仅保留用于观看视频的窗口和显示器采集。")
+                ]
+                delegate: Text {
+                    required property string modelData
+                    Layout.fillWidth: true
+                    text: modelData
+                    wrapMode: Text.Wrap
+                    color: Theme.t1
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsBody
+                    lineHeight: 1.25
+                }
+            }
+        }
+    }
     ScreenSourceDialog {
         id: screenDialog
         dialogHost: host

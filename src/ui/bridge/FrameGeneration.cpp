@@ -13,6 +13,7 @@ QString QmlPlayerBridge::fgBackendName() const {
     case engine::FrameGenerationBackend::Vfg:return QStringLiteral("vfg");
     case engine::FrameGenerationBackend::Anr:return QStringLiteral("anr");
     case engine::FrameGenerationBackend::AmdFrc:return QStringLiteral("amdfrc");
+    case engine::FrameGenerationBackend::Rife:return QStringLiteral("rife");
     }
     return {};
 }
@@ -24,14 +25,17 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         QVariantMap{{"id","fsr3"},{"label",tr("FSR 3.1 · 2X")}},
         QVariantMap{{"id","fsr4"},{"label",tr("FSR 4 ML · RX 9000")}},
         QVariantMap{{"id","amdfrc"},{"label",tr("AMD FRC · 视频补帧 · 2X")}},
+        QVariantMap{{"id","rife"},{"label",tr("RIFE · AI 视频补帧 · 2X / 3X")}},
         QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50")},{"gold",true}}
     };
     const auto caps = effectCapabilities();
     for (auto& choice : choices) {
         auto row = choice.toMap();
         const auto cap = caps.value(row.value("id").toString()).toMap();
-        row["disabled"] = !cap.value("available").toBool();
-        row["note"] = cap.value("reason");
+        const bool downloadable = cap.value("downloadable").toBool();
+        row["download"] = downloadable;
+        row["disabled"] = !cap.value("available").toBool() && !downloadable;
+        row["note"] = downloadable ? tr("点击从 Apex Compute 下载并启用（约 3.2 MB）") : cap.value("reason");
         choice = row;
     }
     return choices;
@@ -47,6 +51,7 @@ QString QmlPlayerBridge::fgProviderText() const {
     }
     if(engine::fsrFrameGeneration(s.applied.frameGenerationBackend)&&s.applied.multiplier>1&&!s.fsrProviderVersion.empty())
         return tr("实际运行：FSR %1 · 2X").arg(QString::fromStdString(s.fsrProviderVersion));
+    if(fgBackendName()==QLatin1String("rife"))return tr("RIFE 4.26（3X 用 4.22 lite）AI 视频补帧，经 DirectML 在任意 DirectX 12 显卡上运行，只用前后两帧画面；比 AMD FRC 清晰，但 GPU 占用更高、延迟略高");
     if(fgBackendName()==QLatin1String("amdfrc"))return tr("AMD 驱动自带的视频补帧（AMF FRC），只用前后两帧画面估算运动，固定 2X");
     if(fgBackendName()==QLatin1String("fsr4"))return tr("FSR 4 ML 需要支持的 RX 9000 和驱动，不可用时自动改用 FSR 3.1；尚未在 RX 9000 实卡上验证");
     if(fgBackendName()==QLatin1String("fsr3"))return tr("FSR 3.1 跨厂商补帧 · 最高 2X");
@@ -71,8 +76,9 @@ int xessCeiling(const engine::PlayerSnapshot& s) {
     return std::max(cap, seen);
 }
 void QmlPlayerBridge::setFgBackendName(const QString& value) {
-    if(value!=QLatin1String("anr")&&value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")&&value!=QLatin1String("amdfrc")){emit notice(tr("未知补帧后端"),true);return;}
+    if(value!=QLatin1String("anr")&&value!=QLatin1String("dlss")&&value!=QLatin1String("xess")&&value!=QLatin1String("fsr3")&&value!=QLatin1String("fsr4")&&value!=QLatin1String("vfg")&&value!=QLatin1String("amdfrc")&&value!=QLatin1String("rife")){emit notice(tr("未知补帧后端"),true);return;}
     const auto availability = effectCapabilities().value(value).toMap();
+    if (availability.value("downloadable").toBool()) { downloadAnr(); return; }
     if (!availability.value("available").toBool()) { emit notice(availability.value("reason").toString(), true); emit settingsChanged(); return; }
     auto s = settings();
     const auto want = value == QLatin1String("anr") ? engine::FrameGenerationBackend::Anr
@@ -81,6 +87,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
                     : value == QLatin1String("fsr4") ? engine::FrameGenerationBackend::Fsr4
                     : value == QLatin1String("vfg") ? engine::FrameGenerationBackend::Vfg
                     : value == QLatin1String("amdfrc") ? engine::FrameGenerationBackend::AmdFrc
+                    : value == QLatin1String("rife") ? engine::FrameGenerationBackend::Rife
                     : engine::FrameGenerationBackend::Dlss;
     if (s.frameGenerationBackend == want) return;
     if(want==engine::FrameGenerationBackend::Vfg&&(!vfgHardwarePossible()||!pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring()))){
@@ -98,7 +105,7 @@ void QmlPlayerBridge::setFgBackendName(const QString& value) {
     auto& chain = impl_->chain;
     const auto beforeMultiplier = chain.fgMultiplier;
     const int cap = want == engine::FrameGenerationBackend::XeSS ? xessCeiling(impl_->snapshot)
-                  : engine::twoXFrameGeneration(want) ? 2 : want==engine::FrameGenerationBackend::Vfg?8:6;
+                  : engine::twoXFrameGeneration(want) ? 2 : want==engine::FrameGenerationBackend::Rife ? 3 : want==engine::FrameGenerationBackend::Vfg?8:6;
     chain.fgMultiplier=normalizeFgMultiplier(chain.fgMultiplier,want,uint32_t(cap));
     const bool clamped = chain.fgMultiplier != beforeMultiplier;
     if(!impl_->commit(s)){
@@ -121,6 +128,7 @@ int QmlPlayerBridge::fgMaxMultiplier() const {
         return s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Anr&&s.fgCapabilityKnown&&s.fgMultiFrameMax>0?std::clamp(s.fgMultiFrameMax+1,2,6):6;
     if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Vfg)return 8;
     if(engine::twoXFrameGeneration(settings().frameGenerationBackend))return 2;
+    if(settings().frameGenerationBackend==engine::FrameGenerationBackend::Rife)return 3;
     if (settings().frameGenerationBackend == engine::FrameGenerationBackend::XeSS)
         return xessCeiling(s);
     if (s.fgCapabilityKnown && s.fgMultiFrameMax > 0) return std::clamp(s.fgMultiFrameMax + 1, 2, 6);
@@ -279,6 +287,28 @@ void QmlPlayerBridge::setHudLock(bool value) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "HUD lock not saved");
     emit settingsChanged();
 }
+int QmlPlayerBridge::hudProtect() const { return int(settings().hudProtect); }
+void QmlPlayerBridge::setHudProtect(int value) {
+    if(value<0||value>int(engine::HudProtectMode::Regions))return;
+    auto s=settings();
+    const auto mode=engine::HudProtectMode(value);
+    if(s.hudProtect==mode)return;
+    s.hudProtect=mode;
+    if(!impl_->commit(std::move(s))){emit settingsChanged();return;}
+    impl_->prefs[QStringLiteral("hudProtect")]=value;
+    if(!impl_->savePrefs())veyra::log::warn("ui-prefs","HUD protection not saved");
+    emit settingsChanged();
+}
+bool QmlPlayerBridge::dynamicHud() const { return settings().dynamicHud; }
+void QmlPlayerBridge::setDynamicHud(bool value) {
+    auto s = settings();
+    if (s.dynamicHud == value) return;
+    s.dynamicHud = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("动态 HUD 保护设置未生效"), true); return; }
+    impl_->prefs[QStringLiteral("dynamicHud")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "dynamic HUD setting not saved");
+    emit settingsChanged();
+}
 bool QmlPlayerBridge::dlssgLiteAvailable() const {
     static const bool present = ngx::dlssgLiteRuntimePresent(runtime::localRuntimeDirectory());
     return present;
@@ -292,7 +322,7 @@ QString QmlPlayerBridge::dlssgLiteHint() const {
 }
 int QmlPlayerBridge::contentRate() const { return int(engine::currentContentRate(settings().content)); }
 void QmlPlayerBridge::setContentRate(int value) {
-    if (value < 0 || value > int(engine::ContentRate::Capture60To30)) return;
+    if (!engine::validContentRate(static_cast<engine::ContentRate>(value))) return;
     value=int(engine::currentContentRate(static_cast<engine::ContentRate>(value)));
     auto s = settings();
     if (int(s.content) == value) return;
@@ -311,14 +341,6 @@ void QmlPlayerBridge::setPresentationFullscreen(bool value) {
     impl_->presentation.fullscreen=value;
     impl_->engine.requestPresentation(impl_->presentation);
     emit presentationChanged();
-    // QML's visibility notification runs inside Qt's fullscreen transition.
-    // Let Qt finish its activation request before applying no-focus/through
-    // flags and handing the foreground to the game. One queued transition,
-    // without changing polling or presentation cadence.
-    if(value&&gameMode()) QMetaObject::invokeMethod(this,[this]{
-        if(impl_->presentation.fullscreen)updateGameMode();
-    },Qt::QueuedConnection);
-    else updateGameMode();
 }
 double QmlPlayerBridge::previewAspect() const {
     const int mode=impl_->screenFillActive?2:impl_->aspectMode;
@@ -373,12 +395,12 @@ QString QmlPlayerBridge::vrrHintText(int level) const {
     // can do VRR even if the driver setting is still off.
     const bool on = impl_->presentation.variableRefresh, running = impl_->snapshot.running;
     switch (level) {
-    case 0: return tr("无法检测屏幕是否支持（目前只支持 NVIDIA 显卡）");
+    case 0: return tr("无法检测屏幕是否支持（目前只支持 NVIDIA 和 AMD 显卡）");
     case 1: return tr("当前屏幕不支持可变刷新");
     case 2: return tr("屏幕支持可变刷新，但当前显示模式不可用；请检查连接、刷新率及驱动设置");
     case 3:
         if (!on) return tr("屏幕跟着画面刷新：不撕裂，也几乎不用等刷新");
-        return running ? tr("已请求可变刷新，驱动尚未确认生效；可检查窗口/全屏 G-SYNC 设置，当前状态不代表驱动已关闭")
+        return running ? tr("已请求可变刷新，驱动尚未确认生效（AMD 驱动不报告是否生效，可看显示器菜单中的刷新率）；可检查窗口/全屏 G-SYNC 或 FreeSync 设置，当前状态不代表驱动已关闭")
                        : tr("已开启，将在播放时请求可变刷新；是否生效以驱动报告为准");
     default: return on ? tr("生效中：屏幕跟着画面刷新") : tr("屏幕正处于可变刷新（驱动已开启）");
     }

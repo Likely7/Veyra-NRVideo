@@ -95,7 +95,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     const bool mute=impl_->prefBool("audioMuted",false);
     impl_->engine.setVolume(gain,mute);impl_->snapshot.volume=gain;impl_->snapshot.muted=mute;
     veyra::log::info("ui-prefs",std::format("volume restored={:.3f} muted={}",gain,mute));
-    applyGameHotkeys();
+    logShortcuts();
     syncReplay();
     impl_->enumerateGpuAdapters();
     impl_->resolveGpuMonitor();
@@ -123,47 +123,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     updateLiveCompanionCompat();
     applyPreference(QStringLiteral("prewarmEnhancement"));
     impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));
+    applyPreference(QStringLiteral("fullscreenFrameStats"));
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    impl_->engine.setRemotePlayTouchpadPressOnly(impl_->prefBool("ps5TouchpadPressOnly",false));
+#endif
     connect(&impl_->exportQueue,&QmlExportQueueModel::changed,this,&QmlPlayerBridge::exportChanged);
     if (qApp) qApp->installEventFilter(this);
-    // 游戏模式. The native filter also keeps windows shown during a monitor capture
-    // out of that capture, so it is installed for every run.
-    if (qApp) qApp->installNativeEventFilter(&impl_->game);
-    impl_->displayChangeFilter.changed = &impl_->displayChanged;
-    if (qApp) qApp->installNativeEventFilter(&impl_->displayChangeFilter);
-    impl_->game.onEvent = [this](ui::GamePassthrough::Event event) {
-        using E = ui::GamePassthrough::Event;
-        switch (event) {
-        case E::PanelHotkey: emit gameHotkey(0); break;
-        case E::ExitHotkey:
-        case E::ExitUnavailable:
-            // Restore input before QML processes its fullscreen notification.
-            impl_->gameRefused = true;
-            impl_->gameInputShown = impl_->passthroughShown = false;
-            emit gameModeChanged();
-            impl_->game.apply(ui::GamePassthrough::Mode::Off);
-            if (event == E::ExitHotkey) emit gameHotkey(1);
-            else emit notice(tr("游戏模式键盘监听不可用，已退出鼠标穿透；请退出全屏后重试"), true);
-            break;
-        case E::HangReleased:
-            // Publish Off before the foreground goes back to Veyra; stay out of
-            // click-through until fullscreen is left.
-            impl_->gameRefused = true;
-            impl_->gameInputShown = impl_->passthroughShown = false;
-            emit gameModeChanged();
-            impl_->game.apply(ui::GamePassthrough::Mode::Off);
-            emit gameModeStopped(tr("界面卡住超过 3 秒，已退出游戏模式")); break;
-        // The game has the keyboard in game mode; the hook hands these over.
-        case E::ScreenshotHotkey: takeScreenshot(); break;
-        case E::RecordHotkey: toggleRecording(QStringLiteral("game-hotkey")); break;
-        case E::ReplayHotkey: saveReplay(QStringLiteral("game-hotkey")); break;
-        }
-    };
-    auto* gameBeat = new QTimer(this);
-    connect(gameBeat, &QTimer::timeout, this, [this] {
-        impl_->game.heartbeat();
-        updateGameGeometry();
-    });
-    gameBeat->start(250);
+    impl_->displayEventFilter.changed = &impl_->displayChanged;
+    if (qApp) qApp->installNativeEventFilter(&impl_->displayEventFilter);
 #ifdef VEYRA_ENABLE_MOONLIGHT
     setupMoonlight();
 #endif
@@ -208,6 +175,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         auto settings = impl_->facade.pendingSettings();
         const auto& configuration = restored.configurations[size_t(restored.active)];
         configuration.apply(settings);
+        if (restored.originalHalfRate) settings.content = engine::ContentRate::Capture60To30Original;
         const auto previous = impl_->facade.pendingSettings();
         if (settings.validate().empty() && impl_->facade.applySettings(settings,engine::runtimeOrder(configuration.chain))) {
             impl_->session = restored;
@@ -262,6 +230,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                                                     engine::runtimeOrder(candidate.configurations[size_t(candidate.active)].chain))) {
                 error = tr("引擎未接受默认预设，已保留恢复会话");
             } else {
+                candidate.originalHalfRate = settings.content == engine::ContentRate::Capture60To30Original;
                 impl_->session = candidate;
                 impl_->restoreConfiguration(candidate.configurations[size_t(candidate.active)]);
                 impl_->revalidate();
@@ -320,9 +289,20 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("hudLock")).toBool();
             if (s.hudLock != on) { s.hudLock = on; changed = true; }
         }
+        if(p.contains(QStringLiteral("hudProtect"))){
+            const int mode=p.value(QStringLiteral("hudProtect"),-1).toInt();
+            if(mode>=0&&mode<=int(engine::HudProtectMode::Regions)&&int(s.hudProtect)!=mode){
+                s.hudProtect=engine::HudProtectMode(mode);
+                changed=true;
+            }
+        }
+        if (p.contains(QStringLiteral("dynamicHud"))) {
+            const bool on = p.value(QStringLiteral("dynamicHud")).toBool();
+            if (s.dynamicHud != on) { s.dynamicHud = on; changed = true; }
+        }
         if (!defaultFlowApplied && p.contains(QStringLiteral("contentRate"))) {
             const int rate = p.value(QStringLiteral("contentRate")).toInt();
-            if(rate>=0&&rate<=int(engine::ContentRate::Capture60To30)){
+            if(engine::validContentRate(static_cast<engine::ContentRate>(rate))){
                 const auto mode=engine::currentContentRate(static_cast<engine::ContentRate>(rate));
                 if(s.content!=mode){s.content=mode;changed=true;}
                 if(rate!=int(mode)){
@@ -406,6 +386,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const bool wasImage = impl_->snapshot.image;
         const bool wasFailed = impl_->snapshot.failed;
         const bool wasEngineHung = impl_->snapshot.status == engine::kEngineHangStatus;
+        const bool wasCaptureDriverWaiting = impl_->snapshot.captureDriverWaitMs != 0;
         const bool wasFullscreenUnsafe = impl_->snapshot.vramFullscreenUnsafe;
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
@@ -466,6 +447,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             else emit notice(tr("显存在设置未变时增加了 %1 GB，正在尝试回收；回收结果见诊断日志。原因尚未确认。")
                                  .arg(impl_->snapshot.vramRunawayMiB / 1024.0, 0, 'f', 1), true);
         }
+        const auto& displayed = impl_->snapshot;
+        if (displayed.running && !displayed.image && displayed.tearingHint != engine::TearingHint::None
+            && displayed.sessionId != impl_->tearingNoticeSession) {
+            impl_->tearingNoticeSession = displayed.sessionId;
+            emit warningNotice(displayed.tearingHint == engine::TearingHint::Nvidia
+                ? tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请在 NVIDIA 控制面板的程序设置中，将 veyra_qml_ui.exe 的垂直同步设为“使用 3D 应用程序设置”。")
+                : tr("检测到可能导致画面撕裂的送显时序。如果看到了撕裂，请检查显卡驱动中的垂直同步设置。"));
+        }
         updateMaskOverlay();
         tickSubtitles();
         tickImageBatch();
@@ -510,6 +499,11 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // up what it opened about twice a second.
         if (++impl_->audioPollTicks >= 30) {
             impl_->audioPollTicks = 0;
+            const auto hdmi = impl_->engine.hdmiBitstream().state();
+            if (impl_->hdmiState != hdmi) {
+                impl_->hdmiState = hdmi;
+                emit audioDevicesChanged();
+            }
             const auto active = sink::activeRenderEndpoint();
             if (active.valid != impl_->audioActive.valid || active.id != impl_->audioActive.id ||
                 active.fallback != impl_->audioActive.fallback || active.channels != impl_->audioActive.channels ||
@@ -535,7 +529,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             // frame carried its dynamic metadata, so announcing there would say
             // "SDR" for an HDR Vivid or HDR10+ stream.
             if (s.transport == engine::TransportState::Playing && !s.image && !s.failed &&
-                s.frames > 0 && impl_->formatBadgeSession != s.sessionId)
+                s.frames > 0 && !s.sourceHdrLabel.empty() &&
+                (impl_->formatBadgeSession != s.sessionId || impl_->formatBadgeLabel != s.sourceHdrLabel))
                 showFormatBadge(s);
             if (had && !wasFailed && s.failed && !s.capture && !s.remotePlay &&
                 impl_->prefString("decode") == QLatin1String("hardware"))
@@ -564,6 +559,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 if (!reconnect && impl_->currentPage == QLatin1String("min")) emit navigate(QStringLiteral("home"));
             }
             // Engine watchdog (field logs(15)): a frozen picture says why, once.
+            if (had && !wasCaptureDriverWaiting && s.captureDriverWaitMs) emit notice(statusText(), true);
             if (had && !wasEngineHung && s.status == engine::kEngineHangStatus) emit notice(uiText(s.status), true);
             // Network sources (#48): a recovered connection and now-and-then loss summaries.
             if (s.sessionId != impl_->netNoticeSession) {
@@ -613,7 +609,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         // snapshot is not part of the player snapshot.
         if (impl_->exportQueue.queue().needsTick()) pollExport();
         tickPlaylist();
-        updateGameMode();
     });
     impl_->timer->start(16);
     startGpuSampler();
@@ -739,7 +734,7 @@ QmlPlayerBridge::~QmlPlayerBridge() {
     // The overlay is a child window: it has to go before the video window does.
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
-    if (qApp) qApp->removeNativeEventFilter(&impl_->displayChangeFilter);
+    if (qApp) qApp->removeNativeEventFilter(&impl_->displayEventFilter);
     // rememberPosition(true) writes every preference, a pending volume included.
     if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->stop();
     rememberPosition(true);

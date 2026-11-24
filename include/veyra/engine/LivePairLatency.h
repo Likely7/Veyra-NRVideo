@@ -21,10 +21,23 @@ public:
         while(!samples_.empty()&&(samples_.size()>=64||samples_.front().time<now-10000000))samples_.pop_front();
         samples_.push_back({now,requiredDelay});
     }
+    // Apply the floor from the actual pair's deadline geometry before
+    // deciding if the same pair fits. Keep the original allowance cap.
+    int64_t enforceAdmissionFloor(int64_t need,int64_t limit){
+        selected_=std::min(std::max(selected_,need),limit);
+        return selected_;
+    }
     int64_t select(int64_t now,int64_t legacyDelay,int64_t interval,unsigned multiplier,int64_t samplingAllowance=0){
         std::vector<int64_t> current;
         for(const auto& sample:samples_)if(sample.time>=now-10000000)current.push_back(sample.delay);
-        if(current.size()<8||interval<=0||multiplier<2){selected_=legacyDelay;return selected_;}
+        if(interval<=0||multiplier<2){selected_=0;return legacyDelay;}
+        const auto limit=legacyDelay+samplingAllowance;
+        // A gap in readiness observations is expected when pairs are skipped.
+        // Retain the last phase until enough new samples arrive.
+        if(current.size()<8){
+            selected_=std::min(selected_?selected_:legacyDelay,limit);
+            return selected_;
+        }
         const auto index=(current.size()*95+99)/100-1;
         std::nth_element(current.begin(),current.begin()+index,current.end());
         // 0.5 ms covers wake-up jitter with MMCSS. The allowance lets readiness
@@ -32,7 +45,6 @@ public:
         // later sample can move readiness past a deadline on the continuous
         // content clock, and FG whose own interpolation does not fit in the
         // legacy delay (FgRecoveryBudget::phaseAllowance).
-        const auto limit=legacyDelay+samplingAllowance;
         const auto target=std::min(limit,current[index]+kMargin100ns);
         const auto step=std::min<int64_t>(5000,interval/multiplier/8);
         selected_=std::clamp(selected_?selected_-step:legacyDelay,target,limit);

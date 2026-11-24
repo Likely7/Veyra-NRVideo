@@ -100,6 +100,15 @@ DialogLayer {
                 onToggled: v => veyra.setPreference("captureAudioMonitor", v)
             }
         }
+        VRow {
+            label: qsTr("HDMI 码流直通")
+            hint: qsTr("将采集的 AC-3 / DTS 送到功放。直通期间会独占所选输出设备，其他程序无法在该设备播放声音。")
+            VSwitch {
+                objectName: "audio-hdmi-passthrough"
+                checked: veyra.preferences.captureHdmiPassthrough === true
+                onToggled: v => veyra.setPreference("captureHdmiPassthrough", v)
+            }
+        }
     }
     DialogSection { text: qsTr("音画同步") }
     DialogGroup {

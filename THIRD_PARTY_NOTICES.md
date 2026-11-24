@@ -1,17 +1,151 @@
 # Third-party dependencies
 
+## Magpie author’s private Veyra patches (2026-11-22)
+
+The Magpie author supplied two source patches against Veyra `c6633121`.
+`veyra-optimizations.patch` informed the FSR motion resampling, optional
+present percentile and VFG history-only capture. `veyra-frame-trace.patch`
+informed the bounded recorder, timing hooks and CSV event schema. The ports
+retain Veyra's crosshair processing, intentional idle exclusion and current
+graphics scheduling. The offline Python analyzer and its tests retain their
+GPL-3.0-only notices. Its embedded HTML template comes from the same source
+package, whose analyzer adapted the Magpie workflow at
+`91080c48752a1face38eb32e5444b12185ea84ae`.
+
+## RIFE frame generation through ONNX Runtime DirectML (2026-11-22)
+
+`src/gfx/RifeDmlBackend.cpp` runs RIFE video frame interpolation (Practical-RIFE,
+hzwer, MIT) with ONNX Runtime and its DirectML execution provider on the graph's
+D3D12 queue. Nothing below is committed or bundled; the user places it in
+`runtime/rife` (docs/RIFE_DIRECTML.md) and the backend loads it by absolute path:
+
+- ONNX Runtime 1.24.4 (`onnxruntime.dll`, `onnxruntime_providers_shared.dll`), MIT,
+  from the NuGet package Microsoft.ML.OnnxRuntime.DirectML. The build uses its
+  C API headers (`onnxruntime_c_api.h`, `dml_provider_factory.h`) only.
+- DirectML 1.15.4 (`DirectML.dll`), Microsoft DirectML license (redistributable),
+  from the NuGet package Microsoft.AI.DirectML; header `DirectML.h` at build time.
+- Models `rife_v4.26_fp16.onnx` and `rife_v4.22_lite_fp16.onnx`: Practical-RIFE
+  weights (MIT) as exported to ONNX by vs-mlrt (AmusementClub, external-models
+  release), converted by `tools/rife_models/make_rife_models.py` (separate inputs,
+  fp16). The script reproduces the files byte for byte.
+
+`shaders/RifePack.hlsl`, `RifeUnpack.hlsl` and `RifeShotChange.hlsl` are original.
+The shot-change test reuses the sampling idea of `VfgShotChange.hlsl` with a
+motion-compensated block match instead of the histogram/SAD thresholds.
+
+## NVIDIA Image Scaling (NIS)
+
+NIS uses NVIDIA's MIT-licensed Image Scaling SDK v1.0.3 at
+[35e13ba316c98eeecf16f37eae70ce88019911f6](https://github.com/NVIDIAGameWorks/NVIDIAImageScaling/tree/35e13ba316c98eeecf16f37eae70ce88019911f6).
+Copyright (c) 2022 NVIDIA CORPORATION & AFFILIATES. See
+[third_party/nis/licence.txt](third_party/nis/licence.txt) (distributed as
+licenses/NVIDIA_NIS_MIT.txt).
+
+- third_party/nis/NIS_Config.h retains the upstream parameter and coefficient tables.
+- third_party/nis/NIS_Scaler.h allows an application output-store transform and
+  excludes the first pixel outside each viewport edge.
+- shaders/Nis.hlsl adapts the HLSL example bindings to Veyra's D3D12 pass
+  and converts the SDR result back to linear working color.
+- src/pipeline/NisScaler.cpp uploads the stock coefficients and runs the shader
+  with SDR or linear HDR inputs on the selected graphics adapter.
+
+## AMD VideoSR
+
+src/gfx/AmfVideoSrBackend.cpp uses the public AMD AMF 1.5.3 HQ Scaler API with
+the AMF runtime from the installed graphics driver. AMD Advanced Media Framework
+headers are build-time dependencies. The AMD driver runtime is supplied by AMD.
+
 ## Live subtitle translation (2026-11-20)
 
 Veyra's native subtitle translation adapts the Live Captions integration and
 translation workflow proposed by jjjxxxttt in [PR #203](https://github.com/Likely7/Veyra-NRVideo/pull/203)
 at `fb08b6cd87afcc2942eca2201958da4fbabfabaf` under the project's GPL-3.0 license.
-Windows speech recognition comes from Windows Live Captions.
+Windows Live Captions remains available as a legacy speech source.
 
-The optional in-app downloads are [llama.cpp b12240 Windows x64 CPU](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
+The optional in-app downloads are [llama.cpp b12240 Windows x64 Vulkan](https://github.com/ggml-org/llama.cpp/releases/tag/b12240)
 (MIT and the included LLVM OpenMP license) and [Qwen2.5-1.5B-Instruct Q4_K_M](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/tree/91cad51170dc346986eccefdc2dd33a9da36ead9)
 (Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
 `src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
 data directory and are independent of the application installer.
+
+### Local speech recognition
+
+The optional speech-recognition path taps Veyra's playback PCM and runs on the
+CPU in a separate process. Timestamps and sentence identifiers are shared with
+the legacy Windows Live Captions source. ASR models and runtime binaries are
+downloaded on demand into the user's data directory.
+
+- [sherpa-onnx v2.0.2](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v2.0.2)
+  at 5d2bd37de78b223a2e8e00e25483d12c5b164299, Apache-2.0. The public
+  sherpa-onnx/c-api/c-api.h header is copied unmodified to
+  [third_party/sherpa-onnx](third_party/sherpa-onnx) with its license. Veyra uses
+  the CPU Windows x64 shared MD MinSizeRel no-TTS release. The child process
+  uses the C API for non-streaming recognition and VAD.
+- [ONNX Runtime 1.28.2](https://github.com/microsoft/onnxruntime/blob/v1.28.2/LICENSE),
+  MIT. The two CPU runtime DLLs come from the pinned sherpa-onnx release.
+- [Silero VAD](https://github.com/snakers4/silero-vad), MIT. The ONNX export
+  is the silero_vad.onnx asset from the sherpa-onnx ASR releases.
+- [NVIDIA Parakeet TDT 0.6B v2](https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2),
+  NVIDIA, CC BY 4.0. The sherpa-onnx maintainers export and quantize the
+  encoder, decoder and joiner to ONNX int8. This option recognizes English.
+- [OpenAI Whisper large-v3-turbo](https://huggingface.co/openai/whisper-large-v3-turbo),
+  OpenAI, MIT. The sherpa-onnx int8 ONNX export supplies multilingual recognition.
+
+src/ui/AsrModels.cpp pins the artifact identities. If a GitHub archive is
+unavailable, the downloader can fetch the same Parakeet members from
+[84b478d541cd](https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v2-int8/tree/84b478d541cdbf0c296a7ab5f1e20a6f8f998114)
+or the same Whisper members from
+[2ca6ff69fc87](https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/tree/2ca6ff69fc878651b770880507669577ac41c2ff).
+Hugging Face and hf-mirror use these same revisions and file digests.
+The sherpa-onnx runtime also has a same-digest GH-Proxy route. The VAD
+fallback is the MIT-licensed Silero V5 ONNX export from
+[5cd2ba54db05](https://github.com/snakers4/silero-vad/tree/5cd2ba54db059f961e7545d4f211b44f005a6dfb),
+pinned to its own SHA-256, available from GitHub Raw or jsDelivr.
+
+The ASR child verifies the files before loading the runtime or parsing the
+models. All speech recognition DLLs and weights are installed through the
+user data directory downloader.
+
+### On-screen text source: VI Translator capture reading (2026-11-20)
+
+Live translation can read the subtitles drawn on the picture (capture card, PS5
+Remote Play, Xbox/PC streaming, video) instead of Windows Live Captions. The
+reading logic is ported to C++ from [VI Translator - Desktop](https://github.com/vi-translator/vi-translator-desktop)
+v1.2.3 at `715f04a8188e7c39be5d264c5d89f362a6f07e04`: the three OCR passes and their choice, outline-only letters,
+junk/quality/order checks, gap filling, the centred-subtitle filter, the lost
+apostrophe fixes, the "could this be English" check, edit-distance line matching
+and the settle/clear timing (`src-tauri/src/ocr.rs`, area loop in `src-tauri/src/main.rs`).
+Ported into `include/veyra/engine/ScreenText.h`, `src/engine/ScreenText.cpp` and
+`tests/unit/ScreenTextTests.cpp`; the GTA VI specific parts (speaker names, button
+icons, highlight colours, game screens, phrasebook, sync server) are not included.
+The frame readback, the Windows OCR wrapper (`src/engine/ScreenTextCapture.cpp`)
+and the user interface are Veyra's own. Text recognition is Windows.Media.Ocr.
+When each line's translation is shown follows VI Translator's presenter (`src-tauri/src/main.rs`,
+same version), ported into `src/ui/CaptionPresenter.h` and `tests/unit/CaptionPresenterTests.cpp`.
+
+```
+MIT License
+
+Copyright (c) 2026 Fouad Almalki
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## PushFPS frame generation and recording features (2026-11-19)
 
@@ -128,6 +262,37 @@ timeline discontinuity and rebuild) instead of the history alpha. The
 connection are Veyra's own. Not ported: jittered SMAA T2x / 4x (captured
 frames cannot be jittered), Anime4K 3D AA upscale, SGSR, and the MagpieFX
 effect runtime. No Magpie binary or runtime is used.
+
+## Magpie / Anime4K bilateral video denoise (2026-11-23)
+
+- HLSL source: [Blinue/Magpie](https://github.com/Blinue/Magpie/blob/7133a2dd4a2e7013b218510db22a724f8bdfb9bf/src/Effects/Anime4K/Anime4K_Denoise_Bilateral_Mean.hlsl), GPL-3.0, blob SHA-256 45a5a0b35757efc59b6775ca10745bca51a47278c7c3a60aebe7f974ec3dd057.
+- Original: [bloc97/Anime4K](https://github.com/bloc97/Anime4K/blob/7684e9586f8dcc738af08a1cdceb024cc184f426/glsl/Denoise/Anime4K_Denoise_Bilateral_Mean.glsl), MIT, blob SHA-256 bdcbc73cecdbc2fda879824cad822c70cc89c9e93d747fa740c1301c3d270dee.
+- Veyra port: `shaders/VideoDenoise.hlsl` retains the 5×5 spatial Gaussian and range-weighted mean. MagpieFX texture gathers become an 8×8 D3D12 group with shared tiles. The range metric uses linear luma and chroma differences with SDR / scRGB calibration, and luma and chroma can be mixed independently. Edge clamping and alpha follow the Veyra input/output contract.
+
+```text
+MIT License
+
+Copyright (c) 2019-2021 bloc97
+All rights reserved.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ## User-provided ShortFuse NR 310.9.16 (2026-10-17, local testing)
 
@@ -451,7 +616,7 @@ Veyra calls the pinned Chiaki orientation tracker API (AGPL-3.0-only with OpenSS
 
 ### PSN browser authorization adapter (2026-09-12)
 
-Historical attribution: this adapter was removed on 2026-11-11. Current Veyra opens the user-selected PSNTools website for manual Account ID lookup; it does not implement the old OAuth/token flow. Existing Chiaki protocol and dependency notices below still apply.
+Historical attribution: this adapter was removed on 2026-11-11. Current Veyra opens its own Account ID guide (docs/PSN_ACCOUNT_ID.md), which points to Sony's own sign-in through psn-account-id or chiaki-ng, for manual Account ID lookup; it does not implement the old OAuth/token flow. Existing Chiaki protocol and dependency notices below still apply.
 
 `src/remoteplay/PsnAuth.cpp` adapts the OAuth request contract and public client identifiers from chiaki-ng, commit `0e16950165f06e5c3291537c2eeba6e852be7120`, `gui/src/psnaccountid.cpp`, `gui/include/psnaccountid.h`, and `gui/src/psntoken.cpp`. Upstream credits the Account ID script to grill2010. License: AGPL-3.0-only with the upstream OpenSSL exception. The Windows HTTP, protected storage and UI integration are Veyra code. This is an unofficial client, not Sony endorsement. json-c remains an existing Chiaki dependency; its license/notice must remain in binary distributions.
 
@@ -672,6 +837,9 @@ together, which is recorded as an open question in
 
 Two upstream projects are ported into `include/veyra/ngx/AdaMfgUnlock.h` /
 `src/ngx/AdaMfgUnlock.cpp`; both are MIT-licensed and are attributed separately.
+The parsing helpers this port shares with the RTX 30 port below (`readU16/32/64`,
+`sha256Equals`, `lz4BlockDecompress`, `pointsToCString`) were moved unchanged into
+`src/ngx/MfgUnlockUtil.h` / `src/ngx/MfgUnlockUtil.cpp` on 2026-11-20.
 
 ### ImDreamt/MFGAdaUnlock-RenoDx (initial port)
 
@@ -856,6 +1024,19 @@ layouts (checked against the commit above). It only reads the monitor's
 variable-refresh support and state, for diagnostics and to enable the 可变刷新
 switch; this monitor query never changes driver settings. Same loading rules and the same
 license as above.
+
+The same header (2026-11-22) adds an AMD FreeSync fallback for displays NVAPI
+does not answer: minimal renamed `AdapterInfo`, `ADLDisplayInfo` and
+`ADLFreeSyncCap` layouts, the `ADL_FREESYNC_CAP_*` and display-info bits and
+the ADL2 entry points `ADL2_Main_Control_Create`,
+`ADL2_Adapter_NumberOfAdapters_Get`, `ADL2_Adapter_AdapterInfo_Get`,
+`ADL2_Display_DisplayInfo_Get`, `ADL2_Display_FreeSync_Cap` and
+`ADL2_Display_FreeSyncState_Get`, checked against GPUOpen display-library
+(AMD Display Library SDK) commit `84c881cb2136f04287eb3af12de00a9e2867aa9e`
+(`include/adl_structures.h`, `include/adl_defines.h`, MIT). Only the System32
+`atiadlxx.dll` installed with the AMD driver is loaded and pinned; it is read
+only and never changes FreeSync settings. No ADL SDK file or AMD runtime is
+committed or bundled.
 
 `src/gfx/NvidiaVrrProfile.cpp` (2026-11-14) adds minimal renamed DRS v1
 application/profile/setting layouts, QueryInterface IDs and G-SYNC scope enums,
@@ -1188,6 +1369,10 @@ At the inspected commit the ANR core source and a clear integration/redistributi
 ### ANR public release boundary (2026-11-13)
 
 Upstream collaborator selimsandal explicitly states that third-party redistribution is not allowed until a full-release license is issued: https://github.com/apex-compute/ANR/issues/9#issuecomment-6857895225 (2026-11-13T15:49:32Z). Veyra 2.1.6 public packages contain none of ANR's provider DLL, model/program packs, configuration or generated bridge loader. The host adapter remains independently written Veyra source. Existing private local test copies are not public Release assets; no automated download, mirror, repackaged or renamed ANR payload is offered. The previous dated local research/measurements remain historical evidence, not a grant of redistribution rights.
+
+### ANR on-demand download (2026-11-23)
+
+Selecting ANR with the component missing retrieves the pinned FG V.B15 Windows Addon directly from Apex Compute's GitHub Release. Veyra checks the archive's published SHA-256 and the 19 original provider members before installing them in the user's application data. The installer selects the provider directory with its original data and configuration, and Veyra's own host calls the provider. The upstream archive supplies all vendor bytes for this user-initiated download. [Official FG V.B15 release](https://github.com/apex-compute/ANR/releases/tag/FG-V.B15)
 
 ## AMD Advanced Media Framework (AMF) SDK headers
 

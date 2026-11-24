@@ -2,11 +2,15 @@
 #include "veyra/source/IFrameSource.h"
 #include "veyra/source/CaptureColorOverride.h"
 #include "veyra/source/CaptureFormatSelection.h"
+#include "veyra/source/CaptureDriverStage.h"
+#include <chrono>
+#include <functional>
 #include <memory>
 #include <string_view>
 #include <vector>
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/source/AudioInputRecovery.h"
+namespace veyra::sink { class HdmiBitstreamOutput; }
 namespace veyra::source {
 constexpr int kCaptureAudioDisabled=-1;
 constexpr int kCaptureAudioFromVideoDevice=-2;
@@ -40,6 +44,9 @@ struct CaptureFormatQueryInfo {
     size_t advertised=0,rejected=0;
     bool partial=false,fallback=false;
 };
+std::wstring captureFailureAdvice(long code);
+bool isCaptureDisconnect(long code);
+
 class CaptureCardSource final:public IFrameSource {
 public:
     CaptureCardSource();~CaptureCardSource()override;
@@ -58,12 +65,16 @@ public:
     bool configure(const SourceOpenDesc&);
     bool start();
     bool reconnect(float gain,unsigned syncMode,int offsetMs);
+    void releaseForRetry();
+    bool noVideoAfterRun() const { return noVideoAfterRun_; }
+    void setDriverStageObserver(std::function<void(CaptureDriverStage)> observer);
     // Owner-thread recovery of DirectShow audio pins; same video filter retained.
     void recoverAudio(float gain,unsigned syncMode,int offsetMs);
     bool setAudioGain(float); // call on the graph owner thread; never system volume
     // 0 automatic, 1 PCM only, 2 bitstream preferred. Takes effect on the next
     // connect/reconnect because the audio media type is negotiated there.
     void setAudioIngress(unsigned mode);
+    void setHdmiBitstream(std::shared_ptr<sink::HdmiBitstreamOutput> output);
     // 0 auto, 1 minimum, 2 driver default (see CaptureBuffer.h). Applied on the
     // next connect: the allocator is created while the graph is built.
     void setBufferMode(unsigned mode);
@@ -84,6 +95,8 @@ public:
     sink::CaptureAudioState audioState()const;
     const SourceInfo& info()const override;
     const std::wstring& errorMessage()const{return error_;}
+    long lastFailureCode()const{return lastFailureCode_;}
+    bool deviceRemoved()const{return deviceRemoved_;}
     // The selected media type is compressed (MJPEG, H.264, ...) and decoded by Veyra.
     bool compressedVideo()const;
     SourceReadStatus read(pipeline::FramePacket&,const AVFrame**)override;
@@ -95,7 +108,18 @@ public:
     bool seek(const pipeline::Rational&)override{return false;}
     void close()noexcept override;
 private:
+    class DriverCall;
+    CaptureDriverStage driverStage_ = CaptureDriverStage::None;
+    std::function<void(CaptureDriverStage)> driverStageObserver_;
     std::wstring error_;
+    long lastFailureCode_ = 0;
+    bool deviceRemoved_ = false;
+    bool noVideoAfterRun_ = false;
+    std::chrono::steady_clock::time_point nextCadenceReconnect_{};
+    void clearFailure();
+    void setFailure(const wchar_t* stage, long code);
+    void closeGraph(bool stopped = false) noexcept;
+    bool configureDevice(const SourceOpenDesc&);
     bool configureDeckLink(const SourceOpenDesc&);
     bool connectDirectShowAudio(const SourceOpenDesc&);
     // Starts AVerMedia's in-process audio graph; false means "use DirectShow".

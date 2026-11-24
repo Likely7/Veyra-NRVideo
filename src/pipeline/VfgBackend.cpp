@@ -146,6 +146,9 @@ struct VfgBackend::Impl {
     struct Job {unsigned parity,sub,multiplier;bool reset;uint64_t revision,value;bool fast;};
     std::array<std::atomic<SubmissionState>,kOutputs> states{};
     std::atomic<bool> failed=false;
+    std::atomic<bool> adaMemoryFault=false;
+    bool adaMedium=false;
+    unsigned injectAdaFaultRun=0; // Explicit deterministic test hook, no failing GPU command.
     uint64_t queuedFence=0; // jobsMutex: greatest completion dependency queued for D3D12
     std::mutex jobsMutex,profileMutex,cudaSubmissionMutex;
     std::condition_variable jobsChanged;
@@ -222,6 +225,8 @@ struct VfgBackend::Impl {
     }
     bool cu(CUresult code,const char* name){
         if(code==CUDA_SUCCESS)return true;
+        if(adaMedium&&(code==CUDA_ERROR_ILLEGAL_ADDRESS||code==CUDA_ERROR_MISALIGNED_ADDRESS))
+            adaMemoryFault.store(true);
         const char* label=nullptr;const char* detail=nullptr;
         if(cuGetErrorNameFn)cuGetErrorNameFn(code,&label);
         if(cuGetErrorStringFn)cuGetErrorStringFn(code,&detail);
@@ -358,7 +363,12 @@ struct VfgBackend::Impl {
             while(std::chrono::steady_clock::now()<until)std::this_thread::yield();
         }
         if(ok){
-            if(rejectRun&&++runCount==rejectRun){log::warn("vfg","injected VFG Run rejection (test hook)");ok=false;}
+            if(injectAdaFaultRun||rejectRun)++runCount;
+            if(injectAdaFaultRun&&runCount==injectAdaFaultRun){
+                adaMemoryFault.store(true);
+                log::warn("vfg","injected Ada Medium CUDA 700 recovery test; no failing GPU work submitted");
+                ok=false;
+            }else if(rejectRun&&runCount==rejectRun){log::warn("vfg","injected VFG Run rejection (test hook)");ok=false;}
             else ok=cv(cpuCall(9,[&]{return run(e.handle,1);}),"NvVFX_Run async");
         }
         if(profiling){
@@ -534,6 +544,12 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     if(!ampere&&!vfgNativeArchitecture(major,minor)){log::error("vfg",std::format("Windows VFG requires SM86 (experimental), Ada or Blackwell; compute={}.{}",major,minor));return false;}
     const bool adaMedium=major==8&&minor==9&&
         (p.effects[0].mode==1||(p.mixed&&p.effects[1].mode==1)||(fastFallback&&quality==2));
+    p.adaMedium=adaMedium;
+    if(p.effects[0].mode==1||(p.mixed&&p.effects[1].mode==1)||(fastFallback&&quality==2)){
+        wchar_t test[16]{};
+        const auto len=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_ADA_FAULT_RUN",test,DWORD(std::size(test)));
+        if(len&&len<std::size(test))p.injectAdaFaultRun=unsigned(std::clamp(_wtoi(test),0,1000000));
+    }
     const bool forcedPrivate=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_PRIVATE_CONTEXT",nullptr,0)>0;
     if(adaMedium||forcedPrivate){
         // Keep the affected provider tier off the primary context that other
@@ -640,6 +656,13 @@ bool VfgBackend::initialize(gfx::D3D12DeviceContext& context,const std::wstring&
     log::error("vfg","VFG unavailable: configure VEYRA_CUDA_DRIVER_INCLUDE_DIR");return false;
 #endif
 }
+bool VfgBackend::adaMediumMemoryFault() const {
+#ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
+    return impl_&&impl_->adaMemoryFault.load();
+#else
+    return false;
+#endif
+}
 bool VfgBackend::created()const{
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     return impl_->ready;
@@ -647,7 +670,7 @@ bool VfgBackend::created()const{
     return false;
 #endif
 }
-bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture,unsigned parity,bool comparePrevious){
+bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture,unsigned parity,CaptureMode mode){
 #ifdef VEYRA_HAVE_CUDA_DRIVER_HEADERS
     auto& p=*impl_;if(!p.ready||p.failed.load()||!list||!texture||parity>1)return false;
     const auto desc=texture->GetDesc();if(desc.Width!=p.width||desc.Height!=p.height||desc.Format!=p.format)return false;
@@ -657,11 +680,12 @@ bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture
     D3D12_TEXTURE_COPY_LOCATION src{};src.pResource=texture;src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
     D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=buffer;dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=p.footprint;
     list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
-    if(p.gpuShotChange)p.recordShotChangeTest(list,parity,comparePrevious);
+    if(p.gpuShotChange&&mode!=CaptureMode::HistoryOnly)
+        p.recordShotChangeTest(list,parity,mode==CaptureMode::ComparePair);
     else{std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);}
     ++p.inputRevision;return true;
 #else
-    (void)list;(void)texture;(void)parity;(void)comparePrevious;return false;
+    (void)list;(void)texture;(void)parity;(void)mode;return false;
 #endif
 }
 bool VfgBackend::fastReady()const{

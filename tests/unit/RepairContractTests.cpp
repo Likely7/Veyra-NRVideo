@@ -68,6 +68,18 @@ int main(){
         check(gfx::vrrLevel(state)==4,"only real activity flags report VRR active");
         state={};
         check(gfx::vrrLevel(state)==0,"unanswered VRR query remains unknown");
+        // AMD ADL FreeSync: caps 0xf = supported/GPU/display/current mode, state 7 = all use cases.
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(0,0xf,0,7))==3,"AMD FreeSync on in the current mode can request VRR");
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(0,0xf,0,0))==2,"AMD FreeSync off in Adrenalin does not request VRR");
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(0,0x7,0,7))==2,"AMD FreeSync display in an unsupported mode does not request VRR");
+        check(gfx::vrrLevel(gfx::amdFreeSyncState(-1,0,-1,0))==1,"AMD display without FreeSync is unsupported");
+        check(gfx::amdFreeSyncState(-1,0,-1,0).status==0,"AMD display without FreeSync is an answer, not a retried failure");
+        check(!gfx::amdFreeSyncState(0,0xf,0,7).enabled&&!gfx::amdFreeSyncState(0,0xf,0,7).inVrrMode,"AMD FreeSync never fabricates active VRR flags");
+        check(std::abs(gfx::amdFreeSyncState(0,0xf,0,7,59940000,119880000).minimumHz-59.94)<.000001,
+              "AMD FreeSync keeps the lower bound in Hz");
+        check(gfx::amdFreeSyncState(0,0xf,0,0,59940000,119880000).minimumHz==0&&
+              gfx::amdFreeSyncState(0,0xf,0,7,119880000,59940000).minimumHz==0,
+              "VRR off or inverted driver data never reports an active floor");
     }
     {
         engine::PreviewView v;v.displayAspect=16.0/9;
@@ -982,6 +994,25 @@ int main(){
             frc.multiplier=2;engine::EnhancementSettings failed=frc;
             check(engine::disableFailedBackend(failed,engine::FailedBackend::Fg)&&failed.multiplier==1&&failed.frameGenerationBackend==F::AmdFrc,
                 "a failing AMD FRC turns frame generation off and keeps the choice");
+            engine::FrameGenerationAvailability rife=crossVendor;rife.rife=true;
+            check(rife.supports(F::Rife)&&!crossVendor.supports(F::Rife),"RIFE availability is its own flag (runtime\\rife present)");
+            check(engine::restoredFrameGenerationBackend(F::Rife,rife)==F::Rife&&engine::restoredFrameGenerationBackend(F::Dlss,rife)==F::Fsr,
+                "a usable manual RIFE choice is retained and RIFE is never chosen automatically");
+            check(engine::restoredFrameGenerationBackend(F::Rife,crossVendor)==F::Fsr,"RIFE without its runtime moves to FSR 3.1");
+            check(!engine::twoXFrameGeneration(F::Rife)&&!engine::fsrFrameGeneration(F::Rife)&&engine::crossVendorFrameGeneration(F::Rife),
+                "RIFE is not 2X-only, not FSR, and not NVIDIA-only");
+            check(!engine::motionUsesFlow(engine::MotionSource::OpticalFlow,F::Rife)&&!engine::motionUsesFlow(engine::MotionSource::Automatic,F::Rife),
+                "RIFE estimates its own motion (no optical-flow session)");
+            check(engine::displayFgMultiplierSelectable(F::Rife,2)&&engine::displayFgMultiplierSelectable(F::Rife,3)&&!engine::displayFgMultiplierSelectable(F::Rife,4),
+                "RIFE offers 2X and 3X");
+            check(engine::exportFrameGenerationSupported(F::Rife,false),"RIFE writes graph textures, so export can use it");
+            check(engine::frameGenerationBackendName(F::Rife)=="RIFE","RIFE name");
+            engine::EnhancementSettings rifeSettings;rifeSettings.frameGenerationBackend=F::Rife;rifeSettings.multiplier=3;
+            check(rifeSettings.validate().empty(),"RIFE 3X settings are valid");
+            rifeSettings.multiplier=4;check(!rifeSettings.validate().empty(),"RIFE above 3X is invalid");
+            rifeSettings.multiplier=3;engine::EnhancementSettings rifeFailed=rifeSettings;
+            check(engine::disableFailedBackend(rifeFailed,engine::FailedBackend::Fg)&&rifeFailed.multiplier==1&&rifeFailed.frameGenerationBackend==F::Rife,
+                "a failing RIFE turns frame generation off and keeps the choice");
         }
         {
             engine::EnhancementSettings ml4;ml4.frameGenerationBackend=F::Fsr4;ml4.multiplier=2;ml4.nr=true;

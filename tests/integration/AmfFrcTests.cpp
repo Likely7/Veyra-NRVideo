@@ -8,7 +8,8 @@
 //             PC has an AMD iGPU), AMF FRC also ran on the RTX 5070 (2026-11-14); then the
 //             same checks apply. Otherwise it must fail cleanly as a frame-generation
 //             failure, not crash or hang. The outcome is printed as AMF_FRC_OTHER.
-// usage: veyra_amf_frc_tests OUTDIR amd|other
+//   flow-4k : measure the AMD optical-flow stage at 4K with full and half flow extents.
+// usage: veyra_amf_frc_tests OUTDIR amd|other|flow-4k
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
@@ -16,6 +17,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/Log.h"
 #include <d3d12sdklayers.h>
+#include <algorithm>
 #include <cmath>
 #include <filesystem>
 #include <iostream>
@@ -25,20 +27,81 @@ extern "C" {
 #include <libavutil/pixfmt.h>
 }
 
+namespace {
+int amdFlow4k(veyra::gfx::D3D12DeviceContext& ctx, veyra::gfx::CommandSlotRing& ring) {
+    using namespace veyra;
+    constexpr unsigned width=3840,height=2160,frames=16,warmup=4;
+    auto freeFrame=[](AVFrame* f){av_frame_free(&f);};
+    std::unique_ptr<AVFrame,decltype(freeFrame)> frame(av_frame_alloc(),freeFrame);
+    if(!frame)return 1;
+    frame->format=AV_PIX_FMT_RGBA;
+    frame->width=width;
+    frame->height=height;
+    frame->color_range=AVCOL_RANGE_JPEG;
+    frame->color_trc=AVCOL_TRC_IEC61966_2_1;
+    if(av_frame_get_buffer(frame.get(),32)<0)return 1;
+
+    for(const bool half:{false,true}){
+        pipeline::EnhanceGraphDesc desc;
+        desc.sourceWidth=desc.workWidth=width;
+        desc.sourceHeight=desc.workHeight=height;
+        desc.rgbInput=true;
+        desc.enableNr=desc.enableSr=desc.enableFg=false;
+        desc.enableNvofStandalone=true;
+        desc.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
+        desc.amdFlowHalfResolution=half;
+        desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+        pipeline::EnhanceGraph graph(ctx,ring);
+        if(!graph.initialize(desc)||!graph.createViews())return 1;
+        graph.recordGpuTimings();
+        std::vector<double> samples;
+        for(unsigned i=0;i<frames;++i){
+            for(unsigned y=0;y<height;++y){
+                auto* row=reinterpret_cast<uint32_t*>(frame->data[0]+size_t(y)*frame->linesize[0]);
+                std::fill_n(row,width,0xFF202020u);
+                if(y>=370&&y<1100)std::fill_n(row+160+i*16,420,0xFFEEE0B0u);
+            }
+            pipeline::EnhanceGraph::FrameOutputs out;
+            if(!graph.process(frame.get(),i*(1000.0/30),i==0,out,i+1)||
+               !ctx.waitForFenceValue(out.videoFenceValue))return 1;
+            for(const auto& timing:graph.takeGpuTimings()){
+                const auto& sample=timing.gpu[size_t(diagnostics::GpuStage::Flow)];
+                if(i>=warmup&&sample.milliseconds)samples.push_back(*sample.milliseconds);
+            }
+        }
+        if(samples.size()!=frames-warmup||graph.metrics().amdOfExecuteCount!=frames||
+           graph.flowWidth()!=width/(half?2:1)||graph.flowHeight()!=height/(half?2:1))return 1;
+        std::sort(samples.begin(),samples.end());
+        const size_t p95=(samples.size()*95+99)/100-1;
+        std::cout<<"AMD_FLOW_4K half="<<half<<" flow="<<graph.flowWidth()<<'x'<<graph.flowHeight()
+                 <<" samples="<<samples.size()<<" p50Ms="<<samples[samples.size()/2]
+                 <<" p95Ms="<<samples[p95]<<'\n';
+        if(!ring.drainQueue())return 1;
+        graph.shutdown();
+    }
+    return 0;
+}
+}
 int wmain(int argc, wchar_t** argv) {
     using namespace veyra;
     if (argc != 3) return 2;
     const std::wstring mode = argv[2];
-    const bool amd = mode == L"amd";
+    const bool measureFlow = mode == L"flow-4k";
+    const bool amd = mode == L"amd" || measureFlow;
     if (!amd && mode != L"other") return 2;
     std::filesystem::create_directories(argv[1]);
     veyra::Logger::instance().openFile((std::filesystem::path(argv[1]) / L"engine.log").wstring());
     veyra::Logger::instance().setConsoleEnabled(false);
     if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 2;
     gfx::D3D12DeviceContext ctx; gfx::CommandSlotRing ring; Status st = Status::Ok;
-    gfx::DeviceContextDesc device; device.enableDebugLayer = true; device.requiredVendorId = amd ? 0x1002 : 0x10DE;
+    gfx::DeviceContextDesc device; device.enableDebugLayer = !measureFlow; device.requiredVendorId = amd ? 0x1002 : 0x10DE;
     if (!ctx.initialize(device, st) || !ring.initialize(ctx.device(), ctx.directQueue(), ctx.fence(), ctx.fenceEvent(), 6, st)) {
         std::cout << "AMF_FRC no " << (amd ? "AMD" : "NVIDIA") << " adapter" << std::endl; CoUninitialize(); return 3;
+    }
+    if (measureFlow) {
+        const int result = amdFlow4k(ctx,ring);
+        ring.shutdown(); ctx.shutdown(); CoUninitialize();
+        return result;
     }
     Microsoft::WRL::ComPtr<ID3D12InfoQueue> info; ctx.device()->QueryInterface(IID_PPV_ARGS(&info));
     constexpr unsigned W = 640, H = 360, Bar = 80, Step = 16, Row = 180;

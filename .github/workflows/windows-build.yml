@@ -1,0 +1,234 @@
+name: Windows build (reproducible)
+
+# Builds veyra_qml_ui.exe and the virtual camera on a clean GitHub-hosted
+# runner. Every dependency is fetched from its upstream source at a pinned
+# commit (see scripts/ci/fetch-sdks.ps1); FFmpeg 9.0.1 is built from source by
+# vcpkg at this repository's builtin-baseline with scripts/ffmpeg/*.patch.
+# Outputs: a portable zip without proprietary runtime DLLs, SHA256SUMS and,
+# outside pull requests, a signed build-provenance attestation so users can
+# check that a download came from this workflow:
+#   gh attestation verify <zip> -R Likely7/Veyra-NRVideo
+
+on:
+  workflow_dispatch:
+  push:
+    # Branch pushes run only when the CI files change; version tags always run
+    # (GitHub does not apply path filters to tag pushes).
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - '.github/workflows/windows-build.yml'
+      - 'scripts/ci/**'
+  pull_request:
+    paths:
+      - '.github/workflows/windows-build.yml'
+      - 'scripts/ci/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VCPKG_COMMIT: 30ef65cad98f08e7197c9a1656fbd871bcb72f2d   # = vcpkg.json builtin-baseline
+  QT_VERSION: '6.8.3'
+  CARGO_C_VERSION: '0.10.26'
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 300
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        shell: pwsh -NoProfile -Command "$ErrorActionPreference = 'Stop'; $PSNativeCommandUseErrorActionPreference = $true; . '{0}'"
+    steps:
+      - uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v6.0.0
+        with:
+          persist-credentials: false
+
+      - name: Stage pinned SDK headers and import libraries
+        run: |
+          if (Test-Path third_party_local) { throw 'third_party_local must not be tracked in Git' }
+          scripts/ci/fetch-sdks.ps1 -VeyraRoot . -WorkRoot C:\sdk-src -ManifestOut C:\sdk-manifest.json
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@d325aaf2a8baeeda41ad0b5d39f84a6af9bcf005 # v4.3.0
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          cache: false
+
+      - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+        with:
+          arch: x64
+
+      - name: Restore cargo-c
+        id: cargo-c-cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~\.cargo\bin\cargo-c*
+          key: cargo-c-${{ env.CARGO_C_VERSION }}-v1
+
+      - name: Build libdovi 3.4.0 from source
+        run: |
+          if ('${{ steps.cargo-c-cache.outputs.cache-hit }}' -ne 'true') {
+            cargo install cargo-c --version $env:CARGO_C_VERSION --locked
+          }
+          Push-Location (Join-Path $env:DOVI_SOURCE 'dolby_vision')
+          cargo cinstall --release --locked --prefix C:\dovi --library-type cdylib
+          Pop-Location
+          # find_library() looks for dovi.lib; cargo-c names the MSVC import library dovi.dll.lib.
+          if (-not (Test-Path C:\dovi\lib\dovi.lib) -and (Test-Path C:\dovi\lib\dovi.dll.lib)) {
+            Copy-Item C:\dovi\lib\dovi.dll.lib C:\dovi\lib\dovi.lib
+          }
+          if (-not (Test-Path C:\dovi\include\libdovi\rpu_parser.h)) { throw 'libdovi header missing' }
+          Get-ChildItem C:\dovi -Recurse -File | Select-Object -ExpandProperty FullName
+
+      - name: Save cargo-c
+        if: steps.cargo-c-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ~\.cargo\bin\cargo-c*
+          key: cargo-c-${{ env.CARGO_C_VERSION }}-v1
+
+      - name: Fetch vcpkg at the builtin-baseline and prepare the patched FFmpeg port
+        run: |
+          git init -q C:\v
+          git -C C:\v remote add origin https://github.com/microsoft/vcpkg.git
+          git -C C:\v fetch -q --depth 1 origin $env:VCPKG_COMMIT
+          git -C C:\v -c advice.detachedHead=false checkout -q FETCH_HEAD
+          C:\v\bootstrap-vcpkg.bat -disableMetrics
+          python scripts/ci/make-ffmpeg-overlay.py C:\v . C:\vcpkg-overlay
+          $all = (Get-ChildItem C:\vcpkg-overlay -Recurse -File | Get-FileHash | ForEach-Object Hash) -join ''
+          "OVERLAY_HASH=$([Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($all))))" >> $env:GITHUB_ENV
+
+      - name: Restore vcpkg binary cache
+        id: vcpkg-cache
+        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: C:\vcache
+          key: vcpkg-${{ env.VCPKG_COMMIT }}-${{ env.OVERLAY_HASH }}-v1
+
+      - name: Build FFmpeg 9.0.1 (slices256, deinterlace, D3D12VA reference pool), dav1d, zlib and libass
+        env:
+          VCPKG_BINARY_SOURCES: clear;files,C:\vcache,readwrite
+          VCPKG_DISABLE_METRICS: '1'
+        run: |
+          New-Item -ItemType Directory -Force C:\vcache | Out-Null
+          # --classic: vcpkg.json in the repo root would otherwise force manifest mode.
+          C:\v\vcpkg.exe install --classic --overlay-ports=C:\vcpkg-overlay --clean-after-build `
+            'ffmpeg[core,avcodec,avformat,avfilter,swresample,swscale,dav1d,zlib]:x64-windows' `
+            'libass:x64-windows-static'
+          $list = C:\v\vcpkg.exe list --classic
+          $list | Set-Content -Encoding utf8 C:\vcpkg-list.txt
+          $list | Write-Host
+          if (-not ($list -match '^ffmpeg:x64-windows')) { throw 'ffmpeg not installed' }
+
+      - name: Save vcpkg binary cache
+        if: steps.vcpkg-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: C:\vcache
+          key: vcpkg-${{ env.VCPKG_COMMIT }}-${{ env.OVERLAY_HASH }}-v1
+
+      - name: Configure (preset x64-release)
+        run: |
+          cmake --preset x64-release -B C:\b `
+            -DVEYRA_BUILD_QML_UI=ON `
+            -DVEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON `
+            "-DVEYRA_DLSS_SDK_ROOT=$((Resolve-Path third_party_local/nvidia/DLSS_SDK_310.7.0).Path)" `
+            -DVEYRA_FFMPEG_ROOT=C:/v/installed/x64-windows `
+            -DVEYRA_LIBASS_ROOT=C:/v/installed/x64-windows-static `
+            -DVEYRA_LIBDOVI_ROOT=C:/dovi `
+            "-DCMAKE_PREFIX_PATH=$env:QT_ROOT_DIR"
+
+      - name: Build veyra_qml_ui, virtual camera and shaders
+        run: |
+          cmake --build C:\b --parallel --target veyra_qml_ui veyra_virtualcam_components
+          $shaders = ninja -C C:\b -t targets all | ForEach-Object { ($_ -split ':')[0] } | Where-Object { $_ -match '^veyra_shader_' } | Sort-Object -Unique
+          if ($shaders) { cmake --build C:\b --parallel --target @shaders }
+
+      - name: Stage portable package
+        run: |
+          $name = "Veyra-$($env:GITHUB_SHA.Substring(0, 10))-win64-ci-no-gpu-runtimes"
+          $stage = "C:\out\$name"
+          New-Item -ItemType Directory -Force $stage, "$stage\qml", "$stage\licenses" | Out-Null
+          Copy-Item C:\b\veyra_qml_ui.exe $stage
+          Copy-Item C:\b\qml\Veyra "$stage\qml\Veyra" -Recurse
+          $shaderRoot = (Resolve-Path C:\b\shaders).Path
+          Get-ChildItem $shaderRoot -Recurse -Filter *.dxil | ForEach-Object {
+            $dst = Join-Path "$stage\shaders" $_.FullName.Substring($shaderRoot.Length + 1)
+            New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+            Copy-Item $_.FullName $dst
+          }
+          # 64-bit module + setup in C:\b\virtualcam, 32-bit module from the x86 ExternalProject.
+          New-Item -ItemType Directory -Force "$stage\virtualcam" | Out-Null
+          foreach ($f in 'virtualcam\veyra-virtualcam64.dll', 'virtualcam\veyra-camera-setup.exe', 'virtualcam-x86\virtualcam\veyra-virtualcam32.dll') {
+            Copy-Item (Join-Path C:\b $f) "$stage\virtualcam"
+          }
+          Copy-Item C:\v\installed\x64-windows\bin\*.dll $stage
+          Copy-Item C:\dovi\bin\*.dll $stage
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --qmldir qml --no-translations `
+            --skip-plugin-types qmltooling,generic "$stage\veyra_qml_ui.exe"
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          $qmlModules = 'qml/QtCore/qmldir', 'qml/QtCore/qtqmlcoreplugin.dll',
+                        'qml/QtQuick/Dialogs/qmldir', 'qml/QtQuick/Dialogs/qtquickdialogsplugin.dll'
+          foreach ($file in $qmlModules) {
+            if (!(Test-Path -LiteralPath (Join-Path $stage $file) -PathType Leaf)) {
+              throw "QML deployment is missing $file"
+            }
+          }
+          Copy-Item "$env:VCToolsRedistDir\x64\Microsoft.VC143.CRT\*.dll" $stage
+          foreach ($f in 'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.md', 'README_EN.md') { Copy-Item $f $stage }
+          @'
+          Veyra Windows CI build for development testing.
+          The official release packages are on the project's GitHub Releases page.
+          DLSS, XeSS and other proprietary GPU runtimes, RIFE models, and optional audio packages are absent.
+          '@ | Set-Content -Encoding utf8 "$stage\CI-BUILD.txt"
+          Copy-Item licenses\* "$stage\licenses" -Recurse
+          Copy-Item C:\v\installed\x64-windows\share\ffmpeg\copyright "$stage\licenses\FFMPEG-COPYRIGHT.txt"
+          Copy-Item C:\v\installed\x64-windows\share\dav1d\copyright "$stage\licenses\DAV1D-COPYRIGHT.txt"
+          Copy-Item C:\v\installed\x64-windows-static\share\libass\copyright "$stage\licenses\LIBASS-COPYRIGHT.txt"
+          Copy-Item (Join-Path $env:DOVI_SOURCE 'LICENSE') "$stage\licenses\LIBDOVI-LICENSE.txt"
+          [ordered]@{
+            commit = $env:GITHUB_SHA; runId = $env:GITHUB_RUN_ID; runner = "$env:ImageOS $env:ImageVersion"
+            msvc = $env:VCToolsVersion; windowsSdk = $env:WindowsSDKVersion; qt = $env:QT_VERSION
+            vcpkgCommit = $env:VCPKG_COMMIT; vcpkgPackages = (Get-Content C:\vcpkg-list.txt)
+            sdks = (Get-Content C:\sdk-manifest.json -Raw | ConvertFrom-Json)
+            notIncluded = 'Proprietary GPU runtimes (runtime/, runtime_local/), BGM, VB-CABLE package'
+          } | ConvertTo-Json -Depth 6 | Set-Content -Encoding utf8 "$stage\BUILD-INFO.json"
+          Compress-Archive -Path $stage -DestinationPath "C:\out\$name.zip"
+          Get-ChildItem C:\out\*.zip | ForEach-Object { "{0}  {1}" -f (Get-FileHash $_.FullName).Hash.ToLowerInvariant(), $_.Name } |
+            Set-Content -Encoding utf8 C:\out\SHA256SUMS.txt
+          Write-Host '--- SHA256SUMS.txt'; Get-Content C:\out\SHA256SUMS.txt | Write-Host
+          Write-Host "veyra_qml_ui.exe  $((Get-FileHash "$stage\veyra_qml_ui.exe").Hash.ToLowerInvariant())"
+          "STAGE=$stage" >> $env:GITHUB_ENV
+
+      - name: Microsoft Defender scan
+        run: |
+          $mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+          $PSNativeCommandUseErrorActionPreference = $false
+          & $mp -SignatureUpdate | Out-Host
+          & $mp -Scan -ScanType 3 -File C:\out -DisableRemediation | Out-Host
+          if ($LASTEXITCODE -ne 0) { throw "Defender exit code $LASTEXITCODE" }
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: veyra-windows-ci-no-gpu-runtimes
+          path: |
+            C:\out\*.zip
+            C:\out\SHA256SUMS.txt
+
+      - name: Attest build provenance
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2.4.0
+        with:
+          subject-path: |
+            C:\out\*.zip
+            ${{ env.STAGE }}\veyra_qml_ui.exe

@@ -21,8 +21,11 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
     std::filesystem::create_directories(output);
     Logger::instance().openFile((std::filesystem::path(output)/L"engine.log").wstring());
     Logger::instance().setConsoleEnabled(false);
-    const bool vfg=mode==L"--vfg-provider-recovery";
+    const bool ada=mode==L"--vfg-ada-recovery";
+    const bool cached=mode==L"--vfg-ada-cache";
+    const bool vfg=mode==L"--vfg-provider-recovery"||ada||cached;
     const bool xess=mode==L"--amd-xess-capture";
+    const bool amdHdr=mode==L"--amd-hdr-chain";
     if(!vfg){
         gfx::ComPtr<IDXGIFactory1> factory;
         if(FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory))))return 2;
@@ -56,8 +59,21 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
             initial.fgMotion=engine::MotionSource::Zero;
             initial.srMotion=engine::MotionSource::Zero;
         }
+        if(amdHdr){
+            initial.color.enabled=true;
+            initial.antiAlias.enabled=true;
+            initial.antiAlias.method=engine::AntiAliasMethod::Smaa;
+            initial.antiAlias.quality=2;
+            initial.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
+            initial.amdFlowHalfResolution=true;
+            initial.srMotion=engine::MotionSource::OpticalFlow;
+            initial.sr=true;
+            initial.srTarget=pipeline::SrTarget::Qhd;
+            initial.frameGenerationBackend=engine::FrameGenerationBackend::AmdFrc;
+            initial.multiplier=2;
+        }
         auto options=engine::PlayerOptions::from(initial);
-        options.captureReplayForTest=true;
+        options.captureReplayForTest=!amdHdr;
         const auto until=[&](auto predicate,int seconds){
             const auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);
             while(std::chrono::steady_clock::now()<deadline){
@@ -72,10 +88,31 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
         const auto stop=[&]{engine.stop();return until([&](const auto&){return engine.idle();},10);};
         if(vfg){
             SetEnvironmentVariableW(L"VEYRA_TEST_VFG_PRIVATE_CONTEXT",L"1");
-            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",L"55");
+            if(!cached)SetEnvironmentVariableW(ada?L"VEYRA_TEST_VFG_ADA_FAULT_RUN":L"VEYRA_TEST_VFG_REJECT_RUN",L"55");
         }
         engine.open(window,input,options);
-        if(vfg){
+        if(ada||cached){
+            const bool first=cached||until([](const auto& s){return s.fgActive&&s.applied.vfgQuality==1&&s.generated>8;},22);
+            const bool low=first&&until([](const auto& s){
+                return s.running&&s.fgActive&&s.applied.vfgQuality==0&&s.frames>70&&
+                    s.backendWarning.find(L"VFG")!=std::wstring::npos&&s.metrics.flow.counters.generatedPresented>8;
+            },24);
+            SetEnvironmentVariableW(L"VEYRA_TEST_VFG_ADA_FAULT_RUN",nullptr);
+            bool dlss=false;
+            if(low&&!cached){
+                auto next=engine.snapshot().desired;
+                next.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
+                // This test measures process recovery. Optical flow work is not
+                // needed to validate that DLSSG can create and present after VFG.
+                next.fgMotion=engine::MotionSource::Zero;
+                dlss=engine.requestSettings(next)&&until([](const auto& s){
+                    return s.fgActive&&s.applied.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&
+                           s.metrics.flow.counters.generatedPresented>8;
+                },25);
+            }
+            std::cout<<"VFG_ADA_RECOVERY cached="<<cached<<" first="<<first<<" low="<<low<<" dlss="<<dlss<<'\n';
+            ok=low&&(dlss||cached);
+        }else if(vfg){
             ok=until([](const auto& s){return s.fgActive&&s.generated>8;},25);
             ok=ok&&until([](const auto& s){return s.running&&!s.fgActive&&s.frames>70;},25);
             SetEnvironmentVariableW(L"VEYRA_TEST_VFG_REJECT_RUN",nullptr);
@@ -85,6 +122,19 @@ __declspec(noinline) int providerRecovery(const wchar_t* input,const wchar_t* ou
                 ok=until([](const auto& s){return s.fgActive&&s.applied.vfgQuality==1&&s.generated>100;},30);
             }
             std::cout<<"VFG_RECOVERY reconstructedPrivateContext="<<ok<<'\n';
+        }else if(amdHdr){
+            ok=until([](const auto& s){
+                return s.srActive&&s.fgActive&&s.colorStatus.find(L"HDR10 / PQ")!=std::wstring::npos&&
+                    s.metrics.resolution.output==pipeline::Extent{2560,1440}&&
+                    s.metrics.flow.counters.generatedPresented>=12;
+            },40);
+            const auto s=engine.snapshot();
+            const auto output=s.metrics.resolution.output;
+            const auto flow=s.metrics.resolution.flow;
+            std::cout<<"AMD_HDR_CHAIN pass="<<ok<<" output="<<output.width<<'x'<<output.height
+                     <<" flow="<<flow.width<<'x'<<flow.height<<" sr="<<s.srActive<<" fg="<<s.fgActive
+                     <<" generatedPresented="<<s.metrics.flow.counters.generatedPresented<<'\n';
+            std::wcout<<s.colorStatus<<L" / "<<s.backendWarning<<L'\n';
         }else if(xess){
             ok=until([](const auto& s){return s.fgActive&&s.metrics.flow.counters.xessSdkGenerated>=450;},90);
             const auto s=engine.snapshot();
@@ -224,6 +274,25 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
     std::unique_ptr<engine::PlayerSnapshot> start,end;
     const bool started=pumpUntil([&]{start.reset(new engine::PlayerSnapshot(engine.snapshot()));return start->frames>30&&(!fg||start->fgActive)&&(!requireNr||start->nrActive)&&(!requireSr||start->srActive);},25s);
     std::cout<<(started?"PASS ":"FAIL ")<<(fg?"replay starts with frame generation":"replay starts without frame generation")<<std::endl;
+    if(mode==L"half-switch"){
+        bool ok=started;
+        for(auto next:{engine::ContentRate::Capture60To30Original,engine::ContentRate::Capture60To30}){
+            const auto before=std::make_unique<engine::PlayerSnapshot>(engine.snapshot());
+            auto requested=before->applied;
+            requested.content=next;
+            ok=ok&&engine.requestSettings(requested)&&pumpUntil([&]{
+                end=std::make_unique<engine::PlayerSnapshot>(engine.snapshot());
+                return end->applied.content==next&&end->frames>=before->frames+5;
+            },8s);
+            ok=ok&&end&&end->captureHalfRate&&end->applied.revision==before->applied.revision;
+            if(!ok)break;
+        }
+        engine.stop();
+        const bool drained=pumpUntil([&]{return engine.idle();},8s);
+        std::cout<<(ok&&drained?"PASS ":"FAIL ")<<"half-rate switch keeps source, graph revision and half-rate scheduling"<<std::endl;
+        Logger::instance().flush();
+        return ok&&drained?0:1;
+    }
     const auto begin=std::chrono::steady_clock::now();
     wchar_t durationText[16]{};
     const int sampleSeconds=GetEnvironmentVariableW(L"VEYRA_TEST_CADENCE_SECONDS",durationText,16)?std::clamp(_wtoi(durationText),5,75):20;
@@ -234,7 +303,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
              <<" generatedPresented="<<end->metrics.flow.counters.generatedPresented-start->metrics.flow.counters.generatedPresented
              <<" fgInvalid="<<end->metrics.flow.counters.fgInvalid-start->metrics.flow.counters.fgInvalid
              <<" submit1PercentLow="<<end->submissionLow1Fps.value_or(0)<<std::endl;
-    const bool ran=started&&!end->failed&&end->frames>start->frames+300;
+    const auto minimumFrames=engine::isCaptureHalfRate(start->applied.content)?sampleSeconds*15:300;
+    const bool ran=started&&!end->failed&&end->frames>start->frames+minimumFrames;
     std::cout<<(ran?"PASS ":"FAIL ")<<"content-cadence replay runs"<<std::endl;
     engine.stop();const bool drained=pumpUntil([&]{return engine.idle();},8s);
     std::cout<<(drained?"PASS ":"FAIL ")<<"content-cadence replay drains"<<std::endl;
@@ -245,7 +315,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
 int wmain(int argc,wchar_t**argv){
     if(argc==4){
         const std::wstring_view mode=argv[3];
-        if(mode==L"--vfg-provider-recovery"||mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch")
+        if(mode==L"--vfg-provider-recovery"||mode==L"--vfg-ada-recovery"||mode==L"--vfg-ada-cache"||
+            mode==L"--amd-xess-capture"||mode==L"--amd-sr-switch"||mode==L"--amd-hdr-chain")
             return providerRecovery(argv[1],argv[2],mode);
     }
     if(argc==4&&(wcscmp(argv[3],L"--inactive-effects")==0||wcscmp(argv[3],L"--inactive-effects-node")==0))return inactiveEffectsTest(argv[1],argv[2],wcscmp(argv[3],L"--inactive-effects-node")==0);
@@ -334,7 +405,9 @@ int wmain(int argc,wchar_t**argv){
 #endif
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",L"1");
     const bool settingsRebuild=argc==4&&wcscmp(argv[3],L"--settings-rebuild")==0;
-    if(!settingsRebuild&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0||std::wstring(argv[3]).rfind(L"--dedup-",0)==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
+    const bool captureRelease=argc==4&&wcscmp(argv[3],L"--capture-release")==0;
+    const bool captureNoVideo=captureRelease||(argc==4&&wcscmp(argv[3],L"--capture-no-video")==0);
+    if(!settingsRebuild&&!captureNoVideo&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0||std::wstring(argv[3]).rfind(L"--dedup-",0)==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     std::filesystem::create_directories(argv[2]);Logger::instance().startAsync();Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
     HWND window=CreateWindowExW(0,L"STATIC",L"Live scheduler replay",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!window)return 3;engine::EngineController engine;engine::PlayerOptions options;options.nr=false;options.fg=false;options.captureReplayForTest=true;
@@ -386,14 +459,42 @@ int wmain(int argc,wchar_t**argv){
         else if(dedupMode.starts_with(L"vfg-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;dedupMode.erase(0,4);}
         else if(dedupMode.starts_with(L"xess-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::XeSS;dedupMode.erase(0,5);}
         else if(dedupMode.starts_with(L"fsr-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Fsr;dedupMode.erase(0,4);}
-        options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:dedupMode==L"half"?engine::ContentRate::Capture60To30:
+        options.settings.content=dedupMode==L"auto"?engine::ContentRate::Auto:
+            dedupMode==L"half"||dedupMode==L"half-switch"?engine::ContentRate::Capture60To30:
+            dedupMode==L"half-original"?engine::ContentRate::Capture60To30Original:
             dedupMode==L"fps30"?engine::ContentRate::Fps30:engine::ContentRate::Transport;
         engine.setVolume(0,true);ShowWindow(window,SW_SHOWNOACTIVATE);
     }
     if(fileOverload){options.captureReplayForTest=false;options.nr=options.sr=options.fg=true;options.realtime=false;options.fgMultiplier=4;options.settings.videoSrQuality=4;}
     int failures=0;auto check=[&](bool pass,const char* s){std::cout<<(pass?"PASS ":"FAIL ")<<s<<std::endl;if(!pass)++failures;};
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
+    if(captureNoVideo)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_NO_VIDEO",L"1");
+    if(captureRelease)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_RELEASE",L"1");
     engine.open(window,argv[1],options);
+    if(captureNoVideo){
+        bool recovering=false, startConfirmed=false;
+        auto lastAttempt=0u;
+        const auto deadline=std::chrono::steady_clock::now()+75s;
+        while(std::chrono::steady_clock::now()<deadline){
+            MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}
+            const auto snap=engine.snapshot();
+            startConfirmed|=snap.frames>=120;
+            recovering|=snap.captureRecovering;
+            lastAttempt=std::max(lastAttempt,snap.captureReconnectAttempts);
+            if(snap.failed)break;
+            std::this_thread::sleep_for(20ms);
+        }
+        const auto end=engine.snapshot();
+        check(startConfirmed,"video was presented before the injected disconnect");
+        check(recovering&&lastAttempt==(captureRelease?3u:5u),"no-frame reopen count matches the recovery policy");
+        const bool correctStatus=captureRelease?end.status.starts_with(L"重新打开采集设备后仍没有画面"):
+                                               end.status.starts_with(L"自动重连已停止");
+        check(end.failed&&!end.captureRecovering&&correctStatus
+              &&end.status.find(L"USB 3")!=std::wstring::npos,"recovery stops and leaves a manual retry with USB details");
+        engine.stop();
+        DestroyWindow(window);CoUninitialize();
+        return failures?1:0;
+    }
     if(dedupRun){const int result=runContentCadenceReplay(engine,dedupMode,!dedupNoFg,argv[2],options.nr,options.sr);DestroyWindow(window);CoUninitialize();return result;}
     if(settingsRebuild){
         check(until([](const auto& s){return s.frames>20&&s.nrActive&&s.fgActive;},30),"original NR 1080p and DLSS 2X start on the actual video");

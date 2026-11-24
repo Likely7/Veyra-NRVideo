@@ -14,6 +14,7 @@ import QtQuick.Layouts
 VPage {
     id: root
     signal requestPage(string page)
+    property Item fullscreenBackground
 
     property string section: "look"
     property bool hdrAdvancedExpanded: false
@@ -181,6 +182,13 @@ VPage {
                         font.pixelSize: Theme.fsBody
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        active: !!root.fullscreenBackground && root.section === "look"
+                        sourceComponent: Component {
+                            PortraitBackgroundSettings { controller: root.fullscreenBackground }
+                        }
                     }
                     VGroup {
                         // 日落 (the default) or the original black-grey 经典 palette.
@@ -1023,6 +1031,26 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("全屏帧率")
+                            hint: qsTr("在视频上显示提交 FPS 和 1% Low。全屏时按 %1 切换。").arg(veyra.shortcuts.fullscreenStats || qsTr("快捷键"))
+                            VSwitch {
+                                objectName: "fullscreen-frame-stats"
+                                checked: !!veyra.preferences.fullscreenFrameStats
+                                onToggled: v => veyra.setPreference("fullscreenFrameStats", v)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("帧率显示位置")
+                            visible: !!veyra.preferences.fullscreenFrameStats
+                            VSelect {
+                                objectName: "fullscreen-frame-stats-corner"
+                                options: [{id:"0",label:qsTr("左上")},{id:"1",label:qsTr("右上")},
+                                          {id:"2",label:qsTr("左下")},{id:"3",label:qsTr("右下")}]
+                                value: options[veyra.preferences.fullscreenFrameStatsCorner ?? 1].label
+                                onPicked: id => veyra.setPreference("fullscreenFrameStatsCorner", Number(id))
+                            }
+                        }
+                        VRow {
                             label: qsTr("全屏显存增长保护")
                             hint: qsTr("检测异常增长时自动退出全屏；默认关闭")
                             VSwitch {
@@ -1107,6 +1135,9 @@ VPage {
                                         obsRestart.open()
                                 }
                             }
+                        }
+                        DialogNote {
+                            text: qsTr("直播建议开启 Veyra 虚拟摄像机，在 OBS 中添加「视频采集设备」，选择 Veyra Virtual Camera。")
                         }
                         VRow {
                             // RivaTuner (MSI Afterburner's OSD), NVIDIA's in-game overlay and GamePP: see
@@ -1198,7 +1229,7 @@ VPage {
                         }
                         VRow {
                             label: qsTr("PSN 账号")
-                            hint: qsTr("在 PSNTools 网页获取 Account ID，再到 PS5 串流窗口填写并配对。")
+                            hint: qsTr("按指南用索尼官方登录获取 Account ID，再到 PS5 串流窗口填写并配对。切勿向第三方网站提供 NPSSO。")
                             hintBelow: true
                             RowLayout {
                                 spacing: 6
@@ -1245,12 +1276,11 @@ VPage {
                                 { id: "fullscreen", a: qsTr("全屏"), note: qsTr("F11 / Alt+Enter 也可以") },
                                 { id: "lock", a: qsTr("锁定全屏控制条") },
                                 { id: "hold", a: qsTr("按住查看原画") },
-                                { id: "screenshot", a: qsTr("截图"), note: qsTr("游戏模式下在游戏里也能用") },
-                                { id: "record", a: qsTr("开始 / 停止录制"), note: qsTr("游戏模式下在游戏里也能用") },
-                                { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在 设置 → 播放 开启即时回放；游戏模式下在游戏里也能用") },
-                                { id: "toggleMode", a: qsTr("切换极简 / 专业") },
-                                { id: "gamePanel", a: qsTr("游戏模式：调整画面"), note: qsTr("仅在游戏模式中接管按键；支持 Ctrl、Alt、Shift 组合") },
-                                { id: "gameExit", a: qsTr("游戏模式：退出鼠标穿透"), note: qsTr("退出全屏，恢复普通窗口操作") }
+                                { id: "screenshot", a: qsTr("截图") },
+                                { id: "record", a: qsTr("开始 / 停止录制") },
+                                { id: "replay", a: qsTr("保存即时回放"), note: qsTr("需先在「设置 → 播放」开启即时回放") },
+                                { id: "fullscreenStats", a: qsTr("显示 / 隐藏全屏帧率") },
+                                { id: "toggleMode", a: qsTr("切换极简 / 专业") }
                             ]
                             delegate: VRow {
                                 id: keyRow
@@ -1353,10 +1383,26 @@ VPage {
                         Repeater {
                             model: veyra.componentList
                             delegate: VRow {
+                                id: componentRow
                                 required property var modelData
+                                readonly property bool anr: modelData.id === "anr"
+                                readonly property var download: veyra.anrDownload || ({})
+                                readonly property bool downloading: anr && !!download.active
+                                readonly property bool downloadable: anr
+                                    && !!((veyra.effectCapabilities || {}).anr || {}).downloadable
                                 label: modelData.name
-                                hint: modelData.detail
+                                hint: downloading ? download.status : modelData.detail
+                                value: downloading ? download.percent + "%" : ""
+                                VButton {
+                                    visible: componentRow.downloading || componentRow.downloadable
+                                    text: componentRow.downloading ? qsTr("取消") : qsTr("下载并启用")
+                                    onClicked: {
+                                        if (componentRow.downloading) veyra.cancelAnrDownload()
+                                        else veyra.downloadAnr()
+                                    }
+                                }
                                 VTag {
+                                    visible: !componentRow.downloading && !componentRow.downloadable
                                     text: modelData.experimental ? qsTr("实验") : (modelData.loaded ? qsTr("已加载") : qsTr("未加载"))
                                     kind: modelData.experimental ? "exp" : (modelData.loaded ? "ok" : "")
                                 }

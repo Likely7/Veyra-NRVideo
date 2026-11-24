@@ -110,4 +110,8 @@ struct ControllerState {
     std::array<MotionSample,16> motionSamples{};uint8_t motionSampleCount=0;
     bool operator==(const ControllerState&) const = default;
 };
+inline ControllerState touchpadPressOnly(ControllerState input){
+    input.touches={};
+    return input;
+}
 } // namespace veyra::remoteplay

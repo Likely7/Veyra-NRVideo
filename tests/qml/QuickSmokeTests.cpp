@@ -60,15 +60,38 @@ QtObject {
     property var preferences: ({exportStopsPlayback:false})
     property QtObject liveTranslation: QtObject {
         property bool supported: true
+        property bool screenTextSupported: true
+        property int screenRegion: 0
+        property rect customRegion: Qt.rect(0.08, 0.70, 0.84, 0.27)
+        property string screenReading: ""
+        property int screenWords: 0
+        property bool windowsCaptionsSupported: true
+        property int recognitionSource: 0
+        property int recognitionModel: 0
+        property int recognitionThreads: 0
+        property int recognitionEffectiveThreads: 3
+        property string recognitionStatus: ""
+        property bool recognitionInstalled: false
+        property bool recognitionDownloading: false
+        property real recognitionProgress: 0
+        property real recognitionBytes: 489155614
+        property real recognitionRtf: 0
+        property real averageTranslationMs: 0
+        property int skippedSentences: 0
+        function downloadRecognitionModel() { recognitionDownloading = true }
+        function cancelRecognitionDownload() { recognitionDownloading = false }
+        function deleteRecognitionModel() { recognitionInstalled = false }
+        function openWindowsCaptions() {}
         property bool enabled: false
         property int provider: 0
         property string sourceLanguage: ""
         property string targetLanguage: "en"
         property bool showOriginal: true
+        property bool useGpu: true
         property bool modelInstalled: false
         property bool downloading: false
         property real downloadProgress: 0
-        property real downloadBytes: 1142252715
+        property real downloadBytes: 1155212906
         property string apiBase: ""
         property string apiModel: ""
         property string status: ""
@@ -87,6 +110,11 @@ QtObject {
     property int sourceWidth: 1000
     property int sourceHeight: 500
     property string statusText: ""
+    property string runStatus: ""
+    property string runStatusLevel: "idle"
+    property string runStatusDetail: ""
+    property string runStatusAction: ""
+    property string runStatusHint: ""
     property var appliedCrop: ({})
     // Off by default, as before these existed: only the low latency test turns them on.
     property bool nvidiaLowLatencyAvailable: false

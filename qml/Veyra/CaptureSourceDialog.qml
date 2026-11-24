@@ -553,6 +553,7 @@ DialogLayer {
     DialogGroup {
         VRow {
             id: inputColorRow
+            visible: veyra.captureMjpegSelected !== true
             label: qsTr("输入色彩（SDR / HDR）")
             hint: qsTr("不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连")
             VSeg {
@@ -561,6 +562,10 @@ DialogLayer {
                 current: String(veyra.captureColorSpace)
                 onPicked: id => veyra.captureColorSpace = Number(id)
             }
+        }
+        DialogNote {
+            visible: veyra.captureMjpegSelected === true
+            text: qsTr("MJPEG 采集的输入色彩跟随码流，可在下方单独调整色彩范围。")
         }
         VRow {
             label: qsTr("输入范围")

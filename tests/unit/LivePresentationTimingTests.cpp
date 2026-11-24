@@ -4,6 +4,7 @@
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
+#include "CaptureHalfRate219.h"
 #include "veyra/engine/CapturePreviewClock.h"
 #include "veyra/engine/ContentDedup.h"
 #include "veyra/pipeline/PictureCompare.h"
@@ -20,6 +21,7 @@
 #include <cmath>
 #include <chrono>
 #include <limits>
+#include <random>
 #include <cstdio>
 int main(){
     using veyra::engine::livePairHoldMs;
@@ -137,6 +139,100 @@ int main(){
             check(repeats==std::vector<int>{45,47}&&sampler.repeatsSkipped()==3&&sampler.repeatsHeld()==2,
                   "a freeze longer than the hitch window is held on the grid");
         }
+    }
+    {
+        using namespace veyra::engine;
+        constexpr int64_t dt=166667;
+        CaptureHalfRate original;
+        original.setSkipRepeats(false);
+        unsigned kept=0;
+        for(int i=0;i<720;++i){
+            const uint64_t id=i<240?uint64_t(i/2):i<421?1000:uint64_t(1000+i-420);
+            kept+=original.accept(i*dt,dt,false,&id);
+        }
+        check(kept==360&&original.repeatsSkipped()==0&&original.repeatsHeld()>0,
+              "original half-rate keeps 360 samples through still-to-60 transition");
+        for(unsigned fps:{29,28,26,24,20})for(bool sequenced:{false,true}){
+            CaptureHalfRate compatible;
+            original.reset();
+            unsigned legacyCount=0,compatibleCount=0;
+            for(uint64_t i=0;i<1200;++i){
+                const uint64_t picture=i*fps/60,sequence=sequenced?i+1:0;
+                const int64_t pts=int64_t(i)*dt;
+                legacyCount+=original.accept(pts,dt,false,&picture,sequence);
+                compatibleCount+=compatible.accept(pts,dt,false,&picture,sequence);
+            }
+            check(legacyCount>=600&&original.repeatsHeld()>0&&original.repeatsSkipped()==0,
+                  "original half-rate admits repeats on its grid below 30 fps");
+            check(compatibleCount==fps*20&&compatible.repeatsHeld()==0,
+                  "compatible half-rate retains the changing pictures below 30 fps");
+        }
+        for(bool skip:{false,true}){
+            CaptureHalfRate sampler;sampler.setSkipRepeats(skip);
+            unsigned chosen=0;
+            bool firsts=true;
+            for(uint64_t i=1;i<541;++i){
+                const uint64_t picture=i/2;
+                if(sampler.accept(int64_t(i)*dt,dt,false,&picture,i+1)){
+                    ++chosen;
+                    if(i>14)firsts&=(i%2==0);
+                }
+            }
+            check(sampler.shifts()==1&&firsts&&chosen>=269&&chosen<=271,
+                  "both selectors move onto the first copy of a locked 30 fps stream");
+        }
+        CaptureHalfRate switcher;
+        const uint64_t repeated=9;
+        switcher.accept(0,dt,false,&repeated,1);
+        switcher.accept(dt,dt,false,&repeated,2);
+        check(!switcher.accept(2*dt,dt,false,&repeated,3),"compatible mode waits on a due repeat");
+        check(switcher.setSkipRepeats(false)&&switcher.accept(3*dt,dt,false,&repeated,4)&&
+              !switcher.setSkipRepeats(false)&&!switcher.accept(4*dt,dt,false,&repeated,5)&&
+              switcher.accept(5*dt,dt,false,&repeated,6),"switch clears pending repeat wait and reanchors once");
+        EnhancementSettings newer,previous;
+        previous.content=ContentRate::Capture60To30;
+        newer.content=ContentRate::Capture60To30Original;
+        check(previous.sameVideoConfiguration(newer)&&previous.sameActiveVideoParameters(newer),
+              "switching half-rate variants retains graph revision and active parameters");
+    }
+    {
+        // Deterministic mixed input with repeat runs, absent metadata, missing
+        // callbacks, restarts, jitter, invalid periods and transport changes.
+        using veyra::engine::test::CaptureHalfRate219;
+        std::mt19937 rng{219220};
+        unsigned samples=0,disagreements=0;
+        for(unsigned run=0;run<128;++run){
+            CaptureHalfRate219 reference;
+            CaptureHalfRate original;
+            original.setSkipRepeats(false);
+            int64_t pts=1000000;
+            uint64_t sequence=15,picture=0;
+            unsigned periodIndex=0;
+            for(unsigned n=0;n<8192;++n){
+                if(n%121==0){reference.reset();original.reset();}
+                const auto flags=rng();
+                if(flags%257==0)periodIndex=(periodIndex+1)%3;
+                const auto period=std::array<int64_t,3>{166667,166833,0}[periodIndex];
+                const auto nominal=std::max<int64_t>(period,166667);
+                const unsigned skip=flags%41==0?2+flags%8:1;
+                pts+=int64_t(skip)*nominal+int(rng()%20001)-10000;
+                if(flags%67==0)pts-=3*nominal;
+                if(flags%139==0)sequence=1;
+                else sequence+=skip;
+                if(flags%7<2)++picture;
+                const auto* pictureArg=flags%19==0?nullptr:&picture;
+                const uint64_t sequenceArg=flags%5==0||run%4==0?0:sequence;
+                const bool boundary=flags%313==0;
+                const bool before=reference.accept(pts,period,boundary,pictureArg,sequenceArg);
+                const bool after=original.accept(pts,period,boundary,pictureArg,sequenceArg);
+                ++samples;
+                disagreements+=before!=after;
+            }
+            check(reference.shifts()==original.shifts()&&reference.gridKept()==original.gridKept()&&
+                  reference.secondCopiesKept()==original.secondCopiesKept(),"v2.1.9 diagnostics agree on the random sequence");
+        }
+        std::printf("HALF_RATE_PARITY samples=%u disagreements=%u\n",samples,disagreements);
+        check(disagreements==0,"original half-rate chooses exactly the same samples as v2.1.9");
     }
     check(!CaptureHalfRate::supported(30)&&!CaptureHalfRate::supported(18)&&!CaptureHalfRate::supported(120)&&CaptureHalfRate::supported(59.94),"60-to-30 setting does not halve other transport modes");
     {
@@ -455,11 +551,69 @@ int main(){
         }
     }
     {
+        using veyra::engine::LiveCapturePacer;
+        using veyra::engine::FramePaceWindow;
+        constexpr int64_t period = 166667, base = 100000000;
+        // A late packet is followed by a short interval, as on the T900.
+        constexpr std::array<int64_t, 8> phase{-9500, 33490, -3500, 0, -6000, 9900, -10050, 1500};
+        LiveCapturePacer capture;
+        FramePaceWindow before, after;
+        int64_t last = 0;
+        bool bounded = true;
+        for (int i = 0; i < 720; ++i) {
+            const auto pts = i * period;
+            const auto arrival = base + pts + i * 80 + phase[i % phase.size()];
+            const auto deadline = capture.deadline(pts, arrival, period);
+            const auto presented = std::max(arrival + 6000, deadline);
+            bounded &= !deadline || (deadline >= arrival && deadline - arrival <= LiveCapturePacer::kMaxHold100ns);
+            if (i >= 60) {
+                before.complete(arrival + 6000);
+                after.complete(presented);
+            }
+            last = presented;
+        }
+        check(bounded && before.lowFps(last).value_or(0) < 50 && after.lowFps(last).value_or(0) > 57,
+              "jittery 60 Hz card keeps regular real-frame delivery with bounded hold");
+
+        const auto afterGap = capture.deadline(722 * period, base + 722 * period + 61000, period);
+        check(!afterGap, "missed capture frame drops old pacing anchor immediately");
+        const auto wrongPts = capture.deadline(721 * period, base + 723 * period + 61000, period);
+        check(!wrongPts, "backwards device timestamp returns to ready-driven preview");
+
+        for (int64_t cleanPeriod : {333667, 166667, 83333}) {
+            LiveCapturePacer clean, variable;
+            bool cleanReady = true, variableReady = true;
+            for (int i = 0; i < 360; ++i) {
+                const int64_t pts = i * cleanPeriod;
+                const int64_t arrival = base + pts + (i % 2 ? 300 : -300);
+                cleanReady &= !clean.deadline(pts, arrival, cleanPeriod);
+                variableReady &= !variable.deadline(pts + (i % 2 ? cleanPeriod / 4 : 0), arrival, cleanPeriod);
+            }
+            check(cleanReady, "steady capture stays ready-driven after warmup");
+            check(variableReady, "variable source PTS remains ready-driven");
+        }
+    }
+    {
+        CaptureHalfRate preview, fg;
+        preview.setSkipRepeats(false);
+        constexpr int64_t period = 166667;
+        unsigned previewCount = 0, fgCount = 0;
+        for (uint64_t i = 0; i < 240; ++i) {
+            const uint64_t picture = i / 4;
+            previewCount += preview.accept(i * period, period, i == 0, &picture, i + 1);
+            fgCount += fg.accept(i * period, period, i == 0, &picture, i + 1);
+        }
+        check(previewCount == 120 && preview.repeatsSkipped() == 0 && preview.repeatsHeld() == 60,
+              "original 60-to-30 keeps its grid while the game varies below 30");
+        check(fgCount == 60 && fg.repeatsSkipped() > 0 && fg.repeatsHeld() == 0,
+              "compatible 60-to-30 skips still pairs across game hitches");
+    }
+    {
         // 60 fps window capture without FG (2026-10-29): the first frame was read
         // 52 ms after its compositor time, later frames 1 ms after theirs. Same
         // sequence as the engine: anchor only when this epoch and mode have none.
         using veyra::engine::livePacesSourcePts;
-        check(!livePacesSourcePts(false,false,true)&&!livePacesSourcePts(false,true,false),"screen and physical capture without FG are ready-driven");
+        check(!livePacesSourcePts(false,false,true)&&!livePacesSourcePts(false,true,false),"screen and physical capture without FG use a ready-driven default anchor");
         check(livePacesSourcePts(false,false,false)&&livePacesSourcePts(true,false,true)&&livePacesSourcePts(true,true,false),"file replay, streams and FG pairs keep their PTS clock");
         auto worstHold=[](bool screen){
             veyra::engine::PresentationScheduler timeline;const bool paced=livePacesSourcePts(false,false,screen);
@@ -691,15 +845,15 @@ int main(){
          check(r.kept==n&&r.droppedReal==0,"dedup 30-in-60 with noise beyond the band: every sample kept, nothing lost");}
         {// Hitch: one picture shown for four samples, then the 30 fps cadence resumes one slot later.
          const auto r=run(60.0,[](int i){return int64_t(i<301?i/2:(i<304?150:(i-1)/2));},n,0,0,333333);
-         check(r.keptRepeats==0&&r.droppedReal==0&&r.monotonic&&r.neverLate,"dedup hitch: no real picture lost, timestamps stay ordered and never late");}
+         check(r.keptRepeats==1&&r.droppedReal==0&&r.monotonic&&r.neverLate,"dedup hitch: one static refresh, no lost picture or nonmonotonic timestamp");}
         {// Mailbox overwrite: the first sample of a picture is never read; its second still counts as new.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<120;++i){if(i%4==2)continue;const uint64_t shown=uint64_t(i/2);kept+=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;}
          check(kept==60,"dedup keeps a picture whose first sample the engine never read");}
-        {// Still picture after 30 fps content: held on the 33.3 ms cadence (steady GPU work), not once per 150-250 ms.
+        {// Still picture after 30 fps content returns to its transport cadence.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<600;++i){const uint64_t shown=i<240?uint64_t(i/2):1000u;const bool keep=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;if(i>=300)kept+=keep;}
-         check(kept>=148&&kept<=152&&dedup.stats().held>=140,"dedup still picture after 30 fps content is held at a steady 30 fps");}
+         check(kept==300&&dedup.stats().held>=350,"dedup still picture returns to 60 Hz without gaps");}
         {
             ContentDedup recovering;constexpr int64_t dt=166667;const uint64_t picture=7;
             int64_t firstHeldSpan=0,firstHeldCadence=0;
@@ -707,19 +861,44 @@ int main(){
                 const auto d=recovering.observe(&picture,i*dt,dt,i==0);
                 if(d.keep&&d.holdInterval&&!firstHeldSpan){firstHeldSpan=d.interval;firstHeldCadence=d.holdInterval;}
             }
-            check(firstHeldSpan>firstHeldCadence&&firstHeldCadence==2*dt,
-                  "static refresh distinguishes its preceding hold gap from the ongoing content cadence");
+            check(firstHeldSpan>firstHeldCadence&&firstHeldCadence==dt,
+                  "static refresh distinguishes its preceding hole from the transport cadence");
             const auto phase=veyra::engine::capturePairInterval100ns({firstHeldCadence,10000000},60,0,double(firstHeldSpan)/10000,true);
-            check(phase==2*dt,"post-boundary static hold cannot stretch subsequent pair scheduling to the hitch duration");
+            check(phase==dt,"post-boundary static hold cannot stretch subsequent pair scheduling to the hitch duration");
         }
-        {// Still picture after 40 fps content in 60 Hz: held on the 25 ms grid (33/17 ms samples).
+        {// Still picture after 40 fps content also follows transport.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<600;++i){const uint64_t shown=i<240?uint64_t(std::floor(i*40.0/60.0+1e-9)):1000u;const bool keep=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;if(i>=300)kept+=keep;}
-         check(kept>=196&&kept<=204,"dedup still picture after 40 fps content is held at 40 fps");}
-        {// Still picture from the start, no learned rate: half the 60 Hz transport.
+         check(kept==300,"dedup still picture after 40 fps content follows transport");}
+        {// Still picture from the start, no learned rate.
          ContentDedup dedup;const uint64_t shown=3;int kept=0;
          for(int i=0;i<240;++i)kept+=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;
-         check(kept>=116&&kept<=122,"dedup still picture with no learned rate keeps 30 of a 60 Hz capture");}
+         check(kept==238,"dedup with no learned rate holds after two ordinary repeat slots");}
+        {
+            ContentDedup menu;
+            constexpr int64_t dt=333333;
+            bool all=true;
+            for(uint64_t i=0;i<360;++i){
+                const auto picture=i/11;
+                const auto frame=menu.observe(&picture,i*dt,dt,i==0);
+                all&=frame.keep&&(!i||frame.interval==dt);
+            }
+            check(all,"near-static 30 Hz map with 2.7 new pictures per second keeps every transport slot");
+        }
+        {
+            ContentDedup locked;
+            constexpr int64_t dt=166667;
+            uint64_t picture=0;
+            for(uint64_t i=0;i<180;++i){
+                // Noise makes some real repeats look like changes, always on
+                // the repeat side of the 30-in-60 sampling pattern.
+                if(i%2==0||i%6==1)++picture;
+                locked.observe(&picture,i*dt,dt,i==0,0,i+1);
+            }
+            check(locked.suggestHalfRate(),"sporadic false new pictures retain the half-rate cadence hint");
+            for(uint64_t i=180;i<300;++i)locked.observe(&picture,i*dt,dt,false,0,i+1);
+            check(!locked.suggestHalfRate(),"still pictures on both parities do not trigger a lock-30 hint");
+        }
         {// No CPU picture: everything is kept.
          ContentDedup dedup;int kept=0;for(int i=0;i<60;++i)kept+=dedup.observe(nullptr,i*166667+1000,166667,i==0).keep;
          check(kept==60,"dedup without a picture keeps every sample");}
@@ -759,6 +938,12 @@ int main(){
         check(startMetrics.presentLow1Fps&&*startMetrics.presentLow1Fps>119.9&&returnMetrics.presentLow1Fps&&*returnMetrics.presentLow1Fps<116,
               "1% low spaces presents by the call start, as RTSS and PresentMon, not by the call's return");
         check(std::abs(startMetrics.presentSubmitFps-returnMetrics.presentSubmitFps)<0.2,"the submit rate counts the same presents either way");
+        const auto fullLow=startMetrics.presentLow1Fps;
+        const auto fps=startMetrics.presentSubmitFps;
+        byStart.snapshot(startMetrics,t,false);
+        check(!startMetrics.presentLow1Fps&&startMetrics.presentSubmitFps==fps,"cheap stats skip the percentile and keep submit FPS");
+        byStart.snapshot(startMetrics,t);
+        check(startMetrics.presentLow1Fps==fullLow,"cheap stats preserve the history used by a full snapshot");
     }
     {// PictureCompare.h: a new picture stops the comparison early; its reference copy can wait.
         using veyra::pipeline::PictureReference;using veyra::pipeline::PicturePlane;using veyra::pipeline::PictureComponents;

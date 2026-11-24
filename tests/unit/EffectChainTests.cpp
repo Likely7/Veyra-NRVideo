@@ -281,6 +281,21 @@ void testExistingChainContracts() {
           check(requiresGraphRebuild(base, next), "turning NR off rebuilds"); }
         { auto next = base; next.multiplier = 2;
           check(requiresGraphRebuild(base, next), "changing the multiplier rebuilds"); }
+        {
+            EnhancementSettings off;
+            EnhancementSettings on = off;
+            on.dynamicHud = true;
+            check(!off.dynamicHud && on.dynamicHud && !on.hudLock, "dynamic HUD is opt-in and independent");
+            check(!requiresGraphRebuild(off, on) && on.sameVideoConfiguration(off),
+                  "saving dynamic HUD with frame generation off leaves the graph alone");
+            off.multiplier = on.multiplier = 2;
+            off.frameGenerationBackend = on.frameGenerationBackend = FrameGenerationBackend::Vfg;
+            check(requiresGraphRebuild(off, on) && requiresGraphRebuild(on, off) &&
+                  !off.sameVideoConfiguration(on), "both dynamic HUD transitions rebuild active VFG");
+            off.frameGenerationBackend = on.frameGenerationBackend = FrameGenerationBackend::XeSS;
+            check(!requiresGraphRebuild(off, on) && on.sameVideoConfiguration(off),
+                  "XeSS holds the choice without using or rebuilding the graph HUD pass");
+        }
         { auto next = base; next.nrTemporal = false;
           check(requiresGraphRebuild(base, next), "toggling temporal anti-flicker rebuilds"); }
         { auto next = base; next.videoHdr.enabled = false;
@@ -663,6 +678,27 @@ void testProductionFixedPlanDescription() {
     check(desc.validateFixedExecutionPlan().empty()&&desc.enableNr&&!desc.enableSr&&desc.fixedExecutionPlan&&
           desc.fixedExecutionPlan->resourceCounts[size_t(EffectType::NrEnhance)]==2,
         "AMD adapter description keeps NR layers for the lmxxf runtime");
+    {
+        EnhancementSettings flow;
+        flow.nrPolicy=NrSizePolicy::Realtime;
+        StageRequest capture;
+        capture.width=3840;capture.height=2160;capture.nvidiaAdapter=false;capture.amdNr=true;
+        capture.nr=false;flow.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
+        const auto fullFlow=[&]{
+            const auto plan=describeStages(capture,flow,desc);
+            return plan.flow==Extent{3840,2160}&&desc.flowWidth==3840&&desc.flowHeight==2160;
+        };
+        check(fullFlow(),"AMD flow with NR disabled uses the source extent");
+        capture.nr=true;flow.nr=true;
+        check(fullFlow()&&desc.nrWidth==1920&&desc.nrHeight==1080,"AMD flow and NR have independent extents");
+        flow.amdFlowHalfResolution=true;
+        check(fullFlow()&&desc.amdFlowHalfResolution,"half resolution is applied once in the AMD graph");
+        capture.nvidiaAdapter=true;capture.amdNr=false;flow.opticalFlowBackend=OpticalFlowBackend::Nvidia;
+        const auto withNr=describeStages(capture,flow,desc);
+        check(withNr.flow==Extent{1920,1080},"NVOF with realtime NR keeps the existing guidance budget");
+        capture.nr=false;
+        check(fullFlow(),"NVOF without NR retains the source extent");
+    }
     request.amdNr=false;request.sr=true;
     request.nvidiaAdapter=true;request.nr=false;describeStages(request,s,desc);
     check(desc.validateFixedExecutionPlan().empty()&&!desc.enableNr&&desc.fixedExecutionPlan&&
@@ -973,6 +1009,19 @@ static void testOutputControlNodes(){
     check(!requiresGraphRebuild(s,changed),"mask geometry and feather edit live");
     changed.exclusion.enabled=false;
     check(requiresGraphRebuild(s,changed),"mask allocation is rebuilt on enable transitions");
+    changed=s;
+    changed.exclusion.regions[0].content=ExclusionContent::FrameGeneration;
+    check(!requiresGraphRebuild(s,changed),"only-FG mode is a live composition parameter");
+    changed.exclusion.regions[0].content=ExclusionContent::Hud;
+    check(requiresGraphRebuild(s,changed)&&hudProtectRegions(HudProtectMode::Off,changed.exclusion)[1].ellipse,
+          "HUD regions activate independently and rebuild bounded GPU history");
+    changed=s;changed.hudProtect=HudProtectMode::Center;
+    check(requiresGraphRebuild(s,changed)&&
+          !hudProtectRegions(changed.hudProtect,changed.exclusion)[0].empty(),
+          "automatic centre selection rebuilds FG history");
+    changed.hudProtect=HudProtectMode::Regions;changed.exclusion.enabled=false;
+    check(!hudProtectRegions(changed.hudProtect,changed.exclusion)[1].empty(),
+          "manual HUD protection can use saved geometry with whole-box exclusion off");
     for(uint32_t i=0;i<chain.nodeCount;++i)
         if(chain.nodes[i].type==EffectType::NrStabilizer||chain.nodes[i].type==EffectType::Exclusion){
             chain.nodes[i].enabled=false;chain.nodes[i].protection={};
@@ -1714,6 +1763,48 @@ static void testSmartSr(){
 }
 
 int main() {
+    {
+        EnhancementSettings off;
+        check(!toChain(off).firstOf(EffectType::VideoDenoise),"video denoise: old settings leave the stage absent");
+        auto on=off;
+        on.videoDenoiseEnabled=true;
+        on.color.enabled=true;
+        on.sr=true;
+        on.srTarget=veyra::pipeline::SrTarget::Qhd;
+        const auto chain=toChain(on);
+        EnhancementSettings restored;
+        fromChain(chain,restored);
+        check(restored.videoDenoiseEnabled&&restored.videoDenoise==on.videoDenoise,
+              "video denoise: settings and list chain round trip");
+        StageRequest request;request.width=1920;request.height=1080;request.sr=true;
+        veyra::pipeline::EnhanceGraphDesc desc;
+        describeStages(request,on,desc);
+        using Slot=veyra::pipeline::EnhanceGraphDesc::PassSlot;
+        check(desc.fixedExecutionPlan&&desc.validateFixedExecutionPlan().empty()&&
+              desc.fixedExecutionPlan->steps[0].type==EffectType::VideoDenoise&&
+              desc.fixedExecutionPlan->steps[0].output==veyra::pipeline::Extent{1920,1080}&&
+              desc.slotOfStep(0)==Slot::SourcePost&&desc.slotOfStep(1)==Slot::SourcePost,
+              "video denoise: source-sized stage before the grade and SR");
+        auto edit=on;edit.videoDenoise.luma=.37f;edit.videoDenoise.chroma=.85f;
+        check(!requiresGraphRebuild(on,edit)&&on.sameVideoConfiguration(edit),
+              "video denoise: strengths are live uniforms");
+        edit.videoDenoiseEnabled=false;
+        check(requiresGraphRebuild(on,edit),"video denoise: toggle adds/removes GPU resources");
+        edit.videoDenoise.chroma=-.01f;
+        check(!edit.validate().empty()&&!validateChain(toChain(edit)).accepted,
+              "video denoise: range is enforced even while disabled");
+        auto nodeChain=chain;
+        nodeChain.mode=ChainMode::Node;
+        request.nodeOrder=nullptr;
+        auto* denoise=nodeChain.firstOf(EffectType::VideoDenoise);
+        denoise->enabled=false;
+        fromChain(nodeChain,restored);
+        const auto order=runtimeOrder(nodeChain);
+        EffectChain rebuilt;
+        check(order&&restoreRuntimeOrder(restored,*order,rebuilt).accepted&&
+              rebuilt.firstOf(EffectType::VideoDenoise)&&!rebuilt.firstOf(EffectType::VideoDenoise)->enabled,
+              "video denoise: disabled default node stays in runtime order");
+    }
     {
         EnhancementSettings before;before.nr=before.sr=false;
         before.antiAlias.enabled=true;before.antiAlias.method=AntiAliasMethod::Dlaa;before.antiAlias.quality=0;

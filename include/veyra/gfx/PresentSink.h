@@ -79,7 +79,7 @@ public:
     // Creates a Win32 window (not shown as foreground; background probe
     // friendly) and the flip-model swapchain on the given device/queue.
     bool initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
-                    const Desc& desc, Status& status);
+                    const Desc& desc, Status& status,std::unique_ptr<XessPresenter> preparedXess={});
 
     // Handles WM_SIZE; returns true when the swapchain buffers were resized
     // and the caller must recreate sized resources.

@@ -18,6 +18,7 @@ import QtQuick.Effects
 
 VPage {
     id: root
+    property alias videoBackgroundHost: videoArea
     signal requestPage(string page)
     signal requestDialog(string key)
     signal requestFullscreen()
@@ -110,6 +111,7 @@ VPage {
             tab = "quality"
             if (chip.type === "sr") target = "list-sr"
             else if (chip.type === "aa") target = "list-anti-alias"
+            else if (chip.type === "video-denoise") target = "list-video-denoise"
             else if (chip.type === "video-hdr") target = "list-video-hdr"
             else if (chip.type === "protection") { nrStage.open = true; target = "list-global-protection" }
             else if (chip.type === "beauty") {
@@ -298,6 +300,11 @@ VPage {
             width: head.compact ? head.width : Math.max(0, head.width - actionViewport.width - 16)
             height: 32
             spacing: 8
+            readonly property real loadingSpace: sourceLoading.visible ? sourceLoading.implicitWidth + spacing : 0
+            // The source button uses 68 px for its two icons and padding.
+            readonly property real titleAndFormatSpace: width - 68 - spacing * (formatTag.visible ? 2 : 1)
+                - loadingSpace - (outputTag.visible ? outputTag.implicitWidth + spacing : 0)
+            readonly property real formatLimit: Math.max(40, titleAndFormatSpace - 32)
 
             // pages-pro.js data-srcbtn: what is playing, with a chevron for the menu.
             VButton {
@@ -307,8 +314,11 @@ VPage {
                         : veyra.sourceKind === "image" ? "image" : veyra.sourceKind === "file" ? "film" : "video"
                 text: veyra.sourceTitle.length > 0 ? veyra.sourceTitle : qsTr("片源")
                 tip: text
-                maxTextWidth: Math.max(64, Math.min(260, sourceInfo.width - formatTag.implicitWidth
-                                                  - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
+                maxTextWidth: sourceLoading.visible
+                    ? Math.max(32, Math.min(260, sourceInfo.titleAndFormatSpace
+                        - (formatTag.visible ? Math.min(formatTag.implicitWidth, sourceInfo.formatLimit) : 0)))
+                    : Math.max(64, Math.min(260, sourceInfo.width - formatTag.implicitWidth
+                                           - (outputTag.visible ? outputTag.implicitWidth + 8 : 0) - 74))
                 trailingIcon: "down"
                 onClicked: sourceMenu.openAt(this, "down")
             }
@@ -317,11 +327,73 @@ VPage {
                 id: formatTag
                 objectName: "pro-format-tag"
                 text: veyra.sourceFormatText.length > 0 ? veyra.sourceFormatText : qsTr("未打开")
+                visible: veyra.openingSource !== true || veyra.sourceFormatText.length > 0
+                Layout.maximumWidth: sourceLoading.visible ? sourceInfo.formatLimit : Infinity
+                elideText: sourceLoading.visible
+                ToolTip.visible: formatHover.hovered && width < implicitWidth
+                ToolTip.text: text
+                HoverHandler { id: formatHover }
+            }
+            Item {
+                id: sourceLoading
+                objectName: "pro-source-loading"
+                visible: veyra.openingSource === true || veyra.captureEnhancementLoading === true
+                Layout.alignment: Qt.AlignVCenter
+                implicitWidth: Math.max(68, Math.min(144, loadingLabel.implicitWidth, sourceInfo.width * 0.36))
+                implicitHeight: loadingLabel.implicitHeight + 3 + loadingProgress.height
+
+                Text {
+                    id: loadingLabel
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    text: veyra.captureEnhancementLoading === true ? qsTr("正在准备增强") : qsTr("正在打开")
+                    color: Theme.t2
+                    font.family: Theme.fontUi
+                    font.pixelSize: 11
+                    elide: Text.ElideRight
+                }
+
+                Basic.ProgressBar {
+                    id: loadingProgress
+                    objectName: "pro-source-loading-progress"
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 4
+                    padding: 0
+                    indeterminate: true
+                    Accessible.name: loadingLabel.text
+                    background: Rectangle { radius: 2; color: Theme.stroke2 }
+                    contentItem: Item {
+                        clip: true
+                        Rectangle {
+                            width: parent.width * 0.42
+                            height: parent.height
+                            radius: 2
+                            color: Theme.accent
+                            x: Theme.reduced ? (parent.width - width) / 2
+                                             : travel * (parent.width + width) - width
+                            property real travel: 0
+                            NumberAnimation on travel {
+                                from: 0; to: 1
+                                duration: 1450
+                                loops: Animation.Infinite
+                                running: loadingProgress.visible && !Theme.reduced
+                            }
+                        }
+                    }
+                }
+                ToolTip.visible: loadingHover.hovered && loadingLabel.truncated
+                ToolTip.text: loadingLabel.text
+                HoverHandler { id: loadingHover }
             }
             VTag {
                 id: outputTag
                 objectName: "pro-output-summary"
                 visible: veyra.outputSummary.length > 0
+                    && (!sourceLoading.visible || sourceInfo.width >= 100 + sourceInfo.spacing * 4
+                        + sourceLoading.implicitWidth + formatTag.implicitWidth + implicitWidth)
                 text: qsTr("输出 ") + veyra.outputSummary.replace("x", "×")
             }
             Item { Layout.fillWidth: true }
@@ -777,9 +849,14 @@ VPage {
                     id: barBtn
                     property string glyph: ""
                     property string tip: ""
+                    property bool highlighted: false
                     signal tapped()
                     implicitWidth: 28; implicitHeight: 28
-                    VIcon { anchors.centerIn: parent; name: barBtn.glyph; color: barHover.hovered ? Theme.t1 : Theme.t2 }
+                    VIcon {
+                        anchors.centerIn: parent
+                        name: barBtn.glyph
+                        color: barBtn.highlighted ? Theme.warn : barHover.hovered ? Theme.t1 : Theme.t2
+                    }
                     HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: barBtn.tapped() }
                     ToolTip.visible: barHover.hovered
@@ -796,9 +873,10 @@ VPage {
                 BarButton {
                     id: proAudioButton
                     objectName: "pro-audio-tracks"
-                    glyph: "music"
-                    tip: qsTr("音轨")
-                    visible: veyra.hasSource && !veyra.isCapture
+                    glyph: proAudioMenu.captureSource ? "vol" : "music"
+                    tip: proAudioMenu.buttonLabel
+                    highlighted: proAudioMenu.monitorOff
+                    visible: veyra.hasSource && (!veyra.isCapture || proAudioMenu.captureSource)
                     onTapped: proAudioMenu.openAt(proAudioButton, "up")
                 }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
@@ -809,7 +887,7 @@ VPage {
                     HoverHandler { id: fullHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler { onTapped: root.requestFullscreen() }
                     ToolTip.visible: fullHover.hovered
-                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
+                    ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节").arg("Home")
                 }
             }
         }
@@ -1395,14 +1473,14 @@ VPage {
                 ScrollBar.vertical: VScrollBar {
                     id: inspectorScroll
                     objectName: "pro-inspector-scrollbar"
-                    wide: root.tab === "color"
+                    wide: root.tab === "color" || root.tab === "quality"
                 }
 
                 ColumnLayout {
                     id: body
                     // CSS thin scrollbars consume 10px on the reference host;
                     // reserve their gutter instead of drawing over the colour card.
-                    width: parent.width - 20 - (root.tab === "color" && inspectorScroll.size < 1 ? inspectorScroll.implicitWidth : 0)
+                    width: parent.width - 20 - ((root.tab === "quality" || (root.tab === "color" && inspectorScroll.size < 1)) ? inspectorScroll.implicitWidth : 0)
                     x: 10
                     spacing: 6
 
@@ -1416,6 +1494,24 @@ VPage {
                         // The design builds the inspector from accordion cards, not
                         // flat rows: an icon, a title, a live summary line, a switch
                         // and a chevron, with nested groups inside.
+                        VAccordion {
+                            objectName: "list-video-denoise"
+                            Layout.fillWidth: true
+                            glyph: "sparkles"
+                            hue: "#62CDB7"
+                            title: qsTr("视频降噪")
+                            summary: veyra.videoDenoiseEnabled ? qsTr("已开启") : qsTr("已关闭")
+                            on: !!veyra.videoDenoiseEnabled
+                            onToggled: checked => veyra.videoDenoiseEnabled = checked
+
+                            VideoDenoiseEditor {
+                                Layout.fillWidth: true
+                                namePrefix: "list-denoise"
+                                params: veyra.videoDenoiseParams || ({})
+                                enabled: !!veyra.videoDenoiseEnabled
+                                onEdited: (channel, amount) => veyra.setVideoDenoiseStrength(channel, amount)
+                            }
+                        }
                         // Spatial anti-aliasing (#53) runs at source size right after the
                         // input conversion, in front of SR, so jaggies are never enlarged.
                         VAccordion {
@@ -1833,6 +1929,7 @@ VPage {
                                     onPicked: id => veyra.fgBackendName = id
                                 }
                             }
+                            AnrDownloadRow {}
                             VRow {
                                 label: qsTr("补帧运动来源")
                                 visible: veyra.fgBackendName !== "vfg"
@@ -1947,6 +2044,8 @@ VPage {
                                     onToggled: checked => veyra.hudLock = checked
                                 }
                             }
+                            HudProtectControl { objectName: "list-hud-protect" }
+                            DynamicHudRow { backend: veyra; namePrefix: "list" }
                             VSubGroup {
                                 id: fgFlowGroup
                                 objectName: "list-fg-flow-group"
@@ -2096,20 +2195,11 @@ VPage {
             else if (o.track !== undefined) veyra.subtitlePrimary = o.track
         }
     }
-    VMenu {
+    PlayerAudioMenu {
         id: proAudioMenu
-        title: qsTr("音轨")
-        readonly property var mk: t => ({ label: t.label, index: t.index,
-                                          note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
-                                          checked: t.index === veyra.selectedAudioTrack })
-        items: veyra.audioTracks.length > 0
-               ? veyra.audioTracks.map(mk).concat([{ sep: true },
-                     { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
-               : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
-        onPicked: (i, o) => {
-            if (o.act === "dlg") return root.requestDialog("audio")
-            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
-        }
+        objectName: "pro-audio-menu"
+        backend: veyra
+        onSettingsRequested: root.requestDialog("audio")
     }
     // pages-pro.js data-srcbtn: the open source first (checked), then the ways in.
     VMenu {

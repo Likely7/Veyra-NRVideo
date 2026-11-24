@@ -33,6 +33,7 @@
 #include <QDebug>
 #include <QAbstractNativeEventFilter>
 #include <QFile>
+#include <QFileInfo>
 #include <QDir>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -43,13 +44,16 @@
 #include <shobjidl.h>
 #include <dbghelp.h>
 #include <d3d12.h>
+#include <restartmanager.h>
 
 #include <chrono>
+#include <cerrno>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <format>
 #include <memory>
+#include <vector>
 
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
@@ -57,6 +61,7 @@
 #include "veyra/engine/ExportJobManager.h"
 #include "veyra/engine/PresentationGeometry.h"
 #include "veyra/gfx/PresentationHooks.h"
+#include "veyra/media/NetworkInput.h"
 #include "veyra/pipeline/AmdHipPreflight.h"
 #include "veyra/ui/InterfaceRenderer.h"
 #include "veyra/ui/QmlDataDirectory.h"
@@ -64,10 +69,13 @@
 #include "veyra/ui/PlaybackServer.h"   // Custom: local HTTP endpoint for the browser extension
 #include "veyra/ui/QmlPlayerBridge.h"
 #include "../../src/ui/WinCaptionReader.h"
+#include "../../src/ui/AsrWorker.h"
 #include "veyra/ui/StartupMusic.h"
 #include "veyra/ui/ThumbnailProvider.h"
+#include "veyra/ui/UiLanguage.h"
 #include "veyra/ui/UpdateChecker.h"
 #include "veyra/base/PortableLayout.h"
+#include "ProfileInstance.h"
 
 using namespace veyra;
 
@@ -216,12 +224,10 @@ bool syncVideoGeometry(QQuickWindow* window, QQuickItem* host) {
     // spans the window must use its actual physical client extent: Qt rounds
     // the HWND at fractional DPI, whereas flooring width*dpr can leave a
     // one-pixel strip outside the video (for example 642 DIP at 125%).
-    const bool aligned = window->property("gameAligned").toBool();
-    const auto physical = [aligned](qreal value) { return int(aligned ? std::round(value) : std::floor(value)); };
-    const int x = physical(topLeft.x() * dpr);
-    const int y = physical(topLeft.y() * dpr);
-    int w = std::max(1, physical(host->width() * dpr));
-    int h = std::max(1, physical(host->height() * dpr));
+    const int x = int(std::floor(topLeft.x() * dpr));
+    const int y = int(std::floor(topLeft.y() * dpr));
+    int w = std::max(1, int(std::floor(host->width() * dpr)));
+    int h = std::max(1, int(std::floor(host->height() * dpr)));
     RECT parentClient{};
     if (GetClientRect(reinterpret_cast<HWND>(window->winId()), &parentClient)) {
         if (std::abs(topLeft.x()) < 0.001 && std::abs(host->width() - window->width()) < 0.001)
@@ -413,10 +419,74 @@ void syncVideoCovers(QQuickWindow* window, QQuickItem* host, qreal inset) {
         covers.size(), w, h, result, error));
     logVideoWindowState(window, host, "region");
 }
+QString protocolTarget(const QString& argument) {
+    if (!argument.startsWith(QLatin1String("veyra://"), Qt::CaseInsensitive)) return {};
+    return QUrlQuery(QUrl(argument).query()).queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
+}
+
+bool reportLogHolders(const std::filesystem::path& path, int openErrno) {
+    std::error_code pathError;
+    const auto resource = std::filesystem::absolute(path, pathError).lexically_normal();
+    if (pathError) {
+        log::warn("app", std::format("primary log unavailable errno={} path error={}", openErrno, pathError.value()));
+        return false;
+    }
+    DWORD session = 0;
+    wchar_t key[CCH_RM_SESSION_KEY + 1]{};
+    DWORD result = RmStartSession(&session, 0, key);
+    if (result != ERROR_SUCCESS) {
+        log::warn("app", std::format("primary log unavailable errno={} restart manager start error={}", openErrno, result));
+        return false;
+    }
+    struct Session {
+        DWORD id;
+        ~Session() { RmEndSession(id); }
+    } scopedSession{session};
+
+    PCWSTR file = resource.c_str();
+    result = RmRegisterResources(session, 1, &file, 0, nullptr, 0, nullptr);
+    UINT needed = 0, count = 0;
+    DWORD reboot = 0;
+    std::vector<RM_PROCESS_INFO> processes;
+    if (result == ERROR_SUCCESS) result = RmGetList(session, &needed, &count, nullptr, &reboot);
+    for (int attempt = 0; result == ERROR_MORE_DATA && attempt < 3; ++attempt) {
+        processes.resize(needed);
+        count = needed;
+        result = RmGetList(session, &needed, &count, processes.data(), &reboot);
+    }
+    log::warn("app", std::format("primary log unavailable errno={} restart manager result={} holders={}",
+                                openErrno, result, result == ERROR_SUCCESS ? count : 0));
+    if (result != ERROR_SUCCESS) return false;
+
+    bool anotherVeyra = false;
+    for (UINT i = 0; i < count; ++i) {
+        const auto& holder = processes.at(i).Process;
+        const DWORD pid = holder.dwProcessId;
+        bool veyraProcess = false;
+        if (pid != GetCurrentProcessId()) {
+            const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+            if (process) {
+                FILETIME started{}, ended{}, kernel{}, user{};
+                std::wstring image(32768, L'\0');
+                DWORD size = DWORD(image.size());
+                if (GetProcessTimes(process, &started, &ended, &kernel, &user)
+                    && CompareFileTime(&started, &holder.ProcessStartTime) == 0
+                    && QueryFullProcessImageNameW(process, 0, image.data(), &size)) {
+                    const auto name = std::filesystem::path(std::wstring_view(image.data(), size)).filename();
+                    veyraProcess = _wcsicmp(name.c_str(), L"veyra_qml_ui.exe") == 0;
+                }
+                CloseHandle(process);
+            }
+        }
+        anotherVeyra |= veyraProcess;
+        log::info("app", std::format("primary log holder pid={} veyra={}", pid, veyraProcess));
+    }
+    return anotherVeyra;
+}
 } // namespace
 
 namespace {
-// Last-chance handler, as in the Win32 shell (apps/veyra/main.cpp): provider and
+// Last-chance handler: provider and
 // driver faults are structured exceptions no C++ catch sees. The 2.0 beta had no
 // handler, so a field crash left neither a reason nor the last buffered log lines.
 std::wstring g_crashDumpDirectory;
@@ -434,6 +504,32 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
     veyra::log::error("crash", std::format("unhandled exception code=0x{:08X} address=0x{:X} module={} offset=0x{:X} thread={}",
         code, address, std::filesystem::path(moduleName).filename().string(),
         module ? address - reinterpret_cast<uintptr_t>(module) : uintptr_t(0), GetCurrentThreadId()));
+    // The file offset alone only names the faulting instruction. A return-address
+    // list, printed as module-relative offsets, names the callers too, so a field
+    // crash can be attributed without a debugger attached.
+    {
+        void* frames[32]{};
+        const USHORT count = CaptureStackBackTrace(0, 32, frames, nullptr);
+        std::string trace;
+        for (USHORT k = 0; k < count; ++k) {
+            const auto frame = reinterpret_cast<uintptr_t>(frames[k]);
+            if (!trace.empty()) trace += ' ';
+            HMODULE frameModule = nullptr;
+            wchar_t framePath[MAX_PATH]{};
+            const bool named = GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+                                                      GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                                                  reinterpret_cast<LPCWSTR>(frames[k]), &frameModule)
+                && GetModuleFileNameW(frameModule, framePath, MAX_PATH);
+            if (named) {
+                trace += std::format("{}+0x{:X}",
+                    QString::fromStdWString(std::filesystem::path(framePath).filename().wstring()).toStdString(),
+                    frame - reinterpret_cast<uintptr_t>(frameModule));
+            } else {
+                trace += std::format("0x{:X}", frame);
+            }
+        }
+        veyra::log::error("crash", std::format("stack(module offsets): {}", trace));
+    }
     SYSTEMTIME st{};
     GetLocalTime(&st);
     wchar_t name[96]{};
@@ -481,15 +577,90 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         if (SUCCEEDED(com)) CoUninitialize();
         return result;
     }
-    // A log file has to be opened explicitly; without this the QML app produced
-    // no diagnostics at all, which made every failure look like a silent exit.
-    // Same path and override as the Win32 build, so support instructions do not
-    // change between the two front ends.
+
+    // Use exactly the same profile for ownership, renderer preferences and the
+    // bridge. Portable versions within an installation share this profile.
+    std::vector<std::wstring> launchArgs;
+    int count = 0;
+    if (auto* args = CommandLineToArgvW(GetCommandLineW(), &count)) {
+        for (int i = 1; i < count; ++i) launchArgs.emplace_back(args[i]);
+        LocalFree(args);
+    }
+    auto legacyDirectory = veyra::runtime::userDataDirectory();
+    auto dataDirectory = legacyDirectory / L"user-data-2.0.0";
+    bool explicitDataDirectory = false, obsGameCaptureArg = false, overlayCompatRestart = false;
+    for (size_t i = 0; i < launchArgs.size(); ++i) {
+        const auto& arg = launchArgs.at(i);
+        if (arg == L"--data-dir" && i + 1 < launchArgs.size()) {
+            dataDirectory = launchArgs.at(++i);
+            explicitDataDirectory = true;
+        } else if (arg == L"--import-1.4.4-data" && i + 1 < launchArgs.size()) {
+            legacyDirectory = launchArgs.at(++i);
+        } else if (arg == L"--obs-game-capture") {
+            obsGameCaptureArg = true;
+        } else if (arg == L"--overlay-compat-restart") {
+            overlayCompatRestart = true;
+        }
+    }
+    QFile prefFile(QString::fromStdWString((dataDirectory / L"qml-preferences.v1.json").wstring()));
+    QJsonObject saved;
+    if (prefFile.open(QIODevice::ReadOnly)) {
+        saved = QJsonDocument::fromJson(prefFile.readAll()).object();
+        prefFile.close();
+    }
+    ui::ProfileInstance profileInstance;
+    const auto instanceNotice = [&](instance::Notice notice, DWORD value, const std::filesystem::path& dump) {
+        const char* source = nullptr;
+        switch (notice) {
+        case instance::Notice::StartingOrClosing:
+            source = "Veyra 正在打开或退出。请稍候再试。";
+            break;
+        case instance::Notice::AlreadyOpen:
+            source = "Veyra 已经打开。请切换到原窗口继续使用。";
+            break;
+        case instance::Notice::Hung:
+            source = "Veyra（PID %1）未响应。请在任务管理器中检查此进程后重试。";
+            break;
+        case instance::Notice::ConfirmEnd:
+            source = "Veyra（PID %1）未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？";
+            break;
+        case instance::Notice::EndPending:
+            source = "旧的 Veyra（PID %1）仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。";
+            break;
+        case instance::Notice::EndFailed:
+            source = "Windows 无法确认 Veyra（PID %1）已退出。请在任务管理器中查看此进程。";
+            break;
+        }
+        if (!source) return false;
+        // Only the duplicate needs a translator before QApplication exists.
+        QCoreApplication core(argc, argv);
+        ui::i18n::apply(ui::i18n::resolve(saved.value(QStringLiteral("language")).toString()));
+        auto message = ui::i18n::text(QString::fromUtf8(source));
+        if (value) message = message.arg(value);
+        if (!dump.empty()) {
+            message += QStringLiteral("\n\n") + ui::i18n::text(QStringLiteral("反馈时请附上以下转储文件。"))
+                       + QStringLiteral("\n") + QString::fromStdWString(dump.wstring());
+        }
+        ui::i18n::apply(QStringLiteral("zh-CN"));
+        const UINT flags = notice == instance::Notice::ConfirmEnd
+            ? MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING : MB_OK | MB_ICONINFORMATION;
+        return MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(message.utf16()), L"Veyra", flags) == IDYES;
+    };
     wchar_t logOverride[32768]{};
     const auto overrideLength = GetEnvironmentVariableW(L"VEYRA_LOG_FILE", logOverride, 32768);
     auto logPath = overrideLength > 0 && overrideLength < 32768
                        ? std::filesystem::path(logOverride)
                        : veyra::runtime::logsDirectory() / L"veyra-qml.log";
+    std::error_code logPathError;
+    const auto absoluteLog = std::filesystem::absolute(logPath, logPathError);
+    if (!logPathError) logPath = absoluteLog.lexically_normal();
+    if (!updateProbe && !profileInstance.acquire(dataDirectory, logPath.parent_path(),
+                                                 instance::launchTarget(launchArgs), instanceNotice))
+        return 0; // An already-open UI isn't a managed launcher crash or rollback condition.
+
+    struct CloseLog {
+        ~CloseLog() { Logger::instance().closeFile(); }
+    } closeLog;
     // Bounded: earlier sessions move to veyra-qml.old.log once this file passes
     // 16 MB at start, and a session that alone reaches 64 MB (about five hours of
     // capture) continues in a fresh file (audit 2026-10-15 B3).
@@ -501,10 +672,16 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     if(!veyra::Logger::instance().startAsync())
         veyra::log::warn("log", "asynchronous output unavailable; using synchronous logging");
     veyra::Logger::instance().setRotation(rotateAtStart, rotateWhileRunning);
+    bool anotherVeyraLogHolder = false;
     if (!veyra::Logger::instance().openFile(logPath.wstring(), true)) {
+        const int openErrno = errno;
+        const auto mainLog = logPath;
         logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
+        anotherVeyraLogHolder = reportLogHolders(mainLog, openErrno);
     }
+    if (const DWORD error = profileInstance.lockError(); error != ERROR_SUCCESS)
+        log::warn("app-instance", std::format("profile mutex unavailable; startup continuing error={}", error));
     g_crashDumpDirectory = logPath.parent_path().wstring();
     veyra::engine::EngineWatchdog::setDumpDirectory(g_crashDumpDirectory);
     SetUnhandledExceptionFilter(crashFilter);
@@ -512,38 +689,16 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // Interface scale (设置 → 界面缩放) has to be fixed before Qt starts, so the
     // preference file is read here, from the same data directory the bridge uses.
     // "Auto" leaves Qt following the Windows display scale.
-    int uiScale = 0;
-    bool obsGameCapture = false;
-    bool overlayCompatAuto = true;   // 设置 → 监控软件兼容: "auto" (default) or "off"
-    bool overlayCompatRestart = false;
-    bool gpuUiChosen = false;        // 设置 → 界面绘制: "software" (default) or "gpu"
-    {
-        int count = 0;
-        LPWSTR* args = CommandLineToArgvW(GetCommandLineW(), &count);
-        std::filesystem::path dir = veyra::runtime::userDataDirectory() / L"user-data-2.0.0";
-        bool obsGameCaptureArg = false;
-        for (int i = 1; args && i < count; ++i) {
-            if (std::wstring(args[i]) == L"--data-dir" && i + 1 < count) dir = args[++i];
-            else if (std::wstring(args[i]) == L"--obs-game-capture") obsGameCaptureArg = true;
-            else if (std::wstring(args[i]) == L"--overlay-compat-restart") overlayCompatRestart = true;
-        }
-        if (args) LocalFree(args);
-        QFile prefs(QString::fromStdWString((dir / L"qml-preferences.v1.json").wstring()));
-        if (prefs.open(QIODevice::ReadOnly)) {
-            const auto saved = QJsonDocument::fromJson(prefs.readAll()).object();
-            uiScale = saved.value(QStringLiteral("uiScale")).toInt();
-            obsGameCapture = saved.value(QStringLiteral("obsGameCapture")).toBool();
-            overlayCompatAuto = saved.value(QStringLiteral("overlayCompat")).toString() != QStringLiteral("off");
-            gpuUiChosen = saved.value(QStringLiteral("uiRenderer")).toString() == QStringLiteral("gpu");
-        }
-        obsGameCapture = obsGameCapture || obsGameCaptureArg;
-        if (uiScale == 100 || uiScale == 125 || uiScale == 150) {
-            qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
-            qputenv("QT_SCALE_FACTOR", QByteArray::number(uiScale / 100.0));
-            veyra::log::info("app", std::format("interface scale fixed at {}%", uiScale));
-        } else {
-            uiScale = 0;
-        }
+    int uiScale = saved.value(QStringLiteral("uiScale")).toInt();
+    const bool obsGameCapture = obsGameCaptureArg || saved.value(QStringLiteral("obsGameCapture")).toBool();
+    const bool overlayCompatAuto = saved.value(QStringLiteral("overlayCompat")).toString() != QStringLiteral("off");
+    const bool gpuUiChosen = saved.value(QStringLiteral("uiRenderer")).toString() == QStringLiteral("gpu");
+    if (uiScale == 100 || uiScale == 125 || uiScale == 150) {
+        qputenv("QT_ENABLE_HIGHDPI_SCALING", "0");
+        qputenv("QT_SCALE_FACTOR", QByteArray::number(uiScale / 100.0));
+        veyra::log::info("app", std::format("interface scale fixed at {}%", uiScale));
+    } else {
+        uiScale = 0;
     }
     // OBS 32.1.2 shares capture state across DXGI swapchains. Keeping Qt off
     // DXGI prevents its resize/destruction from freeing the video's capture
@@ -701,22 +856,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // Keep 2.0.0 settings separate from 1.4.4 so the old executable remains a
     // working rollback. An explicit data directory is for isolated runs and is
     // never populated from the user's old settings.
-    std::filesystem::path dataDirectory = veyra::runtime::userDataDirectory() / L"user-data-2.0.0";
-    std::filesystem::path legacyDirectory = veyra::runtime::userDataDirectory();
-    bool explicitDataDirectory = false;
-    {
-        const QStringList early = QCoreApplication::arguments();
-        const auto at = early.indexOf(QStringLiteral("--data-dir"));
-        if (at > 0 && at + 1 < early.size()) {
-            dataDirectory = std::filesystem::path(early.at(at + 1).toStdWString());
-            explicitDataDirectory = true;
-            veyra::log::info("app", "test data directory " + early.at(at + 1).toStdString());
-        }
-        const auto importAt = early.indexOf(QStringLiteral("--import-1.4.4-data"));
-        if (importAt > 0 && importAt + 1 < early.size())
-            legacyDirectory = std::filesystem::path(early.at(importAt + 1).toStdWString());
-    }
-    if (!explicitDataDirectory) {
+    if (explicitDataDirectory) {
+        veyra::log::info("app", "test data directory " + QString::fromStdWString(dataDirectory.wstring()).toStdString());
+    } else {
         const auto migration = ui::prepareQmlDataDirectory(legacyDirectory, dataDirectory);
         if (!migration.ok) {
             veyra::log::error("app", "2.0.0 data migration failed: " + migration.error);
@@ -730,10 +872,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // the bridge below consumes it; the handler is installed by install-protocol.cmd.
     QString protocolUrl;
     for (const QString& a : QCoreApplication::arguments()) {
-        if (!a.startsWith(QStringLiteral("veyra://"), Qt::CaseInsensitive)) continue;
-        const QUrlQuery query(QUrl(a).query());
-        protocolUrl = query.queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
-        break;
+        protocolUrl = protocolTarget(a);
+        if (!protocolUrl.isEmpty()) break;
     }
     ui::QmlPlayerBridge bridge(controller, dataDirectory);
     if (updateProbe && portable::releaseVersion(bridge.version()) != QString::fromLatin1(argv[2])) return 2;
@@ -747,14 +887,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         bridge.bringToFront();bridge.openNetworkAddress(url);
     });
     if (!updateProbe) playbackServer.listen(18765);
-    if (!protocolUrl.isEmpty()) {
-        veyra::log::info("playback-server", std::format("protocol request: host={}",
-                                                         QUrl(protocolUrl).host().toStdString()));
-        QTimer::singleShot(1500, &bridge, [&bridge, url = protocolUrl] {
-            bridge.bringToFront();
-            bridge.openNetworkAddress(url);
-        });
-    }
 
     // Qt reports QML failures through its own message handler. Routing them to
     // the log is the difference between "it did not load" and why.
@@ -966,12 +1098,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                                             testSize.width(), testSize.height()));
     veyra::log::info("qml-window", std::format("probe mode={}", videoProbeName()));
     engine.rootContext()->setContextProperty(QStringLiteral("vyTest"), testOptions);
-    if (!openPath.isEmpty() && !updateProbe) {
-        QTimer::singleShot(600, &bridge, [&bridge, openPath] { bridge.openPath(openPath); });
-    } else if (!updateProbe) {
-        QTimer::singleShot(600, &bridge, [&bridge] { bridge.autoResumeLastSource(); });
-    }
-
     engine.loadFromModule("Veyra", "Main");
 
     if (engine.rootObjects().isEmpty()) {
@@ -985,7 +1111,6 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         return 1;
     }
     if (testSize.isValid()) window->resize(testSize);
-    bridge.attachMainWindow(static_cast<qulonglong>(window->winId()));
 
     // Fullscreen must own the whole monitor. Without telling the shell, the taskbar
     // stayed above the fullscreen picture on some systems (field report with the
@@ -1238,10 +1363,30 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                                             GetParent(g_video) != nullptr));
     });
 
-    // A file on the command line opens immediately. This exists so playback can
-    // be verified end to end by a test rather than by a person clicking around;
-    // it is not a user-facing feature.
+    QTimer startupOpen;
+    startupOpen.setSingleShot(true);
+    if (!updateProbe) {
+        QObject::connect(&startupOpen, &QTimer::timeout, &bridge, [&] {
+            if (!protocolUrl.isEmpty()) bridge.openNetworkAddress(protocolUrl);
+            else if (!openPath.isEmpty()) bridge.openPath(openPath);
+            else bridge.autoResumeLastSource(!anotherVeyraLogHolder || explicitDataDirectory);
+        });
+        startupOpen.start(protocolUrl.isEmpty() ? 600 : 1500);
+    }
+    profileInstance.listen(reinterpret_cast<HWND>(window->winId()), [&](const QString& target) {
+        // Acknowledge the handoff before running callbacks that may open media.
+        QTimer::singleShot(0, &startupOpen, [&, target] {
+            const auto hwnd = reinterpret_cast<HWND>(window->winId());
+            if (IsIconic(hwnd)) ShowWindow(hwnd, SW_RESTORE);
+            if (GetForegroundWindow() != hwnd && !SetForegroundWindow(hwnd)) FlashWindow(hwnd, TRUE);
+            if (target.isEmpty()) return;
+            startupOpen.stop();
+            if (const auto url = protocolTarget(target); !url.isEmpty()) bridge.openNetworkAddress(url);
+            else if (QFileInfo::exists(target) || media::networkMediaInput(target.toStdWString())) bridge.openPath(target);
+        });
+    });
     const int rc = app.exec();
+    profileInstance.stopListening();
     if (updateProbe) veyra::log::info("portable-update-probe", "QML startup completed");
     if (rc == 0 && updater->scheduled() && !bridge.exportRunning()) {
         if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
@@ -1274,6 +1419,15 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
 int main(int argc, char** argv) {
     if (argc == 2 && std::strcmp(argv[1], "--read-live-captions") == 0)
         return veyra::ui::runLiveCaptionReader();
+    if (argc == 2 && std::strcmp(argv[1], "--asr-worker") == 0)
+        return veyra::ui::asr::runWorker();
+    if (argc >= 2 && std::strcmp(argv[1], "--asr-file") == 0) {
+        int count = 0;
+        wchar_t** wide = CommandLineToArgvW(GetCommandLineW(), &count);
+        const int code = wide ? veyra::ui::asr::runFile(count, wide) : 2;
+        if (wide) LocalFree(wide);
+        return code;
+    }
     // A child for the AMD HIP self-test (AmdHipPreflight.h): no Qt, no window and
     // no player state, only the HIP calls and their result lines on the pipe.
     if (argc >= 2 && std::strcmp(argv[1], "--amd-hip-preflight") == 0) {

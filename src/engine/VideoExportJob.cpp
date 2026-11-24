@@ -106,7 +106,10 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         // One description for the whole job: the stage rules (which SR runs,
         // whether NR/FG are available) come from the same place the preview uses.
         StageRequest stages;stages.nr=options.nr;stages.sr=options.sr;stages.fg=options.fg;stages.fgMultiplier=options.fgMultiplier;
-        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;stages.amdNr=amdNrExport;
+        stages.width=info.width;stages.height=info.height;stages.exportJob=true;stages.nvidiaAdapter=nvidiaAdapter;stages.amdNr=amdNrExport;stages.amdAdapter=amdAdapter;
+        if(options.sr&&amdVideoSr(options.settings.videoSrQuality)&&!amdAdapter){
+            failureReason=L"AMD VideoSR 需要在 AMD 显卡上处理";break;
+        }
         const auto plan=describeStages(stages,options.snapshot(),gd);
         // Export keeps the standard DLSS-G model: quality first, no latency to save.
         gd.dlssgLite=false;
@@ -129,8 +132,12 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
                 step.parameterIndex,step.resourceIndex,step.input.width,step.input.height,
                 step.processing.width,step.processing.height,step.output.width,step.output.height));
         }
-        if(options.sr&&!srAvailable)fgNote+=fgNote.empty()?L"当前显卡不能使用所选超分，本次导出关闭超分":L"；当前显卡不能使用所选超分，本次导出关闭超分";
-        if(!nvidiaFeatures&&srAvailable)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";
+        if(options.sr&&!srAvailable){
+            if(!fgNote.empty())fgNote+=L"；";
+            fgNote+=spatialVideoSr(options.settings.videoSrQuality)?L"片源已达到目标尺寸。调高目标尺寸可启用此算法。":
+                L"当前显卡不能使用所选超分，本次导出关闭超分";
+        }
+        if(!nvidiaFeatures&&srAvailable&&options.settings.videoSrQuality==kVideoSrFsr)fgNote+=fgNote.empty()?L"本次导出使用 AMD FSR 超分":L"；本次导出使用 AMD FSR 超分";
         gd.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
         // Keep the requested multiplier. Changing it after initialization fails
         // would produce a successful-looking file with different settings.

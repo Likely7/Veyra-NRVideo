@@ -41,7 +41,7 @@ QVariantMap QmlPlayerBridge::maskState(bool allEffects) const {
     for(int index=0;index<int(value.regions.size());++index){
         const auto& q=value.regions[size_t(index)];
         if(!q.empty())regions<<QVariantMap{{"index",index},{"left",q.left},{"top",q.top},
-            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse}};
+            {"right",q.right},{"bottom",q.bottom},{"ellipse",q.ellipse},{"mode",int(q.content)}};
     }
     const auto& first=value.regions[0];
     return {{"overlayVisible",allEffects&&exclusionOverlayVisible()},{"selected",allEffects?impl_->exclusionSelected:-1},{"enabled",node&&node->enabled},{"feather",value.featherPixels},{"regions",regions},
@@ -152,6 +152,16 @@ bool QmlPlayerBridge::setMaskFeather(bool allEffects,double pixels) {
     if(!std::isfinite(pixels)||pixels<0||pixels>64)return false;
     return editProtection([&](engine::ChainNode& node){node.protection.featherPixels=float(pixels);return true;},allEffects);
 }
+bool QmlPlayerBridge::setExclusionRegionMode(int index,int mode) {
+    if(index<0||mode<0||mode>int(engine::ExclusionContent::Hud))return false;
+    return editProtection([&](engine::ChainNode& node){
+        auto& regions=node.protection.regions;
+        if(size_t(index)>=regions.size()||regions[size_t(index)].empty())return false;
+        regions[size_t(index)].content=engine::ExclusionContent(mode);
+        return true;
+    },true);
+}
+
 bool QmlPlayerBridge::clearMaskRegions(bool allEffects) {
     if(allEffects){endExclusionMove(false);impl_->exclusionSelected=-1;}
     return editProtection([](engine::ChainNode& node){node.protection.regions={};return true;},allEffects);
@@ -328,12 +338,10 @@ void QmlPlayerBridge::setAspectMode(int value) {
     impl_->prefs[QStringLiteral("aspect")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "aspect mode not saved");
     applyAspect(true);
-    if (gameMode()) { updateGameGeometry(); updateGameMode(); emit gameModeChanged(); }
     emit compareChanged();
 }
 void QmlPlayerBridge::applyAspect(bool force) {
     auto& i = *impl_;
-    const bool aligned=gameMode()&&i.presentation.fullscreen&&!gameScaledPreview();
     const int mode = i.screenCropPreview ? 0 : i.screenFillActive ? 2 : i.aspectMode;
     if (!i.videoWindow) return;
     RECT r{}; GetClientRect(i.videoWindow, &r);
@@ -342,7 +350,7 @@ void QmlPlayerBridge::applyAspect(bool force) {
     const double dar=sourceAspect();
     if (!force && mode == i.aspectApplied && client == i.screenFitClient && image == i.screenFitImage && dar == i.screenFitAspect) return;
     i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode; i.screenFitAspect = dar;
-    auto view=force||aligned||i.screenCropPreview?engine::PreviewView{}:i.engine.previewView();
+    auto view=force||i.screenCropPreview?engine::PreviewView{}:i.engine.previewView();
     view.mode=mode;
     view.displayAspect=dar>0&&image.height()>0&&std::abs(dar-double(image.width())/image.height())>.001?dar:0;
     i.engine.previewView(view);
@@ -412,9 +420,14 @@ void QmlPlayerBridge::rememberSource(const QString& kind, const QString& label) 
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last source not saved");
     emit preferencesChanged();
 }
-void QmlPlayerBridge::autoResumeLastSource() {
+void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
     if(!impl_->prefBool("autoResume",false)||impl_->openingSource||impl_->snapshot.running)return;
-    if(lastSource().isEmpty())return;
+    const auto last = lastSource();
+    if(last.isEmpty())return;
+    if (!allowCapture && last.value(QStringLiteral("kind")).toString() == QLatin1String("capture")) {
+        veyra::log::info("ui-startup", "automatic capture skipped while another Veyra holds the primary log");
+        return;
+    }
     veyra::log::info("ui-startup","automatically resuming the last source");
     resumeLastSource();
 }
@@ -468,7 +481,7 @@ void QmlPlayerBridge::resumeLastSource() {
             const auto map = item.toMap();
             if (map.value(QStringLiteral("label")).toString() == label) {
                 setScreenTargetId(map.value(QStringLiteral("id")).toString());
-                startScreenCapture();
+                emit navigate(QStringLiteral("screen"));
                 return;
             }
         }

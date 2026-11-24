@@ -1,7 +1,9 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include <QColor>
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/gfx/RifeDmlBackend.h"
 #include "veyra/ui/UpdateChecker.h"
 
 namespace veyra::ui {
@@ -79,13 +81,20 @@ QVariantList QmlPlayerBridge::readComponentList() const {
     // Read from the runtime manifest the build produces rather than a list written
     // by hand here, so the page cannot claim a component the package lacks.
     QVariantList out;
-    const auto anrDirectory=ngx::AnrProvider::directory(runtime::localRuntimeDirectory().wstring());
-    out<<QVariantMap{{"name",QStringLiteral("ANR FG")},{"detail",QString::fromStdWString(anrDirectory)},
-        {"loaded",ngx::AnrProvider::available(runtime::localRuntimeDirectory().wstring())},{"experimental",true}};
+    const auto runtimeRoot = runtime::localRuntimeDirectory().wstring();
+    const bool anrInstalled = ngx::AnrProvider::available(runtimeRoot);
+    const auto anrDirectory = anrInstalled ? ngx::AnrProvider::directory(runtimeRoot) :
+        (ngx::AnrProvider::downloadRoot() / ngx::AnrProvider::downloadVersion).wstring();
+    out<<QVariantMap{{"id",QStringLiteral("anr")},{"name",QStringLiteral("ANR FG")},
+        {"detail",QString::fromStdWString(anrDirectory)},{"loaded",anrInstalled},{"experimental",true}};
     // AMD FRC: the AMF runtime of the AMD driver, never shipped with Veyra.
     wchar_t systemDirectory[MAX_PATH]{};GetSystemDirectoryW(systemDirectory,MAX_PATH);
     out<<QVariantMap{{"name",QStringLiteral("AMD FRC (AMF)")},{"detail",QString::fromWCharArray(systemDirectory)+QStringLiteral("\\amfrt64.dll")},
         {"loaded",gfx::AmfFrcBackend::runtimeInstalled()}};
+    // RIFE: ONNX Runtime + DirectML and the models, placed by the user (docs/RIFE_DIRECTML.md).
+    out<<QVariantMap{{"name",QStringLiteral("RIFE (ONNX Runtime DirectML)")},
+        {"detail",QString::fromStdWString((runtime::applicationRoot()/L"runtime"/L"rife").wstring())},
+        {"loaded",gfx::RifeDmlBackend::runtimeInstalled()},{"experimental",true}};
     const auto vfgDirectory=pipeline::VfgBackend::runtimeDirectory(runtime::localRuntimeDirectory().wstring());
     const bool vfgAvailable=pipeline::VfgBackend::runtimeAvailable(runtime::localRuntimeDirectory().wstring());
     out<<QVariantMap{{"name",QStringLiteral("NVIDIA VFG")},{"detail",QString::fromStdWString(vfgDirectory)},
@@ -192,6 +201,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
+        {"liveSubtitleSize", {0, 56}}, {"liveSubtitleShadow", {-1, 8}}, {"liveSubtitleLines", {0, 3}},
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
@@ -204,21 +214,28 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"recordSplitSeconds", {0, 86400}},
         {"recordSplitMiB", {0, 1048576}},
         {"virtualCameraFps", {0, 120}},
+        {"fullscreenFrameStatsCorner", {0, 3}},
         // Instant replay (#103): seconds the buffer keeps.
         {"replaySeconds", {15, 600}}};
     static const QStringList flags{"recordHevc", "recordAudio", "recordMic", "recordMicTrack", "replayEnabled", "subtitleEnabled", "subtitleBackground", "subtitleFit",
-                                   "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "holdCompare",
+                                   "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "captureHdmiPassthrough", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
                                    // 设置 → 外观 → 启动动画 / 启动音乐 / 剔除遮罩（2.1.9）
-                                   "introAnimation", "introMusic", "exclusionOverlay"};
+                                   "introAnimation", "introMusic", "exclusionOverlay", "fullscreenFrameStats"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
         const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) return false;
+        if (key == QLatin1String("liveSubtitleSize") && n != 0 && n < 16) return false;
         stored = n;
     } else if (flags.contains(key)) {
         stored = value.toBool();
+    } else if (key == QLatin1String("liveSubtitleColor")) {
+        const auto valueText = value.toString().trimmed();
+        const auto color = QColor::fromString(valueText);
+        if (!color.isValid() || valueText.size() != 7 || !valueText.startsWith(u'#')) return false;
+        stored = color.name(QColor::HexRgb);
     } else if (key == QLatin1String("nrResidualView") || key == QLatin1String("nrCorrectionView")) {
         const auto view = value.toString();
         if (view != QLatin1String("web") && view != QLatin1String("list")) return false;
@@ -326,6 +343,15 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     return true;
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
+    if (key == "audioDevice") sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
+    if (key == "audioForceStereo" || key == "audioDevice" || key == "captureAudioMonitor" || key == "captureHdmiPassthrough") {
+        const bool downmix = impl_->prefBool("audioForceStereo", false);
+        sink::setForceStereoDownmix(downmix);
+        impl_->engine.hdmiBitstream().configure({
+            impl_->prefBool("captureHdmiPassthrough", false) && !downmix && impl_->prefBool("captureAudioMonitor", true),
+            impl_->prefString("audioDevice").toStdWString()});
+        emit audioDevicesChanged();
+    }
     if (key == QLatin1String("updateDownloadRoute")) {
         const auto route = portable::parseDownloadRoute(impl_->prefString("updateDownloadRoute"));
         static_cast<UpdateChecker*>(updates_)->setDownloadRoute(route.value_or(portable::DownloadRoute::GitHub));
@@ -355,9 +381,11 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     }
     if(key==QLatin1String("overlayCompat"))updateLiveCompanionCompat();
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
+    if(key==QLatin1String("fullscreenFrameStats")||key==QLatin1String("fullscreenFrameStatsCorner")){
+        const auto corner=impl_->prefs.value(QStringLiteral("fullscreenFrameStatsCorner"),1).toInt();
+        impl_->engine.setFullscreenFrameStats(impl_->prefBool("fullscreenFrameStats",false)?std::clamp(corner,0,3):-1);
+    }
     if(key==QLatin1String("captureShowAllFrameRates"))emit captureChanged();
-    if (key == QLatin1String("audioDevice")) sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());
-    else if (key == QLatin1String("audioForceStereo")) sink::setForceStereoDownmix(impl_->prefBool("audioForceStereo", false));
     else if (key == QLatin1String("magewellLowLatency")) source::magewell::setLowLatencyPreference(impl_->prefBool("magewellLowLatency", false));
     else if (key == QLatin1String("blackmagicNativeCapture")) { if(impl_->captureListed)refreshCaptureDevices();emit captureChanged(); }
     else if (key == QLatin1String("language")) {
@@ -484,6 +512,11 @@ QVariantList QmlPlayerBridge::audioDevices() const {
     return out;
 }
 QString QmlPlayerBridge::audioOutputStatus() const {
+    const auto bitstream = impl_->engine.hdmiBitstream().state();
+    if (bitstream.status == sink::HdmiBitstreamStatus::Active) {
+        const auto format = tr("%1 码流直通").arg(QString::fromLatin1(sink::bitstreamKindName(bitstream.codec)));
+        return bitstream.endpoint.empty() ? format : QString::fromStdWString(bitstream.endpoint) + " · " + format;
+    }
     const auto& a = impl_->audioActive;
     if (!a.valid) return tr("尚未打开音频输出");
     QString text = QString::fromStdWString(a.name.empty() ? L"(未命名设备)" : a.name) + tr(" · %1 声道").arg(a.channels);
@@ -503,8 +536,7 @@ namespace {
 const QVariantMap& shortcutDefaults() {
     // Screenshot was Ctrl+S before 2026-10-27; saved custom keys are kept.
     static const QVariantMap d{{"playPause", "Space"}, {"fullscreen", "F"}, {"lock", "Ctrl+L"},
-                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"replay", "F9"}, {"toggleMode", "Tab"},
-                               {"gamePanel", "Home"}, {"gameExit", "Ctrl+Alt+Home"}};
+                               {"hold", "V"}, {"screenshot", "F7"}, {"record", "F8"}, {"replay", "F9"}, {"fullscreenStats", "F10"}, {"toggleMode", "Tab"}};
     return d;
 }
 }
@@ -514,7 +546,6 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
     QStringList taken;
     for (auto it = custom.begin(); it != custom.end(); ++it)
         if (out.contains(it.key())) {
-            if ((it.key()=="gamePanel"||it.key()=="gameExit") && !ui::gameKey(QKeySequence(it.value().toString(),QKeySequence::PortableText)).vk) continue;
             out[it.key()] = it.value();
             taken << it.value().toString();
         }
@@ -524,10 +555,8 @@ QVariantMap QmlPlayerBridge::shortcuts() const {
         if (!custom.contains(it.key()) && taken.contains(it.value().toString())) it.value() = QString();
     return out;
 }
-void QmlPlayerBridge::applyGameHotkeys() {
+void QmlPlayerBridge::logShortcuts() {
     const auto keys = shortcuts();
-    const auto key = [&keys](const char* action) { return ui::gameKey(QKeySequence(keys.value(action).toString(), QKeySequence::PortableText)); };
-    impl_->game.setHotkeys(key("gamePanel"), key("gameExit"), key("screenshot"), key("record"), key("replay"));
     // At start and after every change: a field log then says which key each
     // action answers to (the 2026-11-08 recording report had no way to tell).
     const auto custom = impl_->prefs.value("shortcuts").toMap();
@@ -544,15 +573,8 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     const QKeySequence seq(sequence, QKeySequence::PortableText);
     if (seq.isEmpty() || seq.count() != 1) { emit notice(tr("无效的按键"), true); return false; }
     const QString text = seq.toString(QKeySequence::PortableText);
-    if ((action=="gamePanel"||action=="gameExit") && !ui::gameKey(seq).vk) {
-        emit notice(tr("无效的按键"),true); return false;
-    }
-    if ((action=="gamePanel"||action=="gameExit") &&
-        (text=="Ctrl+Alt+Del"||text=="Alt+Tab"||text=="Alt+F4"||text=="Ctrl+Shift+Esc"||text=="Alt+Enter")) {
-        emit notice(tr("%1 已被固定功能占用").arg(text),true); return false;
-    }
     // Keys the shell already owns cannot be taken over.
-    static const QStringList reserved{"Esc", "F11", "Left", "Right", "Up", "Down", "Ctrl+O", "Ctrl+E",
+    static const QStringList reserved{"Esc", "F11", "Home", "Left", "Right", "Up", "Down", "Ctrl+O", "Ctrl+E",
                                       "B", "Z", "X", "T", "Y", "Shift+Z", "Shift+X", "Alt+Return"};
     if (reserved.contains(text)) { emit notice(tr("%1 已被固定功能占用").arg(text), true); return false; }
     const auto current = shortcuts();
@@ -566,7 +588,7 @@ bool QmlPlayerBridge::setShortcut(const QString& action, const QString& sequence
     impl_->prefs["shortcuts"] = custom;
     if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("快捷键保存失败"), true); return false; }
     veyra::log::info("ui-prefs", std::format("shortcut {}={}", action.toStdString(), text.toStdString()));
-    applyGameHotkeys();
+    logShortcuts();
     emit preferencesChanged();
     return true;
 }
@@ -574,7 +596,7 @@ void QmlPlayerBridge::resetShortcuts() {
     const auto previous = impl_->prefs;
     impl_->prefs.remove("shortcuts");
     if (!impl_->savePrefs()) { impl_->prefs = previous; return; }
-    applyGameHotkeys();
+    logShortcuts();
     emit preferencesChanged();
 }
 bool QmlPlayerBridge::obsGameCaptureActive() const { return qApp && qApp->property("veyraObsGameCapture").toBool(); }
@@ -641,16 +663,6 @@ bool QmlPlayerBridge::openSponsorLink(const QString& id) {
 QObject* QmlPlayerBridge::updates() const { return updates_; }
 bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
     const auto type = event->type();
-    if (watched == impl_->gameWindow && (type == QEvent::WinIdChange ||
-        (type == QEvent::PlatformSurface && static_cast<QPlatformSurfaceEvent*>(event)->surfaceEventType() ==
-                                          QPlatformSurfaceEvent::SurfaceCreated))) {
-        // Rebind after Qt's platform-window transition, never during teardown.
-        QMetaObject::invokeMethod(this, [this] {
-            if (!impl_->gameWindow || !impl_->gameWindow->handle()) return;
-            impl_->game.attach(reinterpret_cast<HWND>(impl_->gameWindow->winId()));
-            updateGameGeometry(); updateGameMode();
-        }, Qt::QueuedConnection);
-    }
     // Remembered for the record trigger log only; the event goes on unchanged.
     if (type == QEvent::ShortcutOverride) {
         const auto* key = static_cast<QKeyEvent*>(event);
@@ -957,6 +969,7 @@ QString QmlPlayerBridge::capturePreviewUrl() const {
 }
 QString QmlPlayerBridge::captureSignalLevel() const {
     const auto& s = impl_->snapshot;
+    if (s.captureDriverWaitMs) return QStringLiteral("warn");
     if (!s.running || !s.capture) return QStringLiteral("idle");
     if (s.captureRecovering) return QStringLiteral("warn");
     if (s.captureSampledBlack) return QStringLiteral("warn");
@@ -964,6 +977,7 @@ QString QmlPlayerBridge::captureSignalLevel() const {
 }
 QString QmlPlayerBridge::captureSignalText() const {
     const auto& s = impl_->snapshot;
+    if (s.captureDriverWaitMs) return tr("等待采集卡驱动");
     if (captureSignalLevel() == QLatin1String("idle")) return tr("未连接");
     if (s.captureRecovering) return tr("正在恢复");
     if (s.captureFps > 0.5 && s.captureSampledBlack) return tr("收到黑帧 · 检查输入制式");
@@ -1006,6 +1020,7 @@ bool QmlPlayerBridge::exportPreset(int index, const QString& path) {
 QString QmlPlayerBridge::liveOpeningText() const {
     if (!impl_->pendingLiveText.isEmpty()) return impl_->pendingLiveText;
     const auto& s = impl_->snapshot;
+    if (!s.running && s.captureDriverWaitMs) return statusText();
     if (s.running || s.failed || s.transport != engine::TransportState::Opening) return {};
     const QString status = veyra::ui::i18n::text(s.status);
     if (s.remotePlay)

@@ -3,7 +3,9 @@ param(
     [Parameter(Mandatory=$true)][string]$OutputDirectory
 )
 $ErrorActionPreference='Stop'
-$exe=Join-Path (Resolve-Path $BuildDirectory).Path 'veyra.exe'
+# This probe tests encoder and muxer timestamps. Generated-frame cadence
+# runs in veyra_vfg_export_probe and the corresponding VFG tests.
+$exe=Join-Path (Resolve-Path $BuildDirectory).Path 'veyra_export_probe.exe'
 $directory=[IO.Path]::GetFullPath($OutputDirectory)
 New-Item -ItemType Directory -Path $directory -ErrorAction Stop | Out-Null
 $fixture=Join-Path $directory 'irregular.mkv'
@@ -17,7 +19,7 @@ function Probe([string]$path,[string]$selector,[string]$entries,[string]$show){
 }
 function RunExport([string]$name,[string[]]$flags,[int]$expectedExit=0){
     $destination=Join-Path $directory "$name.mp4"
-    $arguments=@($fixture,'--no-nr','--no-sr','--no-fg','--export-out',$destination)+$flags
+    $arguments=@($fixture,$destination)+$flags
     $quoted=@($arguments | ForEach-Object {'"'+$_+'"'})
     $logName=$name.Replace('/','-')
     $process=Start-Process -FilePath $exe -ArgumentList $quoted -PassThru -WindowStyle Hidden -RedirectStandardOutput "$directory/$logName.stdout.log" -RedirectStandardError "$directory/$logName.stderr.log"
@@ -32,7 +34,7 @@ if($source.Count -ne 60){throw 'Unexpected source frame count'}
 $results=@()
 foreach($case in @(
     @{name='irregular-h264';multiplier=1;flags=@()},
-    @{name='irregular-hevc-6x';multiplier=6;flags=@('--hevc','--fg-multiplier','6')},
+    @{name='irregular-hevc';multiplier=1;flags=@('--hevc')},
     @{name='irregular-mf';multiplier=1;flags=@();forceMf=$true},
     @{name='irregular-nvenc-fallback';multiplier=1;flags=@();failNvenc=$true}
 )){

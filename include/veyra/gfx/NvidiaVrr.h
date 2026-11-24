@@ -5,11 +5,14 @@
 #include <cstdlib>
 #include <cwchar>
 #include <mutex>
+#include <cstring>
 #include <string>
+#include <vector>
 namespace veyra::gfx {
-// Variable refresh (G-SYNC / G-SYNC Compatible) state of the monitor showing
-// a window. This query never changes driver settings. The user enables G-SYNC
-// in the NVIDIA Control Panel; the separate explicit profile setup can adjust
+// Variable refresh (G-SYNC / G-SYNC Compatible, or AMD FreeSync through ADL)
+// state of the monitor showing a window. This query never changes driver
+// settings. The user enables G-SYNC in the NVIDIA Control Panel (FreeSync in
+// AMD Adrenalin); the separate explicit profile setup can adjust
 // only Veyra's scope. The 可变刷新 switch only decides how Veyra presents when
 // it is available (VideoPresenter::configurePresentation).
 // Minimal ABI declarations checked against NVIDIA/nvapi public interfaces
@@ -29,6 +32,8 @@ struct VrrState {
     bool currentlyCapable=false; // ... with the applied display settings
     bool trueGsync=false;        // G-SYNC module, not adaptive sync
     bool simulated=false;        // VEYRA_TEST_VRR_LEVEL override
+    bool amd=false;              // answered by the AMD driver (ADL FreeSync), not NVAPI
+    double minimumHz=0;    // current mode, when reported by the display driver
     int status=0;          // last NvAPI status (0 = OK)
     bool operator==(const VrrState&)const=default;
 };
@@ -50,6 +55,83 @@ constexpr unsigned vrrLevel(const VrrState& s){
     if(s.supportsVrr||s.currentlyCapable)return 2;
     return 1;
 }
+// AMD FreeSync of one display from ADL2_Display_FreeSync_Cap (caps) and
+// ADL2_Display_FreeSyncState_Get (current use-case bits, 0 = off in Adrenalin).
+// ADL reports whether FreeSync is on, not whether a flip is in VRR mode, so the
+// best AMD level is 3. Generic caps stay unknown: the driver answers the setting
+// itself, so the #45 caps-only rule must not request VRR while it is off.
+// The driver rejects the caps query for a display without FreeSync (seen as
+// -1 on a non-FreeSync monitor), so that is an answer, not a failed query:
+// status stays 0 and DisplayStateService does not retry it.
+inline VrrState amdFreeSyncState(int capStatus,int caps,int stateStatus,int current,int minMicroHz=0,int maxMicroHz=0){
+    constexpr int displaySupported=1<<2,currentModeSupported=1<<3; // ADL_FREESYNC_CAP_*
+    VrrState s;s.known=true;s.amd=true;
+    if(capStatus!=0)return s;
+    s.supportsVrr=caps&displaySupported;s.currentlyCapable=caps&currentModeSupported;
+    // vrrPresentationAvailable treats requested alone as enough, so it is set
+    // only together with possible (FreeSync on and usable in this mode).
+    s.possible=s.requested=s.supportsVrr&&s.currentlyCapable&&stateStatus==0&&current!=0;
+    if(s.requested&&minMicroHz>=1000000&&maxMicroHz>minMicroHz)
+        s.minimumHz=double(minMicroHz)/1000000.0;
+    return s;
+}
+// Minimal ADL2 declarations checked against GPUOpen display-library (MIT,
+// adl_structures.h AdapterInfo / ADLDisplayInfo / ADLFreeSyncCap, commit
+// 84c881cb). Same loading rules as NVAPI: System32 atiadlxx.dll only, pinned,
+// one context for the life of the process. Read-only.
+inline VrrState queryAmdFreeSync(const wchar_t* gdiDevice){
+    struct AdapterInfo{int size,index;char udid[256];int bus,device,function,vendor;char adapterName[256],displayName[256];int present,exist;char driverPath[256],driverPathExt[256],pnp[256];int osDisplayIndex;};
+    struct DisplayInfo{int logical,physical,logicalAdapter,physicalAdapter,controller;char name[256],manufacturer[256];int type,outputType,connector,mask,value;};
+    struct Cap{int caps,minMicroHz,maxMicroHz;unsigned char label;char reserved[3];int reservedEx[4];};
+    static_assert(sizeof(AdapterInfo)==1572&&sizeof(DisplayInfo)==552&&sizeof(Cap)==32);
+    using Alloc=void*(__stdcall*)(int);
+    using Create=int(__cdecl*)(Alloc,int,void**);
+    using Count=int(__cdecl*)(void*,int*);
+    using Adapters=int(__cdecl*)(void*,AdapterInfo*,int);
+    using Displays=int(__cdecl*)(void*,int,int*,DisplayInfo**,int);
+    using GetCap=int(__cdecl*)(void*,int,int,Cap*);
+    using GetState=int(__cdecl*)(void*,int,int,int*,int*,int*,int*);
+    static std::once_flag once;static void* context=nullptr;static Count count=nullptr;static Adapters adapters=nullptr;
+    static Displays displays=nullptr;static GetCap getCap=nullptr;static GetState getState=nullptr;
+    std::call_once(once,[]{
+        wchar_t system[MAX_PATH]{};GetSystemDirectoryW(system,MAX_PATH);
+        const std::wstring path=std::wstring(system)+L"\\atiadlxx.dll";
+        HMODULE module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if(!module)return;
+        HMODULE pinned=nullptr;GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS|GET_MODULE_HANDLE_EX_FLAG_PIN,reinterpret_cast<LPCWSTR>(module),&pinned);
+        auto create=reinterpret_cast<Create>(GetProcAddress(module,"ADL2_Main_Control_Create"));
+        count=reinterpret_cast<Count>(GetProcAddress(module,"ADL2_Adapter_NumberOfAdapters_Get"));
+        adapters=reinterpret_cast<Adapters>(GetProcAddress(module,"ADL2_Adapter_AdapterInfo_Get"));
+        displays=reinterpret_cast<Displays>(GetProcAddress(module,"ADL2_Display_DisplayInfo_Get"));
+        getCap=reinterpret_cast<GetCap>(GetProcAddress(module,"ADL2_Display_FreeSync_Cap"));
+        getState=reinterpret_cast<GetState>(GetProcAddress(module,"ADL2_Display_FreeSyncState_Get"));
+        if(!create||!count||!adapters||!displays||!getCap||!getState)return;
+        if(create([](int size)->void*{return std::malloc(size_t(size));},1,&context)!=0)context=nullptr;
+    });
+    if(!context||!gdiDevice)return {};
+    char device[CCHDEVICENAME*2]{};
+    if(!WideCharToMultiByte(CP_ACP,0,gdiDevice,-1,device,int(sizeof(device)),nullptr,nullptr))return {};
+    int adapterCount=0;
+    if(count(context,&adapterCount)!=0||adapterCount<=0||adapterCount>64)return {};
+    std::vector<AdapterInfo> list(static_cast<size_t>(adapterCount));for(auto& a:list)a.size=int(sizeof(AdapterInfo));
+    if(adapters(context,list.data(),int(sizeof(AdapterInfo))*adapterCount)!=0)return {};
+    for(int a=0;a<adapterCount;++a){
+        if(std::strcmp(list[a].displayName,device)!=0)continue;
+        int n=0;DisplayInfo* info=nullptr;
+        if(displays(context,list[a].index,&n,&info,0)!=0){std::free(info);continue;}
+        constexpr int connectedMapped=0x3; // ADL_DISPLAY_DISPLAYINFO_DISPLAYCONNECTED | DISPLAYMAPPED
+        int display=-1;
+        for(int i=0;i<n;++i)if(info[i].logicalAdapter==list[a].index&&(info[i].value&connectedMapped)==connectedMapped){display=info[i].logical;break;}
+        std::free(info);
+        if(display<0)continue;
+        Cap cap{};int current=0,defaults=0,minMicroHz=0,maxMicroHz=0;
+        const int capStatus=getCap(context,list[a].index,display,&cap);
+        const int stateStatus=capStatus==0?getState(context,list[a].index,display,&current,&defaults,&minMicroHz,&maxMicroHz):capStatus;
+        return amdFreeSyncState(capStatus,cap.caps,stateStatus,current,minMicroHz,maxMicroHz);
+    }
+    return {};
+}
+inline VrrState queryNvidiaVrr(HWND window);
 inline VrrState queryVrr(HWND window){
     // Test hook (VEYRA_TEST_VRR_LEVEL=0..4): this rig's monitor reports no VRR
     // support, so UI and presentation-rule tests simulate a level.
@@ -59,6 +141,15 @@ inline VrrState queryVrr(HWND window){
         s.supportsVrr=testLevel>=2;s.currentlyCapable=testLevel>=3;s.possible=s.requested=testLevel>=3;s.enabled=s.inVrrMode=testLevel>=4;
         return s;
     }
+    VrrState state=queryNvidiaVrr(window);
+    if(state.known||!window)return state;
+    // Not an NVIDIA display (or no NVAPI): ask the AMD driver.
+    MONITORINFOEXW monitor{};monitor.cbSize=sizeof(monitor);
+    if(!GetMonitorInfoW(MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST),&monitor))return state;
+    VrrState amd=queryAmdFreeSync(monitor.szDevice);
+    return amd.known?amd:state;
+}
+inline VrrState queryNvidiaVrr(HWND window){
     struct Info {uint32_t version;uint32_t flags;uint32_t reservedEx[4];};
     static_assert(sizeof(Info)==24);
     // NV_MONITOR_CAPABILITIES_V1: the union starts right after the one-byte

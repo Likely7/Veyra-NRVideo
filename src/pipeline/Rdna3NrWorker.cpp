@@ -112,7 +112,16 @@ struct Worker {
         diagnostics::phase("hip-device-selection");
         selectHipDevice(hip,init.adapterLuid);
         diagnostics::phase("device-and-shared-resource-setup");
-        if(!LoadLibraryExW(hip.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32)){error="AMD HIP7 load failed win32="+std::to_string(GetLastError());return false;}
+        const auto module=LoadLibraryExW(hip.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
+        if(!module){error="AMD HIP7 load failed win32="+std::to_string(GetLastError());return false;}
+        wchar_t actual[32768]{};
+        const auto reported=GetModuleFileNameW(module,actual,DWORD(std::size(actual)));
+        if(reported&&reported<std::size(actual)){
+            const auto utf8=std::filesystem::path(actual).u8string();
+            fprintf(logfile,"HIP library=%s\n",reinterpret_cast<const char*>(utf8.c_str()));
+            fflush(logfile);
+        }
+        logLine(2,"using packaged code/cache; runtime translation is disabled");
         const auto snippet=std::filesystem::path(init.runtime.data())/L"nvngx_dlssnr.dll";
         DWORD ignored=0;const DWORD size=GetFileVersionInfoSizeW(snippet.c_str(),&ignored);std::vector<uint8_t> version(size);VS_FIXEDFILEINFO* info=nullptr;UINT count=0;
         if(!size||!GetFileVersionInfoW(snippet.c_str(),0,size,version.data())||!VerQueryValueW(version.data(),L"\\",reinterpret_cast<void**>(&info),&count)||
@@ -243,6 +252,9 @@ int wmain(int argc,wchar_t** argv){
     HANDLE input=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[1],nullptr,10)));
     HANDLE output=reinterpret_cast<HANDLE>(uintptr_t(_wcstoui64(argv[2],nullptr,10)));
     Worker w;if(!readAll(input,&w.init,sizeof(w.init)))return 3;
+#ifdef VEYRA_RDNA3_CONTRACT_WORKER
+    if(std::filesystem::exists(std::filesystem::path(w.init.runtime.data())/L"contract-no-init-reply"))Sleep(INFINITE);
+#endif
     const bool opened=w.open();if(!opened)logLine(0,w.error.c_str());if(!answer(output,0,opened?0:1,w.error)||!opened)return 4;
     for(;;){
         Header h;if(!readAll(input,&h,sizeof(h)))return 5;

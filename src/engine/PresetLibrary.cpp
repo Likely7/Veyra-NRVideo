@@ -1,5 +1,6 @@
 #include "veyra/engine/PresetLibrary.h"
 #include "veyra/engine/NrCorrectionCodec.h"
+#include "veyra/engine/ProtectionCodec.h"
 
 #include <windows.h>
 
@@ -26,7 +27,7 @@ void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=fals
     // Three-step SR prescale / output: library v16, session v11.
     if(srStage)out<<' '<<uint32_t(g.srPrescale)<<' '<<uint32_t(g.srOutput);
     if(dual)out<<' '<<g.dualSrEnabled<<' '<<uint32_t(g.dualSrTarget)<<' '<<g.dualSrQuality;
-    // Smart SR switch: library v23, session v18.
+    // Smart SR switch: library v27, session v22.
     if(smart)out<<' '<<g.smartSr;}
 bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool smart=false){
     int hdr,fg,sr,nr;
@@ -101,9 +102,24 @@ void PresetLibrary::addBuiltins() {
     add(L"极致", L"超分 4K · NR 1 层 · HDR · 补帧 2X", ChainMode::List, true, true, 2, true, false);
 }
 
+static bool hasExclusionModes(const EffectChain& chain) {
+    return std::any_of(chain.nodes.begin(),chain.nodes.begin()+chain.nodeCount,[](const auto& n){
+        return n.type==EffectType::Exclusion&&exclusionModes(n.protection)!=0;
+    });
+}
+
+static bool hasVideoDenoise(const ChainConfiguration& config) {
+    return config.chain.firstOf(EffectType::VideoDenoise) ||
+        (config.editor && config.editor->nodes.firstOf(EffectType::VideoDenoise));
+}
+
 bool PresetLibrary::load() {
     error_.clear();
     addBuiltins();
+    const auto directDenoise=std::filesystem::path(path_).concat(L".video-denoise");
+    const auto directModes=std::filesystem::path(path_).concat(L".exclusion-modes");
+    const auto directHalfRate=std::filesystem::path(path_).concat(L".half-rate-variants");
+    const auto directFrameOptions=std::filesystem::path(path_).concat(L".fg-options");
     const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -171,9 +187,22 @@ bool PresetLibrary::load() {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
-    // v23: the smart SR switch; its own file keeps every older library intact.
+    const auto modesPath=std::filesystem::path(path_).concat(L".exclusion-modes");
+    if(std::filesystem::exists(directModes))path_=directModes;
+    else if(std::filesystem::exists(modesPath))path_=modesPath;
+    const auto halfRatePath=std::filesystem::path(path_).concat(L".half-rate-variants");
+    if(std::filesystem::exists(directHalfRate))path_=directHalfRate;
+    else if(std::filesystem::exists(halfRatePath))path_=halfRatePath;
+    const auto optionsPath=std::filesystem::path(path_).concat(L".fg-options");
+    if(std::filesystem::exists(directFrameOptions))path_=directFrameOptions;
+    else if(std::filesystem::exists(optionsPath))path_=optionsPath;
+    const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
+    if(std::filesystem::exists(directDenoise))path_=directDenoise;
+    else if(std::filesystem::exists(denoisePath))path_=denoisePath;
+    // v27: the smart SR switch; its own file keeps every older library intact.
     const auto smartSrPath=std::filesystem::path(path_).concat(L".smart-sr");
-    if(std::filesystem::exists(directSmartSr))path_=directSmartSr;else if(std::filesystem::exists(smartSrPath))path_=smartSrPath;
+    if(std::filesystem::exists(directSmartSr))path_=directSmartSr;
+    else if(std::filesystem::exists(smartSrPath))path_=smartSrPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -266,9 +295,16 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
-    // v23 (smart SR switch) gets its own file and keeps it, as .auto-fg does.
-    if(data.starts_with("VEYRA_PRESET_LIBRARY 23")&&!path_.wstring().ends_with(L".smart-sr"))path_=std::filesystem::path(path_).concat(L".smart-sr");
-    if(!path_.wstring().ends_with(L".smart-sr")){
+    // v27 (smart SR switch) gets its own .smart-sr file and keeps it, as
+    // .video-denoise does; the file it starts from keeps its bytes.
+    const bool smartSidecar=path_.wstring().ends_with(L".smart-sr");
+    const bool upgradeSmart=!smartSidecar && data.starts_with("VEYRA_PRESET_LIBRARY 27\n");
+    const bool denoiseSidecar=smartSidecar||path_.wstring().ends_with(L".video-denoise");
+    const bool upgradeDenoise=!denoiseSidecar && !upgradeSmart && data.starts_with("VEYRA_PRESET_LIBRARY 26\n");
+    const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
+    const bool upgrade=!separate && !upgradeSmart && data.starts_with("VEYRA_PRESET_LIBRARY 25\n");
+    if(!separate&&!upgrade&&!upgradeDenoise&&!upgradeSmart&&!path_.wstring().ends_with(L".exclusion-modes")&&
+       !path_.wstring().ends_with(L".half-rate-variants")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 22")&&!path_.wstring().ends_with(L".auto-fg"))path_=std::filesystem::path(path_).concat(L".auto-fg");
     if(data.starts_with("VEYRA_PRESET_LIBRARY 21")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".auto-fg")&&!path_.wstring().ends_with(L".output-controls")){
@@ -314,21 +350,26 @@ bool PresetLibrary::save() {
     }
     }
     }
-    } // .auto-fg / .output-controls own every subsequent edit, even after deleting the new nodes.
-    } // .smart-sr likewise after the switch is turned off.
+    } // .auto-fg / .output-controls own subsequent edits.
+    }
+    auto destination=path_;
+    if(upgradeSmart)destination+=L".smart-sr";
+    else if(upgradeDenoise)destination+=L".video-denoise";
+    else if(upgrade)destination+=L".fg-options";
     std::error_code ec;
-    std::filesystem::create_directories(path_.parent_path(), ec);
-    const auto temporary = std::filesystem::path(path_).concat(L".tmp");
+    std::filesystem::create_directories(destination.parent_path(), ec);
+    const auto temporary=std::filesystem::path(destination).concat(L".tmp");
     HANDLE file = CreateFileW(temporary.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
     if (file == INVALID_HANDLE_VALUE) { error_ = L"预设库写入失败"; return false; }
     DWORD written = 0;
     const bool ok = WriteFile(file, data.data(), DWORD(data.size()), &written, nullptr) && written == data.size() && FlushFileBuffers(file);
     CloseHandle(file);
-    if (!ok || !MoveFileExW(temporary.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    if (!ok || !MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::filesystem::remove(temporary, ec);
         error_ = ok ? L"预设库替换失败" : L"预设库写入失败";
         return false;
     }
+    path_=std::move(destination);
     return true;
 }
 
@@ -462,6 +503,25 @@ void PresetLibrary::apply(const PresetEntry& entry, EnhancementSettings& setting
     }
 }
 
+bool PresetLibrary::matchesChain(const EffectChain& saved,const EffectChain& current) {
+    if(saved.mode!=current.mode||saved.nodeCount>kMaxChainNodes||current.nodeCount>kMaxChainNodes)return false;
+    const auto enabledFg=[](const auto& chain){
+        const auto* node=chain.firstOf(EffectType::FrameGeneration);
+        return node&&node->enabled;
+    };
+    if(enabledFg(saved)||enabledFg(current))return saved==current;
+    // An inactive FG node can be absent or retained for the next toggle.
+    // Its remembered multiplier/admission flags do not describe rendered output.
+    const auto skipFg=[](const auto& chain,uint32_t& i){
+        while(i<chain.nodeCount&&chain.nodes[i].type==EffectType::FrameGeneration)++i;
+    };
+    uint32_t a=0,b=0;
+    while(true){
+        skipFg(saved,a);skipFg(current,b);
+        if(a==saved.nodeCount||b==current.nodeCount)return a==saved.nodeCount&&b==current.nodeCount;
+        if(saved.nodes[a++]!=current.nodes[b++])return false;
+    }
+}
 ChainValidation PresetLibrary::applyToChain(const PresetEntry& entry, EffectChain& chain,
                                            EnhancementSettings& settings) {
     if (entry.kind != chain.mode) return {false, "预设编辑模式不匹配"};
@@ -587,6 +647,7 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
         // Sort only the helper INPUT, so detached tail nodes do not reject it.
         const auto rank = [](const ChainNode& n) {
             switch (n.type) {
+            case EffectType::VideoDenoise: return -1;
             case EffectType::Color: return 0;
             case EffectType::AntiAliasing: return 1;
             case EffectType::SuperResolution: return 2;
@@ -724,11 +785,11 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     });
     const bool rendering=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){return e.globals.has_value();});
     const bool vfg=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
-        if((e.fg.backend==FrameGenerationBackend::Vfg||e.fg.backend==FrameGenerationBackend::Anr||e.fg.backend==FrameGenerationBackend::AmdFrc)||e.fg.vfgQuality!=1||
-           (e.globals&&((e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->fgBackend==FrameGenerationBackend::Anr||e.globals->fgBackend==FrameGenerationBackend::AmdFrc)||e.globals->vfgQuality!=1)))return true;
+        if((e.fg.backend==FrameGenerationBackend::Vfg||e.fg.backend==FrameGenerationBackend::Anr||e.fg.backend==FrameGenerationBackend::AmdFrc||e.fg.backend==FrameGenerationBackend::Rife)||e.fg.vfgQuality!=1||
+           (e.globals&&((e.globals->fgBackend==FrameGenerationBackend::Vfg||e.globals->fgBackend==FrameGenerationBackend::Anr||e.globals->fgBackend==FrameGenerationBackend::AmdFrc||e.globals->fgBackend==FrameGenerationBackend::Rife)||e.globals->vfgQuality!=1)))return true;
         if(!e.nodeConfiguration)return false;const auto& c=*e.nodeConfiguration;
-        return (c.fgBackend==FrameGenerationBackend::Vfg||c.fgBackend==FrameGenerationBackend::Anr||c.fgBackend==FrameGenerationBackend::AmdFrc)||c.vfgQuality!=1||
-            (c.editor&&c.editor->globals&&((c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->fgBackend==FrameGenerationBackend::Anr||c.editor->globals->fgBackend==FrameGenerationBackend::AmdFrc)||c.editor->globals->vfgQuality!=1));
+        return (c.fgBackend==FrameGenerationBackend::Vfg||c.fgBackend==FrameGenerationBackend::Anr||c.fgBackend==FrameGenerationBackend::AmdFrc||c.fgBackend==FrameGenerationBackend::Rife)||c.vfgQuality!=1||
+            (c.editor&&c.editor->globals&&((c.editor->globals->fgBackend==FrameGenerationBackend::Vfg||c.editor->globals->fgBackend==FrameGenerationBackend::Anr||c.editor->globals->fgBackend==FrameGenerationBackend::AmdFrc||c.editor->globals->fgBackend==FrameGenerationBackend::Rife)||c.editor->globals->vfgQuality!=1));
     });
     const bool correction=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
         for(unsigned i=0;i<e.chain.nodeCount;++i)if(e.chain.nodes[i].nr.residual.extendedSchema())return true;
@@ -806,10 +867,28 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return hasOutputControls(e.chain)||(e.nodeConfiguration&&(hasOutputControls(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&hasOutputControls(e.nodeConfiguration->editor->nodes))));
     });
-    // v23: the smart SR switch in any stored globals.
+    const bool individualModes=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return hasExclusionModes(e.chain)||(e.nodeConfiguration&&
+            (hasExclusionModes(e.nodeConfiguration->chain)||(e.nodeConfiguration->editor&&
+             hasExclusionModes(e.nodeConfiguration->editor->nodes))));
+    });
+    const bool originalHalfRate=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return e.flow&&e.flow->content==ContentRate::Capture60To30Original;
+    });
+    const bool rife=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        const auto usesRife=[](const auto& config){return config.fgBackend==FrameGenerationBackend::Rife;};
+        return e.fg.backend==FrameGenerationBackend::Rife||(e.globals&&usesRife(*e.globals))||
+            (e.nodeConfiguration&&(usesRife(*e.nodeConfiguration)||(e.nodeConfiguration->editor&&
+                e.nodeConfiguration->editor->globals&&usesRife(*e.nodeConfiguration->editor->globals))));
+    });
+    const bool denoise=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return e.chain.firstOf(EffectType::VideoDenoise) ||
+            (e.nodeConfiguration && hasVideoDenoise(*e.nodeConfiguration));
+    });
+    // v27: the smart SR switch in any stored globals.
     const auto smartOf=[](const ChainGlobalSettings& g){return g.smartSr;};
     const bool smart=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return (e.globals&&smartOf(*e.globals))||(e.nodeConfiguration&&(smartOf(*e.nodeConfiguration)||(e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals&&smartOf(*e.nodeConfiguration->editor->globals))));});
-    const int version=std::max(minimumVersion, smart?23:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const int version=std::max(minimumVersion, smart?27:denoise?26:(individualModes||originalHalfRate||rife)?25:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -832,6 +911,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
             // earlier files never hold an inverted box).
             for (const auto& r : n.protection.regions)
                 o << ' ' << (r.ellipse ? r.right : r.left) << ' ' << r.top << ' ' << (r.ellipse ? r.left : r.right) << ' ' << r.bottom;
+            if(version==23||version>=25)o<<' '<<exclusionModes(n.protection);
             o << ' ' << (n.videoHdr.enabled ? 1 : 0) << ' ' << n.videoHdr.contrast << ' ' << n.videoHdr.saturation << ' '
               << n.videoHdr.middleGray << ' ' << n.videoHdr.peakNits << ' ';
             if(version>=3)o<<int(n.nr.sizePolicy)<<' ';
@@ -846,6 +926,8 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
                 o << ' ';
             }
             if(n.type==EffectType::NrStabilizer)o<<n.holdStrength<<' '<<n.holdTolerance<<' ';
+            if (version>=26 && n.type == EffectType::VideoDenoise)
+                o << n.videoDenoise.luma << ' ' << n.videoDenoise.chroma << ' ';
             if (version>=15 && n.type == EffectType::Beauty) {
                 writeBeauty(o, n.beauty);
                 o << ' ';
@@ -865,7 +947,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=23);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=27);}
         }
         if(version>=10){
             o<<' '<<e.flow.has_value();
@@ -885,13 +967,13 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     std::string magic, quoted;
     int version = 0;
     size_t count = 0;
-    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
-    // keep the hard ceiling in step with it or encode->decode self-check rejects our file.
-    // v22 is the local auto-multiplier marker (upstream owns 21 for output-controls);
-    // the ceiling must include it or encode->decode self-check rejects our own file.
-    // v23 is the smart SR switch.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,23):23;
-    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) { error = L"预设库格式或版本不支持"; return false; }
+    // v23 adds region modes and the standalone v24 adds cadence value 6.
+    // v25 combines both layouts and adds RIFE as a provider; v26 video denoise.
+    // v27 appends the smart SR switch to the rendering globals.
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,27):27;
+    if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) {
+        error = L"预设库格式或版本不支持"; return false;
+    }
     if (!(in >> std::quoted(quoted) >> count) || count > 64) { error = L"预设库条目数非法"; return false; }
     def = wide(quoted);
     for (size_t i = 0; i < count; ++i) {
@@ -909,7 +991,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             e.chain.fgAutoMultiplier=autoFg!=0;
         }
         if(version>=7&&!(in>>e.fg.vfgQuality)){error=L"预设库 VFG 质量字段损坏";return false;}
-        if(fgBackend<0||fgBackend>(version>=7?6:3)){error=L"预设库补帧后端无效";return false;}
+        if(fgBackend<0||fgBackend>(version>=25?7:version>=7?6:3)){error=L"预设库补帧后端无效";return false;}
         e.name = wide(name);
         e.note = wide(note);
         e.kind = static_cast<ChainMode>(kind);
@@ -937,9 +1019,11 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
                 if (!(in >> r.left >> r.top >> r.right >> r.bottom)) { error = L"预设库保护区域损坏"; return false; }
                 if (r.left > r.right) { std::swap(r.left, r.right); r.ellipse = true; }
             }
+            if((version==23||version>=25)&&!readExclusionModes(in,node.protection)){error=L"Invalid exclusion region mode";return false;}
             if (!(in >> hdrEnabled >> node.videoHdr.contrast >> node.videoHdr.saturation >> node.videoHdr.middleGray >> node.videoHdr.peakNits)) { error = L"预设库 HDR 字段损坏"; return false; }
             if (type < 0 || type >= int(EffectType::Count) || (version < 14 && type >= int(EffectType::AntiAliasing)) ||
                 (version < 21 && type >= int(EffectType::NrStabilizer)) ||
+                (version < 26 && type == int(EffectType::VideoDenoise)) ||
                 enabled < 0 || enabled > 1 || !validNrRuntime(static_cast<NrRuntime>(runtime)) ||
                 temporal < 0 || temporal > 1 || lowLatency < 0 || lowLatency > 1 || protEnabled < 0 || protEnabled > 1 || hdrEnabled < 0 || hdrEnabled > 1) {
                 error = L"预设库节点取值超出范围"; return false;
@@ -975,6 +1059,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             }
             if(node.type==EffectType::NrStabilizer&&!(in>>node.holdStrength>>node.holdTolerance)){
                 error=L"预设库稳定器字段损坏";return false;
+            }
+            if (node.type == EffectType::VideoDenoise &&
+                (!(in >> node.videoDenoise.luma >> node.videoDenoise.chroma) || !node.videoDenoise.valid())) {
+                error = L"预设库视频降噪参数损坏"; return false;
             }
             if (version >= 15 && node.type == EffectType::Beauty && !readBeauty(in, node.beauty)) {
                 error = L"预设库节点美颜参数损坏"; return false;
@@ -1014,7 +1102,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=23))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=27))return false;e.globals=g;
             }
         }
         if(version>=10){
@@ -1023,6 +1111,10 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){
                 int backend,quality,half,content;
                 if(!(in>>backend>>quality>>half>>content)||half<0||half>1){error=L"预设光流字段损坏";return false;}
+                if(!validContentRate(ContentRate(content))||
+                   (version<24&&ContentRate(content)==ContentRate::Capture60To30Original)){
+                    error=L"预设去除重复帧档位与文件版本不匹配"; return false;
+                }
                 PresetFlowSettings f{OpticalFlowBackend(backend),FlowQuality(quality),half!=0,ContentRate(content)};
                 EnhancementSettings contract;f.apply(contract);
                 if(!contract.validate().empty()){error=L"预设光流或去除重复帧设置无效";return false;}
@@ -1042,7 +1134,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const auto& editor = session.configurations[1].editor;
     const auto extended=[](const ChainGlobalSettings& g){return g.srTarget>pipeline::SrTarget::Uhd8K||g.hdrOutputMode!=HdrOutputMode::Hdr10||g.fgMotion!=MotionSource::Automatic||g.srMotion!=MotionSource::OpticalFlow||g.nrMotion!=MotionSource::OpticalFlow;};
     const bool rendering=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return extended(c)||(c.editor&&c.editor->globals&&extended(*c.editor->globals));});
-    const auto usesVfg=[](const ChainGlobalSettings& g){return (g.fgBackend==FrameGenerationBackend::Vfg||g.fgBackend==FrameGenerationBackend::Anr||g.fgBackend==FrameGenerationBackend::AmdFrc)||g.vfgQuality!=1;};
+    const auto usesVfg=[](const ChainGlobalSettings& g){return (g.fgBackend==FrameGenerationBackend::Vfg||g.fgBackend==FrameGenerationBackend::Anr||g.fgBackend==FrameGenerationBackend::AmdFrc||g.fgBackend==FrameGenerationBackend::Rife)||g.vfgQuality!=1;};
     const bool vfg=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){return usesVfg(c)||(c.editor&&c.editor->globals&&usesVfg(*c.editor->globals));});
     // Session v6 carries the static HDR output tuning (curve + metadata).
     const auto tuningCustom=[](const ChainConfiguration& c){
@@ -1089,19 +1181,29 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     const bool outputControls=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return hasOutputControls(c.chain)||(c.editor&&hasOutputControls(c.editor->nodes));
     });
-    // v18: the smart SR switch (local; library v23).
+    const bool individualModes=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
+        return hasExclusionModes(c.chain)||(c.editor&&hasExclusionModes(c.editor->nodes));
+    });
+    const auto usesRife=[](const auto& g){return g.fgBackend==FrameGenerationBackend::Rife;};
+    const bool rife=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
+        return usesRife(c)||(c.editor&&c.editor->globals&&usesRife(*c.editor->globals));
+    });
+    const bool denoise=std::any_of(session.configurations.begin(),session.configurations.end(),hasVideoDenoise);
+    // v22: the smart SR switch.
     const bool smart=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return c.smartSr||(c.editor&&c.editor->globals&&c.editor->globals->smartSr);});
-    const int version = smart?18:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const int version = smart?22:denoise?21:(individualModes||session.originalHalfRate||rife)?20:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
-    if(version>=4)out<<' '<<bool(editor);out<<'\n';
+    if(version>=4)out<<' '<<bool(editor);
+    if(version>=20)out<<' '<<session.originalHalfRate;
+    out<<'\n';
     std::vector<PresetEntry> entries;
     for (size_t i = 0; i < session.configurations.size(); ++i) {
         const auto& c = session.configurations[i];
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=18);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -1119,7 +1221,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=18);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -1146,10 +1248,15 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 18) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v17 = local auto-multiplier session, v18 = smart SR
+        (version < 1 || version > 22) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v22 = smart SR
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
+    int original=version==19;
+    if(version>=20&&(!(in>>original)||original<0||original>1))return false;
+    parsed.originalHalfRate=original!=0;
+    const int presetVersion=version>=22?27:version>=21?26:version>=20?25:version==18?23:version>=17?22:
+        version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11;
     for (auto& c : parsed.configurations) {
         int target, backend, flow, optical, half, policy;
         if (!(in >> target >> c.videoSrQuality >> backend >> flow >> optical >> half >> policy >> c.selectedNr >> c.selectedColour) ||
@@ -1157,11 +1264,11 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=18))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
-    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=18?23:version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 2 || !def.empty()) return false;
+    if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, presetVersion) || entries.size() != 2 || !def.empty()) return false;
 
     for (size_t i = 0; i < entries.size(); ++i) {
         if (entries[i].kind != ChainMode(i)) return false;
@@ -1180,7 +1287,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=18))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -1193,7 +1300,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         }
         if (!(in >> std::quoted(body))) return false;
         entries.clear(); def.clear(); error.clear();
-        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, version>=18?23:version>=17?22:version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11) || entries.size() != 1 ||
+        if (!PresetLibrary::parse(body, entries, def, error, nullptr, true, presetVersion) || entries.size() != 1 ||
 
             !def.empty() || entries[0].kind != ChainMode::Node || entries[0].chain.nodeCount != count) return false;
         editor->nodes = std::move(entries[0].chain);
@@ -1211,6 +1318,10 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
 }
 
 bool ChainSessionStore::load(ChainSession& session) {
+    const auto directDenoise=std::filesystem::path(path_).concat(L".video-denoise");
+    const auto directModes=std::filesystem::path(path_).concat(L".exclusion-modes");
+    const auto directHalfRate=std::filesystem::path(path_).concat(L".half-rate-variants");
+    const auto directFrameOptions=std::filesystem::path(path_).concat(L".fg-options");
     const auto directControls=std::filesystem::path(path_).concat(L".output-controls");
     const auto directDlaa=std::filesystem::path(path_).concat(L".dlaa");
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
@@ -1276,9 +1387,22 @@ bool ChainSessionStore::load(ChainSession& session) {
     else if(std::filesystem::exists(directControls))path_=directControls;
     else if(std::filesystem::exists(autoFgPath))path_=autoFgPath;
     else if(std::filesystem::exists(controlsPath))path_=controlsPath;
-    // v18: the smart SR switch in its own file.
+    const auto modesPath=std::filesystem::path(path_).concat(L".exclusion-modes");
+    if(std::filesystem::exists(directModes))path_=directModes;
+    else if(std::filesystem::exists(modesPath))path_=modesPath;
+    const auto halfRatePath=std::filesystem::path(path_).concat(L".half-rate-variants");
+    if(std::filesystem::exists(directHalfRate,ec))path_=directHalfRate;
+    else if(std::filesystem::exists(halfRatePath,ec))path_=halfRatePath;
+    const auto optionsPath=std::filesystem::path(path_).concat(L".fg-options");
+    if(std::filesystem::exists(directFrameOptions,ec))path_=directFrameOptions;
+    else if(std::filesystem::exists(optionsPath,ec))path_=optionsPath;
+    const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
+    if(std::filesystem::exists(directDenoise,ec))path_=directDenoise;
+    else if(std::filesystem::exists(denoisePath,ec))path_=denoisePath;
+    // v22: the smart SR switch in its own file.
     const auto smartSrPath=std::filesystem::path(path_).concat(L".smart-sr");
-    if(std::filesystem::exists(directSmartSr))path_=directSmartSr;else if(std::filesystem::exists(smartSrPath))path_=smartSrPath;
+    if(std::filesystem::exists(directSmartSr,ec))path_=directSmartSr;
+    else if(std::filesystem::exists(smartSrPath,ec))path_=smartSrPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1303,9 +1427,16 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
-    // v18 (smart SR switch) gets its own file and keeps it.
-    if(data.starts_with("VEYRA_CHAIN_SESSION 18")&&!path_.wstring().ends_with(L".smart-sr"))path_=std::filesystem::path(path_).concat(L".smart-sr");
-    if(!path_.wstring().ends_with(L".smart-sr")){
+    // v22 (smart SR switch) gets its own .smart-sr file and keeps it, as
+    // .video-denoise does; the file it starts from keeps its bytes.
+    const bool smartSidecar=path_.wstring().ends_with(L".smart-sr");
+    const bool upgradeSmart=!smartSidecar && data.starts_with("VEYRA_CHAIN_SESSION 22\n");
+    const bool denoiseSidecar=smartSidecar||path_.wstring().ends_with(L".video-denoise");
+    const bool upgradeDenoise=!denoiseSidecar && !upgradeSmart && data.starts_with("VEYRA_CHAIN_SESSION 21\n");
+    const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
+    const bool upgrade=!separate && !upgradeSmart && data.starts_with("VEYRA_CHAIN_SESSION 20\n");
+    if(!separate&&!upgrade&&!upgradeDenoise&&!upgradeSmart&&!path_.wstring().ends_with(L".exclusion-modes")&&
+       !path_.wstring().ends_with(L".half-rate-variants")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 16")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".output-controls")){
 
@@ -1352,28 +1483,33 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
     }
     } // Keep upgraded sessions in their own sidecar after disabling/removing controls.
-    } // .smart-sr likewise.
+    }
 
+    auto destination=path_;
+    if(upgradeSmart)destination+=L".smart-sr";
+    else if(upgradeDenoise)destination+=L".video-denoise";
+    else if(upgrade)destination+=L".fg-options";
     std::error_code ec;
-    if (!path_.parent_path().empty()) std::filesystem::create_directories(path_.parent_path(), ec);
+    if (!destination.parent_path().empty()) std::filesystem::create_directories(destination.parent_path(), ec);
     if (ec) {
         // Put the path and the OS reason into the message that already reaches the
         // log: "cannot create directory" alone gives nobody anything to act on.
         const std::string reason = ec.message();
-        error_ = std::format(L"模式会话目录无法创建: {} ({}）", path_.wstring(),
+        error_ = std::format(L"模式会话目录无法创建: {} ({}）", destination.wstring(),
             std::wstring(reason.begin(), reason.end()));
         return false;
     }
-    const auto temporary = std::filesystem::path(path_).concat(L".tmp");
+    const auto temporary=std::filesystem::path(destination).concat(L".tmp");
     bool written = false;
     {
         std::ofstream file(temporary, std::ios::binary | std::ios::trunc);
         if (file) { file << data; file.flush(); written = bool(file); file.close(); written = written && !file.fail(); }
     }
-    if (!written || !MoveFileExW(temporary.c_str(), path_.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    if (!written || !MoveFileExW(temporary.c_str(), destination.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
         std::filesystem::remove(temporary, ec);
         error_ = L"模式会话写入或替换失败，原存档保留"; return false;
     }
+    path_=std::move(destination);
     return true;
 }
 }

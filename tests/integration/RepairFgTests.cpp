@@ -10,6 +10,7 @@
 #include <cstring>
 #include <d3d12sdklayers.h>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 extern "C" {
 #include <libavutil/frame.h>
@@ -66,33 +67,92 @@ double translation(const veyra::sink::RgbaImage& previous,const veyra::sink::Rgb
     return shift;
 }
 }
-// Decode diagnostic RGB10/PQ readback to an 80-nit SDR reference so the same
-// geometric truth metric can test both provider programs. Product frames never
-// enter this CPU path. HDR range/color is checked separately by HDR tests.
-static bool readImage(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& ring,ID3D12Resource* texture,veyra::sink::RgbaImage& image){
+// Test-only raw GPU readback. Restore the caller's resource state after copying.
+static bool readTexture(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& ring,
+                        ID3D12Resource* texture,D3D12_RESOURCE_STATES state,size_t pixelBytes,
+                        std::vector<uint8_t>& pixels,const D3D12_BOX* crop=nullptr) {
+    using namespace veyra;
+    if(!texture)return false;
+    auto desc=texture->GetDesc();
+    if(crop){desc.Width=crop->right-crop->left;desc.Height=crop->bottom-crop->top;}
+    D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+    UINT64 bytes=0;
+    ctx.device()->GetCopyableFootprints(&desc,0,1,0,&footprint,nullptr,nullptr,&bytes);
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type=D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width=bytes;
+    buffer.Height=buffer.DepthOrArraySize=buffer.MipLevels=buffer.SampleDesc.Count=1;
+    buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    pipeline::ComPtr<ID3D12Resource> readback;
+    if(FAILED(ctx.device()->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&buffer,
+        D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&readback))))return false;
+
+    Status status;
+    unsigned slot=0;
+    auto* list=ring.acquireNext(slot,status);
+    if(!list)return false;
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition={texture,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,state,D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1,&barrier);
+    D3D12_TEXTURE_COPY_LOCATION source{},destination{};
+    source.pResource=texture;
+    source.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destination.pResource=readback.Get();
+    destination.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    destination.PlacedFootprint=footprint;
+    list->CopyTextureRegion(&destination,0,0,0,&source,crop);
+    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);
+    list->ResourceBarrier(1,&barrier);
+    if(!ring.submitAndSignal(slot)||!ring.drainQueue())return false;
+    void* mapped=nullptr;
+    D3D12_RANGE range{0,SIZE_T(bytes)};
+    if(FAILED(readback->Map(0,&range,&mapped)))return false;
+    const auto payload=size_t(desc.Width)*pixelBytes;
+    pixels.resize(payload*desc.Height);
+    for(unsigned y=0;y<desc.Height;++y)
+        std::memcpy(pixels.data()+y*payload,static_cast<const uint8_t*>(mapped)+footprint.Offset+
+                    y*footprint.Footprint.RowPitch,payload);
+    D3D12_RANGE written{0,0};
+    readback->Unmap(0,&written);
+    return true;
+}
+
+// SDR reference for the geometric metric. HDR range/color is checked separately.
+static bool readImage(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& ring,
+                      ID3D12Resource* texture,veyra::sink::RgbaImage& image) {
     using namespace veyra;
     const auto desc=texture->GetDesc();
     if(desc.Format!=DXGI_FORMAT_R10G10B10A2_UNORM)return sink::readRgba8(ctx,ring,texture,image);
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{};UINT64 bytes=0;ctx.device()->GetCopyableFootprints(&desc,0,1,0,&fp,nullptr,nullptr,&bytes);
-    D3D12_HEAP_PROPERTIES hp{};hp.Type=D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC bd{};bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;bd.Width=bytes;bd.Height=1;bd.DepthOrArraySize=bd.MipLevels=1;bd.SampleDesc.Count=1;bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    pipeline::ComPtr<ID3D12Resource> rb;if(FAILED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&rb))))return false;
-    Status st;unsigned slot=0;auto* list=ring.acquireNext(slot,st);if(!list)return false;
-    D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barrier.Transition={texture,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};list->ResourceBarrier(1,&barrier);
-    D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=texture;from.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;to.pResource=rb.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;to.PlacedFootprint=fp;list->CopyTextureRegion(&to,0,0,0,&from,nullptr);
-    std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
-    if(!ring.submitAndSignal(slot)||!ring.drainQueue())return false;
-    void* mapped=nullptr;D3D12_RANGE range{0,SIZE_T(bytes)};if(FAILED(rb->Map(0,&range,&mapped)))return false;
-    image.width=unsigned(desc.Width);image.height=desc.Height;image.pixels.resize(size_t(image.width)*image.height*4);
-    const auto decode=[](unsigned code){const double v=std::pow(double(code)/1023,1/78.84375);const double nits=10000*std::pow(std::max(v-.8359375,0.)/(18.8515625-18.6875*v),1/.1593017578125);const double l=nits/80;const double srgb=l<=.0031308?12.92*l:1.055*std::pow(l,1/2.4)-.055;return uint8_t(std::lround(std::clamp(srgb,0.,1.)*255));};
-    for(unsigned y=0;y<image.height;++y)for(unsigned x=0;x<image.width;++x){uint32_t pixel=0;std::memcpy(&pixel,static_cast<const uint8_t*>(mapped)+fp.Offset+y*fp.Footprint.RowPitch+x*4,4);for(unsigned c=0;c<3;++c)image.pixels[(size_t(y)*image.width+x)*4+c]=decode((pixel>>(c*10))&1023);image.pixels[(size_t(y)*image.width+x)*4+3]=255;}
-    D3D12_RANGE written{0,0};rb->Unmap(0,&written);return true;
+    if(!readTexture(ctx,ring,texture,D3D12_RESOURCE_STATE_COMMON,4,image.pixels))return false;
+    image.width=unsigned(desc.Width);
+    image.height=desc.Height;
+    const auto decode=[](unsigned code) {
+        const double v=std::pow(double(code)/1023,1/78.84375);
+        const double nits=10000*std::pow(std::max(v-.8359375,0.)/(18.8515625-18.6875*v),1/.1593017578125);
+        const double l=nits/80;
+        const double srgb=l<=.0031308?12.92*l:1.055*std::pow(l,1/2.4)-.055;
+        return uint8_t(std::lround(std::clamp(srgb,0.,1.)*255));
+    };
+    for(size_t i=0;i<image.pixels.size();i+=4) {
+        uint32_t pixel=0;
+        std::memcpy(&pixel,image.pixels.data()+i,4);
+        for(unsigned c=0;c<3;++c)image.pixels[i+c]=decode((pixel>>(c*10))&1023);
+        image.pixels[i+3]=255;
+    }
+    return true;
 }
 #include "EffectExclusionCases.h"
+#include "HudProtectCases.h"
+#include "HudFilmCases.h"
 int wmain(int argc,wchar_t** argv){
     const std::wstring modeWide=argc>1?argv[1]:L"off";
     const std::string mode(modeWide.begin(),modeWide.end());
     if(mode.starts_with("exclusion"))return effectExclusionCases(argc,argv);
+    if(mode.starts_with("hud-film"))return hudFilmCases(argc,argv);
+    if(mode.starts_with("hud-protect"))return hudProtectCases(argc,argv);
     using namespace veyra;CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;pipeline::EnhanceGraph graph(ctx,ring);
     Status st=Status::Ok;gfx::DeviceContextDesc dd;dd.commandSlotCount=6;dd.enableDebugLayer=mode.find("-debug")!=std::string::npos;bool ok=ctx.initialize(dd,st)&&ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st);

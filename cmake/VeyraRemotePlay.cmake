@@ -71,3 +71,10 @@ target_link_libraries(veyra_remoteplay_feedback_wire_tests PRIVATE chiaki-lib ws
 enable_testing()
 add_test(NAME remoteplay-feedback-wire COMMAND veyra_remoteplay_feedback_wire_tests)
 set_tests_properties(remoteplay-feedback-wire PROPERTIES TIMEOUT 15)
+
+# Exercise both real Takion socket-setup paths without contacting a console.
+add_executable(veyra_remoteplay_udp_buffer_tests
+    "${VEYRA_ROOT}/tests/remoteplay/UdpReceiveBufferTests.c")
+target_link_libraries(veyra_remoteplay_udp_buffer_tests PRIVATE chiaki-lib ws2_32)
+add_test(NAME remoteplay-udp-buffer COMMAND veyra_remoteplay_udp_buffer_tests)
+set_tests_properties(remoteplay-udp-buffer PROPERTIES TIMEOUT 15 LABELS "native-core")

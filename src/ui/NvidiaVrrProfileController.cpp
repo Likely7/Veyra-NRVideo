@@ -76,6 +76,13 @@ NvidiaVrrProfileController::NvidiaVrrProfileController(const std::filesystem::pa
     executable_ = QDir::toNativeSeparators(QFileInfo(QCoreApplication::applicationFilePath()).absoluteFilePath()).toLower();
     const auto key = QString::fromLatin1(QCryptographicHash::hash(executable_.toUtf8(), QCryptographicHash::Sha256).toHex());
     backupPath_ = QDir(QString::fromStdWString(dataDirectory.wstring())).filePath(QStringLiteral("driver-profiles/vrr-%1.json").arg(key));
+    auto result = std::make_shared<std::string>();
+    auto* worker = QThread::create([executable = executable_.toStdWString(), result] {
+        *result = gfx::nvidiaVsyncProfileDiagnostic(executable);
+    });
+    connect(worker, &QThread::finished, this, [result] { log::info("display-driver-vsync", *result); });
+    connect(worker, &QThread::finished, worker, &QObject::deleteLater);
+    worker->start();
 }
 QString NvidiaVrrProfileController::summary() const {
     if (busy_) return tr("正在处理驱动配置…");

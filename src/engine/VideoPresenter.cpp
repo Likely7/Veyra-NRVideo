@@ -25,10 +25,49 @@ void VideoPresenter::sourceProcessed(pipeline::FrameIdentity identity){
     xessWork_[xessWorkPosition_]={identity,xessInputId_};
     xessWorkPosition_=(xessWorkPosition_+1)%xessWork_.size();xessInputId_=0;
 }
-bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::EnhanceGraph& graph,bool captureCompatible,bool mediaClockPaced) {
+namespace {
+bool xessLowLatencySleep(){
+    wchar_t lowLatency[4]{};
+    return !(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_LOW_LATENCY",lowLatency,4)&&lowLatency[0]==L'0');
+}
+
+bool createPresentationPasses(gfx::D3D12DeviceContext& ctx,pipeline::EnhanceGraph& graph,
+                             VideoPresenter::PreparedOpening& opening,bool xess){
+    std::vector<uint8_t> vs,ps;
+    // The output pool contains both parities of every generated subframe.
+    // Comparison references follow it, including VFG through 8X.
+    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||!pipeline::loadShaderBytes("PresentBlit_ps.dxil",ps)||
+       !opening.blit.create(ctx.device(),vs,ps,pipeline::kOutputPoolSlots+8,graph.outputFormat(),16))return false;
+    if(!xess)return true;
+    std::vector<uint8_t> cs;
+    auto& motion=opening.motion;
+    if(!pipeline::loadShaderBytes("PresentMotion.dxil",cs)||!motion.create(ctx.device(),cs,4,1,1,16))return false;
+    const auto heap=motion.heap->GetCPUDescriptorHandleForHeapStart();
+    for(unsigned i=0;i<2;++i){
+        auto& texture=opening.motionTextures[i];
+        texture=pipeline::makeTexture(ctx.device(),graph.workWidth(),graph.workHeight(),DXGI_FORMAT_R16G16_FLOAT,true);
+        if(!texture)return false;
+        texture->SetName(L"Veyra XeSS display motion");
+        pipeline::makeSrv(ctx.device(),graph.presentMotion(i),DXGI_FORMAT_R16G16_FLOAT,{heap.ptr+size_t(i*2)*motion.increment});
+        pipeline::makeUav(ctx.device(),texture.Get(),DXGI_FORMAT_R16G16_FLOAT,{heap.ptr+size_t(i*2+1)*motion.increment});
+    }
+    return true;
+}
+}
+
+bool VideoPresenter::prepareOpening(gfx::D3D12DeviceContext& ctx,pipeline::EnhanceGraph& graph,PreparedOpening& opening){
+    if(graph.xessEnabled()){
+        opening.xess=std::make_unique<gfx::XessPresenter>();
+        if(!opening.xess->prepare(ctx.device(),graph.fgMultiplier(),xessLowLatencySleep(),true))return false;
+    }
+    return createPresentationPasses(ctx,graph,opening,graph.xessEnabled());
+}
+
+bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::EnhanceGraph& graph,bool captureCompatible,
+                          bool mediaClockPaced,std::unique_ptr<PreparedOpening> prepared,HWND temporarySurface) {
     const bool reuse=sink_.swapChain()&&!sink_.xess()&&!graph.xessEnabled()&&window_==window&&
         presentationDevice_==ctx.device()&&presentationFormat_==graph.outputFormat()&&
-        captureCompatible_==captureCompatible&&presentationQueue_;
+        captureCompatible_==captureCompatible&&presentationQueue_&&temporarySurface_==temporarySurface;
     if(reuse){if(!prepareGraphChange())return false;}
     else close();
     RECT rc{};
@@ -68,9 +107,10 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         veyra::log::info("present","native presentation uses persistent independent queue/fence, 3 command slots; shared textures use producer/consumer GPU fences");
     }
     auto* queue=presentationQueue_?presentationQueue_.Get():ctx.directQueue();
-    gpuTimer_.initialize(ctx.device(),queue);window_=window;
+    gpuTimer_.initialize(ctx.device(),queue);window_=window;temporarySurface_=temporarySurface;
     presentationDevice_=ctx.device();presentationFormat_=graph.outputFormat();captureCompatible_=captureCompatible;
-    gfx::PresentSink::Desc d;d.targetWindow=window;d.width=std::max(1L,rc.right);d.height=std::max(1L,rc.bottom);d.vsync=false;d.tearing=false;
+    gfx::PresentSink::Desc d;d.targetWindow=temporarySurface?temporarySurface:window;
+    d.width=std::max(1L,rc.right);d.height=std::max(1L,rc.bottom);d.vsync=false;d.tearing=false;
     d.waitable=!GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_SWAPCHAIN",nullptr,0);
     d.hdr=graph.hdrOutput();d.hdr10=graph.hdr10Output();d.xess=graph.xessEnabled();d.captureCompatible=captureCompatible;d.fgMultiplier=graph.fgMultiplier();
     // Candidate X2 (2026-09-22) tried XeLL pass-through for media-clock-paced
@@ -79,8 +119,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     // generation is disabled unless XeLL is enabled. Keep low latency on.
     // VEYRA_TEST_XESS_LOW_LATENCY=0 remains a diagnostic-only toggle.
     (void)mediaClockPaced;
-    wchar_t lowLatency[4]{};
-    d.xessLowLatencySleep=!(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_LOW_LATENCY",lowLatency,4)&&lowLatency[0]==L'0');lastXessFrame_={};lastXessIdentity_={};xessWasEnabled_=false;
+    d.xessLowLatencySleep=xessLowLatencySleep();lastXessFrame_={};lastXessIdentity_={};xessWasEnabled_=false;
     if(d.xess){
         bufferMonitor_=MonitorFromWindow(window,MONITOR_DEFAULTTONEAREST);
         MONITORINFO monitor{sizeof(monitor)};
@@ -90,25 +129,17 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         }
         veyra::log::info("present",std::format("XeSS retained buffers {}x{} client={}x{}; window scaling avoids provider rebuild",d.width,d.height,rc.right,rc.bottom));
     }
-    if(!reuse&&!sink_.initialize(ctx.device(),queue,d,st))return false;
+    if(!reuse&&!sink_.initialize(ctx.device(),queue,d,st,prepared?std::move(prepared->xess):nullptr))return false;
     if(reuse)veyra::log::info("present-reuse",std::format("retained native swapchain generation={} format={} fg={} output={}x{}; rebinding drained graph descriptors",generation_,unsigned(graph.outputFormat()),graph.fgEnabled(),graph.workWidth(),graph.workHeight()));
-    pass_={};rtvs_.Reset();compositeTarget_.Reset();exclusionUiTarget_.Reset();exclusionHudlessTarget_.Reset();
-    exclusionUiEnabled_=graph.xessEnabled()&&graph.exclusionEnabled();
-    std::vector<uint8_t> vs,ps;
-    // The output pool contains both parities of every generated subframe.
-    // Comparison references follow it; derive offsets to cover VFG through 8X.
-    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||!pipeline::loadShaderBytes("PresentBlit_ps.dxil",ps)||!pass_.create(ctx.device(),vs,ps,pipeline::kOutputPoolSlots+8,graph.outputFormat(),16))return false;
+    pass_={};frameStats_.resetPass();rtvs_.Reset();compositeTarget_.Reset();exclusionUiTarget_.Reset();exclusionHudlessTarget_.Reset();
+    exclusionUiEnabled_=graph.xessEnabled()&&graph.exclusionUi(0)!=nullptr;
+    PreparedOpening direct;
+    if(!prepared&&!createPresentationPasses(ctx,graph,direct,sink_.xess()!=nullptr))return false;
+    auto& opening=prepared?*prepared:direct;
+    pass_=std::move(opening.blit);
     if(sink_.xess()){
-        std::vector<uint8_t> cs;
-        if(!pipeline::loadShaderBytes("PresentMotion.dxil",cs)||!presentMotionPass_.create(ctx.device(),cs,4,1,1,16))return false;
-        const auto heap=presentMotionPass_.heap->GetCPUDescriptorHandleForHeapStart();
-        for(unsigned i=0;i<2;++i){
-            presentMotion_[i]=pipeline::makeTexture(ctx.device(),graph.workWidth(),graph.workHeight(),DXGI_FORMAT_R16G16_FLOAT,true);
-            if(!presentMotion_[i])return false;
-            presentMotion_[i]->SetName(L"Veyra XeSS display motion");
-            pipeline::makeSrv(ctx.device(),graph.presentMotion(i),DXGI_FORMAT_R16G16_FLOAT,{heap.ptr+size_t(i*2)*presentMotionPass_.increment});
-            pipeline::makeUav(ctx.device(),presentMotion_[i].Get(),DXGI_FORMAT_R16G16_FLOAT,{heap.ptr+size_t(i*2+1)*presentMotionPass_.increment});
-        }
+        presentMotionPass_=std::move(opening.motion);
+        presentMotion_=std::move(opening.motionTextures);
     }
     // Field 2026-10-09: HDR application FG flashes on an RTX5090 while the
     // pixel-copy diagnostic does not. This is a compatibility candidate, not
@@ -128,7 +159,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
         pipeline::makeSrv(ctx.device(),graph.exclusionUi(i),graph.outputFormat(),
             {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+4+i)*pass_.increment});
     if(exclusionUiEnabled_)for(unsigned i=0;i<2;++i)
-        pipeline::makeSrv(ctx.device(),graph.unmaskedVideo(i),graph.outputFormat(),
+        pipeline::makeSrv(ctx.device(),graph.fgInput(i),graph.outputFormat(),
             {pass_.heap->GetCPUDescriptorHandleForHeapStart().ptr+size_t(pipeline::kOutputPoolSlots+6+i)*pass_.increment});
     if(!reuse)startDisplayState();
     return true;
@@ -171,22 +202,28 @@ bool VideoPresenter::refresh(ID3D12Device* device){
         }
         if(compositeTarget_)device->CreateRenderTargetView(compositeTarget_.Get(),nullptr,{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(3)*inc_});
     }
-    if(exclusionUiEnabled_){
-        auto desc=bb->GetDesc();
-        unsigned index=4;
-        for(auto* surface:{std::addressof(exclusionUiTarget_),std::addressof(exclusionHudlessTarget_)}){
-            if(!*surface||(*surface)->GetDesc().Width!=desc.Width||
-               (*surface)->GetDesc().Height!=desc.Height||(*surface)->GetDesc().Format!=desc.Format){
-                D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
-                desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
-                D3D12_CLEAR_VALUE clear{};clear.Format=desc.Format;
-                const auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,
-                    D3D12_RESOURCE_STATE_COMMON,&clear,IID_PPV_ARGS(surface->ReleaseAndGetAddressOf()));
-                if(FAILED(hr)){veyra::log::error("exclusion",std::format("XeSS composition allocation hr=0x{:X}",unsigned(hr)));return false;}
+    xessFrameStatsFailed_=false;
+    return !exclusionUiEnabled_||ensureXessUiSurfaces(device,bb->GetDesc());
+}
+bool VideoPresenter::ensureXessUiSurfaces(ID3D12Device* device,D3D12_RESOURCE_DESC desc){
+    unsigned index=4;
+    for(auto* surface:{std::addressof(exclusionUiTarget_),std::addressof(exclusionHudlessTarget_)}){
+        const bool matches=*surface&&(*surface)->GetDesc().Width==desc.Width&&
+            (*surface)->GetDesc().Height==desc.Height&&(*surface)->GetDesc().Format==desc.Format;
+        if(!matches){
+            D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
+            desc.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+            D3D12_CLEAR_VALUE clear{};clear.Format=desc.Format;
+            const auto hr=device->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&desc,
+                D3D12_RESOURCE_STATE_COMMON,&clear,IID_PPV_ARGS(surface->ReleaseAndGetAddressOf()));
+            if(FAILED(hr)){
+                veyra::log::error("present-ui",std::format("XeSS composition allocation hr=0x{:X}",unsigned(hr)));
+                return false;
             }
             device->CreateRenderTargetView(surface->Get(),nullptr,
-                {rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(index++)*inc_});
+                {rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(index)*inc_});
         }
+        ++index;
     }
     return true;
 }
@@ -202,6 +239,8 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     bool resized=false;
     const auto deferUntil=uint64_t(uintptr_t(GetPropW(window_,L"Veyra.ResizeDeferUntil")));
     if(viewWidth_!=unsigned(rc.right)||viewHeight_!=unsigned(rc.bottom)){
+        if(temporarySurface_)SetWindowPos(temporarySurface_,nullptr,0,0,rc.right,rc.bottom,
+                                         SWP_NOMOVE|SWP_NOZORDER|SWP_NOACTIVATE);
         // 进出全屏 or a resized window during VRR presentation: VRR may start
         // or stop for it, so ask once 3 s after the size settles.
         if(viewWidth_&&vrrSync_)vrrConfirmAt_=now+std::chrono::seconds(3);
@@ -316,7 +355,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const bool traceDovi=latestDovi_.valid&&std::getenv("VEYRA_DOVI_TRACE")!=nullptr;
     const RetainedFrame retained{graph.presentationReadyFenceObject(slot,generated),graph.presentationReadyFence(slot,generated),
         slot,unsigned(rc.right),unsigned(rc.bottom),generated,referencesValid,baseReference,IsWindowVisible(window_)!=FALSE,
-        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST),graph.hdrOutput()?effective:HdrCurveSettings{}};
+        comparison,split,view,identity,MonitorFromWindow(window_,MONITOR_DEFAULTTONEAREST),graph.hdrOutput()?effective:HdrCurveSettings{},frameStatsCorner_};
     // Pausing keeps the last flip-model buffer visible. Re-submit only when
     // its producer fence, view, comparison, visibility, monitor or size changes.
     // Deferred resize must keep polling until the actual buffers match.
@@ -475,6 +514,22 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
         if(veyra::log::verboseFrameLogs())veyra::log::info("comparison",std::format("real-frame source={} epoch={} revision={} reference={} mode={} split={} (same leased frame)",identity.sourceFrameId,identity.epoch,identity.settingsRevision,baseReference?"base":"input",comparison,split));
     }
+    const auto bufferWidth=sink_.bufferWidth(),bufferHeight=sink_.bufferHeight();
+    const bool overlayReady=frameStatsCorner_>=0&&frameStats_.prepare(ctx.device(),graph.outputFormat());
+    if(overlayReady&&sink_.xess()&&!exclusionUiEnabled_&&!xessFrameStatsFailed_){
+        xessFrameStatsFailed_=!ensureXessUiSurfaces(ctx.device(),bb->GetDesc());
+        if(!xessFrameStatsFailed_){
+            pipeline::StateTracker clean;
+            clean.set(bb,D3D12_RESOURCE_STATE_RENDER_TARGET);
+            clean.transition(list,bb,D3D12_RESOURCE_STATE_COPY_SOURCE);
+            clean.transition(list,exclusionHudlessTarget_.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
+            list->CopyResource(exclusionHudlessTarget_.Get(),bb);
+            clean.transition(list,exclusionHudlessTarget_.Get(),D3D12_RESOURCE_STATE_COMMON);
+            clean.transition(list,bb,D3D12_RESOURCE_STATE_RENDER_TARGET);
+        }
+    }
+    const int overlayCorner=overlayReady&&!xessFrameStatsFailed_?frameStatsCorner_:-1;
+    frameStats_.draw(list,rtv,bufferWidth,bufferHeight,overlayCorner);
     for(auto& b:barriers)std::swap(b.Transition.StateBefore,b.Transition.StateAfter);
     if(copyBeforePresent_)barriers[1].Transition.StateAfter=D3D12_RESOURCE_STATE_COPY_SOURCE;
     list->ResourceBarrier(2,barriers);
@@ -579,21 +634,34 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
                     size_t(pipeline::kOutputPoolSlots+4+slot)*pass_.increment});
                 list->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
                 list->DrawInstanced(3,1,0,0);
+                frameStats_.draw(list,uiRtv,bufferWidth,bufferHeight,overlayCorner);
                 uiState.transition(list,sourceUi,D3D12_RESOURCE_STATE_COMMON);
                 uiState.transition(list,ui,D3D12_RESOURCE_STATE_COMMON);
                 hudless=exclusionHudlessTarget_.Get();
-                auto* sourceHudless=graph.unmaskedVideo(slot);
+                auto* sourceHudless=graph.fgInput(slot);
                 uiState.transition(list,sourceHudless,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
                 uiState.transition(list,hudless,D3D12_RESOURCE_STATE_RENDER_TARGET);
                 const D3D12_CPU_DESCRIPTOR_HANDLE hudlessRtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(5)*inc_};
                 list->ClearRenderTargetView(hudlessRtv,black,0,nullptr);
                 list->OMSetRenderTargets(1,&hudlessRtv,FALSE,nullptr);
+                list->RSSetScissorRects(1,&all);
+                list->SetDescriptorHeaps(1,heaps);
+                list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
                 list->SetGraphicsRoot32BitConstants(0,16,dims,0);
                 list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+
                     size_t(pipeline::kOutputPoolSlots+6+slot)*pass_.increment});
                 list->DrawInstanced(3,1,0,0);
                 uiState.transition(list,sourceHudless,D3D12_RESOURCE_STATE_COMMON);
                 uiState.transition(list,hudless,D3D12_RESOURCE_STATE_COMMON);
+            }else if(overlayCorner>=0){
+                ui=exclusionUiTarget_.Get();hudless=exclusionHudlessTarget_.Get();
+                pipeline::StateTracker uiState;
+                uiState.transition(list,ui,D3D12_RESOURCE_STATE_RENDER_TARGET);
+                const D3D12_CPU_DESCRIPTOR_HANDLE uiRtv{rtvs_->GetCPUDescriptorHandleForHeapStart().ptr+size_t(4)*inc_};
+                const float transparent[4]{};
+                list->ClearRenderTargetView(uiRtv,transparent,0,nullptr);
+                frameStats_.draw(list,uiRtv,bufferWidth,bufferHeight,overlayCorner);
+                uiState.transition(list,ui,D3D12_RESOURCE_STATE_COMMON);
             }
             if(!xess->tag(list,bb,mapped,depth,fullBuffer,true,reset,elapsed,ui,hudless)){xessFailed_=true;return false;}
             gpuTimer_.mark(list,diagnostics::GpuStage::FgBatch,true);
@@ -638,7 +706,26 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         if(stats.supported)veyra::log::info("display-stats",std::format("refreshHz={:.3f} presentCalls={} dxgiPresentCount={} refreshes={} presentRefreshDelta={} presentsAhead={} backend={} (DXGI GetFrameStatistics delta over ~1s. These counters CANNOT tell how many frames the panel actually showed: with vsync off and tearing allowed, dxgiPresentCount tracks completed Present calls, and both refresh counters just advance with the monitor. presentsAhead = submitted presents after the last shown one at the sample: the display queue under VSync; with Automatic Present(0,0) it includes frames a newer one replaces; -1 unavailable. Measuring scanout needs PresentMon. XeSS generated presents are provider-internal.)",sink_.displayRefreshHz(),stats.presents,stats.displayed,stats.refreshes,stats.displayedRefresh,stats.ahead,sink_.xess()?"XeSS":"DXGI"));
         else if(FAILED(stats.result))veyra::log::info("display-stats",std::format("unavailable hr=0x{:X} backend={}",unsigned(stats.result),sink_.xess()?"XeSS":"DXGI"));
         const auto scanout=displayStats?sink_.takeDisplayLatency():gfx::PresentSink::DisplayLatencySummary{};
-        if(scanout.samples||scanout.compositionMode>=0)veyra::log::info("display-latency",std::format("presentToScanoutP50Ms={:.3f} presentToScanoutP95Ms={:.3f} presentToScanoutMaxMs={:.3f} samples={} replacedAtLeast={} compositionMode={} refreshHz={:.3f} (DXGI frame statistics: Present call to the vblank that showed it, VSync and Automatic DXGI presents; Automatic dates only frames named as shown; compositionMode 0 composed 1 overlay 2 none 3 failure -1 unknown; not a photon measurement)",scanout.p50Ms,scanout.p95Ms,scanout.maxMs,scanout.samples,scanout.replacedAtLeast,scanout.compositionMode,sink_.displayRefreshHz()));
+        displayCompositionMode_=scanout.compositionMode;
+        const bool vrrCapable = gfx::vrrPresentationAvailable(vrr_);
+        // ADL reports FreeSync availability in this mode, without a scanout-active flag.
+        const bool vrrActive = (!vrr_.amd && vrrSync_) || vrr_.enabled || vrr_.inVrrMode;
+        if(scanout.samples||scanout.compositionMode>=0)veyra::log::info("display-latency",std::format("presentToScanoutP50Ms={:.3f} presentToScanoutP95Ms={:.3f} presentToScanoutMaxMs={:.3f} samples={} replacedAtLeast={} compositionMode={} refreshHz={:.3f} vrrCapable={} vrrActive={} (DXGI frame statistics: Present call to the vblank that showed it, VSync and Automatic DXGI presents; Automatic dates only frames named as shown; compositionMode 0 composed 1 overlay 2 none 3 failure -1 unknown; not a photon measurement)",scanout.p50Ms,scanout.p95Ms,scanout.maxMs,scanout.samples,scanout.replacedAtLeast,scanout.compositionMode,sink_.displayRefreshHz(),vrrCapable,vrrActive));
+        const double sampleSeconds = scanoutSampleAt_.time_since_epoch().count() > 0
+            ? std::chrono::duration<double>(presentEnd - scanoutSampleAt_).count() : 0;
+        scanoutSampleAt_ = presentEnd;
+        const bool countersValid = stats.supported && !sink_.xess() && refreshQueried_
+            && observedDisplayGeneration_ == displayGeneration_ && sink_.lastPresentTiming().result == S_OK;
+        if (tearingDetector_.sample({sampleSeconds, refreshHz_, scanout.p50Ms, stats.refreshes,
+                                     scanout.samples, stats.presents, scanoutSync_, countersValid,
+                                     vrrCapable, vrrActive})) {
+            tearingHint_ = ctx.adapter().isNvidia ? TearingHint::Nvidia : TearingHint::Driver;
+            veyra::log::warn("display-tearing", std::format(
+                "possible-immediate-flip sync={} refreshHz={:.3f} observedHz={:.3f} submittedHz={:.3f} vrrCapable={} spanSeconds={:.3f} samples={} p50Ms={:.3f} compositionMode={}",
+                unsigned(scanoutSync_), refreshHz_, double(stats.refreshes) / sampleSeconds,
+                double(stats.presents) / sampleSeconds, vrrCapable, tearingDetector_.seconds(),
+                tearingDetector_.samples(), scanout.p50Ms, scanout.compositionMode));
+        }
         const auto& timing=sink_.lastPresentTiming();
         veyra::log::info("present-cost",std::format("generated={} totalMs={:.3f} recordSubmitMs={:.3f} slotWaitMs={:.3f} dxgiMs={:.3f} slow={} source={} epoch={} backend={} resized={} resizeMs={:.3f} beginMs={:.3f} commandsMs={:.3f} beforeMs={:.3f} presentCallMs={:.3f} bufferMs={:.3f} afterMs={:.3f} hr=0x{:X}",generated,
             std::chrono::duration<double,std::milli>(presentEnd-presentStart).count(),
@@ -686,6 +773,7 @@ void VideoPresenter::publishLiveCoverage(const HdrCurveSettings& curve,pipeline:
 }
 
 void VideoPresenter::close(){
+    tearingDetector_.resetWindow();scanoutSampleAt_={};observedDisplayGeneration_=0;
     metadataSent_=false;metadataDirty_=false;lastMetadata_={};sourceMetadata_={};metadataAttempt_={};
     hdrPeakInfo_={};
     refreshMonitor_=nullptr;refreshHz_=0;vrr_={};refreshQueried_=false;vrrSync_=false;displayStateSerial_=0;vrrConfirmAt_.reset();
@@ -699,9 +787,10 @@ void VideoPresenter::close(){
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}
-    presentationDevice_=nullptr;presentationFormat_=DXGI_FORMAT_UNKNOWN;window_=nullptr;
+    presentationDevice_=nullptr;presentationFormat_=DXGI_FORMAT_UNKNOWN;window_=nullptr;temporarySurface_=nullptr;
 }
 void VideoPresenter::startDisplayState(){
+    displayCompositionMode_=-1;
     // A new presentation chain (session start): the monitor's stored state
     // applies at once and is checked once more in the background; without one
     // the first configuration waits up to 100 ms for the first answer.
@@ -719,9 +808,16 @@ void VideoPresenter::startDisplayState(){
 void VideoPresenter::applyDisplayState(const DisplayState& state){
     if(state.monitor!=refreshMonitor_)return;
     const auto hz=state.refreshHz;const auto& vrr=state.vrr;
+    if (!refreshQueried_ || std::abs(hz - refreshHz_) > 0.5 || vrr != vrr_
+        || observedDisplayGeneration_ != state.generation) {
+        tearingDetector_.resetWindow();
+        scanoutSampleAt_ = {};
+        displayCompositionMode_=-1;
+    }
+    observedDisplayGeneration_ = state.generation;
     if(refreshQueried_&&std::abs(hz-refreshHz_)>0.5)veyra::log::info("display-refresh",std::format("monitor refresh={:.3f} Hz (was {:.3f}; window moved or display mode changed)",hz,refreshHz_));
     refreshHz_=hz;sink_.setDisplayRefreshHz(hz);
-    if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible state of the window's monitor; read-only monitor query, per-application setup is a separate explicit action)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.status,hz));
+    if(!(vrr==vrr_)||!refreshQueried_)veyra::log::info("display-vrr",std::format("level={} known={} monitorSupportsVrr={} currentlyCapable={} trueGsync={} capsKnown={} possible={} requested={} active={} displayInVrrMode={} indicator={} simulated={} driver={} status={} refreshHz={:.3f} (NVIDIA G-SYNC / G-SYNC Compatible or AMD FreeSync state of the window's monitor; read-only monitor query, per-application setup is a separate explicit action)",gfx::vrrLevel(vrr),vrr.known,vrr.supportsVrr,vrr.currentlyCapable,vrr.trueGsync,vrr.capsKnown,vrr.possible,vrr.requested,vrr.enabled,vrr.inVrrMode,vrr.indicator,vrr.simulated,vrr.amd?"amd":"nvidia",vrr.status,hz));
     vrr_=vrr;refreshQueried_=true;displayStateSerial_=state.serial;
 }
 double VideoPresenter::displayRefreshHz(){
@@ -733,6 +829,7 @@ double VideoPresenter::displayRefreshHz(){
         // Never apply the previous monitor's VRR/cap to a moved window; its own
         // stored state (an earlier visit) applies at once when there is one.
         refreshMonitor_=monitor;refreshHz_=0;vrr_={};refreshQueried_=false;displayStateSerial_=0;reason="monitor-change";
+        tearingDetector_.resetWindow();scanoutSampleAt_={};displayCompositionMode_=-1;
     }
     if(const auto generation=displayStates_->generation();generation!=displayGeneration_){displayGeneration_=generation;reason="display-change";}
     // request() starts a query only when this monitor's state is stale or
@@ -743,6 +840,13 @@ double VideoPresenter::displayRefreshHz(){
     return refreshHz_;
 }
 PresentationSettings VideoPresenter::configurePresentation(gfx::D3D12DeviceContext& ctx,PresentationSettings requested,bool fg,std::wstring& status){
+    if (scanoutSync_ != requested.display || scanoutFullscreen_ != requested.fullscreen) {
+        tearingDetector_.resetWindow();
+        scanoutSampleAt_ = {};
+        displayCompositionMode_=-1;
+        scanoutSync_ = requested.display;
+        scanoutFullscreen_ = requested.fullscreen;
+    }
     // The NVIDIA choice only runs on an NVIDIA adapter, where it implies the
     // low queue. Another adapter keeps the plain switch's value; the UI retains
     // the choice for the next NVIDIA session (syncNvidiaLowLatencyQueue).

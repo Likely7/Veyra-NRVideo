@@ -3,6 +3,7 @@
 #include "../QmlPlayerBridge_p.h"
 
 namespace veyra::ui {
+bool QmlPlayerBridge::captureHalfRateSuggested() const{return impl_->snapshot.captureHalfRateSuggested;}
 // --- professional-page readouts ---------------------------------------------
 // These read fields the engine genuinely publishes. Where it publishes nothing,
 // the getter says so and the UI shows an explicit "unmeasured" rather than a
@@ -38,6 +39,8 @@ QString QmlPlayerBridge::srStageNote() const {
     // Only the standard family restores a source already at the target size.
     if (s.applied.sr && engine::vfxVideoSr(s.applied.videoSrQuality) && !plan.srApplied)
         notes << tr("高码率和流媒体只做放大：片源已达到目标尺寸，所以没有运行；同尺寸修复请用标准。");
+    if (s.applied.sr && engine::spatialVideoSr(s.applied.videoSrQuality) && !plan.srApplied)
+        notes << tr("片源已达到目标尺寸。调高目标尺寸可启用此算法。");
     return notes.join(QStringLiteral("；"));
 }
 
@@ -98,6 +101,7 @@ QVariantList QmlPlayerBridge::stageTimings() const {
     struct Row { const char* label; Stage stage; const char* color; };
     const Row rows[] = {
         {"输入", Stage::Color, "#A8A8B8"},
+        {"视频降噪", Stage::VideoDenoise, "#62CDB7"},
         {"抗锯齿", Stage::AaNode0, "#7FD4FF"},
         {"抗锯齿 2", Stage::AaNode1, "#A9E2FF"},
         {"人脸识别", Stage::BeautyDetect, "#FFB3D1"},
@@ -251,6 +255,7 @@ QVariantMap QmlPlayerBridge::nodeTimings() const {
             if (beauty < diagnostics::kTimedBeautyNodes) stage = diagnostics::beautyNodeStage(beauty);
             ++beauty;
             break;
+        case engine::EffectType::VideoDenoise: stage = Stage::VideoDenoise; break;
         case engine::EffectType::SuperResolution: stage = Stage::Sr; break;
         case engine::EffectType::VideoHdr:
             stage = Stage::VideoHdr;
@@ -304,6 +309,8 @@ bool QmlPlayerBridge::gpuUtilizationKnown() const { return impl_->gpuUtil.load()
 QString QmlPlayerBridge::runStatus() const { return impl_->runStatus; }
 QString QmlPlayerBridge::runStatusLevel() const { return impl_->runLevel; }
 QString QmlPlayerBridge::runStatusDetail() const { return impl_->runDetail; }
+QString QmlPlayerBridge::runStatusAction() const { return impl_->runAction; }
+QString QmlPlayerBridge::runStatusHint() const { return impl_->runHint; }
 QStringList QmlPlayerBridge::runOptions() const { return impl_->runOptions; }
 double QmlPlayerBridge::effectiveOutputFps() const { return impl_->effectiveOutputFps; }
 double QmlPlayerBridge::outputRateRatio() const { return impl_->rateRatio; }
@@ -364,6 +371,8 @@ void QmlPlayerBridge::updateRunStatus() {
     const auto& f = s.metrics.flow;
     const bool active = s.running && !s.image && s.transport == engine::TransportState::Playing;
     QString status = tr("待机"), level = QStringLiteral("idle");
+    QString action, hint;
+    bool secondaryFgWarning = false;
     if (s.failed) { status = tr("错误"); level = QStringLiteral("err"); }
     else if (s.remoteRecovering) { status = tr("恢复中"); level = QStringLiteral("warn"); }
     // Paused to buffer a network source (#48): no pictures are due, so the output rate is not judged.
@@ -372,9 +381,17 @@ void QmlPlayerBridge::updateRunStatus() {
     }
     else if (active && !s.applying && f.rateWindowReady) {
         // Judged on the engine's own words, shown in the interface language.
-        const std::wstring rate = i.history.rateStatus(s);
-        status = uiText(rate);
-        level = rate == L"正常" ? QStringLiteral("ok") : QStringLiteral("warn");
+        const std::wstring rateStatus = i.history.rateStatus(s);
+        status = uiText(rateStatus);
+        level = rateStatus == L"正常" ? QStringLiteral("ok") : QStringLiteral("warn");
+        secondaryFgWarning = rateStatus != L"补帧调度降档" && i.history.fgScheduleLimited(s);
+        if (rateStatus == L"输入帧率不足" && sourceKind() == QLatin1String("capture")) {
+            action = tr("请检查采集卡接口");
+            hint = tr("采集卡送来的帧率低于信号帧率。USB 采集卡请直接插在主板背部的 USB 3.0 及以上接口，不要经过扩展坞、延长线或前置接口。同时确认主机输出帧率与所选采集格式一致。");
+        } else if (rateStatus == L"补帧调度降档") {
+            action = tr("性能不足");
+            hint = tr("显卡跟不上当前补帧设置，部分帧已改用更低档位或跳过。可降低补帧倍率或档位，或关闭部分增强。");
+        }
     }
     else if (s.applying && s.running) { status = tr("调整中"); level = QStringLiteral("warn"); }
     else if (active) status = tr("采样中");
@@ -383,7 +400,8 @@ void QmlPlayerBridge::updateRunStatus() {
     const auto chosen=settings();
     const auto content=engine::currentContentRate(chosen.content);
     if(content!=engine::ContentRate::Transport){
-        const auto cadence=content==engine::ContentRate::Capture60To30?QStringLiteral("60→30"):tr("自动去除");
+        const auto cadence=content==engine::ContentRate::Capture60To30?tr("60→30（兼容自动去重）"):
+            engine::isCaptureHalfRate(content)?QStringLiteral("60→30"):tr("自动去除");
         if(s.running&&rate.halfRate)options<<tr("%1 · 当前约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
         else if(s.running&&rate.deduplicating)options<<tr("%1 · 去重后约 %2 fps").arg(cadence).arg(rate.contentFps,0,'f',0);
         else if(s.running&&!s.capture)options<<tr("%1 · 当前来源未去重").arg(cadence);
@@ -454,7 +472,25 @@ void QmlPlayerBridge::updateRunStatus() {
         else if(s.hudLockState==2)options<<tr("HUD 自动锁定 · 无法启用");
         else if(s.hudLockState==3)options<<tr("HUD 自动锁定 · 当前补帧方式不支持");
     }
+    if (s.running && !s.image && s.applied.multiplier > 1 && s.applied.dynamicHud) {
+        if (s.dynamicHudState == 1) options << tr("动态 HUD 保护");
+        else if (s.dynamicHudState == 2) options << tr("动态 HUD 保护 · 无法启用");
+        else if (s.dynamicHudState == 3) options << tr("动态 HUD 保护 · 当前补帧方式不支持");
+    }
     QStringList detail;
+    if (secondaryFgWarning) detail << tr("补帧降档");
+    if(s.transport==engine::TransportState::Playing&&!s.image&&i.presentation.fullscreen){
+        const double fps=s.submissionFps.value_or(0);
+        if(i.presentation.variableRefresh&&vrrLevel>=3&&fps>0&&s.displayVrrMinimumHz>0&&
+                std::abs(fps-s.displayVrrMinimumHz)<=0.25)
+            detail<<tr("提交帧率接近可变刷新下限 %1 Hz。若全屏卡顿，可试用垂直同步并关闭可变刷新。")
+                        .arg(s.displayVrrMinimumHz,0,'f',2);
+        if(s.displayCompositionMode==0){
+            detail<<tr("全屏画面仍由 Windows 合成。若出现卡顿，可试用显示器支持的其他刷新率。");
+            if(std::abs(refreshHz-120.0)<0.04)
+                detail<<tr("若系统提供 119.88 Hz，可与当前 120 Hz 对照测试。");
+        }
+    }
     // Live output hint: also shown under the 倍率 control (fgDisplayHint).
     QString fgHint;
     if (s.running && !s.image && s.applied.multiplier > 1 && i.compareMode == 0 && s.displayFgSuggestion > 0 &&
@@ -476,6 +512,7 @@ void QmlPlayerBridge::updateRunStatus() {
             case engine::FrameGenerationBackend::Fsr4: backend = tr("FSR 4 ML"); break;
             case engine::FrameGenerationBackend::Anr: backend = QStringLiteral("ANR FG"); break;
             case engine::FrameGenerationBackend::AmdFrc: backend = QStringLiteral("AMD FRC"); break;
+            case engine::FrameGenerationBackend::Rife: backend = QStringLiteral("RIFE"); break;
             case engine::FrameGenerationBackend::Vfg: backend = QStringLiteral("NVIDIA VFG"); break;
             }
             detail << tr("补帧 %1X · %2").arg(s.applied.multiplier)
@@ -489,8 +526,6 @@ void QmlPlayerBridge::updateRunStatus() {
         // Live output hint (DisplayFgBudget.h): a suggestion only, the
         // multiplier stays the user's choice.
         else if (!fgHint.isEmpty()) detail << fgHint;
-        else if (s.applied.multiplier > 1 && (s.fgBudgetLimited || s.xessGenerationSuppressed) &&
-                 (!rate.policyLimited()||i.history.overloaded)) detail << tr("调度降档");
         // Why VFG cannot hold the requested multiplier. One VFG interpolation
         // costs about the same at any resolution, so what fits follows from its
         // measured cost, the rest of the chain and the source interval; the
@@ -536,10 +571,13 @@ void QmlPlayerBridge::updateRunStatus() {
     const QString text = detail.join(QStringLiteral(" · "));
     const double gpu = i.gpuUtil.load();
     const double target=active&&f.rateWindowReady&&rate.targetFps>0?rate.targetFps:-1;
-    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail || options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
+    const bool changed = ratioChanged || active || status != i.runStatus || level != i.runLevel || text != i.runDetail ||
+                         action != i.runAction || hint != i.runHint ||
+                         options!=i.runOptions || std::abs(target-i.effectiveOutputFps)>.05 || std::abs(gpu - i.gpuPublished) > 0.05 ||
                          fgHint != i.fgDisplayHint || vrrLevel != i.vrrState || displayChecking != i.displayChecking ||
                          hdr != i.displayHdr || std::abs(refreshHz - i.displayRefreshHz) > .01;
     i.runStatus = status; i.runLevel = level; i.runDetail = text; i.gpuPublished = gpu;
+    i.runAction = action; i.runHint = hint;
     i.runOptions=options;i.effectiveOutputFps=target;i.fgDisplayHint=fgHint;i.vrrState=vrrLevel;i.displayChecking=displayChecking;
     i.displayHdr=hdr;i.displayRefreshHz=refreshHz;
     if (changed) emit perfChanged();
@@ -548,10 +586,9 @@ void QmlPlayerBridge::updateRunStatus() {
 
 
 void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
-    // 临时停用：格式徽章窗口在开符号构建下必崩（见 FormatBadgeWindow::show），
-    // 它把真正的崩溃信号盖住了。只停调用，代码留着。
+    if (!impl_->videoWindow) return;
     impl_->formatBadgeSession = s.sessionId;
-    if (impl_->videoWindow == nullptr) return;
+    impl_->formatBadgeLabel = s.sourceHdrLabel;
     if (!impl_->formatBadge) {
         impl_->formatBadge = std::make_unique<media::FormatBadgeWindow>();
         if (!impl_->formatBadge->create(impl_->videoWindow)) {
@@ -559,8 +596,7 @@ void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
             return;
         }
     }
-    const QString label = uiText(s.sourceHdrLabel);
-    const QString title = label.isEmpty() ? QStringLiteral("SDR") : label;
+    const QString title = uiText(s.sourceHdrLabel);
     QStringList detailParts;
     const QString rate = sourceRateText();
     if (!rate.isEmpty()) detailParts << rate;
@@ -570,8 +606,9 @@ void QmlPlayerBridge::showFormatBadge(const engine::PlayerSnapshot& s) {
     impl_->formatBadge->show(impl_->videoWindow, title.toStdWString(), detail.toStdWString());
     veyra::log::info("format-badge", std::format("shown title={} detail={} session={}",
         title.toStdString(), detail.toStdString(), s.sessionId));
-    QTimer::singleShot(3200, this, [this]() {
-        if (impl_->formatBadge) impl_->formatBadge->hide();
+    const auto serial = ++impl_->formatBadgeSerial;
+    QTimer::singleShot(3200, this, [this, serial]() {
+        if (impl_->formatBadge && serial == impl_->formatBadgeSerial) impl_->formatBadge->hide();
     });
 }
 

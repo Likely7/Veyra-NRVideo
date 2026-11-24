@@ -69,23 +69,25 @@ bool ColorDetailPass::run(ID3D12GraphicsCommandList* list, StateTracker& tracker
     list->CopyResource(copy_.Get(), target);
     tracker.transition(list, copy_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-    tracker.transition(list, lowA_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    const float reduce[8] = {std::bit_cast<float>(width_), std::bit_cast<float>(height_),
-        std::bit_cast<float>(lowWidth_), std::bit_cast<float>(lowHeight_), std::bit_cast<float>(block_), workingToScene, 0, 0};
-    reduce_.bind(list, reduce, gpuHandleOf(reduce_, 0).ptr, gpuHandleOf(reduce_, 1).ptr);
-    list->Dispatch((lowWidth_ + 7) / 8, (lowHeight_ + 7) / 8, 1);
-    tracker.uavBarrier(list, lowA_.Get());
-
-    for (int pass = 0; pass < 2; ++pass) {
-        auto* from = pass == 0 ? lowA_.Get() : lowB_.Get();
-        auto* to = pass == 0 ? lowB_.Get() : lowA_.Get();
-        tracker.transition(list, from, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-        tracker.transition(list, to, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        const float blur[8] = {std::bit_cast<float>(lowWidth_), std::bit_cast<float>(lowHeight_),
-            std::bit_cast<float>(pass == 0 ? 1 : 0), std::bit_cast<float>(pass == 0 ? 0 : 1), 0, 0, 0, 0};
-        blur_.bind(list, blur, gpuHandleOf(blur_, UINT(pass * 2)).ptr, gpuHandleOf(blur_, UINT(pass * 2 + 1)).ptr);
+    if (settings.clarity != 0 || settings.dehaze > 0) {
+        tracker.transition(list, lowA_.Get(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        const float reduce[8] = {std::bit_cast<float>(width_), std::bit_cast<float>(height_),
+            std::bit_cast<float>(lowWidth_), std::bit_cast<float>(lowHeight_), std::bit_cast<float>(block_), workingToScene, 0, 0};
+        reduce_.bind(list, reduce, gpuHandleOf(reduce_, 0).ptr, gpuHandleOf(reduce_, 1).ptr);
         list->Dispatch((lowWidth_ + 7) / 8, (lowHeight_ + 7) / 8, 1);
-        tracker.uavBarrier(list, to);
+        tracker.uavBarrier(list, lowA_.Get());
+
+        for (int pass = 0; pass < 2; ++pass) {
+            auto* from = pass == 0 ? lowA_.Get() : lowB_.Get();
+            auto* to = pass == 0 ? lowB_.Get() : lowA_.Get();
+            tracker.transition(list, from, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            tracker.transition(list, to, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+            const float blur[8] = {std::bit_cast<float>(lowWidth_), std::bit_cast<float>(lowHeight_),
+                std::bit_cast<float>(pass == 0 ? 1 : 0), std::bit_cast<float>(pass == 0 ? 0 : 1), 0, 0, 0, 0};
+            blur_.bind(list, blur, gpuHandleOf(blur_, UINT(pass * 2)).ptr, gpuHandleOf(blur_, UINT(pass * 2 + 1)).ptr);
+            list->Dispatch((lowWidth_ + 7) / 8, (lowHeight_ + 7) / 8, 1);
+            tracker.uavBarrier(list, to);
+        }
     }
 
     tracker.transition(list, lowA_.Get(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

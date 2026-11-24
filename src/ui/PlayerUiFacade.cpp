@@ -46,12 +46,15 @@ bool sameNetwork(const veyra::media::NetworkStats& a, const veyra::media::Networ
 // makes the UI repaint.
 bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::PlayerSnapshot& b) {
     return sameNetwork(a.network, b.network) &&
+        a.displayVrrMinimumHz==b.displayVrrMinimumHz&&a.displayCompositionMode==b.displayCompositionMode&&
         a.presentationStatus==b.presentationStatus&&a.presentationEffective==b.presentationEffective&&
         a.presentationRevision==b.presentationRevision&&a.presentationProviderOwned==b.presentationProviderOwned&&
         a.transport == b.transport && a.sessionId == b.sessionId && a.position == b.position &&
         a.duration == b.duration && a.frames == b.frames && a.generated == b.generated &&
-        a.status == b.status && a.savedFramePath == b.savedFramePath && a.backendWarning == b.backendWarning && a.sourceNotice == b.sourceNotice &&
-        a.applying == b.applying && a.rejectedRevision == b.rejectedRevision &&
+        a.captureHalfRateSuggested == b.captureHalfRateSuggested &&
+        a.status == b.status && a.savedFramePath == b.savedFramePath && a.backendWarning == b.backendWarning && a.nrPreparing == b.nrPreparing && a.sourceNotice == b.sourceNotice &&
+        a.applying == b.applying && a.captureEnhancementLoading == b.captureEnhancementLoading &&
+        a.rejectedRevision == b.rejectedRevision &&
         a.desired == b.desired && a.applied == b.applied && a.nrActive == b.nrActive &&
         a.srActive == b.srActive && a.fgActive == b.fgActive && a.failed == b.failed &&
         a.smartSrActive == b.smartSrActive && a.smartSrSettled == b.smartSrSettled &&
@@ -60,7 +63,8 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.audioTracks.size() == b.audioTracks.size() && a.running == b.running &&
         a.sourceWidth == b.sourceWidth && a.sourceHeight == b.sourceHeight &&
         a.sourceDisplayAspect == b.sourceDisplayAspect && a.sourceRotationDegrees == b.sourceRotationDegrees &&
-        a.capture == b.capture && a.image == b.image &&
+        a.capture == b.capture && a.image == b.image && a.captureRecovering == b.captureRecovering &&
+        a.captureReconnectAttempts == b.captureReconnectAttempts && a.captureDriverWaitMs == b.captureDriverWaitMs &&
         a.playbackRate == b.playbackRate && a.vramRunawayMiB == b.vramRunawayMiB && a.vramFullscreenUnsafe == b.vramFullscreenUnsafe &&
         a.metrics.resolution.base.width == b.metrics.resolution.base.width &&
         a.metrics.resolution.base.height == b.metrics.resolution.base.height &&
@@ -112,7 +116,7 @@ PlayerUiFacade::Frame PlayerUiFacade::poll() {
     const bool recoveredGraphFg=snapshot.rejectedRevision>=pendingFgRevision_&&
         snapshot.desired.revision==snapshot.rejectedRevision&&
         (requestedFgBackend_==veyra::engine::FrameGenerationBackend::Vfg||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Anr||
-         requestedFgBackend_==veyra::engine::FrameGenerationBackend::AmdFrc)&&
+         requestedFgBackend_==veyra::engine::FrameGenerationBackend::AmdFrc||requestedFgBackend_==veyra::engine::FrameGenerationBackend::Rife)&&
         snapshot.desired.frameGenerationBackend==requestedFgBackend_&&
         snapshot.desired.vfgQuality==requestedVfgQuality_&&
         requestedFgMultiplier_>1&&snapshot.desired.multiplier==1&&
@@ -247,9 +251,13 @@ void PlayerUiFacade::refreshRecentFiles() {
     for (auto& entry : recent_) entry.exists = std::filesystem::exists(entry.path);
 }
 
-void PlayerUiFacade::clearRecentFiles() {
-    recent_.clear();
-    savePreferences();
+bool PlayerUiFacade::clearRecentFiles() {
+    if (recent_.empty()) return true;
+    std::vector<RecentEntry> previous;
+    recent_.swap(previous);
+    if (savePreferences()) return true;
+    recent_.swap(previous);
+    return false;
 }
 
 void PlayerUiFacade::noteCaptureSession(const CaptureSession& session) {

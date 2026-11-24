@@ -29,7 +29,10 @@ class AverMediaAudioCarrier {
 public:
     using Callback=std::function<bool(const VendorPcmBlock&)>;
     static constexpr size_t kMaxBytes=131072;
-    explicit AverMediaAudioCarrier(Callback callback);
+    // Called with confirmed original IEC carrier words before decoding.
+    // A zero Pc/Pd and empty payload marks a stream discontinuity.
+    using BurstCallback = std::function<void(uint16_t, uint16_t, unsigned, std::span<const uint8_t>)>;
+    explicit AverMediaAudioCarrier(Callback callback, BurstCallback burst = {});
     bool feed(std::span<const uint8_t>,avermedia::SampleInfo,double now);
     void reset();
     const VendorCarrierState& state()const{return state_;}
@@ -37,7 +40,8 @@ public:
     bool compressed()const{return compressed_;}
 private:
     bool emitPcm(std::span<const uint8_t>,avermedia::SampleInfo);
-    bool emitBurst(std::span<const uint8_t>,size_t payloadBytes,sink::BitstreamKind);
+    bool emitBurst(std::span<const uint8_t>,size_t payloadBytes,sink::BitstreamKind,uint16_t pc,uint16_t pd);
+    BurstCallback burst_;
     Callback callback_;
     VendorCarrierState state_;
     std::vector<uint8_t> buffer_,packet_;
@@ -62,7 +66,7 @@ public:
     static constexpr double kConfirmSeconds=0.3; // E-AC-3 repeats every 128 ms
     enum class Route { Pcm, Withheld };
     struct Result { Route route=Route::Pcm; bool restorePcm=false; };
-    PcmCarrierRouter(uint32_t rate,AverMediaAudioCarrier::Callback decoded);
+    PcmCarrierRouter(uint32_t rate,AverMediaAudioCarrier::Callback decoded,AverMediaAudioCarrier::BurstCallback burst = {});
     PcmCarrierRouter(const PcmCarrierRouter&)=delete;
     PcmCarrierRouter& operator=(const PcmCarrierRouter&)=delete;
     // Pcm: push these original bytes. Withheld: push nothing; decoded blocks

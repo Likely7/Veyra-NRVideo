@@ -6,6 +6,7 @@
 // lines are stacked bottom-up by the caller.
 #include <windows.h>
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,9 @@ struct SubtitleLine {
     // rendered at assTimeMs inside the video area; `text` is only diagnostics.
     std::shared_ptr<const engine::SubtitleAssData> ass;
     double assTimeMs=0;
+    int maximumLines=0;                // Live captions may ellipsize to this many lines.
+    std::optional<double> scaleOverride;
+    std::optional<double> shadowOffset; // logical pixels. 0 explicitly disables the shadow.
 };
 struct SubtitleView {
     double scale=1.0;                  // viewer size multiplier

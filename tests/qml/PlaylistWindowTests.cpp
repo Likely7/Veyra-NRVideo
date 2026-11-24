@@ -1,20 +1,25 @@
+#include "veyra/engine/EngineController.h"
 #include "veyra/ui/PlaylistModel.h"
+#include "veyra/ui/PlayerUiFacade.h"
+#include "veyra/ui/QmlPlayerBridge.h"
+#include <QApplication>
 #include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QDragMoveEvent>
 #include <QFile>
 #include <QFileInfo>
-#include <QGuiApplication>
 #include <QMimeData>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlContext>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSignalSpy>
 #include <QTest>
 #include <QUrl>
 #include <cstdio>
+#include <filesystem>
 #include <memory>
 
 namespace {
@@ -55,7 +60,7 @@ void dropUrls(QQuickWindow* win, const QList<QUrl>& urls) {
 void drop(QQuickWindow* win, const QString& path) { dropUrls(win, {QUrl::fromLocalFile(path)}); }
 }
 int main(int argc, char** argv) {
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     qInstallMessageHandler(messages);
     if (argc != 2) return 2;
     const auto path = QString::fromLocal8Bit(argv[1]);
@@ -67,14 +72,39 @@ int main(int argc, char** argv) {
     for (int i = 0; i < 200 && model.busy(); ++i) QTest::qWait(10);
     check(model.count() == 12 && !model.busy(), "production model ready");
     const QString playing = model.pathAt(0);
+    const QString profile = path + "/profile";
+    if (!QDir().mkpath(profile)) return 2;
+    const std::filesystem::path dataDirectory(profile.toStdWString());
+    veyra::engine::EngineController playbackEngine;
+    {
+        veyra::ui::PlayerUiFacade history(playbackEngine, dataDirectory);
+        history.noteRecentFile(playing.toStdWString());
+        history.noteRecentFile((path + "/missing.mp4").toStdWString());
+    }
+    veyra::ui::QmlPlayerBridge historyBridge(playbackEngine, dataDirectory);
+    check(historyBridge.recentFiles().size() == 2, "saved history loads existing and missing files");
     model.setPlayback(playing, "playing");
     QString requested;
     QObject::connect(&model, &veyra::ui::PlaylistModel::playRequested, [&](const auto& selected) { requested = selected; });
     QQmlEngine engine;
     engine.addImportPath(QString::fromUtf8(VEYRA_QML_DIR));
     engine.rootContext()->setContextProperty("testPlaylist", &model);
+    engine.rootContext()->setContextProperty("historyBridge", &historyBridge);
     QQmlComponent component(&engine);
-    component.setData("import QtQuick\nimport Veyra\nWindow { id: owner; x: 40; y: 40; width: 800; height: 500; visible: true; PlaylistWindow { owner: owner; playlist: testPlaylist } }", QUrl());
+    component.setData(R"qml(
+import QtQuick
+import Veyra
+Window {
+    id: owner
+    x: 40; y: 40; width: 800; height: 500; visible: true
+    PlaylistWindow {
+        owner: owner
+        playlist: testPlaylist
+        hasRecentFiles: historyBridge.recentFiles.length > 0
+        onClearRecentFiles: historyBridge.clearRecentFiles()
+    }
+}
+)qml", QUrl());
     std::unique_ptr<QObject> object(component.create());
     if (!object) { std::fprintf(stderr, "%s\n", component.errorString().toUtf8().constData()); return 1; }
     auto* owner = qobject_cast<QQuickWindow*>(object.get());
@@ -134,6 +164,46 @@ int main(int argc, char** argv) {
         QTest::qWait(80);
         check(model.pathAt(1) == source && model.pathAt(model.currentIndex()) == playing, "drop in row spacing stays near the drop instead of jumping to an end");
     } else check(false, "visible handles for gap reorder");
+    win->resize(420, 320);
+    QTest::qWait(100);
+    auto* clearHistory = find(win->contentItem(), "playlist-clear-history");
+    auto* historyDialog = find(win->contentItem(), "playlist-clear-history-confirm");
+    check(clearHistory && clearHistory->isEnabled() && clearHistory->isVisible() &&
+          clearHistory->mapToScene(QPointF(clearHistory->width(), clearHistory->height())).y() <= win->height(),
+          "clear history is available at the minimum window size");
+    const auto queuedItems = model.count();
+    click(win, "playlist-clear-history");
+    check(historyDialog && historyDialog->property("shown").toBool() && historyBridge.recentFiles().size() == 2,
+          "opening confirmation leaves the history intact");
+    QTest::keyClick(win, Qt::Key_Delete);
+    QTest::keyClick(win, Qt::Key_Return);
+    check(model.count() == queuedItems && requested.isEmpty(), "confirmation owns playlist shortcuts");
+    QTest::keyClick(win, Qt::Key_Escape);
+    QTest::qWait(250);
+    check(historyDialog && !historyDialog->property("shown").toBool() && win->isVisible() &&
+          historyBridge.recentFiles().size() == 2, "Escape cancels without closing the playlist");
+
+    auto confirmClear = [&] {
+        click(win, "playlist-clear-history");
+        QTest::qWait(250);
+        click(win, "playlist-clear-history-confirm-accept");
+        QTest::qWait(250);
+    };
+    // A directory in place of the temporary file denies the atomic write.
+    const QString blocker = "ui-session.v1.tmp";
+    QSignalSpy notices(&historyBridge, &veyra::ui::QmlPlayerBridge::notice);
+    check(QDir(profile).mkdir(blocker), "write failure fixture created");
+    confirmClear();
+    check(historyBridge.recentFiles().size() == 2 && !notices.isEmpty() && notices.last().at(1).toBool(),
+          "a failed save reports the error and keeps history available");
+    check(QDir(profile).rmdir(blocker), "write failure fixture removed");
+    confirmClear();
+    veyra::ui::PlayerUiFacade reloaded(playbackEngine, dataDirectory);
+    check(historyBridge.recentFiles().isEmpty() && clearHistory && !clearHistory->isEnabled() &&
+          reloaded.loadPreferences() && reloaded.recentFiles().empty(), "confirmed clear updates both the UI and stored history");
+    check(model.count() == queuedItems && model.pathAt(model.currentIndex()) == playing && QFileInfo::exists(playing),
+          "clearing history preserves the queue, current file and media");
+
     auto* list = find(win->contentItem(), "playlist-list");
     win->resize(620, 480); win->setPosition(win->x() + 25, win->y() + 30); QTest::qWait(100);
     check(win->width() == 620 && win->height() == 480 && list && list->width() > 560, "resized layout adapts without clipping controls");

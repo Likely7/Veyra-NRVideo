@@ -1,6 +1,7 @@
 #include "veyra/source/RemotePlaySource.h"
 
 #include "veyra/Log.h"
+#include "veyra/media/FfmpegLog.h"
 #include "veyra/pipeline/ColorMetadata.h"
 
 #include <algorithm>
@@ -169,6 +170,8 @@ bool RemotePlaySource::openDecoder(remoteplay::Codec codec, std::uint32_t width,
     if(decodeMode_==RemotePlayConnectDesc::DecodeMode::Hardware&&!decodeDevice_){
         veyra::log::error("remoteplay-decode","hardware requested without the engine D3D12 device");return false;
     }
+    // Surface FFmpeg/d3d12va warnings and errors (e.g. "No space for new Reference frame!").
+    media::ffmpeglog::installApp();
     if (codecContext_ != nullptr) {
         if (codecContext_->codec_id == (codec == remoteplay::Codec::H264 ? AV_CODEC_ID_H264 : AV_CODEC_ID_HEVC)
             && static_cast<std::uint32_t>(codecContext_->width) == width

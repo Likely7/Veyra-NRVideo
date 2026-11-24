@@ -129,7 +129,7 @@ LRESULT CALLBACK PresentSink::wndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARA
 }
 
 bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
-                             const Desc& desc, Status& status)
+                             const Desc& desc, Status& status,std::unique_ptr<XessPresenter> preparedXess)
 {
     device_ = device;
     // These are borrowed until shutdown. Bind the current queue before any
@@ -177,8 +177,10 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         status = Status::WindowFailure;
         return false;
     }
-    if (!desc.targetWindow) ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
-    UpdateWindow(hwnd_);
+    if (!desc.targetWindow) {
+        ShowWindow(hwnd_, SW_SHOWNOACTIVATE);
+        UpdateWindow(hwnd_);
+    }
 
     // Factory with tearing awareness.
     UINT factoryFlags = 0;
@@ -227,8 +229,11 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         }
         for(auto& b:backBuffers_)b.Reset();
         swapChain_.Reset();swapChain4_.Reset();
-        xess_=std::make_unique<XessPresenter>();
-        if(!xess_->initialize(device,queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf(),desc.fgMultiplier,desc.xessLowLatencySleep)){
+        const bool prepared=bool(preparedXess);
+        xess_=prepared?std::move(preparedXess):std::make_unique<XessPresenter>();
+        const bool opened=prepared?xess_->bindSwapChain(queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf()):
+            xess_->initialize(device,queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf(),desc.fgMultiplier,desc.xessLowLatencySleep);
+        if(!opened){
             // XeSS is an optional experimental presenter. A missing or
             // incompatible local runtime must not prevent basic playback.
             log::warn("present", "XeSS FG initialization failed; falling back to native presentation");

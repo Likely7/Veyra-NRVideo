@@ -9,11 +9,9 @@
 #include <chrono>
 #include <filesystem>
 #include <format>
-#include <mutex>
 
 #ifdef VEYRA_HAS_AMF
-#include "core/Factory.h"
-#include "core/D3D12AMF.h"
+#include "AmfDx12Interop.h"
 #include "components/FRC.h"
 #endif
 
@@ -22,95 +20,7 @@ using Microsoft::WRL::ComPtr;
 
 #ifdef VEYRA_HAS_AMF
 namespace {
-// AMFInit hands out one factory per process; the runtime stays loaded with it.
-struct Runtime {
-    amf::AMFFactory* factory = nullptr;
-    std::string version;
-    std::wstring compiler;
-    bool systemCompiler = false;
-};
-const Runtime& runtime() {
-    static Runtime r;
-    static std::once_flag once;
-    std::call_once(once, [] {
-        // AMF reflects its D3D12 kernels with d3dcompiler_47.dll, loaded by name. The copy Qt
-        // deploys next to the program (6.3.9600, Windows 8.1) cannot reflect them: D3DReflect
-        // returns E_NOINTERFACE and FRC Init fails with AMF_DIRECTX_FAILED (AMF trace,
-        // 2026-11-14). Bind the name to the system copy before AMF asks for it.
-        HMODULE compiler = GetModuleHandleW(L"d3dcompiler_47.dll");
-        if (!compiler) compiler = LoadLibraryExW(L"d3dcompiler_47.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        wchar_t compilerPath[MAX_PATH]{}, systemPath[MAX_PATH]{};
-        if (compiler) GetModuleFileNameW(compiler, compilerPath, MAX_PATH);
-        GetSystemDirectoryW(systemPath, MAX_PATH);
-        r.compiler = compilerPath;
-        std::error_code ec;
-        r.systemCompiler = compiler && std::filesystem::equivalent(std::filesystem::path(compilerPath).parent_path(), systemPath, ec);
-        if (!r.systemCompiler)
-            log::warn("amf-frc", "d3dcompiler_47.dll is not the system copy; AMF FRC kernels may fail to load: " +
-                      std::filesystem::path(compilerPath).string());
-        // Only the driver's copy in System32, never one next to the program.
-        HMODULE module = LoadLibraryExW(AMF_DLL_NAME, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
-        if (!module) { log::warn("amf-frc", std::format("AMF runtime not loaded err={}", GetLastError())); return; }
-        auto query = reinterpret_cast<AMFQueryVersion_Fn>(GetProcAddress(module, AMF_QUERY_VERSION_FUNCTION_NAME));
-        auto init = reinterpret_cast<AMFInit_Fn>(GetProcAddress(module, AMF_INIT_FUNCTION_NAME));
-        amf_uint64 installed = 0;
-        if (query) query(&installed);
-        r.version = std::format("{}.{}.{}.{}", AMF_GET_MAJOR_VERSION(installed), AMF_GET_MINOR_VERSION(installed),
-                                AMF_GET_SUBMINOR_VERSION(installed), AMF_GET_BUILD_VERSION(installed));
-        // A runtime older than these headers is asked for its own version.
-        const amf_uint64 requested = installed && installed < AMF_FULL_VERSION ? installed : AMF_FULL_VERSION;
-        const AMF_RESULT result = init ? init(requested, &r.factory) : AMF_FAIL;
-        if (result != AMF_OK || !r.factory) {
-            r.factory = nullptr;
-            log::error("amf-frc", std::format("AMFInit failed result={} runtime={}", int(result), r.version));
-            return;
-        }
-        // Diagnostics only: VEYRA_AMF_TRACE=<file> writes AMF's own debug trace there.
-        wchar_t tracePath[MAX_PATH]{};
-        amf::AMFTrace* trace = nullptr;
-        if (GetEnvironmentVariableW(L"VEYRA_AMF_TRACE", tracePath, MAX_PATH) && r.factory->GetTrace(&trace) == AMF_OK && trace) {
-            trace->SetPath(tracePath);
-            trace->EnableWriter(AMF_TRACE_WRITER_FILE, true);
-            trace->SetGlobalLevel(AMF_TRACE_DEBUG);
-            trace->SetWriterLevel(AMF_TRACE_WRITER_FILE, AMF_TRACE_DEBUG);
-            log::info("amf-frc", "AMF trace enabled (VEYRA_AMF_TRACE)");
-        }
-    });
-    return r;
-}
-UINT64 fenceValue(ID3D12Fence* fence) {
-    UINT64 value = 0; UINT size = sizeof(value);
-    return SUCCEEDED(fence->GetPrivateData(AMFFenceValueGUID, &size, &value)) ? value : 0;
-}
-void setFenceValue(ID3D12Fence* fence, UINT64 value) { fence->SetPrivateData(AMFFenceValueGUID, sizeof(value), &value); }
-ComPtr<ID3D12Fence> resourceFence(ID3D12Resource* resource) {
-    IUnknown* unknown = nullptr; UINT size = sizeof(unknown);
-    ComPtr<ID3D12Fence> fence;
-    if (SUCCEEDED(resource->GetPrivateData(AMFFenceGUID, &size, &unknown)) && unknown) {
-        unknown->QueryInterface(IID_PPV_ARGS(&fence));
-        unknown->Release();
-    }
-    return fence;
-}
-D3D12_RESOURCE_STATES resourceState(ID3D12Resource* resource) {
-    UINT value = 0; UINT size = sizeof(value);
-    resource->GetPrivateData(AMFResourceStateGUID, &size, &value);
-    return D3D12_RESOURCE_STATES(value);
-}
-void setResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state) {
-    const UINT value = UINT(state);
-    resource->SetPrivateData(AMFResourceStateGUID, sizeof(value), &value);
-}
-void barrier(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after) {
-    if (before == after) return;
-    D3D12_RESOURCE_BARRIER b{};
-    b.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition.pResource = resource;
-    b.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-    b.Transition.StateBefore = before;
-    b.Transition.StateAfter = after;
-    list->ResourceBarrier(1, &b);
-}
+using namespace amfDx12;
 amf::AMF_SURFACE_FORMAT surfaceFormat(DXGI_FORMAT format) {
     switch (format) {
     case DXGI_FORMAT_R8G8B8A8_UNORM: return amf::AMF_SURFACE_RGBA;
@@ -119,13 +29,6 @@ amf::AMF_SURFACE_FORMAT surfaceFormat(DXGI_FORMAT format) {
     case DXGI_FORMAT_R16G16B16A16_FLOAT: return amf::AMF_SURFACE_RGBA_F16;
     default: return amf::AMF_SURFACE_UNKNOWN;
     }
-}
-// Shutdown only: the textures may still be read on AMF's queue.
-void waitFence(ID3D12Fence* fence, UINT64 value) {
-    if (!fence || !value || fence->GetCompletedValue() >= value) return;
-    HANDLE event = CreateEventW(nullptr, FALSE, FALSE, nullptr);
-    if (event && SUCCEEDED(fence->SetEventOnCompletion(value, event))) WaitForSingleObject(event, 2000);
-    if (event) CloseHandle(event);
 }
 }
 #endif
@@ -190,7 +93,12 @@ bool AmfFrcBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* queue, 
     result = rt.factory->CreateComponent(p.context, AMFFRC, &p.frc);
     if (result != AMF_OK || !p.frc) { log::error("amf-frc", std::format("CreateComponent(AMFFRC) failed result={} runtime={}", int(result), p.version)); shutdown(); return false; }
     // AMD's guidance: the SUPER motion-search profile from 1440p up, HIGH below.
+    // Dedicated GPUs also take SUPER below 1440p: on 1080p console capture HIGH
+    // loses fast camera pans and falls back to a two-frame blend (double image);
+    // SUPER tracks them for about 0.3 ms more GPU time (RX 9070 XT, 2026-11-20).
+    // Low-memory GPUs (lowPower, under 2 GiB) keep HIGH below 1440p.
     const bool large = uint64_t(width) * height > uint64_t(2560) * 1440;
+    const bool superProfile = large || !lowPower;
     // The downscaled (performance) search returned the previous frame unchanged at
     // 640x360 while it interpolated from 960x540 up (probe on the Radeon iGPU,
     // 2026-11-14); small frames are cheap with the full-resolution search anyway.
@@ -199,7 +107,7 @@ bool AmfFrcBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* queue, 
     p.frc->SetProperty(AMF_FRC_MODE, amf_int64(FRC_ONLY_INTERPOLATED));
     p.frc->SetProperty(AMF_FRC_ENABLE_FALLBACK, true); // blend, not repeat, where the motion is unsure
     p.frc->SetProperty(AMF_FRC_INDICATOR, false);
-    p.frc->SetProperty(AMF_FRC_PROFILE, amf_int64(large ? FRC_PROFILE_SUPER : FRC_PROFILE_HIGH));
+    p.frc->SetProperty(AMF_FRC_PROFILE, amf_int64(superProfile ? FRC_PROFILE_SUPER : FRC_PROFILE_HIGH));
     p.frc->SetProperty(AMF_FRC_MV_SEARCH_MODE, amf_int64(lowPower ? FRC_MV_SEARCH_PERFORMANCE : FRC_MV_SEARCH_NATIVE));
     // The future frame would add one more frame of delay and shift the output a pair later.
     p.frc->SetProperty(AMF_FRC_USE_FUTURE_FRAME, false);
@@ -222,7 +130,7 @@ bool AmfFrcBackend::initialize(ID3D12Device* device, ID3D12CommandQueue* queue, 
     }
     p.queue = queue; p.width = width; p.height = height; p.ready = true;
     log::info("amf-frc", std::format("ready runtime={} {}x{} format={} profile={} motionSearch={} futureFrame=0 mode=only-interpolated initMs={:.1f}",
-        p.version, width, height, int(format), large ? "super" : "high", lowPower ? "performance" : "native",
+        p.version, width, height, int(format), superProfile ? "super" : "high", lowPower ? "performance" : "native",
         std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count()));
     return true;
 #else

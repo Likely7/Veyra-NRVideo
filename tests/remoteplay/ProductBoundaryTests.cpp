@@ -154,6 +154,11 @@ int virtualInput(){
     SDL_SetJoystickVirtualTouchpad(joystick,0,0,true,.4f,.4f,1);SDL_UpdateGamepads();
     SDL_SetJoystickVirtualTouchpad(joystick,0,0,false,.4f,.4f,0);SDL_UpdateGamepads();
     auto tapDown=input.poll(true),tapUp=input.poll(true);ok&=tapDown.touches[0].id>=0&&tapUp.touches[0].id<0;
+    auto click=touchpadPressOnly(tapDown);
+    ok&=click.touches[0].id<0&&!(click.buttons&ControllerState::Touchpad);
+    tapDown.buttons|=ControllerState::Touchpad;
+    click=touchpadPressOnly(tapDown);
+    ok&=click.touches[0].id<0&&(click.buttons&ControllerState::Touchpad);
     ok&=input.calibrate();
     gyro[0]=.01f;gyro[1]=.02f;gyro[2]=.03f;
     for(int i=0;i<121;++i){SDL_SendJoystickVirtualSensorData(joystick,SDL_SENSOR_GYRO,20000000+i*1000000,gyro,3);input.poll(true);}

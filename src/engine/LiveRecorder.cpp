@@ -444,6 +444,7 @@ bool writeReplayFile(const std::wstring& path,const ReplayBuffer::Clip& clip,std
 struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     // Fixed at creation.
     ComPtr<ID3D12Device> device;
+    uint32_t sourceWidth=0,sourceHeight=0;
     uint32_t width=0,height=0,hdrMode=0,fps=60,bitrateMbps=20,vendor=0;
     uint32_t multipass=0;bool psychoAq=false;   // NVENC tuning (RecordingSettings)
     bool hevc=false,nvenc=false;
@@ -565,7 +566,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         if(pending<0)closeJobs();
     }
     bool matches(const PresentCapture::Frame& frame) const {
-        return frame.width==width&&frame.height==height&&frame.hdrMode==hdrMode;
+        return frame.width==sourceWidth&&frame.height==sourceHeight&&frame.hdrMode==hdrMode;
     }
 
     // ---- creation (engine thread) -------------------------------------------
@@ -623,8 +624,8 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         list->ResourceBarrier(1,&source);
         states.transition(list,y.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         states.transition(list,uv.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        // reserved.x = HDR mode, reserved.y = output dither step (RgbToNv12.hlsl).
-        const float constants[8]={std::bit_cast<float>(width),std::bit_cast<float>(height),std::bit_cast<float>(hdrMode),frame.ditherStep,0,0,0,0};
+        const float constants[8]={std::bit_cast<float>(width),std::bit_cast<float>(height),std::bit_cast<float>(hdrMode),frame.ditherStep,
+            std::bit_cast<float>(sourceWidth),std::bit_cast<float>(sourceHeight),0,0};
         convert.bind(list,constants,pipeline::gpuHandleOf(convert,UINT(index)).ptr,pipeline::gpuHandleOf(convert,kSlots).ptr);
         list->Dispatch((width+15)/16,(height+15)/16,1);
         states.uavBarrier(list,y.Get());states.uavBarrier(list,uv.Get());
@@ -1337,7 +1338,7 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
             s.retire(s.current,{});s.current.reset();return false;
         }
         veyra::log::info("live-recorder",std::format("picture changed {}x{} hdr={} -> {}x{} hdr={}; continuing in a new {}",
-            s.current->width,s.current->height,s.current->hdrMode,frame.width,frame.height,frame.hdrMode,s.replayMode?"replay buffer":"file"));
+            s.current->sourceWidth,s.current->sourceHeight,s.current->hdrMode,frame.width,frame.height,frame.hdrMode,s.replayMode?"replay buffer":"file"));
         s.retire(s.current,s.replayMode?std::wstring{}:L"画面尺寸或 HDR 模式变化，已接着写入新文件");s.current.reset();
     }
     if(!s.current){
@@ -1356,14 +1357,17 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         segment->vendor=adapterVendor(segment->device.Get());
         segment->nvenc=segment->vendor==0x10DE&&GetEnvironmentVariableW(L"VEYRA_TEST_FORCE_MF_ENCODER",nullptr,0)==0;
         if(frame.hdrMode&&!segment->nvenc)return fail(L"HDR 画面录制需要 NVIDIA 显卡（HEVC 10bit）；请关闭 HDR 输出后再录制");
-        if(frame.width<16||frame.height<16||(frame.width&1)||(frame.height&1))
+        if(frame.width<16||frame.height<16)
             return fail(std::format(L"当前画面尺寸 {}×{} 无法录制",frame.width,frame.height));
-        segment->width=frame.width;segment->height=frame.height;segment->hdrMode=frame.hdrMode;
+        segment->sourceWidth=frame.width;segment->sourceHeight=frame.height;segment->hdrMode=frame.hdrMode;
+        // NV12/P010 need even extents. The converter extends the last column or row.
+        segment->width=(frame.width+1u)&~1u;
+        segment->height=(frame.height+1u)&~1u;
         // H.264 hardware encoders stop at 4096 pixels per side.
-        segment->hevc=s.settings.hevc||frame.hdrMode!=0||frame.width>4096||frame.height>4096;
+        segment->hevc=s.settings.hevc||frame.hdrMode!=0||segment->width>4096||segment->height>4096;
         const double hint=s.presentFps.load();
         segment->fps=s.settings.fpsLimit?s.settings.fpsLimit:uint32_t(std::clamp<long>(std::lround(hint>1?hint:60.0),10,480));
-        segment->bitrateMbps=s.settings.bitrateMbps?s.settings.bitrateMbps:autoBitrateMbps(frame.width,frame.height,segment->fps,segment->hevc);
+        segment->bitrateMbps=s.settings.bitrateMbps?s.settings.bitrateMbps:autoBitrateMbps(segment->width,segment->height,segment->fps,segment->hevc);
         segment->multipass=std::min(s.settings.multipass,2u);segment->psychoAq=s.settings.psychoAq;
         segment->sound=s.settings.audio;
         segment->microphone=s.settings.microphone;
@@ -1383,8 +1387,9 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         s.current=segment;++s.files;++s.nextNumber;s.audioTrack=segment->audio;
         if(segment->sound)sink::addRecordingAudioSink(segment);
         if(segment->microphone)attachMicrophone(segment,s.settings.microphoneId);
-        veyra::log::info("live-recorder",std::format("{} {} path={} extent={}x{} hdr={} codec={} fps={} bitrateMbps={} encoder={} audio={} microphone={}",
-            s.replayMode?"replay buffer":"file",s.files,segment->name(),segment->width,segment->height,segment->hdrMode,segment->hevc?"HEVC":"H264",segment->fps,segment->bitrateMbps,
+        veyra::log::info("live-recorder",std::format("{} {} path={} extent={}x{} source={}x{} hdr={} codec={} fps={} bitrateMbps={} encoder={} audio={} microphone={}",
+            s.replayMode?"replay buffer":"file",s.files,segment->name(),segment->width,segment->height,segment->sourceWidth,segment->sourceHeight,
+            segment->hdrMode,segment->hevc?"HEVC":"H264",segment->fps,segment->bitrateMbps,
             segment->nvenc?"NVENC":"MediaFoundation",segment->sound,segment->microphone?(segment->microphoneTrack?"track":"mixed"):"off"));
     }
     if(!s.current->capture(list,frame,now))return false;

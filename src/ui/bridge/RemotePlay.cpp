@@ -22,6 +22,7 @@ QVariantMap QmlPlayerBridge::ps5() const {
     out["controller"] = c.connected;
     out["gyro"] = c.gyro && c.accel;
     out["calibrating"] = c.calibrating;
+    out["touchpadPressOnly"] = impl_->prefBool("ps5TouchpadPressOnly",false);
 #else
     out["available"] = false;
 #endif
@@ -324,6 +325,18 @@ bool QmlPlayerBridge::ps5Set(const QString& key, const QVariant& value) {
         bool ok = false; const int n = value.toInt(&ok); const auto [low, high] = ranges.value(key);
         if (!ok || n < low || n > high) return false;
         impl_->ps5Form[key] = n;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    } else if(key==QLatin1String("touchpadPressOnly")){
+        const auto before=impl_->prefs;
+        const bool enabled=value.toBool();
+        impl_->prefs[QStringLiteral("ps5TouchpadPressOnly")]=enabled;
+        if(!impl_->savePrefs()){
+            impl_->prefs=before;
+            emit notice(tr("设置保存失败，请查看日志"),true);
+            return false;
+        }
+        impl_->engine.setRemotePlayTouchpadPressOnly(enabled);
+#endif
     } else if (key == QLatin1String("viewOnly")) impl_->ps5Form[key] = value.toBool();
     else if (key == QLatin1String("host") || key == QLatin1String("account")) impl_->ps5Form[key] = value.toString().trimmed();
     else return false;
@@ -513,8 +526,10 @@ void QmlPlayerBridge::ps5Forget() {
 #endif
 }
 void QmlPlayerBridge::ps5OpenAccountChecker() {
+    // Opens Veyra's own guide to getting the Account ID through Sony's sign-in (psn-account-id
+    // or chiaki-ng). Never a third-party lookup site: those ask for the NPSSO session cookie.
     // Fixed public URL; no account IDs, pairing credentials or login tokens leave Veyra.
-    const bool opened=QDesktopServices::openUrl(QUrl(QStringLiteral("https://www.psntools.com/psn/checker")));
+    const bool opened=QDesktopServices::openUrl(QUrl(QStringLiteral("https://github.com/Likely7/Veyra-NRVideo/blob/main/docs/PSN_ACCOUNT_ID.md")));
     impl_->ps5Status=opened
         ? tr("在网页获取 PSN Account ID 后，复制到配对栏，再填写主机的 8 位配对码。")
         : tr("无法打开浏览器，请检查默认浏览器设置。");

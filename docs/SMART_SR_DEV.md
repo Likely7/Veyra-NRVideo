@@ -58,23 +58,25 @@ Smart SR is therefore its own switch on the single SR pass.
   at the work size, the frame is copied as without smart SR.
 - Status: `PlayerSnapshot::smartSr*` -> `QmlPlayerBridge::smartSrStatus`
   ("正在检测…" / "检测到渲染分辨率 WxH…" / "画面不是放大输出…") under the switch.
-- Storage: PresetStore v38 (field after the v37 layout), preset library v23 and
-  mode session v18, each in a `.smart-sr` sidecar so older files keep their
-  bytes (as `.sr-stage` / `.dual-sr` do). Export worker ABI version 16 (the
+- Storage (after merging upstream 2.2.1, which took presets v38/v39, library
+  v23-v26 and session v18-v21): PresetStore v40 (field after the v38 layout),
+  preset library v27 and mode session v22, each saved to a `.smart-sr` sidecar
+  the way upstream saves `.video-denoise`, so the file it starts from keeps its
+  bytes. Export worker ABI version 17 (16 is upstream's video denoise; the
   settings struct grew; exports do not run smart SR).
 - i18n: 7 new strings (hint says "SDR 与 HDR10") in all 9 catalogue languages (`extract.py --check`:
   missing 0, placeholder problems 0).
 - Tests: `veyra_effect_chain_tests` (math, verdict rules incl. unmeasured
   heights, normalization, rebuild, graph description),
-  `veyra_repair_preset_tests` (v38 round trip, invalid value keeps the file,
-  off stays v21), `veyra_preset_library_tests` (v23 / v18 sidecars).
+  `veyra_repair_preset_tests` (v40 round trip, invalid value keeps the file,
+  off stays v21), `veyra_preset_library_tests` (v27 / v22 sidecars).
 - Build: main needs OpenSSL (portable update verification); libdovi is off in
   this reduced local build.
 - Results on main with the switch (zh-TW UI, private data dir): turning it on
   rebuilds once (`smart-sr auto: 22 candidate heights ... whole-source SR`),
   the Switch 2 clip settles at `render 1920x1080 (knee x5.3 notch x3.4)` and the
   row under the switch reads "偵測到渲染解析度 1920x1080，依此還原後超解析".
-  The session goes to `chain-session.v1.smart-sr` (v18) with the original file
+  The session goes to `chain-session.v1.smart-sr` (v18 then; v22 now) with the original file
   unchanged; after a restart the switch is on and the clip settles again.
   Synthetic 1440p -> `render 2560x1440 (knee x21.7 notch x14.4)`; native 4K
   (compressed) -> `whole-source SR (knee x1.6)`, i.e. the same-size repair.
@@ -99,7 +101,7 @@ Smart SR is therefore its own switch on the single SR pass.
     `render 2560x1440 knee x21.7`, `whole-source SR knee x1.6`); the Switch 2
     clip screenshot is byte-identical to the one before.
 - Unit tests here: effect chain 516 PASS / 0 FAIL, preset library 646 PASS /
-  0 FAIL, ui i18n 0 failures; repair presets: every itemized line (smart SR v38
+  0 FAIL, ui i18n 0 failures; repair presets: every itemized line (smart SR v38, now v40
   included) is 1, but the overall line is 0 - the same overall 0 as upstream
   c663312 built from its own sources in this environment.
 

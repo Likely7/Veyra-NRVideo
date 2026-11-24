@@ -2,7 +2,7 @@
 // minimal page and the fullscreen control window (G2.5). Only the pill: where it
 // sits and how it enters belong to the owner.
 //
-// .cine-bar: 3 columns (230px | 1fr | 230px), 92px tall, radius 30. The design's
+// .cine-bar: three columns, 92px tall, radius 30. The design's
 // frosted glass cannot sample a native video window, so the fill is the opaque
 // approximation rgba(22,22,26,.86) (D5).
 import QtQuick
@@ -29,6 +29,7 @@ Rectangle {
     readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
+    readonly property bool compact: width < 820
     readonly property bool seekPreviewOpen: seekMouse.enabled && (seekMouse.containsMouse || seekArea.scrubbing)
     readonly property bool editing: volumeSlider.editing
     // Keep the control window active until a seek releases its mouse grab, too.
@@ -58,11 +59,11 @@ Rectangle {
         anchors.fill: parent
         anchors.leftMargin: 16
         anchors.rightMargin: 16
-        spacing: 18
+        spacing: 12
 
-        // --- left: artwork + title (230px) ---------------------------
+        // --- left: artwork, title and playlist -----------------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 140; Layout.maximumWidth: 230
+            Layout.preferredWidth: 230; Layout.minimumWidth: 112; Layout.maximumWidth: 230
             Layout.fillHeight: true
             spacing: 10
             // The file's own cover art when it carries one (MP4 covr, MKV image
@@ -131,18 +132,21 @@ Rectangle {
         // --- middle: transport + seek --------------------------------
         ColumnLayout {
             Layout.fillWidth: true
+            Layout.minimumWidth: transport.implicitWidth
             Layout.alignment: Qt.AlignVCenter
             spacing: 4
 
             RowLayout {
+                id: transport
                 Layout.alignment: Qt.AlignHCenter
-                spacing: 10
+                spacing: bar.compact ? 4 : 6
 
                 // .cbtn: 32px round, muted, brightens on hover.
                 component CBtn: Item {
                     id: cbtn
                     property string glyph: ""
                     property string tip: ""
+                    property bool highlighted: false
                     // The signal has to be declared: an inline component does not
                     // inherit the TapHandler's signal, so callers cannot assign
                     // onTapped without it.
@@ -157,7 +161,7 @@ Rectangle {
                     VIcon {
                         anchors.centerIn: parent
                         name: glyph
-                        color: cHover.hovered ? "#FFFFFF" : Theme.t2
+                        color: cbtn.highlighted ? Theme.warn : cHover.hovered ? "#FFFFFF" : Theme.t2
                     }
                     scale: cTap.pressed ? 0.86 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
@@ -194,7 +198,13 @@ Rectangle {
                 }
 
                 CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
-                CBtn { glyph: "music"; onTapped: audioMenu.openAt(this, "up") }
+                CBtn {
+                    objectName: "cine-audio-tracks"
+                    glyph: audioMenu.captureSource ? "vol" : "music"
+                    tip: audioMenu.buttonLabel
+                    highlighted: audioMenu.monitorOff
+                    onTapped: audioMenu.openAt(this, "up")
+                }
                 PlaybackRateButton { id: playbackRate; objectName: "cine-playback-rate"; menuBottomLimit: bar.menuBottomLimit }
             }
 
@@ -420,9 +430,10 @@ Rectangle {
             }
         }
 
-        // --- right: preset, volume, fullscreen (230px) ---------------
+        // --- right: preset, volume, picture and bar controls ----------
         RowLayout {
-            Layout.preferredWidth: 308; Layout.minimumWidth: 308; Layout.maximumWidth: 308
+            Layout.fillWidth: false
+            Layout.minimumWidth: implicitWidth
             Layout.alignment: Qt.AlignVCenter | Qt.AlignRight
             spacing: 6
 
@@ -431,6 +442,7 @@ Rectangle {
             VPill {
                 key: ""
                 value: veyra.currentPresetName
+                maximumValueWidth: bar.compact ? 52 : 80
                 onClicked: presetMenu.openAt(this, "up")
                 Rectangle {
                     width: 7; height: 7; radius: 3.5
@@ -438,32 +450,26 @@ Rectangle {
                 }
             }
 
-            Item {
-                implicitWidth: 146
-                implicitHeight: 32
-                Layout.minimumWidth: 146
-                RowLayout {
-                    anchors.fill: parent
-                    spacing: 6
-                    VIcon { name: "vol"; color: Theme.t2 }
-                    VSlider {
-                        id: volumeSlider
-                        objectName: "cine-volume"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.minimumWidth: 72
-                        from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
-                        defaultValue: 1
-                        valueFromModel: true
-                        fullKnobHitArea: true
-                        onMoved: moved => veyra.volume = moved
-                    }
-                    VSliderValue {
-                        Layout.preferredWidth: 36
-                        slider: volumeSlider
-                        text: Math.round(veyra.volume * 100) + "%"
-                        color: Theme.t2; pixelSize: 10
-                    }
+            RowLayout {
+                Layout.preferredHeight: 32
+                spacing: 6
+                VIcon { name: "vol"; color: Theme.t2 }
+                VSlider {
+                    id: volumeSlider
+                    objectName: "cine-volume"
+                    Layout.preferredWidth: bar.compact ? 48 : 68
+                    Layout.fillHeight: true
+                    from: 0; to: veyra.maximumVolume; value: veyra.volume; inputScale: 100
+                    defaultValue: 1
+                    valueFromModel: true
+                    fullKnobHitArea: true
+                    onMoved: moved => veyra.volume = moved
+                }
+                VSliderValue {
+                    Layout.preferredWidth: 30
+                    slider: volumeSlider
+                    text: Math.round(veyra.volume * 100) + "%"
+                    color: Theme.t2; pixelSize: 10
                 }
             }
 
@@ -561,24 +567,11 @@ Rectangle {
         }
     }
 
-    // 音轨: this one is real - the bridge exposes the file's audio streams and the
-    // selected index, so the list and the check mark both come from the engine.
-    VMenu {
+    PlayerAudioMenu {
         id: audioMenu
+        objectName: "cine-audio-menu"
+        backend: veyra
         aboveLimit: bar.menuBottomLimit
-        title: qsTr("音轨")
-        // The bridge's label already carries language · title · codec; only the
-        // channel count is separate.
-        readonly property var mk: t => ({ label: t.label, index: t.index,
-                                          note: t.channels > 0 ? (t.channels + qsTr(" 声道")) : "",
-                                          checked: t.index === veyra.selectedAudioTrack })
-        items: veyra.audioTracks.length > 0
-               ? veyra.audioTracks.map(mk).concat([{ sep: true },
-                     { label: qsTr("音频设置…"), note: qsTr("输出设备、音画同步、偏移"), icon: "music", act: "dlg" }])
-               : [{ label: qsTr("片源没有音轨或尚未打开"), disabled: true }]
-        onPicked: (i, o) => {
-            if (o.act === "dlg") return bar.requestDialog("audio")
-            if (o.index !== undefined) veyra.selectedAudioTrack = o.index
-        }
+        onSettingsRequested: bar.requestDialog("audio")
     }
 }

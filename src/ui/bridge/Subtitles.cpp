@@ -1,6 +1,7 @@
 // QML bridge: Subtitles responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "../LiveTranslation.h"
+#include <QColor>
 
 namespace veyra::ui {
 // --- subtitles (P4-c) --------------------------------------------------------
@@ -30,7 +31,7 @@ void QmlPlayerBridge::refreshSubtitles(const std::wstring& media) {
     if (!i.subLoader) i.subLoader = std::make_unique<engine::SubtitleLoader>();
     // A file on a server is scanned only while playback has its buffer (#48): a second reader
     // that takes the same share's bandwidth would starve the picture it is meant to subtitle.
-    const bool server = !media.empty() && engine::subtitleServerFile(media);
+    const bool server = !media.empty() && (engine::subtitleServerFile(media)||engine::subtitleHttpContainer(media));
     i.subScanGate = server ? std::make_shared<std::atomic<bool>>(false) : nullptr;
     i.subScanOpen = false;
     i.subLoader->setReadGate(i.subScanGate);
@@ -47,8 +48,9 @@ void QmlPlayerBridge::tickSubtitles() {
         const auto& n = i.snapshot.network;
         const bool ended = n.active && n.state == media::NetworkStats::State::Ended;
         const bool healthy = n.active && !n.bandwidthLow && n.state == media::NetworkStats::State::Playing;
-        const bool open = i.subScanOpen ? (ended || (healthy && n.bufferedSeconds >= 1.0))
-                                        : (ended || (healthy && n.bufferedSeconds >= 3.0));
+        const bool http = engine::subtitleHttpContainer(i.subMedia);
+        const double needed = http ? (i.subScanOpen?0.5:1.0) : (i.subScanOpen?1.0:3.0);
+        const bool open = ended || (healthy && n.bufferedSeconds >= needed);
         if (open != i.subScanOpen) {
             i.subScanOpen = open;
             i.subScanGate->store(open);
@@ -128,6 +130,29 @@ void QmlPlayerBridge::tickSubtitles() {
     const auto& s = i.snapshot;
     liveTranslation_->setPlayback(s.sessionId, s.running && !s.image &&
         s.transport == engine::TransportState::Playing, false);
+    // On-screen text (capture card, PS5/Xbox/PC streaming, video): the engine reads the
+    // chosen region of the presented picture only while this source is on.
+    const bool screenText = liveTranslation_->screenTextWanted();
+    engine::ScreenTextOptions screenOptions;
+    if (screenText) {
+        const QRectF r = liveTranslation_->screenTextRect();
+        screenOptions.x = float(r.x()); screenOptions.y = float(r.y());
+        screenOptions.w = float(r.width()); screenOptions.h = float(r.height());
+        screenOptions.centeredOnly = liveTranslation_->screenTextCentered();
+        screenOptions.language = liveTranslation_->screenTextLanguage().toStdWString();
+        screenOptions.intervalMs = uint32_t(liveTranslation_->screenTextIntervalMs());
+    }
+    if (screenText != i.screenTextOn || (screenText && !(screenOptions == i.screenTextOptions))) {
+        i.engine.setScreenText(screenText, screenOptions);
+        i.screenTextOn = screenText;
+        i.screenTextOptions = screenOptions;
+    }
+    if (screenText) {
+        const auto onScreen = i.engine.screenTextSnapshot();
+        liveTranslation_->acceptScreenText(QString::fromStdWString(onScreen.text), onScreen.ready,
+                                           onScreen.error.empty() ? QString() : uiText(onScreen.error),
+                                           QString::fromStdWString(onScreen.reading), int(onScreen.words));
+    }
     // Draw. The overlay is a layered child of the video window: it moves with the
     // picture and is clipped by the same window region as the video itself.
     if (!i.videoWindow || !IsWindow(i.videoWindow)) return;
@@ -205,18 +230,37 @@ void QmlPlayerBridge::tickSubtitles() {
         emit subtitleTextChanged();
     }
     // Live text is never copied into subtitle diagnostics or the export graph.
-    const QString translated = liveTranslation_->translated();
-    const QString original = liveTranslation_->caption();
-    const bool showOriginal = liveTranslation_->showOriginal();
-    QString live = translated;
-    if (showOriginal && !original.isEmpty() && original != translated)
-        live = translated.isEmpty() ? original : original + QLatin1Char('\n') + translated;
-    if (!live.isEmpty()) {
-        SubtitleLine line;
-        line.text = live.toStdWString();
-        line.style.alignment = draw.empty() ? 2 : 8;
-        draw.push_back(std::move(line));
+    const auto [original, translated, draft] = liveTranslation_->displayCaption();
+    if (original.isEmpty() && translated.isEmpty() && draft.isEmpty()) {
+        updateSubtitleOverlay(i.subOverlay, draw, view);
+        return;
     }
+    const int alignment = draw.empty() ? 2 : 8;
+    const auto beginLive = draw.size();
+    const int liveSize = i.prefInt("liveSubtitleSize", 0);
+    const double liveScale = liveSize > 0 ? double(std::clamp(liveSize, 16, 56)) / 22.0 : view.scale;
+    const auto liveColor = QColor::fromString(i.prefString("liveSubtitleColor"));
+    const uint32_t liveRgb = liveColor.isValid() ? liveColor.rgb() & 0x00ffffffu : 0x00ffffffu;
+    const int liveShadow = i.prefInt("liveSubtitleShadow", -1);
+    const int liveLines = i.prefInt("liveSubtitleLines", 0);
+    const auto appendLive = [&](const QString& text, double scale, uint32_t alpha, int lines, bool italic = false) {
+        SubtitleLine line;
+        line.text = text.toStdWString();
+        line.style.alignment = alignment;
+        line.style.italic = italic;
+        line.style.primary = (alpha << 24) | liveRgb;
+        line.scaleOverride = liveScale * scale;
+        if (liveShadow >= 0) line.shadowOffset = std::min(liveShadow, 8);
+        line.maximumLines = lines;
+        draw.push_back(std::move(line));
+    };
+    if (liveTranslation_->showOriginal() && !original.isEmpty() && original != translated)
+        appendLive(original, 0.8, 0xb3, 1);
+    if (!translated.isEmpty())
+        appendLive(translated, 1.0, 0xff, std::clamp(liveLines > 0 ? liveLines : view.targetLines, 1, 3));
+    if (alignment == 8 && draw.size() - beginLive == 2)
+        std::swap(draw[beginLive], draw[beginLive + 1]);
+    if (!draft.isEmpty()) appendLive(draft, 0.75, 0x99, 1, true);
     updateSubtitleOverlay(i.subOverlay, draw, view);
 }
 QVariantList QmlPlayerBridge::subtitleTracks() const {

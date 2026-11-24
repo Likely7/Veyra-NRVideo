@@ -9,11 +9,9 @@
 #include "veyra/media/FormatBadgeWindow.h"
 #include "veyra/ngx/DlssgLite.h"
 #include "veyra/RuntimePaths.h"
-#include "veyra/ui/GamePassthrough.h"
 #include <QAbstractNativeEventFilter>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QtGui/qscreen_platform.h>
 #include <shellapi.h>
 #include <QElapsedTimer>
 #include <QScopedValueRollback>
@@ -32,8 +30,6 @@
 #include <QCursor>
 #include <QScreen>
 #include <QWindow>
-#include <QPlatformSurfaceEvent>
-#include <QPointer>
 
 #include <QDateTime>
 #include <QDir>
@@ -192,14 +188,27 @@ namespace bridge_detail {
 // WM_DISPLAYCHANGE reaches every top-level window when a display mode, refresh
 // rate or HDR state, or the set of screens, changes: the 可变刷新 state is then
 // read once more (DisplayStateService) instead of on a timer.
-struct DisplayChangeFilter final : QAbstractNativeEventFilter {
+struct DisplayEventFilter final : QAbstractNativeEventFilter {
     bool* changed = nullptr;
     bool nativeEventFilter(const QByteArray& type, void* message, qintptr*) override {
-        if (changed && type == "windows_generic_MSG" && static_cast<const MSG*>(message)->message == WM_DISPLAYCHANGE) *changed = true;
+        if (type != "windows_generic_MSG") return false;
+        const auto* msg = static_cast<const MSG*>(message);
+        if (msg->message == WM_DISPLAYCHANGE && changed) *changed = true;
+        // Windows created or shown after monitor capture starts must also be
+        // excluded so the preview and controls never feed back into the source.
+        if (msg->message == WM_SHOWWINDOW && msg->wParam)
+            source::excludeWindowFromScreenCapture(msg->hwnd);
+        if (msg->message == WM_WINDOWPOSCHANGING) {
+            const auto* pos = reinterpret_cast<const WINDOWPOS*>(msg->lParam);
+            if (pos && (pos->flags & SWP_SHOWWINDOW))
+                source::excludeWindowFromScreenCapture(msg->hwnd);
+        }
         return false;
     }
 };
 } // namespace bridge_detail
+
+class ModelAssets;
 
 struct QmlPlayerBridge::Impl {
     // Per-layer on/off before the NR master switch turned them all off.
@@ -209,9 +218,10 @@ struct QmlPlayerBridge::Impl {
     engine::EngineController& engine;
     PlayerUiFacade facade;
 
-    // Announce the format when a new source first delivers a picture.
+    // Announce the effective format on the first picture and on format changes.
     std::unique_ptr<media::FormatBadgeWindow> formatBadge;
-    uint64_t formatBadgeSession = 0;
+    std::wstring formatBadgeLabel;
+    uint64_t formatBadgeSession = 0, formatBadgeSerial = 0;
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.
@@ -221,6 +231,7 @@ struct QmlPlayerBridge::Impl {
     bool openingSource = false;
     uint64_t openingSessionId = 0;
     uint64_t vramNoticeSession = 0;   // the session the video-memory warning was shown for
+    uint64_t tearingNoticeSession = 0;
 
     // The chain the UI edits, kept in step with the facade's pending settings.
     engine::EffectChain chain;
@@ -325,6 +336,7 @@ struct QmlPlayerBridge::Impl {
     double exportTrimStartSeconds = 0.0;
     double exportTrimEndSeconds = 0.0;
     std::wstring exportPresetName;
+    std::wstring lastAppliedPresetName;
     QString initialPageOverride;
     QString currentPage;
     std::wstring captureDevice;
@@ -363,6 +375,9 @@ struct QmlPlayerBridge::Impl {
     int subBottomInset = 0;
     HWND subOverlay = nullptr;
     bool subOverlayFailed = false;
+    // Live translation's on-screen text source: what the engine was last told.
+    bool screenTextOn = false;
+    engine::ScreenTextOptions screenTextOptions;
     std::wstring subMedia;
     std::atomic<bool> subAligning{false}, subAlignReady{false};
     std::atomic<int> subAlignOffset{0};
@@ -443,6 +458,8 @@ struct QmlPlayerBridge::Impl {
     // notify with every engine snapshot, so each 60 Hz tick re-read the manifest and
     // rebuilt the page's 49 rows (audit 2026-10-15 B5).
     QVariantList componentList; bool componentListRead = false;
+    ModelAssets* anrInstaller = nullptr; // QObject child of the bridge.
+    bool anrInstallCancelled = false;
     bool liveCompanionCap = false;   // updateLiveCompanionCompat
     int captureHiddenRates = 0;   // set with captureRateCache
     template <class Build> const QVariantList& captureList(CaptureListCache& cache, const std::wstring& a, const std::wstring& b, Build&& build) {
@@ -515,6 +532,7 @@ struct QmlPlayerBridge::Impl {
     uint64_t imageSession = 0;
     enum class ImagePhase { Idle, Opening, Saving } imagePhase = ImagePhase::Idle;
     sink::ActiveRenderEndpoint audioActive;
+    sink::HdmiBitstreamState hdmiState;
     int audioPollTicks = 0;
     // --- protection drawing (#8) ---
     QString protDraw;                         // "" | rect | ellipse
@@ -528,7 +546,7 @@ struct QmlPlayerBridge::Impl {
     // --- performance orbs / status light (#13) ---
     ui::live_status::DashboardHistory history;
     int historyTicks = 0;
-    QString runStatus, runLevel, runDetail;
+    QString runStatus, runLevel, runDetail, runAction, runHint;
     QStringList runOptions;
     double effectiveOutputFps=-1;
     // FG output hint for the 倍率 row; 可变刷新 level (gfx::vrrLevel) of the
@@ -542,7 +560,7 @@ struct QmlPlayerBridge::Impl {
     bool displayChecking=false,displayRecheckPending=false,displayChanged=false;
     uint64_t displayRecheckGeneration=0;
     std::chrono::steady_clock::time_point displayRecheckSince{};
-    DisplayChangeFilter displayChangeFilter;
+    DisplayEventFilter displayEventFilter;
     std::atomic<double> gpuUtil{-1.0};
     // Hardware adapters in Windows' high-performance order (discrete first). The
     // sampler only counts engines of the adapter whose LUID is in gpuMonitorLuid
@@ -594,15 +612,6 @@ struct QmlPlayerBridge::Impl {
                 id.toStdString(), uint32_t(d.AdapterLuid.HighPart), d.AdapterLuid.LowPart, d.DedicatedVideoMemory >> 20));
         }
     }
-    // 游戏模式: the native side, the capture it belongs to and what the UI reported.
-    ui::GamePassthrough game;
-    std::wstring gameModeUri;          // the screen URI startScreenCapture opened in game mode
-    uint64_t gameModeSessionId = 0;    // its engine session once the open ran
-    bool gameModeLive = false, gamePanelOpen = false, gameRefused = false;
-    bool gameModeShown = false, passthroughShown = false, gameInputShown = false;
-    QRectF gameVideoRect;
-    QPointer<QWindow> gameWindow;
-    HMONITOR gameMonitor = nullptr;
     // The monitored GPU also computes when 设置 -> "同时用这块显卡运算" is on
     // and a specific GPU (not 自动) is chosen; otherwise the default order.
     QString computeGpuName;
@@ -813,6 +822,7 @@ struct QmlPlayerBridge::Impl {
 
     engine::ChainSession currentSession() const {
         auto current = session;
+        current.originalHalfRate = facade.pendingSettings().content == engine::ContentRate::Capture60To30Original;
         current.active = chain.mode;
         current.initialized[size_t(chain.mode)] = true;
         current.configurations[size_t(chain.mode)] = engine::ChainConfiguration::capture(

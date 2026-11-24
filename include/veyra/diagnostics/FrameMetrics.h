@@ -7,11 +7,12 @@
 namespace veyra::diagnostics {
 // NrLayer*/ColorNode* are per-instance node spans nested inside the stage
 // spans above; they are never merged into enhancementProcessingMs.
-enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, Fg6, Fg7, FgBatch, Blit, VideoHdr,
+enum class GpuStage { Color, Sr, Flow, Nr, Residual, Fg1, Fg2, Fg3, Fg4, Fg5, Fg6, Fg7, FgBatch, VideoDenoise, Blit, VideoHdr,
     NrLayer0, NrLayer1, NrLayer2, NrLayer3,
     ColorNode0, ColorNode1, ColorNode2, ColorNode3, ColorNode4, ColorNode5,
     AaNode0, AaNode1,
-    BeautyNode0, BeautyNode1, BeautyNode2, BeautyNode3, BeautyNode4, BeautyNode5, BeautyDetect, Count };
+    BeautyNode0, BeautyNode1, BeautyNode2, BeautyNode3, BeautyNode4, BeautyNode5, BeautyDetect, HudMask, HudRepair, HudMotion,
+    HudCompose1, HudCompose2, HudCompose3, HudCompose4, HudCompose5, HudCompose6, HudCompose7, Count };
 static_assert(unsigned(GpuStage::Fg5)-unsigned(GpuStage::Fg1)==4);
 static_assert(unsigned(GpuStage::FgBatch)>unsigned(GpuStage::Fg7));
 static_assert(unsigned(GpuStage::Count)<=64,"GpuTimer keeps one mask bit per stage");

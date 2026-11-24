@@ -1,4 +1,6 @@
 module Veyra
+FullscreenBackground 1.0 FullscreenBackground.qml
+PortraitBackgroundSettings 1.0 PortraitBackgroundSettings.qml
 CaptureLegacyPicker 1.0 CaptureLegacyPicker.qml
 ScreenCropEditor 1.0 ScreenCropEditor.qml
 FullscreenTimingPanel 1.0 FullscreenTimingPanel.qml
@@ -34,6 +36,7 @@ VSwitch 1.0 VSwitch.qml
 VTag 1.0 VTag.qml
 Main 1.0 Main.qml
 VMenu 1.0 VMenu.qml
+PlayerAudioMenu 1.0 PlayerAudioMenu.qml
 VPage 1.0 VPage.qml
 VRise 1.0 VRise.qml
 CineBar 1.0 CineBar.qml
@@ -46,14 +49,17 @@ VScrollBar 1.0 VScrollBar.qml
 VConfirm 1.0 VConfirm.qml
 NrLayerEditor 1.0 NrLayerEditor.qml
 MaskEditor 1.0 MaskEditor.qml
+HudProtectControl 1.0 HudProtectControl.qml
 DedupModeRow 1.0 DedupModeRow.qml
 NrWebPad 1.0 NrWebPad.qml
 SrStageEditor 1.0 SrStageEditor.qml
+VideoDenoiseEditor 1.0 VideoDenoiseEditor.qml
 AntiAliasEditor 1.0 AntiAliasEditor.qml
 BeautyEditor 1.0 BeautyEditor.qml
 VSpinner 1.0 VSpinner.qml
 VEqBars 1.0 VEqBars.qml
 VTelemetryValue 1.0 VTelemetryValue.qml
+AnrDownloadRow 1.0 AnrDownloadRow.qml
 SponsorPanel 1.0 SponsorPanel.qml
 RotateButton 1.0 RotateButton.qml
 
@@ -78,6 +84,7 @@ NetworkSourceDialog 1.0 NetworkSourceDialog.qml
 CaptureSourceDialog 1.0 CaptureSourceDialog.qml
 CaptureGuideDialog 1.0 CaptureGuideDialog.qml
 OnboardingGuide 1.0 OnboardingGuide.qml
+DynamicHudRow 1.0 DynamicHudRow.qml
 Ps5SourceDialog 1.0 Ps5SourceDialog.qml
 PcSourceDialog 1.0 PcSourceDialog.qml
 XboxSourceDialog 1.0 XboxSourceDialog.qml

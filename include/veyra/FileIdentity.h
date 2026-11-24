@@ -33,6 +33,9 @@ const char* identityErrorString(IdentityError error);
 // partial results remain in `out` for logging.
 bool computeFileIdentity(const std::wstring& path, FileIdentity& out, IdentityError& error);
 
+// Size and uppercase SHA-256, without version or signature inspection.
+bool computeFileSha256(const std::wstring& path, std::string& hex, uint64_t& size);
+
 // Uppercase hex SHA-256 over an in-memory buffer (diagnostics/statistics).
 std::string sha256Hex(const uint8_t* data, size_t size);
 

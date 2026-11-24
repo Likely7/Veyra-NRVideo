@@ -48,13 +48,40 @@ int wmain(int argc,wchar_t** argv){
     for(uint32_t q=0;q<40;++q){
         const bool rtx=(q>=1&&q<=4)||(q>=16&&q<=19)||q==21||q==23;
         check(rtxVideoSr(q)==rtx,"RTX Video SR family values");
-        check(validVideoSrQuality(q)==(rtx||q==0||q==kVideoSrFsr),"stored SR quality table");
+        check(validVideoSrQuality(q)==(rtx||q==0||q==kVideoSrFsr||q==24||q==25||q==26),"stored SR quality table");
         EnhancementSettings s;s.sr=true;s.videoSrQuality=q;
         check(s.validate().empty()==validVideoSrQuality(q),"validation accepts exactly the stored SR qualities");
         check(ngxVideoSr(q)==(q>=1&&q<=4)&&vfxVideoSr(q)==(rtx&&q>4),"standard runs on NGX, the others on Video Effects");
     }
     check(vfxVideoSrNeedsAmpere(21)&&vfxVideoSrNeedsAmpere(23)&&!vfxVideoSrNeedsAmpere(16)&&!vfxVideoSrNeedsAmpere(19)&&!vfxVideoSrNeedsAmpere(4),
           "only the streaming family needs Ampere");
+    {
+        EnhancementSettings s;
+        s.sr=true;s.srTarget=SrTarget::Uhd4K;
+        StageRequest request;
+        request.width=1280;request.height=720;request.sr=true;
+        veyra::pipeline::EnhanceGraphDesc desc;
+        for(uint32_t quality:{kVideoSrNis,kVideoSrAmf10,kVideoSrAmf11}){
+            s.videoSrQuality=quality;
+            check(!temporalVideoSr(quality),"spatial SR never requests temporal guidance");
+            for(const auto& [nvidia,amd]:{std::pair{true,false},{false,true},{false,false}}){
+                request.nvidiaAdapter=nvidia;request.amdAdapter=amd;
+                describeStages(request,s,desc);
+                check(desc.enableSr==(quality==kVideoSrNis||amd),"spatial SR follows the selected adapter");
+            }
+        }
+        auto restored=s;
+        restored.videoSrQuality=kVideoSrAmf10;
+        check(disableUnsupportedNvidiaEffects(restored,true)&&!restored.sr,
+            "an AMD VideoSR preference is disabled after switching to NVIDIA");
+        restored=s;
+        restored.videoSrQuality=kVideoSrNis;
+        disableUnsupportedNvidiaEffects(restored,false,true);
+        check(restored.sr,"NIS survives non-NVIDIA settings normalization");
+        s.videoSrQuality=kVideoSrAmf10;
+        s.dualSrQuality=kVideoSrNis;s.dualSrEnabled=true;s.srPrescale=SrPrescale::P1080;
+        check(dualSrRuns(s,false,false,true)&&!dualSrRuns(s,true),"mixed AMD VideoSR/NIS double SR needs the AMD adapter");
+    }
     // Family + tier <-> stored value.
     for(uint32_t tier=1;tier<=4;++tier){
         check(videoSrQualityFor(VideoSrFamily::Standard,tier)==tier,"standard tiers are 1..4");
@@ -75,8 +102,8 @@ int wmain(int argc,wchar_t** argv){
         check(s.validate().empty(),"high bitrate base with a streaming second pass");
         auto active=s.activeVideoSettings();
         check(active.dualSrEnabled&&active.dualSrQuality==23&&active.srPrescale==SrPrescale::P1080,"double SR stays active on high bitrate");
-        for(uint32_t bad2:{6u,15u,20u,22u,24u}){auto bad=s;bad.dualSrQuality=bad2;check(!bad.validate().empty(),"second SR must be a stored SR value");}
-        for(uint32_t good2:{0u,kVideoSrFsr}){auto good=s;good.dualSrQuality=good2;check(good.validate().empty(),"DLSS SR and FSR are valid second passes");}
+        for(uint32_t bad2:{6u,15u,20u,22u,27u}){auto bad=s;bad.dualSrQuality=bad2;check(!bad.validate().empty(),"second SR must be a stored SR value");}
+        for(uint32_t good2:{0u,kVideoSrFsr,kVideoSrNis,kVideoSrAmf10,kVideoSrAmf11}){auto good=s;good.dualSrQuality=good2;check(good.validate().empty(),"DLSS, FSR, NIS and AMD VideoSR are valid second passes");}
         s.videoSrQuality=4;s.dualSrQuality=17;check(s.validate().empty()&&s.activeVideoSettings().dualSrEnabled,"standard base with a high bitrate second pass");
         s.videoSrQuality=0;check(s.activeVideoSettings().dualSrEnabled,"a DLSS SR base runs double SR");
         s.videoSrQuality=kVideoSrFsr;check(s.activeVideoSettings().dualSrEnabled,"an FSR base runs double SR");
@@ -266,6 +293,37 @@ int wmain(int argc,wchar_t** argv){
               bytes(sidecar(anyPath,L".dual-sr-any")).starts_with("VEYRA_CHAIN_SESSION 14"),"session writes v14 to the .dual-sr-any sidecar only");
         auto anyRestored=std::make_unique<ChainSession>();ChainSessionStore anyReader(anyPath);
         check(anyReader.load(*anyRestored)&&*anySession==*anyRestored,"session restart restores the DLSS SR second pass");
+    }
+
+    {
+        const auto path=root/L"exclusion-modes.session";
+        EnhancementSettings settings;
+        settings.exclusion.enabled=true;
+        settings.exclusion.regions[0]={.1f,.2f,.3f,.4f};
+        settings.exclusion.regions[1]={.4f,.2f,.6f,.4f,true};
+        auto initial=std::make_unique<ChainSession>(ChainSession::initial(settings));
+        ChainSessionStore writer(path);
+        check(writer.save(*initial),"legacy exclusion session saved");
+        const auto old=files(path);
+        settings.exclusion.regions[0].content=ExclusionContent::FrameGeneration;
+        settings.exclusion.regions[1].content=ExclusionContent::Hud;
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(settings));
+        check(session->select(ChainMode::Node),"exclusion node session initializes");
+        auto editor=std::make_shared<NodeEditorDocument>();
+        editor->nodes=session->configurations[1].chain;
+        check(editor->layout.initialize(editor->nodes).accepted,"exclusion editor layout");
+        session->configurations[1].editor=editor;
+        check(writer.save(*session),"mixed exclusion session saved");
+        auto loaded=std::make_unique<ChainSession>();ChainSessionStore reader(path);
+        check(kept(old,files(path))&&reader.load(*loaded)&&*loaded==*session,"modes persist through the session and editor while old data stays readable");
+
+        const auto libraryPath=root/L"exclusion.preset";
+        PresetLibrary library(libraryPath);library.setIncludeBuiltins(false);
+        auto entry=std::make_unique<PresetEntry>();entry->name=L"Exclusion";entry->chain=toChain(settings);
+        check(library.load()&&library.put(*entry),"mixed exclusion library saved");
+        PresetLibrary restored(libraryPath);restored.setIncludeBuiltins(false);
+        check(restored.load()&&restored.entries().size()==1&&restored.entries()[0].chain==entry->chain,
+              "preset library restores both exclusion modes and both shapes");
     }
 
     std::cout<<"Video AI settings "<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;

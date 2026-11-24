@@ -76,6 +76,8 @@ std::filesystem::path oldLogPath(const std::filesystem::path& path)
 
 bool Logger::openFile(const std::wstring& path, bool append)
 {
+    // Arm even a session that closes without processing a frame.
+    (void)diagnostics::privateFrameTraceActive();
     flush();
     std::error_code ec;
     const std::filesystem::path fsPath(path);
@@ -311,7 +313,10 @@ bool verboseFrameLogs()
 
 void Logger::diagnosticContext(diagnostics::DiagnosticEvent event){threadDiagnosticContext=std::move(event);}
 std::string Logger::latestProblem(){std::lock_guard lock(mutex_);return diagnostics::redact(latestProblem_);}
-void Logger::recordFrame(diagnostics::FrameTraceEvent event){std::lock_guard lock(traceMutex_);frameTrace_.add(event);}
+void Logger::recordFrame(diagnostics::FrameTraceEvent event){
+    {std::lock_guard lock(traceMutex_);frameTrace_.add(event);}
+    diagnostics::recordPrivateFrame(event);
+}
 std::pair<size_t,uint64_t> Logger::frameTraceSize(){std::lock_guard lock(traceMutex_);return {frameTrace_.size(),frameTrace_.overwritten()};}
 std::string Logger::diagnosticReport(){std::ostringstream o;o<<"Veyra 本地诊断（复制前脱敏预览；不会上传）\n";
     {std::lock_guard lock(mutex_);

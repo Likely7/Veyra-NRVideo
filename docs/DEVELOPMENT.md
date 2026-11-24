@@ -27,6 +27,8 @@ py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task code
 
 虚拟摄像机模块与安装器由产品目标依赖构建；x86模块通过独立Win32 CMake子工程构建。独立诊断目标为`veyra_virtualcam_transport_tests`、`veyra_virtualcam_probe`、`veyra_virtualcam_cadence`、`veyra_virtualcam_gpu_tests`。只在任务目录运行，用私有IPC命名空间和配置，避免影响用户生产者；不要为测试擅自更新系统组件。
 
+Qt 主程序是 `veyra_qml_ui.exe`。默认开发构建可通过 `Veyra.cmd` 启动。便携包和安装器使用 `scripts/package-portable-update.py` 与 `scripts/package-windows-installer.py`，包根目录的 `Veyra.exe` 是启动器。旧 `run-test.cmd` 和 Win32 打包脚本已停用。导出计时和损坏输入门禁使用 `veyra_export_probe`，生成帧导出另由 VFG 回归覆盖。
+
 ## 验证与stage
 
 - 每个测试进程≤300秒。按实际改动选择合同/CPU/QtQuick/GPU/真实产品回归，保留失败，不把历史结果当本次通过。
@@ -45,6 +47,6 @@ py -3.11 -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task code
 
 完整 Windows 构建默认启用 libdovi，必须提供 `VEYRA_LIBDOVI_ROOT`（include/libdovi、lib、bin、MIT LICENSE）；不得把贡献 PR 的 DLL/LIB 合进源码。固定来源 quietvoid/dovi_tool `d1abe0e27ff2c7ab3339614d06db9f8a058af6b2`，libdovi 3.4.0，Rust 1.88+；用其 cbindgen.toml 生成匹配头，`cargo rustc --manifest-path dolby_vision/Cargo.toml --lib --release --locked --features capi --crate-type cdylib -- -Cpanic=abort`。DLL 与 MIT LICENSE 跟随用户包，SDK/导入库不打包。仅精简开发构建可显式关闭 VEYRA_ENABLE_LIBDOVI，不能把关闭版当完整交付。
 
-PS5 使用新的独立 Chiaki stage，按 `scripts/remoteplay/patches/0001..0003` 顺序打补丁并运行 verify-chiaki-stage.py；保留原 stage。nanopb 生成器需把依赖包的 protobuf/tools/protoc 放入**子进程** PATH。不得改全局 PATH 或复用未核验的生成缓存。
+PS5 使用新的独立 Chiaki stage，按 `scripts/remoteplay/patches/0001..0005` 顺序打补丁并运行 verify-chiaki-stage.py；保留原 stage。nanopb 生成器需把依赖包的 protobuf/tools/protoc 放入**子进程** PATH。不得改全局 PATH 或复用未核验的生成缓存。
 
 Linux 独立 OBS 模块与验证见 [OBS_FILTER.md](OBS_FILTER.md)。

@@ -65,6 +65,8 @@ struct FFmpegDeinterlacer::Impl {
     struct Clock {int64_t pts,duration;unsigned field=0,fields=1;};
     std::deque<Clock> clocks;
     AVRational inputTimeBase{},inputRate{};
+    int64_t previousPicturePts=AV_NOPTS_VALUE;
+    int64_t observedPictureTicks=0;
     AVFrame* input(const AVFrame* frame,const HardwareSurfaceView* surface){
         if(!frame)return nullptr;
         auto* copy=av_frame_clone(frame);
@@ -184,6 +186,24 @@ int FFmpegDeinterlacer::receive(const AVFrame** frame){
     if(result>=0){
         if(i.clocks.empty())return AVERROR_INVALIDDATA;
         auto& clock=i.clocks.front();const AVRational outputBase{i.num,i.den};
+        if(clock.field==0&&clock.pts!=AV_NOPTS_VALUE){
+            // A container can label each interlaced picture with one field's
+            // duration. Adjacent decoded picture PTS determine the real spacing.
+            const int64_t next=i.clocks.size()>1?i.clocks[1].pts:AV_NOPTS_VALUE;
+            const auto delta=[&](int64_t a,int64_t b)->int64_t{
+                if(a==AV_NOPTS_VALUE||b==AV_NOPTS_VALUE||b<=a)return 0;
+                const long double ticks=static_cast<long double>(b)-a;
+                const double seconds=double(ticks)*av_q2d(i.inputTimeBase);
+                return seconds>=1.0/240.0&&seconds<=0.25?int64_t(ticks):0;
+            };
+            const auto following=delta(clock.pts,next);
+            const auto preceding=delta(i.previousPicturePts,clock.pts);
+            i.previousPicturePts=clock.pts;
+            if(const auto spacing=following?following:preceding;spacing>0&&clock.fields==2){
+                clock.duration=spacing;
+                if(!i.observedPictureTicks)i.observedPictureTicks=spacing;
+            }
+        }
         if(clock.pts!=AV_NOPTS_VALUE){
             i.output->pts=av_rescale_q(clock.pts,i.inputTimeBase,outputBase);
             const int64_t duration=clock.duration>0?av_rescale_q(clock.duration,i.inputTimeBase,outputBase)/clock.fields:0;
@@ -201,6 +221,13 @@ int FFmpegDeinterlacer::receive(const AVFrame** frame){
 }
 int FFmpegDeinterlacer::timeBaseNum()const{return impl_->num;}
 int FFmpegDeinterlacer::timeBaseDen()const{return impl_->den;}
+double FFmpegDeinterlacer::observedPictureRate()const{
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    const auto& i=*impl_;
+    if(i.observedPictureTicks>0)return 1.0/(double(i.observedPictureTicks)*av_q2d(i.inputTimeBase));
+#endif
+    return 0;
+}
 bool FFmpegDeinterlacer::active()const{
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
     return impl_->output!=nullptr;
@@ -215,6 +242,7 @@ void FFmpegDeinterlacer::close(){
     if(i.graph)api().avfilter_graph_free(&i.graph);
     av_buffer_unref(&i.bridgeFrames);i.source=i.sink=nullptr;
     i.clocks.clear();i.inputTimeBase={};i.inputRate={};
+    i.previousPicturePts=AV_NOPTS_VALUE;i.observedPictureTicks=0;
 #endif
     impl_->path.clear();impl_->num=impl_->den=0;
 }

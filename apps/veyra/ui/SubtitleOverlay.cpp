@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cwctype>
 #include <format>
 #include <memory>
 #include <string>
@@ -39,7 +40,9 @@ std::wstring signatureOf(const std::vector<SubtitleLine>& lines,const SubtitleVi
     for(const auto& line:lines){
         signature+=std::format(L"{}:{}|{:08X}|{:08X}|{}:{}|{}|{}|{}|{}|",line.text.size(),line.text,line.style.primary,line.style.outline,line.style.font.size(),line.style.font,
             line.style.size,line.style.alignment,line.alignOverride,line.secondary?1:0);
-        signature+=std::format(L"{}:{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),reinterpret_cast<uintptr_t>(line.ass.get()),line.posX,line.posY);
+        signature+=std::format(L"{}:{}:{}:{}:{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),
+            reinterpret_cast<uintptr_t>(line.ass.get()),line.posX,line.posY,line.maximumLines,
+            line.scaleOverride.value_or(-1),line.shadowOffset.value_or(-1));
         const auto& s=line.style;
         signature+=std::format(L"{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|",s.back,s.outlineWidth,s.shadow,s.marginL,s.marginR,s.marginV,s.bold,s.italic,s.background,s.font.size());
     }
@@ -53,6 +56,7 @@ struct Line {
     std::unique_ptr<Gdiplus::GraphicsPath> path;
     Gdiplus::RectF bounds{};
     engine::SubtitleStyle style;
+    double shadowOffset=0;
     bool positioned=false;
     float positionX=0,positionY=0;
 };
@@ -143,9 +147,10 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             Line entry;
             entry.path=std::make_unique<Gdiplus::GraphicsPath>();
             entry.style=line.style;
+            entry.shadowOffset=line.shadowOffset.value_or(line.style.shadow>0?line.style.shadow:(view.outline?1.8:0.0));
             if(line.alignOverride>=1&&line.alignOverride<=9)entry.style.alignment=line.alignOverride;
             if(entry.style.alignment<1||entry.style.alignment>9)entry.style.alignment=2;
-            const double logicalSize=std::max(8.0,(line.style.size>0?line.style.size:24.0)*view.scale);
+            const double logicalSize=std::max(8.0,(line.style.size>0?line.style.size:24.0)*line.scaleOverride.value_or(view.scale));
             const std::wstring family=!view.fontOverride.empty()?view.fontOverride:(line.style.font.empty()?L"Microsoft YaHei UI":line.style.font);
             FontFamily requested(family.c_str());
             FontFamily* use=requested.IsAvailable()?&requested:&fallbackFamily;
@@ -154,7 +159,7 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             format.SetAlignment(StringAlignmentNear);
             format.SetLineAlignment(StringAlignmentNear);
             format.SetFormatFlags(StringFormatFlagsNoClip|StringFormatFlagsMeasureTrailingSpaces);
-            const auto& text=line.text;
+            auto text=line.text;
             const bool positioned=line.posX>=0&&line.posY>=0;
             const float availableWidth=positioned?layoutWidth:std::max(1.0f,layoutWidth-float(dip(h,std::max(0.0,line.style.marginL)+std::max(0.0,line.style.marginR))));
             float fontPixels=float(dip(h,logicalSize));
@@ -162,12 +167,37 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             // rectangle can silently omit the end of a long cue before fitting.
             auto measure=[&](float size){Font font(use,size,toFontStyle(line.style.bold,line.style.italic),UnitPixel);RectF bounds;
                 graphics.MeasureString(text.c_str(),int(text.size()),&font,RectF(0,0,availableWidth,1e7f),&format,&bounds);return bounds;};
-            if(!positioned&&view.fitToLines&&view.targetLines>0){
+            if(!line.maximumLines&&!positioned&&view.fitToLines&&view.targetLines>0){
                 const float minimum=float(dip(h,12));
                 for(int attempt=0;attempt<24&&fontPixels>minimum;++attempt){
                     Font font(use,fontPixels,toFontStyle(line.style.bold,line.style.italic),UnitPixel);
                     if(measure(fontPixels).Height<=font.GetHeight(&graphics)*view.targetLines+1)break;
                     fontPixels=std::max(minimum,fontPixels*.9f);
+                }
+            }
+            if (line.maximumLines > 0) {
+                // GDI+ measures with the actual font and width so a Japanese
+                // sentence and an English sentence respect the same line cap.
+                Font font(use,fontPixels,toFontStyle(line.style.bold,line.style.italic),UnitPixel);
+                auto lineCount = [&](const std::wstring& value) {
+                    RectF bounds;
+                    INT count = 0, fitted = 0;
+                    graphics.MeasureString(value.c_str(), INT(value.size()), &font,
+                        RectF(0, 0, availableWidth, 1e7f), &format, &bounds, &fitted, &count);
+                    return count;
+                };
+                if (lineCount(text) > line.maximumLines) {
+                    size_t low = 0, high = text.size();
+                    while (low < high) {
+                        const size_t middle = low + (high - low + 1) / 2;
+                        const std::wstring candidate = text.substr(0, middle) + L"\u2026";
+                        if (lineCount(candidate) <= line.maximumLines) low = middle;
+                        else high = middle - 1;
+                    }
+                    if (low && text[low - 1] >= 0xd800 && text[low - 1] <= 0xdbff) --low;
+                    text.resize(low);
+                    while (!text.empty() && std::iswspace(text.back())) text.pop_back();
+                    text += L"\u2026";
                 }
             }
             const auto measured=measure(fontPixels);
@@ -230,7 +260,7 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
                 SolidBrush back(Color::MakeARGB(byte((style.back>>24)&0xFF),byte((style.back>>16)&0xFF),byte((style.back>>8)&0xFF),byte(style.back&0xFF)));
                 graphics.FillRectangle(&back,box);
             }
-            const float shadow=float(dip(h,style.shadow>0?style.shadow:(view.outline?1.8:0.0)));
+            const float shadow=float(dip(h,entry.shadowOffset));
             if(shadow>0.5f){
                 GraphicsPath shadowPath;
                 shadowPath.AddPath(entry.path.get(),FALSE);

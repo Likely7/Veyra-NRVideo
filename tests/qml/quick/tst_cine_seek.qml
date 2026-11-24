@@ -46,6 +46,7 @@ Item {
     }
     CineBar { id: bar; x: 50; y: 220; width: 860; height: 92 }
     SignalSpy { id: moveSpy; target: bar; signalName: "requestMove" }
+    SignalSpy { id: hideSpy; target: bar; signalName: "requestHide" }
     TestCase {
         name: "CinemaSeek"
         when: windowShown
@@ -54,9 +55,38 @@ Item {
             root.Window.window.height = 650
             root.Window.window.requestActivate()
             veyra.seeks = []; veyra.duration = 100; veyra.isCapture = false
+            veyra.hasSource = false
+            veyra.currentPresetName = ""
             veyra.liveTimeshift = {enabled: false, available: false, start: 0, end: 0}
+            bar.width = 860
             bar.fullscreen = true
             moveSpy.clear()
+            hideSpy.clear()
+        }
+        function test_hide_fits_data() {
+            const longPreset = "Long custom preset name ".repeat(8)
+            return [
+                {tag:"windowed-860", width:860, full:false, capture:true, preset:"自定义"},
+                {tag:"file-760", width:760, full:true, capture:false, preset:longPreset},
+                {tag:"file-819", width:819, full:true, capture:false, preset:longPreset},
+                {tag:"file-820", width:820, full:true, capture:false, preset:longPreset}
+            ]
+        }
+        function test_hide_fits(data) {
+            bar.width = data.width
+            bar.fullscreen = data.full
+            veyra.hasSource = true
+            veyra.isCapture = data.capture
+            veyra.currentPresetName = data.preset
+            verify(waitForRendering(bar))
+            const hide = findChild(bar, "cine-hide")
+            const rail = findChild(bar, "cine-seek")
+            const end = hide.mapToItem(bar, hide.width, hide.height / 2)
+            verify(hide.width >= 32 && end.x <= bar.width - 15,
+                   "Hide hit area ends at " + end.x + " in a " + bar.width + " px pill")
+            verify(rail.width > 100, "The other controls must fit without crowding out seek")
+            mouseClick(hide, hide.width - 2, hide.height / 2)
+            compare(hideSpy.count, 1)
         }
         function test_scrub_data() {
             return [{tag:"fullscreen",full:true},{tag:"windowed",full:false}]

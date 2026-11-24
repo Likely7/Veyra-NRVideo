@@ -2,6 +2,7 @@
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/AudioFormat.h"
 #include "veyra/sink/RecordingAudioTap.h"
+#include "veyra/sink/HdmiBitstreamOutput.h"
 #include "veyra/source/AudioInputRecovery.h"
 #include <chrono>
 #include <thread>
@@ -24,7 +25,14 @@ int main(int argc,char** argv){
             else std::this_thread::sleep_until(due);
         }
     } pacer;
-    if(argc>=2&&std::string_view(argv[1])=="--record-monitor-off"){
+    const auto mode=argc>=2?std::string_view(argv[1]):std::string_view{};
+    const bool hdmiBranch=mode=="--hdmi-branch";
+    const bool bitstreamReservation=mode=="--bitstream-reservation";
+    if((hdmiBranch||bitstreamReservation)&&enumerateRenderEndpoints().empty()){
+        std::cout<<"SKIP HDMI branch PCM integration: no active render endpoint\n";
+        return 77;
+    }
+    if(mode=="--record-monitor-off"||hdmiBranch||bitstreamReservation){
         // Production converter/renderer with two consumers and zero local gain.
         // No microphone or physical capture device is opened.
         struct Tap final : RecordingAudioSink {
@@ -40,25 +48,49 @@ int main(int argc,char** argv){
         auto recording=std::make_shared<Tap>(),replay=std::make_shared<Tap>();
         addRecordingAudioSink(recording);addRecordingAudioSink(replay);
         CaptureAudioSession output;const auto wave=floatWave({2,SPEAKER_FRONT_LEFT|SPEAKER_FRONT_RIGHT});
+        HdmiBitstreamOutput hdmi;
+        if(hdmiBranch){
+            setForceStereoDownmix(true);
+            hdmi.configure({true,L"{0.0.0.00000000}.{e4c6d785-02b3-41d7-ab02-fce86693bd9e}"});
+        }
         output.setGain(0);output.setSync(2,0);
         if(!output.configure(wave.Format,sizeof(wave))||!output.start())return 2;
         std::vector<float> block(480*2);const auto start=Clock::now();
+        bool sawRecordingOnly=false;
         for(unsigned n=0;n<220;++n){
             pacer.until(start+std::chrono::milliseconds(n*10));
+            if(hdmiBranch&&n%3==0){
+                const uint8_t words[]{0x77,0x0b,0,0};
+                hdmi.submit(1,32,48000,words);
+            }
             for(unsigned f=0;f<480;++f)block[f*2]=block[f*2+1]=float(.25*std::sin(2*3.141592653589793*1000*(n*480+f)/48000.0));
             if(!output.push(block.data(),block.size()*sizeof(float),n*10.0,n==0))return 3;
             const auto host=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;
             output.videoPresented(n*10.0,host,host);
+            if(bitstreamReservation&&n==40){
+                const auto endpoint=activeRenderEndpoint();
+                if(!endpoint.valid)return 4;
+                setBitstreamRenderEndpoint(endpoint.id);
+            }
+            if(bitstreamReservation&&n==105){
+                const auto state=output.snapshot();
+                std::lock_guard lock(recording->mutex);
+                sawRecordingOnly=state.available&&!state.running&&state.outputChannels==0&&recording->frames>36000;
+                setBitstreamRenderEndpoint({});
+            }
             if(n==110)removeRecordingAudioSink(recording.get());
         }
         const auto state=output.snapshot();output.stop();
         removeRecordingAudioSink(recording.get());removeRecordingAudioSink(replay.get());
         const bool pass=recording->frames>24000&&replay->frames>recording->frames+24000&&recording->energy>100&&replay->energy>100
             &&recording->peak>.2&&replay->peak>.2&&recording->monotonic&&replay->monotonic&&recording->validFormat&&replay->validFormat
-            &&state.inputBlocks==220&&!recordingAudioActive();
+            &&state.inputBlocks==220&&!recordingAudioActive()
+            &&(!hdmiBranch||(state.running&&state.outputChannels==2&&hdmi.state().status==HdmiBitstreamStatus::Error))
+            &&(!bitstreamReservation||(sawRecordingOnly&&state.running));
         std::cout<<(pass?"PASS ":"FAIL ")<<"monitor gain=0 recordingFrames="<<recording->frames<<" replayFrames="<<replay->frames
             <<" recordingPeak="<<recording->peak<<" replayPeak="<<replay->peak<<" inputBlocks="<<state.inputBlocks
-            <<" timestampsMonotonic="<<(recording->monotonic&&replay->monotonic)<<std::endl;
+            <<" timestampsMonotonic="<<(recording->monotonic&&replay->monotonic)
+            <<" recordingOnly="<<sawRecordingOnly<<std::endl;
         return pass?0:1;
     }
     if(argc>=2&&std::string_view(argv[1])=="--endpoint-switch"){

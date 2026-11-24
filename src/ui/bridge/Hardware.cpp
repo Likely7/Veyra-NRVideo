@@ -5,6 +5,8 @@
 #include "veyra/pipeline/VfxSrBackend.h"
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
+#include "veyra/gfx/RifeDmlBackend.h"
+#include "veyra/gfx/AmfVideoSrBackend.h"
 
 namespace veyra::ui {
 
@@ -106,7 +108,17 @@ static QVariantMap scanEffectCapabilities() {
     for (int q : {16, 17, 18, 19}) add("sr" + QString::number(q), H::Nvidia, vfxSr, QObject::tr("需要 NVIDIA RTX 显卡"));
     for (int q : {21, 23}) add("sr" + QString::number(q), H::NvidiaAmpere, vfxSr, QObject::tr("需要 NVIDIA RTX 30 及更新显卡"));
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
-    add("anr", H::CrossVendor, ngx::AnrProvider::available(nr.wstring()), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    const auto srId = [](uint32_t id) { return "sr" + QString::number(id); };
+    const auto shaders = runtime::shaderDirectory();
+    add(srId(engine::kVideoSrNis), H::CrossVendor, exists(shaders / "NisSdr.dxil") && exists(shaders / "NisHdr.dxil"),
+        QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    add(srId(engine::kVideoSrAmf10), H::AmdFrc, gfx::AmfVideoSrBackend::available(),
+        QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
+    const bool anrInstalled = ngx::AnrProvider::available(nr.wstring());
+    add("anr", H::CrossVendor, anrInstalled, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    auto anr = out.value("anr").toMap();
+    anr["downloadable"] = !anrInstalled && ui::hardwareSupports(H::CrossVendor, gpu);
+    out["anr"] = anr;
     add("dlss", H::Nvidia, exists(nr / "nvngx_dlssg.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"));
     add("xess", H::CrossVendor, exists(data / "intel/experimental/libxess_fg.dll") && exists(data / "intel/experimental/libxell.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
@@ -114,6 +126,11 @@ static QVariantMap scanEffectCapabilities() {
     add("fsr4", H::Fsr4, fsrLoader && exists(fsr / "amd_fidelityfx_framegeneration_dx12.dll"), QObject::tr("需要 AMD RX 9000"));
     // AMD FRC uses the AMF runtime the AMD driver installs; nothing ships with Veyra.
     add("amdfrc", H::AmdFrc, gfx::AmfFrcBackend::runtimeInstalled(), QObject::tr("需要 AMD 显卡（驱动自带 AMF 运行库）"));
+    const bool rifeHardware = ui::hardwareSupports(H::CrossVendor, gpu);
+    const bool rifeRuntime = gfx::RifeDmlBackend::runtimeInstalled();
+    out["rife"] = QVariantMap{{"available", rifeHardware && rifeRuntime},
+        {"reason", !rifeHardware ? QObject::tr("需要支持 DirectX 12 的硬件显卡") :
+                   !rifeRuntime ? QObject::tr("需要 runtime/rife 中的 ONNX Runtime、DirectML 和 RIFE 模型") : QString{}}};
     add("hdr", H::Nvidia, exists(nr / "nvngx_truehdr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("flow0", H::Nvidia, true, QObject::tr("需要 NVIDIA RTX 显卡及 NVOF 驱动"));
     add("flow1", H::CrossVendor, true, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
@@ -140,6 +157,7 @@ QString fgEffectId(engine::FrameGenerationBackend backend) {
     case engine::FrameGenerationBackend::Vfg: return "vfg";
     case engine::FrameGenerationBackend::Anr: return "anr";
     case engine::FrameGenerationBackend::AmdFrc: return "amdfrc";
+    case engine::FrameGenerationBackend::Rife: return "rife";
     }
     return {};
 }
@@ -162,7 +180,7 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
     const auto caps = currentEffectCapabilities();
     const auto available = [&](const char* id) { return caps.value(id).toMap().value("available").toBool(); };
     const engine::FrameGenerationAvailability fgAvailable{
-        available("dlss"),available("xess"),available("fsr3"),available("fsr4"),available("vfg"),available("anr"),available("amdfrc")};
+        available("dlss"),available("xess"),available("fsr3"),available("fsr4"),available("vfg"),available("anr"),available("amdfrc"),available("rife")};
     QStringList reasons;
     const auto sanitize = [&](engine::EffectChain& chain, engine::ChainGlobalSettings& globals) {
         // Also migrate disabled stages: keeping an unavailable DLSS selection
@@ -226,7 +244,7 @@ QVariantMap QmlPlayerBridge::effectAvailability(const QString& id) const {
         id == "sr" ? "sr" + QString::number(s.videoSrQuality) : id == "video-hdr" ? QString("hdr") :
         id == "frame-generation" ? fgEffectId(s.frameGenerationBackend) :
         id == "dlss-fg" ? QString("dlss") : id == "xess-fg" ? QString("xess") :
-        id == "fsr3-fg" ? QString("fsr3") : id == "fsr4-fg" ? QString("fsr4") : id == "vfg-fg" ? QString("vfg") : id == "anr-fg" ? QString("anr") : id == "amdfrc-fg" ? QString("amdfrc") : id;
+        id == "fsr3-fg" ? QString("fsr3") : id == "fsr4-fg" ? QString("fsr4") : id == "vfg-fg" ? QString("vfg") : id == "anr-fg" ? QString("anr") : id == "amdfrc-fg" ? QString("amdfrc") : id == "rife-fg" ? QString("rife") : id;
     const auto caps = effectCapabilities();
     return caps.contains(key) ? caps.value(key).toMap() : QVariantMap{{"available", true}, {"reason", QString{}}};
 }
@@ -247,7 +265,9 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
     struct Entry { QString id; int capability; QString label; };
     for (const auto& entry : std::initializer_list<Entry>{{"0", 0, "DLSS SR"}, {"rtx", 4, tr("RTX 视频超分 · 标准")},
             {"rtx-hb", 16, tr("RTX 视频超分 · 高码率")}, {"rtx-st", 21, tr("RTX 视频超分 · 流媒体")},
-            {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")}}) {
+            {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")},
+            {QString::number(engine::kVideoSrNis), engine::kVideoSrNis, "NVIDIA NIS"},
+            {QString::number(engine::kVideoSrAmf10), engine::kVideoSrAmf10, "AMD VideoSR 1.0"}}) {
         const auto cap = caps.value("sr" + QString::number(entry.capability)).toMap();
         choices << QVariantMap{{"id", entry.id}, {"label", entry.label}, {"disabled", !cap.value("available").toBool()}, {"note", cap.value("reason")}};
     }

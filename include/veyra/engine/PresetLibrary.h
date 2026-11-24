@@ -97,6 +97,7 @@ public:
     // Editor variant: retain topology/layout unless Chain is selected. Colour
     // grades replace colour slots by ordinal (extras follow the last slot);
     // all unrelated nodes remain intact. Failure changes neither argument.
+    static bool matchesChain(const EffectChain& saved,const EffectChain& current);
     static ChainValidation applyToChain(const PresetEntry& entry, EffectChain& chain,
                                         EnhancementSettings& settings);
     // Partial presets retain stable IDs, detached nodes and wires.

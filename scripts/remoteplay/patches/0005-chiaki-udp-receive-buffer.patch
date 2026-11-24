@@ -1,0 +1,30 @@
+diff --git a/lib/src/takion.c b/lib/src/takion.c
+--- a/lib/src/takion.c
++++ b/lib/src/takion.c
+@@ -39,6 +39,8 @@
+ // VERY similar to SCTP, see RFC 4960
+ 
+ #define TAKION_A_RWND 0x19000
++// Keep the protocol receive window separate from the local UDP burst buffer.
++#define TAKION_SOCKET_RCVBUF (4 * 1024 * 1024)
+ #define TAKION_OUTBOUND_STREAMS 0x64
+ #define TAKION_INBOUND_STREAMS 0x64
+ 
+@@ -257,7 +259,7 @@
+ 			CHIAKI_LOGE(takion->log, "Takion had problem reading extra messages from socket using PSN Connection with error: " CHIAKI_SOCKET_ERROR_FMT, CHIAKI_SOCKET_ERROR_VALUE);
+ 			goto error_sock;
+ 		}
+-		const int rcvbuf_val = takion->a_rwnd;
++		const int rcvbuf_val = TAKION_SOCKET_RCVBUF;
+ 		int r = setsockopt(takion->sock, SOL_SOCKET, SO_RCVBUF, (const CHIAKI_SOCKET_BUF_TYPE)&rcvbuf_val, sizeof(rcvbuf_val));
+ 		if(r < 0)
+ 		{
+@@ -345,7 +347,7 @@
+ 			ret = CHIAKI_ERR_NETWORK;
+ 			goto error_pipe;
+ 		}
+-		const int rcvbuf_val = takion->a_rwnd;
++		const int rcvbuf_val = TAKION_SOCKET_RCVBUF;
+ 		int r = setsockopt(takion->sock, SOL_SOCKET, SO_RCVBUF, (const CHIAKI_SOCKET_BUF_TYPE)&rcvbuf_val, sizeof(rcvbuf_val));
+ 		if(r < 0)
+ 		{

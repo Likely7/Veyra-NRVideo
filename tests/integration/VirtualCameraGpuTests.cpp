@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdio>
 #include <stdexcept>
+#include <string_view>
 #include <thread>
 #include <vector>
 using namespace veyra;
@@ -107,4 +108,39 @@ static void run(){
     unsigned errors=0;if(debug)for(UINT64 i=0;i<debug->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T n=0;debug->GetMessage(i,nullptr,&n);std::vector<uint8_t> bytes(n);auto* m=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());debug->GetMessage(i,m,&n);if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::printf("D3D12 ERROR %s\n",m->pDescription);}}
     require(errors==0,"D3D12 debug errors");std::printf("PASS checks=%u debugErrors=%u\n",checks,errors);ring.shutdown();
 }
-int main(){try{run();return 0;}catch(const std::exception& e){std::fprintf(stderr,"FAIL %s after %u checks\n",e.what(),checks);return 2;}}
+static void setupReentry(){
+    engine::VirtualCamera* camera=nullptr;
+    DWORD result=ERROR_CANCELLED;
+    unsigned launched=0;
+    engine::VirtualCamera mock([&](const std::filesystem::path&,bool remove,HANDLE& process)->DWORD{
+        ++launched;
+        require(!remove,"install launch");
+        require(camera->status().installing,"status reenters during consent");
+        std::wstring busy;
+        require(!camera->installForAllUsers(busy)&&!busy.empty(),"duplicate action is rejected without relaunch");
+        require(!camera->uninstall(busy),"uninstall cannot race installation");
+        if(result==ERROR_SUCCESS){
+            const HANDLE self=GetCurrentProcess();
+            require(DuplicateHandle(self,self,self,&process,0,FALSE,DUPLICATE_SAME_ACCESS)!=FALSE,"test process remains in flight");
+        }
+        return result;
+    });
+    camera=&mock;
+    std::wstring error;
+    require(!mock.installForAllUsers(error)&&!error.empty(),"consent cancelled");
+    require(!mock.status().installing&&mock.status().setupError==error,"cancellation updates the snapshot");
+    result=ERROR_SUCCESS;
+    require(mock.installForAllUsers(error)&&mock.status().installing,"confirmed launch remains in progress");
+    require(mock.status().setupError.empty()&&launched==2,"retry clears previous setup error");
+    std::printf("PASS setup reentry checks=%u\n",checks);
+}
+int main(int argc,char** argv){
+    try{
+        if(argc==2&&std::string_view(argv[1])=="--setup-reentry")setupReentry();
+        else run();
+        return 0;
+    }catch(const std::exception& e){
+        std::fprintf(stderr,"FAIL %s after %u checks\n",e.what(),checks);
+        return 2;
+    }
+}

@@ -82,10 +82,12 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString fgBackendName READ fgBackendName WRITE setFgBackendName NOTIFY settingsChanged)
     Q_PROPERTY(int vfgQuality READ vfgQuality WRITE setVfgQuality NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList fgBackendChoices READ fgBackendChoices NOTIFY effectCapabilitiesChanged)
+    Q_PROPERTY(QVariantMap anrDownload READ anrDownload NOTIFY anrDownloadChanged)
     Q_PROPERTY(QString fgProviderText READ fgProviderText NOTIFY fgChoicesChanged)
     Q_PROPERTY(int fgMaxMultiplier READ fgMaxMultiplier NOTIFY snapshotChanged)
     Q_PROPERTY(bool fgEnabled READ fgEnabled WRITE setFgEnabled NOTIFY chainChanged)
     Q_PROPERTY(QString submitFpsLabel READ submitFpsLabel NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureHalfRateSuggested READ captureHalfRateSuggested NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool fgStrict READ fgStrict WRITE setFgStrict NOTIFY settingsChanged)
     Q_PROPERTY(bool fgLowQueue READ fgLowQueue WRITE setFgLowQueue NOTIFY settingsChanged)
@@ -143,6 +145,7 @@ class QmlPlayerBridge : public QObject {
     // dialog never searches captureFormats itself (logs(18): 15474 formats hung it).
     Q_PROPERTY(QString captureFormatLabel READ captureFormatLabel NOTIFY captureChanged)
     Q_PROPERTY(bool captureFormatCostHint READ captureFormatCostHint NOTIFY captureChanged)
+    Q_PROPERTY(bool captureMjpegSelected READ captureMjpegSelected NOTIFY captureChanged)
     // Resolution, frame rate and pixel format are three views of captureFormatKey.
     // Changing one retargets that key to a media type the device actually enumerated.
     Q_PROPERTY(QVariantList captureResolutionOptions READ captureResolutionOptions NOTIFY captureChanged)
@@ -179,14 +182,6 @@ class QmlPlayerBridge : public QObject {
     // method 0 WGC / 1 DXGI (monitor only), fps cap index into {follow,30,60,120,144,240},
     // pointer, crop margins in source pixels, and "fill the window".
     Q_PROPERTY(QVariantMap screenOptions READ screenOptions NOTIFY captureChanged)
-    // 游戏模式 (screen option "passthrough", ui/GamePassthrough.h): gameMode while the
-    // current source is such a capture (opening or live); passthroughActive while the
-    // fullscreen picture is click-through and the captured program has the input.
-    Q_PROPERTY(bool gameMode READ gameMode NOTIFY gameModeChanged)
-    Q_PROPERTY(bool passthroughActive READ passthroughActive NOTIFY gameModeChanged)
-    Q_PROPERTY(bool gameInputActive READ gameInputActive NOTIFY gameModeChanged)
-    Q_PROPERTY(bool gameScaledPreview READ gameScaledPreview NOTIFY gameModeChanged)
-    Q_PROPERTY(QRectF gameVideoRect READ gameVideoRect NOTIFY gameModeChanged)
 
     // Subtitles (P4-c): the engine's SubtitleLoader reads the embedded tracks and
     // the same-name external file; the old shell's SubtitleOverlay draws them as a
@@ -296,6 +291,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool timelineSeekable READ timelineSeekable NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantMap liveTimeshift READ liveTimeshift NOTIFY snapshotChanged)
     Q_PROPERTY(bool openingSource READ openingSource NOTIFY snapshotChanged)
+    Q_PROPERTY(bool captureEnhancementLoading READ captureEnhancementLoading NOTIFY snapshotChanged)
     Q_PROPERTY(bool running READ running NOTIFY snapshotChanged)
     Q_PROPERTY(bool paused READ paused NOTIFY snapshotChanged)
     Q_PROPERTY(bool failed READ failed NOTIFY snapshotChanged)
@@ -370,6 +366,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantMap beautyDetection READ beautyDetection NOTIFY beautyChanged)
     Q_PROPERTY(QString beautyStatus READ beautyStatus NOTIFY snapshotChanged)
     Q_PROPERTY(bool beautyAnyEnabled READ beautyAnyEnabled NOTIFY beautyChanged)
+    Q_PROPERTY(bool videoDenoiseEnabled READ videoDenoiseEnabled WRITE setVideoDenoiseEnabled NOTIFY videoDenoiseChanged)
+    Q_PROPERTY(QVariantMap videoDenoiseParams READ videoDenoiseParams NOTIFY videoDenoiseChanged)
     Q_PROPERTY(bool antiAliasEnabled READ antiAliasEnabled WRITE setAntiAliasEnabled NOTIFY antiAliasChanged)
     Q_PROPERTY(QVariantMap antiAliasParams READ antiAliasParams NOTIFY antiAliasChanged)
     // Custom: static HDR output tuning (globals, every field live).
@@ -456,6 +454,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString runStatus READ runStatus NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusLevel READ runStatusLevel NOTIFY perfChanged)
     Q_PROPERTY(QString runStatusDetail READ runStatusDetail NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusAction READ runStatusAction NOTIFY perfChanged)
+    Q_PROPERTY(QString runStatusHint READ runStatusHint NOTIFY perfChanged)
     // Live FG output hint ("当前帧率…超出屏幕刷新率，建议降至…"), empty when the
     // output fits; a suggestion only, the multiplier is never changed.
     Q_PROPERTY(QString fgDisplayHint READ fgDisplayHint NOTIFY perfChanged)
@@ -481,6 +481,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool fgAdaptive READ fgAdaptive WRITE setFgAdaptive NOTIFY settingsChanged)
     Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
     Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
+    Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
+    Q_PROPERTY(bool dynamicHud READ dynamicHud WRITE setDynamicHud NOTIFY settingsChanged)
     Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
     Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
     Q_PROPERTY(int contentRate READ contentRate WRITE setContentRate NOTIFY settingsChanged)
@@ -719,7 +721,11 @@ public:
     int fgMaxMultiplier() const;
     bool fgEnabled() const;
     void setFgEnabled(bool enabled);
+    QVariantMap anrDownload() const;
+    Q_INVOKABLE void downloadAnr();
+    Q_INVOKABLE void cancelAnrDownload();
     QString submitFpsLabel() const;
+    bool captureHalfRateSuggested() const;
     QVariantList fgMultiplierChoices() const;
     bool fgStrict() const;
     void setFgStrict(bool value);
@@ -768,6 +774,7 @@ public:
     QString captureFormatKey() const;
     QString captureFormatLabel() const;
     bool captureFormatCostHint() const;
+    bool captureMjpegSelected() const;
     void setCaptureFormatKey(const QString& key);
     QVariantList captureResolutionOptions() const;
     QString captureResolutionId() const;
@@ -810,17 +817,6 @@ public:
     Q_INVOKABLE bool setScreenOption(const QString& key, const QVariant& value);
     Q_INVOKABLE bool startScreenCapture(bool cropPreview = false);
     Q_INVOKABLE bool applyScreenCrop(int left, int top, int right, int bottom);
-    bool gameMode() const;
-    bool passthroughActive() const;
-    bool gameInputActive() const;
-    bool gameScaledPreview() const;
-    QRectF gameVideoRect() const;
-    // The Home panel is open: the picture stays on top but takes the input back.
-    Q_INVOKABLE void setGamePanelOpen(bool open);
-    // Index into Qt.application.screens of the monitor 游戏模式 covers, or -1.
-    Q_INVOKABLE int gameModeScreenIndex() const;
-    // Test only (VEYRA_TEST_UI_BLOCK): blocks the GUI thread to exercise the hang release.
-    Q_INVOKABLE void testBlockUi(int ms);
 
     QVariantList screenTargets() const;
     QString screenTargetId() const;
@@ -944,6 +940,7 @@ public:
     bool isCapture() const;
     bool hasSource() const;
     bool openingSource() const;
+    bool captureEnhancementLoading() const;
     double position() const;
     double duration() const;
     double progress() const;
@@ -1077,6 +1074,10 @@ public:
     void syncHdrDisplayProfile();
     QVariantMap videoHdrParams() const;
     Q_INVOKABLE bool setVideoHdrParameter(const QString& key, double value);
+    bool videoDenoiseEnabled() const;
+    void setVideoDenoiseEnabled(bool enabled);
+    QVariantMap videoDenoiseParams() const;
+    Q_INVOKABLE bool setVideoDenoiseStrength(const QString& channel, double value);
     bool antiAliasEnabled() const;
     void setAntiAliasEnabled(bool enabled);
     QVariantMap antiAliasParams() const;
@@ -1147,6 +1148,7 @@ public:
     Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
     Q_INVOKABLE bool removeMaskRegion(bool allEffects,int index);
     Q_INVOKABLE bool clearMaskRegions(bool allEffects);
+    Q_INVOKABLE bool setExclusionRegionMode(int index,int mode);
     Q_INVOKABLE bool setStabilizerParameter(int index,const QString& key,double value);
     Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
@@ -1162,6 +1164,8 @@ public:
     QString runStatus() const;
     QString runStatusLevel() const;
     QString runStatusDetail() const;
+    QString runStatusAction() const;
+    QString runStatusHint() const;
     QStringList runOptions() const;
     double effectiveOutputFps() const;
     double outputRateRatio() const;
@@ -1190,6 +1194,10 @@ public:
     void setPacingRepair(bool value);
     bool hudLock() const;
     void setHudLock(bool value);
+    int hudProtect() const;
+    void setHudProtect(int value);
+    bool dynamicHud() const;
+    void setDynamicHud(bool value);
     bool dlssgLiteAvailable() const;
     QString dlssgLiteHint() const;
     int contentRate() const;
@@ -1268,7 +1276,7 @@ public:
     // Split position from a pointer on the picture host (fractions of the host).
     Q_INVOKABLE void setCompareSplitAt(double hostFractionX);
     Q_INVOKABLE void resumeLastSource();
-    void autoResumeLastSource();
+    void autoResumeLastSource(bool allowCapture);
     // List mode: an NR layer's model and residual back to their defaults.
     Q_INVOKABLE bool resetNrLayer(int index);
     QVariantList protectionRegions() const;
@@ -1374,8 +1382,6 @@ public:
     // window of the QML window and hands it over; the bridge never draws QML
     // into it and Qt never touches its swapchain.
     void attachVideoWindow(qulonglong nativeHandle);
-    // The QML main window: 游戏模式 changes its styles and owns its hotkeys.
-    void attachMainWindow(qulonglong nativeHandle);
 
     // Run immediately before the engine opens a source. The presenter reads the
     // host window's client size once, when it initialises, and builds the
@@ -1548,6 +1554,7 @@ signals:
     // bindings do not re-evaluate 60 times a second for nothing.
     void snapshotChanged();
     void componentListChanged();
+    void anrDownloadChanged();
     void perfChanged();
     void protectionDrawChanged();
     void presentationChanged();
@@ -1562,6 +1569,7 @@ signals:
     // labels or positions; only that group notifies (audit 2026-10-15 B1).
     void nrLayersChanged();
     void videoHdrParamsChanged();
+    void videoDenoiseChanged();
     void antiAliasChanged();
     void beautyChanged();
     void colourParamsChanged();
@@ -1576,28 +1584,20 @@ signals:
     // User-facing notices the UI shows as a transient message: a rejected
     // chain edit, an export that finished, a failed open.
     void notice(const QString& text, bool isError);
+    void warningNotice(const QString& text);
     // A presentation-hooking overlay appeared in a run whose interface draws on the GPU
     // ("rtss": its OSD is kept out of this process; "nvidia": NVIDIA's in-game overlay and
     // "gamepp": GamePP, which cannot be kept out); a restart draws the interface in software.
     void overlayRestartSuggested(const QString& kind);
     // The UI moves to a page by name when a command implies it.
     void navigate(const QString& page);
-    void gameModeChanged();
-    // Configurable game hotkeys: 0 = adjust panel, 1 = leave.
-    void gameHotkey(int which);
-    // The game-mode capture ended or failed, or the GUI hung, while the picture was in
-    // front: the UI leaves fullscreen and shows the reason.
-    void gameModeStopped(const QString& reason);
 
 private:
     // Structural change: every chain-derived property notifies.
     void emitChainChanged();
     // Value edit of one group; a change of the chain's validity notifies everything.
     void emitParameterChanged(void (QmlPlayerBridge::*group)(), bool wasValid);
-    void updateGameMode();
-    void updateGameGeometry();
-    // Game mode's keyboard hook gets the current panel, exit, screenshot, record and replay keys.
-    void applyGameHotkeys();
+    void logShortcuts();
     // The recording settings both recorders follow, and the replay buffer
     // armed (or not) with them; its state for the interface.
     engine::RecordingSettings recordingOptions() const;

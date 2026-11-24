@@ -19,6 +19,7 @@ constexpr std::array<EffectInfo, effectTypeCount> kCatalog{{
     {EffectType::Beauty, effectTypeName(EffectType::Beauty), "美颜", kMaxBeautyInstances, true, false, false, false, false, false},
     {EffectType::NrStabilizer, effectTypeName(EffectType::NrStabilizer), "NR 输出稳定器", 1, false, false, false, false, false},
     {EffectType::Exclusion, effectTypeName(EffectType::Exclusion), "全效果剔除", 1, false, false, true, false, false},
+    {EffectType::VideoDenoise, effectTypeName(EffectType::VideoDenoise), "视频降噪"},
 }};
 } // namespace
 
@@ -248,6 +249,8 @@ ChainValidation validateChain(const EffectChain& chain) {
         if(node.type==EffectType::NrStabilizer&&(!std::isfinite(node.holdStrength)||node.holdStrength<0||node.holdStrength>1||
            !std::isfinite(node.holdTolerance)||node.holdTolerance<0||node.holdTolerance>1))
             return {false,"稳定器参数超出范围"};
+        if(node.type==EffectType::VideoDenoise&&!node.videoDenoise.valid())
+            return {false, "降噪强度超出范围"};
         if(node.type==EffectType::Beauty&&!node.beauty.validate().empty())
             return {false, "美颜参数超出范围"};
         ++seen[index];
@@ -328,9 +331,9 @@ EffectChain toChain(const EnhancementSettings& settings) {
         node.enabled = enabled;
         return node;
     };
-    // List order is the product order: colour (fused into the ingest shader),
-    // anti-aliasing (source size), SR, NR layers, protection, the beauty group,
-    // Video HDR, frame generation.
+    // Optional source-size denoising precedes the grade and enhancement stages.
+    if(settings.videoDenoiseEnabled||settings.videoDenoise!=VideoDenoiseSettings{})
+        append(EffectType::VideoDenoise,settings.videoDenoiseEnabled).videoDenoise=settings.videoDenoise;
     append(EffectType::Color, settings.color.enabled).color = settings.color;
     for(uint32_t i=0;i<std::min(settings.additionalColorCount,kMaxColorInstances-1);++i)
         append(EffectType::Color,settings.additionalColors[i].enabled).color=settings.additionalColors[i];
@@ -407,7 +410,8 @@ ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const C
         uint32_t index = 0;
         while (index < source.nodeCount && (used[index] || source.nodes[index].type != order.types[i])) ++index;
         if (index == source.nodeCount) {
-            if(order.types[i]==EffectType::NrStabilizer||order.types[i]==EffectType::Exclusion){
+            if(order.types[i]==EffectType::NrStabilizer||order.types[i]==EffectType::Exclusion||
+               order.types[i]==EffectType::VideoDenoise){
                 restored.nodes[i]=ChainNode{};
                 restored.nodes[i].type=order.types[i];restored.nodes[i].enabled=false;
                 continue;
@@ -469,6 +473,8 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
     settings.exclusion = ProtectionSettings{};
     if(chain.mode==ChainMode::Node)settings.nrHoldStrength=0;
     settings.videoHdr = VideoHdrSettings{};
+    settings.videoDenoiseEnabled = false;
+    settings.videoDenoise = {};
     settings.multiplier = 1;
     settings.fgStrictAdmission = chain.fgStrictAdmission;
     settings.fgAutoMultiplier = chain.fgAutoMultiplier;
@@ -547,6 +553,10 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
             settings.exclusion=node.protection;
             settings.exclusion.enabled=node.enabled;
             break;
+        case EffectType::VideoDenoise:
+            settings.videoDenoiseEnabled = node.enabled;
+            settings.videoDenoise = node.videoDenoise;
+            break;
         case EffectType::Count:
             break;
         }
@@ -616,12 +626,12 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         for (uint32_t i = 0; i < chain.nodeCount; ++i)
             if (chain.nodes[i].enabled && chain.nodes[i].type == EffectType::NrEnhance) nrActive = true;
         const std::array<EffectType, effectTypeCount> order = nrFirst
-            ? std::array{EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty,
+            ? std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty,
                 EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
             : nrActive
-            ? std::array{EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer,
+            ? std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer,
                 EffectType::Beauty, EffectType::AntiAliasing, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
-            : std::array{EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance,
+            : std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance,
                 EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration};
         for (const auto type : order)
             for (uint32_t i = 0; i < chain.nodeCount; ++i)
@@ -725,6 +735,7 @@ bool ChainConfiguration::valid() const {
 
 ChainSession ChainSession::initial(const EnhancementSettings& settings) {
     ChainSession result;
+    result.originalHalfRate = settings.content == ContentRate::Capture60To30Original;
     result.configurations[0] = ChainConfiguration::capture(toChain(settings), settings);
     result.configurations[1].chain.mode = ChainMode::Node;
     return result;
@@ -768,6 +779,7 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (planOf(previous) != planOf(next)) return true;
     if (previous.lowLatency != next.lowLatency) return true;
     if(previous.exclusion.enabled!=next.exclusion.enabled)return true;
+    if(previous.videoDenoiseEnabled!=next.videoDenoiseEnabled)return true;
     // The output stabiliser's pass exists only when it is on (EnhanceGraph::createNrHoldPass).
     if ((previous.nrHoldStrength > 0.0f) != (next.nrHoldStrength > 0.0f)) return true;
     // NR inference reuse allocates its pass only when on (EnhanceGraph::createNrReusePass);
@@ -790,7 +802,10 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.dlssgLite != next.dlssgLite) return true;
     if (previous.vfgAutoRegulate != next.vfgAutoRegulate) return true;
     // Live HUD Lock owns its mask and compose passes (pipeline/HudLock.h).
-    if (previous.multiplier > 1 && next.multiplier > 1 && previous.hudLock != next.hudLock) return true;
+    if (previous.multiplier > 1 && next.multiplier > 1 &&
+        (previous.hudLock != next.hudLock || previous.dynamicHud != next.dynamicHud)) return true;
+    if (previous.multiplier > 1 && next.multiplier > 1 &&
+        hudProtectRegions(previous.hudProtect,previous.exclusion)!=hudProtectRegions(next.hudProtect,next.exclusion))return true;
     if (previous.flow != next.flow) return true;
     if (previous.captureCompatible != next.captureCompatible) return true;
     if (previous.forceSdrPreview != next.forceSdrPreview) return true;

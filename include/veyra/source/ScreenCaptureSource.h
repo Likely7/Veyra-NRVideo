@@ -12,8 +12,8 @@ struct ScreenCaptureOptions {
     uint64_t target=0;
     unsigned fps=0; // 0 follows the captured target's display refresh rate
     bool cursor=true;
-    // No yellow WGC capture border (Windows 11). Monitor captures always drop it;
-    // a window capture drops it in 游戏模式. Carried in the URI's cursor field (bit 1).
+    // No yellow WGC capture border (Windows 11). Monitor captures always drop it.
+    // Bit 1 of the URI's cursor field also supports borderless WGC windows.
     bool borderless=false;
     unsigned left=0,top=0,right=0,bottom=0; // crop margins in source pixels
     std::wstring uri() const;

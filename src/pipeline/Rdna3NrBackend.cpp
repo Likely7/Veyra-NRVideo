@@ -40,9 +40,16 @@ struct Rdna3NrBackend::Impl {
     uint32_t w=0,h=0;uint64_t sequence=0,sourceFrame=0;
     rdna3::Evaluate pending;
     bool opened=false,prepared=false,enqueued=false,outputs=false,bound=false;
+    bool pendingInit=false,smallModel=false,contractTest=false;
+    uint64_t initDeadline=0;
     std::string error;
     bool fail(std::string s){error=std::move(s);log::error("amd-nr-rdna3",error);return false;}
     bool healthy(){return !failed.load()&&process&&WaitForSingleObject(process,0)==WAIT_TIMEOUT;}
+    bool validateReply(const Reply& r,uint64_t seq){
+        if(!validHeader(r.h,Op::Reply,sizeof(r))||r.h.sequence!=seq)return fail("RDNA3 worker protocol/version/frame mismatch");
+        if(r.result)return fail(std::string(r.message.data(),strnlen(r.message.data(),r.message.size())));
+        return true;
+    }
     bool reply(uint64_t seq,DWORD timeout){
         Reply r{};size_t got=0;const auto end=GetTickCount64()+timeout;
         while(got<sizeof(r)&&GetTickCount64()<end){
@@ -53,9 +60,7 @@ struct Rdna3NrBackend::Impl {
             got+=n;
         }
         if(got!=sizeof(r))return fail("RDNA3 worker response exceeded its deadline");
-        if(!validHeader(r.h,Op::Reply,sizeof(r))||r.h.sequence!=seq)return fail("RDNA3 worker protocol/version/frame mismatch");
-        if(r.result)return fail(std::string(r.message.data(),strnlen(r.message.data(),r.message.size())));
-        return true;
+        return validateReply(r,seq);
     }
     void watch(){
         while(WaitForSingleObject(stop,50)==WAIT_TIMEOUT){
@@ -92,9 +97,15 @@ bool Rdna3NrBackend::hipRuntimeAvailable(){
     const std::filesystem::path root=sdk;
     return n&&n<std::size(sdk)&&root.is_absolute()&&std::filesystem::is_regular_file(root/L"bin"/L"amdhip64_7.dll",ec);
 }
-bool Rdna3NrBackend::open(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){return start(p,d,q,w,h,smallModel,false);}
-bool Rdna3NrBackend::openContractTest(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){return start(p,d,q,w,h,smallModel,true);}
-bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* device,ID3D12CommandQueue* queue,uint32_t w,uint32_t h,bool smallModel,bool test){
+bool Rdna3NrBackend::open(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){return start(p,d,q,w,h,smallModel,false,0);}
+bool Rdna3NrBackend::openAsync(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){
+    return start(p,d,q,w,h,smallModel,false,180000);
+}
+bool Rdna3NrBackend::openContractTestAsync(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel,uint32_t timeoutMs){
+    return start(p,d,q,w,h,smallModel,true,timeoutMs);
+}
+bool Rdna3NrBackend::openContractTest(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){return start(p,d,q,w,h,smallModel,true,0);}
+bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* device,ID3D12CommandQueue* queue,uint32_t w,uint32_t h,bool smallModel,bool test,uint32_t asyncTimeoutMs){
     close();impl_=std::make_unique<Impl>();auto& s=*impl_;
     if(!device||!queue||!directory.is_absolute()||!validExtent(w,h))return s.fail("invalid RDNA3 device, queue, absolute runtime path or internal size");
     if(!test&&!runtimeAvailable(directory))return s.fail("RX7000 NR runtime is incomplete; install the RDNA3 worker, original NR network, kernels and translation cache");
@@ -151,11 +162,46 @@ bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* 
         init.handles[i]=uintptr_t(remote);
     }
     ResumeThread(process.hThread);drop(process.hThread);
-    if(!send(s.toWorker,&init,sizeof(init))||!s.reply(0,180000))return false;
-    s.stop=CreateEventW(nullptr,TRUE,FALSE,nullptr);if(!s.stop)return s.fail("RDNA3 worker monitor event failed");
-    s.monitor=std::jthread([&s]{s.watch();});s.opened=true;
-    log::info("amd-nr-rdna3",std::format("{}worker ready pid={} model={} internal={}x{} same-frame GPU interop; Veyra owns history",test?"CONTRACT TEST (not inference) ":"",process.dwProcessId,smallModel?"Small":"Original",w,h));
+    if(!send(s.toWorker,&init,sizeof(init)))return s.fail("RDNA3 worker initialization send failed");
+    s.contractTest=test;s.smallModel=smallModel;
+    if(!asyncTimeoutMs)return s.reply(0,180000)&&finishPreparation();
+    s.pendingInit=true;s.initDeadline=GetTickCount64()+asyncTimeoutMs;
+    log::info("amd-nr-rdna3",std::format("worker preparing pid={} deadlineMs={} internal={}x{}",process.dwProcessId,asyncTimeoutMs,w,h));
     return true;
+}
+bool Rdna3NrBackend::finishPreparation(){
+    auto& s=*impl_;
+    s.stop=CreateEventW(nullptr,TRUE,FALSE,nullptr);
+    if(!s.stop)return s.fail("RDNA3 worker monitor event failed");
+    try{s.monitor=std::jthread([&s]{s.watch();});}
+    catch(...){return s.fail("RDNA3 worker monitor could not start");}
+    s.opened=true;
+    log::info("amd-nr-rdna3",std::format("{}worker ready pid={} model={} internal={}x{} same-frame GPU interop; Veyra owns history",
+        s.contractTest?"CONTRACT TEST (not inference) ":"",GetProcessId(s.process),s.smallModel?"Small":"Original",s.w,s.h));
+    return true;
+}
+NrPreparation Rdna3NrBackend::pollPreparation(){
+    auto& s=*impl_;
+    if(!s.pendingInit)return ready()?NrPreparation::Ready:NrPreparation::Failed;
+    const auto reject=[&](const char* message){
+        s.pendingInit=false;s.failed=true;
+        if(message)s.fail(message);
+        if(s.job)TerminateJobObject(s.job,125);
+        return NrPreparation::Failed;
+    };
+    DWORD bytes=0;
+    if(!PeekNamedPipe(s.fromWorker,nullptr,0,nullptr,&bytes,nullptr))return reject("RDNA3 startup status pipe closed");
+    if(bytes<sizeof(Reply)){
+        if(!s.healthy())return reject("RDNA3 worker exited during initialization");
+        if(GetTickCount64()>=s.initDeadline)return reject("RDNA3 worker initialization timed out; last phase is in the worker log");
+        return NrPreparation::Pending;
+    }
+    Reply reply{};DWORD received=0;
+    if(!ReadFile(s.fromWorker,&reply,sizeof(reply),&received,nullptr)||received!=sizeof(reply))
+        return reject("RDNA3 worker startup reply truncated");
+    if(!s.validateReply(reply,0)||!finishPreparation())return reject(nullptr);
+    s.pendingInit=false;
+    return NrPreparation::Ready;
 }
 bool Rdna3NrBackend::ready()const{return impl_->opened&&!impl_->failed.load();}
 ID3D12Resource* Rdna3NrBackend::diagnosticProxyForTest()const{return impl_->image[0].Get();}
@@ -224,7 +270,10 @@ bool Rdna3NrBackend::retireSubmitted(){auto& s=*impl_;if(!s.outputs)return true;
 void Rdna3NrBackend::close()noexcept{
     if(!impl_)return;auto& s=*impl_;
     s.closing=true;
-    if(s.process&&WaitForSingleObject(s.process,0)==WAIT_TIMEOUT){
+    if(s.process&&WaitForSingleObject(s.process,0)==WAIT_TIMEOUT&&!s.opened){
+        // No frame has used these handles or queued a completion wait yet.
+        if(s.job)TerminateJobObject(s.job,125);
+    }else if(s.process&&WaitForSingleObject(s.process,0)==WAIT_TIMEOUT){
         // This signal follows the last output consumer on the actual graph queue.
         Header end{kMagic,kVersion,sizeof(Header),Op::Stop,s.queued.load()+1};
         if(s.queue&&s.producer)s.queue->Signal(s.producer.Get(),end.sequence);
@@ -232,6 +281,6 @@ void Rdna3NrBackend::close()noexcept{
         if(WaitForSingleObject(s.process,3000)==WAIT_TIMEOUT){log::warn("amd-nr-rdna3","worker close timed out; terminating owned worker");TerminateProcess(s.process,125);WaitForSingleObject(s.process,1000);if(s.done)s.done->Signal(UINT64_MAX-1);}
     }
     if(s.stop)SetEvent(s.stop);if(s.monitor.joinable())s.monitor.join();
-    drop(s.toWorker);drop(s.fromWorker);drop(s.process);drop(s.job);drop(s.stop);s.opened=false;
+    drop(s.toWorker);drop(s.fromWorker);drop(s.process);drop(s.job);drop(s.stop);s.opened=s.pendingInit=false;
 }
 }

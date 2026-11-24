@@ -31,9 +31,9 @@ namespace veyra::engine {
 // 40 in 60 Hz) gets evenly spaced timestamps that are never later than the
 // sample; hitches and variable rates keep their sample times.
 //
-// A picture that stays identical past a hitch (paused game, menu) is held at
-// the content cadence instead of one frame per 150-250 ms: the kept rate, and
-// with it the GPU work of NR and frame generation, stays steady.
+// Repetition in a quiet menu is not a measurement of its rendering cadence.
+// Keep feeding at transport cadence after the ordinary duplicate slots, and
+// train the content clock only on pictures that actually change.
 class ContentDedup {
 public:
     struct Decision {
@@ -53,6 +53,7 @@ public:
         haveKept_ = haveContent_ = skipSpan_ = holding_ = false; prevSample_ = 0; lastKeptSample_ = 0; lastContent_ = 0;
         timeCount_ = 0; timeHead_ = 0; period_ = 0; misses_ = 0;
         rateCount_ = rateHead_ = 0; observedPeriod_ = 0;ratePictures_=rateLastPicture_=rateLastSequence_=0;
+        halfRateSamples_.fill(0); halfRateRepeats_={}; halfRateSeen_=0; halfRateOrigin_=0;
     }
     // picture: picture number of the sample, or nullptr (no CPU picture: keep everything).
     // hintPeriod: expected content period of the selected content rate, 0 = unknown.
@@ -74,25 +75,22 @@ public:
             return keep(d, pts, previous, transport, nullptr, Timing::Sample, "no-picture");
         }
         if (!continuous) {
-            reset(); prevSample_ = pts;
+            reset(); prevSample_ = halfRateOrigin_ = pts;
             return keep(d, pts, previous, transport, picture, Timing::Sample, boundary ? "boundary" : "first",0,captureSequence);
         }
-        if (*picture == kept_) {
-            const auto measured=measuredPeriod();
-            const int64_t cadence = std::min<int64_t>(measured > 0 ? measured : hintPeriod > 0 ? hintPeriod : transport * 2, 666667);
-            if (!holding_) {
-                // A hitch repeats one picture for a few samples: drop those, so
-                // the next picture spans the whole wait.
-                if (pts - lastKeptSample_ < std::max(cadence * 5 / 2, transport * 3)) { ++stats_.repeats; d.keep = false; d.reason = "repeat"; return d; }
-                holding_ = true; holdDue_ = pts;
+        const bool repeated=*picture==kept_;
+        if(transport>=150000&&transport<=185200)learnHalfRate(pts,transport,captureSequence,repeated);
+        if(repeated){
+            // Keep one normal 30 Hz source slot. At typical 60 Hz transport,
+            // allow two duplicate slots for 24/25 Hz content before holding.
+            const auto wait=transport>=250000?transport*7/8:transport*23/8;
+            if(!holding_&&pts-lastKeptSample_<wait){
+                ++stats_.repeats;d.keep=false;d.reason="repeat";return d;
             }
-            // Past that the picture is still: hold it on the content cadence's
-            // grid (40 fps in 60 Hz keeps 33/17 ms), never slower than 15 fps.
-            if (pts + transport / 4 < holdDue_) { ++stats_.repeats; d.keep = false; d.reason = "repeat"; return d; }
-            holdDue_ = std::max(holdDue_ + cadence, pts + cadence / 2);
+            holding_=true;
             ++stats_.held;
-            d.holdInterval=cadence;
-            return keep(d, pts, previous, transport, picture, Timing::Sample, "hold");
+            d.holdInterval=transport;
+            return keep(d,pts,previous,transport,picture,Timing::Sample,"hold");
         }
         holding_ = false;
         return keep(d, pts, previous, transport, picture, Timing::Cadence, "new", hintPeriod,captureSequence);
@@ -105,8 +103,21 @@ public:
         return std::max(transport, measuredPeriod() > 0 ? measuredPeriod() : transport);
     }
     const Stats& stats() const { return stats_; }
+    bool suggestHalfRate()const{
+        const auto [lo,hi]=std::minmax(halfRateRepeats_[0],halfRateRepeats_[1]);
+        return halfRateSeen_>=halfRateSamples_.size()&&hi>=12&&lo*6<=hi;
+    }
 
 private:
+    void learnHalfRate(int64_t pts,int64_t transport,uint64_t sequence,bool repeated){
+        const auto slot=sequence?sequence:uint64_t((pts-halfRateOrigin_+transport/2)/transport);
+        auto& sample=halfRateSamples_[halfRateSeen_%halfRateSamples_.size()];
+        if(sample)--halfRateRepeats_[sample-1];
+        sample=repeated?uint8_t((slot&1)+1):0;
+        if(sample)++halfRateRepeats_[sample-1];
+        ++halfRateSeen_;
+    }
+
     enum class Timing { Sample, Cadence };
     static constexpr unsigned kTimes = 48;
     int64_t measuredPeriod() const {
@@ -122,7 +133,9 @@ private:
         int64_t content = pts;
         if (!haveContent_&&picture) observeRate(pts, transport, false,*picture,captureSequence);
         if (timing == Timing::Cadence) {
-            observeRate(pts, transport, skipSpan_,*picture,captureSequence);
+            const auto lastChange=rateCount_?rateTimes_[(rateHead_+kTimes-1)%kTimes]:pts;
+            const bool longStill=skipSpan_&&pts-lastChange>std::max<int64_t>(transport*6,2500000);
+            observeRate(pts, transport, longStill,*picture,captureSequence);
             // A span that started at a held (still-screen) frame is not a content period.
             if (skipSpan_) { timeCount_ = 0; timeHead_ = 0; }
             if (timeCount_ == 0) push(lastKeptSample_);
@@ -201,7 +214,11 @@ private:
     unsigned timeCount_ = 0, timeHead_ = 0, misses_ = 0;
     unsigned rateCount_ = 0, rateHead_ = 0;
     bool haveKept_ = false, haveContent_ = false, skipSpan_ = false, holding_ = false;
-    int64_t prevSample_ = 0, lastKeptSample_ = 0, lastContent_ = 0, period_ = 0, holdDue_ = 0;
+    int64_t prevSample_ = 0, lastKeptSample_ = 0, lastContent_ = 0, period_ = 0;
+    std::array<uint8_t,64> halfRateSamples_{};
+    std::array<unsigned,2> halfRateRepeats_{};
+    uint64_t halfRateSeen_=0;
+    int64_t halfRateOrigin_=0;
     int64_t observedPeriod_ = 0;
     Stats stats_;
 };

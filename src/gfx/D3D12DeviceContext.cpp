@@ -141,13 +141,18 @@ bool D3D12DeviceContext::initialize(const DeviceContextDesc& desc, Status& statu
 
     // Microsoft DRED settings apply only to subsequently created devices.
     // Enable before even the adapter's D3D12 capability probe below.
+    wchar_t disableDred[2]{};
+    const bool dredOff=GetEnvironmentVariableW(L"VEYRA_DISABLE_DRED",disableDred,2)==1&&disableDred[0]==L'1';
+    const auto enablement=dredOff?D3D12_DRED_ENABLEMENT_FORCED_OFF:D3D12_DRED_ENABLEMENT_FORCED_ON;
     ComPtr<ID3D12DeviceRemovedExtendedDataSettings1> dredSettings;
     const auto dredHr=D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings));
     if(SUCCEEDED(dredHr)) {
-        dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
-        dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        dredSettings->SetAutoBreadcrumbsEnablement(enablement);
+        dredSettings->SetPageFaultEnablement(enablement);
     }
-    veyra::log::info("dred",std::format("configured before device creation hr=0x{:X} breadcrumbs={} pageFault={}",unsigned(dredHr),SUCCEEDED(dredHr),SUCCEEDED(dredHr)));
+    const bool dredEnabled=SUCCEEDED(dredHr)&&!dredOff;
+    veyra::log::info("dred",std::format("configured before device creation hr=0x{:X} breadcrumbs={} pageFault={} requestedOff={}",
+        unsigned(dredHr),dredEnabled,dredEnabled,dredOff));
     // 1. Optional debug layer.
     if (desc.enableDebugLayer) {
         ComPtr<ID3D12Debug> debug;

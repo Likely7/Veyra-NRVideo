@@ -388,10 +388,95 @@ std::pair<double,bool> meanLinear(const sink::RgbaImage& img){
     }
     return {sum/(texels*3),finite};
 }
+
+// Moving detail with an integer translation at both input and output. Save the
+// actual FSR pixels and compare motion-compensated temporal error against zero.
+int fsrFlow(const std::filesystem::path& directory){
+    std::filesystem::create_directories(directory);
+    Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    using pipeline::SrPrescale;using pipeline::SrTarget;using pipeline::Extent;
+    using engine::OpticalFlowBackend;
+    struct Case {
+        const char* name;OpticalFlowBackend backend;
+        Extent extent;bool half=false,dual=false,capture=false,zero=false;
+    };
+    constexpr auto nvidia=OpticalFlowBackend::Nvidia,amd=OpticalFlowBackend::AmdFidelityFx;
+    const Case cases[]={
+        {"nvof-zero",nvidia,{640,360},false,false,false,true},
+        {"nvof-half",nvidia,{640,360}},
+        {"amd-native",amd,{}},
+        {"amd-half",amd,{},true},
+        {"dual-amd-half",amd,{},true,true},
+        {"capture-4k-cap",nvidia,{},false,false,true}
+    };
+    bool ok=true;
+    for(const auto& test:cases){
+        engine::EnhancementSettings settings;
+        settings.sr=true;settings.videoSrQuality=engine::kVideoSrFsr;settings.multiplier=1;
+        settings.srTarget=test.capture?SrTarget::Uhd5K:SrTarget::Qhd;
+        settings.nr=test.capture;settings.nrPolicy=pipeline::NrSizePolicy::Realtime;
+        settings.opticalFlowBackend=test.backend;settings.amdFlowHalfResolution=test.half;
+        settings.srMotion=test.zero?engine::MotionSource::Zero:engine::MotionSource::OpticalFlow;
+        settings.dualSrEnabled=test.dual;settings.dualSrQuality=engine::kVideoSrFsr;
+        settings.dualSrTarget=SrTarget::Qhd;settings.srPrescale=SrPrescale::P720;
+        engine::StageRequest request;
+        request.width=test.capture?3840:1280;request.height=test.capture?2160:720;
+        request.sr=true;request.nr=test.capture;request.uncompressedSource=test.capture;
+        pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
+        desc.rgbInput=true;desc.outputDitherStep=0;
+        desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+        if(test.extent.valid()){desc.flowWidth=test.extent.width;desc.flowHeight=test.extent.height;}
+        // NR stays in the production 4K plan that puts NVOF at 1080p.
+        const bool capOk=!test.capture||(desc.flowWidth==1920&&desc.flowHeight==1080);
+        pipeline::EnhanceGraph graph(ctx,ring);
+        bool passed=capOk&&graph.initialize(desc)&&graph.createViews()&&graph.fsrSrEnabled();
+        const auto original=pattern(request.width,request.height);
+        auto moved=original;
+        const unsigned frames=test.capture?4:10,step=6;
+        std::array<sink::RgbaImage,2> sampled;
+        pipeline::EnhanceGraph::FrameOutputs out;
+        for(unsigned i=0;i<frames&&passed;++i){
+            const size_t rowBytes=size_t(original.width)*4,shift=i*step*4;
+            for(unsigned y=0;y<original.height;++y){
+                const auto* row=original.pixels.data()+size_t(y)*rowBytes;
+                auto* dst=moved.pixels.data()+size_t(y)*rowBytes;
+                std::memcpy(dst,row+rowBytes-shift,shift);
+                std::memcpy(dst+shift,row,rowBytes-shift);
+            }
+            auto frame=sdrFrame(moved);out={};
+            passed=frame&&graph.process(frame.get(),i*1000./60,i==0,out,i+1)&&ring.waitIdle();
+            if(passed&&i+2>=frames){
+                auto* output=graph.videoFrameResource(out.videoSlot);
+                passed=read(ctx,ring,output,D3D12_RESOURCE_STATE_COMMON,4,sampled[i+2-frames]);
+            }
+        }
+        uint64_t error=0,count=0;
+        auto& a=sampled[0];auto& b=sampled[1];
+        if(passed){
+            const unsigned shift=step*b.width/request.width;
+            for(unsigned y=b.height/4;y<3*b.height/4;++y)
+                for(unsigned x=b.width/4;x<3*b.width/4;++x)
+                    for(unsigned c=0;c<3;++c){
+                        error+=std::abs(int(a.pixels[(size_t(y)*a.width+x)*4+c])-int(b.pixels[(size_t(y)*b.width+x+shift)*4+c]));
+                        ++count;
+                    }
+            passed=sink::saveImage((directory/(std::string(test.name)+".png")).wstring(),b,false);
+        }
+        const auto evaluations=graph.metrics().srEvaluateCount;
+        passed=passed&&evaluations==frames*(test.dual?2u:1u)&&graph.flowWidth()==desc.flowWidth/(test.half?2u:1u)
+            &&graph.flowHeight()==desc.flowHeight/(test.half?2u:1u);
+        std::cout<<"FSR_FLOW name="<<test.name<<" extent="<<graph.flowWidth()<<'x'<<graph.flowHeight()
+                 <<" evaluations="<<evaluations<<" motionCompensatedMae="<<(count?double(error)/count:-1.)
+                 <<" passed="<<passed<<std::endl;
+        ok=ok&&passed;out={};ring.drainQueue();graph.shutdown();
+    }
+    return ok?0:1;
+}
 // Every backend pair with real SDK evaluations of both passes, zero and optical
 // flow motion: sizes, two evaluations per frame, finite output with the source's
-// mean brightness. Then a first DLSS SR pass with nothing to enlarge (a copy of
-// the source), and HDR backend pairs including FSR in either or both passes.
+// mean brightness. Also cover an unchanged first extent and HDR backend pairs.
 int any(const std::filesystem::path& directory,bool onlyHdr=false,bool onlySdr=false,int first=-1,int second=-1){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
@@ -420,13 +505,19 @@ int any(const std::filesystem::path& directory,bool onlyHdr=false,bool onlySdr=f
         }
     }
     if(!onlyHdr&&first<0){
-        // A 4K source at the 4K base target: the first DLSS SR pass has nothing to enlarge.
-        const auto copy=run(ctx,ring,uhd.get(),false,mixed(0,0,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),false,false,false,3,true);
-        double worst=0;bool sized=copy.ok&&copy.firstLinear.width==3840&&copy.firstLinear.height==2160;
-        for(size_t p=0;sized&&p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c)
-            worst=std::max(worst,std::abs(double(half(copy.firstLinear,p*4+c))-decode(uhdImage.pixels[p*4+c])));
-        const bool passed=sized&&copy.evaluations==6&&copy.work==Extent{3840,2160}&&worst<0.002;
-        std::cout<<"DUAL_ANY copy first=0 second=0 evaluations="<<copy.evaluations<<" worst="<<worst<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+        for(const unsigned quality:{0u,engine::kVideoSrFsr}){
+            const auto result=run(ctx,ring,uhd.get(),false,
+                mixed(quality,engine::kVideoSrFsr,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),
+                false,false,false,3,true);
+            const bool sized=result.ok&&result.firstLinear.width==3840&&result.firstLinear.height==2160;
+            double worst=0;
+            for(size_t p=0;sized&&p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c)
+                worst=std::max(worst,std::abs(double(half(result.firstLinear,p*4+c))-decode(uhdImage.pixels[p*4+c])));
+            const bool passed=sized&&result.evaluations==3&&result.srIn==Extent{1920,1080}&&
+                result.work==Extent{3840,2160}&&worst<0.002;
+            std::cout<<"DUAL_ANY passthrough first="<<quality<<" second=5 evaluations="<<result.evaluations
+                     <<" worst="<<worst<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+        }
     }
     if(!onlySdr)for(const auto pair:{Pair{0,0},Pair{2,0},Pair{0,2},Pair{5,5},Pair{2,5},Pair{5,2},Pair{0,5},Pair{5,0}}){
         if(!selected(pair))continue;
@@ -548,6 +639,7 @@ int wmain(int argc,wchar_t** argv){
     if(argc==3&&std::wstring_view(argv[2])==L"dual-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-any"){const int result=stage::any(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&std::wstring_view(argv[2])==L"fsr-flow"){const int result=stage::fsrFlow(argv[1]);CoUninitialize();return result;}
     if((argc==3||argc==5)&&(std::wstring_view(argv[2])==L"dual-any-hdr"||std::wstring_view(argv[2])==L"dual-any-sdr")){
         const bool hdr=std::wstring_view(argv[2])==L"dual-any-hdr";
         const int result=stage::any(argv[1],hdr,!hdr,argc==5?std::stoi(argv[3]):-1,argc==5?std::stoi(argv[4]):-1);

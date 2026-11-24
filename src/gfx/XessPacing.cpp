@@ -285,23 +285,27 @@ void tryPace(void* ctx, void* arg5, void* arg6, uint64_t arg7, bool isLast) {
 int64_t detour(void* ctx, uint32_t a2, uint32_t a3, uint64_t a4, void* arg5, void* arg6, uint64_t arg7) {
     auto& s = state();
     const auto host=[](){return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()/100;};
-    const auto scheduleBegin=s.traceEnabled?host():0;
+    // Observe the existing output hook without enabling the test-only
+    // deadline hook or changing the provider's pacing.
+    const bool traceOutput=s.traceEnabled||diagnostics::privateFrameTraceActive();
+    const auto scheduleBegin=traceOutput?host():0;
     auto* caller = static_cast<uint8_t*>(_ReturnAddress());
     if (s.installed) {
         if (caller == s.base + XessPacing::kPacedCallerRva) tryPace(ctx, arg5, arg6, arg7, false);
         else if (caller == s.base + XessPacing::kLastFrameCallerRva) tryPace(ctx, arg5, arg6, arg7, true);
         else {std::lock_guard statsLock(s.statsMutex);++s.forwarded;}
     }
-    const auto nativeBegin=s.traceEnabled?host():0;
+    const auto nativeBegin=traceOutput?host():0;
     const auto result=s.native(ctx, a2, a3, a4, arg5, arg6, arg7);
-    if(s.traceEnabled){
+    if(traceOutput){
         diagnostics::FrameTraceEvent event;event.kind=diagnostics::TraceKind::ProviderOutput;
         event.host100ns=event.presentEndHost=host();event.presentBeginHost=nativeBegin;
         event.milliseconds=double(event.presentEndHost-nativeBegin)/10000;
         event.providerScheduleBeginHost=scheduleBegin;
         const auto address=reinterpret_cast<uintptr_t>(caller),base=reinterpret_cast<uintptr_t>(s.base);
         if(address>=base&&address-base<XessPacing::kKnownSizeOfImage)event.providerCallerRva=uint32_t(address-base);
-        Logger::instance().recordFrame(event);
+        if(s.traceEnabled)Logger::instance().recordFrame(event);
+        else diagnostics::recordPrivateFrame(event);
     }
     LARGE_INTEGER now{};QueryPerformanceCounter(&now);
     std::lock_guard statsLock(s.statsMutex);

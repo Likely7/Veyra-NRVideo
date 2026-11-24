@@ -111,7 +111,7 @@ Popup {
 
     // The walkthrough also follows late layouts, animated accordion bodies,
     // and rows that move as an existing capture source reports new properties.
-    Timer { interval: 33; running: guide.visible; repeat: true; onTriggered: guide.updateSpotlight() }
+    Timer { interval: 16; running: guide.visible; repeat: true; onTriggered: guide.updateSpotlight() }
 
     function tipPlacement() {
         const edge = 10

@@ -17,6 +17,7 @@ int wmain(int argc, wchar_t** argv) {
     using namespace veyra;
     if(argc<2||FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
     const bool amd=argc>2&&std::wstring_view(argv[2])==L"amd";
+    const bool localBackends=argc>2&&std::wstring_view(argv[2])==L"local-backends";
     std::filesystem::create_directories(argv[1]);
     HWND window=CreateWindowExW(0,L"STATIC",L"Veyra FG switch acceptance",WS_POPUP,
         40,40,640,360,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
@@ -45,7 +46,10 @@ int wmain(int argc, wchar_t** argv) {
     ok=av_frame_get_buffer(frame,32)>=0;
     struct Case{engine::FrameGenerationBackend backend;unsigned multiplier;};
     std::vector<Case> cases;
-    for(unsigned repeat=0;repeat<3;++repeat){
+    if(localBackends){
+        cases={{engine::FrameGenerationBackend::Fsr,2},{engine::FrameGenerationBackend::Rife,2},
+            {engine::FrameGenerationBackend::Rife,3}};
+    }else for(unsigned repeat=0;repeat<3;++repeat){
         cases.push_back({engine::FrameGenerationBackend::Fsr,2});
         cases.push_back({engine::FrameGenerationBackend::XeSS,4});
         cases.push_back({engine::FrameGenerationBackend::Fsr,2});
@@ -108,14 +112,18 @@ int wmain(int argc, wchar_t** argv) {
                         uint64_t light=0;for(size_t p=0;p<image.pixels.size();p+=4)light+=image.pixels[p];
                         ok=light>uint64_t(image.width)*image.height*10;
                         if(ok)++nonblack;
-                        if(gen&&i==10)ok=sink::saveImage((std::filesystem::path(argv[1])/(std::to_wstring(cycles)+L"-generated.png")).wstring(),image)&&ok;
+                        if(gen&&i==10){
+                            auto name=std::to_wstring(cycles)+L"-generated";
+                            if(localBackends)name+=L"-"+std::to_wstring(k);
+                            ok=sink::saveImage((std::filesystem::path(argv[1])/(name+L".png")).wstring(),image)&&ok;
+                        }
                     }
                 }
             }
             if(c.backend==engine::FrameGenerationBackend::XeSS)generated=unsigned(presenter.xessGeneratedCount());
             Sleep(12);
         }
-        const unsigned minGenerated=c.multiplier>1?c.backend==engine::FrameGenerationBackend::XeSS?(c.multiplier-1)*25:25:0;
+        const unsigned minGenerated=(c.multiplier-1)*25;
         ok=ok&&generated>=minGenerated&&nonblack>=2;
         totalGenerated+=generated;
         std::cout<<"SWITCH_CASE cycle="<<cycles<<" pid="<<GetCurrentProcessId()<<" hwnd="<<window
@@ -123,7 +131,7 @@ int wmain(int argc, wchar_t** argv) {
             <<" generated="<<generated<<" nonblack="<<nonblack<<" pass="<<ok<<std::endl;
         ok=ring.drainQueue()&&ok;presenter.close();graph.shutdown();
     }
-    if(ok){
+    if(ok&&!localBackends){
         // Unsupported FSR 4 must fail before a swapchain is touched. The same
         // HWND must subsequently reopen, with no FSR 3.1 mislabeled as ML.
         pipeline::EnhanceGraphDesc ml;ml.sourceWidth=ml.workWidth=640;ml.sourceHeight=ml.workHeight=360;

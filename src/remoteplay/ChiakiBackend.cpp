@@ -2,6 +2,8 @@
 // Uses chiaki-ng's AGPL-3.0-only + OpenSSL-exception APIs; retain both licenses.
 // Windows native initialization and source regression evidence: see execution log.
 #include "veyra/remoteplay/ChiakiBackend.h"
+#include "veyra/Log.h"
+#include <format>
 #include <chiaki/session.h>
 #if !defined(CHIAKI_VEYRA_VIDEO_METADATA_API) || CHIAKI_VEYRA_VIDEO_METADATA_API != 1
 #error The reviewed Chiaki video metadata patch is required
@@ -59,6 +61,9 @@ struct ChiakiBackend::Impl {
     std::atomic<bool> active=false,started=false,connected=false;
     std::atomic<std::uint64_t> warnings=0,errors=0,videoCallbacks=0,audioCallbacks=0;
     std::atomic<int> quitReason=0,apiError=0;
+    std::atomic<uint32_t> applicationReason=0;
+    std::array<ControllerState::Touch,2> lastLoggedTouches{};
+    bool lastLoggedTouchClick=false;
     std::atomic<uint64_t> callbackRejected=0,transportErrors=0,assemblyErrors=0;
     std::atomic<int64_t> serverTargetBitrate=-1;
     std::atomic<uint64_t> qualityReports=0;
@@ -79,7 +84,12 @@ struct ChiakiBackend::Impl {
             if(std::sscanf(message,"StreamConnection received connection quality: target_bitrate=%d,",&target)==1&&target>=0){self.serverTargetBitrate=target;++self.qualityReports;}
         }
         // Raw upstream log strings/hexdumps may contain keys. Do not forward them.
-        if(level==CHIAKI_LOG_ERROR)++self.errors;
+        if(level==CHIAKI_LOG_ERROR){
+            ++self.errors;
+            unsigned reason=0;
+            if(message&&std::sscanf(message,"Reported Application Reason: %x",&reason)==1)
+                self.applicationReason=reason;
+        }
         if(level==CHIAKI_LOG_WARNING)++self.warnings;
         // Classify in memory; no upstream strings or hexdumps leave this callback.
         if(message&&(level==CHIAKI_LOG_ERROR||level==CHIAKI_LOG_WARNING)){
@@ -278,7 +288,26 @@ BackendResult ChiakiBackend::submitController(const ControllerState& state){
         chiaki_orientation_tracker_apply_to_controller_state(&p_->orientation,&c);
     }else p_->lastMotion=0;
     c.l2_state=state.l2;c.r2_state=state.r2;c.left_x=state.leftX;c.left_y=state.leftY;c.right_x=state.rightX;c.right_y=state.rightY;
-    return p_->record(chiaki_session_set_controller_state(&p_->session,&c),"chiaki_session_set_controller_state");
+    const auto sent=p_->record(chiaki_session_set_controller_state(&p_->session,&c),"chiaki_session_set_controller_state");
+    static const bool traceInput=[]{
+        const auto* value=std::getenv("VEYRA_TEST_RP_INPUT_LOG");
+        return value&&std::string_view(value)=="1";
+    }();
+    if(traceInput&&sent.ok){
+        const bool clicked=(c.buttons&CHIAKI_CONTROLLER_BUTTON_TOUCHPAD)!=0;
+        for(size_t slot=0;slot<state.touches.size();++slot){
+            const auto& before=p_->lastLoggedTouches[slot];
+            const auto& touch=state.touches[slot];
+            if(touch==before)continue;
+            const auto type=touch.id<0?"up":before.id!=touch.id?"down":"move";
+            log::info("remoteplay-input",std::format("event={} touchId={} touchpadButton={}",type,int(touch.id<0?before.id:touch.id),clicked));
+        }
+        if(clicked!=p_->lastLoggedTouchClick)
+            log::info("remoteplay-input",std::format("event=touchpad-button touchpadButton={}",clicked));
+        p_->lastLoggedTouchClick=clicked;
+        p_->lastLoggedTouches=state.touches;
+    }
+    return sent;
 }
 ControllerFeedback ChiakiBackend::takeFeedback(){
     if(!p_||!p_->onOwner())return {};
@@ -292,6 +321,17 @@ NativeSnapshot ChiakiBackend::snapshot()const{
     if(!p_)return {};
     auto& s=*p_;
     NativeSnapshot out{s.started.load(),s.connected.load(),s.warnings.load(),s.errors.load(),s.videoCallbacks.load(),s.audioCallbacks.load(),s.quitReason.load(),s.apiError.load()};
+    out.applicationReason=s.applicationReason;
+    using Advice=NativeSnapshot::SessionAdvice;
+    switch(out.applicationReason){
+    case CHIAKI_RP_APPLICATION_REASON_INVALID_PSN_ID:out.sessionAdvice=Advice::Account;break;
+    case CHIAKI_RP_APPLICATION_REASON_REGIST_FAILED:out.sessionAdvice=Advice::Registration;break;
+    case CHIAKI_RP_APPLICATION_REASON_IN_USE:out.sessionAdvice=Advice::InUse;break;
+    case CHIAKI_RP_APPLICATION_REASON_RP_VERSION:out.sessionAdvice=Advice::Version;break;
+    default:
+        if(out.lastQuitReason==CHIAKI_QUIT_REASON_SESSION_REQUEST_UNKNOWN)out.sessionAdvice=Advice::Rejected;
+        break;
+    }
     out.callbackRejected=s.callbackRejected;out.transportErrors=s.transportErrors;out.assemblyErrors=s.assemblyErrors;
     out.serverTargetBitrate=s.serverTargetBitrate;out.qualityReports=s.qualityReports;
     // Upstream packet window may reset itself; do not label this cumulative UDP.

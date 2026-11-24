@@ -73,6 +73,7 @@ int wmain(int argc,wchar_t** argv){
         // Hashes of every single-model subframe: a mixed tier must reproduce them exactly.
         std::array<std::array<std::array<uint64_t,7>,9>,engine::kVfgQualityCount> modelHashes{};
         // Keep mapping for readback comparisons; upload memory is immutable.
+        using CaptureMode=pipeline::VfgBackend::CaptureMode;
         for(unsigned quality=0;quality<engine::kVfgQualityCount;++quality){
             pipeline::VfgBackend vfg;
             if(!vfg.initialize(ctx,argv[1],w,h,format,8,quality,asynchronous)){std::puts("FAIL native VFG initialization");return 3;}
@@ -82,7 +83,7 @@ int wmain(int argc,wchar_t** argv){
                 D3D12_TEXTURE_COPY_LOCATION dst{};dst.pResource=textures[p].Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
                 l->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
                 transition(l,textures[p].Get(),D3D12_RESOURCE_STATE_COPY_DEST,D3D12_RESOURCE_STATE_COPY_SOURCE);
-                check(vfg.capture(l,textures[p].Get(),p,p!=0),"capture encoded GPU frame");
+                check(vfg.capture(l,textures[p].Get(),p,p?CaptureMode::ComparePair:CaptureMode::ResetPair),"capture encoded GPU frame");
                 transition(l,textures[p].Get(),D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
                 if(!ring.submitAndSignal(slot))return 2;
             }
@@ -238,15 +239,15 @@ int wmain(int argc,wchar_t** argv){
             // show B (GPU pair test + predicated copy, or the SDK's own detection
             // under VEYRA_TEST_VFG_AUTO_SHOT_CHANGE=1). Then cut back, and a normal
             // pair must interpolate again (the predicate is per pair).
-            const auto capturePair=[&](ID3D12Resource* a,ID3D12Resource* b){
+            const auto capturePair=[&](ID3D12Resource* a,ID3D12Resource* b,CaptureMode mode=CaptureMode::ComparePair){
                 for(unsigned p=0;p<2;++p){auto* l=ring.acquireNext(slot,st);if(!l)return false;auto* texture=p?b:a;
                     transition(l,texture,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE);
-                    if(!vfg.capture(l,texture,p,true))return false;
+                    if(!vfg.capture(l,texture,p,p?mode:CaptureMode::HistoryOnly))return false;
                     transition(l,texture,D3D12_RESOURCE_STATE_COPY_SOURCE,D3D12_RESOURCE_STATE_COMMON);
                     if(!ring.submitAndSignal(slot))return false;}
                 return true;
             };
-            const auto cutCount=[&]()->int{
+            const auto cutCount=[&](bool expectedCut)->int{
                 auto* buffer=vfg.shotChangeResultsForTest();if(!buffer)return -1;
                 auto* l=ring.acquireNext(slot,st);if(!l)return -2;
                 transition(l,buffer,D3D12_RESOURCE_STATE_PREDICATION,D3D12_RESOURCE_STATE_COPY_SOURCE);l->CopyBufferRegion(results.Get(),0,buffer,0,256);
@@ -256,6 +257,7 @@ int wmain(int argc,wchar_t** argv){
                 const auto* words=static_cast<const uint32_t*>(data);const int count=int(words[12]);
                 float sad=0,histogram=0;std::memcpy(&sad,words+8,4);std::memcpy(&histogram,words+9,4);
                 std::printf("VFG_SHOT_CHANGE parity1 flag=%u sad=%.4f histogram=%.4f cuts=%d\n",words[2],sad,histogram,count);
+                check(words[2]==unsigned(expectedCut),"parity1 predicate matches capture mode");
                 results->Unmap(0,&written);return count;
             };
             check(capturePair(textures[0].Get(),cutTexture.Get()),"capture cut pair");
@@ -267,7 +269,14 @@ int wmain(int argc,wchar_t** argv){
                 cutError=std::max(cutError,unsigned(std::abs(int(a)-int(b))));}
             readback->Unmap(0,&written);std::printf("VFG_CUT format=%u quality=%u maxByteError=%u\n",unsigned(format),quality,cutError);
             check(cutError<=2,"undeclared cut shows the current input in every subframe");
-            const int afterCut=cutCount();if(afterCut!=-1)check(afterCut==1,"GPU pair test found exactly the one cut");
+            const int afterCut=cutCount(true);
+            if(afterCut!=-1){
+                check(afterCut==1,"GPU pair test found exactly the one cut");
+                check(capturePair(textures[0].Get(),textures[1].Get(),CaptureMode::HistoryOnly),"capture a skipped pair");
+                check(cutCount(true)==afterCut,"history-only leaves the old predicate and cut count untouched");
+                check(capturePair(textures[0].Get(),cutTexture.Get(),CaptureMode::ResetPair),"record a reset after a cut");
+                check(cutCount(false)==afterCut,"reset clears the old predicate without counting a cut");
+            }
             check(capturePair(cutTexture.Get(),textures[1].Get())&&capturePair(textures[0].Get(),textures[1].Get()),"cut back, then a normal pair");
             for(unsigned sub=1;sub<4;++sub)check(consume(sub,sub-1),"normal pair after cut queued");
             check(ring.waitIdle(),"normal pair after cut completion");
@@ -283,7 +292,7 @@ int wmain(int argc,wchar_t** argv){
             readback->Unmap(0,&written);
             // Pair tests that crossed a cut: into the checkerboard and out of it.
             // Every other capture (identical or shifted frames) must stay unflagged.
-            const int afterReturn=cutCount();if(afterReturn!=-1)check(afterReturn==2,"cut back counted; normal pairs never flagged");
+            const int afterReturn=cutCount(false);if(afterReturn!=-1)check(afterReturn==2,"cut back counted; normal pairs never flagged");
             vfg.shutdown();
         }
         D3D12_RANGE written{0,0};upload->Unmap(0,&written);

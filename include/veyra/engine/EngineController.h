@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/engine/PresentTearingDetector.h"
 #include <windows.h>
 #include <atomic>
 #include <mutex>
@@ -15,6 +16,7 @@
 #include "veyra/engine/PreviewView.h"
 #include "veyra/engine/EngineWatchdog.h"
 #include "veyra/sink/CaptureAudioSession.h"
+#include "veyra/sink/HdmiBitstreamOutput.h"
 #include "veyra/remoteplay/SessionInbox.h"
 #ifdef VEYRA_ENABLE_MOONLIGHT
 #include "veyra/source/MoonlightSessionSource.h"
@@ -28,6 +30,7 @@
 #include "veyra/engine/ExportOptions.h"
 #include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/VirtualCamera.h"
+#include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
@@ -86,6 +89,7 @@ struct PlayerSnapshot {
     // from the request (HDR screenshots are JXR); no UI-thread file polling.
     std::wstring savedFramePath;
     EnhancementSettings desired,applied;bool applying=false;
+    bool captureEnhancementLoading=false;
     bool nrActive=false,srActive=false,fgActive=false;
     bool nrAutoActive=false;
     uint32_t nrAutoPercent=0,nrAutoWidth=0,nrAutoHeight=0;
@@ -104,11 +108,12 @@ struct PlayerSnapshot {
     std::string nrReuseUnavailable;
     bool videoHdrActive=false; // TrueHDR actually running this graph (needs an HDR display path)
     std::wstring backendWarning;
+    bool nrPreparing=false;
     std::wstring sourceNotice;
     std::wstring colorStatus;
     // Custom (format label): the source's HDR format as one word ("Dolby Vision
     // P7", "HDR Vivid", "HDR10+", "HDR10", "HLG", "SDR"). The start-up badge and
-    // the player bar both read it; empty for captures and images.
+    // the player bar both read it; empty until a video format is known.
     std::wstring sourceHdrLabel;
     std::wstring videoHdrStatus;
     // Beauty nodes: whether the graph runs any, the faces the shared tracker saw a
@@ -168,9 +173,10 @@ struct PlayerSnapshot {
     uint64_t frames=0,generated=0;
     uint64_t captureReceived=0,captureDropped=0,nrEvaluated=0,nvofExecuted=0;
     uint64_t captureRateSkipped=0,processedCompleted=0;
-    bool captureHalfRate=false;
+    bool captureHalfRate=false,captureHalfRateSuggested=false;
     bool captureSampledBlack=false; // Sparse CPU-source samples, not no-signal detection.
     bool captureRecovering=false;unsigned captureReconnectAttempts=0;
+    uint64_t captureDriverWaitMs=0;
     double captureFps=0,captureReadAgeMs=0,captureAgeMs=0,captureAgeP95Ms=0;
     double schedulingWaitP95Ms=0,processCpuP95Ms=0,presentCpuP95Ms=0;
     // Realtime file preview: dropped enhancement opportunities this metrics
@@ -190,6 +196,7 @@ struct PlayerSnapshot {
     uint64_t pacingFrames=0,pacingRepaired=0;
     // Live HUD Lock (EnhanceGraph::hudLockState): 0 off, 1 running, 2 unavailable, 3 not with this frame generation.
     int hudLockState=0;
+    int dynamicHudState=0;
     // Live FG output hint (DisplayFgBudget.h), never applied automatically:
     // 0 = the output fits the panel, 1 = suggest turning generation off,
     // otherwise the suggested lower multiplier. Refresh and content rate are
@@ -201,6 +208,9 @@ struct PlayerSnapshot {
     // now, 3 possible, 4 active. presentationVrrSync: the 可变刷新 switch made
     // Automatic present like Vsync for it.
     unsigned displayVrr=0;
+    double displayVrrMinimumHz=0;
+    int displayCompositionMode=-1;
+    TearingHint tearingHint=TearingHint::None;
     bool presentationVrrSync=false;
     // Runtime-reported DLSSG MultiFrameCountMax: 1 = 2X only, 5 = 6X.
     // 0 = not queried yet (no session). The UI uses this to offer only the
@@ -247,6 +257,7 @@ public:
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
     void remotePlayController(const remoteplay::ControllerState&);
+    void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
     // (the console's keepalive video and audio are dropped on receipt). Start and
@@ -284,10 +295,12 @@ public:
     remoteplay::ControllerFeedback xboxFeedback();
 #endif
     void stop();
+    sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}
     void pause(bool p);
     bool setPlaybackRate(double rate);
     void setFullscreenMemoryProtection(bool enabled);
+    void setFullscreenFrameStats(int corner){fullscreenFrameStatsCorner_=corner;}
     void observeHdrCoverage(bool on){hdrCoverageObserved_=on;}
     void previewView(PreviewView view){if(!std::isfinite(view.zoom)||!std::isfinite(view.centerX)||!std::isfinite(view.centerY)||!std::isfinite(view.displayAspect)||view.displayAspect<0||view.mode<0||view.mode>6)return;std::lock_guard lock(mutex_);view.zoom=std::clamp(view.zoom,.05f,64.0f);if(view.displayAspect==0)view.displayAspect=previewView_.displayAspect;view.rotationDegrees=previewView_.rotationDegrees;view.userQuarterTurns=previewView_.userQuarterTurns;previewView_=view;}
     bool rotatePreviewClockwise(uint64_t session){std::lock_guard lock(mutex_);if(session!=snapshot_.sessionId||(!snapshot_.running&&!snapshot_.image))return false;previewView_.rotateClockwise();return true;}
@@ -310,6 +323,11 @@ public:
     bool uninstallVirtualCamera(std::wstring& error);
     bool installVirtualCamera(std::wstring& error);
     VirtualCameraStatus virtualCameraSnapshot()const;
+    // On-screen text for live translation (ScreenTextCapture.h): while enabled, a
+    // region of the presented picture is read by Windows OCR a few times a second.
+    // Any thread.
+    void setScreenText(bool enabled,const ScreenTextOptions& options);
+    ScreenTextStatus screenTextSnapshot()const;
     // Instant replay (#103): while enabled, the last options.replaySeconds of
     // whatever is presented stay in memory, across sessions; saveReplay()
     // writes them to a new file in the background. Any thread.
@@ -325,7 +343,7 @@ private:
     void post(std::function<void()>);
     void dispatch();
     void status(const std::wstring&,bool failed=false);
-    void noteEngineHang(uint64_t stalledMs);
+    void noteEngineHang(uint64_t stalledMs,bool captureDriver);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void controlLoop(std::stop_token);
     void waitRemoteControlIdle();
@@ -359,7 +377,9 @@ private:
     std::unique_ptr<LiveRecorder> replay_=std::make_unique<LiveRecorder>(true);
     PresentCaptureFanout recordingCaptures_{*recorder_,*replay_};
     std::unique_ptr<VirtualCamera> virtualCamera_=std::make_unique<VirtualCamera>();
-    PresentCaptureFanout captures_{recordingCaptures_,*virtualCamera_};
+    std::unique_ptr<ScreenTextCapture> screenText_=std::make_unique<ScreenTextCapture>();
+    PresentCaptureFanout outputCaptures_{*virtualCamera_,*screenText_};
+    PresentCaptureFanout captures_{recordingCaptures_,outputCaptures_};
     // Declared before worker_: it outlives the engine thread's presenters.
     DisplayStateService displayStates_;
     std::thread worker_;
@@ -374,10 +394,15 @@ private:
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_
     std::atomic<bool> stop_{false},paused_{false},muted_{false};
     std::atomic<bool> captureAudioMonitoring_{true};
+    std::shared_ptr<sink::HdmiBitstreamOutput> hdmiBitstream_;
     std::atomic<float> volume_{1};uint64_t sessionId_=0;
     std::atomic<double> seekSeconds_{-1};
     std::atomic<double> requestedPlaybackRate_{1};
     std::atomic<bool> fullscreenMemoryProtection_{false};
+    std::atomic<int> fullscreenFrameStatsCorner_{-1};
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    std::atomic<bool> remotePlayTouchpadPressOnly_{false};
+#endif
     std::atomic<bool> hdrCoverageObserved_{false};
     int pendingAudioTrack_=-1;uint64_t pendingAudioSession_=0; // mutex_
     std::atomic<int> comparisonMode_{0};std::atomic<bool> comparisonBase_{false};std::atomic<float> comparisonSplit_{.5f};

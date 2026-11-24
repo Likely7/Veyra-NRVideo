@@ -12,6 +12,7 @@
 #include <dxgi1_6.h>
 #include <chrono>
 #include <cmath>
+#include <filesystem>
 #include <iostream>
 #include <thread>
 extern "C" {
@@ -99,6 +100,51 @@ int xessResize(HWND target,unsigned multiplier,bool resizeTarget,unsigned second
     controller.stop();const auto drain=Clock::now()+std::chrono::seconds(10);while(!controller.idle()&&Clock::now()<drain){pump();Sleep(10);}
     check(controller.idle(),"XeSS resize engine drains after stop");DestroyWindow(host);return ok&&controller.idle()?0:1;
 }
+int recordCrop(source::ScreenCaptureOptions options, unsigned width, unsigned height,
+               const std::filesystem::path& directory, std::wstring_view mode){
+    const HWND host=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"Veyra cropped recording test",
+        WS_OVERLAPPEDWINDOW|WS_VISIBLE,860,40,640,400,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
+    if(!host)return 2;
+    engine::EngineController controller;
+    engine::PlayerOptions settings;
+    settings.nr=settings.sr=settings.fg=false;
+    settings.settings.forceSdrPreview=mode!=L"hdr"&&mode!=L"hdr-replay";
+    controller.open(host,options.uri(),settings);
+    const auto waitFor=[&](auto ready, uint64_t milliseconds){
+        const auto until=GetTickCount64()+milliseconds;
+        while(!ready()&&GetTickCount64()<until){pump();Sleep(4);}
+        return ready();
+    };
+    const bool started=waitFor([&]{
+        const auto snapshot=controller.snapshot();
+        return snapshot.sourceWidth==width&&snapshot.sourceHeight==height&&snapshot.frames>=10;
+    },10000);
+    check(started,"capture delivers the requested cropped dimensions");
+    engine::RecordingSettings output;
+    output.directory=directory.wstring();
+    output.audio=false;
+    output.hevc=mode==L"hevc";
+    output.fpsLimit=60;
+    const bool replay=mode==L"replay"||mode==L"hdr-replay";
+    std::wstring error;
+    auto state=[&]{return replay?controller.replaySnapshot():controller.recordingSnapshot();};
+    const bool armed=started&&(replay?controller.setReplay(true,output,error):controller.requestRecording(output,error));
+    const bool recorded=armed&&waitFor([&]{const auto current=state();return current.frames>=72||current.failed;},8000)
+        &&!state().failed;
+    if(replay){
+        check(recorded&&controller.saveReplay(output.directory,error),"save cropped replay");
+    }else controller.stopRecording();
+    const bool saved=recorded&&waitFor([&]{return state().saved>=1;},7000);
+    const auto result=state();
+    std::wcout<<L"CROP_RECORD source="<<width<<L"x"<<height<<L" frames="<<result.frames<<L" saved="<<result.saved
+              <<L" path="<<result.path<<L" error="<<result.error<<L" requestError="<<error<<std::endl;
+    check(saved&&!result.failed,"cropped output finishes with encoded frames");
+    if(replay)controller.setReplay(false,output,error);
+    controller.stop();
+    check(waitFor([&]{return controller.idle();},10000),"cropped recording session drains");
+    DestroyWindow(host);
+    return failures?1:0;
+}
 int wmain(int argc,wchar_t** argv){
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(argc>3&&std::wstring(argv[1])==L"--xess-window")
@@ -123,6 +169,16 @@ int wmain(int argc,wchar_t** argv){
     source::SourceOpenDesc desc;desc.path=options.uri();desc.d3d12Device=ctx.device();desc.d3d12Queue=ctx.directQueue();source::ScreenCaptureSource source;
     bool opened=source.open(desc);check(opened,"WGC open");if(!opened){std::wcerr<<source.status()<<std::endl;return 5;}
     pipeline::FramePacket p;const AVFrame* f=nullptr;bool frame=next(source,p,&f);check(frame,"WGC first real frame");if(!frame)return 6;
+    if(argc==6&&std::wstring_view(argv[1])==L"--record-crop"){
+        const unsigned width=unsigned(_wtoi(argv[2])),height=unsigned(_wtoi(argv[3]));
+        if(width<16||height<16||width>unsigned(f->width)||height>unsigned(f->height))return 2;
+        options.right=unsigned(f->width)-width;
+        options.bottom=unsigned(f->height)-height;
+        source.close();ring.shutdown();ctx.shutdown();
+        const std::wstring_view mode=argv[4];
+        if(mode!=L"h264"&&mode!=L"hevc"&&mode!=L"replay"&&mode!=L"hdr"&&mode!=L"hdr-replay")return 2;
+        return recordCrop(options,width,height,argv[5],mode);
+    }
     check(content(ctx,ring,source,p,f),"WGC shared GPU graph RGB stripe content");
     const auto initialReceived=source.metrics().received,initialDropped=source.metrics().dropped;
     auto end=GetTickCount64()+4000;unsigned frames=0;int64_t last=0;bool monotonic=true;

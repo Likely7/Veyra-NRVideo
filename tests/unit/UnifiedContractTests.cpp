@@ -1,6 +1,6 @@
 // Unified contract tests  FramePacket, FrameWindow, GuidanceFrame,
-// ResetCoordinator, EnhanceGraph interface compliance, and fake/zero
-// provider behavior. Reset epochs cover all 8 Launch V1 reset events.
+// ResetCoordinator, and fake/zero guidance provider behavior. Reset epochs
+// cover all 8 Launch V1 reset events.
 #include <cstdio>
 #include <cstring>
 
@@ -8,7 +8,6 @@
 #include "veyra/core/FrameWindow.h"
 #include "veyra/core/GuidanceFrame.h"
 #include "veyra/core/ResetCoordinator.h"
-#include "veyra/core/EnhanceGraph.h"
 
 namespace {
 
@@ -21,8 +20,18 @@ void check(const char* name, bool ok, const char* detail = "") {
     if (!ok) ++g_failures;
 }
 
+// The provider contract the fakes below implement. Only these tests use it; it
+// used to live in the removed veyra/core/EnhanceGraph.h stub.
+class IGuidanceProvider {
+public:
+    virtual ~IGuidanceProvider() = default;
+    virtual bool provide(const veyra::core::FrameWindow& window, veyra::core::GuidanceFrame& out) = 0;
+    virtual veyra::core::GuidanceProvider providerType() const = 0;
+    virtual void reset() = 0;
+};
+
 // Fake guidance provider for testing (simulates NVOF with known values).
-class FakeNvofProvider : public veyra::core::IGuidanceProvider {
+class FakeNvofProvider : public IGuidanceProvider {
 public:
     bool provide(const veyra::core::FrameWindow& window, veyra::core::GuidanceFrame& out) override {
         if (window.current == nullptr) return false;
@@ -44,7 +53,7 @@ public:
 };
 
 // Zero guidance provider (honest fallback).
-class ZeroGuidanceProvider : public veyra::core::IGuidanceProvider {
+class ZeroGuidanceProvider : public IGuidanceProvider {
 public:
     bool provide(const veyra::core::FrameWindow& window, veyra::core::GuidanceFrame& out) override {
         if (window.current == nullptr) return false;

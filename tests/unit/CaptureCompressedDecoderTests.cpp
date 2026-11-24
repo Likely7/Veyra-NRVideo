@@ -332,13 +332,14 @@ bool decoderReplacement(ElementaryStream& stream, gfx::D3D12DeviceContext& devic
 // Xbox may advertise one size while the SPS describes another. The software
 // fallback scales into the advertised target, so sws_scale returns target rows.
 // Comparing those rows with the decoded source height rejects every good frame.
-bool softwareScalingTest(const ElementaryStream& stream)
+bool softwareScalingTest(const ElementaryStream& stream,bool nativeSize=false)
 {
     const unsigned width = unsigned(std::max(2, (stream.width / 4) * 2));
     const unsigned height = unsigned(std::max(2, (stream.height / 4) * 2));
     if (height == unsigned(stream.height)) return false;
     source::CaptureCompressedDecoder decoder;
     decoder.setStreamProfile(true);
+    decoder.preserveSoftwareStreamExtent(nativeSize);
     if (!decoder.open(stream.codec, width, height, nullptr, 0, nullptr, nullptr)) return false;
     AVFrame* target = av_frame_alloc();
     if (!target) return false;
@@ -353,7 +354,9 @@ bool softwareScalingTest(const ElementaryStream& stream)
         bool hardware = false;
         if (decoder.decode(unit.data(), unit.size(), stream.pts[i], target, &out, hardware)) {
             ++frames;
-            ok = !hardware && out == target && out->width == int(width) && out->height == int(height);
+            ok = !hardware && out == target &&
+                 out->width == (nativeSize?stream.width:int(width)) &&
+                 out->height == (nativeSize?stream.height:int(height));
         } else if (!decoder.waitingForInput()) {
             std::cout << "software scaling error: " << decoder.lastError() << '\n';
             ok = false;
@@ -375,6 +378,13 @@ int wmain(int argc, wchar_t** argv)
         return 0; // missing corpus is not a product failure; the gate reports it
     }
     std::cout << "loaded accessUnits=" << stream.accessUnits.size() << " " << stream.width << "x" << stream.height << '\n';
+
+    if(argc==3&&std::wstring_view(argv[2])==L"--native-software"){
+        const bool native=softwareScalingTest(stream,true),fixed=softwareScalingTest(stream);
+        std::cout<<"SOFTWARE_OUTPUT "<<stream.width<<"x"<<stream.height
+            <<" native="<<native<<" fixed="<<fixed<<'\n';
+        return native&&fixed?0:1;
+    }
 
     gfx::D3D12DeviceContext context;
     gfx::DeviceContextDesc desc;

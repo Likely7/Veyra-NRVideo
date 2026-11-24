@@ -77,7 +77,7 @@ public:
     // then on the name, so a second AVerMedia card in the same machine cannot
     // donate its audio to this capture.
     bool start(PcmCallback onPcm, const std::wstring& preferName = std::wstring(),
-               const std::wstring& preferPath = std::wstring());
+               const std::wstring& preferPath = std::wstring(), AverMediaAudioCarrier::BurstCallback onBurst = {});
 
     // Stops the graph and joins the worker. Safe to call more than once.
     void stop();

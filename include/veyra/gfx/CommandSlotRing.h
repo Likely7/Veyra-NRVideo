@@ -46,6 +46,7 @@ public:
     uint32_t slotCount() const { return slotCount_; }
     bool initialized() const { return initialized_; }
     ID3D12CommandQueue* queue() const {return queue_;}
+    ID3D12Fence* fence() const {return fence_;}
 
     // Waits for this slot's outstanding fence value (if any), then resets the
     // allocator and command list. Returns the recycled list ready for record.

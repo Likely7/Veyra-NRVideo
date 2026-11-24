@@ -21,7 +21,7 @@
 <!-- veyra-creator-and-tutorials:end -->
 
 <!-- veyra-main-pr-integration -->
-**Veyra 2.2.0** · [Download and release notes](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)
+**Veyra 2.2.1** · [Download and release notes](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
 
 
 ### Real-time GPU Video Enhancement for Windows
@@ -132,13 +132,13 @@ I've received creator fees from a community-created Veyra token. These contribut
 
 **📖 [English User Guide / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)** — installation, software setup, capture card compatibility, troubleshooting, and community-tested solutions. [中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home).
 
-## Latest update · 2.2.0
+## Latest update · 2.2.1
 
-- Windows installers with a selectable location, optional desktop shortcut and uninstaller. Portable ZIPs remain available. Both include signed in-app update support.
-- Real-time subtitle translation with an optional local model, a processed virtual camera output, and improved fullscreen scaling.
-- Capture and audio stability fixes, screen-capture drag cropping, segmented recording, RTP/UDP multicast and live timeshift.
+- Capture shows the original picture while enhancement loads. Improved capture recovery, two 60-to-30 modes, and odd-crop recording and replay.
+- Added video denoise, NVIDIA Image Scaling, AMD VideoSR, downloadable ANR and RIFE support. Refined crosshair and HUD compositing.
+- Faster live captions with adjustable styling, plus fixes for PS5 streaming, virtual camera setup and player controls.
 
-[Full 2.2.0 changes, test results and image comparisons](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0)
+[Full 2.2.1 changes and test results](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
 
 ## Highlights
 
@@ -152,7 +152,7 @@ I've received creator fees from a community-created Veyra token. These contribut
 
 ## Install and upgrade
 
-Download the [Veyra 2.2.0 Setup EXE or portable ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0) for Veyra's active GPU. Run Setup, or extract the portable ZIP with Windows or 7-Zip into a new writable folder and launch **Veyra.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download the [Veyra 2.2.1 Setup EXE or portable ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1) for Veyra's active GPU. Run Setup, or extract the portable ZIP with Windows or 7-Zip into a new writable folder and launch **Veyra.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -165,6 +165,8 @@ Start with effects off, check picture/sound, then enable effects individually. H
 ### Sources and pages
 
 Home offers files, capture card, PS5, PC, Xbox and screen capture. Files/images can also be dropped into the window. Move to the bottom edge to reveal navigation between Home, Cinema, Professional, Colour, Export and Settings.
+
+**Screen capture** is for viewing video from a window or display. Choose **Continue to capture** in the notice to select a source. Mouse click-through has been removed. For PC games, older titles and emulators, see [Magpie Experimental](https://github.com/SAOG0721/Magpie).
 
 - Cinema prioritises the picture with a floating source/transport/audio/fullscreen bar, optionally hidden in settings.
 - Professional List has Picture, Frame generation, Colour, Sound and Display tabs. The order strip locates effects; bottom panels report source/output, GPU stage time and load.
@@ -199,12 +201,12 @@ Select Nodes at the top of Professional. This is an executable chain editor:
 | Source | Setup |
 |---|---|
 | Capture card | Select device, resolution, rate, then a supported pixel format and audio input. Close competing apps. Match PQ/HLG/709 and Limited/Full to the signal. Magewell Pro Capture has a dedicated low-latency option. |
-| PS5 | Enable Remote Play and discover/enter the console IP. Click **Get Account ID** to open [PSNTools](https://www.psntools.com/psn/checker), copy the numeric or Base64 Account ID back into Veyra, then enter the console’s eight-digit pairing code. Saved consoles reconnect directly. |
+| PS5 | Enable Remote Play and discover/enter the console IP. Click **Get Account ID** to open the [Account ID guide](docs/PSN_ACCOUNT_ID.md) (Sony's own sign-in via [psn-account-id](https://github.com/metalito/psn-account-id) or [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng); never paste your NPSSO cookie into a third-party site), copy the numeric or Base64 Account ID into Veyra, then enter the console’s eight-digit pairing code. Saved consoles reconnect directly. |
 | PC | Install/configure Sunshine yourself; discover/add the host, PIN-pair, select app/desktop and connect. Sunshine is not bundled. |
 | Xbox | Follow device-code sign-in and select a console with remote features enabled. Unofficial/experimental; account, service and console restrictions apply. |
 | Screen | Select a window/display; avoid recursively capturing Veyra itself. |
 
-For **Screen Capture → Game mode**, choose a borderless game window or monitor. **Home** opens adjustments, Home/Esc closes them, **Ctrl+Alt+Home** exits passthrough. For **Capture card → PS5 controller control**, pair the console first; third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the2.0.8 update for setup and hardware limits. Hotkeys are now customizable in Settings → Shortcuts; defaults stay Home/Ctrl+Alt+Home. Windowed game pictures follow the original visible bounds; use borderless fullscreen to fill the display.
+For **Capture card → PS5 controller control**, pair the console first. Third-party streaming software can relay this PC's enhanced picture and forward remote input. Enable background controller forwarding and audio monitoring as needed. See the 2.0.8 update for setup and hardware limits.
 
 Pausing capture/streaming freezes the preview while keeping the session, not the host game. Physical hardware, networks, HDR and controllers need individual validation.
 
@@ -255,7 +257,7 @@ ANR host source is traceable; beta runtime files are excluded under upstream res
 
 Developer entry: [current documentation](docs/README.md), [build and validation](docs/DEVELOPMENT.md), [UI code responsibilities](docs/ARCHITECTURE.md). Historical task notes are indexed separately.
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.2.0 build and corresponding source](docs/BUILD_2.2.0.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.2.1 build and corresponding source](docs/BUILD_2.2.1.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 

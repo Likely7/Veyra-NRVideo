@@ -11,6 +11,7 @@ namespace veyra::pipeline {
 class VfgBackend {
 public:
     enum class SubmissionState { Pending, Succeeded, Failed };
+    enum class CaptureMode { ComparePair, ResetPair, HistoryOnly };
     VfgBackend();
     ~VfgBackend();
     VfgBackend(const VfgBackend&)=delete;
@@ -23,14 +24,14 @@ public:
                     unsigned width,unsigned height,DXGI_FORMAT,unsigned multiplier,unsigned quality,
                     bool asynchronousSubmission=false,bool fastFallback=false);
     bool created() const;
+    bool adaMediumMemoryFault() const;
     // Caller transitions encoded texture to COPY_SOURCE and back to COMMON.
     // Submit this list before generate(). Normal frames never CPU-wait here;
     // teardown and exceptional SDK rejection drain work before releasing it.
-    // The same list also runs the GPU shot-change test of this pair against
-    // the other parity's input (comparePrevious=false when the pair has no
-    // valid A, e.g. after a reset); copyOutput() of the pair's subframes is
-    // predicated on its result and shows the current input on a cut.
-    bool capture(ID3D12GraphicsCommandList*,ID3D12Resource*,unsigned parity,bool comparePrevious=true);
+    // ComparePair tests A/B and ResetPair clears the predicate for this B.
+    // HistoryOnly updates B for the next pair without changing the predicate.
+    // Use ComparePair or ResetPair before generating output for a pair.
+    bool capture(ID3D12GraphicsCommandList*,ID3D12Resource*,unsigned parity,CaptureMode mode=CaptureMode::ComparePair);
     // Signals an OWNED producer fence and queues a GPU wait before copyOutput.
     // Preview offloads the serial CUDA wait/run/signal to a bounded worker;
     // synchronous/export callers retain the immediate SDK rejection verdict.

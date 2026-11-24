@@ -1,4 +1,5 @@
 #include "veyra/ngx/AnrProvider.h"
+#include "veyra/RuntimePaths.h"
 #include "veyra/Log.h"
 #include <windows.h>
 #include <nvsdk_ngx_params.h>
@@ -95,7 +96,15 @@ struct AnrProvider::Impl {
 };
 AnrProvider::AnrProvider():impl_(std::make_unique<Impl>()){}
 AnrProvider::~AnrProvider()=default;
-std::wstring AnrProvider::directory(const std::wstring& root){return (std::filesystem::path(root)/L"anr").wstring();}
+std::filesystem::path AnrProvider::downloadRoot() {
+    return runtime::userDataDirectory() / L"components" / L"anr";
+}
+std::wstring AnrProvider::directory(const std::wstring& root) {
+    const auto downloaded = downloadRoot() / downloadVersion;
+    std::error_code ec;
+    if (std::filesystem::is_regular_file(downloaded / L"nvngx_dlssg.dll", ec)) return downloaded.wstring();
+    return (std::filesystem::path(root) / L"anr").wstring();
+}
 bool AnrProvider::available(const std::wstring& root){std::error_code ec;return std::filesystem::is_regular_file(std::filesystem::path(directory(root))/L"nvngx_dlssg.dll",ec);}
 bool AnrProvider::open(ID3D12Device* device,const std::wstring& root,unsigned& maxGenerated){
     auto& s=*impl_;if(s.runtime||!device)return false;

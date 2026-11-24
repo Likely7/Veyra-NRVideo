@@ -52,6 +52,10 @@ void outputRateContracts(){
     h={};s=live();s.captureFps=40;s.applied.content=engine::ContentRate::Auto;s.contentFps=20;
     s.metrics.flow.presentSubmitFps=20;settle(h,s,20);
     require(!h.overloaded&&h.inputLimited&&std::wstring(h.rateStatus(s))==L"输入帧率不足","dedup never hides a deficient input");
+    s.applied.multiplier=2;s.fgBudgetLimited=true;
+    settle(h,s,20);
+    require(h.fgScheduleLimited(s)&&std::wstring(h.rateStatus(s))==L"输入帧率不足",
+            "an input warning still exposes a concurrent frame generation reduction");
     h={};s=live();s.applied.multiplier=4;s.presentationEffective.display=engine::DisplaySync::Vsync;
     s.metrics.flow.presentSubmitFps=60;settle(h,s,0,{60});
     require(h.output.targetFps==60&&h.output.displayLimited&&!h.overloaded,"VSync target is bounded by the actual display");

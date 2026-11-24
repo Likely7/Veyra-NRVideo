@@ -74,7 +74,7 @@ else {
 }
 
 # FFmpeg dependency roots (C:\veyra-deps: the project path contains spaces,
-# which FFmpeg's build refuses; see loop/JOURNAL.md).
+# which FFmpeg's build refuses; see docs/history/loop/JOURNAL.md).
 $ffmpegRoot = if ($FfmpegRoot) { [IO.Path]::GetFullPath($FfmpegRoot) } else { "C:\veyra-deps\installed\x64-windows" }
 if (Test-Path -LiteralPath (Join-Path $ffmpegRoot "include\libavformat\avformat.h") -PathType Leaf) {
     $configureExtra = $configureExtra + (' -DVEYRA_FFMPEG_ROOT="{0}"' -f $ffmpegRoot)
@@ -116,7 +116,7 @@ Set-Content -LiteralPath $batchFile -Value $batchLines -Encoding ASCII
 
 & cmd.exe /c ('"{0}"' -f $batchFile)
 $exitCode = $LASTEXITCODE
-if ($exitCode -eq 0 -and (Test-Path -LiteralPath (Join-Path $buildDir 'veyra.exe'))) {
+if ($exitCode -eq 0 -and (Test-Path -LiteralPath (Join-Path $buildDir 'veyra_export_probe.exe'))) {
     foreach ($name in @('avcodec-63.dll','avformat-63.dll','avutil-61.dll','swresample-7.dll','swscale-10.dll')) {
         Copy-Item -LiteralPath (Join-Path $ffmpegRoot "bin/$name") -Destination $buildDir
     }

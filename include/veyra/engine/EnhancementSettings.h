@@ -10,6 +10,7 @@
 #include "veyra/source/CaptureBuffer.h"
 #include "veyra/engine/ColorSettings.h"
 #include "veyra/engine/AntiAliasSettings.h"
+#include "veyra/engine/VideoDenoiseSettings.h"
 #include "veyra/engine/BeautySettings.h"
 namespace veyra::engine {
 inline constexpr uint32_t kMaxColorInstances = 6;
@@ -44,7 +45,8 @@ inline bool validNrReuseMode(NrReuseMode v) {
 // Preserve persisted values 0/1/2; the old Fsr value now explicitly selects
 // the 3.1 provider. Fsr4 requires a real ML provider, never an auto fallback.
 // AmdFrc: AMD AMF FRC, the video frame interpolation of the AMD driver (gfx::AmfFrcBackend).
-enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5, AmdFrc = 6 };
+// Rife: RIFE through ONNX Runtime DirectML from runtime/rife (gfx::RifeDmlBackend).
+enum class FrameGenerationBackend { Dlss = 0, XeSS = 1, Fsr = 2, Fsr4 = 3, Vfg = 4, Anr = 5, AmdFrc = 6, Rife = 7 };
 constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Fsr || backend == FrameGenerationBackend::Fsr4;
 }
@@ -52,10 +54,11 @@ constexpr bool fsrFrameGeneration(FrameGenerationBackend backend) {
 constexpr bool twoXFrameGeneration(FrameGenerationBackend backend) {
     return fsrFrameGeneration(backend) || backend == FrameGenerationBackend::AmdFrc;
 }
-// Not NVIDIA-only (AMD FRC runs on AMD GPUs; its own runtime refuses others).
+// Not NVIDIA-only (AMD FRC runs on AMD GPUs; its own runtime refuses others;
+// RIFE runs on any DirectML GPU).
 constexpr bool crossVendorFrameGeneration(FrameGenerationBackend backend) {
     return backend == FrameGenerationBackend::Anr || backend == FrameGenerationBackend::XeSS || fsrFrameGeneration(backend) ||
-        backend == FrameGenerationBackend::AmdFrc;
+        backend == FrameGenerationBackend::AmdFrc || backend == FrameGenerationBackend::Rife;
 }
 // Frame generation that runs inside the present sink (external frame
 // interpolation swapchain) instead of the in-graph DLSSG backend.
@@ -90,6 +93,9 @@ inline size_t exportBitrateIndex(uint32_t mbps){for(size_t i=0;i<kExportBitrateC
 // videoSrQuality values: 0 = DLSS SR, 1..4 = RTX video SR quality steps,
 // 5 = AMD FSR upscaling (vendor neutral; verified on an NVIDIA adapter).
 inline constexpr uint32_t kVideoSrFsr=5;
+inline constexpr uint32_t kVideoSrNis=24;
+inline constexpr uint32_t kVideoSrAmf10=25;
+inline constexpr uint32_t kVideoSrAmf11=26;
 // Fresh SR selections use RTX Video SR medium; explicit saved selections retain
 // their numeric IDs. The UI seeds FSR separately on AMD/Intel adapters.
 inline constexpr uint32_t kDefaultVideoSrQuality=2;
@@ -108,7 +114,18 @@ constexpr bool ngxVideoSr(uint32_t q){return q>=1&&q<=4;}
 constexpr bool vfxVideoSr(uint32_t q){return (q>=16&&q<=19)||q==21||q==23;}
 constexpr bool vfxVideoSrNeedsAmpere(uint32_t q){return q==21||q==23;}
 constexpr bool rtxVideoSr(uint32_t q){return ngxVideoSr(q)||vfxVideoSr(q);}
-constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q);}
+// Keep the experimental preset ID readable. The D3D12 provider currently
+// uses the verified VideoSR 1.0 path for both stored AMD IDs.
+constexpr uint32_t currentVideoSrQuality(uint32_t quality) {
+    return quality==kVideoSrAmf11?kVideoSrAmf10:quality;
+}
+constexpr bool amdVideoSr(uint32_t q){return q==kVideoSrAmf10||q==kVideoSrAmf11;}
+constexpr bool spatialVideoSr(uint32_t q){return q==kVideoSrNis||amdVideoSr(q);}
+constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q);}
+constexpr bool videoSrRunsOn(uint32_t q,bool nvidia,bool amd){
+    if (amdVideoSr(q)) return amd;
+    return validVideoSrQuality(q) && (nvidia || q==kVideoSrFsr || q==kVideoSrNis);
+}
 // DLSS SR and FSR are temporal: they read the SR motion source. RTX Video SR is spatial.
 constexpr bool temporalVideoSr(uint32_t q){return q==0||q==kVideoSrFsr;}
 inline constexpr uint32_t kVfxVideoSrQualities[]={16,17,18,19,21,23};
@@ -165,7 +182,16 @@ enum class FlowQuality { Performance, Balanced, Quality };
 enum class OpticalFlowBackend { Nvidia, AmdFidelityFx, GpuDis };
 // Persisted IDs must stay stable. 2..4 are legacy identification hints, no longer
 // offered by the UI; importing/applying one uses automatic duplicate removal.
-enum class ContentRate { Transport=0, Auto=1, Fps30=2, Fps50=3, Fps60=4, Capture60To30=5 };
+enum class ContentRate {
+    Transport=0, Auto=1, Fps30=2, Fps50=3, Fps60=4,
+    Capture60To30=5, Capture60To30Original=6
+};
+constexpr bool isCaptureHalfRate(ContentRate mode) {
+    return mode==ContentRate::Capture60To30||mode==ContentRate::Capture60To30Original;
+}
+constexpr bool validContentRate(ContentRate mode) {
+    return mode>=ContentRate::Transport&&mode<=ContentRate::Capture60To30Original;
+}
 constexpr ContentRate currentContentRate(ContentRate mode) {
     return mode>=ContentRate::Fps30&&mode<=ContentRate::Fps60?ContentRate::Auto:mode;
 }
@@ -173,8 +199,8 @@ enum class AudioSyncMode { Automatic, Manual, Off };
 enum class HdrOutputMode { Hdr10, ScRgb };
 enum class MotionSource { Zero, OpticalFlow, Automatic };
 constexpr bool motionUsesFlow(MotionSource source,FrameGenerationBackend backend=FrameGenerationBackend::Dlss) {
-    // VFG and AMD FRC estimate motion themselves from the two pictures.
-    return backend!=FrameGenerationBackend::Vfg&&backend!=FrameGenerationBackend::AmdFrc&&
+    // VFG, AMD FRC and RIFE estimate motion themselves from the two pictures.
+    return backend!=FrameGenerationBackend::Vfg&&backend!=FrameGenerationBackend::AmdFrc&&backend!=FrameGenerationBackend::Rife&&
         (source==MotionSource::OpticalFlow||(source==MotionSource::Automatic&&backend!=FrameGenerationBackend::XeSS));
 }
 constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend backend) {
@@ -186,6 +212,7 @@ constexpr std::string_view frameGenerationBackendName(FrameGenerationBackend bac
     case FrameGenerationBackend::Vfg: return "NVIDIA-VFG";
     case FrameGenerationBackend::Anr: return "ANR-FG";
     case FrameGenerationBackend::AmdFrc: return "AMD-FRC";
+    case FrameGenerationBackend::Rife: return "RIFE";
     }
     return "unknown";
 }
@@ -270,10 +297,14 @@ struct NrLayerSettings {
     bool operator==(const NrLayerSettings&) const = default;
     bool usesTemporal() const {return residual.correction.enabled?residual.correction.usesHistory():temporal;}
 };
+enum class ExclusionContent : uint8_t { All, FrameGeneration, Hud };
+enum class HudProtectMode : uint8_t { Off, Center, Regions };
+
 struct ProtectionRect {
     float left=0,top=0,right=0,bottom=0;
     // The ellipse inscribed in the rectangle instead of the rectangle itself.
     bool ellipse=false;
+    ExclusionContent content=ExclusionContent::All;
     bool empty()const{return left==right||top==bottom;}
     bool operator==(const ProtectionRect&)const=default;
 };
@@ -296,16 +327,32 @@ struct ProtectionSettings {
         // tile space without clipping, since clipping would change its shape.
         for(auto r:regions){const float low=r.ellipse?-64.0f:0.0f,high=r.ellipse?65.0f:1.0f;
             for(float v:{r.left,r.top,r.right,r.bottom})if(!std::isfinite(v)||v<low||v>high)return "invalid protection rectangle";
-            if(r.left>r.right||r.top>r.bottom)return "inverted protection rectangle";}
+            if(r.left>r.right||r.top>r.bottom)return "inverted protection rectangle";
+            if(r.content>ExclusionContent::Hud)return "invalid exclusion content";
+        }
         return {};
     }
 };
+using HudProtectRegions = std::array<ProtectionRect,5>;
+inline HudProtectRegions hudProtectRegions(HudProtectMode mode,const ProtectionSettings& exclusion) {
+    HudProtectRegions result{};
+    if(mode==HudProtectMode::Center)result[0]={0.44f,0.40f,0.56f,0.60f};
+    for(size_t i=0;i<exclusion.regions.size();++i){
+        const auto& r=exclusion.regions[i];
+        const bool taggedHud=exclusion.enabled&&r.content==ExclusionContent::Hud;
+        if(r.empty()||(!taggedHud&&mode!=HudProtectMode::Regions))continue;
+        result[i+1]=r;
+        result[i+1].content=ExclusionContent::All;
+    }
+    return result;
+}
+
 struct EnhancementSettings {
     uint64_t revision=1;
     NrSettings model;
     ResidualSettings residual;
     ProtectionSettings protection;
-    ProtectionSettings exclusion; // final raw-source mask, including generated frames
+    ProtectionSettings exclusion; // per-region raw, frame generation or HUD protection
     bool nr=false,sr=false;
     bool lowLatency=false; // preview only: NR before SR, opt-in
     NrRuntime nrRuntime=NrRuntime::Ampere;
@@ -464,6 +511,8 @@ struct EnhancementSettings {
     uint32_t additionalColorCount=0;
     // Spatial anti-aliasing (#53). Instance zero is the list card; a node chain may
     // hold a second instance. Fixed capacity for the export shared-memory POD.
+    bool videoDenoiseEnabled = false;
+    VideoDenoiseSettings videoDenoise;
     AntiAliasSettings antiAlias;
     std::array<AntiAliasSettings,kMaxAntiAliasInstances-1> additionalAntiAlias{};
     uint32_t additionalAntiAliasCount=0;
@@ -515,6 +564,8 @@ struct EnhancementSettings {
     // UI "HUD 自动锁定" (pipeline/HudLock.h, from PushFPS): a per-pixel HUD mask found every
     // frame and kept out of graph frame generation. Its passes exist only when on.
     bool hudLock=false;
+    HudProtectMode hudProtect=HudProtectMode::Off;
+    bool dynamicHud=false;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -565,6 +616,7 @@ struct EnhancementSettings {
         for(size_t i=0;i<active.additionalColors.size();++i)
             if(i>=additionalColorCount||!additionalColors[i].enabled)active.additionalColors[i]={};
         if(!videoHdr.enabled)active.videoHdr=defaults.videoHdr;
+        if(!videoDenoiseEnabled)active.videoDenoise={};
         active.antiAlias=antiAlias.active();
         for(size_t i=0;i<active.additionalAntiAlias.size();++i)
             active.additionalAntiAlias[i]=i<additionalAntiAliasCount?additionalAntiAlias[i].active():AntiAliasSettings{};
@@ -596,7 +648,11 @@ struct EnhancementSettings {
         if(!(multiplier>2))active.fgAdaptive=defaults.fgAdaptive;
         if(!(multiplier>1))active.pacingRepair=defaults.pacingRepair;
         // XeSS generates inside its own presenter; HUD Lock works on graph frame generation.
-        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS))active.hudLock=defaults.hudLock;
+        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS)){
+            active.hudLock=defaults.hudLock;
+            active.dynamicHud=defaults.dynamicHud;
+        }
+        if(multiplier<=1)active.hudProtect=defaults.hudProtect;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {
@@ -605,6 +661,7 @@ struct EnhancementSettings {
         active.captureFlipVertical=target.captureFlipVertical;active.exportBitrateMbps=target.exportBitrateMbps;
         // Read by the engine loop each pair; no graph update or NR history reset.
         active.fgAdaptive=target.fgAdaptive;active.pacingRepair=target.pacingRepair;
+        if(isCaptureHalfRate(active.content)&&isCaptureHalfRate(target.content))active.content=target.content;
         return active==target;
     }
     bool sameVideoConfiguration(const EnhancementSettings& other) const {
@@ -621,6 +678,8 @@ struct EnhancementSettings {
         // Adaptive multiplier and pacing repair: chosen per pair inside the running graph.
         video.fgAdaptive=target.fgAdaptive;
         video.pacingRepair=target.pacingRepair;
+        // Half-rate variants use the same graph and differ only at sample admission.
+        if(isCaptureHalfRate(video.content)&&isCaptureHalfRate(target.content))video.content=target.content;
         // Colour grade: parameters are uniform-only (never a rebuild), but the
         // master switch changes the graph shape, so it stays in the comparison.
         const auto oldColor=video.color;const auto oldAdditional=video.additionalColors;
@@ -636,6 +695,7 @@ struct EnhancementSettings {
         }
         video.videoHdr=target.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
+        video.videoDenoise=target.videoDenoise;
         // Anti-aliasing thresholds and history weights are uniforms; the method,
         // tier and temporal mode decide which passes exist.
         if(video.antiAlias.sameStructure(target.antiAlias))video.antiAlias=target.antiAlias;
@@ -664,6 +724,7 @@ struct EnhancementSettings {
         if(!hdrMetadata.valid())return "invalid HDR metadata parameters";
         auto range=[](float v,float hi){return std::isfinite(v)&&v>=0&&v<=hi;};
         if(auto error=protection.validate();!error.empty())return error;
+        if(hudProtect>HudProtectMode::Regions)return "invalid HUD protection mode";
         if(auto error=exclusion.validate();!error.empty())return error;
         if(!revision)return "settingsRevision must be nonzero";
         if(!validNrRuntime(nrRuntime))return "invalid NR runtime";
@@ -697,7 +758,7 @@ struct EnhancementSettings {
                 return "active NR layers must share runtime and NR/SR order";
         }
         if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";
-        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::AmdFrc)return "invalid frame generation backend";
+        if(frameGenerationBackend<FrameGenerationBackend::Dlss||frameGenerationBackend>FrameGenerationBackend::Rife)return "invalid frame generation backend";
         if(vfgQuality>=kVfgQualityCount)return "invalid VFG quality";
         // The XeSS provider reports its own generated-frame ceiling at session
         // start; the engine clamps/rejects above it, so validation only guards
@@ -707,6 +768,7 @@ struct EnhancementSettings {
         // probe measured the same count for 2/3/4 requested frames.
         if(fsrFrameGeneration(frameGenerationBackend)&&multiplier>2)return "AMD FSR frame generation supports up to 2X";
         if(frameGenerationBackend==FrameGenerationBackend::AmdFrc&&multiplier>2)return "AMD FRC supports 2X only";
+        if(frameGenerationBackend==FrameGenerationBackend::Rife&&multiplier>3)return "RIFE supports 2X and 3X";
         if(!validVideoSrQuality(videoSrQuality))return "invalid video SR quality";
         if(dlssSrModel>=kDlssSrModelCount)return "invalid DLSS SR model";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
@@ -722,6 +784,7 @@ struct EnhancementSettings {
         if(additionalColorCount>additionalColors.size())return "too many color instances";
         for(uint32_t i=0;i<additionalColorCount;++i)
             if(auto error=additionalColors[i].validate();!error.empty())return error;
+        if(!videoDenoise.valid())return "video denoise strength out of range";
         if(auto error=antiAlias.validate();!error.empty())return error;
         if(additionalAntiAliasCount>additionalAntiAlias.size())return "too many anti-aliasing instances";
         for(uint32_t i=0;i<additionalAntiAliasCount;++i)
@@ -732,7 +795,7 @@ struct EnhancementSettings {
             if(auto error=additionalBeauty[i].validate();!error.empty())return error;
         if(auto error=beautyDetection.validate();!error.empty())return error;
         if(!pipeline::validNrSizePolicy(nrPolicy))return "invalid NR size policy";
-        if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||content<ContentRate::Transport||content>ContentRate::Capture60To30)return "invalid flow/content mode";
+        if(flow<FlowQuality::Performance||flow>FlowQuality::Quality||!validContentRate(content))return "invalid flow/content mode";
         return {};
     }
 };

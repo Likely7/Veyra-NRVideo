@@ -1,4 +1,5 @@
 #pragma once
+#include "veyra/engine/PresentTearingDetector.h"
 #include "veyra/diagnostics/GpuTimer.h"
 #include "veyra/gfx/PresentSink.h"
 #include <dxgi1_6.h> // DXGI_HDR_METADATA_HDR10 (custom: HDR static metadata)
@@ -12,6 +13,7 @@
 #include "veyra/engine/PresentationSettings.h"
 #include "veyra/engine/PresentCapture.h"
 #include "veyra/engine/DisplayStateService.h"
+#include "veyra/engine/FullscreenFrameStats.h"
 #include <chrono>
 #include <array>
 #include <optional>
@@ -29,7 +31,17 @@ public:
     // mediaClockPaced: the owner already waits on a media clock before each
     // source (file playback). Retained for diagnostics; XeLL low latency must
     // stay enabled or the provider refuses generation (result -15).
-    bool open(gfx::D3D12DeviceContext&, HWND, pipeline::EnhanceGraph&, bool captureCompatible=false, bool mediaClockPaced=false);
+    struct PreparedOpening {
+        pipeline::GraphicsPass blit;
+        pipeline::ComputePass motion;
+        std::array<Microsoft::WRL::ComPtr<ID3D12Resource>,2> motionTextures;
+        std::unique_ptr<gfx::XessPresenter> xess;
+    };
+    // CPU/driver pipeline creation only. The rendering owner still opens and
+    // attaches the swapchain to the window after the graph is ready.
+    static bool prepareOpening(gfx::D3D12DeviceContext&,pipeline::EnhanceGraph&,PreparedOpening&);
+    bool open(gfx::D3D12DeviceContext&, HWND, pipeline::EnhanceGraph&, bool captureCompatible=false,
+              bool mediaClockPaced=false,std::unique_ptr<PreparedOpening> prepared={},HWND temporarySurface=nullptr);
     bool present(gfx::D3D12DeviceContext&,gfx::CommandSlotRing&,pipeline::EnhanceGraph&,unsigned slot,bool generated,bool referencesValid=true,int comparison=0,bool baseReference=false,float split=.5f,pipeline::FrameIdentity identity={},PreviewView view={},int64_t sourcePts100ns=-1,bool retainUnchanged=false);
     void close();
     // Owner-thread graph replacement boundary. Native DXGI remains attached to
@@ -113,6 +125,15 @@ public:
         return requested.variableRefresh&&requested.display==DisplaySync::Automatic&&gfx::vrrLevel(vrr)>=3;
     }
     bool vrrSync()const{return vrrSync_;}
+    TearingHint tearingHint()const { return tearingHint_; }
+    int displayCompositionMode()const{return displayCompositionMode_;}
+    void setFullscreenFrameStats(int corner){frameStatsCorner_=corner;}
+    bool frameStatsNeedsUpdate() const {
+        return frameStatsCorner_>=0&&frameStats_.needsUpdate();
+    }
+    void updateFrameStats(std::optional<double> fps,std::optional<double> low){
+        if(frameStatsCorner_>=0)frameStats_.update(fps,low);
+    }
     diagnostics::GpuSample blitTiming(ID3D12Fence* f,uint64_t revision=0,uint64_t epoch=0){gpuTimer_.collect(presentationFence_?presentationFence_.Get():f);if((revision&&gpuTimer_.last().identity.settingsRevision!=revision)||(epoch&&gpuTimer_.last().identity.epoch!=epoch)){diagnostics::GpuSample pending;pending.state=diagnostics::SampleState::Pending;return pending;}return gpuTimer_.last().gpu[size_t(diagnostics::GpuStage::Blit)];}
     // Application-side frame-generation timing for present-sink backends
     // (XeSS): the copies, barriers and provider prepare work recorded on
@@ -135,6 +156,7 @@ private:
     gfx::ReflexSession reflex_;
     uint64_t reflexFrame_=0,reflexInputFrame_=0,generation_=0;
     int64_t lastPresentCallHost100ns_=0;
+    int displayCompositionMode_=-1;
     bool providerOwnedPresentation_=false;
     PresentCapture* capture_=nullptr;
     Microsoft::WRL::ComPtr<ID3D12CommandQueue> presentationQueue_;
@@ -194,10 +216,12 @@ private:
         pipeline::FrameIdentity identity{};
         HMONITOR monitor=nullptr;
         HdrCurveSettings displayCurve{};
+        int frameStatsCorner=-1;
         bool operator==(const RetainedFrame&)const=default;
     };
     std::optional<RetainedFrame> retainedFrame_;
     HWND window_=nullptr;
+    HWND temporarySurface_=nullptr;
     ID3D12Device* presentationDevice_=nullptr;
     DXGI_FORMAT presentationFormat_=DXGI_FORMAT_UNKNOWN;
     bool captureCompatible_=false;
@@ -206,6 +230,11 @@ private:
     HMONITOR bufferMonitor_=nullptr;
     unsigned monitorWidth_=0,monitorHeight_=0;
     std::chrono::steady_clock::time_point nextCostLog_{};
+    std::chrono::steady_clock::time_point scanoutSampleAt_{};
+    PresentTearingDetector tearingDetector_;
+    TearingHint tearingHint_ = TearingHint::None;
+    DisplaySync scanoutSync_ = DisplaySync::Automatic;
+    bool scanoutFullscreen_ = false;
     std::chrono::steady_clock::time_point lastXessFrame_{};
     pipeline::FrameIdentity lastXessIdentity_{};
     int64_t lastXessPts100ns_=-1;
@@ -214,7 +243,7 @@ private:
     bool xessGenerationSuppressed_=false;
     HMONITOR refreshMonitor_=nullptr;double refreshHz_=0;gfx::VrrState vrr_{};bool refreshQueried_=false,vrrSync_=false;
     DisplayStateService* displayStates_=nullptr;
-    uint64_t displayStateSerial_=0,displayGeneration_=0;
+    uint64_t displayStateSerial_=0,displayGeneration_=0,observedDisplayGeneration_=0;
     // VRR presentation may start or stop after it is requested or when the
     // window enters/leaves fullscreen: one forced query 3 s after that settles.
     std::optional<std::chrono::steady_clock::time_point> vrrConfirmAt_;
@@ -225,5 +254,9 @@ private:
     std::array<XessWork,4> xessWork_{};
     size_t xessWorkPosition_=0;
     bool refresh(ID3D12Device*);
+    bool ensureXessUiSurfaces(ID3D12Device*,D3D12_RESOURCE_DESC);
+    FullscreenFrameStats frameStats_;
+    int frameStatsCorner_=-1;
+    bool xessFrameStatsFailed_=false;
 };
 }

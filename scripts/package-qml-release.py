@@ -26,6 +26,8 @@ FORBIDDEN = {'.pdb', '.lib', '.obj', '.h', '.hpp', '.cpp', '.c', '.zip', '.7z',
 MODELS = {'runtime/models/face_detection_yunet_2023mar.onnx': '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4',
           'runtime/models/face_landmark.tflite': 'c603fa6149219a3e9487dc9abd7a0c24474c77263273d24868378cdf40aa26d1'}
 REQUIRED = {'veyra_qml_ui.exe', 'qml/Veyra/Main.qml', 'platforms/qwindows.dll',
+            'qml/QtCore/qmldir', 'qml/QtCore/qtqmlcoreplugin.dll',
+            'qml/QtQuick/Dialogs/qmldir', 'qml/QtQuick/Dialogs/qtquickdialogsplugin.dll',
             'Qt6Quick.dll', 'Qt6Core.dll', 'qt.conf', 'licenses/FFMPEG-VEYRA-BUILD.json',
             'licenses/qt/LGPL-3.0-only.txt', 'licenses/qt/GPL-3.0-only.txt',
             'licenses/NVIDIA_RTX_VIDEO_SDK_LICENSE.pdf', 'licenses/INTEL_XESS_LICENSE.txt',
@@ -54,6 +56,8 @@ def relative(name):
 def validate_payload(name):
     p = relative(name)
     parts = {part.lower() for part in p.parts}
+    if 'frame_analyzer' in parts or p.stem.casefold() in {'veyra_frame_analyzer', 'test_frame_analyzer'}:
+        raise ValueError('Developer frame analyzer in candidate: ' + name)
     if (p.suffix.lower() in FORBIDDEN and name not in MODELS) or parts & {'logs', 'captures', 'qml-tests', '.git', 'third_party_local'}:
         raise ValueError('Forbidden candidate payload: ' + name)
     if any(part.startswith(('user-data', 'qml-preferences', 'last-applied', 'presets.v1')) for part in parts):

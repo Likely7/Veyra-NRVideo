@@ -16,6 +16,7 @@ import QtQuick.Shapes
 
 VPage {
     id: root
+    property alias videoBackgroundHost: videoArea
     signal requestPage(string page)
     signal requestDialog(string key)
     signal requestInspector(int nodeIndex, string nodeType)
@@ -85,13 +86,14 @@ VPage {
         case "color": return "#E0C341"
         case "sr": return "#4F7BFF"
         case "aa": return "#7FD4FF"
+        case "video-denoise": return "#62CDB7"
         case "beauty": return "#FF8FBF"
         case "nr": return "#FF8A3D"
         case "protection": return "#8A8A96"
         case "nr-stabilizer": return "#5DCCA1"
         case "exclusion": return "#E7B868"
         case "video-hdr": return "#FFB547"
-        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": case "amdfrc-fg": return "#3DDC84"
+        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": case "amdfrc-fg": case "rife-fg": return "#3DDC84"
         }
         return "#55555C"
     }
@@ -322,8 +324,10 @@ VPage {
         selectedId = id
         selectedNode = veyra.nodeIndexForId(id)
     }
+    property int colourRevision: 0
     Connections {
         target: veyra
+        function onColourParamsChanged() { ++root.colourRevision }
         function onChainChanged() {
             root.selectedNode = veyra.nodeIndexForId(root.selectedId)
             if (root.wireFrom > 1 && veyra.nodeIndexForId(root.wireFrom) < 0) root.wireFrom = -1
@@ -619,7 +623,7 @@ VPage {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 anchors.margins: 12
-                text: qsTr("%1 关闭").arg(veyra.gameMode ? veyra.shortcuts.gamePanel : "Home")
+                text: qsTr("%1 关闭").arg("Home")
                 color: Theme.t3
                 font.family: Theme.fontUi
                 font.pixelSize: 11
@@ -803,6 +807,15 @@ VPage {
                             }
                             VSliderValue { slider: nodeVolume; text: Math.round(veyra.volume * 100) + "%"; color: Theme.t2; pixelSize: 10 }
                             VSwitch { objectName: "node-out-mute"; checked: !veyra.muted; onToggled: checked => veyra.muted = !checked }
+                        }
+                        VRow {
+                            visible: veyra.sourceKind === "capture"
+                            label: qsTr("本机音频监听")
+                            VSwitch {
+                                objectName: "node-out-capture-monitor"
+                                checked: veyra.preferences.captureAudioMonitor !== false
+                                onToggled: value => veyra.setPreference("captureAudioMonitor", value)
+                            }
                         }
                         VSeg {
                             objectName: "node-out-sync"
@@ -1064,7 +1077,7 @@ VPage {
                 radius: 5
                 color: Theme.shade(10, 10, 13, 0.85)
                 visible: segments.length > 0 && (!root.shortLayout || root.overlay)
-                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", aa: "#7FD4FF",
+                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", "video-denoise": "#62CDB7", aa: "#7FD4FF",
                                                "frame-generation": "#3DDC84", protection: "#E7B868" })
                 readonly property var segments: {
                     const timings = veyra.nodeTimings, chain = veyra.chain
@@ -1282,7 +1295,9 @@ VPage {
         QtObject {
             id: colourApi
             function select() { veyra.selectedColourLayer = card.node.index }
-            readonly property var colourState: (veyra.chain, veyra.colourStateAt(card.node.index))
+            // Parameter edits notify the colour group without changing the chain.
+            readonly property var colourState: card.node.type === "color"
+                ? (root.colourRevision, veyra.colourStateAt(card.node.index)) : ({})
             readonly property var colourParameters: veyra.colourParameters
             property bool colorEnabled: false
             onColorEnabledChanged: if (colorEnabled !== !!colourState.enabled) { select(); veyra.colorEnabled = colorEnabled }
@@ -1465,6 +1480,7 @@ VPage {
                                : card.node.type === "color" ? colourEditor
                                : card.node.type === "sr" ? srEditor
                                : card.node.type === "aa" ? aaEditor
+                               : card.node.type === "video-denoise" ? denoiseEditor
                                : card.node.type === "beauty" ? beautyEditor
                                : card.node.type === "video-hdr" ? hdrEditor
                                : card.node.type === "protection" ? protectionEditor
@@ -1575,6 +1591,15 @@ VPage {
             }
         }
         Component {
+            id: denoiseEditor
+            VideoDenoiseEditor {
+                namePrefix: "node-denoise"
+                params: veyra.videoDenoiseParams || ({})
+                enabled: !!card.node.enabled
+                onEdited: (channel, amount) => veyra.setVideoDenoiseStrength(channel, amount)
+            }
+        }
+        Component {
             id: beautyEditor
             BeautyEditor {
                 objectName: "node-beauty-editor-" + card.node.id
@@ -1642,6 +1667,7 @@ VPage {
                         onPicked: id => veyra.fgBackendName = id
                     }
                 }
+                AnrDownloadRow {}
                 VRow {
                     label: qsTr("倍率")
                     // 档位与作者原版一致（只有数字档）；自动选择由下方独立开关控制。
@@ -1707,6 +1733,8 @@ VPage {
                     hint: qsTr("自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭")
                     VSwitch { objectName: "node-hud-lock"; checked: veyra.hudLock; onToggled: checked => veyra.hudLock = checked }
                 }
+                HudProtectControl { objectName: "node-hud-protect" }
+                DynamicHudRow { backend: veyra; namePrefix: "node" }
                 VRow {
                     label: qsTr("补帧运动来源")
                     visible: veyra.fgBackendName !== "vfg"

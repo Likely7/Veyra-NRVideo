@@ -16,27 +16,22 @@ constexpr const wchar_t* ngxFailureHint(uint64_t result) {
 // selects it for every NR layer; an unsupported RX model fails in its own
 // open/admits and is reported like any other NR backend failure).
 inline bool disableUnsupportedNvidiaEffects(EnhancementSettings& settings,bool nvidia,bool amdNr=false){
-    if(nvidia)return false;
     const auto before=settings;
+    settings.sr=settings.sr&&videoSrRunsOn(settings.videoSrQuality,nvidia,amdNr);
+    if(nvidia)return settings.sr!=before.sr;
     if(!amdNr)settings.nr=false;
     // NVOF does not exist on these adapters; NR motion uses AMD FidelityFX flow.
     if(amdNr&&settings.nr&&settings.opticalFlowBackend==OpticalFlowBackend::Nvidia)
         settings.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
     settings.videoHdr.enabled=false;
-    // AMD FSR upscaling is vendor neutral and must survive the NVIDIA-only
-    // normalization; every other SR backend is NGX-only. It survives only when
-    // the user turned SR on: FSR is the AMD default backend, so assigning the
-    // backend test here switched SR on at every graph build (2.1.0 field
-    // report: SR could not be turned off on AMD).
-    settings.sr=settings.sr&&settings.videoSrQuality==kVideoSrFsr;
     if(settings.frameGenerationBackend==FrameGenerationBackend::Dlss)settings.multiplier=1;
     return settings!=before;
 }
 // A stage that only an NVIDIA adapter can run is still requested: NR outside
-// the AMD runtime, SR other than FSR, and frame generation other than the
+// the AMD runtime, unsupported SR, and frame generation other than the
 // cross-vendor XeSS/FSR providers.
 inline bool nvidiaOnlyStagesRequested(bool nr,bool sr,bool fg,const EnhancementSettings& settings,bool amdNr){
-    return (nr&&!amdNr)||(sr&&settings.videoSrQuality!=kVideoSrFsr)||
+    return (nr&&!amdNr)||(sr&&!videoSrRunsOn(settings.videoSrQuality,false,amdNr))||
         (fg&&!crossVendorFrameGeneration(settings.frameGenerationBackend));
 }
 inline const wchar_t* backendFailureName(FailedBackend backend) {
@@ -76,7 +71,9 @@ inline bool disableFailedBackend(EnhancementSettings& settings,FailedBackend bac
     case FailedBackend::NgxCore:
         disableDlaa();
         settings.videoHdr.enabled=false;
-        settings.nr=settings.sr=false;
+        settings.nr=false;
+        if(!videoSrRunsOn(settings.videoSrQuality,false,true)||
+           (settings.dualSrEnabled&&!videoSrRunsOn(settings.dualSrQuality,false,true)))settings.sr=false;
         if(settings.frameGenerationBackend==FrameGenerationBackend::Dlss)settings.multiplier=1;
         break;
     case FailedBackend::OpticalFlow:

@@ -46,7 +46,7 @@ QtObject {
 
     property Timer driver: Timer {
         id: tick
-        interval: 33
+        interval: 16
         repeat: true
         onTriggered: {
             root.value = root.atTime(Date.now())

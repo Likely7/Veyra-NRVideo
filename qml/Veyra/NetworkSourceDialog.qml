@@ -11,6 +11,9 @@ DialogLayer {
     title: qsTr("播放地址")
     sub: qsTr("直接打开 HTTP、HTTPS、RTSP、RTP 或 UDP 视频流")
     dialogWidth: 640
+    onShownChanged: if (shown) Qt.callLater(() => {
+        if (networkDialog.shown) networkAddress.focusEditor()
+    })
     actions: [{label:qsTr("取消")},{label:qsTr("打开"),primary:true,icon:"play"}]
     onActionTriggered: label => {
         if(label!==qsTr("打开")){dialogHost.close();return}

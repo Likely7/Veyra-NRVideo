@@ -1,6 +1,6 @@
 """Generate owned fixtures and exercise the three 2026-09-13 release P1 fixes.
 
-Uses the real product EXE/libraries, FFmpeg/ffprobe, and the local NVIDIA GPU.
+Uses the production engine through its headless export probe, FFmpeg/ffprobe, and the local NVIDIA GPU.
 All outputs go into a new directory; existing evidence is never overwritten.
 """
 import argparse
@@ -23,7 +23,7 @@ ffmpeg, ffprobe = shutil.which('ffmpeg'), shutil.which('ffprobe')
 if not ffmpeg or not ffprobe:
     raise SystemExit('FFmpeg and ffprobe must be on PATH')
 test = build / 'veyra_file_safety_tests.exe'
-player = build / 'veyra.exe'
+player = build / 'veyra_export_probe.exe'
 startup = subprocess.STARTUPINFO()
 startup.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 startup.wShowWindow = 0
@@ -110,7 +110,7 @@ run('play-overload-eof', [test, 'play-overload-eof', short])
 for name, path, expected, partial in [('healthy', short, 0, False), ('healthy-long', long, 0, False),
     ('bad-early', bad_short, 1, False), ('bad-late', bad_late, 1, True), ('resize', resize, 1, True)]:
     destination = output / (name + '-export.mp4')
-    run('export-' + name, [player, path, '--export-out', destination, '--no-nr', '--no-sr', '--no-fg'], expected)
+    run('export-' + name, [player, path, destination], expected)
     check(name + '-final-file-state', destination.exists() == (expected == 0))
     check(name + '-partial-state', pathlib.Path(str(destination) + '.partial').exists() == partial)
     if expected == 0:

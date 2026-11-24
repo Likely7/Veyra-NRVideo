@@ -7,7 +7,14 @@
 
 namespace veyra::ui {
 // --- playback ---------------------------------------------------------------
-QString QmlPlayerBridge::statusText() const { return uiText(impl_->snapshot.status); }
+QString QmlPlayerBridge::statusText() const {
+    const auto& snapshot = impl_->snapshot;
+    if (snapshot.captureDriverWaitMs) {
+        return tr("采集卡驱动响应缓慢（已等待 %1 秒）。若频繁出现，请重新插拔采集卡并检查 USB 连接。")
+            .arg(snapshot.captureDriverWaitMs / 1000);
+    }
+    return uiText(snapshot.status);
+}
 bool QmlPlayerBridge::running() const { return impl_->snapshot.running; }
 bool QmlPlayerBridge::paused() const { return impl_->snapshot.transport == engine::TransportState::Paused; }
 bool QmlPlayerBridge::failed() const { return impl_->snapshot.failed; }
@@ -15,6 +22,7 @@ bool QmlPlayerBridge::isImage() const { return impl_->snapshot.image; }
 bool QmlPlayerBridge::isCapture() const { return impl_->snapshot.capture; }
 bool QmlPlayerBridge::hasSource() const { return impl_->snapshot.running || impl_->snapshot.image; }
 bool QmlPlayerBridge::openingSource() const { return impl_->openingSource; }
+bool QmlPlayerBridge::captureEnhancementLoading() const { return impl_->snapshot.captureEnhancementLoading && !impl_->snapshot.failed; }
 double QmlPlayerBridge::position() const { return impl_->snapshot.position; }
 double QmlPlayerBridge::duration() const { return impl_->snapshot.duration; }
 double QmlPlayerBridge::progress() const {
@@ -81,7 +89,6 @@ void QmlPlayerBridge::rotatePictureClockwise() {
     // An in-progress protection selection uses the previous coordinate system.
     beginProtectionDraw(QString());
     tickSubtitles();
-    if(gameMode()){updateGameGeometry();updateGameMode();emit gameModeChanged();}
     veyra::log::info("ui-rotation",std::format("session={} clockwise={}",impl_->snapshot.sessionId,previewRotation()));
     emit compareChanged();
 }
@@ -166,7 +173,12 @@ bool QmlPlayerBridge::fgActive() const { return impl_->snapshot.fgActive; }
 bool QmlPlayerBridge::captureRecovering() const { return impl_->snapshot.captureRecovering; }
 double QmlPlayerBridge::captureFps() const { return impl_->snapshot.captureFps; }
 double QmlPlayerBridge::captureDropped() const { return double(impl_->snapshot.captureDropped); }
-QString QmlPlayerBridge::backendWarning() const { return uiText(impl_->snapshot.backendWarning); }
+QString QmlPlayerBridge::backendWarning() const {
+    const auto& snapshot=impl_->snapshot;
+    if(snapshot.running&&snapshot.nrPreparing&&snapshot.backendWarning.empty())
+        return tr("正在准备 RX 7000 NR，当前显示未应用 NR 的画面。");
+    return uiText(snapshot.backendWarning);
+}
 
 // --- commands ---------------------------------------------------------------
 void QmlPlayerBridge::openFileDialog() {
@@ -291,7 +303,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
-    refreshSubtitles(network?std::wstring():wide);
+    refreshSubtitles(!network||engine::subtitleHttpContainer(wide)?wide:std::wstring());
 }
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }
