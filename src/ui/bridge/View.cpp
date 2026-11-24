@@ -1,6 +1,10 @@
 // QML bridge: View responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "veyra/source/XcapCapture.h"
+#include "veyra/source/XcapAudio.h"
+#include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/ui/MaskGeometry.h"
+#include <QThreadPool>
 
 namespace veyra::ui {
 // --- NR protection regions drawn on the picture (#8) ------------------------
@@ -430,6 +434,86 @@ void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
     }
     veyra::log::info("ui-startup","automatically resuming the last source");
     resumeLastSource();
+}
+void QmlPlayerBridge::openXcap(bool pattern, double targetFps, int vfgQuality) {
+    if (!impl_->prefBool("xcapDefaultsApplied", false)) {
+        const int at = addEffect(QStringLiteral("vfg-fg"));
+        // 4X is the ceiling; each pair takes the multiplier that lands on the target (30 fps 4X, 40 fps 3X, 60 fps 2X)
+        setFgAutoMultiplier(false);
+        setFgMultiplier(4);
+        setFgAdaptive(true);
+        setVfgQuality(2);          // high: 21 ms of GPU time per 33 ms pair on an RTX 5090, no extra delay
+        setContentRate(int(engine::ContentRate::Auto));
+        impl_->prefs[QStringLiteral("xcapDefaultsApplied")] = true;
+        impl_->savePrefs();
+        veyra::log::info("ui-xcap", std::format("defaults applied, frame generation stage {}", at));
+    }
+    if (vfgQuality >= 0) setVfgQuality(vfgQuality);
+    auto& pr = impl_->presentation;
+    pr.enabled = true;
+    pr.nvidiaLowLatency = nvidiaLowLatencyAvailable() ? engine::NvidiaLowLatency::On : engine::NvidiaLowLatency::Off;
+    pr.display = engine::DisplaySync::Automatic;
+    pr.variableRefresh = true;
+    pr.outputRate = targetFps >= 24 ? engine::OutputRateMode::Custom : engine::OutputRateMode::FollowDisplay;
+    if (targetFps >= 24) pr.customFps = targetFps;
+    applyPresentation();
+    // sound goes to the TV unless the user picked an output
+    if (const auto tv = source::xcapture::tvName(); !tv.empty() && impl_->prefString("audioDevice").isEmpty())
+        for (const auto& e : sink::enumerateRenderEndpoints())
+            if (e.name.find(tv) != std::wstring::npos) { sink::setPreferredRenderEndpoint(e.id); veyra::log::info("ui-xcap", "sound to the TV endpoint"); break; }
+    // While there is no signal the card is asked every 700 ms. Finding the card, opening it, handing the TV's EDID
+    // over (0.8 s of sleep after a change) and asking the audio endpoints all block: a pool thread does that, this
+    // thread only takes the answer. One question at a time; once the open is issued the timer stops, so nothing
+    // touches the card while the engine starts it.
+    struct Probe { bool busy = false, waiting = false; };
+    const auto probe = std::make_shared<Probe>();
+    auto* timer = new QTimer(this);
+    timer->setInterval(700);
+    connect(timer, &QTimer::timeout, this, [this, timer, pattern, probe] {
+        if (impl_->snapshot.running) { timer->stop(); timer->deleteLater(); return; }       // from here on the engine reconnects by itself
+        if (probe->busy || impl_->openingSource || captureQueryBusy()) return;
+        probe->busy = true;
+        QThreadPool::globalInstance()->start([this, self = QPointer<QmlPlayerBridge>(this), watch = QPointer<QTimer>(timer), pattern, probe] {
+            std::wstring path;
+            for (const auto& d : source::xcapture::devices())
+                if (path.empty() && d.path.starts_with(L"xcap-native:pattern:") == pattern) path = d.path;
+            const bool ready = !path.empty() && source::xcapture::prepare(path);
+            auto* app = QCoreApplication::instance();
+            if (!app) return;
+            // back on the UI thread; `this` is used only while `self` says the bridge still exists
+            QMetaObject::invokeMethod(app, [this, self, watch, probe, path, ready] {
+                probe->busy = false;
+                if (!self || !watch) return;
+                if (impl_->snapshot.running || impl_->openingSource || captureQueryBusy()) return;   // the next tick decides
+                if (!ready) {
+                    if (!probe->waiting) { probe->waiting = true; emit notice(path.empty() ? tr("没有找到 XCAP 采集卡") : tr("等待 HDMI 信号：请打开 PS5"), false); veyra::log::info("ui-xcap", path.empty() ? "no card" : "waiting for a signal"); }
+                    return;
+                }
+                probe->waiting = false;
+                ui::CapturePreferences prefs = ui::CapturePreferenceStore(impl_->dataDir).load();
+                prefs.videoPath = path;
+                prefs.formatKey = L"decklink:auto";
+                prefs.audioPath.clear();
+                prefs.audioMode = source::kCaptureAudioFromVideoDevice;
+                prefs.colorOverride = 0;
+                prefs.requestedFps = 0;
+                prefs.deviceColors.erase(path);
+                if (!ui::CapturePreferenceStore(impl_->dataDir).save(prefs)) { veyra::log::warn("ui-xcap", "capture preferences not saved"); return; }
+                veyra::log::info("ui-xcap", "signal present, opening");
+                watch->stop();
+                resumeCaptureSession();
+                // The open normally leads to a running session within seconds. If it did not (signal gone again,
+                // open refused), ask the card again.
+                QTimer::singleShot(15000, watch.data(), [this, self, watch] {
+                    if (!self || !watch) return;
+                    if (impl_->snapshot.running) { watch->deleteLater(); return; }
+                    veyra::log::info("ui-xcap", "the capture did not start; waiting for the signal again");
+                    watch->start();
+                });
+            }, Qt::QueuedConnection);
+        });
+    });
+    timer->start();
 }
 void QmlPlayerBridge::resumeLastSource() {
     const auto last = lastSource();

@@ -819,6 +819,12 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/CaptureCardSource.cpp
     src/source/DeckLinkCapture.cpp
     src/source/DeckLinkDriver.cpp
+    src/source/NativeDrivers.cpp
+    src/source/XcapCapture.cpp
+    src/source/XcapAudio.cpp
+    third_party/xcap/xcap.cpp
+    third_party/xcap/xcap_edid.cpp
+    third_party/xcap/xcap_sim.cpp
     src/source/ElgatoHdrControl.cpp
     src/source/ScreenCaptureSource.cpp
     src/source/VirtualDesktop.cpp
@@ -830,6 +836,8 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     src/source/MagewellCapture.cpp
   )
   veyra_apply_warnings(veyra_sources)
+  target_include_directories(veyra_sources PRIVATE third_party/xcap)
+  target_link_libraries(veyra_sources PRIVATE setupapi avrt)
   # Optional external DeckLink SDK. Generate the official COM ABI outside the
   # source tree; Desktop Video supplies the installed COM server at run time.
   set(VEYRA_DECKLINK_SDK_DIR "" CACHE PATH "External DeckLink SDK Win IDL directory")
@@ -900,6 +908,17 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
     target_sources(veyra_sources PRIVATE src/source/XboxSessionSource.cpp)
     target_link_libraries(veyra_sources PUBLIC veyra_xbox_protocol PRIVATE Opus::opus)
   endif()
+
+  add_executable(veyra_xcap_audio_tests tests/integration/XcapAudioTests.cpp)
+  target_compile_features(veyra_xcap_audio_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_xcap_audio_tests PRIVATE /utf-8)
+  target_compile_definitions(veyra_xcap_audio_tests PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_xcap_audio_tests PRIVATE veyra_sources ole32)
+  add_executable(veyra_xcap_probe tests/integration/XcapCaptureProbe.cpp)
+  target_compile_features(veyra_xcap_probe PRIVATE cxx_std_20)
+  target_compile_options(veyra_xcap_probe PRIVATE /utf-8)
+  target_compile_definitions(veyra_xcap_probe PRIVATE UNICODE _UNICODE WIN32_LEAN_AND_MEAN NOMINMAX)
+  target_link_libraries(veyra_xcap_probe PRIVATE veyra_sources d3d12 dxgi ole32)
 
   add_executable(veyra_source_tests
     tests/integration/MediaFileSourceTests.cpp

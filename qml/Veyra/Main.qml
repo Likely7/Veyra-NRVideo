@@ -546,6 +546,17 @@ Window {
     // top-level window (FullscreenBar.qml), because the native video window draws
     // above everything in this one.
     property bool fullControls: true
+    property bool autoFullDone: false
+    Timer {     // --fullscreen: once, when the first picture source is open
+        interval: 1200
+        running: root.test.autoFullscreen === true && veyra.hasSource && !root.autoFullDone
+        onTriggered: {
+            root.autoFullDone = true
+            if (onboarding.visible) onboarding.close()
+            if (!root.fullscreen) root.toggleFullscreen()
+            root.fullControls = false
+        }
+    }
     // Also consumed by the native video HWND: a QML cursor alone cannot hide
     // the class cursor of the foreign child window under a stationary pointer.
     readonly property bool fullscreenCursorHidden: fullscreen && (!fullControls || fullLocked)

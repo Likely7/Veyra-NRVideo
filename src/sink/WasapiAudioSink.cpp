@@ -1,5 +1,6 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
+#include "veyra/sink/ExclusivePassthrough.h"
 #include "veyra/sink/RecordingAudioTap.h"
 #include "veyra/engine/PlaybackRate.h"
 #include "veyra/media/NetworkInput.h"
@@ -1028,6 +1029,7 @@ bool AudioRenderer::start(AudioFormat input,double requestedBufferMs,std::wstrin
     hr = client_->Initialize(AUDCLNT_SHAREMODE_SHARED, AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
         AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
         requestedBufferHns, 0, &mix.Format, nullptr);
+    if(hr==AUDCLNT_E_DEVICE_IN_USE&&exclusivePassthroughActive()){lastError_.store(hr);return false;}   // expected: XCAP passthrough owns it
     const bool initOk = checked(hr,"Initialize AudioClient");
     if (!initOk) return false;
     if (!checked(client_->GetBufferSize(&bufferFrames_),"GetBufferSize")) return false;
@@ -1600,5 +1602,9 @@ void AudioPipeline::startThread(AudioRenderer* renderer, bool ownEndpoint, doubl
     queueMode_=session_!=nullptr;   // a shared session is always read through its queue
     thread_ = std::thread(&AudioPipeline::runOnAudioThread, this, renderer, ownEndpoint, initialMs);
 }
+
+namespace { std::atomic<bool> gExclusivePassthrough{false}; }
+void setExclusivePassthroughActive(bool active) { gExclusivePassthrough.store(active); }
+bool exclusivePassthroughActive() { return gExclusivePassthrough.load(); }
 
 } // namespace veyra::sink

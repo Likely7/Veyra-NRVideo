@@ -1270,6 +1270,9 @@ public:
     Q_INVOKABLE void setCompareSplitAt(double hostFractionX);
     Q_INVOKABLE void resumeLastSource();
     void autoResumeLastSource(bool allowCapture);
+    // --xcap: waits for the console's signal, opens the XCAP card and sets frame generation up for targetFps
+    // (0 = the display's refresh rate) the first time.
+    void openXcap(bool pattern, double targetFps, int vfgQuality = -1);
     // List mode: an NR layer's model and residual back to their defaults.
     Q_INVOKABLE bool resetNrLayer(int index);
     QVariantList protectionRegions() const;
