@@ -49,7 +49,9 @@ void main(uint3 id : SV_DispatchThreadID) {
             ring += logLuma(source[clamp(int2(id.xy) + taps[k], int2(0, 0), hi)].rgb * workingToScene);
         delta += textureAmount * 0.9 * (lum - ring / 8.0);
     }
-    const float4 base = lowAt(id.xy);
+    float4 base = 0.0;
+    [branch] if (clarityAmount != 0.0 || dehazeAmount > 0.0)
+        base = lowAt(id.xy);
     if (clarityAmount != 0.0) {
         // Midtones carry clarity; deep shadows and highlights are left alone.
         const float m = saturate((lum + 8.0) / 9.0);

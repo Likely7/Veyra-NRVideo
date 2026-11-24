@@ -476,8 +476,7 @@ int fsrFlow(const std::filesystem::path& directory){
 }
 // Every backend pair with real SDK evaluations of both passes, zero and optical
 // flow motion: sizes, two evaluations per frame, finite output with the source's
-// mean brightness. Then a first DLSS SR pass with nothing to enlarge (a copy of
-// the source), and HDR backend pairs including FSR in either or both passes.
+// mean brightness. Also cover an unchanged first extent and HDR backend pairs.
 int any(const std::filesystem::path& directory,bool onlyHdr=false,bool onlySdr=false,int first=-1,int second=-1){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
@@ -506,13 +505,19 @@ int any(const std::filesystem::path& directory,bool onlyHdr=false,bool onlySdr=f
         }
     }
     if(!onlyHdr&&first<0){
-        // A 4K source at the 4K base target: the first DLSS SR pass has nothing to enlarge.
-        const auto copy=run(ctx,ring,uhd.get(),false,mixed(0,0,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),false,false,false,3,true);
-        double worst=0;bool sized=copy.ok&&copy.firstLinear.width==3840&&copy.firstLinear.height==2160;
-        for(size_t p=0;sized&&p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c)
-            worst=std::max(worst,std::abs(double(half(copy.firstLinear,p*4+c))-decode(uhdImage.pixels[p*4+c])));
-        const bool passed=sized&&copy.evaluations==6&&copy.work==Extent{3840,2160}&&worst<0.002;
-        std::cout<<"DUAL_ANY copy first=0 second=0 evaluations="<<copy.evaluations<<" worst="<<worst<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+        for(const unsigned quality:{0u,engine::kVideoSrFsr}){
+            const auto result=run(ctx,ring,uhd.get(),false,
+                mixed(quality,engine::kVideoSrFsr,SrTarget::Uhd4K,SrPrescale::P1080,SrTarget::Uhd4K,false),
+                false,false,false,3,true);
+            const bool sized=result.ok&&result.firstLinear.width==3840&&result.firstLinear.height==2160;
+            double worst=0;
+            for(size_t p=0;sized&&p<size_t(3840)*2160;++p)for(unsigned c=0;c<3;++c)
+                worst=std::max(worst,std::abs(double(half(result.firstLinear,p*4+c))-decode(uhdImage.pixels[p*4+c])));
+            const bool passed=sized&&result.evaluations==3&&result.srIn==Extent{1920,1080}&&
+                result.work==Extent{3840,2160}&&worst<0.002;
+            std::cout<<"DUAL_ANY passthrough first="<<quality<<" second=5 evaluations="<<result.evaluations
+                     <<" worst="<<worst<<" passed="<<passed<<std::endl;ok=ok&&passed;++cases;
+        }
     }
     if(!onlySdr)for(const auto pair:{Pair{0,0},Pair{2,0},Pair{0,2},Pair{5,5},Pair{2,5},Pair{5,2},Pair{0,5},Pair{5,0}}){
         if(!selected(pair))continue;

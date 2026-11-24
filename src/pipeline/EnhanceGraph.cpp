@@ -927,7 +927,9 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const bool firstVideoSr=desc_.dualSr&&engine::rtxVideoSr(desc_.videoSrQuality);
     const auto firstSrMotion=firstSrMotionExtent();
     const uint64_t firstSrMotionBytes=uint64_t(firstSrMotion.width)*firstSrMotion.height*4u;
-    const uint64_t dualBytes=desc_.dualSr?uint64_t(desc_.firstSrWidth)*desc_.firstSrHeight*(firstVideoSr?12u:8u)+(firstVideoSr?uint64_t(srcW_)*srcH_*4u:0)+
+    const uint64_t firstSrPixels=uint64_t(desc_.firstSrWidth)*desc_.firstSrHeight;
+    const uint64_t firstResultBytes=(desc_.firstSrEnlarges()||firstVideoSr)?firstSrPixels*8u:0;
+    const uint64_t dualBytes=desc_.dualSr?firstResultBytes+(firstVideoSr?(firstSrPixels+uint64_t(srcW_)*srcH_)*4u:0)+
         (desc_.dualSrQuality==engine::kVideoSrFsr?uint64_t(srInW_)*srInH_*4u:0)+
         (temporalDual?uint64_t(fsrAuxW_)*fsrAuxH_*8u:0):0;
     // Supersampling keeps the larger RGBA8 SR result beside the work textures.
@@ -1108,10 +1110,13 @@ bool EnhanceGraph::createResources()
     // Three-step SR: the linear SR input after the exact area shrink.
     if(srEnabled_&&srPrescaleActive()&&!(srPrescaled_=makeTexture(context_.device(),srInW_,srInH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true)))return false;
     if(srEnabled_&&desc_.dualSr){
-        // Every first pass leaves a linear result; RTX Video SR also needs its RGBA8 pair.
-        firstSrLinear_=makeTexture(context_.device(),desc_.firstSrWidth,desc_.firstSrHeight,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
-        if(!firstSrLinear_)return false;
-        if(engine::rtxVideoSr(desc_.videoSrQuality)){
+        const bool firstVideoSr=engine::rtxVideoSr(desc_.videoSrQuality);
+        // A bypassed first pass can feed its input directly into the reduction.
+        if(desc_.firstSrEnlarges()||firstVideoSr){
+            firstSrLinear_=makeTexture(context_.device(),desc_.firstSrWidth,desc_.firstSrHeight,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+            if(!firstSrLinear_)return false;
+        }
+        if(firstVideoSr){
             firstSrInput_=makeTexture(context_.device(),srcW_,srcH_,DXGI_FORMAT_R8G8B8A8_UNORM,true);
             firstSrOutput_=makeTexture(context_.device(),desc_.firstSrWidth,desc_.firstSrHeight,DXGI_FORMAT_R8G8B8A8_UNORM,true);
             if(!firstSrInput_||!firstSrOutput_)return false;
@@ -2189,7 +2194,7 @@ bool EnhanceGraph::initNgxFeatures()
     if(srEnabled_&&!desc_.noFeatures&&desc_.dualSr){
         // At the source size a first Video Effects / DLSS SR / FSR pass is a copy;
         // the standard family restores there too.
-        const char* first=desc_.firstSrEnlarges()||engine::ngxVideoSr(desc_.videoSrQuality)?srRuntimeName(desc_.videoSrQuality):"copy";
+        const char* first=desc_.firstSrEnlarges()||engine::rtxVideoSr(desc_.videoSrQuality)?srRuntimeName(desc_.videoSrQuality):"passthrough";
         veyra::log::info("dual-sr",std::format("passes=2 source={}x{} first={}x{} shrink={}x{} second={}x{} output={}x{} firstQuality={} secondQuality={} firstRuntime={} secondRuntime={}",srcW_,srcH_,desc_.firstSrWidth,desc_.firstSrHeight,srInW_,srInH_,srOutW_,srOutH_,workW_,workH_,desc_.videoSrQuality,desc_.dualSrQuality,
             first,srRuntimeName(desc_.dualSrQuality)));
     }
@@ -2731,17 +2736,13 @@ bool EnhanceGraph::createViews()
     // layout: (base, encoded input, SR result) at 0 source / 4 resolved SR input /
     // 7 shrunk input, 3 the work texture (UAV).
     if(srPrescaled_){
-        stagedSrv(desc_.dualSr?firstSrLinear_.Get():srStageInput(),DXGI_FORMAT_R16G16B16A16_FLOAT,srPrescalePass_,0);
+        stagedSrv(srPrescaleInput(),DXGI_FORMAT_R16G16B16A16_FLOAT,srPrescalePass_,0);
         makeUav(context_.device(),srPrescaled_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(srPrescalePass_,1));
         stagedSrv(srPrescaled_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,21);
     }
-    if(firstSrLinear_){
-        // 22 -> 25 also copies the source into the first result when a first
-        // DLSS SR / FSR / Video Effects pass has nothing to enlarge.
+    if(firstSrInput_){
         stagedSrv(srStageInput(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,22);
         makeUav(context_.device(),firstSrLinear_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(blitPass_,25));
-    }
-    if(firstSrInput_){
         makeUav(context_.device(),firstSrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,cpu(blitPass_,23));
         stagedSrv(firstSrOutput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,blitPass_,24);
         if(desc_.hdrWorking()){
@@ -3749,7 +3750,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // Double SR reduces the first AI result before the second pass (exact area, linear light).
     auto reduceFirstSr=[&]{
         if(!srPrescaled_)return;
-        tracker_.transition(list,desc_.dualSr?firstSrLinear_.Get():srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        tracker_.transition(list,srPrescaleInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,srPrescaled_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float down[8]={uintBits(desc_.dualSr?desc_.firstSrWidth:srcW_),uintBits(desc_.dualSr?desc_.firstSrHeight:srcH_),uintBits(srInW_),uintBits(srInH_),0,0,0,0};
         srPrescalePass_.bind(list,down,gpuHandleOf(srPrescalePass_,0).ptr,gpuHandleOf(srPrescalePass_,1).ptr);
@@ -4021,7 +4022,6 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         const bool validMotion=desc_.srUsesFlow()&&haveFlow;
         const double deltaMs=(prevPtsMs_>=0.0&&ptsMs>prevPtsMs_)?(ptsMs-prevPtsMs_):16.6;
         auto readable=[&](std::initializer_list<ID3D12Resource*> resources){for(auto* r:resources)tracker_.transition(list,r,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);};
-        auto written=[&](ID3D12Resource* output){tracker_.uavBarrier(list,output);tracker_.transition(list,output,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);};
         auto dlss=[&](ngx::DlssSrBackend& backend,ID3D12Resource* color,ID3D12Resource* motion,ID3D12Resource* output)->bool{
             auto& restore=output==firstSrLinear_.Get()?firstSrHdrRestore_:srHdrRestore_;
             auto* target=restore.raw?restore.raw.Get():output;
@@ -4046,15 +4046,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         auto* zero=fsrSrZeroMotion_.Get();
         // 1. Source -> linear first result.
         if(engine::rtxVideoSr(desc_.videoSrQuality)){if(!firstVideoSr())return false;}
-        else{
+        else if(desc_.firstSrEnlarges()){
             auto* input=srStageInput();
-            if(!desc_.firstSrEnlarges()){
-                // Nothing to enlarge: the first result is the source itself.
-                readable({input});tracker_.transition(list,firstSrLinear_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                const float copy[8]={uintBits(srcW_),uintBits(srcH_),uintBits(srcW_),uintBits(srcH_),0,0,0,0};
-                blitPass_.bind(list,copy,gpuHandleOf(blitPass_,22).ptr,gpuHandleOf(blitPass_,25).ptr);
-                list->Dispatch((srcW_+15)/16,(srcH_+15)/16,1);written(firstSrLinear_.Get());
-            }else if(firstDlssSrBackend_){
+            if(firstDlssSrBackend_){
                 if(!dlss(*firstDlssSrBackend_,input,validMotion?firstSrFlow_.Get():zero,firstSrLinear_.Get()))return false;
             }else if(firstFsrSrBackend_&&firstFsrSrBackend_->created()){
                 if(!fsr(*firstFsrSrBackend_,input,fsrSourceMotion?fsrSourceMotion:zero,firstSrLinear_.Get(),srcW_,srcH_,desc_.firstSrWidth,desc_.firstSrHeight))return false;
@@ -4081,7 +4075,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         return true;
     };
     // Each pass of a mixed double SR has its backend (none under the VEYRA_NO_*
-    // diagnostics); a first pass with nothing to enlarge is a copy.
+    // diagnostics); a bypassed first pass does not need a backend.
     auto dualPassReady=[&](uint32_t quality,bool first)->bool{
         if(first&&!desc_.firstSrEnlarges()&&!engine::ngxVideoSr(quality))return true;
         if(engine::spatialVideoSr(quality))return first?(nisSr_[0]||amfSr_[0]):(nisSr_[1]||amfSr_[1]);

@@ -9,10 +9,10 @@ namespace veyra::pipeline {
 // so they run as a separate in-place pass right after the grade. Until
 // 2026-10-02 the three sliders were stored but nothing read them.
 //
-// Three small dispatches: block statistics at about 1/8 of the extent, a
-// separable blur of those, then the full-size apply against a copy of the
-// graded image. Nothing is allocated or recorded while all three are zero; the
-// first non-zero value allocates (live edits need no graph rebuild).
+// Clarity and positive dehaze use downsampled block statistics and a separable
+// blur. Texture and negative dehaze can run the full-size apply directly from
+// a copy of the grade. The first non-zero value prepares the resources so
+// switching between these modes needs no graph rebuild.
 class ColorDetailPass {
 public:
     static bool wanted(const engine::ColorSettings& settings) {

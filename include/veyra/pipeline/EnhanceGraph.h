@@ -842,7 +842,7 @@ public:
     ID3D12Resource* diagnosticPreSrProtection() const { return preSrProtectionRgba_.Get(); }
     ID3D12Resource* diagnosticInterNrProtection() const { return interNrProtectionRgba_.Get(); }
     ID3D12Resource* diagnosticVideoSrInput() const { return videoSrInput_.Get(); }
-    ID3D12Resource* diagnosticFirstSrLinear() const { return firstSrLinear_.Get(); }
+    ID3D12Resource* diagnosticFirstSrLinear() const { return desc_.dualSr && srEnabled_ ? srPrescaleInput() : nullptr; }
     ID3D12Resource* diagnosticVideoSrOutput() const { return videoSrOutput_.Get(); }
     ID3D12Resource* diagnosticNrLayerInput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->input() : nullptr; }
     ID3D12Resource* diagnosticNrLayerOutput(size_t index) const { return index < nrInstances_.size() ? nrInstances_[index]->fullTarget() : nullptr; }
@@ -1188,6 +1188,9 @@ private:
     }
     ID3D12Resource* srStageInput() const {
         return preSrColorOutput_?preSrColorOutput_:(desc_.nrBeforeSr?preSrBaseInput():sourceStageOutput());
+    }
+    ID3D12Resource* srPrescaleInput() const {
+        return firstSrLinear_ ? firstSrLinear_.Get() : srStageInput();
     }
     ID3D12Resource* nrLayerBase(size_t layer) const {
         if(layer<interNrColorOutputs_.size()&&interNrColorOutputs_[layer])return interNrColorOutputs_[layer];

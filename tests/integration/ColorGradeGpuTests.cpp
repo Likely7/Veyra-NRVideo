@@ -217,6 +217,39 @@ __declspec(noinline) void exactExposureTests(){
     std::vector<uint8_t> bypassed;
     check(ok&&graded->apply(settings)&&linear(*graded,bypassed)&&bypassed==reference,"bypassed white balance restores exact exposure without rebuilding graph");
 }
+bool writeDetailReference(const std::filesystem::path& path){
+    std::ofstream reference(path,std::ios::binary);
+    if(!reference)return false;
+    struct Detail { float texture,clarity,dehaze; };
+    constexpr Detail cases[]={{55,0,0},{-45,0,0},{0,0,-55},{35,0,-40},{0,-60,0},{0,0,45},{30,55,45},{55,0,0}};
+    for(const bool hdr:{false,true}){
+        auto storage=std::make_unique<engine::EnhancementSettings>();
+        auto& settings=*storage;
+        settings.color.enabled=true;
+        settings.color.texture=cases[0].texture;
+        Frame frame;
+        Graph graph;
+        if(!(hdr?frame.makeHdr(false):frame.makeRamp(32,224))||!graph.startColors(settings,hdr,hdr))return false;
+        std::vector<uint8_t> first;
+        for(size_t index=0;index<std::size(cases);++index){
+            const auto detail=cases[index];
+            settings.color.texture=detail.texture;
+            settings.color.clarity=detail.clarity;
+            settings.color.dehaze=detail.dehaze;
+            pipeline::EnhanceGraph::FrameOutputs output;
+            std::vector<uint8_t> pixels;
+            if(!graph.apply(settings)||!graph.g.process(frame.frame,0,true,output,1)||
+               !readReference(graph,graph.g.diagnosticLinearInput(),pixels,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE)||
+               pixels.size()!=size_t(kSize)*kSize*8)return false;
+            if(index==0)first=pixels;
+            const bool same=pixels==first;
+            if(same!=(index==0||index+1==std::size(cases)))return false;
+            reference.write(reinterpret_cast<const char*>(pixels.data()),pixels.size());
+            std::printf("DETAIL hdr=%d case=%zu bytes=%zu\n",hdr,index,pixels.size());
+        }
+    }
+    return bool(reference);
+}
 Pixel center(const sink::RgbaImage& image){
     const auto index=(std::size_t(kSize/2)*std::size_t(image.width)+std::size_t(kSize/2))*4;
     return {image.pixels[index],image.pixels[index+1],image.pixels[index+2]};
@@ -644,6 +677,10 @@ int wmain(int argc,wchar_t** argv){
         if(argc==2&&std::wstring_view(argv[1])==L"--device-removal"){colorDeviceRemovalTest();return failures?1:0;}
         if(argc!=3)return 2;
         const std::wstring_view mode=argv[1];
+        if(mode==L"--write-detail-reference"){
+            check(writeDetailReference(argv[2]),"texture, clarity and dehaze live edits retain their FP16 outputs");
+            return failures?1:0;
+        }
         if(mode!=L"--write-fused-reference"&&mode!=L"--compare-fused-reference")return 2;
         check(fusedLegacyReference(argv[2],mode==L"--write-fused-reference"),
               "legacy fused full-image intermediate/output byte contract");

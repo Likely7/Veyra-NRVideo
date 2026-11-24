@@ -11,8 +11,11 @@
 - NV12/P010 等采集色度采用插值，MJPEG 手动限幅/全幅沿用到 GPU 转换。可选 HDMI 压缩码流直通和 AC-3 回放，默认仍解码成 PCM，便于监听、处理与录音。
 - 优化暂停日志、固定刷新撕裂提示、AMD FreeSync 能力识别及异常时的崩溃堆栈日志。屏幕捕获保留窗口/显示器观看用途，入口说明引导 PC 游戏用户使用 Magpie。游戏模式鼠标穿透已移除。
 
+- 修复裁剪后尺寸为奇数时录制和即时回放无法启动的问题。编码器通过延展最后一列或一行补齐偶数尺寸，保留完整画面。
+
 ### 补帧、超分与画质
 
+- 纹理和负向去朦胧跳过用不到的调色统计与模糊。双超分首段尺寸与输入相同且无需执行模型时，直接将首段输入交给降采样，省去一次整帧复制。
 - 新增可选的准星/HUD 保护和更精细的框内 HUD 模式。宽圆点和细十字的保护按准星轮廓合成，避免中央背景出现被锁住的方块。原 1440p 录屏在 VFG 2× 中、高档各检查 159 个生成帧，方块内背景锁帧均从 75 张降到 0 张。开头仍有个别单准星残影，筛查未检出三准星。
 - 新增视频降噪，默认关闭。列表模式在源尺寸先处理，节点模式可添加独立节点。亮度颗粒和彩噪分别调节，支持 SDR 和 P010 HDR。RTX 5070 实播 60 FPS 测试片的降噪 GPU P95 为 1080p 0.114 ms、4K 1.516 ms。
 - ANR FG 可在补帧或组件页面下载官方运行组件并启用。AMD FRC 在符合条件的独显和分辨率使用 SUPER 档。RIFE 提供 DirectML 的 SDR 2×/3×，使用[单独配置的组件和模型](RIFE_DIRECTML.md)。
@@ -39,8 +42,11 @@
 - Added bounded capture recovery, more precise device and launcher diagnostics, and video-only fallback for certain audio startup failures. Local capture monitoring is available independently of the recording track. Improved chroma sampling and preservation of manual MJPEG range. Optional HDMI bitstream passthrough and AC-3 replay remain off by default.
 - Fixed pause-related timing traces and added fixed-refresh tearing diagnostics and AMD FreeSync detection. Screen capture is for watching display or window video. The capture notice links to Magpie for PC gaming.
 
+- Recording and instant replay support odd-sized crops. The converter extends the last column or row to the encoder's even dimensions and preserves the full picture.
+
 ### Frame generation and upscaling
 
+- Texture and negative dehaze skip unused colour statistics and blur passes. In dual upscaling, a same-size first stage that bypasses its model feeds the reduction stage directly, saving a full-frame copy.
 - Optional HUD and crosshair protection uses the shape of wide centre dots and thin crosshairs to preserve background motion. On the supplied 1440p clip, the background lock check dropped from 75 to 0 out of 159 generated frames for each VFG 2× quality tested (Medium and High). Isolated reticle ghosts still appear at the start of the clip.
 - Added optional video denoise with independent luma and chroma controls for SDR and P010 HDR. List mode runs it at the source resolution, and node mode offers a dedicated stage. It starts disabled. Measured denoise GPU P95 on the RTX 5070 was 0.114 ms at 1080p60 and 1.516 ms at 4K60.
 - ANR FG can fetch its official runtime from the app. Added the AMD FRC SUPER profile for eligible GPUs. RIFE SDR 2×/3× runs through the separately installed DirectML components and models. [RIFE setup](RIFE_DIRECTML.md)
