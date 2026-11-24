@@ -101,13 +101,14 @@ int xessResize(HWND target,unsigned multiplier,bool resizeTarget,unsigned second
     check(controller.idle(),"XeSS resize engine drains after stop");DestroyWindow(host);return ok&&controller.idle()?0:1;
 }
 int recordCrop(source::ScreenCaptureOptions options, unsigned width, unsigned height,
-               const std::filesystem::path& directory, bool replay, bool hevc){
+               const std::filesystem::path& directory, std::wstring_view mode){
     const HWND host=CreateWindowExW(WS_EX_NOACTIVATE,L"STATIC",L"Veyra cropped recording test",
         WS_OVERLAPPEDWINDOW|WS_VISIBLE,860,40,640,400,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!host)return 2;
     engine::EngineController controller;
     engine::PlayerOptions settings;
     settings.nr=settings.sr=settings.fg=false;
+    settings.settings.forceSdrPreview=mode!=L"hdr"&&mode!=L"hdr-replay";
     controller.open(host,options.uri(),settings);
     const auto waitFor=[&](auto ready, uint64_t milliseconds){
         const auto until=GetTickCount64()+milliseconds;
@@ -122,8 +123,9 @@ int recordCrop(source::ScreenCaptureOptions options, unsigned width, unsigned he
     engine::RecordingSettings output;
     output.directory=directory.wstring();
     output.audio=false;
-    output.hevc=hevc;
+    output.hevc=mode==L"hevc";
     output.fpsLimit=60;
+    const bool replay=mode==L"replay"||mode==L"hdr-replay";
     std::wstring error;
     auto state=[&]{return replay?controller.replaySnapshot():controller.recordingSnapshot();};
     const bool armed=started&&(replay?controller.setReplay(true,output,error):controller.requestRecording(output,error));
@@ -174,8 +176,8 @@ int wmain(int argc,wchar_t** argv){
         options.bottom=unsigned(f->height)-height;
         source.close();ring.shutdown();ctx.shutdown();
         const std::wstring_view mode=argv[4];
-        if(mode!=L"h264"&&mode!=L"hevc"&&mode!=L"replay")return 2;
-        return recordCrop(options,width,height,argv[5],mode==L"replay",mode==L"hevc");
+        if(mode!=L"h264"&&mode!=L"hevc"&&mode!=L"replay"&&mode!=L"hdr"&&mode!=L"hdr-replay")return 2;
+        return recordCrop(options,width,height,argv[5],mode);
     }
     check(content(ctx,ring,source,p,f),"WGC shared GPU graph RGB stripe content");
     const auto initialReceived=source.metrics().received,initialDropped=source.metrics().dropped;
