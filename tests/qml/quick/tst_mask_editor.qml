@@ -12,6 +12,10 @@ Item {
         property var preferences: ({})
         property bool exclusionOverlayVisible: false
         property int hudProtect: 0
+        property bool hudAllEffects: false
+        property bool hudLock: false
+        property bool dynamicHud: false
+        property string fgBackendName: "vfg"
         property var edits: []
         function patch(all, fields) {
             if(all) exclusionState=Object.assign({},exclusionState,fields)
@@ -38,7 +42,7 @@ Item {
     }
     Component {
         id: protectionControl
-        HudProtectControl { width: 300; bridge: backend; objectName: "fixture-hud" }
+        HudProtectControl { width: 300; instantExpansion: true; bridge: backend; objectName: "fixture-hud" }
     }
     TestCase {
         name: "MaskEditor"
@@ -96,6 +100,8 @@ Item {
         function test_manual_drawing_is_inline_and_only_visible_in_manual_mode() {
             const control=createTemporaryObject(protectionControl,fixture)
             verify(control)
+            compare(control.expanded,false)
+            control.expanded=true
             const select=findChild(control,"fixture-hud-mode")
             verify(select)
             compare(findChild(control,"fixture-hud-draw-rect"),null)

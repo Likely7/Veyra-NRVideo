@@ -201,6 +201,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     static const QHash<QString, std::pair<int, int>> ranges{
         {"subtitleSize", {16, 56}}, {"subtitleFont", {0, 5}}, {"subtitleOutline", {0, 3}},
         {"subtitleMargin", {0, 240}}, {"subtitleLines", {0, 8}},
+        {"liveSubtitlePosition", {0, 1}}, {"liveSubtitleX", {0, 100}}, {"liveSubtitleY", {0, 100}},
         {"liveSubtitleSize", {0, 56}}, {"liveSubtitleShadow", {-1, 8}}, {"liveSubtitleLines", {0, 3}},
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},

@@ -20,7 +20,7 @@ public:
                     unsigned outputMode,const engine::HudProtectRegions& regions,
                     bool externalMotion,unsigned generatedCount);
     void createViews(ID3D12Device* device,DescriptorStager& stager,
-                     ID3D12Resource* const (&real)[2],ID3D12Resource* const* generated,ID3D12Resource* denseFlow);
+                     ID3D12Resource* const (&real)[2],ID3D12Resource* const* generated,ID3D12Resource* denseFlow, ID3D12Resource* const (&detection)[2]);
     void prepare(ID3D12GraphicsCommandList* list,StateTracker& tracker,diagnostics::GpuTimer& timer,
                  unsigned parity,bool reset,bool haveFlow,ID3D12Fence* fence);
     void submitted(uint64_t fence);
@@ -62,6 +62,7 @@ private:
     unsigned generatedCount_=0;
     Constants constants_{};
     ID3D12Resource* real_[2]{};
+    ID3D12Resource* detection_[2]{};
     ID3D12Resource* denseFlow_=nullptr;
     ComPtr<ID3D12Resource> input_[2],confidence_[2],appearance_[2],mask_[2],motion_[2],density_[2];
     ComPtr<ID3D12Resource> correctedFlow_,scratch_,diagnostics_;

@@ -37,7 +37,10 @@ public:
     static constexpr UINT kMaxGenerated = 32;
     // outputMode: how the frames are encoded, as EffectExclusion (0 sRGB, 1 scRGB, 2 PQ).
     bool initialize(ID3D12Device* device, uint32_t width, uint32_t height, DXGI_FORMAT format,
-                    unsigned outputMode, bool staticLock = true, bool dynamicProtection = false);
+                    unsigned outputMode, bool staticLock = true, bool dynamicProtection = false, bool composeGenerated = true);
+    ID3D12Resource* stillState() const { return state_.Get(); }
+    ID3D12Resource* dynamicMask() const { return protectionMask_.Get(); }
+    unsigned dynamicCell() const { return dynamicActive()?cellSize_:0; }
     bool dynamicActive() const { return bool(protectionMask_); }
     // real[0..1]: the graph's two real-frame textures by parity; generated: the
     // generated-frame textures, in the graph's slot order.

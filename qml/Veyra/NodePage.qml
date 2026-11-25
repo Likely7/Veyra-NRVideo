@@ -842,6 +842,7 @@ VPage {
                             text: veyra.audioSyncLive ? qsTr("软件估算补偿 ") + veyra.audioCompensationMs.toFixed(0) + " ms" : qsTr("自动估算：采集卡 / PS5 实时输入时生效")
                             color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 10; wrapMode: Text.WordWrap
                         }
+                        HudProtectControl { objectName: "node-hud-protect"; namePrefix: "node" }
                         // 显示同步 / 输出上限: presentation belongs to the output.
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -1722,38 +1723,18 @@ VPage {
                     VSwitch { objectName: "node-pacing-repair"; checked: veyra.pacingRepair; onToggled: checked => veyra.pacingRepair = checked }
                 }
                 VRow {
-                    label: qsTr("HUD 自动锁定")
-                    visible: veyra.fgBackendName !== "xess"
-                    hint: qsTr("自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭")
-                    VSwitch { objectName: "node-hud-lock"; checked: veyra.hudLock; onToggled: checked => veyra.hudLock = checked }
-                }
-                HudProtectControl { objectName: "node-hud-protect" }
-                DynamicHudRow { backend: veyra; namePrefix: "node" }
-                VRow {
                     label: qsTr("补帧运动来源")
                     visible: veyra.fgBackendName !== "vfg"
                     hint: qsTr("XeSS 默认零运动；FSR 仍有自身的光流计算")
                     VSeg { objectName: "node-fg-motion"; options: [{id:"0",label:qsTr("零运动")},{id:"1",label:qsTr("光流")}]; current: String(veyra.fgMotionSource); onPicked: id => veyra.fgMotionSource = Number(id) }
                 }
                 VRow {
-                    label: qsTr("严格补帧节奏")
-                    hint: qsTr("帧同步 · 默认关闭")
+                    label: qsTr("文件播放：严格补帧节奏")
+                    visible: veyra.sourceKind === "file"
+                    hint: qsTr("首张生成帧赶不上显示时间时跳过本组，减少晚帧，可能降低输出帧率。")
                     VSwitch { checked: veyra.fgStrict; onToggled: checked => veyra.fgStrict = checked }
                 }
                 NvidiaLowLatencyEditor { namePrefix: "node" }
-                VRow {
-                    objectName: "node-fg-auto-multiplier"
-                    label: qsTr("自动选择倍率")
-                    visible: veyra.fgAutoMultiplierAvailable
-                    hint: veyra.fgAutoMultiplierEnabled
-                          ? qsTr("按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧")
-                          : qsTr("关闭时按手动选的倍率 · 默认关闭")
-                    hintBelow: veyra.fgAutoMultiplierEnabled
-                    VSwitch {
-                        checked: veyra.fgAutoMultiplierEnabled
-                        onToggled: checked => veyra.fgAutoMultiplierEnabled = checked
-                    }
-                }
                 VRow {
                     visible: !veyra.nvidiaLowLatencyAvailable
                     label: qsTr("低延迟队列")

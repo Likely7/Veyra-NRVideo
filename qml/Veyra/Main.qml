@@ -1155,7 +1155,7 @@ Window {
 
     // Startup music plays once, continuing after the intro or without it. Media-open
     // intent or the shared setting/button permanently stops it for this launch.
-    readonly property bool musicOn: typeof vyMusic !== "undefined" && veyra.preferences.introMusic !== false
+    readonly property bool musicOn: typeof vyMusic !== "undefined" && veyra.preferences.introMusic === true
     readonly property bool musicSounding: typeof vyMusic !== "undefined" && (vyMusic.state === "loading" || vyMusic.state === "playing")
     function stopStartupMusicForSession() {
         if (typeof vyMusic === "undefined") return

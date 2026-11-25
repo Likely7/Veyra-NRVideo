@@ -162,6 +162,8 @@ changed (renamed, wired into Veyra's settings, engine and interface):
 
 - Live HUD Lock: `include/veyra/pipeline/HudLock.h`, `src/pipeline/HudLock.cpp`,
   `shaders/HudLockUpdate.hlsl`, `shaders/HudLockCompose.hlsl` (from `PushHudLock*`, a0b76239).
+  Veyra extracted the existing static-pixel weighting into `shaders/HudLockWeight.hlsli`
+  so both frame generation and original-picture HUD restoration use the same detector.
 - Frame pacing repair: `include/veyra/engine/FramePacingRepair.h` and its unit test
   (from `PushPacingRepair`, a0b76239 and ebbde37d).
 - Adaptive multiplier: `include/veyra/engine/AdaptiveFgMultiplier.h` and its unit test

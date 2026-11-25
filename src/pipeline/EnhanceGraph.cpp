@@ -961,10 +961,10 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     const unsigned outputBytes=desc_.hdrOutput&&!hdr10Output()?8u:4u;
     const auto protectRegions=engine::hudProtectRegions(desc_.hudProtect,desc_.exclusion);
     const auto hudBounds=HudProtect::regionBounds(workW_,workH_,protectRegions);
-    const bool hasHud=(fgEnabled_||presentSinkFg())&&hudBounds.right>hudBounds.left;
+    const bool hasHud=(desc_.hudAllEffects||fgEnabled_||presentSinkFg())&&hudBounds.right>hudBounds.left;
     const uint64_t hudBytes=hasHud?
         uint64_t(workW_)*workH_*(2*outputBytes+(desc_.fgUsesFlow()?4u:0u)+
-            (presentSinkFg()?(desc_.exclusion.enabled?0u:4*outputBytes):0u))+
+            (presentSinkFg()?(desc_.writesProtectedOutput()?0u:4*outputBytes):0u))+
         uint64_t(hudBounds.right-hudBounds.left)*(hudBounds.bottom-hudBounds.top)*
             (18u+(presentSinkFg()?0u:outputBytes)):0;
     const auto spatialBytes = [&](uint32_t quality, Extent input, Extent output) -> uint64_t {
@@ -981,13 +981,13 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         spatialBytes(desc_.finalSrQuality(), {srInW_, srInH_}, {srOutW_, srOutH_}) +
         (desc_.dualSr && desc_.firstSrEnlarges() ?
             spatialBytes(desc_.videoSrQuality, {srcW_, srcH_}, {desc_.firstSrWidth, desc_.firstSrHeight}) : 0);
-    const uint64_t estimate=hudBytes+spatialSrBytes+reuseBytes+temporalHdrBytes+dlaaBytes+vfxSrBytes+firstSrMotionBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
+    const uint64_t estimate=(desc_.restoresHud()?uint64_t(workW_)*workH_*outputBytes*2:0)+hudBytes+spatialSrBytes+reuseBytes+temporalHdrBytes+dlaaBytes+vfxSrBytes+firstSrMotionBytes+dualBytes+supersampleBytes+uint64_t(workW_)*workH_*(76u+4u*generatedTextures)+vfgSharedBytes
         +nrTextureBytes+fullLayerBytes
         +uint64_t(srcW_)*srcH_*(32u+(desc_.protectionBeforeSr()?8u:0u))+temporalBytes+tailColorBytes+interProtectionBytes
         +(flowRefine_?uint64_t(nvofW_)*nvofH_*(flowConsistency_?13u:flowClaims_?18u:12u)+uint64_t(workW_)*workH_*4u:0)
         // Two real outputs + generated scratch; XeSS also holds two graph UI
         // textures and two presenter composition targets (estimated at work size).
-        +(desc_.exclusion.enabled?uint64_t(workW_)*workH_*outputBytes*(presentSinkFg()?7u:3u):0);
+        +(desc_.writesProtectedOutput()?uint64_t(workW_)*workH_*outputBytes*(presentSinkFg()?7u:3u):0);
     if(context_.videoMemoryInfo(budget,usage)){
         veyra::log::info("memory",std::format("graph lower-bound={}MiB budget={}MiB usage={}MiB; SDK allocations additional",estimate>>20,budget>>20,usage>>20));
         // Keep measured WDDM headroom for SDK-owned allocations. There is no
@@ -1231,7 +1231,13 @@ bool EnhanceGraph::createResources()
     if(!createBeautyShared())return false;
     videoFrame_[0] = makeTexture(context_.device(), workW_, workH_, outputFormat(), true);
     videoFrame_[1] = makeTexture(context_.device(), workW_, workH_, outputFormat(), true);
-    if(desc_.exclusion.enabled){
+    if(desc_.restoresHud()){
+        for(auto& texture:hudDetectionSource_){
+            texture=makeTexture(context_.device(),workW_,workH_,outputFormat(),true);
+            if(!texture)return false;
+        }
+    }
+    if(desc_.writesProtectedOutput()){
         for(auto& texture:exclusionVideo_){
             texture=makeTexture(context_.device(),workW_,workH_,outputFormat(),true);
             if(!texture)return false;
@@ -1239,7 +1245,7 @@ bool EnhanceGraph::createResources()
         exclusionScratch_=makeTexture(context_.device(),workW_,workH_,outputFormat(),true);
         if(!exclusionScratch_)return false;
     }
-    if(presentSinkFg()&&(desc_.exclusion.enabled||hudProtect_)){
+    if(presentSinkFg()&&(desc_.writesProtectedOutput()||hudProtect_)){
         // The UI-only pass binds a spare UAV for the unused real output.
         if(!exclusionScratch_)exclusionScratch_=makeTexture(context_.device(),1,1,outputFormat(),true);
         if(!exclusionScratch_)return false;
@@ -1763,13 +1769,13 @@ bool EnhanceGraph::initFsrFg() {
 // generation as it was and reports state 2.
 bool EnhanceGraph::initHudProtect() {
     hudProtect_.reset();
-    if(!fgEnabled_&&!presentSinkFg())return true;
+    if(!desc_.hudAllEffects&&!fgEnabled_&&!presentSinkFg())return true;
     const auto regions=engine::hudProtectRegions(desc_.hudProtect,desc_.exclusion);
     if(HudProtect::regionBounds(workW_,workH_,regions).right==0)return true;
     auto pass=std::make_unique<HudProtect>();
     if(!pass->initialize(context_.device(),outputFormat(),workW_,workH_,
                          hdr10Output()?2u:desc_.hdrOutput?1u:0u,regions,desc_.fgUsesFlow(),
-                         presentSinkFg()?0:kGeneratedPoolSlots)){
+                         fgEnabled_&&!presentSinkFg()?kGeneratedPoolSlots:0)){
         log::error("hud-protect","could not allocate HUD protection passes");
         return false;
     }
@@ -1801,10 +1807,10 @@ void EnhanceGraph::composeHudProtect(ID3D12GraphicsCommandList* list,unsigned sl
 
 bool EnhanceGraph::initHudLock() {
     hudLock_.reset();
-    if((!desc_.hudLock&&!desc_.dynamicHud)||!fgEnabled_||presentSinkFg())return true;
+    if((!desc_.hudLock&&!desc_.dynamicHud)||(!desc_.hudAllEffects&&(!fgEnabled_||presentSinkFg())))return true;
     auto pass=std::make_unique<HudLock>();
     if(!pass->initialize(context_.device(),workW_,workH_,outputFormat(),
-                         hdr10Output()?2u:desc_.hdrOutput?1u:0u,desc_.hudLock,desc_.dynamicHud)){
+                         hdr10Output()?2u:desc_.hdrOutput?1u:0u,desc_.hudLock,desc_.dynamicHud,!desc_.hudAllEffects)){
         veyra::log::error("hud-lock",std::format("Live HUD Lock unavailable at {}x{}; frame generation runs without it",workW_,workH_));
         return true;
     }
@@ -1812,7 +1818,7 @@ bool EnhanceGraph::initHudLock() {
     return true;
 }
 void EnhanceGraph::composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity,bool useNewerHud){
-    if(hudLock_&&!hudLock_->compose(list,tracker_,generatedSlot,heldParity,useNewerHud))
+    if(!desc_.hudAllEffects&&hudLock_&&!hudLock_->compose(list,tracker_,generatedSlot,heldParity,useNewerHud))
         veyra::log::warn("hud-lock",std::format("compose skipped slot={} held={}",generatedSlot,heldParity));
 }
 
@@ -2470,8 +2476,8 @@ void EnhanceGraph::setNrReuseLevel(unsigned level)
 bool EnhanceGraph::createComputePasses()
 {
     std::vector<uint8_t> cs;
-    if((desc_.exclusion.enabled||exclusionUi_[0])&&(!exclusionPass_.loadShader("EffectExclusion.dxil",cs)||
-       !exclusionPass_.create(context_.device(),cs,kOutputPoolSlots*12,4,2,28,0,true)))return false;
+    if((desc_.writesProtectedOutput()||exclusionUi_[0])&&(!exclusionPass_.loadShader("EffectExclusion.dxil",cs)||
+       !exclusionPass_.create(context_.device(),cs,kOutputPoolSlots*20,8,2,32,0,true)))return false;
     for(auto& instance:additionalColorInstances_)if(instance&&!instance->createPass(context_.device()))return false;
     for(auto& instance:nodeColorInstances_)if(instance&&!instance->createPass(context_.device()))return false;
     {
@@ -2527,7 +2533,7 @@ bool EnhanceGraph::createComputePasses()
         if(!amdHdrEncodePass_.loadShader("HdrAmdNrEncode.dxil",cs)||!amdHdrEncodePass_.create(context_.device(),cs,2*nrLayerSlots,1,1))return false;
         if(!amdHdrRestorePass_.loadShader("HdrAmdNrRestore.dxil",cs)||!amdHdrRestorePass_.create(context_.device(),cs,4*nrLayerSlots,3,1))return false;
     }
-    if (!blitPass_.loadShader("ScaleBlit.dxil", cs) || !blitPass_.create(context_.device(), cs, 27, 1, 1)) return false;
+    if (!blitPass_.loadShader("ScaleBlit.dxil", cs) || !blitPass_.create(context_.device(), cs, 31, 1, 1)) return false;
     // Nv12Upload stays: frame-time CopyTextureRegion is poisoned by the
     // injected layer (SEH in NGX evaluate, r33-final3 evidence); the compute
     // upload is the proven frame-path ingestion on this system.
@@ -2561,9 +2567,11 @@ bool EnhanceGraph::createViews()
         ID3D12Resource* const real[2]={videoFrame_[0].Get(),videoFrame_[1].Get()};
         std::array<ID3D12Resource*,kGeneratedPoolSlots> generated{};
         for(size_t i=0;i<kGeneratedPoolSlots;++i)generated[i]=genFrame_[i].Get();
-        if(hudLock_)hudLock_->createViews(context_.device(),stager_,real,generated.data(),unsigned(generated.size()));
+        ID3D12Resource* const detection[2]={hudDetectionSource_[0]?hudDetectionSource_[0].Get():real[0],
+                                             hudDetectionSource_[1]?hudDetectionSource_[1].Get():real[1]};
+        if(hudLock_)hudLock_->createViews(context_.device(),stager_,detection,generated.data(),fgEnabled_&&!presentSinkFg()?unsigned(generated.size()):0u);
         if(hudProtect_)hudProtect_->createViews(context_.device(),stager_,real,generated.data(),
-            desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nullptr);
+            desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nullptr,detection);
     }
     // Descriptor initialization is DEFAULT ON since the RAW-upload-SRV removal
     // (2026-09-06): texture SRV/UAV views keep the device alive and NVOF
@@ -2858,6 +2866,10 @@ bool EnhanceGraph::createViews()
         finalInput=chainSlotViews(tailPasses_,finalInput,"tail");
         tailColorOutput_=finalInput;
     }
+    for(unsigned parity=0;parity<2;++parity)if(hudDetectionSource_[parity]){
+        if(viewsTex)stagedSrv(sourceReferences_[parity].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,blitPass_,27+parity);
+        if(viewsUav)makeUav(context_.device(),hudDetectionSource_[parity].Get(),outputFormat(),cpu(blitPass_,29+parity));
+    }
     if (viewsTex) stagedSrv(finalInput, DXGI_FORMAT_R16G16B16A16_FLOAT, blitPass_, 2);
     if (viewsUav) makeUav(context_.device(), videoFrame_[0].Get(), outputFormat(), cpu(blitPass_, 3));
     if (viewsUav) makeUav(context_.device(), videoFrame_[1].Get(), outputFormat(), cpu(blitPass_, 4));
@@ -2904,22 +2916,26 @@ bool EnhanceGraph::createViews()
         context_.device()->CreateUnorderedAccessView(confTex_.Get(), nullptr, &uc, cpu(densifyPass_, 6));
     }
     if(exclusionPass_.heap){
-        const unsigned outputs=desc_.exclusion.enabled?kOutputPoolSlots:2;
+        const unsigned outputs=desc_.writesProtectedOutput()&&fgEnabled_&&!presentSinkFg()?kOutputPoolSlots:2;
         for(unsigned output=0;output<outputs;++output){
             auto* enhanced=output<2?videoFrame_[output].Get():genFrame_[output-2].Get();
             auto* destination=output<2&&exclusionVideo_[output]?exclusionVideo_[output].Get():exclusionScratch_.Get();
             for(unsigned raw=0;raw<2;++raw){
-                const unsigned base=(output*2+raw)*6;
+                const unsigned base=(output*2+raw)*10;
                 if(viewsTex){
                     stagedSrv(enhanced,outputFormat(),exclusionPass_,base);
                     stagedSrv(sourceReferences_[raw].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,exclusionPass_,base+1);
                     stagedSrv(videoFrame_[output<2?1-raw:raw].Get(),outputFormat(),exclusionPass_,base+2);
                     stagedSrv(hudProtect_?hudProtect_->mask(raw):nullptr,DXGI_FORMAT_R8G8B8A8_UNORM,exclusionPass_,base+3);
+                    stagedSrv(hudLock_?hudLock_->stillState():nullptr,DXGI_FORMAT_R16G16_FLOAT,exclusionPass_,base+4);
+                    stagedSrv(hudLock_?hudLock_->dynamicMask():nullptr,DXGI_FORMAT_R8_UNORM,exclusionPass_,base+5);
+                    stagedSrv(sourceReferences_[1-raw].Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,exclusionPass_,base+6);
+                    stagedSrv(hudProtect_?hudProtect_->mask(1-raw):nullptr,DXGI_FORMAT_R8G8B8A8_UNORM,exclusionPass_,base+7);
                 }
                 if(viewsUav){
                     auto* ui=exclusionUi_[raw]?exclusionUi_[raw].Get():destination;
-                    makeUav(context_.device(),destination,outputFormat(),cpu(exclusionPass_,base+4));
-                    makeUav(context_.device(),ui,outputFormat(),cpu(exclusionPass_,base+5));
+                    makeUav(context_.device(),destination,outputFormat(),cpu(exclusionPass_,base+8));
+                    makeUav(context_.device(),ui,outputFormat(),cpu(exclusionPass_,base+9));
                 }
             }
         }
@@ -3094,25 +3110,33 @@ bool EnhanceGraph::uploadElCurve(ID3D12GraphicsCommandList* list) {
 }
 
 void EnhanceGraph::composeExclusion(ID3D12GraphicsCommandList* list,unsigned output,unsigned rawParity,
-                                    bool ui,bool historyValid) {
-    if(!desc_.exclusion.enabled&&!ui)return;
+                                    bool ui,bool historyValid,bool newerHud) {
+    if(!desc_.writesProtectedOutput()&&!ui)return;
     const bool generated=output>=2;
     auto* enhanced=generated?genFrame_[output-2].Get():videoFrame_[output].Get();
     auto* destination=!generated&&exclusionVideo_[output]?exclusionVideo_[output].Get():exclusionScratch_.Get();
     auto* original=sourceReferences_[rawParity].Get();
     auto* held=videoFrame_[generated?rawParity:1-rawParity].Get();
-    const bool overlayHud=hudProtect_&&ui;
-    const unsigned flags=(ui?1u:0u)|(generated?2u:0u)|(desc_.exclusion.enabled?4u:0u)|
-                         (overlayHud?8u:0u)|(historyValid?16u:0u);
+    const bool rawHud=desc_.restoresHud();
+    const bool overlayHud=hudProtect_&&(ui||rawHud);
+    const unsigned hudParity=newerHud?1-rawParity:rawParity;
+    const unsigned flags=(ui?1u:0u)|(generated?2u:0u)|(desc_.writesProtectedOutput()?4u:0u)|
+                         (overlayHud?8u:0u)|(historyValid?16u:0u)|(rawHud?32u:0u)|(newerHud?64u:0u);
     constexpr auto read=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     constexpr auto write=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
     constexpr auto common=D3D12_RESOURCE_STATE_COMMON;
     tracker_.transition(list,enhanced,read);
-    if(desc_.exclusion.enabled)tracker_.transition(list,original,read);
+    if(desc_.writesProtectedOutput())tracker_.transition(list,original,read);
     if(historyValid)tracker_.transition(list,held,read);
-    if(desc_.exclusion.enabled)tracker_.transition(list,destination,write);
+    if(desc_.writesProtectedOutput())tracker_.transition(list,destination,write);
     if(ui)tracker_.transition(list,exclusionUi_[rawParity].Get(),write);
-    float constants[28]={uintBits(workW_),uintBits(workH_),desc_.exclusion.featherPixels,
+    if(overlayHud)tracker_.transition(list,hudProtect_->mask(hudParity),read);
+    if(rawHud&&newerHud)tracker_.transition(list,sourceReferences_[hudParity].Get(),read);
+    if(rawHud&&hudLock_){
+        tracker_.transition(list,hudLock_->stillState(),read);
+        if(hudLock_->dynamicMask())tracker_.transition(list,hudLock_->dynamicMask(),read);
+    }
+    float constants[32]={uintBits(workW_),uintBits(workH_),desc_.exclusion.featherPixels,
         hdr10Output()?2.f:desc_.hdrOutput?1.f:0.f,desc_.hdrOutput&&!desc_.hdrInput?203.f/80.f:1.f,
         outputDitherStep(),uintBits(flags),uintBits(engine::exclusionModes(desc_.exclusion))};
     if(desc_.exclusion.enabled){
@@ -3126,8 +3150,10 @@ void EnhanceGraph::composeExclusion(ID3D12GraphicsCommandList* list,unsigned out
         constants[24]=uintBits(b.left);constants[25]=uintBits(b.top);
         constants[26]=uintBits(b.right);constants[27]=uintBits(b.bottom);
     }
-    const auto base=(output*2+rawParity)*6;
-    exclusionPass_.bind(list,constants,gpuHandleOf(exclusionPass_,base).ptr,gpuHandleOf(exclusionPass_,base+4).ptr);
+    constants[28]=uintBits(rawHud&&hudLock_&&desc_.hudLock?1u:0u);
+    constants[29]=uintBits(rawHud&&hudLock_?hudLock_->dynamicCell():0u);
+    const auto base=(output*2+rawParity)*10;
+    exclusionPass_.bind(list,constants,gpuHandleOf(exclusionPass_,base).ptr,gpuHandleOf(exclusionPass_,base+8).ptr);
     list->Dispatch((workW_+15)/16,(workH_+15)/16,1);
     if(generated){
         tracker_.transition(list,destination,D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -3135,9 +3161,15 @@ void EnhanceGraph::composeExclusion(ID3D12GraphicsCommandList* list,unsigned out
         list->CopyResource(enhanced,destination);
     }
     tracker_.transition(list,enhanced,common);
-    if(desc_.exclusion.enabled){
+    if(desc_.writesProtectedOutput()){
         tracker_.transition(list,destination,common);
         tracker_.transition(list,original,common);
+    }
+    if(overlayHud)tracker_.transition(list,hudProtect_->mask(hudParity),common);
+    if(rawHud&&newerHud)tracker_.transition(list,sourceReferences_[hudParity].Get(),common);
+    if(rawHud&&hudLock_){
+        tracker_.transition(list,hudLock_->stillState(),common);
+        if(hudLock_->dynamicMask())tracker_.transition(list,hudLock_->dynamicMask(),common);
     }
     if(historyValid)tracker_.transition(list,held,common);
     if(ui)tracker_.transition(list,exclusionUi_[rawParity].Get(),common);
@@ -3151,7 +3183,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         std::memcpy(p7Params_, doviP7->params, sizeof(p7Params_));
         std::memcpy(p7Curve_, doviP7->curve, sizeof(p7Curve_));
     }
-    retainReferences=retainReferences||desc_.exclusion.enabled;
+    retainReferences=retainReferences||desc_.writesProtectedOutput();
     if(nrPreparing_){
         bool pending=false;
         for(auto& layer:nrInstances_){
@@ -3184,7 +3216,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         desc_.nrRuntime==engine::NrRuntime::Original&&!desc_.enableSr&&!desc_.enableFg&&
         !srEnabled_&&!fgEnabled_&&!desc_.videoHdr.enabled&&!desc_.hdrInput&&!desc_.hdrOutput&&
         !colorGradeActive()&&!tailColorActiveCount_&&!preNrColorActiveCount_&&
-        !preSrColorActiveCount_&&!interNrColorActiveCount_&&!slotPassesActive()&&!desc_.exclusion.enabled&&desc_.nrHoldStrength==0&&
+        !preSrColorActiveCount_&&!interNrColorActiveCount_&&!slotPassesActive()&&!desc_.writesProtectedOutput()&&desc_.nrHoldStrength==0&&
         (!hardwareSurface||!hardwareSurface->present())&&
         !GetEnvironmentVariableW(L"VEYRA_TEST_DISABLE_PAUSED_NR_RESIDUAL_REUSE",nullptr,0);
     const bool reusePausedNr=pausedEligible&&pausedNrCacheValid_&&pausedNrResidualOnly_&&
@@ -3633,7 +3665,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // A beauty node restoring faces needs the same ungraded picture this frame.
     const bool beautyRestore=beautyNodesActive_&&beautyRestoreRequested();
     const bool beautyCopy=beautyOriginal_&&beautyRestore;
-    if((colorGradeActive()||desc_.exclusion.enabled)&&(retainReferences||beautyCopy)){
+    if((colorGradeActive()||desc_.writesProtectedOutput())&&(retainReferences||beautyCopy)){
         convertInput(false,srcRgba_.Get(),0);
         tracker_.transition(list,srcRgba_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
         if(retainReferences){
@@ -4178,7 +4210,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         // Comparison references belong to this real-frame lease. Avoid the two
         // full-frame copies when comparison is disabled.
         auto retain=[&](ID3D12Resource* src,ID3D12Resource* dst){tracker_.transition(list,src,D3D12_RESOURCE_STATE_COPY_SOURCE);tracker_.transition(list,dst,D3D12_RESOURCE_STATE_COPY_DEST);list->CopyResource(dst,src);tracker_.transition(list,dst,D3D12_RESOURCE_STATE_COMMON);tracker_.transition(list,src,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);};
-        if(!colorGradeActive()&&!desc_.exclusion.enabled)retain(srcRgba_.Get(),sourceReferences_[parity].Get());
+        if(!colorGradeActive()&&!desc_.writesProtectedOutput())retain(srcRgba_.Get(),sourceReferences_[parity].Get());
         if(baseReferences_[parity].Get()!=sourceReferences_[parity].Get())retain(workRgba_.Get(),baseReferences_[parity].Get());
     }
 
@@ -4546,6 +4578,17 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list, videoFrame_[parity].Get(), D3D12_RESOURCE_STATE_COMMON);
 
     }
+    // Detect on the original picture. Neural rendering can change a stationary glyph from one frame to the next.
+    if(hudDetectionSource_[parity]){
+        tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        tracker_.transition(list,hudDetectionSource_[parity].Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        const float constants[8]={uintBits(srcW_),uintBits(srcH_),uintBits(workW_),uintBits(workH_),
+            hdr10Output()?2.f:desc_.hdrOutput?0.f:1.f,0,0,0};
+        blitPass_.bind(list,constants,gpuHandleOf(blitPass_,27+parity).ptr,gpuHandleOf(blitPass_,29+parity).ptr);
+        list->Dispatch((workW_+15)/16,(workH_+15)/16,1);
+        tracker_.transition(list,hudDetectionSource_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+        tracker_.transition(list,sourceReferences_[parity].Get(),D3D12_RESOURCE_STATE_COMMON);
+    }
     auto* fgMotion=desc_.fgMotionProbe?desc_.fgMotionProbe:
         haveFlow&&desc_.fgUsesFlow()?(flowRefine_?fgBaseFlow_.Get():baseFlow_.Get()):nrZeroMotion_.Get();
     if(hudProtect_){
@@ -4639,9 +4682,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         if(!rife_->capture(list,fgFrame)){failedBackend_=engine::FailedBackend::Fg;return false;}
         tracker_.transition(list,fgFrame,D3D12_RESOURCE_STATE_COMMON);
     }
-    composeExclusion(list,parity,parity,exclusionUi_[parity]!=nullptr,!reset&&prevValid_);
     // Live HUD Lock learns from this real frame against the previous one (enhanced colours).
     if(hudLock_&&!hudLock_->update(list,tracker_,parity,!prevValid_))veyra::log::warn("hud-lock","update skipped");
+    composeExclusion(list,parity,parity,exclusionUi_[parity]!=nullptr,!reset&&prevValid_);
     if(!runFg)gpuTimer_.resolve(list);
     if (!submitGraph(slot)) return false;
     if(hudProtect_)hudProtect_->submitted(ring_->lastSignaledValue());
@@ -4664,7 +4707,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if(!copied&&!resetFg){veyra::log::error("amf-frc","AMF returned no interpolated frame for this pair");failedBackend_=engine::FailedBackend::Fg;return false;}
             composeHudLock(flist,generatedSlot,resetFg?parity:1-parity,useNewerHud);
             if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-            composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true);
+            composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true,useNewerHud);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             gpuTimer_.mark(flist,GpuStage::Fg1,true);gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);
             if(!submitGraph(slot))return false;
@@ -4692,7 +4735,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if(!rife_->copyOutput(flist,genFrame_[generatedSlot].Get(),sub,outputMultiplier)){failedBackend_=engine::FailedBackend::Fg;return false;}
             composeHudLock(flist,generatedSlot,1-parity,useNewerHud);
             if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-            composeExclusion(flist,generatedSlot+2,1-parity,false,true);
+            composeExclusion(flist,generatedSlot+2,1-parity,false,true,useNewerHud);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             const bool last=sub==fgCalls;
             if(last){gpuTimer_.mark(flist,GpuStage::Fg1,true);gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);}
@@ -4718,7 +4761,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if(!vfgBackend_->copyOutput(flist,genFrame_[generatedSlot].Get(),generatedSlot)){failedBackend_=engine::FailedBackend::Fg;return false;}
             composeHudLock(flist,generatedSlot,resetFg?parity:1-parity,useNewerHud);
             if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-            composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true);
+            composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true,useNewerHud);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             const auto timingStage=GpuStage(unsigned(GpuStage::Fg1)+sub-1);gpuTimer_.mark(flist,timingStage,true);
             if(sub<fgCalls)gpuTimer_.mark(flist,GpuStage(unsigned(GpuStage::Fg1)+sub));
@@ -4781,7 +4824,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 failedBackend_=engine::FailedBackend::Fg;return false;
             }
         }else if(!fgBackend_->evaluate(flist,ngxParams_,fe,st)){failedBackend_=engine::FailedBackend::Fg;return false;}
-        if((desc_.exclusion.enabled||hudProtect_||hudLock_)&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Anr){
+        if((desc_.writesProtectedOutput()||hudProtect_||hudLock_)&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Anr){
             // ANR's Vulkan bridge fulfills the recorded evaluation when this
             // list is submitted. Post-generation composition in the same list
             // runs before that output exists and is then overwritten. Submit
@@ -4802,7 +4845,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }
         composeHudLock(flist,generatedSlot,resetFg?parity:1-parity,useNewerHud);
         if(!resetFg)composeHudProtect(flist,generatedSlot,parity,sub,outputMultiplier);
-        composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true);
+        composeExclusion(flist,generatedSlot+2,resetFg?parity:1-parity,false,true,useNewerHud);
         tracker_.transition(flist,fgFrame,D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
         tracker_.transition(flist,depthTex_.Get(),D3D12_RESOURCE_STATE_COMMON);
@@ -4978,8 +5021,9 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     // Output stabiliser: its pass is allocated at build time, so on/off rebuilds; strength and
     // tolerance are uniforms. Neither used to reach a running graph (field report
     // 2026-10-01: switching it on mid-play did nothing until something else rebuilt).
-    if(s.exclusion.enabled!=desc_.exclusion.enabled)return false;
-    if((fgEnabled_||presentSinkFg())&&engine::hudProtectRegions(s.hudProtect,s.exclusion)!=
+    if(s.hudAllEffects!=desc_.hudAllEffects||s.exclusion.enabled!=desc_.exclusion.enabled)return false;
+    if(desc_.hudAllEffects&&(s.hudLock!=desc_.hudLock||s.dynamicHud!=desc_.dynamicHud))return false;
+    if((desc_.hudAllEffects||fgEnabled_||presentSinkFg())&&engine::hudProtectRegions(s.hudProtect,s.exclusion)!=
         engine::hudProtectRegions(desc_.hudProtect,desc_.exclusion))return false;
     if((s.nrHoldStrength>0.0f)!=(desc_.nrHoldStrength>0.0f))return false;
     // NR inference reuse: a preview graph allocates its pass only when built
@@ -5333,6 +5377,7 @@ void EnhanceGraph::shutdown()
     hudProtect_.reset();
     hudLock_.reset();
     for(auto& r:exclusionVideo_)r.Reset();
+    for(auto& r:hudDetectionSource_)r.Reset();
     for(auto& r:exclusionUi_)r.Reset();
     for(auto& r:sourceReferences_)r.Reset();for(auto& r:baseReferences_)r.Reset();workRgba_.Reset();
     preGradeRgba_.Reset();srcRgba_.Reset();videoSrInput_.Reset();videoSrOutput_.Reset();srPrescaled_.Reset();

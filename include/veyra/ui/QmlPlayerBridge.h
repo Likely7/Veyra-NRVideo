@@ -52,8 +52,6 @@ class QmlPlayerBridge : public QObject {
     // is the submit rate below (with its 1% low).
     // Automatic FG and Dolby Vision: automatic frame-generation multiplier and
     // the Dolby Vision follow / P7 composite switches.
-    Q_PROPERTY(bool fgAutoMultiplierEnabled READ fgAutoMultiplier WRITE setFgAutoMultiplier NOTIFY settingsChanged)
-    Q_PROPERTY(bool fgAutoMultiplierAvailable READ fgAutoMultiplierAvailable NOTIFY settingsChanged)
     Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
     Q_PROPERTY(bool doviP7Compose READ doviP7Compose WRITE setDoviP7Compose NOTIFY settingsChanged)
     Q_PROPERTY(bool doviFollowAverage READ doviFollowAverage WRITE setDoviFollowAverage NOTIFY settingsChanged)
@@ -477,6 +475,7 @@ class QmlPlayerBridge : public QObject {
     // fgAdaptive, pacingRepair and hudLock, global controls kept in shell preferences.
     Q_PROPERTY(bool fgAdaptive READ fgAdaptive WRITE setFgAdaptive NOTIFY settingsChanged)
     Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
+    Q_PROPERTY(bool hudAllEffects READ hudAllEffects WRITE setHudAllEffects NOTIFY settingsChanged)
     Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
     Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
     Q_PROPERTY(bool dynamicHud READ dynamicHud WRITE setDynamicHud NOTIFY settingsChanged)
@@ -1187,6 +1186,8 @@ public:
     void setFgAdaptive(bool value);
     bool pacingRepair() const;
     void setPacingRepair(bool value);
+    bool hudAllEffects() const;
+    void setHudAllEffects(bool value);
     bool hudLock() const;
     void setHudLock(bool value);
     int hudProtect() const;
@@ -1512,13 +1513,6 @@ public:
 
     void showFormatBadge(const engine::PlayerSnapshot& snapshot);
 
-    void maybeApplyFgAutoMultiplier();
-
-    void setFgAutoMultiplier(bool value);
-    bool fgAutoMultiplierAvailable() const;
-    bool fgAutoMultiplier() const;
-
-    void applyFgMultiplier(int multiplier);
 
     bool doviFollow() const;
     void setDoviFollow(bool on);

@@ -100,7 +100,6 @@ ChainValidation NodeGraphLayout::project(const EffectChain& chain, EffectChain& 
     auto candidate = std::make_unique<EffectChain>();
     candidate->mode = ChainMode::Node;
     candidate->fgMultiplier = chain.fgMultiplier;
-    candidate->fgAutoMultiplier = chain.fgAutoMultiplier;
     candidate->fgStrictAdmission = chain.fgStrictAdmission;
     uint32_t id = inputNext;
     while (id > Output) {
@@ -347,7 +346,6 @@ EffectChain toChain(const EnhancementSettings& settings) {
     EffectChain chain;
     chain.mode = ChainMode::List;
     chain.fgStrictAdmission = settings.fgStrictAdmission;
-    chain.fgAutoMultiplier = settings.fgAutoMultiplier;
     chain.fgMultiplier = std::max(2u, settings.multiplier);
     chain.beautyDetection = settings.beautyDetection;
     // A full chain never overwrites its last node: it is flagged, and validateChain()
@@ -427,7 +425,6 @@ ChainValidation restoreRuntimeOrder(const EnhancementSettings& settings, const C
     restored.mode = ChainMode::Node;
     restored.nodeCount = order.nodeCount;
     restored.fgMultiplier = source.fgMultiplier;
-    restored.fgAutoMultiplier = source.fgAutoMultiplier;
     restored.fgStrictAdmission = source.fgStrictAdmission;
     restored.beautyDetection = source.beautyDetection;
     std::array<bool, kMaxChainNodes> used{};
@@ -508,7 +505,6 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
     settings.videoDenoise = {};
     settings.multiplier = 1;
     settings.fgStrictAdmission = chain.fgStrictAdmission;
-    settings.fgAutoMultiplier = chain.fgAutoMultiplier;
     for (uint32_t i = 0; i < std::min(chain.nodeCount,kMaxChainNodes); ++i) {
         const auto& node = chain.nodes[i];
         switch (node.type) {
@@ -834,10 +830,11 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.fgMotionRefine != next.fgMotionRefine) return true;
     if (previous.dlssgLite != next.dlssgLite) return true;
     if (previous.vfgAutoRegulate != next.vfgAutoRegulate) return true;
+    if (previous.hudAllEffects != next.hudAllEffects) return true;
     // Live HUD Lock owns its mask and compose passes (pipeline/HudLock.h).
-    if (previous.multiplier > 1 && next.multiplier > 1 &&
+    if ((next.hudAllEffects || (previous.multiplier > 1 && next.multiplier > 1)) &&
         (previous.hudLock != next.hudLock || previous.dynamicHud != next.dynamicHud)) return true;
-    if (previous.multiplier > 1 && next.multiplier > 1 &&
+    if ((next.hudAllEffects || (previous.multiplier > 1 && next.multiplier > 1)) &&
         hudProtectRegions(previous.hudProtect,previous.exclusion)!=hudProtectRegions(next.hudProtect,next.exclusion))return true;
     if (previous.flow != next.flow) return true;
     if (previous.captureCompatible != next.captureCompatible) return true;

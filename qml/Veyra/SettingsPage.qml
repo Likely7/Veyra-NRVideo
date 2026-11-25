@@ -222,7 +222,7 @@ VPage {
                                   : qsTr("未找到音乐文件：程序目录下的 media/startup-music.mp3")
                             VSwitch {
                                 objectName: "set-intro-music"
-                                checked: veyra.preferences.introMusic !== false
+                                checked: veyra.preferences.introMusic === true
                                 onToggled: checked => {
                                     veyra.setPreference("introMusic", checked)
                                     if (!checked && typeof vyMusic !== "undefined") vyMusic.pause()

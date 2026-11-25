@@ -9,6 +9,7 @@ Item {
     QtObject {
         id: settings
         property string fgBackendName: "vfg"
+        property bool hudAllEffects: false
         property bool hudLock: true
         property bool dynamicHud: false
     }
@@ -34,6 +35,9 @@ Item {
             settings.fgBackendName = "xess"
             verify(!row.visible)
             compare(settings.dynamicHud, true)
+            settings.hudAllEffects = true
+            verify(row.visible && toggle.checked)
+            settings.hudAllEffects = false
             settings.fgBackendName = "vfg"
             verify(row.visible && toggle.checked)
             mouseClick(toggle)

@@ -5,8 +5,8 @@ VRow {
     required property var backend
     required property string namePrefix
     label: qsTr("动态 HUD 保护")
-    hint: qsTr("识别有固定边框的数字和状态条，补帧时保留真实画面中的内容 · 实验 · 默认关闭")
-    visible: backend.fgBackendName !== "xess"
+    hint: qsTr("识别固定边框内变化的数字和状态条 · 实验 · 默认关闭")
+    visible: backend.hudAllEffects || backend.fgBackendName !== "xess"
     VSwitch {
         objectName: row.namePrefix + "-dynamic-hud"
         checked: row.backend.dynamicHud

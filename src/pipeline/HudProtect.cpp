@@ -101,7 +101,7 @@ bool HudProtect::initialize(ID3D12Device* device,DXGI_FORMAT format,uint32_t wid
 
 void HudProtect::createViews(ID3D12Device* device,DescriptorStager& stager,
                              ID3D12Resource* const (&real)[2],ID3D12Resource* const* generated,
-                             ID3D12Resource* denseFlow) {
+                             ID3D12Resource* denseFlow, ID3D12Resource* const (&detection)[2]) {
     denseFlow_=denseFlow;
     const auto srv=[&](const ComputePass& pass,unsigned slot,ID3D12Resource* texture){
         stager.stageSrv(texture,nullptr,pass.heap.Get(),slot);
@@ -113,8 +113,9 @@ void HudProtect::createViews(ID3D12Device* device,DescriptorStager& stager,
     for(unsigned parity=0;parity<2;++parity){
         const unsigned prev=1-parity;
         real_[parity]=real[parity];
+        detection_[parity]=detection[parity];
         const unsigned match=parity*matchStride,detect=parity*detectStride,repair=parity*repairStride;
-        srv(matchPass_,match,real[parity]);srv(matchPass_,match+1,real[prev]);
+        srv(matchPass_,match,detection[parity]);srv(matchPass_,match+1,detection[prev]);
         if(denseFlow_)srv(matchPass_,match+2,denseFlow_);
         else {
             D3D12_SHADER_RESOURCE_VIEW_DESC view{};
@@ -127,7 +128,7 @@ void HudProtect::createViews(ID3D12Device* device,DescriptorStager& stager,
         srv(matchPass_,match+3,motion_[prev].Get());
         srv(matchPass_,match+4,density_[prev].Get());
         uav(matchPass_,match+5,motion_[parity].Get());uav(matchPass_,match+6,density_[parity].Get());
-        srv(detectPass_,detect,real[parity]);srv(detectPass_,detect+1,real[prev]);
+        srv(detectPass_,detect,detection[parity]);srv(detectPass_,detect+1,detection[prev]);
         srv(detectPass_,detect+2,confidence_[prev].Get());srv(detectPass_,detect+3,motion_[parity].Get());
         srv(detectPass_,detect+4,appearance_[prev].Get());srv(detectPass_,detect+5,density_[prev].Get());
         uav(detectPass_,detect+6,confidence_[parity].Get());uav(detectPass_,detect+7,density_[parity].Get());
@@ -175,6 +176,8 @@ void HudProtect::prepare(ID3D12GraphicsCommandList* list,StateTracker& tracker,d
     values[28]=bits(haveFlow&&denseFlow_?1u:0u);
 
     timer.mark(list,GpuStage::HudMask);
+    tracker.transition(list,detection_[parity],readState);
+    tracker.transition(list,detection_[prev],readState);
     tracker.transition(list,real_[parity],readState);
     tracker.transition(list,real_[prev],readState);
     tracker.transition(list,motion_[prev].Get(),readState);
@@ -216,6 +219,8 @@ void HudProtect::prepare(ID3D12GraphicsCommandList* list,StateTracker& tracker,d
     tracker.transition(list,input_[parity].Get(),commonState);
     tracker.transition(list,real_[parity],commonState);
     tracker.transition(list,real_[prev],commonState);
+    tracker.transition(list,detection_[parity],commonState);
+    tracker.transition(list,detection_[prev],commonState);
     timer.mark(list,GpuStage::HudRepair,true);
 }
 

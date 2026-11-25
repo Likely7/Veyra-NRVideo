@@ -414,10 +414,7 @@ struct EnhancementSettings {
     //     frame at 6X against 1.4.0 hitting the full 3.0 of 3 at 4X.
     // Users reported 1.4.0 feeling better, so the looser rule is the default.
     bool fgStrictAdmission=false;
-    // 自动选择倍率开关（2026-10-24）：开启时 multiplier 只是占位/上次手动值，
-    // 实际档位在运行期由 displayFgAutoMultiplier(backend, 源帧率, 输出上限) 算出；
-    // 关闭时按 multiplier 走作者原版逻辑。只对 DLSS 和 VFG 开放。
-    bool fgAutoMultiplier=false;
+    bool reservedMultiplierFlag=false; // Preserve the binary settings layout used by export workers.
     bool captureCompatible=false;
     // Capture audio ingress; requires a reconnect to take effect (the media type
     // is negotiated when the graph is built).
@@ -557,10 +554,11 @@ struct EnhancementSettings {
     // game whose frames arrive unevenly (17/50 ms). Re-times frames on the engine thread only.
     bool pacingRepair=false;
     // UI "HUD 自动锁定" (pipeline/HudLock.h, from PushFPS): a per-pixel HUD mask found every
-    // frame and kept out of graph frame generation. Its passes exist only when on.
+    // frame. The selected scope restores either generated frames or every output.
     bool hudLock=false;
     HudProtectMode hudProtect=HudProtectMode::Off;
     bool dynamicHud=false;
+    bool hudAllEffects=false;
     ContentRate content=ContentRate::Transport;
     AudioSyncMode audioSync=AudioSyncMode::Automatic;
     int32_t audioOffsetMs=0;
@@ -591,7 +589,7 @@ struct EnhancementSettings {
         }
         if(!nr||!sr)active.lowLatency=defaults.lowLatency;
         if(!nr||!protection.enabled)active.protection=defaults.protection;
-        if(!exclusion.enabled&&!(multiplier>1&&hudProtect==HudProtectMode::Regions))
+        if(!exclusion.enabled&&!((multiplier>1||hudAllEffects)&&hudProtect==HudProtectMode::Regions))
             active.exclusion=defaults.exclusion;
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
@@ -641,12 +639,12 @@ struct EnhancementSettings {
         if(!(multiplier>1&&frameGenerationBackend==FrameGenerationBackend::Vfg))active.vfgAutoRegulate=defaults.vfgAutoRegulate;
         if(!(multiplier>2))active.fgAdaptive=defaults.fgAdaptive;
         if(!(multiplier>1))active.pacingRepair=defaults.pacingRepair;
-        // XeSS generates inside its own presenter; HUD Lock works on graph frame generation.
-        if(!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS)){
+        // With the default scope, XeSS generates the frames inside its own presenter.
+        if(!hudAllEffects&&!(multiplier>1&&frameGenerationBackend!=FrameGenerationBackend::XeSS)){
             active.hudLock=defaults.hudLock;
             active.dynamicHud=defaults.dynamicHud;
         }
-        if(multiplier<=1)active.hudProtect=defaults.hudProtect;
+        if(multiplier<=1&&!hudAllEffects)active.hudProtect=defaults.hudProtect;
         return active;
     }
     bool sameActiveVideoParameters(const EnhancementSettings& other) const {

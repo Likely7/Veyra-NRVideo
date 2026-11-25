@@ -159,9 +159,17 @@ struct EnhanceGraphDesc {
     bool vfgAsyncSubmission=false; // preview-only; export retains synchronous SDK verdicts
     bool vfgAutoRegulate=false;
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
-    bool hudLock=false; // Live HUD Lock (HudLock.h, from PushFPS), graph frame generation only
+    bool hudLock=false; // Live HUD Lock (HudLock.h, from PushFPS), optionally restore original pixels on every output
     engine::HudProtectMode hudProtect=engine::HudProtectMode::Off;
     bool dynamicHud=false;
+    bool hudAllEffects=false;
+    bool restoresHud() const {
+        if(!hudAllEffects)return false;
+        if(hudLock||dynamicHud||hudProtect==engine::HudProtectMode::Center)return true;
+        for(const auto& r:engine::hudProtectRegions(hudProtect,exclusion))if(!r.empty())return true;
+        return false;
+    }
+    bool writesProtectedOutput() const { return exclusion.enabled||restoresHud(); }
     uint64_t settingsRevision=1;
     engine::FlowQuality flowQuality=engine::FlowQuality::Balanced;
     engine::OpticalFlowBackend opticalFlowBackend=engine::OpticalFlowBackend::Nvidia;
@@ -792,10 +800,10 @@ public:
     bool highQualityPresentation() const { return desc_.highQualityPresentation; }
     // Live HUD Lock: 0 off, 1 running, 2 asked for but its passes could not be created,
     // 3 asked for with a frame generation that presents on its own (XeSS) or none.
-    int hudLockState() const { if(!desc_.hudLock)return 0; if(hudLock_)return 1; if(!fgEnabled_||presentSinkFg())return 3; return 2; }
+    int hudLockState() const { if(!desc_.hudLock)return 0; if(hudLock_)return 1; if(!desc_.hudAllEffects&&(!fgEnabled_||presentSinkFg()))return 3; return 2; }
     int dynamicHudState() const {
         if (!desc_.dynamicHud) return 0;
-        if (!fgEnabled_ || presentSinkFg()) return 3;
+        if (!desc_.hudAllEffects && (!fgEnabled_ || presentSinkFg())) return 3;
         return hudLock_ && hudLock_->dynamicActive() ? 1 : 2;
     }
     bool xessEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::XeSS; }
@@ -1023,9 +1031,10 @@ private:
     ComPtr<ID3D12Resource> flowTex_;
     ComPtr<ID3D12Resource> depthTex_;
     ComPtr<ID3D12Resource> genFrame_[kGeneratedPoolSlots];
+    ComPtr<ID3D12Resource> hudDetectionSource_[2];
     ComPtr<ID3D12Resource> exclusionVideo_[2],exclusionScratch_,exclusionUi_[2];
     ComputePass exclusionPass_;
-    void composeExclusion(ID3D12GraphicsCommandList*,unsigned outputIndex,unsigned rawParity,bool ui,bool historyValid);
+    void composeExclusion(ID3D12GraphicsCommandList*,unsigned outputIndex,unsigned rawParity,bool ui,bool historyValid,bool newerHud=false);
     ComPtr<ID3D12Resource> fgDisable_[kGeneratedPoolSlots],fgDisableReadback_[kGeneratedPoolSlots],fgDisableInit_;
     std::array<const volatile uint8_t*,kGeneratedPoolSlots> fgDisableMapped_{};
     ComPtr<ID3D12Resource> nrZeroMotion_;

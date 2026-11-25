@@ -291,6 +291,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("pacingRepair")).toBool();
             if (s.pacingRepair != on) { s.pacingRepair = on; changed = true; }
         }
+        if (p.contains(QStringLiteral("hudAllEffects"))) {
+            const bool on = p.value(QStringLiteral("hudAllEffects")).toBool();
+            if (s.hudAllEffects != on) { s.hudAllEffects = on; changed = true; }
+        }
         if (p.contains(QStringLiteral("hudLock"))) {
             const bool on = p.value(QStringLiteral("hudLock")).toBool();
             if (s.hudLock != on) { s.hudLock = on; changed = true; }
@@ -589,8 +593,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     impl_->netLossNoticeAt = now;
                 }
             }
-            // 「自动」倍率：每个会话进入播放后决定一次（见 applyFgAutoMultiplier）。
-            maybeApplyFgAutoMultiplier();
             emit snapshotChanged();
         }
         // The reconnect waits for the failed session's teardown (the GPU reset can hold it for

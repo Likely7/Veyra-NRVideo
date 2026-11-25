@@ -3056,8 +3056,21 @@
    "ru": "HDR (10-битный) экспорт требует NVIDIA NVENC; этот GPU имеет только 8-битный системный кодер. Выключить HDR или экспортировать NVIDIA GPU"
   },
   {
+   "zh": "HUD 保护",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "HUD 保護",
+   "en": "HUD protection",
+   "ja": "HUD 保護",
+   "ko": "HUD 보호",
+   "es": "Protección del HUD",
+   "fr": "Protection du HUD",
+   "de": "HUD-Schutz",
+   "pt-BR": "Proteção do HUD",
+   "ru": "Защита HUD"
+  },
+  {
    "zh": "HUD 自动锁定",
-   "src": "qml/NodePage.qml",
+   "src": "qml/HudProtectControl.qml",
    "zh-TW": "HUD 自動鎖定",
    "en": "Auto HUD lock",
    "ja": "HUD 自動ロック",
@@ -6800,19 +6813,6 @@
    "ru": "Оба режима сохраняют свои настройки и предустановки полностью отдельными; переключение обратно в список восстанавливает собственные настройки списка."
   },
   {
-   "zh": "严格补帧节奏",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "嚴格補幀節奏",
-   "en": "Strict frame generation pacing",
-   "ja": "厳密なフレーム生成ペーシング",
-   "ko": "프레임 생성 간격 고정",
-   "es": "Ritmo estricto de generación de fotogramas",
-   "fr": "Cadence stricte de génération d'images",
-   "de": "Strikte Taktung der Frame-Generierung",
-   "pt-BR": "Ritmo rigoroso da geração de quadros",
-   "ru": "Строгий ритм генерации кадров"
-  },
-  {
    "zh": "中",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "中",
@@ -8072,19 +8072,6 @@
    "de": "Aus Wiedergabeliste entfernen; Datei behalten",
    "pt-BR": "Remover da playlist; manter arquivo",
    "ru": "Убрать из плейлиста; файл оставить"
-  },
-  {
-   "zh": "从补帧输入移除识别到的准心，再贴回增强后的准心。",
-   "src": "qml/HudProtectControl.qml",
-   "zh-TW": "從補幀輸入移除辨識到的準心，再貼回增強後的準心。",
-   "en": "Remove the detected crosshair before frame generation and restore the enhanced crosshair afterward.",
-   "ja": "フレーム生成前に検出した照準を除去し、処理後に強調済みの照準を戻します。",
-   "ko": "프레임 생성 전에 감지한 조준점을 제거하고, 생성 후 향상된 조준점을 복원합니다.",
-   "es": "Elimina la mira detectada antes de generar fotogramas y restaura la mira mejorada después.",
-   "fr": "Retire le réticule détecté avant la génération d’images, puis restaure le réticule amélioré.",
-   "de": "Entfernt das erkannte Fadenkreuz vor der Frame-Generierung und stellt danach das verbesserte Fadenkreuz wieder her.",
-   "pt-BR": "Remove a mira detectada antes da geração de quadros e restaura a mira aprimorada depois.",
-   "ru": "Удаляет обнаруженный прицел перед генерацией кадров и возвращает улучшенный прицел после неё."
   },
   {
    "zh": "从这张采集卡列出的分辨率里选你要用的那一档。帧率列表会随这项选择更新。",
@@ -9518,19 +9505,6 @@
    "ru": "При выключении, улучшении, генерации кадров и экспорте используют самые мощные GPU"
   },
   {
-   "zh": "关闭时按手动选的倍率 · 默认关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "關閉時按手動選的倍率 · 默認關閉",
-   "en": "Off uses the manually selected multiplier. Off by default",
-   "ja": "オフの場合は手動で選んだ倍率を使います。既定はオフ",
-   "ko": "끄면 직접 선택한 배율을 사용합니다. 기본값 꺼짐",
-   "es": "Off utiliza el multiplicador seleccionado manualmente.",
-   "fr": "Off utilise le multiplicateur sélectionné manuellement. Off par défaut",
-   "de": "Off verwendet den manuell ausgewählten Multiplikator. Off standardmäßig",
-   "pt-BR": "Desligado usa o multiplicador selecionado manualmente. Desligado por padrão",
-   "ru": "Off использует вручную выбранный множитель. Off по умолчанию"
-  },
-  {
    "zh": "关闭时这条链路不存在，零开销",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "關閉時這條鏈路不存在，零開銷",
@@ -10790,6 +10764,19 @@
    "de": "Seite besuchen",
    "pt-BR": "Visitar página",
    "ru": "Открыть страницу"
+  },
+  {
+   "zh": "剔除所有效果",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "排除所有效果",
+   "en": "Exclude from all effects",
+   "ja": "すべての効果から除外",
+   "ko": "모든 효과에서 제외",
+   "es": "Excluir de todos los efectos",
+   "fr": "Exclure de tous les effets",
+   "de": "Von allen Effekten ausnehmen",
+   "pt-BR": "Excluir de todos os efeitos",
+   "ru": "Исключить из всех эффектов"
   },
   {
    "zh": "剪辑入点已超过源视频时长",
@@ -12469,6 +12456,19 @@
    "ru": "Доступно"
   },
   {
+   "zh": "可自动识别中心准星，也可在指定区域内识别。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "可自動辨識中央準星，也可在指定區域內辨識。",
+   "en": "Detect the center crosshair automatically or look inside selected regions.",
+   "ja": "中央の照準を自動検出するか、指定した領域内で検出します。",
+   "ko": "중앙 조준점을 자동으로 찾거나 지정한 영역에서 찾습니다.",
+   "es": "Detecta la mira central o busca en las regiones seleccionadas.",
+   "fr": "Détecte le réticule central ou cherche dans les zones sélectionnées.",
+   "de": "Erkennt das mittlere Fadenkreuz oder sucht in ausgewählten Bereichen.",
+   "pt-BR": "Detecta a mira central ou busca nas regiões selecionadas.",
+   "ru": "Находит прицел в центре или в выбранных областях."
+  },
+  {
    "zh": "可视化裁剪",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "視覺化裁剪",
@@ -13767,6 +13767,19 @@
    "de": "Ausgewogen",
    "pt-BR": "Equilibrado",
    "ru": "Сбалансированный"
+  },
+  {
+   "zh": "垂直位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "垂直位置",
+   "en": "Vertical position",
+   "ja": "垂直位置",
+   "ko": "세로 위치",
+   "es": "Posición vertical",
+   "fr": "Position verticale",
+   "de": "Vertikale Position",
+   "pt-BR": "Posição vertical",
+   "ru": "Положение по вертикали"
   },
   {
    "zh": "垂直同步",
@@ -18202,19 +18215,6 @@
    "ru": "Рамки: обработанные %1, сгенерированный %2"
   },
   {
-   "zh": "帧同步 · 默认关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "幀同步 · 預設關閉",
-   "en": "Frame sync · off by default",
-   "ja": "フレーム同期 · 既定はオフ",
-   "ko": "프레임 동기화 · 기본 꺼짐",
-   "es": "Sincronización de fotogramas · desactivada por defecto",
-   "fr": "Synchro d'images · désactivée par défaut",
-   "de": "Frame-Synchronisation · standardmäßig aus",
-   "pt-BR": "Sincronização de quadros · desligada por padrão",
-   "ru": "Синхронизация кадров · по умолчанию выкл."
-  },
-  {
    "zh": "帧率",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "幀率",
@@ -21465,19 +21465,6 @@
    "ru": "Запоминать для каждого экрана"
   },
   {
-   "zh": "按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "按源幀率和輸出上限自動選檔；源幀率超過上限時關閉補幀",
-   "en": "Choose a multiplier from source FPS and the output limit; disable frame generation when source FPS exceeds the limit",
-   "ja": "ソース FPS と出力上限から倍率を選び、ソース FPS が上限を超える場合はフレーム生成を無効にします",
-   "ko": "소스 FPS와 출력 상한에 따라 배율을 선택합니다. 소스 FPS가 상한을 초과하면 프레임 생성을 끕니다",
-   "es": "Elija un multiplicador de la fuente FPS y el límite de salida; la generación de fotogramas deshabilitado cuando la fuente FPS excede el límite",
-   "fr": "Choisissez un multiplicateur à partir de la source FPS et de la limite de sortie; désactiver la génération d'images lorsque la source FPS dépasse la limite",
-   "de": "Wählen Sie einen Multiplikator aus Source FPS und dem Outputlimit; Deaktivieren Sie die Frame-Generierung, wenn Source FPS den Limit überschreitet",
-   "pt-BR": "Escolha um multiplicador do FPS de origem e o limite de saída; desactiva a geração de quadros quando o FPS de origem exceder o limite",
-   "ru": "Выберите множитель из источника FPS и предела выхода; отключите генерацию кадров, когда источник FPS превышает предел."
-  },
-  {
    "zh": "按片源自动选档",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "按片源自動選檔",
@@ -22688,6 +22675,19 @@
    "ru": "Дефолты для воспроизведения файлов, субтитры и скриншоты."
   },
   {
+   "zh": "文件播放：严格补帧节奏",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "檔案播放：嚴格補幀節奏",
+   "en": "Strict frame pacing for files",
+   "ja": "ファイル再生時の厳密なフレームペーシング",
+   "ko": "파일 재생 시 엄격한 프레임 페이싱",
+   "es": "Cadencia estricta al reproducir archivos",
+   "fr": "Cadence stricte pour les fichiers",
+   "de": "Striktes Frame-Pacing für Dateien",
+   "pt-BR": "Ritmo estrito de quadros em arquivos",
+   "ru": "Строгий ритм кадров при воспроизведении файлов"
+  },
+  {
    "zh": "文件格式不支持、数据损坏或没有字幕内容",
    "src": "src/engine/Subtitles.cpp",
    "zh-TW": "檔案格式不支援、資料損壞或沒有字幕內容",
@@ -23492,6 +23492,19 @@
    "de": "Einige Modelldateien konnten nicht gelöscht werden",
    "pt-BR": "Não foi possível excluir todos os arquivos do modelo",
    "ru": "Не удалось удалить все файлы модели"
+  },
+  {
+   "zh": "无法应用 HUD 全效果剔除",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "無法套用 HUD 全效果排除",
+   "en": "Could not exclude the HUD from all effects.",
+   "ja": "HUD をすべての効果から除外できませんでした。",
+   "ko": "모든 효과에서 HUD를 제외하지 못했습니다.",
+   "es": "No se pudo excluir el HUD de todos los efectos.",
+   "fr": "Impossible d’exclure le HUD de tous les effets.",
+   "de": "Das HUD konnte nicht von allen Effekten ausgenommen werden.",
+   "pt-BR": "Não foi possível excluir o HUD de todos os efeitos.",
+   "ru": "Не удалось исключить HUD из всех эффектов."
   },
   {
    "zh": "无法建立串流连接（错误码 {}）。",
@@ -28096,6 +28109,19 @@
    "ru": "Сравнивает источник с предыдущим кадром: пиксели без четкого изменения повторно используют предыдущий вывод; четко измененные области принимают новый результат напрямую."
   },
   {
+   "zh": "水平位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "水平位置",
+   "en": "Horizontal position",
+   "ja": "水平位置",
+   "ko": "가로 위치",
+   "es": "Posición horizontal",
+   "fr": "Position horizontale",
+   "de": "Horizontale Position",
+   "pt-BR": "Posição horizontal",
+   "ru": "Положение по горизонтали"
+  },
+  {
    "zh": "没有匹配的格式",
    "src": "qml/CaptureLegacyPicker.qml",
    "zh-TW": "沒有相符的格式",
@@ -32503,19 +32529,6 @@
    "ru": "Автоматическая оценка: применяется к карте захвата в реальном времени / PS5"
   },
   {
-   "zh": "自动倍率只支持 DLSS 帧生成和 NVIDIA VFG",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "自動倍率只支持 DLSS 幀生成和 NVIDIA VFG",
-   "en": "Automatic multiplier supports DLSS Frame Generation and NVIDIA VFG only",
-   "ja": "自動倍率は DLSS フレーム生成と NVIDIA VFG のみ対応します",
-   "ko": "자동 배율은 DLSS 프레임 생성과 NVIDIA VFG만 지원합니다",
-   "es": "Multiplicador automático soporta la generación de fotogramas DLSS y NVIDIA VFG sólo",
-   "fr": "Le multiplicateur automatique prend en charge la génération d’images DLSS et NVIDIA VFG uniquement",
-   "de": "Automatischer Multiplikator unterstützt nur DLSS Frame Generation und NVIDIA VFG",
-   "pt-BR": "Multiplicador automático suporta geração de quadros DLSS e NVIDIA VFG apenas",
-   "ru": "Автоматический множитель поддерживает только DLSS Frame Generation и NVIDIA VFG"
-  },
-  {
    "zh": "自动去除",
    "src": "qml/DedupModeRow.qml",
    "zh-TW": "自動去除",
@@ -32592,19 +32605,6 @@
    "de": "Autojustage: %1 (Z/X zur Feinabstimmung)",
    "pt-BR": "Alinhar automaticamente: %1 (Z/X para ajuste fino)",
    "ru": "Автоматический: %1 (Z/X для точной настройки)"
-  },
-  {
-   "zh": "自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動找出持續靜止且有邊緣的像素（文字、準星、血條、小地圖），生成幀直接用真實幀的這些像素，減少 HUD 拖影和抖動，不需要畫框 · 預設關閉",
-   "en": "Finds pixels that stay still and have an edge (text, crosshairs, health bars, minimaps) and takes them from the real frame in generated frames, so the HUD smears and wobbles less; no boxes needed · off by default",
-   "ja": "静止し続けていて輪郭のあるピクセル（文字、照準、体力バー、ミニマップ）を自動で見つけ、生成フレームでは実フレームのピクセルをそのまま使います。HUD のにじみや揺れが減り、枠を描く必要はありません · 既定はオフ",
-   "ko": "계속 정지해 있고 윤곽이 있는 픽셀(글자, 조준점, 체력 바, 미니맵)을 자동으로 찾아 생성 프레임에서 실제 프레임의 픽셀을 그대로 씁니다. HUD 번짐과 흔들림이 줄고 상자를 그릴 필요가 없습니다 · 기본값 끔",
-   "es": "Encuentra píxeles que permanecen quietos y tienen un borde (texto, miradores, barras de salud, minimaps) y los toma del fotograma real en marcos generados, por lo que el HUD smears and wobbles less; no cajas necesarias · off by default",
-   "fr": "Trouvez les pixels qui restent immobiles et ont un bord (texte, crosshairs, barres de santé, minimaps) et les retire de l’image réel dans les images générés, de sorte que le HUD frotte et agite moins; pas de cases nécessaires · off par défaut",
-   "de": "Findet Pixel, die still bleiben und eine Kante haben (Text, Fadenkreuz, Gesundheitsbalken, Minimaps) und nimmt sie aus dem realen Frame in generierten Frames, so dass das HUD weniger schmiert und wackelt; keine Boxen erforderlich · standardmäßig deaktiviert",
-   "pt-BR": "Encontra pixels que ficam parados e têm uma borda (texto, mira, barras de saúde, minimapas) e tira-os do quadro real em quadros gerados, então o HUD borra e oscila menos; nenhuma caixa precisa · fora por padrão",
-   "ru": "Находите пиксели, которые остаются неподвижными и имеют край (текст, перекрестные прицелы, панели здоровья, мини-карты) и извлекаете их из реального кадра в сгенерированных кадрах, поэтому HUD мазает и колеблется меньше; никаких ящиков по умолчанию не требуется."
   },
   {
    "zh": "自动按画面尺寸和帧率选择；数字为 Mbps，越高越清晰、文件也越大",
@@ -32698,6 +32698,19 @@
    "ru": "Определить исходный язык"
   },
   {
+   "zh": "自动识别画面中持续静止的文字和边缘。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "自動辨識畫面中持續靜止的文字和邊緣。",
+   "en": "Detect text and edges that stay still on screen.",
+   "ja": "画面上で静止している文字と輪郭を検出します。",
+   "ko": "화면에 고정된 글자와 윤곽선을 찾습니다.",
+   "es": "Detecta texto y bordes que permanecen fijos en pantalla.",
+   "fr": "Détecte le texte et les contours fixes à l’écran.",
+   "de": "Erkennt Text und Kanten, die im Bild stillstehen.",
+   "pt-BR": "Detecta textos e contornos que ficam parados na tela.",
+   "ru": "Находит неподвижные надписи и контуры."
+  },
+  {
    "zh": "自动调控力度",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "自動調控力度",
@@ -32709,19 +32722,6 @@
    "de": "Automatische Regelmenge",
    "pt-BR": "Quantidade de controle automático",
    "ru": "Величина автоматической регулировки"
-  },
-  {
-   "zh": "自动选择倍率",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動選擇倍率",
-   "en": "Automatic multiplier",
-   "ja": "倍率を自動選択",
-   "ko": "자동 배율 선택",
-   "es": "Multiplicador automático",
-   "fr": "Multiplicateur automatique",
-   "de": "Automatischer Multiplikator",
-   "pt-BR": "Multiplicador automático",
-   "ru": "Автоматический множитель"
   },
   {
    "zh": "自动选择像素格式",
@@ -32956,6 +32956,19 @@
    "de": "Eigene Grenze (FPS)",
    "pt-BR": "Limite personalizado (FPS)",
    "ru": "Свой предел (FPS)"
+  },
+  {
+   "zh": "自定义位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "自訂位置",
+   "en": "Custom position",
+   "ja": "位置を指定",
+   "ko": "사용자 지정 위치",
+   "es": "Posición personalizada",
+   "fr": "Position personnalisée",
+   "de": "Eigene Position",
+   "pt-BR": "Posição personalizada",
+   "ru": "Задать положение"
   },
   {
    "zh": "自定义分辨率",
@@ -35220,6 +35233,19 @@
    "ru": "Доступ запрещён. Разрешите классическим приложениям доступ к камере и микрофону в параметрах конфиденциальности Windows."
   },
   {
+   "zh": "识别到的 HUD 显示原画，保留文字和准星的清晰度。只开画质增强时也可使用。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "辨識到的 HUD 會顯示原始畫面，保留文字和準星的清晰度。單獨使用畫質增強時也有效。",
+   "en": "Use original pixels for detected HUD elements to keep text and crosshairs sharp, even with frame generation off.",
+   "ja": "検出した HUD に元の画素を使い、文字や照準の鮮明さを保ちます。フレーム生成をオフにしても使えます。",
+   "ko": "감지된 HUD에 원본 픽셀을 사용해 글자와 조준점을 선명하게 유지합니다. 프레임 생성이 꺼져 있어도 적용됩니다.",
+   "es": "Usa los píxeles originales del HUD detectado para mantener nítidos el texto y la mira, incluso sin generación de fotogramas.",
+   "fr": "Utilise les pixels d’origine du HUD détecté pour préserver la netteté du texte et du réticule, même sans génération d’images.",
+   "de": "Verwendet die Originalpixel für erkannte HUD-Elemente. Text und Fadenkreuz bleiben auch ohne Framegenerierung scharf.",
+   "pt-BR": "Usa os pixels originais do HUD detectado para manter o texto e a mira nítidos, mesmo sem geração de quadros.",
+   "ru": "Сохраняет исходные пиксели распознанного HUD, чтобы текст и прицел оставались чёткими даже без генерации кадров."
+  },
+  {
    "zh": "识别区域",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "辨識區域",
@@ -35272,17 +35298,17 @@
    "ru": "Распознаёт речь при воспроизведении и показывает перевод в окне просмотра Veyra."
   },
   {
-   "zh": "识别有固定边框的数字和状态条，补帧时保留真实画面中的内容 · 实验 · 默认关闭",
+   "zh": "识别固定边框内变化的数字和状态条 · 实验 · 默认关闭",
    "src": "qml/DynamicHudRow.qml",
-   "zh-TW": "辨識具有固定邊框的數字和狀態條，補幀時保留原始畫面中的內容 · 實驗 · 預設關閉",
-   "en": "Detects counters and status bars within stable borders and preserves their original content during frame generation · Experimental · Off by default",
-   "ja": "固定枠のある数値やゲージを検出し、フレーム生成時に元の表示を維持します · 実験的 · デフォルトはオフ",
-   "ko": "고정 테두리 안의 숫자와 상태 표시줄을 감지하고 프레임 생성 중 원본 표시를 유지합니다 · 실험 기능 · 기본값 끔",
-   "es": "Detecta contadores y barras de estado con bordes fijos y conserva su contenido original durante la interpolación · Experimental · Desactivada por defecto",
-   "fr": "Détecte les compteurs et les jauges avec des bordures fixes et préserve leur contenu original pendant l’interpolation · Expérimental · Désactivé par défaut",
-   "de": "Erkennt Zähler und Statusleisten mit festen Rahmen und erhält ihren Originalinhalt bei der Zwischenbildberechnung · Experimentell · Standardmäßig aus",
-   "pt-BR": "Detecta contadores e barras de status com bordas fixas e preserva o conteúdo original durante a geração de quadros · Experimental · Desativada por padrão",
-   "ru": "Распознаёт счётчики и индикаторы с неподвижными рамками и сохраняет исходное содержимое при генерации кадров · Экспериментально · По умолчанию выключено"
+   "zh-TW": "辨識固定邊框內變動的數字與狀態列 · 實驗性 · 預設關閉",
+   "en": "Detects changing numbers and status bars inside fixed borders · Experimental · Off by default",
+   "ja": "固定枠内で変化する数字やゲージを検出します · 実験的 · デフォルトはオフ",
+   "ko": "고정된 테두리 안에서 변하는 숫자와 상태 표시줄을 감지합니다 · 실험 기능 · 기본값 꺼짐",
+   "es": "Detecta números y barras de estado que cambian dentro de bordes fijos · Experimental · Desactivado de forma predeterminada",
+   "fr": "Détecte les chiffres et les barres d’état qui changent dans un cadre fixe · Expérimental · Désactivé par défaut",
+   "de": "Erkennt wechselnde Zahlen und Statusleisten in festen Rahmen · Experimentell · Standardmäßig aus",
+   "pt-BR": "Detecta números e barras de status que mudam dentro de bordas fixas · Experimental · Desativado por padrão",
+   "ru": "Распознаёт меняющиеся числа и шкалы внутри неподвижных рамок · Экспериментальная функция · По умолчанию выключена"
   },
   {
    "zh": "识别档位",
@@ -35413,6 +35439,19 @@
    "de": "Diagnoseprotokoll",
    "pt-BR": "Log de diagnóstico",
    "ru": "Журнал диагностики"
+  },
+  {
+   "zh": "译文显示位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "譯文顯示位置",
+   "en": "Translation position",
+   "ja": "翻訳字幕の表示位置",
+   "ko": "번역 자막 위치",
+   "es": "Posición de la traducción",
+   "fr": "Position de la traduction",
+   "de": "Position der Übersetzung",
+   "pt-BR": "Posição da tradução",
+   "ru": "Положение перевода"
   },
   {
    "zh": "译文行数上限",
@@ -38923,19 +38962,6 @@
    "de": "Speicherordner wählen…",
    "pt-BR": "Escolha uma pasta para salvar…",
    "ru": "Выберите папку для сохранения…"
-  },
-  {
-   "zh": "选择字幕颜色",
-   "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "選擇字幕顏色",
-   "en": "Choose subtitle colour",
-   "ja": "字幕の色を選択",
-   "ko": "자막 색상 선택",
-   "es": "Elegir color de subtítulos",
-   "fr": "Choisir la couleur des sous-titres",
-   "de": "Untertitelfarbe auswählen",
-   "pt-BR": "Escolher cor da legenda",
-   "ru": "Выбрать цвет субтитров"
   },
   {
    "zh": "选择导出目录",
@@ -42537,6 +42563,19 @@
    "de": "Sättigung min.",
    "pt-BR": "Saturação mín.",
    "ru": "Насыщенность мин."
+  },
+  {
+   "zh": "首张生成帧赶不上显示时间时跳过本组，减少晚帧，可能降低输出帧率。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "第一張生成幀趕不上顯示時間時跳過整組，減少延遲幀，但可能降低輸出幀率。",
+   "en": "Skip a group if its first generated frame would arrive late. This can reduce output FPS.",
+   "ja": "最初の生成フレームが表示に間に合わない場合はグループをスキップします。出力 FPS が下がることがあります。",
+   "ko": "첫 생성 프레임이 늦어지면 그룹을 건너뜁니다. 출력 FPS가 낮아질 수 있습니다.",
+   "es": "Omite el grupo si su primer fotograma generado llegaría tarde. Puede reducir los FPS de salida.",
+   "fr": "Ignore le groupe si sa première image générée devait arriver en retard. Le débit de sortie peut diminuer.",
+   "de": "Überspringt eine Gruppe, wenn ihr erstes generiertes Bild zu spät käme. Die Ausgabe-FPS können sinken.",
+   "pt-BR": "Pula o grupo se o primeiro quadro gerado for chegar atrasado. Isso pode reduzir os FPS de saída.",
+   "ru": "Пропускать группу, если первый сгенерированный кадр опоздает. Частота кадров на выходе может снизиться."
   },
   {
    "zh": "首次使用请在 Windows 下载语音包，并保持实时字幕窗口打开。",

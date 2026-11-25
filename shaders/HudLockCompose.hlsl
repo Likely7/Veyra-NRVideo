@@ -16,11 +16,7 @@ cbuffer Constants : register(b0) {
     uint width, height, outputMode, lockStatic;
     uint dynamicCell, useNewer, pad0, pad1;
 };
-float stillOf(float2 s) { return smoothstep(0.80, 0.95, s.x); }
-float edgeOf(float2 s) {
-    const float edge = outputMode == 1 ? 0.03 : 0.04;
-    return smoothstep(edge, edge * 2.5, s.y);
-}
+#include "HudLockWeight.hlsli"
 [numthreads(16, 16, 1)]
 void main(uint3 id : SV_DispatchThreadID) {
     if (id.x >= width || id.y >= height) return;
@@ -36,15 +32,6 @@ void main(uint3 id : SV_DispatchThreadID) {
         outputTex[id.xy] = g;
         return;
     }
-    const float still = stillOf(stateTex[id.xy]);
-    float edge = 0;
-    if (still > 0) {
-        [unroll] for (int y = -1; y <= 1; ++y)
-            [unroll] for (int x = -1; x <= 1; ++x) {
-                const float2 q = stateTex[clamp(int2(id.xy) + int2(x, y), int2(0, 0), int2(width - 1, height - 1))];
-                edge = max(edge, edgeOf(q) * stillOf(q));
-            }
-    }
-    const float w = still * edge;
+    const float w = hudStaticWeight(stateTex,id.xy,width,height,outputMode);
     outputTex[id.xy] = w > 0 ? float4(lerp(g.rgb, heldTex[id.xy].rgb, w), g.a) : g;
 }

@@ -1009,7 +1009,6 @@ struct QmlPlayerBridge::Impl {
     // revisions, so an unchanged snapshot costs one comparison per tick.
 
     // The chain the UI edits, kept in step with the facade's pending settings.
-    uint64_t fgAutoSession = 0;       // 已为哪个会话决定过档位
 };
 
 

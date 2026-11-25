@@ -1494,6 +1494,29 @@ __declspec(noinline) void testHalfRateVariants() {
     std::wstring name;
     check(imported.load()&&imported.importFile(exported,name)&&imported.entries().size()==1&&imported.entries()[0]==original,
           "half-rate variants: .vpreset imports its original cadence");
+    // Versions 22 and later stored an auto-multiplier flag immediately after strict admission.
+    // Import a legacy preset with the flag enabled and preserve the user's explicit multiplier.
+    auto legacyBytes=readBytes(exported);
+    std::istringstream legacyFields(legacyBytes);
+    std::string header;
+    std::getline(legacyFields,header);
+    std::getline(legacyFields,header);
+    std::string nameField,noteField;
+    legacyFields>>std::quoted(nameField)>>std::quoted(noteField);
+    for(int field=0;field<11;++field){int value=0;legacyFields>>value;}
+    legacyFields>>std::ws;
+    const auto flagAt=static_cast<size_t>(legacyFields.tellg());
+    const bool foundFlag=flagAt<legacyBytes.size()&&legacyBytes[flagAt]=='0';
+    check(foundFlag,"legacy auto FG: locate retired field in exported v25 preset");
+    if(foundFlag){
+        legacyBytes[flagAt]='1';
+        const auto legacyFile=scratch(L"legacy-auto-on.vpreset");
+        {std::ofstream file(legacyFile,std::ios::binary);file<<legacyBytes;}
+        PresetLibrary legacy(scratch(L"legacy-auto-import.v1"));legacy.setIncludeBuiltins(false);
+        std::wstring importedName;
+        check(legacy.load()&&legacy.importFile(legacyFile,importedName)&&legacy.entries().size()==1&&legacy.entries()[0]==original,
+              "legacy auto FG: import enabled bit and preserve explicit settings");
+    }
     check(reopened.erase(1),"half-rate variants: delete original-only preset");
     PresetLibrary finalReader(path);finalReader.setIncludeBuiltins(false);
     check(finalReader.load()&&finalReader.entries().size()==1&&finalReader.entries()[0]==entry&&
@@ -1526,18 +1549,18 @@ __declspec(noinline) void testAutomaticMultiplierCompatibility() {
     editor->nodes=session->configurations[1].chain;
     check(editor->layout.initialize(editor->nodes).accepted,"auto FG: initialize editor layout");
     editor->globals=static_cast<const ChainGlobalSettings&>(session->configurations[1]);
-    editor->nodes.fgAutoMultiplier=true;
+    editor->nodes.fgMultiplier=4;
     session->configurations[1].editor=editor;
-    session->configurations[0].chain.fgAutoMultiplier=true;
+    session->configurations[0].chain.fgMultiplier=3;
     const auto path=scratch(L"auto-fg-session.v1");
     ChainSessionStore writer(path);
-    check(writer.save(*session),"auto FG: session v17 with independent editor serializes");
+    check(writer.save(*session),"manual FG: session with independent editor serializes");
     auto restored=std::make_unique<ChainSession>();ChainSessionStore reader(path);
-    check(reader.load(*restored)&&*restored==*session,"auto FG: list and editor flags survive restart");
+    check(reader.load(*restored)&&*restored==*session,"auto FG: manual list and editor multipliers survive restart");
     PresetLibrary library(scratch(L"auto-fg-library.v1"));library.setIncludeBuiltins(false);library.load();
     PresetEntry entry;entry.name=L"auto FG";entry.kind=ChainMode::Node;
     entry.chain=session->configurations[1].chain;entry.nodeConfiguration=session->configurations[1];
-    check(library.put(entry),"auto FG: preset with editor v17 serializes");
+    check(library.put(entry),"manual FG: preset with editor serializes");
 }
 __declspec(noinline) void testDisabledFrameGenerationMatch() {
     EnhancementSettings off;
@@ -1549,7 +1572,7 @@ __declspec(noinline) void testDisabledFrameGenerationMatch() {
         newNode.type=EffectType::FrameGeneration;
         newNode.enabled=false;
     }
-    saved.fgMultiplier=4;saved.fgAutoMultiplier=true;
+    saved.fgMultiplier=4;
     running.fgMultiplier=2;running.fgStrictAdmission=true;
     check(PresetLibrary::matchesChain(saved,running),"FG off still matches after switching presets");
     auto* node=saved.firstOf(EffectType::FrameGeneration);

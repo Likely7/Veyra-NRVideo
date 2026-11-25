@@ -1,6 +1,5 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Dialogs as NativeDialogs
 import QtQuick.Layouts
 
 DialogLayer {
@@ -52,11 +51,15 @@ DialogLayer {
         ? veyra.preferences.liveSubtitleShadow : ((veyra.preferences.subtitleOutline ?? 2) > 0 ? 1.8 : 0)
     readonly property int subtitleLines: Math.min(3, Math.max(1,
         veyra.preferences.liveSubtitleLines || (veyra.preferences.subtitleLines ?? 2)))
-    NativeDialogs.ColorDialog {
-        id: captionColor
-        title: qsTr("选择字幕颜色")
-        onAccepted: veyra.setPreference("liveSubtitleColor",
-            Qt.rgba(selectedColor.r, selectedColor.g, selectedColor.b, 1).toString())
+    property bool editingColor: false
+    readonly property int positionMode: veyra.preferences.liveSubtitlePosition ?? 0
+    readonly property int positionX: veyra.preferences.liveSubtitleX ?? 50
+    readonly property int positionY: veyra.preferences.liveSubtitleY ?? 20
+    readonly property var positionOptions: [{id:"0",label:qsTr("自动")},{id:"1",label:qsTr("自定义位置")}]
+    function setChannel(channel, value) {
+        const rgb = [subtitleColor.r, subtitleColor.g, subtitleColor.b]
+        rgb[channel] = Math.round(value) / 255
+        veyra.setPreference("liveSubtitleColor", Qt.rgba(rgb[0], rgb[1], rgb[2], 1).toString())
     }
     readonly property var regions: [
         {id: "0", label: qsTr("底部字幕")},
@@ -488,11 +491,77 @@ DialogLayer {
                 VButton {
                     objectName: "live-subtitle-color"
                     text: root.subtitleColor.toString().toUpperCase()
-                    onClicked: {
-                        captionColor.selectedColor = root.subtitleColor
-                        captionColor.open()
+                    onClicked: root.editingColor = !root.editingColor
+                }
+            }
+        }
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: root.editingColor
+            Flow {
+                Layout.fillWidth: true
+                spacing: 6
+                Repeater {
+                    model: ["#ffffff", "#ffe05c", "#8cf798", "#6edfff", "#ff9bcb", "#ff866e", "#000000"]
+                    delegate: Rectangle {
+                        required property string modelData
+                        width: 28; height: 28; radius: 4
+                        color: modelData
+                        border.color: Theme.t2
+                        TapHandler { onTapped: veyra.setPreference("liveSubtitleColor", modelData) }
                     }
                 }
+            }
+            Repeater {
+                model: [qsTr("红"), qsTr("绿"), qsTr("蓝")]
+                delegate: VRow {
+                    required property int index
+                    required property string modelData
+                    id: channelRow
+                    label: modelData
+                    readonly property int level: Math.round([root.subtitleColor.r, root.subtitleColor.g, root.subtitleColor.b][index] * 255)
+                    value: String(level)
+                    VSlider {
+                        objectName: "live-subtitle-rgb-" + channelRow.index
+                        from: 0; to: 255; stepSize: 1
+                        value: channelRow.level
+                        valueFromModel: true
+                        onMoved: n => root.setChannel(channelRow.index, n)
+                    }
+                }
+            }
+        }
+        VRow {
+            label: qsTr("译文显示位置")
+            VSelect {
+                objectName: "live-subtitle-position"
+                options: root.positionOptions
+                value: options[root.positionMode].label
+                onPicked: id => veyra.setPreference("liveSubtitlePosition", Number(id))
+            }
+        }
+        VRow {
+            visible: root.positionMode === 1
+            label: qsTr("水平位置")
+            value: root.positionX + "%"
+            VSlider {
+                objectName: "live-subtitle-x"
+                from: 0; to: 100; stepSize: 1
+                valueFromModel: true
+                value: root.positionX
+                onMoved: n => veyra.setPreference("liveSubtitleX", Math.round(n))
+            }
+        }
+        VRow {
+            visible: root.positionMode === 1
+            label: qsTr("垂直位置")
+            value: root.positionY + "%"
+            VSlider {
+                objectName: "live-subtitle-y"
+                from: 0; to: 100; stepSize: 1
+                valueFromModel: true
+                value: root.positionY
+                onMoved: n => veyra.setPreference("liveSubtitleY", Math.round(n))
             }
         }
         VRow {
@@ -520,6 +589,9 @@ DialogLayer {
             text: qsTr("恢复默认")
             ghost: true
             onClicked: {
+                veyra.setPreference("liveSubtitlePosition", 0)
+                veyra.setPreference("liveSubtitleX", 50)
+                veyra.setPreference("liveSubtitleY", 20)
                 veyra.setPreference("liveSubtitleSize", 0)
                 veyra.setPreference("liveSubtitleColor", "#ffffff")
                 veyra.setPreference("liveSubtitleShadow", -1)

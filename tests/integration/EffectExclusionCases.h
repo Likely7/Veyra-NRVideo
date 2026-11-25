@@ -5,6 +5,10 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     using namespace veyra;
     const std::wstring provider=argc>4?argv[4]:L"off";
     const bool hdr=std::wstring(argv[1]).find(L"hdr")!=std::wstring::npos;
+    const bool hudScope=std::wstring(argv[1]).find(L"hud-scope")!=std::wstring::npos;
+    const bool centerHud=hudScope&&std::wstring(argv[1]).find(L"center")!=std::wstring::npos;
+    const bool dynamicHud=hudScope&&std::wstring(argv[1]).find(L"dynamic")!=std::wstring::npos;
+    const unsigned frameCount=hudScope?64u:6u;
     const bool onlyFg=std::wstring(argv[1]).find(L"onlyfg")!=std::wstring::npos;
     const bool feather=std::wstring(argv[1]).find(L"feather")!=std::wstring::npos;
     const bool upscale=std::wstring(argv[1]).find(L"sr")!=std::wstring::npos;
@@ -31,6 +35,13 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
         desc.exclusion.regions[0].content=engine::ExclusionContent::FrameGeneration;
         desc.exclusion.regions[2].content=engine::ExclusionContent::FrameGeneration;
     }
+    if(hudScope){
+        desc.exclusion={};
+        desc.hudLock=!centerHud&&!dynamicHud;
+        desc.dynamicHud=dynamicHud;
+        if(centerHud)desc.hudProtect=engine::HudProtectMode::Center;
+        desc.hudAllEffects=true;
+    }
     desc.enableFg=provider!=L"off";
     desc.fgMultiplier=std::wstring(argv[1]).find(L"6x")!=std::wstring::npos?6:provider==L"vfg"?3:2;
     if(provider==L"vfg")desc.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;
@@ -51,10 +62,23 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     if(!artifacts.empty())std::filesystem::create_directories(artifacts);
     unsigned realChecked=0,generatedChecked=0;double maximumRawError=0,maximumOutsideError=0,maximumFeatherError=0,minimumChanged=255,minimumRawProgress=255;
     sink::RgbaImage previous;
-    for(unsigned i=0;ok&&i<6;++i){
+    for(unsigned i=0;ok&&i<frameCount;++i){
         for(unsigned y=0;y<360;++y)for(unsigned x=0;x<640;++x){
             auto* p=frame->data[0]+size_t(y)*frame->linesize[0]+x*4;
             p[0]=p[1]=p[2]=detailedPlane(x,y,i);p[3]=255;
+            // Stable narrow glyph strokes over the scrolling background.
+            if(centerHud){
+                int dx=int(x)-320,dy=int(y)-180;
+                if(dx*dx+dy*dy<=4)p[0]=p[1]=p[2]=195;
+                else if(dx*dx+dy*dy<=64)p[0]=p[1]=p[2]=28;
+            }
+            // A pair of rails six dynamic-mask cells apart, matching the moving-meter fixture.
+            if(dynamicHud&&x>=71&&x<320&&y>=45&&y<=57){
+                bool rail=y==45||y==57;
+                bool fill=y>=49&&y<=53&&x>=92&&x<(i%2?212:160);
+                p[0]=rail?244:fill?180:14;p[1]=rail?244:fill?42:14;p[2]=rail?244:14;
+            }
+            if(hudScope&&!centerHud&&!dynamicHud&&x>=240&&x<400&&y>=120&&y<146)p[0]=p[1]=p[2]=(x%4<2)?150:35;
         }
         if(hdrFrame)for(unsigned y=0;y<360;++y)for(unsigned x=0;x<640;++x){
             const double srgb=double(frame->data[0][size_t(y)*frame->linesize[0]+x*4])/255;
@@ -79,6 +103,33 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
                     for(unsigned c=0;c<3;++c){const auto at=(size_t(y)*a.width+x)*4+c;error+=std::abs(int(a.pixels[at])-int(b.pixels[at]));++count;}
             return error/count;
         };
+        if(hudScope){
+            ++realChecked;
+            if(i+4>=frameCount){
+                auto hudError=[&](const sink::RgbaImage& picture,const sink::RgbaImage& expected){
+                    if(!centerHud&&!dynamicHud)return patchError(picture,expected,.50,133./360);
+                    const size_t pixel=(size_t(centerHud?180:51)*picture.width+(centerHud?320:182))*4;
+                    return double(std::abs(int(picture.pixels[pixel])-int(expected.pixels[pixel])));
+                };
+                const double held=hudError(masked,original);
+                const double changed=hudError(enhanced,original);
+                const double outside=patchError(masked,enhanced,.75,.75);
+                maximumRawError=std::max(held,maximumRawError);
+                minimumChanged=std::min(changed,minimumChanged);
+                maximumOutsideError=std::max(outside,maximumOutsideError);
+                ok=held<=2&&changed>(dynamicHud?2:8)&&outside<=1;
+                for(unsigned n=0;n<output.batch.count&&ok;++n){
+                    const auto& item=output.batch.frames[n];
+                    if(item.kind!=pipeline::FrameKind::Generated)continue;
+                    sink::RgbaImage generated;
+                    ok=item.validity==pipeline::GenerationValidity::Valid&&readImage(ctx,ring,item.lease->texture.Get(),generated)
+                        &&hudError(generated,(dynamicHud&&item.subframe*2<=desc.fgMultiplier)?previous:original)<=2;
+                    ++generatedChecked;
+                }
+            }
+            previous=std::move(original);
+            continue;
+        }
         const auto& referencePixels=onlyFg?enhanced:original;
         const double restored=std::max(patchError(masked,referencePixels,.25,.25),patchError(masked,referencePixels,.75,.75));
         const double unchanged=std::max(patchError(masked,enhanced,.75,.25),patchError(masked,enhanced,.61,.61));
@@ -119,8 +170,8 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
         }
         previous=onlyFg?std::move(enhanced):std::move(original);
     }
-    const unsigned expectedGenerated=desc.enableFg&&!graph.xessEnabled()?5*(desc.fgMultiplier-1):0;
-    ok=ok&&realChecked==6&&generatedChecked==expectedGenerated;
+    const unsigned expectedGenerated=desc.enableFg&&!graph.xessEnabled()?(hudScope?4:5)*(desc.fgMultiplier-1):0;
+    ok=ok&&realChecked==frameCount&&generatedChecked==expectedGenerated;
     ring.drainQueue();graph.shutdown();raw.shutdown();av_frame_free(&frame);av_frame_free(&hdrFrame);
     pipeline::ComPtr<ID3D12InfoQueue> queue;unsigned errors=0;
     if(FAILED(ctx.device()->QueryInterface(IID_PPV_ARGS(&queue))))ok=false;

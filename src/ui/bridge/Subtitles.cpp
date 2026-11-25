@@ -235,6 +235,10 @@ void QmlPlayerBridge::tickSubtitles() {
         updateSubtitleOverlay(i.subOverlay, draw, view);
         return;
     }
+    if (i.prefInt("liveSubtitlePosition", 0) == 1) {
+        view.liveX = std::clamp(i.prefInt("liveSubtitleX", 50), 0, 100) / 100.0;
+        view.liveY = std::clamp(i.prefInt("liveSubtitleY", 20), 0, 100) / 100.0;
+    }
     const int alignment = draw.empty() ? 2 : 8;
     const auto beginLive = draw.size();
     const int liveSize = i.prefInt("liveSubtitleSize", 0);
@@ -246,6 +250,7 @@ void QmlPlayerBridge::tickSubtitles() {
     const auto appendLive = [&](const QString& text, double scale, uint32_t alpha, int lines, bool italic = false) {
         SubtitleLine line;
         line.text = text.toStdWString();
+        line.liveCaption = true;
         line.style.alignment = alignment;
         line.style.italic = italic;
         line.style.primary = (alpha << 24) | liveRgb;
@@ -258,7 +263,7 @@ void QmlPlayerBridge::tickSubtitles() {
         appendLive(original, 0.8, 0xb3, 1);
     if (!translated.isEmpty())
         appendLive(translated, 1.0, 0xff, std::clamp(liveLines > 0 ? liveLines : view.targetLines, 1, 3));
-    if (alignment == 8 && draw.size() - beginLive == 2)
+    if (view.liveX < 0 && alignment == 8 && draw.size() - beginLive == 2)
         std::swap(draw[beginLive], draw[beginLive + 1]);
     if (!draft.isEmpty()) appendLive(draft, 0.75, 0x99, 1, true);
     updateSubtitleOverlay(i.subOverlay, draw, view);

@@ -1887,6 +1887,8 @@ VPage {
                         visible: root.tab === "fg"
                         objectName: "list-fg-group"
 
+                        HudProtectControl { objectName: "list-hud-protect"; namePrefix: "list" }
+
                         VAccordion {
                             id: fgCard
                             objectName: "list-fg-card"
@@ -1979,24 +1981,12 @@ VPage {
                                 }
                             }
                             VRow {
-                                label: qsTr("严格补帧节奏")
-                                hint: qsTr("帧同步 · 默认关闭")
+                                label: qsTr("文件播放：严格补帧节奏")
+                                visible: veyra.sourceKind === "file"
+                                hint: qsTr("首张生成帧赶不上显示时间时跳过本组，减少晚帧，可能降低输出帧率。")
                                 VSwitch {
                                     checked: veyra.fgStrict
                                     onToggled: checked => veyra.fgStrict = checked
-                                }
-                            }
-                            VRow {
-                                objectName: "list-fg-auto-multiplier"
-                                label: qsTr("自动选择倍率")
-                                visible: veyra.fgAutoMultiplierAvailable
-                                hint: veyra.fgAutoMultiplierEnabled
-                                      ? qsTr("按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧")
-                                      : qsTr("关闭时按手动选的倍率 · 默认关闭")
-                                hintBelow: veyra.fgAutoMultiplierEnabled
-                                VSwitch {
-                                    checked: veyra.fgAutoMultiplierEnabled
-                                    onToggled: checked => veyra.fgAutoMultiplierEnabled = checked
                                 }
                             }
                             VRow {
@@ -2021,19 +2011,6 @@ VPage {
                                     onToggled: checked => veyra.pacingRepair = checked
                                 }
                             }
-                            VRow {
-                                objectName: "list-hud-lock"
-                                label: qsTr("HUD 自动锁定")
-                                visible: veyra.fgBackendName !== "xess"
-                                hint: qsTr("自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭")
-                                VSwitch {
-                                    objectName: "list-hud-lock-switch"
-                                    checked: veyra.hudLock
-                                    onToggled: checked => veyra.hudLock = checked
-                                }
-                            }
-                            HudProtectControl { objectName: "list-hud-protect" }
-                            DynamicHudRow { backend: veyra; namePrefix: "list" }
                             VSubGroup {
                                 id: fgFlowGroup
                                 objectName: "list-fg-flow-group"

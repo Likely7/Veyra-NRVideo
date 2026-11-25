@@ -43,12 +43,14 @@ std::wstring signatureOf(const std::vector<SubtitleLine>& lines,const SubtitleVi
         signature+=std::format(L"{}:{}:{}:{}:{}:{}:{}|",reinterpret_cast<uintptr_t>(line.bitmap.get()),
             reinterpret_cast<uintptr_t>(line.ass.get()),line.posX,line.posY,line.maximumLines,
             line.scaleOverride.value_or(-1),line.shadowOffset.value_or(-1));
+        signature+=line.liveCaption?L"L":L"T";
         const auto& s=line.style;
         signature+=std::format(L"{}|{}|{}|{}|{}|{}|{}|{}|{}|{}|",s.back,s.outlineWidth,s.shadow,s.marginL,s.marginR,s.marginV,s.bold,s.italic,s.background,s.font.size());
     }
     signature+=std::format(L"#{}|{}:{}|{}|{}|{}|{}",view.scale,view.fontOverride.size(),view.fontOverride,view.outline?1:0,view.background?1:0,view.bottomMargin,view.blockGap);
     signature+=std::format(L"/{}x{}/{}/{}",rect.right,rect.bottom,view.targetLines,view.fitToLines);
     signature+=std::format(L"/{}/{}/{}/{}/{}",view.preview.zoom,view.preview.centerX,view.preview.centerY,view.videoWidth,view.videoHeight);
+    signature+=std::format(L"/live/{}/{}",view.liveX,view.liveY);
     return signature;
 }
 
@@ -57,6 +59,7 @@ struct Line {
     Gdiplus::RectF bounds{};
     engine::SubtitleStyle style;
     double shadowOffset=0;
+    bool liveGroup=false;
     bool positioned=false;
     float positionX=0,positionY=0;
 };
@@ -123,6 +126,17 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
         graphics.SetTextRenderingHint(TextRenderingHintAntiAliasGridFit);
         const float padding=float(dip(h,6));
         const float layoutWidth=std::max(1.0f,float(width)-2*padding);
+        // The translation block follows the visible video rectangle, including letterboxing and zoom.
+        RectF liveArea(padding,padding,layoutWidth,std::max(1.f,float(height)-2*padding-float(dip(h,view.bottomMargin))));
+        if(view.liveX>=0&&view.videoWidth>0&&view.videoHeight>0){
+            const double fit=std::min(width/view.videoWidth,height/view.videoHeight)*view.preview.zoom;
+            const double w=view.videoWidth*fit,hVideo=view.videoHeight*fit;
+            const double left=width*.5-view.preview.centerX*w,top=height*.5-view.preview.centerY*hVideo;
+            const float x=std::max(0.f,float(left))+padding,y=std::max(0.f,float(top))+padding;
+            const float right=std::min(float(width),float(left+w))-padding;
+            const float bottom=std::min(float(height)-float(dip(h,view.bottomMargin)),float(top+hVideo))-padding;
+            if(right>x&&bottom>y)liveArea=RectF(x,y,right-x,bottom-y);
+        }
         FontFamily fallbackFamily(L"Microsoft YaHei UI");   // per call: never survives GdiplusShutdown
         std::vector<Line> laid;
         laid.reserve(lines.size());
@@ -146,6 +160,7 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             if(line.text.empty())continue;
             Line entry;
             entry.path=std::make_unique<Gdiplus::GraphicsPath>();
+            entry.liveGroup=line.liveCaption&&view.liveX>=0&&view.liveY>=0;
             entry.style=line.style;
             entry.shadowOffset=line.shadowOffset.value_or(line.style.shadow>0?line.style.shadow:(view.outline?1.8:0.0));
             if(line.alignOverride>=1&&line.alignOverride<=9)entry.style.alignment=line.alignOverride;
@@ -161,7 +176,7 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
             format.SetFormatFlags(StringFormatFlagsNoClip|StringFormatFlagsMeasureTrailingSpaces);
             auto text=line.text;
             const bool positioned=line.posX>=0&&line.posY>=0;
-            const float availableWidth=positioned?layoutWidth:std::max(1.0f,layoutWidth-float(dip(h,std::max(0.0,line.style.marginL)+std::max(0.0,line.style.marginR))));
+            const float availableWidth=entry.liveGroup?liveArea.Width:positioned?layoutWidth:std::max(1.0f,layoutWidth-float(dip(h,std::max(0.0,line.style.marginL)+std::max(0.0,line.style.marginR))));
             float fontPixels=float(dip(h,logicalSize));
             // Measure the complete cue without a height cap. A two-screen
             // rectangle can silently omit the end of a long cue before fitting.
@@ -214,21 +229,40 @@ void updateSubtitleOverlay(HWND h,const std::vector<SubtitleLine>& lines,const S
         // lays them out bottom-up, so the primary cue ends up on the bottom.
         float cursor=std::max(padding+1,float(height)-padding-float(dip(h,view.bottomMargin)));
         float totalHeight=0;size_t stacked=0;
-        for(const auto& entry:laid)if(!entry.positioned){totalHeight+=entry.bounds.Height;++stacked;}
+        for(const auto& entry:laid)if(!entry.positioned&&!entry.liveGroup){totalHeight+=entry.bounds.Height;++stacked;}
         const float gap=stacked>1?std::min(float(dip(h,view.blockGap)),std::max(0.0f,(cursor-padding)/float(stacked*2))):0;
         const float space=std::max(1.0f,cursor-padding-gap*float(stacked?stacked-1:0));
         const float scale=totalHeight>space?space/totalHeight:1;
-        if(scale<1)for(auto& entry:laid)if(!entry.positioned){Matrix shrink;shrink.Scale(scale,scale);entry.path->Transform(&shrink);entry.path->GetBounds(&entry.bounds);}
+        if(scale<1)for(auto& entry:laid)if(!entry.positioned&&!entry.liveGroup){Matrix shrink;shrink.Scale(scale,scale);entry.path->Transform(&shrink);entry.path->GetBounds(&entry.bounds);}
         float middleHeight=0;size_t middleCount=0;
-        for(const auto& entry:laid)if(!entry.positioned&&verticalOf(entry.style.alignment)==StringAlignmentCenter){middleHeight+=entry.bounds.Height;++middleCount;}
+        for(const auto& entry:laid)if(!entry.positioned&&!entry.liveGroup&&verticalOf(entry.style.alignment)==StringAlignmentCenter){middleHeight+=entry.bounds.Height;++middleCount;}
         if(middleCount>1)middleHeight+=gap*float(middleCount-1);
         float topCursor=padding,middleCursor=std::max(padding,(float(height)-middleHeight)/2);
+        float liveHeight=0;
+        size_t liveCount=0;
+        for(const auto& entry:laid)if(entry.liveGroup){liveHeight+=entry.bounds.Height;++liveCount;}
+        const float liveSpace=liveArea.Height;
+        const float liveGap=liveCount>1?std::min(float(dip(h,view.blockGap)),liveSpace/(2*liveCount)):0;
+        const float gapHeight=liveCount?liveGap*float(liveCount-1):0;
+        if(liveHeight>liveSpace-gapHeight){
+            const float fit=(liveSpace-gapHeight)/liveHeight;
+            for(auto& entry:laid)if(entry.liveGroup){
+                Matrix shrink;shrink.Scale(fit,fit);entry.path->Transform(&shrink);entry.path->GetBounds(&entry.bounds);
+            }
+            liveHeight=liveSpace-gapHeight;
+        }
+        // Layout iterates in reverse. Start at the bottom of the selected block, keeping original, translation and draft in order.
+        float liveCursor=liveArea.Y+float(view.liveY)*std::max(0.f,liveSpace-liveHeight-gapHeight)+liveHeight+gapHeight;
         for(size_t index=laid.size();index-->0;){
             auto& entry=laid[index];
             const int alignment=(entry.style.alignment>=1&&entry.style.alignment<=9)?entry.style.alignment:2;
             const float blockWidth=entry.bounds.Width,blockHeight=entry.bounds.Height;
             float x=padding,y=cursor-blockHeight;
-            if(entry.positioned){
+            if(entry.liveGroup){
+                x=liveArea.X+float(view.liveX)*std::max(0.f,liveArea.Width-blockWidth);
+                y=liveCursor-blockHeight;
+                liveCursor=y-liveGap;
+            }else if(entry.positioned){
                 const auto horizontal=horizontalOf(alignment),vertical=verticalOf(alignment);
                 x=entry.positionX-(horizontal==StringAlignmentNear?0.0f:horizontal==StringAlignmentFar?blockWidth:blockWidth/2);
                 y=entry.positionY-(vertical==StringAlignmentNear?0.0f:vertical==StringAlignmentFar?blockHeight:blockHeight/2);
