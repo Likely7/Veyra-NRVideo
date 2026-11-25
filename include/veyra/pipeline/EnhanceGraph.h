@@ -7,6 +7,7 @@
 #include "veyra/pipeline/AntiAliasPass.h"
 #include "veyra/pipeline/BeautyPass.h"
 #include "veyra/pipeline/HudLock.h"
+#include "veyra/pipeline/SubtitleHold.h"
 #include "veyra/beauty/FaceTracker.h"
 #include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/ResolutionPlan.h"
@@ -161,11 +162,12 @@ struct EnhanceGraphDesc {
     bool vfgFastFallback=false; // live 2X with vfgAutoRegulate: also load the next faster VFG model
     bool hudLock=false; // Live HUD Lock (HudLock.h, from PushFPS), optionally restore original pixels on every output
     engine::HudProtectMode hudProtect=engine::HudProtectMode::Off;
+    bool subtitleHold=false;
     bool dynamicHud=false;
     bool hudAllEffects=false;
     bool restoresHud() const {
         if(!hudAllEffects)return false;
-        if(hudLock||dynamicHud||hudProtect==engine::HudProtectMode::Center)return true;
+        if(hudLock||dynamicHud||subtitleHold||hudProtect==engine::HudProtectMode::Center)return true;
         for(const auto& r:engine::hudProtectRegions(hudProtect,exclusion))if(!r.empty())return true;
         return false;
     }
@@ -1238,6 +1240,7 @@ private:
     std::unique_ptr<gfx::RifeDmlBackend> rife_;
     std::unique_ptr<HudLock> hudLock_;  // Live HUD Lock (from PushFPS)
     bool initHudLock();
+    std::unique_ptr<SubtitleHold> subtitleHold_;
     std::unique_ptr<HudProtect> hudProtect_;
     bool initHudProtect();
     void composeHudProtect(ID3D12GraphicsCommandList*,unsigned slot,unsigned parity,unsigned subframe,unsigned multiplier);

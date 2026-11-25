@@ -830,7 +830,7 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.fgMotionRefine != next.fgMotionRefine) return true;
     if (previous.dlssgLite != next.dlssgLite) return true;
     if (previous.vfgAutoRegulate != next.vfgAutoRegulate) return true;
-    if (previous.hudAllEffects != next.hudAllEffects) return true;
+    if (previous.hudAllEffects != next.hudAllEffects || previous.subtitleHold != next.subtitleHold) return true;
     // Live HUD Lock owns its mask and compose passes (pipeline/HudLock.h).
     if ((next.hudAllEffects || (previous.multiplier > 1 && next.multiplier > 1)) &&
         (previous.hudLock != next.hudLock || previous.dynamicHud != next.dynamicHud)) return true;

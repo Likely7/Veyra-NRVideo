@@ -557,6 +557,7 @@ struct EnhancementSettings {
     // frame. The selected scope restores either generated frames or every output.
     bool hudLock=false;
     HudProtectMode hudProtect=HudProtectMode::Off;
+    bool subtitleHold=false;
     bool dynamicHud=false;
     bool hudAllEffects=false;
     ContentRate content=ContentRate::Transport;
@@ -644,6 +645,7 @@ struct EnhancementSettings {
             active.hudLock=defaults.hudLock;
             active.dynamicHud=defaults.dynamicHud;
         }
+        if(multiplier<=1&&!hudAllEffects)active.subtitleHold=false;
         if(multiplier<=1&&!hudAllEffects)active.hudProtect=defaults.hudProtect;
         return active;
     }

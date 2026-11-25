@@ -1430,3 +1430,5 @@ adapts the approach in XY-CtoPS5's `ps5kbm/mapping.py` at commit
 `6c816d5356abdc7a7577f980a7c1186fe853c44d`, GPL-3.0-or-later.
 Veyra uses its own time-weighted motion reports, radial deadzones, eased
 interpolation and C++ session integration. [Source](https://github.com/SWTiCC/XY-CtoPS5/blob/6c816d5356abdc7a7577f980a7c1186fe853c44d/ps5kbm/mapping.py) · [License](https://github.com/SWTiCC/XY-CtoPS5/blob/6c816d5356abdc7a7577f980a7c1186fe853c44d/LICENSE)
+
+Subtitle Hold is adapted from DosukaSOL/PushFPS at commit 731589e2 (original implementation 2de9d233), GPL-3.0-or-later. Source: https://github.com/DosukaSOL/PushFPS/tree/731589e2 . Veyra uses its SubtitleHoldRule, three PushOverlay shaders and the adapted SubtitleHold GPU pass. The pass shares cleaned input with reticle protection, reads the original frame for all-effects detection, and keeps masks on the GPU.

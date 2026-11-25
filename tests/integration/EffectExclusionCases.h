@@ -6,6 +6,8 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     const std::wstring provider=argc>4?argv[4]:L"off";
     const bool hdr=std::wstring(argv[1]).find(L"hdr")!=std::wstring::npos;
     const bool hudScope=std::wstring(argv[1]).find(L"hud-scope")!=std::wstring::npos;
+    const bool subtitleHud=hudScope && std::wstring(argv[1]).find(L"subtitle")!=std::wstring::npos;
+    const bool onlySubtitleFg=subtitleHud && std::wstring(argv[1]).find(L"fgonly")!=std::wstring::npos;
     const bool centerHud=hudScope&&std::wstring(argv[1]).find(L"center")!=std::wstring::npos;
     const bool dynamicHud=hudScope&&std::wstring(argv[1]).find(L"dynamic")!=std::wstring::npos;
     const unsigned frameCount=hudScope?64u:6u;
@@ -37,10 +39,11 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     }
     if(hudScope){
         desc.exclusion={};
-        desc.hudLock=!centerHud&&!dynamicHud;
+        desc.hudLock=!centerHud&&!dynamicHud&&!subtitleHud;
+        desc.subtitleHold=subtitleHud;
         desc.dynamicHud=dynamicHud;
         if(centerHud)desc.hudProtect=engine::HudProtectMode::Center;
-        desc.hudAllEffects=true;
+        desc.hudAllEffects=!onlySubtitleFg;
     }
     desc.enableFg=provider!=L"off";
     desc.fgMultiplier=std::wstring(argv[1]).find(L"6x")!=std::wstring::npos?6:provider==L"vfg"?3:2;
@@ -62,11 +65,22 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
     if(!artifacts.empty())std::filesystem::create_directories(artifacts);
     unsigned realChecked=0,generatedChecked=0;double maximumRawError=0,maximumOutsideError=0,maximumFeatherError=0,minimumChanged=255,minimumRawProgress=255;
     sink::RgbaImage previous;
+    const auto glyph=[](int x,int y){
+        if(x<224||x>=416||y<305||y>320)return false;
+        const int u=(x-224)%16,v=y-305;
+        return (u>=3&&u<=4)||(u>=3&&u<=12&&(v==1||v==2||v==7||v==8||v==13||v==14));
+    };
     for(unsigned i=0;ok&&i<frameCount;++i){
         for(unsigned y=0;y<360;++y)for(unsigned x=0;x<640;++x){
             auto* p=frame->data[0]+size_t(y)*frame->linesize[0]+x*4;
             p[0]=p[1]=p[2]=detailedPlane(x,y,i);p[3]=255;
             // Stable narrow glyph strokes over the scrolling background.
+            if(subtitleHud){
+                const double world=std::sin((x+13*i)*.075)+std::cos((y+7*i)*.095);
+                p[0]=p[1]=p[2]=uint8_t(92+32*world);
+                if(glyph(x,y))p[0]=p[1]=p[2]=180;
+                else if(glyph(x+1,y)||glyph(x-1,y)||glyph(x,y+1)||glyph(x,y-1))p[0]=p[1]=p[2]=12;
+            }
             if(centerHud){
                 int dx=int(x)-320,dy=int(y)-180;
                 if(dx*dx+dy*dy<=4)p[0]=p[1]=p[2]=195;
@@ -78,7 +92,7 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
                 bool fill=y>=49&&y<=53&&x>=92&&x<(i%2?212:160);
                 p[0]=rail?244:fill?180:14;p[1]=rail?244:fill?42:14;p[2]=rail?244:14;
             }
-            if(hudScope&&!centerHud&&!dynamicHud&&x>=240&&x<400&&y>=120&&y<146)p[0]=p[1]=p[2]=(x%4<2)?150:35;
+            if(hudScope&&!centerHud&&!dynamicHud&&!subtitleHud&&x>=240&&x<400&&y>=120&&y<146)p[0]=p[1]=p[2]=(x%4<2)?150:35;
         }
         if(hdrFrame)for(unsigned y=0;y<360;++y)for(unsigned x=0;x<640;++x){
             const double srgb=double(frame->data[0][size_t(y)*frame->linesize[0]+x*4])/255;
@@ -107,23 +121,52 @@ static int effectExclusionCases(int argc,wchar_t** argv) {
             ++realChecked;
             if(i+4>=frameCount){
                 auto hudError=[&](const sink::RgbaImage& picture,const sink::RgbaImage& expected){
+                    if(subtitleHud){
+                        double sum=0;
+                        unsigned count=0;
+                        for(int y=305;y<=320;++y)for(int x=224;x<416;++x)if(glyph(x,y)){
+                            const size_t at=(size_t(y)*picture.width+x)*4;
+                            sum+=std::abs(int(picture.pixels[at])-int(expected.pixels[at]));
+                            ++count;
+                        }
+                        return sum/count;
+                    }
                     if(!centerHud&&!dynamicHud)return patchError(picture,expected,.50,133./360);
                     const size_t pixel=(size_t(centerHud?180:51)*picture.width+(centerHud?320:182))*4;
                     return double(std::abs(int(picture.pixels[pixel])-int(expected.pixels[pixel])));
                 };
-                const double held=hudError(masked,original);
+                if(subtitleHud && i+4==frameCount){
+                    int hits=0,total=0;
+                    for(int y=305;y<=320;++y)for(int x=224;x<416;++x)if(glyph(x,y)){
+                        size_t at=(size_t(y)*masked.width+x)*4;
+                        hits+=std::abs(int(masked.pixels[at])-int(original.pixels[at]))<=2;++total;
+                    }
+                    std::cout<<"SUBTITLE_GLYPHS covered="<<hits<<" total="<<total<<std::endl;
+                }
+                const double held=hudError(masked,onlySubtitleFg?enhanced:original);
                 const double changed=hudError(enhanced,original);
                 const double outside=patchError(masked,enhanced,.75,.75);
                 maximumRawError=std::max(held,maximumRawError);
                 minimumChanged=std::min(changed,minimumChanged);
                 maximumOutsideError=std::max(outside,maximumOutsideError);
+                if(onlySubtitleFg){
+                    sink::RgbaImage cleaned;
+                    if(!readImage(ctx,ring,graph.fgInput(output.videoSlot),cleaned)){ok=false;break;}
+                    const auto removed=hudError(cleaned,enhanced);
+                    std::cout<<"SUBTITLE_INPUT cleanedDifference="<<removed<<std::endl;
+                    if(removed<10){ok=false;break;}
+                }
                 ok=held<=2&&changed>(dynamicHud?2:8)&&outside<=1;
                 for(unsigned n=0;n<output.batch.count&&ok;++n){
                     const auto& item=output.batch.frames[n];
                     if(item.kind!=pipeline::FrameKind::Generated)continue;
                     sink::RgbaImage generated;
                     ok=item.validity==pipeline::GenerationValidity::Valid&&readImage(ctx,ring,item.lease->texture.Get(),generated)
-                        &&hudError(generated,(dynamicHud&&item.subframe*2<=desc.fgMultiplier)?previous:original)<=2;
+                        ;                    if(ok){
+                        const double error=hudError(generated,onlySubtitleFg?enhanced:(dynamicHud&&item.subframe*2<=desc.fgMultiplier)?previous:original);
+                        std::cout<<"HUD_GENERATED sub="<<item.subframe<<" error="<<error<<std::endl;
+                        ok=error<=(onlySubtitleFg?5:2);
+                    }
                     ++generatedChecked;
                 }
             }

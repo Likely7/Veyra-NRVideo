@@ -306,6 +306,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 changed=true;
             }
         }
+        if (p.contains(QStringLiteral("subtitleHold"))) {
+            const bool on=p.value(QStringLiteral("subtitleHold")).toBool();
+            if(s.subtitleHold!=on){s.subtitleHold=on;changed=true;}
+        }
         if (p.contains(QStringLiteral("dynamicHud"))) {
             const bool on = p.value(QStringLiteral("dynamicHud")).toBool();
             if (s.dynamicHud != on) { s.dynamicHud = on; changed = true; }

@@ -53,5 +53,14 @@ VSubGroup {
             namePrefix: root.objectName
         }
     }
+    VRow {
+        label: qsTr("游戏字幕防拖影")
+        hint: qsTr("识别画面下方的内嵌字幕，补帧前清除字形，生成后贴回。")
+        VSwitch {
+            objectName: root.namePrefix + "-subtitle-hold"
+            checked: root.bridge.subtitleHold === true
+            onToggled: on => root.bridge.subtitleHold = on
+        }
+    }
     DynamicHudRow { backend: root.bridge; namePrefix: root.namePrefix }
 }

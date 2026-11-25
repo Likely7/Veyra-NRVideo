@@ -281,7 +281,7 @@ bool QmlPlayerBridge::hudAllEffects() const { return settings().hudAllEffects; }
 void QmlPlayerBridge::setHudAllEffects(bool value) {
     auto s = settings();
     if (s.hudAllEffects == value) return;
-    const bool enableTextLock = value && !s.hudLock && !s.dynamicHud && s.hudProtect == engine::HudProtectMode::Off;
+    const bool enableTextLock = value && !s.hudLock && !s.dynamicHud && !s.subtitleHold && s.hudProtect == engine::HudProtectMode::Off;
     if (enableTextLock) s.hudLock = true;
     s.hudAllEffects = value;
     if (!impl_->commit(std::move(s))) { emit notice(tr("无法应用 HUD 全效果剔除"), true); return; }
@@ -318,6 +318,16 @@ void QmlPlayerBridge::setHudProtect(int value) {
     emit settingsChanged();
     emit protectionChanged();
     updateMaskOverlay();
+}
+bool QmlPlayerBridge::subtitleHold() const { return settings().subtitleHold; }
+void QmlPlayerBridge::setSubtitleHold(bool value) {
+    auto s = settings();
+    if (s.subtitleHold == value) return;
+    s.subtitleHold = value;
+    if (!impl_->commit(std::move(s))) { emit notice(tr("字幕保护设置未生效"), true); return; }
+    impl_->prefs[QStringLiteral("subtitleHold")] = value;
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "subtitle hold setting not saved");
+    emit settingsChanged();
 }
 bool QmlPlayerBridge::dynamicHud() const { return settings().dynamicHud; }
 void QmlPlayerBridge::setDynamicHud(bool value) {

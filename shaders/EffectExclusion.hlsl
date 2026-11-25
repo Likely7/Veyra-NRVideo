@@ -12,6 +12,8 @@ Texture2D<float2> stillState : register(t4);
 Texture2D<float> dynamicMask : register(t5);
 Texture2D<float4> newerOriginal : register(t6);
 Texture2D<float4> newerMask : register(t7);
+Texture2D<float> subtitleMask : register(t8);
+Texture2D<float> newerSubtitle : register(t9);
 RWTexture2D<float4> outputTex : register(u0);
 RWTexture2D<float4> uiTex : register(u1);
 SamplerState linearClamp : register(s1);
@@ -23,6 +25,7 @@ cbuffer Constants : register(b0) {
     float4 regions[4];
     uint4 hudBounds;
     uint lockStatic, dynamicCell, reserved0, reserved1;
+    uint4 subtitleBounds;
 };
 static const uint WriteUi=1, Generated=2, WriteReal=4, HasHud=8, HistoryValid=16, RawHud=32, NewerHud=64;
 float3 decodeSrgb(float3 value) {
@@ -62,6 +65,10 @@ void main(uint3 id : SV_DispatchThreadID) {
         int3 at=int3(id.xy-hudBounds.xy,0);
         float4 mask=newer?newerMask.Load(at):hudMask.Load(at);
         hudWeight=max(mask.r,mask.b);
+    }
+    if(all(id.xy>=subtitleBounds.xy)&&all(id.xy<subtitleBounds.zw)){
+        int3 p=int3(id.xy-subtitleBounds.xy,0);
+        hudWeight=max(hudWeight,newer?newerSubtitle.Load(p):subtitleMask.Load(p));
     }
     if(lockStatic!=0)hudWeight=max(hudWeight,hudStaticWeight(stillState,id.xy,width,height,uint(outputMode)));
     if(dynamicCell!=0 && dynamicMask[id.xy/max(1u,dynamicCell)]>0.5)hudWeight=1;

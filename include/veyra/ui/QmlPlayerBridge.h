@@ -478,6 +478,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool hudAllEffects READ hudAllEffects WRITE setHudAllEffects NOTIFY settingsChanged)
     Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
     Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
+    Q_PROPERTY(bool subtitleHold READ subtitleHold WRITE setSubtitleHold NOTIFY settingsChanged)
     Q_PROPERTY(bool dynamicHud READ dynamicHud WRITE setDynamicHud NOTIFY settingsChanged)
     Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
     Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
@@ -1192,6 +1193,8 @@ public:
     void setHudLock(bool value);
     int hudProtect() const;
     void setHudProtect(int value);
+    bool subtitleHold() const;
+    void setSubtitleHold(bool value);
     bool dynamicHud() const;
     void setDynamicHud(bool value);
     bool dlssgLiteAvailable() const;
