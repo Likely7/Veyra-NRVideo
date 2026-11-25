@@ -110,8 +110,8 @@ static bool mouseStickPacing() {
     // Low-poll motion is held between reports, tapers to neutral after a
     // stop, and can restart immediately without reusing stale counts.
     const auto last = base + 993000;
-    const auto held = source.takeControllerLocked((last + 12000) * 10).rightX;
-    const auto fading = source.takeControllerLocked((last + 18000) * 10).rightX;
+    const auto held = source.takeControllerLocked((last + 9000) * 10).rightX;
+    const auto fading = source.takeControllerLocked((last + 13000) * 10).rightX;
     const auto stopped = source.takeControllerLocked((last + 24000) * 10).rightX;
     const auto resumed = last + 33000;
     lowPoll->move(8, 0, resumed);
@@ -146,13 +146,91 @@ static bool mouseStickPacing() {
     tuning.smoothingMs = 16;
     batched.setTuning(tuning);
     if (batched.sample(base) != std::pair<int16_t, int16_t>{}) return false;
-    batched.move(64, 64, base);
+    batched.move(12, 12, base);
     const auto first = batched.sample(base);
-    batched.move(64, 64, base + 8000);
+    batched.move(12, 12, base + 8000);
     const auto second = batched.sample(base + 8000);
     if (first.first <= 0 || first.second >= 0 || second.first <= first.first ||
         second.second >= first.second || std::abs(second.first + 2 * second.second) > 1) return false;
     if (batched.sample(base + 32000) != std::pair<int16_t, int16_t>{}) return false;
+    return true;
+}
+static bool calibratedMouse(){
+    using Pad=remoteplay::KeyboardMousePad;using Stick=remoteplay::MouseStick;
+    Stick::Tuning t;t.deadzone=0;Stick high(t);const int64_t origin=1000000;
+    for(int i=0;i<=8;++i){
+        high.move(1,0,origin+i*1000);
+        if((i==4||i==8)&&std::abs(high.sample(origin+i*1000).first/32767.-.25)>.0375)return false;
+    }
+    if(high.sample(origin+16000).first!=0)return false;
+    Stick slow(t);
+    for(int i=0;i<6;++i){slow.move(1,0,origin+i*28571);if(i&&slow.sample(origin+i*28571).first>330)return false;}
+    const auto flick=[&](int period){
+        Stick stick(t);double sum=0;
+        for(int i=0;i<16;++i){if(i%period==0)stick.move(period,0,origin+i*1000);
+            sum+=stick.sample(origin+i*1000).first;}
+        return sum;
+    };
+    if(std::abs(flick(8)/flick(1)-1)>.2)return false;
+    auto t2=t;t2.dpi=1600;Stick low(t),highDpi(t2);
+    for(int i=0;i<10;++i){low.move(1,0,origin+i*1000);highDpi.move(2,0,origin+i*1000);}
+    if(low.sample(origin+9000)!=highDpi.sample(origin+9000))return false;
+    t.deadzone=.18;t.deadzoneShape=1;t.adsScale=.5;Stick shape(t);
+    shape.move(10,1,origin);auto diagonal=shape.sample(origin);
+    if(diagonal.second<.18*32767)return false;
+    remoteplay::ControllerState hip,ads;ads.l2=255;shape.apply(hip,origin);shape.apply(ads,origin);
+    if(ads.rightX>=hip.rightX)return false;
+    Pad pad;pad.setBinding(Pad::Circle,Pad::encode('J',Pad::Ctrl));
+    pad.digital(0xa0,true);pad.digital(0xa2,true);pad.digital('J',true);
+    if(!(pad.state().buttons&remoteplay::ControllerState::Circle))return false;
+    pad.setBinding(Pad::LeftSlow,'B');pad.digital('W',true);pad.digital('B',true);
+    if(std::abs(pad.state().leftY+32767*.45)>1)return false;
+    // ADS delay is measured by the send clock while a held button stays active.
+    t={};t.deadzone=0;t.adsScale=.5;t.adsDelayMs=8;
+    Stick delayed(t);
+    remoteplay::ControllerState scoped;scoped.l2=255;
+    for(int i=0;i<12;++i){
+        delayed.move(1,0,origin+i*1000);
+        delayed.apply(scoped,origin+i*1000);
+        if(i==4 && std::abs(scoped.rightX/32767.-.25)>.001)return false;
+        if(i==10 && std::abs(scoped.rightX/32767.-.125)>.001)return false;
+    }
+    t.smoothingMs=12;
+    Stick reverse(t);
+    for(int i=0;i<92;++i){
+        reverse.move(i<60?2:-2,0,origin+i*1000);
+        const auto x=reverse.sample(origin+i*1000).first;
+        if((i==59&&x<=0)||(i==84&&x>=0))return false;
+    }
+    Pad gestures;
+    gestures.setToggleMask(uint64_t{1}<<Pad::L2);
+    gestures.digital(Pad::MouseRight,true);gestures.digital(Pad::MouseRight,false);
+    if(!gestures.state().l2)return false;
+    gestures.digital(Pad::MouseRight,true);gestures.digital(Pad::MouseRight,false);
+    if(gestures.state().l2)return false;
+    for(int dir=Pad::SwipeUp;dir<=Pad::SwipeRight;++dir){
+        gestures.setBinding(dir,'G');gestures.digital('G',true);
+        const auto first=gestures.state().touches[0];
+        if(first.id<0 || (dir==Pad::SwipeUp && first.y<=464) || (dir==Pad::SwipeDown && first.y>=464)
+            || (dir==Pad::SwipeLeft && first.x<=960) || (dir==Pad::SwipeRight && first.x>=960))return false;
+        gestures.digital('G',false);
+    }
+    if(!Pad::validBinding(27,true)||Pad::validBinding(27))return false;
+    t={};t.gyro=2;Stick gyro(t);remoteplay::ControllerState mousePad;
+    gyro.move(5,0,origin);gyro.apply(mousePad,origin);
+    if(mousePad.motionValid||mousePad.rightX<=0)return false;
+    mousePad={};mousePad.l2=255;gyro.apply(mousePad,origin+1000);
+    if(!mousePad.motionValid||mousePad.gyro[1]>=0||mousePad.rightX)return false;
+    mousePad={};gyro.menu(true);gyro.apply(mousePad,origin+2000);
+    if(mousePad.motionValid||mousePad.leftX<=0||mousePad.rightX)return false;
+    t={};t.deadzone=0;t.carry=true;Stick carry(t);
+    for(int i=0;i<70;++i){carry.move(10,0,origin+i*1000);carry.sample(origin+i*1000);}
+    for(int i=70;i<145;++i){
+        const auto x=carry.sample(origin+i*1000).first;
+        if((i==77&&x==0)||(i==144&&x!=0))return false;
+    }
+    std::cout<<"PS5_GESTURES ADS delay, smoothed reversal, toggle, four swipe origins, Escape, gyro, menu and bounded carry pass\n";
+    std::cout<<"PS5_CALIBRATION start4/8ms, stop8ms, 35counts/s, flick125/1000, DPI, square, ADS, modifiers and walk pass\n";
     return true;
 }
 static bool mouseTurnCurve() {
@@ -165,21 +243,21 @@ static bool mouseTurnCurve() {
     Stick::Tuning defaults;
     const double aim = axis(defaults, 1);
     const double turn = axis(defaults, 8);
-    if (aim < 0.16 || aim > 0.18 || turn < 0.68 || turn > 0.74 || axis(defaults, 12) != 1) return false;
+    if (std::abs(aim-.10875)>.001 || std::abs(turn-.31)>.001 || axis(defaults,32)!=1)return false;
 
     auto field = defaults;
     field.horizontal = field.vertical = 6;
     field.curve = 2.5;
     field.deadzone = 0;
-    if (axis(field, 8) != 1 || axis(field, 1) < 0.09 || axis(field, 1) > 0.12) return false;
+    if (axis(field, 8) != 1 || std::abs(axis(field,1)-std::pow(.1875,2.5))>.001) return false;
     std::cout << "PS5_MOUSE_TURN aim_125=" << aim << " turn_1000=" << turn
               << " turn_1500=" << axis(defaults, 12) << " saved_profile_turn_1000=" << axis(field, 8) << "\n";
 
     auto adjusted = defaults;
-    adjusted.turnBoost = 1;
-    if (axis(adjusted, 1) != aim || axis(adjusted, 8) >= turn * 0.6) return false;
+    adjusted.turnBoost = 3.6;
+    if (axis(adjusted, 1) != aim || axis(adjusted, 8) <= turn) return false;
     adjusted.inputDeadzone = 0.1;
-    if (axis(adjusted, 4) != 0 || axis(adjusted, 5) <= 0) return false;
+    if (axis(adjusted, 3) != 0 || axis(adjusted, 4) <= 0) return false;
 
     // Curve transitions must never turn slower when the mouse moves faster.
     for (const auto gain : {0.1, 1.0, 6.0}) {
@@ -454,6 +532,7 @@ int main(int argc,char** argv){
         std::cerr << "PS5 mouse pacing regression\n";
         return 46;
     }
+    if(!veyra::source::RemotePlaySessionSourceTestAccess::calibratedMouse())return 79;
     if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseTurnCurve()) {
         std::cerr << "PS5 mouse turn response regression\n";
         return 47;

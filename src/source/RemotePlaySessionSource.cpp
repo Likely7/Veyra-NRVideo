@@ -97,7 +97,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                     {std::lock_guard lock(mutex_);controller=takeControllerLocked(remoteplay::monotonic100ns());}
                     const auto r=source.submitController(controller);
                     if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
-                    nextController=now+std::chrono::milliseconds(4);
+                    do{nextController+=std::chrono::milliseconds(4);}while(nextController<=now);
                 }
                 const auto native=source.nativeSnapshot();
                 const auto snapshot=source.sessionSnapshot();
@@ -159,7 +159,24 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                 });
             } else log::error("remoteplay-audio","output initialization failed; video remains available");
             auto lastFrame=std::chrono::steady_clock::now();
-            auto nextController=lastFrame;
+            // The sender is joined before the source is closed, including reconnects and exceptions.
+            // Decoder and UI stalls cannot move the controller's four-millisecond clock.
+            std::jthread controllerSender;
+            if(!desc.request.viewOnly)controllerSender=std::jthread([this,&source](std::stop_token cancel){
+                const auto timer=std::unique_ptr<void,decltype(&CloseHandle)>(CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS),&CloseHandle);
+                auto due=std::chrono::steady_clock::now();
+                while(!cancel.stop_requested()){
+                    remoteplay::ControllerState controller;
+                    {std::lock_guard lock(mutex_);controller=takeControllerLocked(remoteplay::monotonic100ns());}
+                    const auto result=source.submitController(controller);
+                    if(!result.ok)log::warn("remoteplay",std::format("{} code={}",result.operation,result.code));
+                    const auto now=std::chrono::steady_clock::now();
+                    do{due+=std::chrono::milliseconds(4);}while(due<=now);
+                    LARGE_INTEGER timeout;timeout.QuadPart=-std::max<int64_t>(1,std::chrono::duration_cast<std::chrono::microseconds>(due-now).count())*10;
+                    if(timer&&SetWaitableTimer(timer.get(),&timeout,0,nullptr,nullptr,FALSE))WaitForSingleObject(timer.get(),10);
+                    else std::this_thread::sleep_until(due);
+                }
+            });
             auto rateStart=lastFrame;uint64_t previousReceived=receivedBase,previousDecoded=0;
             {std::lock_guard lock(mutex_);previousDecoded=rates_.decoded;}
             auto nextNativeLog=lastFrame;
@@ -175,13 +192,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                     if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
                 }
                 const auto now=std::chrono::steady_clock::now();
-                if(!desc.request.viewOnly&&now>=nextController) {
-                    remoteplay::ControllerState controller;
-                    {std::lock_guard lock(mutex_);controller=takeControllerLocked(remoteplay::monotonic100ns());}
-                    const auto r=source.submitController(controller);
-                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
-                    nextController=now+std::chrono::milliseconds(4);
-                }
+
                 pipeline::FramePacket packet; const AVFrame* frame=nullptr;
                 const auto result=source.read(packet,&frame);
                 auto feedback=source.takeFeedback();
@@ -361,9 +372,7 @@ remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remote
     }
     auto pad=controller_;
     if(const auto mouse=controllerMouse_.lock()){
-        const auto [x,y]=mouse->sample(now/10);
-        pad.rightX=x;
-        pad.rightY=y;
+        mouse->apply(pad,now/10);
     }
     return pad;
 }

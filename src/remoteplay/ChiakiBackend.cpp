@@ -230,6 +230,7 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
     s.started=true;return s.record(startCode,"chiaki_session_start");
 }
 BackendResult ChiakiBackend::stop(){
+    std::lock_guard guard(controllerMutex_);
     if(!p_)return {true,0,"already_stopped"};
     auto& s=*p_;
     if(!s.onOwner())return {false,-1102,"wrong_owner_thread"};
@@ -261,7 +262,8 @@ BackendResult ChiakiBackend::submitLoginPin(std::string_view pin){
     return p_->record(chiaki_session_set_login_pin(&p_->session,reinterpret_cast<const std::uint8_t*>(pin.data()),pin.size()),"chiaki_session_set_login_pin");
 }
 BackendResult ChiakiBackend::submitController(const ControllerState& state){
-    if(!p_||!p_->onOwner()||!p_->started)return {false,-1106,"controller_without_session"};
+    std::lock_guard guard(controllerMutex_);
+    if(!p_||!p_->started)return {false,-1106,"controller_without_session"};
     ChiakiControllerState c;chiaki_controller_state_set_idle(&c);
     struct Mapping{std::uint32_t semantic;ChiakiControllerButton target;};
     static constexpr Mapping buttons[]={

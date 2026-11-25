@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <bit>
+#include <chrono>
 #include <cstdint>
 
 namespace veyra::remoteplay {
@@ -19,7 +21,7 @@ public:
         Cross, Circle, Square, Triangle, Left, Right, Up, Down,
         L1, R1, L3, R3, Options, Share, Touchpad, PS, L2, R2,
         LeftUp, LeftDown, LeftLeft, LeftRight, RightUp, RightDown, RightLeft, RightRight,
-        ActionCount
+        LeftSlow, MenuStick, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, ActionCount
     };
     static constexpr int MouseLeft = 257, MouseMiddle = 258, MouseRight = 259;
     static constexpr int MouseBack = 260, MouseForward = 261;
@@ -39,11 +41,11 @@ public:
         if (key == 0xA4 || key == 0xA5) return Alt;
         return 0;
     }
-    static bool validBinding(int binding) {
+    static bool validBinding(int binding, bool allowEscape=false) {
         if (!binding) return true;
         const int key = binding & KeyMask;
         return binding >= 0 && (binding >> 9) <= 7 &&
-            ((key >= 1 && key <= 254 && key != 0x1B && key != 0x5B && key != 0x5C &&
+            ((key >= 1 && key <= 254 && (key != 0x1B || allowEscape) && key != 0xe5 && key != 0x5B && key != 0x5C &&
                 (key < 0x76 || key > 0x79)) || (key >= MouseLeft && key <= WheelRight));
     }
     static int encode(int key, int modifiers) { return key | ((modifiers & ~modifier(key) & 7) << 9); }
@@ -51,7 +53,7 @@ public:
     const auto& bindings() const { return bindings_; }
     const Tuning& tuning() const { return tuning_; }
     bool setBinding(int action, int binding) {
-        if (action < 0 || action >= ActionCount || !validBinding(binding)) return false;
+        if (action < 0 || action >= ActionCount || !validBinding(binding,tuning_.unlock!=0)) return false;
         for (int i = 0; binding && i < ActionCount; ++i)
             if (i != action && bindings_[i] == binding) bindings_[i] = 0;
         bindings_[action] = binding;
@@ -75,15 +77,18 @@ public:
         held_[key] = down;
         const int currentModifiers = modifiers();
         if (down) {
+            int best=-1;
             const int chord = encode(key, currentModifiers);
             for (int action = 0; action < ActionCount; ++action) {
                 const int binding = bindings_[action];
-                if (binding == chord) {
-                    active_[key] = action;
-                    return true;
-                }
-                if (binding == key) active_[key] = action;
+                const int mods=binding>>9;
+                if((binding&KeyMask)!=key || (mods&(chord>>9))!=mods)continue;
+                const int rank=std::popcount(unsigned(mods));
+                if(rank>best){best=rank;active_[key]=action;}
             }
+            const auto a=active_[key];
+            if(a>=0 && (toggleMask_&(uint64_t{1}<<a)))toggled_^=uint64_t{1}<<a;
+            if(a>=SwipeUp&&a<=SwipeRight){swipeAction_=a;swipeStart_=clockUs();touchId_=(touchId_+1)%127;}
             return active_[key] >= 0;
         }
         bool changed = active_[key] >= 0;
@@ -99,9 +104,14 @@ public:
         return changed;
     }
 
+    static int64_t clockUs(){return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+    uint64_t toggleMask() const{return toggleMask_;}
+    void setToggleMask(uint64_t mask){toggleMask_=mask;reset();}
+    bool menuActive()const{return (toggleMask_&(uint64_t{1}<<MenuStick))?(toggled_&(uint64_t{1}<<MenuStick))!=0:std::find(active_.begin(),active_.end(),MenuStick)!=active_.end();}
     ControllerState state(bool* mouseControlsRightStick = nullptr) const {
         std::array<bool, ActionCount> on{};
         for (const int a : active_) if (a >= 0) on[a] = true;
+        for(int a=0;a<ActionCount;++a)if(toggleMask_&(uint64_t{1}<<a))on[a]=(toggled_&(uint64_t{1}<<a))!=0;
         ControllerState pad;
         pad.inputActive = true;
         for (int i = 0; i < 16; ++i) if (on[i]) pad.buttons |= uint32_t(1) << i;
@@ -109,6 +119,14 @@ public:
         pad.r2 = on[R2] ? 255 : 0;
         setStick(pad.leftX, pad.leftY, int(on[LeftRight]) - int(on[LeftLeft]),
                   int(on[LeftDown]) - int(on[LeftUp]));
+        if(on[LeftSlow]){pad.leftX=int16_t(std::lround(pad.leftX*tuning_.walkScale));pad.leftY=int16_t(std::lround(pad.leftY*tuning_.walkScale));}
+        if(swipeAction_>=SwipeUp){
+            const double t=double(clockUs()-swipeStart_)/90000.;
+            if(t>=0 && t<1.){const double d=(std::min(1.,t*1.25)-.5)*.75;
+                pad.touches[0]={int8_t(touchId_),uint16_t(960+1920*d*(int(swipeAction_==SwipeRight)-int(swipeAction_==SwipeLeft))),
+                    uint16_t(464+928*d*(int(swipeAction_==SwipeDown)-int(swipeAction_==SwipeUp)))};
+            }
+        }
         const int rightX = int(on[RightRight]) - int(on[RightLeft]);
         const int rightY = int(on[RightDown]) - int(on[RightUp]);
         const bool rightKeys = on[RightRight] || on[RightLeft] || on[RightUp] || on[RightDown];
@@ -118,7 +136,7 @@ public:
     }
 
     void reset() {
-        held_.fill(false);
+        held_.fill(false);toggled_=0;swipeAction_=-1;
         active_.fill(-1);
     }
     KeyboardMousePad() { reset(); }
@@ -132,6 +150,8 @@ private:
     std::array<int, ActionCount> bindings_ = Defaults;
     std::array<bool, WheelRight + 1> held_{};
     std::array<int, WheelRight + 1> active_{};
+    uint64_t toggleMask_=0,toggled_=0;
+    int swipeAction_=-1,touchId_=0;int64_t swipeStart_=0;
     Tuning tuning_{};
 };
 

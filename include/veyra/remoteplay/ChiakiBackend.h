@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
+#include <mutex>
 #include "SessionInbox.h"
 #include <array>
 #include <chrono>
@@ -55,7 +56,7 @@ public:
     ~ChiakiBackend();
     ChiakiBackend(const ChiakiBackend&)=delete;
     ChiakiBackend& operator=(const ChiakiBackend&)=delete;
-    // All methods, including snapshot(), must be called from one session-owner thread,
+    // All methods except serialized controller submission must run on the session-owner thread,
     // NEVER from a Chiaki callback. This object is not a renderer or a decoder.
     // discardMedia (PS5 手柄控制): video samples are counted and accepted without
     // a copy, audio goes to a no-op sink, so Chiaki keeps its reference-frame
@@ -70,6 +71,7 @@ public:
     ControllerFeedback takeFeedback();
 private:
     struct Impl;
+    std::mutex controllerMutex_;
     std::unique_ptr<Impl> p_;
 };
 struct PairResult {
