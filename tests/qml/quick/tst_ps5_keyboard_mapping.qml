@@ -39,7 +39,7 @@ Item {
         function applyDefaults(drivingLayout) {
             if (drivingLayout) return
             bindings = ["Space"].concat(Array(31).fill("—"))
-            const keys = Array(32).fill("—"); keys[17] = "W"; keys[9] = "S"; drivingBindings = keys
+            const keys = Array(32).fill("—"); keys[17] = "W"; keys[16] = "S"; keys[9] = "R"; drivingBindings = keys
         }
         function resetMouseTuning() {
             tuning = { horizontal: 1, vertical: 1, turnBoost: 3.6, inputDeadzone: 0, mouseLook: tuning.mouseLook }
@@ -70,6 +70,8 @@ Item {
             fixture.width = 980
             host.dialog = "ps5-mapping"
             mapper.driving=false
+            editor.selected=-1
+            editor.showList = Qt.binding(() => editor.bodyWidth > 0 && editor.bodyWidth < 500)
             editor.editDriving=false
             editor.advanced=false
             mapper.applyDefaults()
@@ -82,15 +84,13 @@ Item {
             verify(trigger && trigger.visible)
             mouseClick(trigger)
             compare(editor.selected, 17)
-            compare(mapper.learning, -1)
-            findChild(editor,"ps5-bind-selected").clicked()
             compare(mapper.learning,17)
-            mapper.releasePs5()
             mouseClick(findChild(editor, "ps5-bind-0"))
-            compare(mapper.learning,-1)
-            findChild(editor,"ps5-bind-selected").clicked()
             compare(mapper.learning,0)
-            mapper.releasePs5()
+            const cancel = findChild(editor,"ps5-cancel-binding")
+            verify(cancel.visible)
+            mouseClick(cancel)
+            compare(mapper.learning,-1)
             mouseClick(findChild(editor, "ps5-clear-binding"))
             compare(editor.binding(0), "—")
             mouseClick(findChild(editor, "ps5-input-preview"))
@@ -130,7 +130,8 @@ Item {
             verify(layout.visible)
             layout.picked("driving")
             compare(editor.binding(17), "W")
-            compare(editor.binding(9), "S")
+            compare(editor.binding(16), "S")
+            compare(editor.binding(9), "R")
             const key = findChild(editor, "ps5-drive-key")
             key.clicked()
             compare(mapper.learning, 32)
@@ -142,6 +143,15 @@ Item {
             mapper.selectDriving(false)
             verify(!editor.editDriving)
             compare(editor.binding(0), "Space")
+        }
+        function test_list_click_starts_learning() {
+            editor.showList = true
+            const entry = findChild(editor, "ps5-list-bind-0")
+            verify(entry && entry.visible)
+            mouseClick(entry)
+            compare(editor.selected,0)
+            compare(mapper.learning,0)
+            editor.showList = false
         }
         function test_narrow_geometry() {
             fixture.width = 453

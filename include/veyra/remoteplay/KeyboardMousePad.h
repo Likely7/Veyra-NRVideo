@@ -71,7 +71,7 @@ public:
         for (auto& key : drivingBindings_) if (key == 'W' || key == 'S') key = 0;
         drivingBindings_[LeftUp] = drivingBindings_[LeftDown] = 0;
         drivingBindings_[R2] = 'W';
-        drivingBindings_[R1] = 'S';
+        drivingBindings_[L2] = 'S';
         reset();
     }
     const Tuning& tuning() const { return tuning_; }
@@ -117,7 +117,7 @@ public:
                 if(rank>best){best=rank;active_[key]=action;}
             }
             const auto a=active_[key];
-            if(a>=0 && (toggleMask_&(uint64_t{1}<<a)))toggled_^=uint64_t{1}<<a;
+            if(a>=0 && (activeToggles()&(uint64_t{1}<<a)))toggled_^=uint64_t{1}<<a;
             if(a>=SwipeUp&&a<=SwipeRight){swipeAction_=a;swipeStart_=clockUs();touchId_=(touchId_+1)%127;}
             return active_[key] >= 0;
         }
@@ -136,12 +136,17 @@ public:
 
     static int64_t clockUs(){return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
     uint64_t toggleMask() const{return toggleMask_;}
+    uint64_t activeToggles() const {
+        // L2 is a held brake in the driving layout.
+        return driving_ ? toggleMask_ & ~(uint64_t{1} << L2) : toggleMask_;
+    }
     void setToggleMask(uint64_t mask){toggleMask_=mask;reset();}
     bool menuActive()const{return (toggleMask_&(uint64_t{1}<<MenuStick))?(toggled_&(uint64_t{1}<<MenuStick))!=0:std::find(active_.begin(),active_.end(),MenuStick)!=active_.end();}
     ControllerState state(bool* mouseControlsRightStick = nullptr, int64_t now = clockUs()) const {
         std::array<bool, ActionCount> on{};
         for (const int a : active_) if (a >= 0) on[a] = true;
-        for(int a=0;a<ActionCount;++a)if(toggleMask_&(uint64_t{1}<<a))on[a]=(toggled_&(uint64_t{1}<<a))!=0;
+        const auto toggles = activeToggles();
+        for(int a=0;a<ActionCount;++a)if(toggles&(uint64_t{1}<<a))on[a]=(toggled_&(uint64_t{1}<<a))!=0;
         ControllerState pad;
         pad.inputActive = true;
         for (int i = 0; i < 16; ++i) if (on[i]) pad.buttons |= uint32_t(1) << i;

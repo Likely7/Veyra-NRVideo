@@ -56,7 +56,7 @@ public:
     QString driveKeyLabel() const;
     bool driving() const { return mapper_.driving(); }
     Q_INVOKABLE void selectDriving(bool on);
-    Q_INVOKABLE void learnDriveKey(QObject* cancelButton);
+    Q_INVOKABLE void learnDriveKey(QObject* learningControls);
     QVariantMap tuning() const;
     QStringList profiles() const {return profiles_.keys();}
     QString profile() const {return profile_;}
@@ -70,7 +70,7 @@ public:
     bool ps5Captured() const { return route_ == Route::Ps5; }
     bool previewing() const { return route_ == Route::Preview; }
     QVariantMap padState() const;
-    Q_INVOKABLE void learn(int action, QObject* cancelButton = nullptr, bool drivingLayout = false);
+    Q_INVOKABLE void learn(int action, QObject* learningControls = nullptr, bool drivingLayout = false);
     Q_INVOKABLE void clearBinding(int action, bool drivingLayout = false);
     Q_INVOKABLE void cancelLearning();
     Q_INVOKABLE void applyDefaults(bool drivingLayout = false);
@@ -136,7 +136,7 @@ private:
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
-    QPointer<QObject> cancelButton_;
+    QPointer<QObject> learningControls_;
     int learning_ = -1;
     int learningModifier_ = 0;
     bool learningDriving_ = false;

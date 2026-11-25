@@ -13,7 +13,7 @@ DialogLayer {
     minimumBodyWidth: 0
     actions: [{ label: qsTr("返回") }]
     property var input: typeof veyra !== "undefined" ? (veyra.ps5Input || null) : null
-    property int selected: 0
+    property int selected: -1
     property bool showList: panel.bodyWidth>0 && panel.bodyWidth<500
     property bool confirmReset: false
     property bool advanced: false
@@ -56,8 +56,9 @@ DialogLayer {
         return value
     }
     function choose(id) {
+        if (!input || input.previewing) return
         selected = id
-        if (input && input.learning >= 0) input.cancelLearning()
+        if (input.learning !== id) input.learn(id, panel, panel.editDriving)
     }
     function active(id) {
         if(id>=26)return false
@@ -107,6 +108,7 @@ DialogLayer {
         label: qsTr("键位布局")
         VSeg {
             objectName: "ps5-mapping-layout"
+            readonly property bool ps5LearningControl: true
             current: panel.editDriving ? "driving" : "walking"
             options: [{id:"walking", label:qsTr("步行")}, {id:"driving", label:qsTr("驾驶")}]
             onPicked: id => {
@@ -119,18 +121,18 @@ DialogLayer {
         label: qsTr("切换步行／驾驶")
         hint: panel.input?.learning === panel.names.length
               ? (panel.input.feedback || qsTr("正在录键"))
-              : qsTr("锁定键鼠后即可切换。默认 W 加速、S 刹车，A/D 转向。")
+              : qsTr("锁定键鼠后即可切换。默认 W（R2）加速、S（L2）刹车／倒车，A/D 转向。")
         hintBelow: true
         RowLayout {
-            Text { text: panel.input?.driveKeyLabel ?? "F6"; color: Theme.t1; font.family: Theme.fontUi }
             VButton {
                 id: driveKeyButton
                 objectName: "ps5-drive-key"
-                text: panel.input?.learning === panel.names.length ? qsTr("取消") : qsTr("改键")
+                text: panel.input?.learning === panel.names.length ? qsTr("取消") : (panel.input?.driveKeyLabel ?? "F6")
+                primary: panel.input?.learning === panel.names.length
                 enabled: panel.input !== null
                 onClicked: {
                     if (panel.input.learning === panel.names.length) panel.input.cancelLearning()
-                    else panel.input.learnDriveKey(driveKeyButton)
+                    else panel.input.learnDriveKey(panel)
                 }
             }
             VButton {
@@ -158,14 +160,21 @@ DialogLayer {
             Layout.fillWidth: true
             Layout.preferredWidth: 550
             spacing: 8
-            VSeg { current: panel.showList?"list":"diagram"
+            VSeg {
+                readonly property bool ps5LearningControl: true
+                current: panel.showList?"list":"diagram"
                 options: [{id:"diagram",label:qsTr("手柄图示")},{id:"list",label:qsTr("键位列表")}]
-                onPicked: id => panel.showList=id==="list"
+                onPicked: id => {
+                    panel.input?.cancelLearning()
+                    panel.showList = id === "list"
+                }
             }
             GridLayout {
                 visible: panel.showList; Layout.fillWidth: true; columns: panel.bodyWidth<340?1:2
                 Repeater { model: panel.names
-                    VButton { required property int index; required property string modelData
+                    VButton {
+                        required property int index; required property string modelData
+                        objectName: "ps5-list-bind-" + index
                         text: modelData+" · "+panel.binding(index); Layout.fillWidth: true
                         primary: panel.selected===index; onClicked: panel.choose(index) }
                 }
@@ -269,6 +278,7 @@ DialogLayer {
                     ]
                     delegate: Rectangle {
                         id: keyCap
+                        readonly property bool ps5LearningControl: true
                         opacity: panel.input?.previewing && (padKey===10||padKey===11) ? .25 : 1
                         required property var modelData
                         readonly property int padKey: modelData[0]
@@ -315,18 +325,21 @@ DialogLayer {
             }
 
             VRow {
-                visible: [1,10,16,27].includes(panel.selected)
+                visible: [1,10,16,27].includes(panel.selected) && !(panel.editDriving && panel.selected === 16)
                 label: qsTr("切换模式")
                 VSwitch { checked: { const b=panel.input?.bindings;return panel.input?.toggleAction?.(panel.selected) || false }
                     onToggled: on => panel.input.setToggleAction(panel.selected,on) }
             }
             VRow {
-                label: panel.names[panel.selected]
-                hint: panel.input && panel.input.learning >= 0 && panel.input.learning < panel.names.length ? qsTr("正在录键") + " · " + panel.names[panel.selected] :
-                      (panel.input && panel.input.feedback ? panel.input.feedback : qsTr("选择按键后点击改键"))
+                label: panel.selected < 0 ? "" : ((panel.input?.learning === panel.selected)
+                    ? qsTr("正在录键") + " · " + panel.names[panel.selected] : panel.names[panel.selected])
+                hint: panel.input?.feedback || (panel.input?.learning === panel.selected && panel.selected >= 0
+                    ? qsTr("按下键盘或鼠标键。点击另一键位可直接切换。")
+                    : qsTr("点击任意手柄按键开始改键。"))
                 hintBelow: true
                 RowLayout {
                     Text {
+                        visible: panel.selected >= 0
                         text: panel.binding(panel.selected)
                         color: Theme.t1
                         font.family: Theme.fontUi
@@ -335,14 +348,14 @@ DialogLayer {
                         elide: Text.ElideRight
                     }
                     VButton {
-                        id: bindSelected
-                        objectName: "ps5-bind-selected"
-                        text: panel.input?.learning === panel.selected ? qsTr("取消") : qsTr("改键")
-                        enabled: panel.input !== null
-                        onClicked: panel.input.learning === panel.selected ? panel.input.cancelLearning() : panel.input.learn(panel.selected, bindSelected, panel.editDriving)
+                        objectName: "ps5-cancel-binding"
+                        visible: panel.selected >= 0 && panel.input?.learning === panel.selected
+                        text: qsTr("取消")
+                        onClicked: panel.input.cancelLearning()
                     }
                     VButton {
                         objectName: "ps5-clear-binding"
+                        visible: panel.selected >= 0
                         text: qsTr("清除")
                         ghost: true
                         enabled: panel.input !== null

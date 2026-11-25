@@ -26,6 +26,19 @@ namespace veyra::ui {
 namespace {
 using Mapper = remoteplay::KeyboardMousePad;
 
+bool clicksLearningControl(const QQuickItem* item, const QPointF& cursor) {
+    if (!item || !item->isVisible() || !item->isEnabled()) return false;
+    const bool contains = item->contains(item->mapFromGlobal(cursor));
+    // Buttons in the dialog keep their normal click, including its Close and
+    // Back buttons. Non-button targets such as the diagram opt in explicitly.
+    if (contains && (item->metaObject()->indexOfSignal("clicked()") >= 0 ||
+                     item->property("ps5LearningControl").toBool())) return true;
+    if (!contains && item->clip()) return false;
+    for (const auto* child : item->childItems())
+        if (clicksLearningControl(child, cursor)) return true;
+    return false;
+}
+
 int64_t nowUs() {
     return std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::steady_clock::now().time_since_epoch()).count();
@@ -355,11 +368,9 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     }
     if(learning_>=0 && (msg->message==WM_KILLFOCUS||(msg->message==WM_ACTIVATE&&LOWORD(msg->wParam)==WA_INACTIVE))){cancelLearning();return false;}
     if (learning_ >= 0) {
-        if (msg->message == WM_LBUTTONDOWN) {
-            auto* button = qobject_cast<QQuickItem*>(cancelButton_.data());
-            if (button && button->isVisible() && button->contains(button->mapFromGlobal(QCursor::pos())))
-                return false;
-        }
+        if (msg->message == WM_LBUTTONDOWN &&
+            clicksLearningControl(qobject_cast<QQuickItem*>(learningControls_.data()), QCursor::pos()))
+            return false;
         if (!keyMessage && msg->message != WM_MOUSEWHEEL && msg->message != WM_MOUSEHWHEEL &&
             msg->message != WM_LBUTTONDOWN && msg->message != WM_RBUTTONDOWN &&
             msg->message != WM_MBUTTONDOWN && msg->message != WM_XBUTTONDOWN) return false;
@@ -485,7 +496,7 @@ void StreamInputCapture::tick() {
 void StreamInputCapture::emitPad() {
     bool useMouse = false;
     auto pad = mapper_.state(&useMouse);
-    if(mouse_)mouse_->menu(mapper_.menuActive());
+    if(mouse_)mouse_->controlContext(mapper_.menuActive(), driving());
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     if (ps5Captured()) {
         if (!target_ || ps5Target_() != target_) { end(); return; }
@@ -519,11 +530,11 @@ void StreamInputCapture::selectDriving(bool on) {
     emit drivingChanged();
     if (ps5Captured() || previewing()) emitPad();
 }
-void StreamInputCapture::learnDriveKey(QObject* cancelButton) { learn(Mapper::ActionCount, cancelButton); }
+void StreamInputCapture::learnDriveKey(QObject* learningControls) { learn(Mapper::ActionCount, learningControls); }
 QVariantMap StreamInputCapture::tuning() const { return tuningMap(mapper_.tuning()); }
 QVariantMap StreamInputCapture::padState() const {
     const int a=mapper_.tuning().adsAction;
-    const bool ads=a==16?previewState_.l2!=0:a==17?previewState_.r2!=0:(previewState_.buttons&(1u<<a))!=0;
+    const bool ads=a==16?!driving()&&previewState_.l2!=0:a==17?previewState_.r2!=0:(previewState_.buttons&(1u<<a))!=0;
     return {{"ads",ads},{"speed",previewing()?previewSpeed_:0.}, {QStringLiteral("buttons"), previewState_.buttons}, {QStringLiteral("leftX"), previewState_.leftX / 32767.0},
             {QStringLiteral("leftY"), previewState_.leftY / 32767.0}, {QStringLiteral("rightX"), previewState_.rightX / 32767.0},
             {QStringLiteral("rightY"), previewState_.rightY / 32767.0}, {QStringLiteral("l2"), previewState_.l2},
@@ -539,7 +550,7 @@ void StreamInputCapture::setKeyboardEnabled(bool enabled) {
     save();
     emit mappingChanged();
 }
-void StreamInputCapture::learn(int action, QObject* cancelButton, bool drivingLayout) {
+void StreamInputCapture::learn(int action, QObject* learningControls, bool drivingLayout) {
     if (action < 0 || action > Mapper::ActionCount) return;
     end();
     cancelLearning();
@@ -551,7 +562,7 @@ void StreamInputCapture::learn(int action, QObject* cancelButton, bool drivingLa
     mapper_.reset();
     router_.reset();
     suspendIme();
-    cancelButton_ = cancelButton;
+    learningControls_ = learningControls;
     learningDriving_ = drivingLayout;
     learning_ = action;
     learningModifier_ = 0;
@@ -684,7 +695,18 @@ void StreamInputCapture::readProfile(const QJsonObject& json){
     };
     readBindings(json.value("bindings").toArray(), false);
     mapper_.resetDrivingBindings();
-    readBindings(json.value("drivingBindings").toArray(), true);
+    const auto driving = json.value("drivingBindings").toArray();
+    readBindings(driving, true);
+    const auto& vehicle = mapper_.bindings(true);
+    const auto& walking = mapper_.bindings();
+    if (json.value("drivingLayoutVersion").toInt() < 2 && driving.size() >= 26 &&
+        vehicle[Mapper::R1] == 'S' && vehicle[Mapper::R2] == 'W' && vehicle[Mapper::L2] == walking[Mapper::L2]) {
+        // Repair the old generated defaults, preserving unrelated driving keys.
+        mapper_.setBinding(Mapper::L2, 'S', true);
+        const int oldShoulder = walking[Mapper::R1];
+        mapper_.setBinding(Mapper::R1,
+            std::find(vehicle.begin(), vehicle.end(), oldShoulder) == vehicle.end() ? oldShoulder : 0, true);
+    }
     mapper_.setDriveKey(json.value("driveKey").toInt(0x75));
     mapper_.setToggleMask(uint64_t(json.value("toggles").toInteger()));
 }
@@ -692,7 +714,7 @@ QJsonObject StreamInputCapture::activeProfile()const{
     QJsonArray walking, driving;
     for (const int key : mapper_.bindings()) walking.append(key);
     for (const int key : mapper_.bindings(true)) driving.append(key);
-    return {{"bindings",walking},{"drivingBindings",driving},{"driveKey",mapper_.driveKey()},
+    return {{"bindings",walking},{"drivingBindings",driving},{"drivingLayoutVersion",2},{"driveKey",mapper_.driveKey()},
             {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}

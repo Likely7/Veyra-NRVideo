@@ -85,7 +85,7 @@ public:
 
     void apply(ControllerState& pad,int64_t nowUs,bool menu=false) {
         std::lock_guard lock(mutex_);
-        const bool ads=tuning_.adsAction==16?pad.l2!=0:tuning_.adsAction==17?pad.r2!=0:
+        const bool ads=tuning_.adsAction==16?!driving_&&pad.l2!=0:tuning_.adsAction==17?pad.r2!=0:
             tuning_.adsAction>=0&&tuning_.adsAction<16&&(pad.buttons&(1u<<tuning_.adsAction));
         if(ads&&!adsWas_)adsSince_=nowUs;
         adsWas_=ads;
@@ -98,7 +98,11 @@ public:
                       float(-filteredX_*gain*tuning_.horizontal/tuning_.dpi),0};
         }else{pad.rightX=x;pad.rightY=y;}
     }
-    void menu(bool active){std::lock_guard lock(mutex_);menu_=active;}
+    void controlContext(bool menu, bool driving) {
+        std::lock_guard lock(mutex_);
+        menu_ = menu;
+        driving_ = driving;
+    }
     double speed(){std::lock_guard lock(mutex_);return std::hypot(filteredX_,filteredY_);}
 
 private:
@@ -190,7 +194,7 @@ private:
     size_t newest_ = 0, used_ = 0;
     int64_t lastSampleUs_ = -1;
     int64_t lastMove_=-1,period_=3000,adsSince_=0;
-    bool knownPeriod_=false,sparse_=false,adsWas_=false,menu_=false;
+    bool knownPeriod_=false,sparse_=false,adsWas_=false,menu_=false,driving_=false;
     double carryX_=0,carryY_=0;
     double filteredX_ = 0, filteredY_ = 0;
 };

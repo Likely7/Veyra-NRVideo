@@ -21595,6 +21595,19 @@
    "ru": "Нажмите новую клавишу…"
   },
   {
+   "zh": "按下键盘或鼠标键。点击另一键位可直接切换。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "按下鍵盤或滑鼠按鍵。點選另一個鍵位即可切換。",
+   "en": "Press a key or mouse button. Click another control to rebind it instead.",
+   "ja": "キーかマウスボタンを押します。別のボタンをクリックすると割り当て先が切り替わります。",
+   "ko": "키나 마우스 버튼을 누르세요. 다른 버튼을 클릭하면 지정 대상이 바뀝니다.",
+   "es": "Pulsa una tecla o un botón del ratón. Haz clic en otro control para cambiar de destino.",
+   "fr": "Appuyez sur une touche ou un bouton de souris. Cliquez sur une autre commande pour changer de cible.",
+   "de": "Eine Taste oder Maustaste drücken. Durch Anklicken einer anderen Belegung das Ziel wechseln.",
+   "pt-BR": "Pressione uma tecla ou botão do mouse. Clique em outro controle para mudar o alvo.",
+   "ru": "Нажмите клавишу или кнопку мыши. Щёлкните другой элемент, чтобы сменить назначение."
+  },
+  {
    "zh": "按住 V 查看原画",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "按住 V 查看原畫",
@@ -22491,19 +22504,6 @@
    "de": "Rename failed: Der Name kann nicht leer, länger als 48 Zeichen oder mit einer anderen Voreinstellung identisch sein",
    "pt-BR": "Renomear falhou: o nome não pode estar em branco, mais de 48 caracteres ou o mesmo que outro predefinido",
    "ru": "Название не может быть пустым, длиннее 48 символов или таким же, как другой предустановленный"
-  },
-  {
-   "zh": "改键",
-   "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "改鍵",
-   "en": "Rebind",
-   "ja": "再割り当て",
-   "ko": "다시 지정",
-   "es": "Reasignar",
-   "fr": "Réaffecter",
-   "de": "Neu belegen",
-   "pt-BR": "Remapear",
-   "ru": "Переназначить"
   },
   {
    "zh": "效果",
@@ -29290,6 +29290,19 @@
    "de": "Von Apex Compute herunterladen und aktivieren (ca. 3,2 MB)",
    "pt-BR": "Baixar da Apex Compute e ativar (cerca de 3,2 MB)",
    "ru": "Скачать с Apex Compute и включить (около 3,2 МБ)"
+  },
+  {
+   "zh": "点击任意手柄按键开始改键。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "點選任一手把按鍵開始改鍵。",
+   "en": "Click a controller button to rebind it.",
+   "ja": "コントローラーのボタンをクリックして割り当てを変更します。",
+   "ko": "컨트롤러 버튼을 클릭하여 다시 지정하세요.",
+   "es": "Haz clic en un botón del mando para reasignarlo.",
+   "fr": "Cliquez sur un bouton de la manette pour le réattribuer.",
+   "de": "Zum Neubelegen eine Controller-Taste anklicken.",
+   "pt-BR": "Clique em um botão do controle para remapeá-lo.",
+   "ru": "Нажмите кнопку геймпада, чтобы переназначить её."
   },
   {
    "zh": "点击右侧按键，再按下新的组合键即可重新绑定；Esc 取消。",
@@ -39471,19 +39484,6 @@
    "ru": "Выбрать папку снимков экрана"
   },
   {
-   "zh": "选择按键后点击改键",
-   "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "選取按鍵後點選改鍵",
-   "en": "Select a control, then click Rebind",
-   "ja": "ボタンを選んでから割り当てを変更します",
-   "ko": "버튼 선택 후 키 변경을 누르세요",
-   "es": "Selecciona un control y pulsa Reasignar",
-   "fr": "Sélectionnez une commande puis cliquez sur Réaffecter",
-   "de": "Bedienelement wählen und dann neu belegen",
-   "pt-BR": "Selecione um controle e clique em Remapear",
-   "ru": "Выберите кнопку, затем нажмите переназначение"
-  },
-  {
    "zh": "选择要处理的图片",
    "src": "src/ui/bridge/Export.cpp",
    "zh-TW": "選擇要處理的圖片",
@@ -40719,17 +40719,17 @@
    "ru": "Закрепить панель управления в полноэкранном режиме"
   },
   {
-   "zh": "锁定键鼠后即可切换。默认 W 加速、S 刹车，A/D 转向。",
+   "zh": "锁定键鼠后即可切换。默认 W（R2）加速、S（L2）刹车／倒车，A/D 转向。",
    "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "鎖定鍵鼠後即可切換。預設 W 加速、S 煞車、A/D 轉向。",
-   "en": "Switch while input is captured. By default W accelerates, S brakes, and A/D steer.",
-   "ja": "入力のロック中に切り替えます。既定では W で加速、S でブレーキ、A/D で操舵します。",
-   "ko": "입력을 잠근 상태에서 전환하세요. 기본값은 W 가속, S 제동, A/D 조향입니다.",
-   "es": "Cambia mientras la entrada esté capturada. Por defecto, W acelera, S frena y A/D giran.",
-   "fr": "Basculez pendant la capture de la saisie. Par défaut, W accélère, S freine et A/D dirigent.",
-   "de": "Bei erfasster Eingabe umschalten. Standardmäßig beschleunigt W, S bremst und A/D lenken.",
-   "pt-BR": "Alterne com a entrada capturada. Por padrão, W acelera, S freia e A/D esterçam.",
-   "ru": "Переключайте при захвате ввода. По умолчанию W — газ, S — тормоз, A/D — поворот."
+   "zh-TW": "鎖定鍵鼠後即可切換。預設 W（R2）加速、S（L2）煞車／倒車，A/D 轉向。",
+   "en": "Switch while input is captured. W (R2) accelerates, S (L2) brakes or reverses, and A/D steer by default.",
+   "ja": "入力のロック中に切り替えます。既定では W（R2）で加速、S（L2）でブレーキ・後退、A/D で操舵します。",
+   "ko": "입력을 잠근 상태에서 전환하세요. 기본값은 W(R2) 가속, S(L2) 제동·후진, A/D 조향입니다.",
+   "es": "Cambia mientras la entrada esté capturada. Por defecto, W (R2) acelera, S (L2) frena o da marcha atrás y A/D giran.",
+   "fr": "Basculez pendant la capture de la saisie. Par défaut, W (R2) accélère, S (L2) freine ou recule et A/D dirigent.",
+   "de": "Bei erfasster Eingabe umschalten. Standardmäßig beschleunigt W (R2), S (L2) bremst oder fährt rückwärts und A/D lenken.",
+   "pt-BR": "Alterne com a entrada capturada. Por padrão, W (R2) acelera, S (L2) freia ou dá ré e A/D esterçam.",
+   "ru": "Переключайте при захвате ввода. По умолчанию W (R2) — газ, S (L2) — тормоз или задний ход, A/D — поворот."
   },
   {
    "zh": "错误",

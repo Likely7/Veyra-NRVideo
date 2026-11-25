@@ -221,7 +221,7 @@ static bool calibratedMouse(){
     if(mousePad.motionValid||mousePad.rightX<=0)return false;
     mousePad={};mousePad.l2=255;gyro.apply(mousePad,origin+1000);
     if(!mousePad.motionValid||mousePad.gyro[1]>=0||mousePad.rightX)return false;
-    mousePad={};gyro.menu(true);gyro.apply(mousePad,origin+2000);
+    mousePad={};gyro.controlContext(true,false);gyro.apply(mousePad,origin+2000);
     if(mousePad.motionValid||mousePad.leftX<=0||mousePad.rightX)return false;
     t={};t.deadzone=0;t.carry=true;Stick carry(t);
     for(int i=0;i<70;++i){carry.move(10,0,origin+i*1000);carry.sample(origin+i*1000);}
@@ -231,12 +231,16 @@ static bool calibratedMouse(){
     }
     Pad driving;
     constexpr auto toggle = 0x75;
+    driving.setToggleMask(uint64_t{1}<<Pad::L2);
     driving.digital('W', true);
     if (driving.state().leftY != -32767 || !driving.digital(toggle, true)) return false;
     if (!driving.driving() || driving.state().leftY || driving.state().r2) return false;
     if (driving.digital('W', true)) return false;
     driving.digital('W', false); driving.digital('W', true); driving.digital('S', true);
-    if (!driving.state().r2 || !(driving.state().buttons & remoteplay::ControllerState::R1)) return false;
+    if (!driving.state().r2 || !driving.state().l2 || (driving.state().buttons & remoteplay::ControllerState::R1)) return false;
+    driving.digital('S', false);
+    if (driving.state().l2) return false;
+    driving.digital('S', true);
     driving.digital('D', true);
     driving.state(nullptr, origin);
     const auto steering = driving.state(nullptr, origin + 40000).leftX;
@@ -264,7 +268,7 @@ static bool calibratedMouse(){
     for(int i=0;i<10;++i){dpi800.move(1,0,origin+i*1000);dpi1600.move(1,0,origin+i*1000);}
     const auto a800=dpi800.sample(origin+9000).first,a1600=dpi1600.sample(origin+9000).first;
     if(a1600<=0||std::abs(a800-2*a1600)>2)return false;
-    std::cout<<"PS5_DRIVING_LAYOUT independent, W/R2 S/R1, steering ramp, held keys neutral, 100 counts/s min/max="
+    std::cout<<"PS5_DRIVING_LAYOUT independent, W/R2 S/L2, steering ramp, held keys neutral, 100 counts/s min/max="
              <<minAxis<<'/'<<maxAxis<<" DPI raw equal axes="<<a800<<'/'<<a1600<<"\n";
     std::cout<<"PS5_GESTURES ADS delay, smoothed reversal, toggle, four swipe origins, Escape, gyro, menu and bounded carry pass\n";
     std::cout<<"PS5_CALIBRATION start4/8ms, stop8ms, 35counts/s, flick125/1000, DPI, square, ADS, modifiers and walk pass\n";
