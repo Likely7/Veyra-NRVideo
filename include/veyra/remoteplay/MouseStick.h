@@ -15,7 +15,9 @@ namespace veyra::remoteplay {
 class MouseStick {
 public:
     struct Tuning {
-        double horizontal = 1.0, vertical = 1.0, curve = 1.0, deadzone = 0.08, smoothingMs = 0;
+        double horizontal = 1.0, vertical = 1.0, curve = 1.0, deadzone = 0.15, smoothingMs = 0;
+        double turnBoost = 3.6;
+        double inputDeadzone = 0;
         bool invertY = false;
         bool mouseLook = true;
         bool operator==(const Tuning&) const = default;
@@ -80,13 +82,27 @@ public:
             dy += report.dy * fraction;
             measuredUs += overlap;
         }
-        // 32,000 counts per second is full scale at unit sensitivity.
-        const double scale = 1000000.0 / (double(measuredUs) * 32000.0);
-        const double x = dx * scale * tuning_.horizontal;
-        const double y = dy * scale * tuning_.vertical * (tuning_.invertY ? -1.0 : 1.0);
+        const double velocityScale = 1000000.0 / double(measuredUs);
+        const double velocityX = dx * velocityScale;
+        const double velocityY = dy * velocityScale;
+        const double rawSpeed = std::hypot(velocityX, velocityY);
+        const double speed = std::max(0.0, rawSpeed - tuning_.inputDeadzone * AimVelocityScale);
+        // Separate slow and fast gains as in XY-CtoPS5's mapping.py (see THIRD_PARTY_NOTICES.md).
+        // Ease between them before applying axis sensitivity, so a swipe can
+        // reach full deflection without sacrificing corrections near centre.
+        const double turn = std::clamp((speed - AimSpeed) / (TurnSpeed - AimSpeed), 0.0, 1.0);
+        const double turnBlend = turn * turn * (3.0 - 2.0 * turn);
+        const double scale = rawSpeed > 0 ? (speed / rawSpeed) *
+            std::lerp(1.0, tuning_.turnBoost, turnBlend) / AimVelocityScale : 0.0;
+        const double x = velocityX * scale * tuning_.horizontal;
+        const double y = velocityY * scale * tuning_.vertical * (tuning_.invertY ? -1.0 : 1.0);
         const double magnitude = std::hypot(x, y);
-        const double response = magnitude > 0 ? (tuning_.deadzone + (1.0 - tuning_.deadzone) *
-            std::pow(std::min(magnitude, 1.0), tuning_.curve)) / magnitude : 0;
+        const double deflection = std::min(magnitude, 1.0);
+        // The aim curve rejoins the linear response below the fast-turn range.
+        const double aim = std::min(deflection / AimDeflection, 1.0);
+        const double curved = std::lerp(AimDeflection * std::pow(aim, tuning_.curve), deflection, aim);
+        const double response = magnitude > 0 ?
+            (tuning_.deadzone + (1.0 - tuning_.deadzone) * curved) / magnitude : 0;
         const int64_t filterTimeUs = std::min(nowUs, last.timeUs + holdUs);
         const int64_t elapsedUs = lastSampleUs_ < 0 ? 4000 :
             std::max<int64_t>(filterTimeUs - lastSampleUs_, 0);
@@ -107,6 +123,11 @@ private:
     static constexpr int64_t VelocityWindowUs = 12000;
     static constexpr int64_t ReleaseUs = 12000;
     static constexpr int64_t RestartUs = 32000;
+    // Mouse counts per second, before per-axis gains.
+    static constexpr double AimVelocityScale = 5000;
+    static constexpr double AimSpeed = 250;
+    static constexpr double TurnSpeed = 1200;
+    static constexpr double AimDeflection = 0.30;
 
     struct Report {
         int64_t timeUs;

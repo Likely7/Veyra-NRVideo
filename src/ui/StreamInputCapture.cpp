@@ -56,6 +56,7 @@ QString bindingLabel(int binding) {
 
 QVariantMap tuningMap(const Mapper::Tuning& t) {
     return {{QStringLiteral("horizontal"), t.horizontal}, {QStringLiteral("vertical"), t.vertical},
+            {QStringLiteral("turnBoost"), t.turnBoost}, {QStringLiteral("inputDeadzone"), t.inputDeadzone},
             {QStringLiteral("curve"), t.curve}, {QStringLiteral("deadzone"), t.deadzone},
             {QStringLiteral("smoothing"), t.smoothingMs}, {QStringLiteral("invertY"), t.invertY},
             {QStringLiteral("mouseLook"), t.mouseLook}};
@@ -68,13 +69,15 @@ Mapper::Tuning readTuning(const QVariantMap& map) {
         return ok && std::isfinite(value) ? std::clamp(value, lo, hi) : fallback;
     };
     Mapper::Tuning t;
-    t.horizontal = bounded("horizontal", 1.0, 0.1, 6.0);
-    t.vertical = bounded("vertical", 1.0, 0.1, 6.0);
-    t.curve = bounded("curve", 1.0, 0.5, 2.5);
-    t.deadzone = bounded("deadzone", 0.08, 0.0, 0.30);
-    t.smoothingMs = bounded("smoothing", 0, 0, 32);
-    t.invertY = map.value(QStringLiteral("invertY"), false).toBool();
-    t.mouseLook = map.value(QStringLiteral("mouseLook"), true).toBool();
+    t.horizontal = bounded("horizontal", t.horizontal, 0.1, 6.0);
+    t.vertical = bounded("vertical", t.vertical, 0.1, 6.0);
+    t.turnBoost = bounded("turnBoost", t.turnBoost, 1.0, 6.0);
+    t.inputDeadzone = bounded("inputDeadzone", t.inputDeadzone, 0.0, 0.10);
+    t.curve = bounded("curve", t.curve, 0.5, 2.5);
+    t.deadzone = bounded("deadzone", t.deadzone, 0.0, 0.30);
+    t.smoothingMs = bounded("smoothing", t.smoothingMs, 0, 32);
+    t.invertY = map.value(QStringLiteral("invertY"), t.invertY).toBool();
+    t.mouseLook = map.value(QStringLiteral("mouseLook"), t.mouseLook).toBool();
     return t;
 }
 } // namespace
@@ -403,11 +406,18 @@ void StreamInputCapture::applyDefaults() {
     save();
     emit mappingChanged();
 }
+void StreamInputCapture::resetMouseTuning() {
+    Mapper::Tuning defaults;
+    defaults.mouseLook = mapper_.tuning().mouseLook;
+    applyMouseTuning(defaults);
+}
 void StreamInputCapture::setTuning(const QString& key, const QVariant& value) {
     auto map = tuning();
     if (!map.contains(key)) return;
     map[key] = value;
-    const auto next = readTuning(map);
+    applyMouseTuning(readTuning(map));
+}
+void StreamInputCapture::applyMouseTuning(const Mapper::Tuning& next) {
     if (next == mapper_.tuning()) return;
     mapper_.setTuning(next);
     if (mouse_) mouse_->setTuning(next);

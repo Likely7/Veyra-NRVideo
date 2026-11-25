@@ -248,8 +248,10 @@ DialogLayer {
                 model: [
                     {id:"horizontal", title:qsTr("横向灵敏度"), min:0.1, max:6, step:0.1, scale:1, initial:1, decimals:1, unit:"×"},
                     {id:"vertical", title:qsTr("纵向灵敏度"), min:0.1, max:6, step:0.1, scale:1, initial:1, decimals:1, unit:"×"},
-                    {id:"deadzone", title:qsTr("死区补偿"), min:0, max:0.3, step:0.01, scale:100, initial:0.08, decimals:0, unit:"%"},
-                    {id:"curve", title:qsTr("响应曲线"), min:0.5, max:2.5, step:0.05, scale:1, initial:1, decimals:2, unit:""},
+                    {id:"turnBoost", title:qsTr("快速转身倍率"), min:1, max:6, step:0.1, scale:1, initial:3.6, decimals:1, unit:"×"},
+                    {id:"curve", title:qsTr("瞄准曲线"), min:0.5, max:2.5, step:0.05, scale:1, initial:1, decimals:2, unit:""},
+                    {id:"inputDeadzone", title:qsTr("输入死区"), min:0, max:0.1, step:0.005, scale:100, initial:0, decimals:1, unit:"%"},
+                    {id:"deadzone", title:qsTr("死区补偿"), min:0, max:0.3, step:0.01, scale:100, initial:0.15, decimals:0, unit:"%"},
                     {id:"smoothing", title:qsTr("平滑时间"), min:0, max:32, step:1, scale:1, initial:0, decimals:0, unit:" ms"}
                 ]
                 delegate: VRow {
@@ -285,6 +287,14 @@ DialogLayer {
             VRow {
                 label: qsTr("反转纵向")
                 VSwitch { checked: panel.tune.invertY === true; onToggled: on => panel.input?.setTuning("invertY", on) }
+            }
+            VButton {
+                objectName: "ps5-reset-mouse"
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("重置鼠标手感")
+                ghost: true
+                enabled: panel.input !== null
+                onClicked: panel.input.resetMouseTuning()
             }
         }
     }

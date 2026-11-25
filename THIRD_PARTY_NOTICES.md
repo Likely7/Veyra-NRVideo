@@ -1420,3 +1420,11 @@ Linux OBS filter work is adopted from andreanjoes PR #96 at
 validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
 centres and preserves premultiplied transparency. OBS's public colour-filter
 shader was consulted for the alpha contract; no OBS DLL is bundled here.
+
+## PS5 mouse-to-stick speed-dependent gain
+
+The slow/fast gain interpolation in `include/veyra/remoteplay/MouseStick.h`
+adapts the approach in XY-CtoPS5's `ps5kbm/mapping.py` at commit
+`6c816d5356abdc7a7577f980a7c1186fe853c44d`, GPL-3.0-or-later.
+Veyra uses its own time-weighted motion reports, radial deadzones, eased
+interpolation and C++ session integration. [Source](https://github.com/SWTiCC/XY-CtoPS5/blob/6c816d5356abdc7a7577f980a7c1186fe853c44d/ps5kbm/mapping.py) · [License](https://github.com/SWTiCC/XY-CtoPS5/blob/6c816d5356abdc7a7577f980a7c1186fe853c44d/LICENSE)

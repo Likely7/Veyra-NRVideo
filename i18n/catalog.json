@@ -13132,19 +13132,6 @@
    "ru": "Shares pairings с потоковой передачей PS5"
   },
   {
-   "zh": "响应曲线",
-   "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "響應曲線",
-   "en": "Response curve",
-   "ja": "反応曲線",
-   "ko": "응답 곡선",
-   "es": "Curva de respuesta",
-   "fr": "Courbe de réponse",
-   "de": "Reaktionskurve",
-   "pt-BR": "Curva de resposta",
-   "ru": "Кривая отклика"
-  },
-  {
    "zh": "唤醒",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "喚醒",
@@ -20163,6 +20150,19 @@
    "de": "Tastenkürzel konnte nicht gespeichert werden",
    "pt-BR": "Não foi possível salvar o atalho",
    "ru": "Не удалось сохранить сочетание клавиш"
+  },
+  {
+   "zh": "快速转身倍率",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "快速轉身倍率",
+   "en": "Fast turn multiplier",
+   "ja": "高速旋回倍率",
+   "ko": "빠른 회전 배율",
+   "es": "Multiplicador de giro rápido",
+   "fr": "Multiplicateur de rotation rapide",
+   "de": "Multiplikator für schnelle Drehung",
+   "pt-BR": "Multiplicador de giro rápido",
+   "ru": "Множитель быстрого поворота"
   },
   {
    "zh": "性能",
@@ -30423,6 +30423,19 @@
    "ru": "Сон (можно разбудить)"
   },
   {
+   "zh": "瞄准曲线",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "瞄準曲線",
+   "en": "Aim curve",
+   "ja": "照準カーブ",
+   "ko": "조준 곡선",
+   "es": "Curva de apuntado",
+   "fr": "Courbe de visée",
+   "de": "Zielkurve",
+   "pt-BR": "Curva de mira",
+   "ru": "Кривая прицеливания"
+  },
+  {
    "zh": "矩形 ",
    "src": "qml/MaskEditor.qml",
    "zh-TW": "矩形 ",
@@ -37612,6 +37625,19 @@
    "ru": "Ввод временной шкалы нерегулярный"
   },
   {
+   "zh": "输入死区",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "輸入死區",
+   "en": "Input deadzone",
+   "ja": "入力デッドゾーン",
+   "ko": "입력 데드존",
+   "es": "Zona muerta de entrada",
+   "fr": "Zone morte d’entrée",
+   "de": "Eingabe-Totzone",
+   "pt-BR": "Zona morta de entrada",
+   "ru": "Мёртвая зона ввода"
+  },
+  {
    "zh": "输入空间不匹配",
    "src": "src/pipeline/EnhanceGraph.cpp",
    "zh-TW": "輸入空間不匹配",
@@ -40184,6 +40210,19 @@
    "de": "Knoten zurücksetzen",
    "pt-BR": "Redefinir nó",
    "ru": "Сбросить узел"
+  },
+  {
+   "zh": "重置鼠标手感",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "重設滑鼠手感",
+   "en": "Reset mouse tuning",
+   "ja": "マウス調整をリセット",
+   "ko": "마우스 조정 초기화",
+   "es": "Restablecer ajustes del ratón",
+   "fr": "Réinitialiser les réglages souris",
+   "de": "Mauseinstellungen zurücksetzen",
+   "pt-BR": "Redefinir ajustes do mouse",
+   "ru": "Сбросить настройки мыши"
   },
   {
    "zh": "重连",

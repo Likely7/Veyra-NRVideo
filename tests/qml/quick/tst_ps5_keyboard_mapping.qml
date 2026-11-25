@@ -32,6 +32,9 @@ Item {
             learning = -1
         }
         function applyDefaults() { bindings = ["Space"].concat(Array(25).fill("—")) }
+        function resetMouseTuning() {
+            tuning = { horizontal: 1, vertical: 1, turnBoost: 3.6, inputDeadzone: 0, mouseLook: tuning.mouseLook }
+        }
         function setTuning(name, value) {
             const next = Object.assign({}, tuning)
             next[name] = value
@@ -53,6 +56,7 @@ Item {
             fixture.width = 980
             host.dialog = "ps5-mapping"
             mapper.applyDefaults()
+            mapper.resetMouseTuning()
             mapper.releasePs5()
             wait(30)
         }
@@ -83,6 +87,21 @@ Item {
             compare(slider.value, 3.2)
             mapper.setTuning("horizontal", 2.1)
             compare(slider.value, 2.1)
+            const boost = findChild(editor, "ps5-tune-turnBoost")
+            const filter = findChild(editor, "ps5-tune-inputDeadzone")
+            compare(boost.value, 3.6)
+            boost.commitValue(4.4)
+            filter.commitValue(0.035)
+            fuzzyCompare(mapper.tuning.turnBoost, 4.4, 0.001)
+            fuzzyCompare(mapper.tuning.inputDeadzone, 0.035, 0.0001)
+            const key = mapper.bindings[0]
+            mapper.setTuning("mouseLook", false)
+            mouseClick(findChild(editor, "ps5-reset-mouse"))
+            compare(boost.value, 3.6)
+            compare(filter.value, 0)
+            compare(mapper.tuning.mouseLook, false)
+            compare(mapper.bindings[0], key)
+            verify(editor.shown)
         }
         function test_narrow_geometry() {
             fixture.width = 453

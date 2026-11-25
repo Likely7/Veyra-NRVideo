@@ -52,6 +52,7 @@ public:
     Q_INVOKABLE void clearBinding(int action);
     Q_INVOKABLE void cancelLearning();
     Q_INVOKABLE void applyDefaults();
+    Q_INVOKABLE void resetMouseTuning();
     Q_INVOKABLE void setTuning(const QString& key, const QVariant& value);
     Q_INVOKABLE void preview(bool on);
     // Invoked while opening another panel or changing source.
@@ -82,6 +83,7 @@ private:
     void emitPad();
     void digital(int key, bool down);
     void bind(int key, int modifiers);
+    void applyMouseTuning(const Mapper::Tuning& tuning);
     void save();
     void load();
 

@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-24 PS5 鼠标瞄准和快速转身
+
+- 复核用户测试配置为横纵 6×、曲线 2.5、死区补偿 0。旧版以 32,000 counts/s 为速度基准，并将整段轴输出做 2.5 次幂。1,000 counts/s 实际只推 1.52% 右杆。以 XY-CtoPS5 的分速增益为参考，在现有报告时间采样上加入慢移和快转两个区域。瞄准曲线只调整前 30% 偏转，快段回到线性。输入过滤阈值和输出死区补偿分别可调。
+- 新增快速转身倍率、输入死区和仅重置鼠标手感入口。版本 1 旧配置仍可读取，已有键位和用户显式参数沿用。新配置或手感重置采用 1× 横纵、3.6× 快转倍率、15% 死区补偿和 0% 输入过滤。重置保留已选的控制方式和鼠标控右杆开关。 [参考实现及许可证](<../THIRD_PARTY_NOTICES.md>)
+- 从 Git 取旧版 MouseStick 与新版并行回放 6 档恒速相对输入。原测配置在 125 / 1,000 counts/s 的轴输出从 0.01% / 1.52% 变为 10.15% / 100%。新默认在 125 / 1,000 / 1,500 counts/s 分别为 17.12% / 71.15% / 100%。XY-CtoPS5 GTA6 预设对照为按源码计算的恒速目标。PS5 实际游戏转向未测。 [回放数值](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/turn-response-ab.csv>)
+- 复用同名构建及单一测试目录，用 `build-recording-handoff.py --task codex-ps5-keyboard-mouse-20261124 --label 2.2.1-ps5-input-test --jobs 2` 构建播放器及相关测试共 5 个目标。PS5 边界回归在 1,000 counts/s 下对比 125 和 1,000 Hz，共 243 次采样，未饱和且一致。另测快转倍率、输入死区边界、对角限幅和 27 组曲线单调性。Qt Quick 262 项、Moonlight 协议 135 项通过，9 种语言无缺译和占位符错误。保留旧测试入口，新构建和运行目录 SHA-256 一致。 [构建](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/build-20261124-190507/receipt.json>) · [PS5 边界](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/turn-boundary.txt>) · [界面回归](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/turn-quick.txt>)
+- Windows 英文窗口实拖快转倍率和输入死区至 5.4× / 3.5%。重启至中文窗口读回，再点击手感重置，原 Ctrl+J 和关闭鼠标控右杆的状态均保留。验证用 `tmp/codex-ps5-keyboard-mouse-20261124/turn-native-en-profile` 夹具，原测试配置哈希保持一致。 [原测试入口](<E:/项目/Veyra/tests/codex-ps5-keyboard-mouse-20261124/Open PS5 keyboard test.cmd>)
+
 ## 2026-11-24 PS5 改键弹窗与鼠标顿挫
 
 - 在现有键鼠试用分支复现点叉键时弹窗关闭。遮罩改为只接收面板外的点击，手柄按键使用与现有按钮一致的按下和释放判定。用新版 Windows 窗口实点叉键和「改键」，录入 Ctrl+J、鼠标右键，验证 Esc 取消录键、输入预览进入与退出、面板外点击关闭。重启后在实际界面读到两个绑定。测试使用任务私有配置。

@@ -84,11 +84,11 @@ static bool mouseStickPacing() {
     int16_t lowMin = 32767, lowMax = 0;
     unsigned samples = 0, mismatches = 0;
     // Real queue and sampler with a 4 ms consumer. UI heartbeats are uneven
-    // and miss 40 ms, while relative input keeps a constant 8,000 counts/s.
+    // and miss 40 ms, while relative input keeps a constant 1,000 counts/s.
     for (int ms = 0; ms <= 1000; ++ms) {
         const auto now = base + ms * 1000;
-        highPoll.move(8, 4, now);
-        if (ms % 8 == 1) lowPoll->move(64, 32, now);
+        highPoll.move(1, 0, now);
+        if (ms % 8 == 1) lowPoll->move(8, 0, now);
         if ((ms % 18 == 0 || ms % 18 == 7) && (ms < 370 || ms > 410)) {
             source.controller(mapped, lowPoll);
             source.controllerStamp_ = now * 10;
@@ -98,14 +98,14 @@ static bool mouseStickPacing() {
             const auto pad = source.takeControllerLocked(now * 10);
             const auto [x, y] = highPoll.sample(now);
             ++samples;
-            if (!pad.inputActive || !x || !y || pad.rightX != x || pad.rightY != y) ++mismatches;
+            if (!pad.inputActive || !x || pad.rightX != x || pad.rightY != y) ++mismatches;
             lowMin = std::min(lowMin, pad.rightX);
             lowMax = std::max(lowMax, pad.rightX);
         }
     }
     std::cout << "PS5_MOUSE_PACING samples=" << samples << " mismatches=" << mismatches
               << " stable_axis_min=" << lowMin << " stable_axis_max=" << lowMax << "\n";
-    if (mismatches || lowMin != lowMax) return false;
+    if (mismatches || lowMin != lowMax || lowMax >= 32767) return false;
 
     // Low-poll motion is held between reports, tapers to neutral after a
     // stop, and can restart immediately without reusing stale counts.
@@ -114,7 +114,7 @@ static bool mouseStickPacing() {
     const auto fading = source.takeControllerLocked((last + 18000) * 10).rightX;
     const auto stopped = source.takeControllerLocked((last + 24000) * 10).rightX;
     const auto resumed = last + 33000;
-    lowPoll->move(64, 32, resumed);
+    lowPoll->move(8, 0, resumed);
     const auto restart = source.takeControllerLocked(resumed * 10).rightX;
     if (held != lowMax || fading <= 0 || fading >= held || stopped || restart != held) return false;
 
@@ -135,10 +135,10 @@ static bool mouseStickPacing() {
     if (source.takeControllerLocked((resumed + 106000) * 10) != State{}) return false;
 
     Stick batched(Stick::Tuning{}), unbatched(Stick::Tuning{});
-    batched.move(32, 16, base);
-    batched.move(32, 16, base);
+    batched.move(4, 2, base);
+    batched.move(4, 2, base);
     batched.move(500, 500, base - 1000); // Out-of-order input must not be replayed.
-    unbatched.move(64, 32, base);
+    unbatched.move(8, 4, base);
     if (batched.sample(base) != unbatched.sample(base)) return false;
     Stick::Tuning tuning;
     tuning.invertY = true;
@@ -154,6 +154,54 @@ static bool mouseStickPacing() {
         second.second >= first.second || std::abs(second.first + 2 * second.second) > 1) return false;
     if (batched.sample(base + 32000) != std::pair<int16_t, int16_t>{}) return false;
     return true;
+}
+static bool mouseTurnCurve() {
+    using Stick = remoteplay::MouseStick;
+    const auto axis = [](Stick::Tuning tuning, int countsPerReport) {
+        Stick stick(tuning);
+        for (int tick = 1; tick <= 12; ++tick) stick.move(countsPerReport, 0, tick * 8000);
+        return stick.sample(96000).first / 32767.0;
+    };
+    Stick::Tuning defaults;
+    const double aim = axis(defaults, 1);
+    const double turn = axis(defaults, 8);
+    if (aim < 0.16 || aim > 0.18 || turn < 0.68 || turn > 0.74 || axis(defaults, 12) != 1) return false;
+
+    auto field = defaults;
+    field.horizontal = field.vertical = 6;
+    field.curve = 2.5;
+    field.deadzone = 0;
+    if (axis(field, 8) != 1 || axis(field, 1) < 0.09 || axis(field, 1) > 0.12) return false;
+    std::cout << "PS5_MOUSE_TURN aim_125=" << aim << " turn_1000=" << turn
+              << " turn_1500=" << axis(defaults, 12) << " saved_profile_turn_1000=" << axis(field, 8) << "\n";
+
+    auto adjusted = defaults;
+    adjusted.turnBoost = 1;
+    if (axis(adjusted, 1) != aim || axis(adjusted, 8) >= turn * 0.6) return false;
+    adjusted.inputDeadzone = 0.1;
+    if (axis(adjusted, 4) != 0 || axis(adjusted, 5) <= 0) return false;
+
+    // Curve transitions must never turn slower when the mouse moves faster.
+    for (const auto gain : {0.1, 1.0, 6.0}) {
+        for (const auto curve : {0.5, 1.0, 2.5}) {
+            for (const auto boost : {1.0, 3.6, 6.0}) {
+                auto tuning = defaults;
+                tuning.horizontal = gain;
+                tuning.curve = curve;
+                tuning.turnBoost = boost;
+                double previous = 0;
+                for (int count = 1; count <= 64; ++count) {
+                    const double value = axis(tuning, count);
+                    if (value < previous || value > 1) return false;
+                    previous = value;
+                }
+            }
+        }
+    }
+    Stick diagonal(defaults);
+    diagonal.move(24, -24, 8000);
+    const auto [x, y] = diagonal.sample(8000);
+    return x > 0 && x == -y && std::hypot(x, y) <= 32768;
 }
 static bool slowConsumer(){
     RemotePlaySessionSource s;s.started_=true;
@@ -405,6 +453,10 @@ int main(int argc,char** argv){
     if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseStickPacing()) {
         std::cerr << "PS5 mouse pacing regression\n";
         return 46;
+    }
+    if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseTurnCurve()) {
+        std::cerr << "PS5 mouse turn response regression\n";
+        return 47;
     }
     std::cout << "PS5_KEYBOARD_MAPPING chord order payload mouse-rate and release passed\n";
     veyra::source::RemotePlaySessionSource source;
