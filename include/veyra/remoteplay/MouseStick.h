@@ -17,7 +17,7 @@ class MouseStick {
 public:
     struct Tuning {
         double horizontal = 1.0, vertical = 1.0, curve = 1.0, deadzone = 0.08, smoothingMs = 0;
-        double turnBoost = 1.0, dpi = 800, deadzoneShape = 0, adsScale = 1, walkScale = .45;
+        double turnBoost = 1.0, turnSpeed = 2400, dpi = 800, deadzoneShape = 0, adsScale = 1, walkScale = .45;
         int adsDelayMs = 0, unlock = 0, gyro = 0, adsAction = 16;
         bool carry = false;
         double inputDeadzone = 0;
@@ -34,6 +34,11 @@ public:
         clear();
     }
 
+    void resetMotion() {
+        std::lock_guard lock(mutex_);
+        clear();
+    }
+
     void move(int dx, int dy, int64_t nowUs) {
         if (dx == 0 && dy == 0) return;
         std::lock_guard lock(mutex_);
@@ -46,17 +51,23 @@ public:
             if(!knownPeriod_)last.periodUs=std::clamp<int64_t>(int64_t(std::abs(last.dx)+std::abs(last.dy))*1000,1000,8000);
             return;
         }
-        const bool firstFine=(lastMove_<0||gap>100000) && std::abs(dx)+std::abs(dy)==1;
-        const bool sparse=firstFine||(gap>16000 && gap<=100000 && std::abs(dx)+std::abs(dy)<=2);
-        if(gap>16000)used_=0;
+        const double count = std::hypot(double(dx), double(dy));
+        const bool firstFine = (lastMove_ < 0 || gap > 70000) && count == 1;
+        // A slow physical move can produce one count every several USB polls.
+        // Continuity follows nonzero reports here, independent of USB poll rate.
+        const bool sparse = firstFine ||
+            (gap >= 6500 && gap <= 70000 && count <= std::max(2., tuning_.dpi / 800.) &&
+             count * 1000000. / gap <= 200. * tuning_.dpi / 800.);
+        if (gap > 70000 || (!sparse && gap > 16000) || (sparse && !sparse_)) used_ = 0;
         int64_t interval=period_;
         if(firstFine)interval=28571; // One isolated count carries no report-period evidence.
         else if(sparse)interval=gap;
-        else if(gap>0 && gap<=16000){
-            interval=std::max<int64_t>(125,gap);
-            period_=std::clamp<int64_t>(interval,125,8000);
-            if(used_==1 && (!knownPeriod_||sparse_))reports_[newest_].periodUs=period_;
-            knownPeriod_=true;
+        else if (gap > 0 && gap <= 16000) {
+            interval = std::max<int64_t>(125, gap);
+            const auto reported = std::clamp<int64_t>(interval, 125, 8000);
+            period_ = !knownPeriod_ || sparse_ ? reported : (period_ * 3 + reported + 2) / 4;
+            if (used_ == 1 && (!knownPeriod_ || sparse_)) reports_[newest_].periodUs = reported;
+            knownPeriod_ = true;
         }else if(!knownPeriod_){
             interval=std::clamp<int64_t>((std::abs(dx)+std::abs(dy))*1000LL,1000,8000);
         }
@@ -95,9 +106,20 @@ private:
         if(!used_)return {};
         const auto& last=reports_[newest_];
         const auto age=std::max<int64_t>(0,nowUs-last.timeUs);
-        const auto holdUs=sparse_?last.periodUs:std::clamp<int64_t>(period_+1500,2500,10000);
+        int64_t holdUs = std::clamp<int64_t>(period_ + 1500, 2500, 10000);
+        if (sparse_) {
+            // At low poll rates, the same hand speed can alternate between
+            // one and two USB intervals per count. Cover the recent cadence.
+            int64_t sparseGap = last.periodUs;
+            for (size_t i = 1; i < std::min<size_t>(used_, 5); ++i) {
+                const auto& previous = reports_[(newest_ + reports_.size() - i) % reports_.size()];
+                sparseGap = std::max(sparseGap, std::min(previous.periodUs, 2 * last.periodUs));
+            }
+            holdUs = std::min<int64_t>(70000, sparseGap + std::max<int64_t>(2000, last.periodUs / 8));
+        }
         const auto releaseUs=std::clamp<int64_t>(period_*3/2,4000,8000);
-        const auto windowUs=std::clamp<int64_t>(period_*3/2,4000,12000);
+        const auto windowUs = sparse_ ? std::min<int64_t>(2 * last.periodUs, 70000)
+                                      : std::clamp<int64_t>(period_ * 3 / 2, 6000, 12000);
         const double dt=std::clamp<double>(lastSampleUs_<0?4000:nowUs-lastSampleUs_,0.,16000.)/1000000.;
         lastSampleUs_=nowUs;
         const double gain=std::clamp(1.-double(age-holdUs)/releaseUs,0.,1.);
@@ -118,7 +140,7 @@ private:
         const double alpha=tuning_.smoothingMs>0?-std::expm1(-1000.*dt/tuning_.smoothingMs):1.;
         filteredX_+=(dx*weight*gain-filteredX_)*alpha;
         filteredY_+=(dy*weight*gain-filteredY_)*alpha;
-        const double scale=(ads?tuning_.adsScale:1.)/(4000.*tuning_.dpi/800.);
+        const double scale = (ads ? tuning_.adsScale : 1.) / (tuning_.turnSpeed * tuning_.dpi / 800.);
         double x=filteredX_*tuning_.horizontal*scale, y=filteredY_*tuning_.vertical*scale*(tuning_.invertY?-1:1);
         const double mag=std::hypot(x,y);
         const double u=std::max(0.,mag-tuning_.inputDeadzone);
@@ -134,7 +156,12 @@ private:
         }
         const double n=std::hypot(x,y);
         if(n<=0)return {};
-        const double response=std::pow(std::min(n,1.),tuning_.curve);
+        const double deflection = std::min(n, 1.);
+        // Aim curve shapes the center, meeting the linear turn range at the
+        // same output so high curve values still allow quick turns.
+        constexpr double aimRange = .45;
+        const double response = deflection < aimRange
+            ? aimRange * std::pow(deflection / aimRange, tuning_.curve) : deflection;
         const auto axis=[&](double v){
             const double dir=v/n, dz=tuning_.deadzone;
             const double axial=v==0?0.:std::copysign(dz,v);

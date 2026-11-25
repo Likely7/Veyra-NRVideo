@@ -18,20 +18,29 @@ Item {
     QtObject {
         id: mapper
         property bool keyboardEnabled: false
-        property var bindings: Array(26).fill("—")
+        property var bindings: Array(32).fill("—")
+        property var drivingBindings: Array(32).fill("—")
+        property string driveKeyLabel: "F6"
+        property bool driving: false
+        function selectDriving(on) { driving = on }
+        function learnDriveKey(button) { learning = 32 }
         property var tuning: ({ horizontal: 1, vertical: 1, mouseLook: true })
         property int learning: -1
         property string feedback: ""
         property bool previewing: false
         property var padState: ({ buttons: 0 })
-        function learn(action) { learning = action }
-        function clearBinding(action) {
+        function learn(action, button, drivingLayout) { learning = action }
+        function clearBinding(action, drivingLayout) {
             const list = bindings.slice()
             list[action] = "—"
             bindings = list
             learning = -1
         }
-        function applyDefaults() { bindings = ["Space"].concat(Array(25).fill("—")) }
+        function applyDefaults(drivingLayout) {
+            if (drivingLayout) return
+            bindings = ["Space"].concat(Array(31).fill("—"))
+            const keys = Array(32).fill("—"); keys[17] = "W"; keys[9] = "S"; drivingBindings = keys
+        }
         function resetMouseTuning() {
             tuning = { horizontal: 1, vertical: 1, turnBoost: 3.6, inputDeadzone: 0, mouseLook: tuning.mouseLook }
         }
@@ -60,6 +69,8 @@ Item {
         function init() {
             fixture.width = 980
             host.dialog = "ps5-mapping"
+            mapper.driving=false
+            editor.editDriving=false
             editor.advanced=false
             mapper.applyDefaults()
             mapper.resetMouseTuning()
@@ -113,6 +124,24 @@ Item {
             compare(mapper.tuning.mouseLook, false)
             compare(mapper.bindings[0], key)
             verify(editor.shown)
+        }
+        function test_driving_layout_and_preview() {
+            const layout = findChild(editor, "ps5-mapping-layout")
+            verify(layout.visible)
+            layout.picked("driving")
+            compare(editor.binding(17), "W")
+            compare(editor.binding(9), "S")
+            const key = findChild(editor, "ps5-drive-key")
+            key.clicked()
+            compare(mapper.learning, 32)
+            key.clicked()
+            compare(mapper.learning, -1)
+            findChild(editor, "ps5-input-preview").clicked()
+            verify(mapper.previewing)
+            verify(mapper.driving)
+            mapper.selectDriving(false)
+            verify(!editor.editDriving)
+            compare(editor.binding(0), "Space")
         }
         function test_narrow_geometry() {
             fixture.width = 453

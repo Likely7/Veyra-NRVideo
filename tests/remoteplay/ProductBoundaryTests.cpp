@@ -157,7 +157,7 @@ static bool mouseStickPacing() {
 }
 static bool calibratedMouse(){
     using Pad=remoteplay::KeyboardMousePad;using Stick=remoteplay::MouseStick;
-    Stick::Tuning t;t.deadzone=0;Stick high(t);const int64_t origin=1000000;
+    Stick::Tuning t;t.deadzone=0;t.turnSpeed=4000;Stick high(t);const int64_t origin=1000000;
     for(int i=0;i<=8;++i){
         high.move(1,0,origin+i*1000);
         if((i==4||i==8)&&std::abs(high.sample(origin+i*1000).first/32767.-.25)>.0375)return false;
@@ -186,7 +186,7 @@ static bool calibratedMouse(){
     pad.setBinding(Pad::LeftSlow,'B');pad.digital('W',true);pad.digital('B',true);
     if(std::abs(pad.state().leftY+32767*.45)>1)return false;
     // ADS delay is measured by the send clock while a held button stays active.
-    t={};t.deadzone=0;t.adsScale=.5;t.adsDelayMs=8;
+    t={};t.deadzone=0;t.turnSpeed=4000;t.adsScale=.5;t.adsDelayMs=8;
     Stick delayed(t);
     remoteplay::ControllerState scoped;scoped.l2=255;
     for(int i=0;i<12;++i){
@@ -229,6 +229,43 @@ static bool calibratedMouse(){
         const auto x=carry.sample(origin+i*1000).first;
         if((i==77&&x==0)||(i==144&&x!=0))return false;
     }
+    Pad driving;
+    constexpr auto toggle = 0x75;
+    driving.digital('W', true);
+    if (driving.state().leftY != -32767 || !driving.digital(toggle, true)) return false;
+    if (!driving.driving() || driving.state().leftY || driving.state().r2) return false;
+    if (driving.digital('W', true)) return false;
+    driving.digital('W', false); driving.digital('W', true); driving.digital('S', true);
+    if (!driving.state().r2 || !(driving.state().buttons & remoteplay::ControllerState::R1)) return false;
+    driving.digital('D', true);
+    driving.state(nullptr, origin);
+    const auto steering = driving.state(nullptr, origin + 40000).leftX;
+    if (steering < 15000 || steering > 18000) return false;
+    driving.digital(toggle, false); driving.digital(toggle, true);
+    if (driving.driving() || driving.state().r2 || driving.state().leftX || driving.state().buttons) return false;
+    if (driving.setDriveKey('A') || !driving.setDriveKey('V')) return false;
+    if (!driving.setBinding(Pad::R1, 'K', true) || driving.bindings()[Pad::R1] != 'R') return false;
+
+    t={};
+    Stick fine(t); int16_t minAxis=32767,maxAxis=0;
+    for(int i=0;i<160;++i){
+        if(i%10==0)fine.move(1,0,origin+i*1000);
+        const auto axis=fine.sample(origin+i*1000).first;
+        if(i>=30){minAxis=std::min(minAxis,axis);maxAxis=std::max(maxAxis,axis);}
+    }
+    if(minAxis<=0 || maxAxis-minAxis>2 || fine.sample(origin+190000).first) return false;
+    Stick lowPollFine(t);
+    const int pulseTimes[] = {8,16,24,40,48,56,64,80,88,96,104,120,128,136,144,160};
+    for(int i=0,pulse=0;i<=160;++i){
+        if(i==pulseTimes[pulse]){ lowPollFine.move(1,0,origin+i*1000);++pulse; }
+        if(i>40 && !lowPollFine.sample(origin+i*1000).first)return false;
+    }
+    t.deadzone=0;Stick dpi800(t);t.dpi=1600;Stick dpi1600(t);
+    for(int i=0;i<10;++i){dpi800.move(1,0,origin+i*1000);dpi1600.move(1,0,origin+i*1000);}
+    const auto a800=dpi800.sample(origin+9000).first,a1600=dpi1600.sample(origin+9000).first;
+    if(a1600<=0||std::abs(a800-2*a1600)>2)return false;
+    std::cout<<"PS5_DRIVING_LAYOUT independent, W/R2 S/R1, steering ramp, held keys neutral, 100 counts/s min/max="
+             <<minAxis<<'/'<<maxAxis<<" DPI raw equal axes="<<a800<<'/'<<a1600<<"\n";
     std::cout<<"PS5_GESTURES ADS delay, smoothed reversal, toggle, four swipe origins, Escape, gyro, menu and bounded carry pass\n";
     std::cout<<"PS5_CALIBRATION start4/8ms, stop8ms, 35counts/s, flick125/1000, DPI, square, ADS, modifiers and walk pass\n";
     return true;
@@ -243,13 +280,13 @@ static bool mouseTurnCurve() {
     Stick::Tuning defaults;
     const double aim = axis(defaults, 1);
     const double turn = axis(defaults, 8);
-    if (std::abs(aim-.10875)>.001 || std::abs(turn-.31)>.001 || axis(defaults,32)!=1)return false;
+    if (std::abs(aim-(.08+.92*125/2400.))>.001 || std::abs(turn-(.08+.92*1000/2400.))>.001 || axis(defaults,20)!=1)return false;
 
     auto field = defaults;
     field.horizontal = field.vertical = 6;
     field.curve = 2.5;
     field.deadzone = 0;
-    if (axis(field, 8) != 1 || std::abs(axis(field,1)-std::pow(.1875,2.5))>.001) return false;
+    if (axis(field, 8) != 1 || std::abs(axis(field,1)-.45*std::pow((125.*6/2400.)/.45,2.5))>.001) return false;
     std::cout << "PS5_MOUSE_TURN aim_125=" << aim << " turn_1000=" << turn
               << " turn_1500=" << axis(defaults, 12) << " saved_profile_turn_1000=" << axis(field, 8) << "\n";
 
@@ -257,7 +294,7 @@ static bool mouseTurnCurve() {
     adjusted.turnBoost = 3.6;
     if (axis(adjusted, 1) != aim || axis(adjusted, 8) <= turn) return false;
     adjusted.inputDeadzone = 0.1;
-    if (axis(adjusted, 3) != 0 || axis(adjusted, 4) <= 0) return false;
+    if (axis(adjusted, 1) != 0 || axis(adjusted, 2) <= 0) return false;
 
     // Curve transitions must never turn slower when the mouse moves faster.
     for (const auto gain : {0.1, 1.0, 6.0}) {

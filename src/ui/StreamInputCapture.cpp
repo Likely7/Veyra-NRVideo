@@ -15,6 +15,8 @@
 
 #include <chrono>
 #include <format>
+#include <future>
+#include <thread>
 #pragma comment(lib,"imm32.lib")
 
 #include "veyra/Log.h"
@@ -71,7 +73,7 @@ QString bindingLabel(int binding) {
 QVariantMap tuningMap(const Mapper::Tuning& t) {
     return {{QStringLiteral("horizontal"), t.horizontal}, {QStringLiteral("vertical"), t.vertical},
             {QStringLiteral("turnBoost"), t.turnBoost}, {QStringLiteral("inputDeadzone"), t.inputDeadzone},
-            {"dpi",t.dpi},{"adsScale",t.adsScale},{"adsDelayMs",t.adsDelayMs},{"adsAction",t.adsAction},
+            {"dpi",t.dpi},{"turnSpeed",t.turnSpeed},{"adsScale",t.adsScale},{"adsDelayMs",t.adsDelayMs},{"adsAction",t.adsAction},
             {"deadzoneShape",t.deadzoneShape},{"walkScale",t.walkScale},{"unlock",t.unlock},{"gyro",t.gyro},{"carry",t.carry},
             {QStringLiteral("curve"), t.curve}, {QStringLiteral("deadzone"), t.deadzone},
             {QStringLiteral("smoothing"), t.smoothingMs}, {QStringLiteral("invertY"), t.invertY},
@@ -85,7 +87,7 @@ Mapper::Tuning readTuning(const QVariantMap& map) {
         return ok && std::isfinite(value) ? std::clamp(value, lo, hi) : fallback;
     };
     Mapper::Tuning t;
-    t.dpi=bounded("dpi",t.dpi,200,6400);t.adsScale=bounded("adsScale",t.adsScale,.1,3.);
+    t.dpi=bounded("dpi",t.dpi,200,6400);t.turnSpeed=bounded("turnSpeed",t.turnSpeed,1000,6000);t.adsScale=bounded("adsScale",t.adsScale,.1,3.);
     t.adsDelayMs=int(bounded("adsDelayMs",0,0,300));t.adsAction=int(bounded("adsAction",16,0,17));
     t.deadzoneShape=bounded("deadzoneShape",0,0,1);t.walkScale=bounded("walkScale",.45,.2,.8);
     t.unlock=int(bounded("unlock",0,0,4));t.gyro=int(bounded("gyro",0,0,2));t.carry=map.value("carry").toBool();
@@ -101,6 +103,96 @@ Mapper::Tuning readTuning(const QVariantMap& map) {
     return t;
 }
 } // namespace
+
+// Mouse-only Raw Input registration for PS5. The foreground requirement is
+// checked again here because the message-only window uses INPUTSINK.
+struct StreamInputCapture::Ps5MouseInput {
+    explicit Ps5MouseInput(HWND target, remoteplay::MouseStick& mouse)
+        : target(target), mouse(mouse) {}
+
+    bool start() {
+        std::promise<bool> ready;
+        auto started = ready.get_future();
+        thread = std::thread([this, ready = std::move(ready)]() mutable {
+            constexpr wchar_t className[] = L"VeyraPs5MouseInput";
+            const auto instance = GetModuleHandleW(nullptr);
+            const WNDCLASSW wc{.lpfnWndProc = dispatch, .hInstance = instance, .lpszClassName = className};
+            if (!RegisterClassW(&wc) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+                ready.set_value(false);
+                return;
+            }
+            const auto hwnd = CreateWindowExW(0, className, nullptr, 0, 0, 0, 0, 0,
+                                             HWND_MESSAGE, nullptr, instance, this);
+            threadId = GetCurrentThreadId();
+            RAWINPUTDEVICE device{0x01, 0x02, RIDEV_INPUTSINK, hwnd};
+            const bool registered = hwnd && RegisterRawInputDevices(&device, 1, sizeof(device));
+            ready.set_value(registered);
+            if (registered) {
+                SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+                MSG message{};
+                while (GetMessageW(&message, nullptr, 0, 0) > 0)
+                    DispatchMessageW(&message);
+                device = {0x01, 0x02, RIDEV_REMOVE, nullptr};
+                RegisterRawInputDevices(&device, 1, sizeof(device));
+            }
+            if (hwnd) DestroyWindow(hwnd);
+        });
+        return started.get();
+    }
+
+    ~Ps5MouseInput() {
+        if (!thread.joinable()) return;
+        if (threadId) PostThreadMessageW(threadId, WM_QUIT, 0, 0);
+        thread.join();
+        veyra::log::info("ps5-input", std::format(
+            "mouse worker reports={} raw queue maxMs={} staleDropped={} maxDeliveryGapUs={}",
+            reports, maxQueueMs, staleReports, maxDeliveryGapUs));
+    }
+
+private:
+    static LRESULT CALLBACK dispatch(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+        if (message == WM_NCCREATE) {
+            const auto* create = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create->lpCreateParams));
+        }
+        if (message == WM_INPUT) {
+            auto* self = reinterpret_cast<Ps5MouseInput*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+            if (self) self->input(lParam);
+        }
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    void input(LPARAM data) {
+        if (GetAncestor(GetForegroundWindow(), GA_ROOT) != target) return;
+        RAWINPUT raw{};
+        UINT size = sizeof(raw);
+        if (GetRawInputData(reinterpret_cast<HRAWINPUT>(data), RID_INPUT, &raw, &size,
+                            sizeof(RAWINPUTHEADER)) == UINT(-1) ||
+            raw.header.dwType != RIM_TYPEMOUSE || (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE)) return;
+        const auto dx = raw.data.mouse.lLastX, dy = raw.data.mouse.lLastY;
+        if (!dx && !dy) return;
+        const DWORD lag = GetTickCount() - DWORD(GetMessageTime());
+        if (lag < 0x80000000u) maxQueueMs = std::max(maxQueueMs, lag);
+        if (lag > 40 && lag < 0x80000000u) {
+            ++staleReports;
+            return;
+        }
+        const auto now = nowUs();
+        if (lastDeliveryUs && now - lastDeliveryUs <= 100000)
+            maxDeliveryGapUs = std::max(maxDeliveryGapUs, now - lastDeliveryUs);
+        lastDeliveryUs = now;
+        ++reports;
+        mouse.move(dx, dy, now);
+    }
+
+    HWND target;
+    remoteplay::MouseStick& mouse;
+    std::thread thread;
+    DWORD threadId = 0;
+    DWORD maxQueueMs = 0;
+    unsigned reports = 0, staleReports = 0;
+    int64_t lastDeliveryUs = 0, maxDeliveryGapUs = 0;
+};
 
 StreamInputCapture::StreamInputCapture(engine::EngineController& engine, QString profilePath,
                                        std::function<uint64_t()> ps5Target)
@@ -151,10 +243,21 @@ bool StreamInputCapture::begin(Route route) {
     if (!window_ || GetForegroundWindow() != window_) return false;
     end();
     cancelLearning();
-    RAWINPUTDEVICE device{0x01, 0x02, 0, window_};
-    if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
-        veyra::log::warn("stream-input", "RegisterRawInputDevices failed");
-        return false;
+    if (route == Route::Moonlight) {
+        RAWINPUTDEVICE device{0x01, 0x02, 0, window_};
+        if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
+            veyra::log::warn("stream-input", "RegisterRawInputDevices failed");
+            return false;
+        }
+    } else {
+        auto mouse = std::make_shared<remoteplay::MouseStick>(mapper_.tuning());
+        auto worker = std::make_unique<Ps5MouseInput>(window_, *mouse);
+        if (!worker->start()) {
+            veyra::log::warn("ps5-input", "Could not start PS5 mouse input");
+            return false;
+        }
+        mouse_ = std::move(mouse);
+        ps5MouseInput_ = std::move(worker);
     }
     router_.reset();
     mapper_.reset();
@@ -162,13 +265,11 @@ bool StreamInputCapture::begin(Route route) {
     target_ = route_ == Route::Ps5 ? ps5Target_() : 0;
     if(route_!=Route::Moonlight){
         restoreCursor_=GetCursorPos(&savedCursor_)!=FALSE;
-        maxQueueMs_=0;staleReports_=0;
         suspendIme();
     }
     clipToWindow();
     SetCursor(nullptr);
     if (route_ != Route::Moonlight) {
-        mouse_ = std::make_shared<remoteplay::MouseStick>(mapper_.tuning());
         timer_.start();
         emitPad();
         if (route_ != route) return false;
@@ -183,15 +284,17 @@ void StreamInputCapture::end() {
     const Route old = route_;
     route_ = Route::None;
     timer_.stop();
+    ps5MouseInput_.reset();
     mouse_.reset();
-    RAWINPUTDEVICE device{0x01, 0x02, RIDEV_REMOVE, nullptr};
-    RegisterRawInputDevices(&device, 1, sizeof(device));
+    if (old == Route::Moonlight) {
+        RAWINPUTDEVICE device{0x01, 0x02, RIDEV_REMOVE, nullptr};
+        RegisterRawInputDevices(&device, 1, sizeof(device));
+    }
     ClipCursor(nullptr);
     if(old!=Route::Moonlight){
         restoreIme();
         if(restoreCursor_ && MonitorFromPoint(savedCursor_,MONITOR_DEFAULTTONULL))SetCursorPos(savedCursor_.x,savedCursor_.y);
         restoreCursor_=false;
-        veyra::log::info("ps5-input",std::format("raw queue maxMs={} staleDropped={}",maxQueueMs_,staleReports_));
     }
     wheelQueue_.clear();wheelGapUs_=0;
     SetCursor(LoadCursorW(nullptr, IDC_ARROW));
@@ -265,20 +368,14 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     if (!captured() && keyMessage && msg->wParam >= VK_F7 && msg->wParam <= VK_F10) return false;
     switch (msg->message) {
     case WM_INPUT: {
+        if (!captured()) return false;
         RAWINPUT raw{};
         UINT size = sizeof(raw);
         if (GetRawInputData(reinterpret_cast<HRAWINPUT>(msg->lParam), RID_INPUT, &raw, &size,
                             sizeof(RAWINPUTHEADER)) != UINT(-1) &&
             raw.header.dwType == RIM_TYPEMOUSE && (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0) {
             const auto dx = raw.data.mouse.lLastX, dy = raw.data.mouse.lLastY;
-            if (mouse_ && (dx || dy)) {
-                const DWORD lag=GetTickCount()-msg->time;
-                if(lag<0x80000000u)maxQueueMs_=std::max<int64_t>(maxQueueMs_,lag);
-                if(lag<=40 || lag>=0x80000000u)mouse_->move(dx,dy,nowUs());
-                else ++staleReports_;
-            } else if (captured()) {
-                router_.rawMouse(dx, dy);
-            }
+            router_.rawMouse(dx, dy);
         }
         // Let the default window procedure complete foreground Raw Input cleanup.
         return false;
@@ -358,7 +455,19 @@ void StreamInputCapture::digital(int key, bool down) {
         else if (down) bind(key, before);
         return;
     }
-    if (mapper_.digital(key, down)) emitPad();
+    const bool previousDriving = driving();
+    if (!mapper_.digital(key, down)) return;
+    if (previousDriving != driving()) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+        if (ps5Captured()) engine_.remotePlayController({});
+#endif
+        if (mouse_) mouse_->resetMotion();
+        wheelQueue_.clear();
+        wheelKey_ = 0;
+        wheelGapUs_ = 0;
+        emit drivingChanged();
+    }
+    emitPad();
 }
 
 void StreamInputCapture::tick() {
@@ -397,6 +506,20 @@ QVariantList StreamInputCapture::bindings() const {
     for (const int binding : mapper_.bindings()) list.push_back(bindingLabel(binding));
     return list;
 }
+QVariantList StreamInputCapture::drivingBindings() const {
+    QVariantList list;
+    for (const int binding : mapper_.bindings(true)) list.push_back(bindingLabel(binding));
+    return list;
+}
+QString StreamInputCapture::driveKeyLabel() const { return bindingLabel(mapper_.driveKey()); }
+void StreamInputCapture::selectDriving(bool on) {
+    if (driving() == on) return;
+    mapper_.selectDriving(on);
+    if (mouse_) mouse_->resetMotion();
+    emit drivingChanged();
+    if (ps5Captured() || previewing()) emitPad();
+}
+void StreamInputCapture::learnDriveKey(QObject* cancelButton) { learn(Mapper::ActionCount, cancelButton); }
 QVariantMap StreamInputCapture::tuning() const { return tuningMap(mapper_.tuning()); }
 QVariantMap StreamInputCapture::padState() const {
     const int a=mapper_.tuning().adsAction;
@@ -416,8 +539,8 @@ void StreamInputCapture::setKeyboardEnabled(bool enabled) {
     save();
     emit mappingChanged();
 }
-void StreamInputCapture::learn(int action, QObject* cancelButton) {
-    if (action < 0 || action >= Mapper::ActionCount) return;
+void StreamInputCapture::learn(int action, QObject* cancelButton, bool drivingLayout) {
+    if (action < 0 || action > Mapper::ActionCount) return;
     end();
     cancelLearning();
     // The editor can be opened from Home before any video HWND exists.
@@ -429,6 +552,7 @@ void StreamInputCapture::learn(int action, QObject* cancelButton) {
     router_.reset();
     suspendIme();
     cancelButton_ = cancelButton;
+    learningDriving_ = drivingLayout;
     learning_ = action;
     learningModifier_ = 0;
     feedback_.clear();
@@ -441,19 +565,27 @@ void StreamInputCapture::bind(int key, int modifiers) {
         emit mappingChanged();
         return;
     }
-    const auto& all = mapper_.bindings();
+    const auto& all = mapper_.bindings(learningDriving_);
     const auto used = std::find(all.begin(), all.end(), encoded);
-    feedback_ = used != all.end() && int(used - all.begin()) != learning_ ?
+    const bool moved = used != all.end() && int(used - all.begin()) != learning_;
+    const bool isDriveKey = learning_ == Mapper::ActionCount;
+    const bool assigned = isDriveKey ? mapper_.setDriveKey(encoded)
+                                     : mapper_.setBinding(learning_, encoded, learningDriving_);
+    if (!assigned) {
+        feedback_ = tr("此键已被另一套键位或布局切换占用。");
+        emit mappingChanged();
+        return;
+    }
+    feedback_ = !isDriveKey && moved ?
         tr("已将 %1 从原按键移到此处。").arg(bindingLabel(encoded)) : QString{};
-    mapper_.setBinding(learning_, encoded);
     restoreIme();
     learning_ = -1;
     save();
     emit mappingChanged();
 }
-void StreamInputCapture::clearBinding(int action) {
+void StreamInputCapture::clearBinding(int action, bool drivingLayout) {
     releasePs5();
-    if (mapper_.setBinding(action, 0)) { save(); emit mappingChanged(); }
+    if (mapper_.setBinding(action, 0, drivingLayout)) { save(); emit mappingChanged(); }
 }
 void StreamInputCapture::cancelLearning() {
     if (learning_ < 0) return;
@@ -463,10 +595,15 @@ void StreamInputCapture::cancelLearning() {
     router_.reset();
     emit mappingChanged();
 }
-void StreamInputCapture::applyDefaults() {
+void StreamInputCapture::applyDefaults(bool drivingLayout) {
     releasePs5();
-    mapper_.resetBindings();
-    mapper_.setToggleMask(0);
+    if (drivingLayout) mapper_.resetDrivingBindings();
+    else {
+        mapper_.resetBindings();
+        mapper_.setToggleMask(0);
+    }
+    const auto toggle = mapper_.driveKey();
+    if (!mapper_.setDriveKey(toggle)) mapper_.setDriveKey(0);
     feedback_.clear();
     save();
     emit mappingChanged();
@@ -537,17 +674,26 @@ QString StreamInputCapture::unlockLabel()const{
 }
 void StreamInputCapture::readProfile(const QJsonObject& json){
     mapper_.setTuning(readTuning(json.value("tuning").toObject().toVariantMap()));
+    mapper_.setDriveKey(0);
     mapper_.resetBindings();
-    const auto list=json.value("bindings").toArray();
-    if(list.size()>=26&&list.size()<=Mapper::ActionCount){
-        for(int i=0;i<list.size();++i)mapper_.setBinding(i,0);
-        for(int i=0;i<list.size();++i)mapper_.setBinding(i,list[i].toInt(Mapper::Defaults[i]));
-    }
+    const auto readBindings = [this](const QJsonArray& bindings, bool driving) {
+        if (bindings.size() < 26 || bindings.size() > Mapper::ActionCount) return;
+        for (int i = 0; i < bindings.size(); ++i) mapper_.setBinding(i, 0, driving);
+        for (int i = 0; i < bindings.size(); ++i)
+            mapper_.setBinding(i, bindings[i].toInt(), driving);
+    };
+    readBindings(json.value("bindings").toArray(), false);
+    mapper_.resetDrivingBindings();
+    readBindings(json.value("drivingBindings").toArray(), true);
+    mapper_.setDriveKey(json.value("driveKey").toInt(0x75));
     mapper_.setToggleMask(uint64_t(json.value("toggles").toInteger()));
 }
 QJsonObject StreamInputCapture::activeProfile()const{
-    QJsonArray list;for(int key:mapper_.bindings())list.append(key);
-    return {{"bindings",list},{"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
+    QJsonArray walking, driving;
+    for (const int key : mapper_.bindings()) walking.append(key);
+    for (const int key : mapper_.bindings(true)) driving.append(key);
+    return {{"bindings",walking},{"drivingBindings",driving},{"driveKey",mapper_.driveKey()},
+            {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}
 void StreamInputCapture::setToggleAction(int action,bool on){
@@ -560,6 +706,7 @@ void StreamInputCapture::selectProfile(const QString& value,bool create){
     if(create?(profiles_.contains(name)||profiles_.size()>=16):!profiles_.contains(name))return;
     releasePs5();profiles_[profile_]=activeProfile();profile_=name;
     if(!create)readProfile(profiles_.value(name).toObject());
+    selectDriving(false);
     save();emit mappingChanged();
 }
 void StreamInputCapture::useTemplate(int index){

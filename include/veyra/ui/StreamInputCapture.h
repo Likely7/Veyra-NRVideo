@@ -26,6 +26,9 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_OBJECT
     Q_PROPERTY(bool keyboardEnabled READ keyboardEnabled WRITE setKeyboardEnabled NOTIFY mappingChanged)
     Q_PROPERTY(QVariantList bindings READ bindings NOTIFY mappingChanged)
+    Q_PROPERTY(QVariantList drivingBindings READ drivingBindings NOTIFY mappingChanged)
+    Q_PROPERTY(QString driveKeyLabel READ driveKeyLabel NOTIFY mappingChanged)
+    Q_PROPERTY(bool driving READ driving NOTIFY drivingChanged)
     Q_PROPERTY(QStringList profiles READ profiles NOTIFY mappingChanged)
     Q_PROPERTY(QString profile READ profile NOTIFY mappingChanged)
     Q_PROPERTY(QString unlockLabel READ unlockLabel NOTIFY mappingChanged)
@@ -49,6 +52,11 @@ public:
     bool keyboardEnabled() const { return keyboardEnabled_; }
     void setKeyboardEnabled(bool enabled);
     QVariantList bindings() const;
+    QVariantList drivingBindings() const;
+    QString driveKeyLabel() const;
+    bool driving() const { return mapper_.driving(); }
+    Q_INVOKABLE void selectDriving(bool on);
+    Q_INVOKABLE void learnDriveKey(QObject* cancelButton);
     QVariantMap tuning() const;
     QStringList profiles() const {return profiles_.keys();}
     QString profile() const {return profile_;}
@@ -62,10 +70,10 @@ public:
     bool ps5Captured() const { return route_ == Route::Ps5; }
     bool previewing() const { return route_ == Route::Preview; }
     QVariantMap padState() const;
-    Q_INVOKABLE void learn(int action, QObject* cancelButton = nullptr);
-    Q_INVOKABLE void clearBinding(int action);
+    Q_INVOKABLE void learn(int action, QObject* cancelButton = nullptr, bool drivingLayout = false);
+    Q_INVOKABLE void clearBinding(int action, bool drivingLayout = false);
     Q_INVOKABLE void cancelLearning();
-    Q_INVOKABLE void applyDefaults();
+    Q_INVOKABLE void applyDefaults(bool drivingLayout = false);
     Q_INVOKABLE void resetMouseTuning();
     Q_INVOKABLE void setTuning(const QString& key, const QVariant& value);
     Q_INVOKABLE void preview(bool on);
@@ -82,6 +90,7 @@ signals:
     void mappingChanged();
     void stateChanged();
     void padStateChanged();
+    void drivingChanged();
 
 private:
     using Mapper = remoteplay::KeyboardMousePad;
@@ -114,8 +123,9 @@ private:
     POINT savedCursor_{};
     bool restoreCursor_=false;
     std::deque<int> wheelQueue_;
-    int64_t wheelGapUs_=0, maxQueueMs_=0;
-    unsigned staleReports_=0;
+    int64_t wheelGapUs_=0;
+    struct Ps5MouseInput;
+    std::unique_ptr<Ps5MouseInput> ps5MouseInput_;
     QJsonObject profiles_;
     QString profile_=QStringLiteral("Default");
     double previewSpeed_=0;
@@ -129,6 +139,7 @@ private:
     QPointer<QObject> cancelButton_;
     int learning_ = -1;
     int learningModifier_ = 0;
+    bool learningDriving_ = false;
     int wheelKey_ = 0;
     int64_t wheelReleaseUs_ = 0;
     QString feedback_;

@@ -50,13 +50,38 @@ public:
     }
     static int encode(int key, int modifiers) { return key | ((modifiers & ~modifier(key) & 7) << 9); }
 
-    const auto& bindings() const { return bindings_; }
+    const auto& bindings(bool driving = false) const { return driving ? drivingBindings_ : bindings_; }
+    bool driving() const { return driving_; }
+    int driveKey() const { return driveKey_; }
+    void selectDriving(bool driving) {
+        if (driving_ == driving) return;
+        driving_ = driving;
+        // A held key belongs to the old layout until physically released.
+        clearActions();
+    }
+    bool setDriveKey(int binding) {
+        if (!validBinding(binding, tuning_.unlock != 0)) return false;
+        for (const auto& layout : {&bindings_, &drivingBindings_})
+            if (binding && std::find(layout->begin(), layout->end(), binding) != layout->end()) return false;
+        driveKey_ = binding;
+        return true;
+    }
+    void resetDrivingBindings() {
+        drivingBindings_ = bindings_;
+        for (auto& key : drivingBindings_) if (key == 'W' || key == 'S') key = 0;
+        drivingBindings_[LeftUp] = drivingBindings_[LeftDown] = 0;
+        drivingBindings_[R2] = 'W';
+        drivingBindings_[R1] = 'S';
+        reset();
+    }
     const Tuning& tuning() const { return tuning_; }
-    bool setBinding(int action, int binding) {
+    bool setBinding(int action, int binding, bool driving = false) {
         if (action < 0 || action >= ActionCount || !validBinding(binding,tuning_.unlock!=0)) return false;
+        if (binding && binding == driveKey_) return false;
+        auto& layout = driving ? drivingBindings_ : bindings_;
         for (int i = 0; binding && i < ActionCount; ++i)
-            if (i != action && bindings_[i] == binding) bindings_[i] = 0;
-        bindings_[action] = binding;
+            if (i != action && layout[i] == binding) layout[i] = 0;
+        layout[action] = binding;
         reset();
         return true;
     }
@@ -76,11 +101,16 @@ public:
         if (key < 1 || key > WheelRight || held_[key] == down) return false;
         held_[key] = down;
         const int currentModifiers = modifiers();
+        const auto& layout = bindings(driving_);
         if (down) {
             int best=-1;
             const int chord = encode(key, currentModifiers);
+            if (driveKey_ && chord == driveKey_) {
+                selectDriving(!driving_);
+                return true;
+            }
             for (int action = 0; action < ActionCount; ++action) {
-                const int binding = bindings_[action];
+                const int binding = layout[action];
                 const int mods=binding>>9;
                 if((binding&KeyMask)!=key || (mods&(chord>>9))!=mods)continue;
                 const int rank=std::popcount(unsigned(mods));
@@ -95,7 +125,7 @@ public:
         active_[key] = -1;
         if (modifier(key)) {
             for (int& action : active_) {
-                if (action >= 0 && ((bindings_[action] >> 9) & currentModifiers) != (bindings_[action] >> 9)) {
+                if (action >= 0 && ((layout[action] >> 9) & currentModifiers) != (layout[action] >> 9)) {
                     action = -1;
                     changed = true;
                 }
@@ -108,7 +138,7 @@ public:
     uint64_t toggleMask() const{return toggleMask_;}
     void setToggleMask(uint64_t mask){toggleMask_=mask;reset();}
     bool menuActive()const{return (toggleMask_&(uint64_t{1}<<MenuStick))?(toggled_&(uint64_t{1}<<MenuStick))!=0:std::find(active_.begin(),active_.end(),MenuStick)!=active_.end();}
-    ControllerState state(bool* mouseControlsRightStick = nullptr) const {
+    ControllerState state(bool* mouseControlsRightStick = nullptr, int64_t now = clockUs()) const {
         std::array<bool, ActionCount> on{};
         for (const int a : active_) if (a >= 0) on[a] = true;
         for(int a=0;a<ActionCount;++a)if(toggleMask_&(uint64_t{1}<<a))on[a]=(toggled_&(uint64_t{1}<<a))!=0;
@@ -119,6 +149,14 @@ public:
         pad.r2 = on[R2] ? 255 : 0;
         setStick(pad.leftX, pad.leftY, int(on[LeftRight]) - int(on[LeftLeft]),
                   int(on[LeftDown]) - int(on[LeftUp]));
+        if (driving_) {
+            const double dt = steerAt_ ? std::clamp(double(now - steerAt_) / 80000., 0., 1.) : 0;
+            steerAt_ = now;
+            const double target = pad.leftX / 32767.;
+            if ((target < 0 && steer_ > 0) || (target > 0 && steer_ < 0)) steer_ = 0;
+            steer_ += std::clamp(target - steer_, -dt, dt);
+            pad.leftX = int16_t(std::lround(steer_ * 32767.));
+        }
         if(on[LeftSlow]){pad.leftX=int16_t(std::lround(pad.leftX*tuning_.walkScale));pad.leftY=int16_t(std::lround(pad.leftY*tuning_.walkScale));}
         if(swipeAction_>=SwipeUp){
             const double t=double(clockUs()-swipeStart_)/90000.;
@@ -136,18 +174,30 @@ public:
     }
 
     void reset() {
-        held_.fill(false);toggled_=0;swipeAction_=-1;
-        active_.fill(-1);
+        held_.fill(false);
+        clearActions();
     }
-    KeyboardMousePad() { reset(); }
+    KeyboardMousePad() { resetDrivingBindings(); }
 
 private:
+    void clearActions() {
+        active_.fill(-1);
+        toggled_ = 0;
+        swipeAction_ = -1;
+        steer_ = 0;
+        steerAt_ = 0;
+    }
     static void setStick(int16_t& xAxis, int16_t& yAxis, double x, double y) {
         const double scale = 32767.0 / std::max(1.0, std::hypot(x, y));
         xAxis = int16_t(std::lround(x * scale));
         yAxis = int16_t(std::lround(y * scale));
     }
     std::array<int, ActionCount> bindings_ = Defaults;
+    std::array<int, ActionCount> drivingBindings_{};
+    int driveKey_ = 0x75; // F6
+    bool driving_ = false;
+    mutable double steer_ = 0;
+    mutable int64_t steerAt_ = 0;
     std::array<bool, WheelRight + 1> held_{};
     std::array<int, WheelRight + 1> active_{};
     uint64_t toggleMask_=0,toggled_=0;

@@ -6735,6 +6735,19 @@
    "ru": "Связь с хозяином была потеряна."
   },
   {
+   "zh": "与鼠标驱动的档位填同一个值。想调快慢，请调灵敏度。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "填寫與滑鼠驅動程式相同的 DPI。要調整快慢，請調整靈敏度。",
+   "en": "Match the DPI set in your mouse driver. Use sensitivity to change aim speed.",
+   "ja": "マウスドライバーと同じ DPI を入力します。照準速度は感度で調整します。",
+   "ko": "마우스 드라이버와 동일한 DPI를 입력하세요. 조준 속도는 감도로 조절합니다.",
+   "es": "Usa el mismo DPI que en el controlador del ratón. Ajusta la sensibilidad para cambiar la velocidad de apuntado.",
+   "fr": "Saisissez le même DPI que dans le pilote de la souris. Réglez la sensibilité pour changer la vitesse de visée.",
+   "de": "DPI wie im Maustreiber einstellen. Das Zieltempo lässt sich über die Empfindlichkeit anpassen.",
+   "pt-BR": "Use o mesmo DPI do driver do mouse. Ajuste a sensibilidade para mudar a velocidade da mira.",
+   "ru": "Укажите DPI из драйвера мыши. Скорость прицеливания меняется чувствительностью."
+  },
+  {
    "zh": "专业模式",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "專業模式",
@@ -10426,6 +10439,19 @@
    "de": "Bei Tastendruck umschalten",
    "pt-BR": "Alternar ao pressionar",
    "ru": "Переключать нажатием"
+  },
+  {
+   "zh": "切换步行／驾驶",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "切換步行／駕駛",
+   "en": "Switch on-foot / driving",
+   "ja": "徒歩・運転を切り替え",
+   "ko": "도보·운전 전환",
+   "es": "Alternar entre a pie y conducción",
+   "fr": "Basculer entre marche et conduite",
+   "de": "Zwischen Laufen und Fahren wechseln",
+   "pt-BR": "Alternar entre a pé e direção",
+   "ru": "Переключить ходьбу и вождение"
   },
   {
    "zh": "列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值",
@@ -22558,6 +22584,19 @@
    "ru": "Более высокие значения дают более мягкий переход"
   },
   {
+   "zh": "数值越小，越容易快速推满右摇杆。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "數值越小，越容易快速推滿右搖桿。",
+   "en": "Lower values reach full right-stick deflection sooner.",
+   "ja": "値が小さいほど右スティックが最大入力に達しやすくなります。",
+   "ko": "값이 작을수록 오른쪽 스틱 최대 입력에 더 빨리 도달합니다.",
+   "es": "Un valor menor alcanza antes la inclinación máxima del stick derecho.",
+   "fr": "Une valeur basse permet d’atteindre plus vite la déflexion maximale du stick droit.",
+   "de": "Niedrigere Werte führen schneller zum Vollausschlag des rechten Sticks.",
+   "pt-BR": "Valores menores atingem mais rápido o limite do analógico direito.",
+   "ru": "Чем ниже значение, тем быстрее правый стик достигает полного отклонения."
+  },
+  {
    "zh": "整个画面",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "整個畫面",
@@ -28187,6 +28226,19 @@
    "ru": "Эта карта захвата не предлагает этот формат. Выберите поддерживаемое разрешение, частоту кадров и формат пикселей."
   },
   {
+   "zh": "此键已被另一套键位或布局切换占用。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "此鍵已被另一套配置或配置切換占用。",
+   "en": "This input is already used by another layout or the layout shortcut.",
+   "ja": "この入力は別の配置または配置切替に使用されています。",
+   "ko": "이 입력은 다른 배치나 배치 전환에 이미 사용 중입니다.",
+   "es": "Esta entrada ya se usa en otra distribución o para cambiarla.",
+   "fr": "Cette entrée est utilisée par une autre configuration ou son raccourci.",
+   "de": "Diese Eingabe wird bereits in einem anderen Layout oder zum Umschalten verwendet.",
+   "pt-BR": "Esta entrada já é usada por outro layout ou pelo atalho de alternância.",
+   "ru": "Этот ввод уже используется в другой раскладке или для переключения."
+  },
+  {
    "zh": "此键用于系统或 Veyra 快捷键，请换一个键。",
    "src": "src/ui/StreamInputCapture.cpp",
    "zh-TW": "此鍵用於系統或 Veyra 快捷鍵，請換用其他按鍵。",
@@ -28198,6 +28250,19 @@
    "de": "Diese Taste ist für das System oder Veyra reserviert. Wähle eine andere.",
    "pt-BR": "Esta tecla é reservada pelo sistema ou pelo Veyra. Escolha outra.",
    "ru": "Эта клавиша зарезервирована системой или Veyra. Выберите другую."
+  },
+  {
+   "zh": "步行",
+   "src": "qml/Main.qml",
+   "zh-TW": "步行",
+   "en": "On foot",
+   "ja": "徒歩",
+   "ko": "도보",
+   "es": "A pie",
+   "fr": "À pied",
+   "de": "Zu Fuß",
+   "pt-BR": "A pé",
+   "ru": "Пешком"
   },
   {
    "zh": "死区补偿",
@@ -29186,6 +29251,19 @@
    "de": "Abrollfestigkeit (%)",
    "pt-BR": "Resistência ao rolamento (%)",
    "ru": "Сила отката (%)"
+  },
+  {
+   "zh": "满杆速度（800 DPI）",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滿桿速度（800 DPI）",
+   "en": "Full stick speed (800 DPI)",
+   "ja": "最大入力に達する速度 (800 DPI)",
+   "ko": "스틱 최대 입력 속도(800 DPI)",
+   "es": "Velocidad para inclinación máxima (800 DPI)",
+   "fr": "Vitesse de déflexion maximale (800 DPI)",
+   "de": "Geschwindigkeit für Vollausschlag (800 DPI)",
+   "pt-BR": "Velocidade de inclinação máxima (800 DPI)",
+   "ru": "Скорость полного отклонения (800 DPI)"
   },
   {
    "zh": "点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退",
@@ -40641,6 +40719,19 @@
    "ru": "Закрепить панель управления в полноэкранном режиме"
   },
   {
+   "zh": "锁定键鼠后即可切换。默认 W 加速、S 刹车，A/D 转向。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "鎖定鍵鼠後即可切換。預設 W 加速、S 煞車、A/D 轉向。",
+   "en": "Switch while input is captured. By default W accelerates, S brakes, and A/D steer.",
+   "ja": "入力のロック中に切り替えます。既定では W で加速、S でブレーキ、A/D で操舵します。",
+   "ko": "입력을 잠근 상태에서 전환하세요. 기본값은 W 가속, S 제동, A/D 조향입니다.",
+   "es": "Cambia mientras la entrada esté capturada. Por defecto, W acelera, S frena y A/D giran.",
+   "fr": "Basculez pendant la capture de la saisie. Par défaut, W accélère, S freine et A/D dirigent.",
+   "de": "Bei erfasster Eingabe umschalten. Standardmäßig beschleunigt W, S bremst und A/D lenken.",
+   "pt-BR": "Alterne com a entrada capturada. Por padrão, W acelera, S freia e A/D esterçam.",
+   "ru": "Переключайте при захвате ввода. По умолчанию W — газ, S — тормоз, A/D — поворот."
+  },
+  {
    "zh": "错误",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "錯誤",
@@ -40678,6 +40769,19 @@
    "de": "Tastenliste",
    "pt-BR": "Lista de teclas",
    "ru": "Список привязок"
+  },
+  {
+   "zh": "键位布局",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "鍵位配置",
+   "en": "Control layout",
+   "ja": "キー配置",
+   "ko": "키 배치",
+   "es": "Distribución de controles",
+   "fr": "Configuration des touches",
+   "de": "Tastenlayout",
+   "pt-BR": "Layout de controles",
+   "ru": "Раскладка управления"
   },
   {
    "zh": "键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · +Q 断开",
@@ -43254,6 +43358,19 @@
    "ru": "Водитель по умолчанию (без переопределения)"
   },
   {
+   "zh": "驾驶",
+   "src": "qml/Main.qml",
+   "zh-TW": "駕駛",
+   "en": "Driving",
+   "ja": "運転",
+   "ko": "운전",
+   "es": "Conducción",
+   "fr": "Conduite",
+   "de": "Fahren",
+   "pt-BR": "Direção",
+   "ru": "Вождение"
+  },
+  {
    "zh": "验证运行库",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "驗證執行庫",
@@ -43788,7 +43905,7 @@
   },
   {
    "zh": "鼠标中键",
-   "src": "src/ui/StreamInputCapture.cpp",
+   "src": "qml/Ps5MappingDialog.qml",
    "zh-TW": "滑鼠中鍵",
    "en": "Middle mouse",
    "ja": "マウス中ボタン",
@@ -43827,7 +43944,7 @@
   },
   {
    "zh": "鼠标右键",
-   "src": "src/ui/StreamInputCapture.cpp",
+   "src": "qml/Ps5MappingDialog.qml",
    "zh-TW": "滑鼠右鍵",
    "en": "Right mouse",
    "ja": "マウス右ボタン",
@@ -43839,8 +43956,21 @@
    "ru": "Правая кнопка мыши"
   },
   {
+   "zh": "鼠标实际 DPI",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠實際 DPI",
+   "en": "Mouse hardware DPI",
+   "ja": "マウス本体の DPI",
+   "ko": "마우스 실제 DPI",
+   "es": "DPI real del ratón",
+   "fr": "DPI matériel de la souris",
+   "de": "Tatsächliche Maus-DPI",
+   "pt-BR": "DPI real do mouse",
+   "ru": "Фактический DPI мыши"
+  },
+  {
    "zh": "鼠标左键",
-   "src": "src/ui/StreamInputCapture.cpp",
+   "src": "qml/Ps5MappingDialog.qml",
    "zh-TW": "滑鼠左鍵",
    "en": "Left mouse",
    "ja": "マウス左ボタン",

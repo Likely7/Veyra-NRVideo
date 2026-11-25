@@ -2073,3 +2073,11 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 构建调用 `python -B -X utf8 E:/项目/Veyra/tmp/codex-ps5-input-subtitle-20261125/build-local.py <工作树> veyra_qml_ui veyra_repair_fg_tests veyra_qml_quick_tests veyra_remoteplay_boundary_tests veyra_moonlight_protocol_tests veyra_ui_i18n_tests`。同一目录的 `stage.py --final` 准备 NVIDIA 手测版；`verify-new.py input quick gpu`、`verify-new.py providers`、`verify-new.py anr-local`、`response.cmd`、`native.py`、`native-cancel.py`、`fullscreen.py cinema|fullscreen`、`persist.py`、`paint.py` 和仓库的 `scripts/i18n/extract.py --check` 执行验收。修正了仅补帧的贴字误差及原生鼠标点击取消改键被吃掉的问题。ANR 首次独立配置缺少可选组件，校验本地已有 19 个文件后重测通过。
 
 构建目录 `E:/项目/Veyra/build/codex-ps5-input-subtitle-20261125`。11 个 D3D12 用例调试层错误为 0，输入边界、135 个 Moonlight 协议检查和 262 个 Qt Quick 检查通过。A/B 为 288 行。中文布局的真实窗口检查了按键与滚轮、光标释放、影院和全屏；真实 PS5 游戏、物理端到端延迟和当事人游戏中的字幕效果待用户手测。播放器已使用独立配置启动并打开键鼠面板。[完整验收、截图、日志和 A/B 表](<E:/项目/Veyra/reports/codex-ps5-input-subtitle-20261125/RESULTS.md>)。
+
+## 2026-11-25 PS5 双布局和鼠标慢移
+
+在 `codex/ps5-input-subtitle-20261125` 的上一版 `b63368db` 后检查手测日志及「继续排查 Claude 线索」的 XY-CtoPS5 调研。行为参考是独立步行／驾驶布局以及精细瞄准与满杆速度分开调节，实现在 Veyra 内完成。步行键位按原档案加载。驾驶默认 W→R2、S→R1，A/D 保持左杆方向并在 80 ms 内渐推满。F6 默认切换且可重绑。切换清除旧动作、积压滚轮和旧鼠标位移，按住的键要松开再触发。各档案持久化两套独立键位。
+
+26 段旧手测的 Windows Raw Input 最大排队记录为 16 ms ×22、31 ms ×3、0 ms ×1，陈旧报告丢弃为零。PS5 鼠标采集移到单独的消息线程。慢移根据非零报告的间隔延长保持期，普通速度仍快速回中。鼠标硬件 DPI 用于归一化，灵敏度单独调整，新增 800 DPI 参考下的满杆速度。336 行回放覆盖 125/500/1000/4000 Hz 和 800/1600/3200 DPI。125 Hz、35 counts/s 的 240 个稳态采样中，归零 12 次变为 0 次。1000 Hz、1000 counts/s 的默认输出从 31.0% 提高到 46.3%，回放末尾归零均为 6 ms。这里的时间由模拟输出读数得到，未测 PS5 实机屏幕端到端延迟。
+
+`tmp/ps5-drive-aim-20261125/build-local.py` 在现有构建目录 `build/codex-ps5-input-subtitle-20261125` 增量构建，日志为 `logs/codex-ps5-input-subtitle-20261125/build-20261125-094539`。`compare.cmd`、`verify.py input quick`、`stage.py --final` 和 `scripts/i18n/extract.py --check` 分别复算回放、运行回归、生成独立本地测试版及核对翻译。远程游玩边界、135 项 Moonlight 协议和 263 项 Qt Quick 检查通过，九种目标语言缺译与占位符错误均为零。测试版沿用用户上次手调配置的本地副本，路径 `tests/ps5-drive-aim-20261125`。真实窗口探针收到鼠标报告，并观察到步行 W、切换时归零、驾驶 W/R2、S/R1 和 D 渐推。重复探针期间前台被切换，完整的真实窗口流程以手测为准。本轮采用手动切换，真机驾驶手感和实际画面延迟仍未验。测试窗口已打开并停在映射面板。

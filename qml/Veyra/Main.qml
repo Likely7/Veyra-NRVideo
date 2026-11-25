@@ -759,6 +759,10 @@ Window {
         property bool capturedNow: root.ps5InputLocked
         onCapturedNowChanged: { if(capturedNow)hintTimer.restart();else hintTimer.stop() }
         Timer {id: hintTimer;interval:1800}
+        Connections {
+            target: veyra.ps5Input
+            function onDrivingChanged() { if (root.ps5InputLocked) hintTimer.restart() }
+        }
         readonly property bool videoCover: true
         readonly property real coverRadius: radius
         visible: (root.ps5KeyboardReady || capturedNow) && (!capturedNow || hintTimer.running) && dialogs.dialog === "" && veyra.hasSource
@@ -777,7 +781,7 @@ Window {
             TapHandler {enabled: !veyra.ps5Input?.ps5Captured; onTapped: dialogs.openPs5Mapping()}
             anchors.centerIn: parent
             text: parent.capturedNow
-                ? (qsTr("键鼠映射")+" · "+veyra.ps5Input.unlockLabel) : (qsTr("点击画面锁定键鼠")+"  ·  "+qsTr("键鼠设置"))
+                ? ((veyra.ps5Input.driving ? qsTr("驾驶") : qsTr("步行")) + " · " + veyra.ps5Input.driveKeyLabel + " · " + veyra.ps5Input.unlockLabel) : (qsTr("点击画面锁定键鼠")+"  ·  "+qsTr("键鼠设置"))
             color: Theme.t1
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSmall
