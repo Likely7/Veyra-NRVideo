@@ -3,6 +3,8 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
+#include <limits>
 #include <numeric>
 #include <vector>
 #include "veyra/pipeline/ResolutionPlan.h"
@@ -32,10 +34,29 @@ inline Extent smartSrRenderExtent(Extent source,uint32_t height){
     return {width,height};
 }
 
+// How the source was enlarged.
+//   Bilinear:  pixel-centre bilinear, any ratio. Switch 2 TV mode: re-upscaling the
+//              least-squares inverse reproduces the capture at 45.85 dB.
+//   Aligned2x: exactly twice. Even samples sit on the render samples, odd ones half
+//              way, both through one symmetric 8-tap filter. Measured on Switch 2 HOME
+//              captured as 4K HDR10 (GC573) while a game that switches the output mode
+//              stays open (2026-11-26): odd samples follow from the even ones within
+//              0.33 ten-bit codes on both axes, so the fit is at the rounding noise.
+//              Bilinear finds no height there (knee x2.5). Whether the console or the
+//              capture card scales is not known.
+enum class SmartSrScaler : uint32_t { Bilinear = 0, Aligned2x = 1 };
+inline constexpr std::array<double,4> kSmartSrAlignedEven{0.7856,0.1121,-0.0126,0.0077};  // 0, 1, 2, 3 render samples away
+inline constexpr std::array<double,4> kSmartSrAlignedOdd{0.5362,-0.0599,0.0214,0.0023};   // 0.5, 1.5, 2.5, 3.5
+// Weight of render sample i in source sample j of the aligned scaler.
+inline double smartSrAlignedWeight(uint32_t j,int i){
+    const int k=int(j/2);
+    if(!(j&1)){const int d=std::abs(i-k);return d<4?kSmartSrAlignedEven[size_t(d)]:0.0;}
+    const int d=i<=k?k-i:i-k-1;
+    return d<4?kSmartSrAlignedOdd[size_t(d)]:0.0;
+}
+
 // ---- reduction back to the render extent ----------------------------------
-// Consoles enlarge with a pixel-centre bilinear scaler (Switch 2 TV mode:
-// re-upscaling the least-squares inverse reproduces the capture at 45.85 dB).
-// A plain box/bilinear reduction blurs that render again; the least-squares
+// A plain box/bilinear reduction blurs the render again; the least-squares
 // inverse of the upscale recovers it. Per axis, render sample i is a fixed
 // filter over source samples centre(i)-14 .. centre(i)+13; the filter repeats
 // every q render samples (p source samples), one row per phase i % q.
@@ -45,6 +66,7 @@ inline constexpr uint32_t kSmartSrConstants=40; // SmartSrReduce.hlsl: 9 uints, 
 inline constexpr uint32_t kSmartSrMaxPhases=16; // one dispatch per phase; a larger q is not descaled
 struct SmartSrAxis {
     uint32_t highLength=0,lowLength=0,p=0,q=0;  // p source samples per q render samples
+    SmartSrScaler scaler=SmartSrScaler::Bilinear;
     std::vector<std::array<float,kSmartSrTaps>> taps;
 };
 // Source sample holding the centre of render sample i.
@@ -56,9 +78,43 @@ inline void smartSrBilinear(uint32_t j,uint32_t high,uint32_t low,int& i0,double
     w1=x-f;w0=1.0-w1;
     i0=std::clamp(int(f),0,int(low)-1);i1=std::clamp(int(f)+1,0,int(low)-1);
 }
-inline SmartSrAxis smartSrInverseAxis(uint32_t high,uint32_t low){
+// Inverse of the aligned 2x scaler: the 28 taps that give render sample i back from its
+// own source samples whatever the neighbours are (minimum norm, with a ridge far below
+// the source's own rounding noise).
+inline SmartSrAxis smartSrAlignedInverseAxis(uint32_t high){
+    SmartSrAxis axis;
+    if(high<2*kSmartSrTaps||(high&1))return axis;
+    axis.highLength=high;axis.lowLength=high/2;axis.p=2;axis.q=1;axis.scaler=SmartSrScaler::Aligned2x;
+    constexpr size_t n=kSmartSrTaps,reach=kSmartSrTaps;  // render samples i-reach .. i+reach
+    // Around render sample `reach` (source sample 2*reach): rows of the upscale under the taps.
+    std::array<std::array<double,2*reach+1>,n> up{};
+    const uint32_t base=uint32_t(2*reach+1)-uint32_t(kSmartSrTapOrigin);
+    for(size_t t=0;t<n;++t)for(size_t i=0;i<up[t].size();++i)up[t][i]=smartSrAlignedWeight(base+uint32_t(t),int(i));
+    // (U U^T + ridge) taps = U e: symmetric positive definite.
+    std::array<std::array<double,n+1>,n> m{};
+    for(size_t a=0;a<n;++a){
+        for(size_t b=0;b<n;++b)for(size_t i=0;i<up[a].size();++i)m[a][b]+=up[a][i]*up[b][i];
+        m[a][a]+=1e-5;m[a][n]=up[a][reach];
+    }
+    for(size_t c=0;c<n;++c)for(size_t r=c+1;r<n;++r){
+        const double f=m[r][c]/m[c][c];
+        for(size_t k=c;k<=n;++k)m[r][k]-=f*m[c][k];
+    }
+    std::array<double,n> x{};double sum=0.0;
+    for(size_t r=n;r-->0;){
+        double v=m[r][n];
+        for(size_t k=r+1;k<n;++k)v-=m[r][k]*x[k];
+        x[r]=v/m[r][r];sum+=x[r];
+    }
+    std::array<float,kSmartSrTaps> taps{};
+    for(size_t t=0;t<n;++t)taps[t]=float(x[t]+(1.0-sum)/double(n));  // sums to exactly one, as below
+    axis.taps.push_back(taps);
+    return axis;
+}
+inline SmartSrAxis smartSrInverseAxis(uint32_t high,uint32_t low,SmartSrScaler scaler=SmartSrScaler::Bilinear){
     SmartSrAxis axis;
     if(!low||low>=high)return axis;
+    if(scaler==SmartSrScaler::Aligned2x)return high==2*low?smartSrAlignedInverseAxis(high):axis;
     const uint32_t g=std::gcd(high,low);
     axis.highLength=high;axis.lowLength=low;axis.p=high/g;axis.q=low/g;
     // U^T U of the bilinear upscale is tridiagonal: diag[i], off[i] couples i and i+1.
@@ -112,6 +168,9 @@ inline SmartSrAxis smartSrInverseAxis(uint32_t high,uint32_t low){
 // with res-probe/m2_validate.py (synthetic 9/9, Switch 2 captures 13/13).
 inline constexpr std::array<uint32_t,22> kSmartSrCandidates{540,576,648,720,810,864,900,1008,1080,1152,1260,
     1296,1350,1440,1512,1584,1620,1728,1800,1872,1944,2016};
+// One more probe behind the candidates: half the source height through the aligned scaler.
+inline constexpr size_t kSmartSrAlignedProbe=kSmartSrCandidates.size();
+inline constexpr size_t kSmartSrProbes=kSmartSrAlignedProbe+1;
 inline constexpr uint32_t kSmartSrProbeRows=96;
 inline constexpr uint32_t kSmartSrProbeInterval=30;  // frames between probes
 inline constexpr uint32_t kSmartSrProbeStreak=3;     // equal verdicts before the render extent changes
@@ -122,10 +181,9 @@ inline constexpr uint32_t kSmartSrReportProbes=40;   // one summary line per thi
 inline constexpr double kSmartSrMinDeviation=0.008;
 // fit: where the error curve rises most, with or without the start rules below;
 // height: the same once the rise is a knee.
-struct SmartSrVerdict { uint32_t height=0; double knee=1.0,notch=1.0; bool spatial=false; uint32_t fit=0; };
-// errors[c]: residual of candidate c over the probed rows' energy; NaN where c
-// was not measured (not a reduction of this source).
-inline SmartSrVerdict smartSrDecide(const std::array<double,kSmartSrCandidates.size()>& errors){
+struct SmartSrVerdict { uint32_t height=0; double knee=1.0,notch=1.0; bool spatial=false; uint32_t fit=0;
+                        SmartSrScaler scaler=SmartSrScaler::Bilinear; };
+inline SmartSrVerdict smartSrDecideBilinear(const std::array<double,kSmartSrCandidates.size()>& errors){
     SmartSrVerdict v;constexpr size_t n=kSmartSrCandidates.size();
     double best=-1e30;size_t at=n;
     for(size_t i=0;i+1<n;++i){
@@ -145,34 +203,66 @@ inline SmartSrVerdict smartSrDecide(const std::array<double,kSmartSrCandidates.s
     v.spatial=next?v.notch>=2.0:v.knee>=20.0;
     return v;
 }
-// The render height a probe votes for, given the height in use (0: none). Live
+// errors[c]: residual of candidate c over the probed rows' energy; NaN where c
+// was not measured (not a reduction of this source). aligned: the same for half the
+// source height through the aligned scaler, NaN when not measured. Its knee is the gain
+// over the bilinear fit of the same height, its notch the gain over the next height up.
+// Measured: x61 and more on that picture, at most x2.3 on every other one (native,
+// bilinear from all candidates, HDR10 and SDR captures, almost flat pictures).
+inline constexpr double kSmartSrAlignedKnee=3.0,kSmartSrAlignedWeakKnee=2.5;
+inline SmartSrVerdict smartSrDecide(const std::array<double,kSmartSrCandidates.size()>& errors,
+                                    double aligned=std::numeric_limits<double>::quiet_NaN(),uint32_t alignedHeight=0){
+    const auto v=smartSrDecideBilinear(errors);
+    const auto same=std::find(kSmartSrCandidates.begin(),kSmartSrCandidates.end(),alignedHeight);
+    if(same==kSmartSrCandidates.end()||!(aligned<=0.02))return v;
+    const size_t at=size_t(same-kSmartSrCandidates.begin());
+    if(!std::isfinite(errors[at]))return v;
+    const double fit=std::max(aligned,1e-7);
+    SmartSrVerdict a;a.scaler=SmartSrScaler::Aligned2x;a.fit=alignedHeight;
+    a.knee=errors[at]/fit;
+    a.notch=at+1<errors.size()&&std::isfinite(errors[at+1])?errors[at+1]/fit:a.knee;
+    const double least=std::min(a.knee,a.notch);
+    if(least>=kSmartSrAlignedKnee){a.height=alignedHeight;a.spatial=true;return a;}
+    return !v.spatial&&least>=kSmartSrAlignedWeakKnee?a:v;
+}
+// The render height and scaler a probe votes for, given the ones in use (0: none). Live
 // Switch 2 HDR (2026-11-22): a dimmed, almost black picture has a weak knee
 // (x2.8-3.1) and flipped smart SR on and off every few seconds, so a fit at the
 // height in use counts for it below the start rules. A weak fit anywhere else is
 // no support for it: kept as such it held a wrong 1152 for minutes (2026-11-24).
 // Native frames are smooth (knee about x1.6) and turn it off.
 inline constexpr double kSmartSrKeepKnee=2.0;
-inline uint32_t smartSrVote(const SmartSrVerdict& v,uint32_t current){
-    if(current&&v.fit==current&&v.knee>=kSmartSrKeepKnee)return current;
-    return v.spatial?v.height:0;
+struct SmartSrTarget {
+    uint32_t height=0;
+    SmartSrScaler scaler=SmartSrScaler::Bilinear;
+    bool operator==(const SmartSrTarget&) const=default;
+};
+inline SmartSrTarget smartSrVote(const SmartSrVerdict& v,SmartSrTarget current){
+    if(current.height&&v.fit==current.height&&v.scaler==current.scaler&&v.knee>=kSmartSrKeepKnee)return current;
+    return v.spatial?SmartSrTarget{v.height,v.scaler}:SmartSrTarget{};
 }
 // Equal votes needed to act: dropping the height in use for none takes longer
 // than finding one, so a few unclear frames do not switch it off.
-inline uint32_t smartSrVotesNeeded(uint32_t vote,uint32_t current){
-    return !vote&&current?kSmartSrOffStreak:kSmartSrProbeStreak;
+inline uint32_t smartSrVotesNeeded(SmartSrTarget vote,SmartSrTarget current){
+    return !vote.height&&current.height?kSmartSrOffStreak:kSmartSrProbeStreak;
 }
 // Source row probed for row r (both probe shaders use the same formula).
 inline uint32_t smartSrProbeRow(uint32_t r,uint32_t height){
     return height/10+uint32_t(uint64_t(r)*(height*8/10)/kSmartSrProbeRows);
 }
 
-// Largest error recovering an interior render signal from its bilinear
-// upscale with these taps (logged at graph creation as evidence).
+// Largest error recovering an interior render signal from its own upscale
+// with these taps.
 inline double smartSrSelfCheck(const SmartSrAxis& axis){
     if(axis.taps.empty())return 1.0;
     std::vector<double> a(axis.lowLength),y(axis.highLength);
     for(uint32_t i=0;i<axis.lowLength;++i)a[i]=0.5+0.35*std::sin(i*0.73)+0.15*std::cos(i*2.11);
     for(uint32_t j=0;j<axis.highLength;++j){
+        if(axis.scaler==SmartSrScaler::Aligned2x){
+            for(int i=int(j/2)-3;i<=int(j/2)+4;++i)
+                y[j]+=smartSrAlignedWeight(j,i)*a[size_t(std::clamp(i,0,int(axis.lowLength)-1))];
+            continue;
+        }
         int i0,i1;double w0,w1;smartSrBilinear(j,axis.highLength,axis.lowLength,i0,w0,i1,w1);
         y[j]=w0*a[i0]+w1*a[i1];
     }

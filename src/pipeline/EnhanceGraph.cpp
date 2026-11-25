@@ -876,7 +876,8 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     // and for native frames, SR keeps the whole source. HDR tone-mapped at ingest is
     // no longer what the source's scaler enlarged.
     smartSrAuto_=smartSrSettled_=false;smartSrX_={};smartSrY_={};smartSrW_=smartSrH_=0;smartSrProbeAxes_.clear();
-    smartSrProbeFrames_=smartSrProbeCount_=0;smartSrProbeTarget_=smartSrProbeStreak_=0;smartSrVerdict_={};
+    smartSrScaler_=SmartSrScaler::Bilinear;
+    smartSrProbeFrames_=smartSrProbeCount_=0;smartSrProbeTarget_={};smartSrProbeStreak_=0;smartSrVerdict_={};
     smartSrKeptVotes_=smartSrNoneVotes_=smartSrOtherVotes_=smartSrFlatProbes_=0;
     if(desc.smartSrBlocked)veyra::log::info("smart-sr","not running: a stage ahead of SR changes the picture (NR, denoise, anti-aliasing or beauty)");
     // SR has to read the converted source itself (describeStages keeps it so).
@@ -889,8 +890,10 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
             smartSrProbeAxes_.push_back(e.valid()?smartSrInverseAxis(srcW_,e.width):SmartSrAxis{});
             candidates+=e.valid();
         }
-        veyra::log::info("smart-sr",std::format("auto: {} candidate heights, {} rows every {} frames, source={}x{} work={}x{} coding={}; {} until {} equal verdicts",
-            candidates,kSmartSrProbeRows,kSmartSrProbeInterval,srcW_,srcH_,workW_,workH_,desc.hdrInput?"PQ (HDR10)":"sRGB",
+        const auto half=smartSrRenderExtent({srcW_,srcH_},srcH_/2);
+        smartSrProbeAxes_.push_back(half.valid()&&half.height*2==srcH_?smartSrInverseAxis(srcW_,half.width,SmartSrScaler::Aligned2x):SmartSrAxis{});
+        veyra::log::info("smart-sr",std::format("auto: {} candidate heights{}, {} rows every {} frames, source={}x{} work={}x{} coding={}; {} until {} equal verdicts",
+            candidates,smartSrProbeAxes_.back().taps.empty()?"":" and aligned 2x",kSmartSrProbeRows,kSmartSrProbeInterval,srcW_,srcH_,workW_,workH_,desc.hdrInput?"PQ (HDR10)":"sRGB",
             desc.smartSrNativeCopy?"pass-through":"whole-source SR",kSmartSrProbeStreak));
     }
     lmxxfNr_ = context_.adapter().vendorId == 0x1002 || desc.nrRuntime == engine::NrRuntime::LmxxfAmd;
@@ -1143,7 +1146,7 @@ bool EnhanceGraph::createResources()
             ComPtr<ID3D12Resource> r;
             return SUCCEEDED(context_.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,state,nullptr,IID_PPV_ARGS(&r)))?r:nullptr;
         };
-        const uint64_t statsBytes=kSmartSrCandidates.size()*kSmartSrProbeRows*16;
+        const uint64_t statsBytes=kSmartSrProbes*kSmartSrProbeRows*16;
         smartSrProbeReduced_=makeTexture(context_.device(),srcW_,kSmartSrProbeRows,DXGI_FORMAT_R32_FLOAT,true);
         smartSrProbeStats_=makeBuffer(statsBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COMMON);
         smartSrProbeReadback_=makeBuffer(statsBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_FLAG_NONE,D3D12_RESOURCE_STATE_COPY_DEST);
@@ -2579,7 +2582,7 @@ bool EnhanceGraph::createComputePasses()
     if(srPrescaled_&&(!srPrescalePass_.loadShader("NrDownsample.dxil",cs)||!srPrescalePass_.create(context_.device(),cs,2,1,1)))return false;
     if(smartSrAuto_&&(!smartSrPass_.loadShader("SmartSrReduce.dxil",cs)||!smartSrPass_.create(context_.device(),cs,4,1,1,kSmartSrConstants)))return false;
     if(smartSrAuto_&&(!smartSrProbeReducePass_.loadShader("SmartSrProbeReduce.dxil",cs)||!smartSrProbeReducePass_.create(context_.device(),cs,2,1,1,kSmartSrConstants)||
-                      !smartSrProbeResidualPass_.loadShader("SmartSrProbeResidual.dxil",cs)||!smartSrProbeResidualPass_.create(context_.device(),cs,3,2,1,8)))return false;
+                      !smartSrProbeResidualPass_.loadShader("SmartSrProbeResidual.dxil",cs)||!smartSrProbeResidualPass_.create(context_.device(),cs,3,2,1,16)))return false;
     if(videoSrOutput_&&srResolveActive()&&(!srResolvePass_.loadShader("SrResolve.dxil",cs)||!srResolvePass_.create(context_.device(),cs,10,3,1)))return false;
     if(firstSrInput_&&desc_.hdrWorking()&&(!firstSrRestorePass_.loadShader("HdrVideoSrRestore.dxil",cs)||!firstSrRestorePass_.create(context_.device(),cs,4,3,1)))return false;
     if (!stager_.initialize(context_.device(), 96)) {
@@ -2797,7 +2800,7 @@ bool EnhanceGraph::createViews()
             stagedSrv(smartSrProbeReduced_.Get(),DXGI_FORMAT_R32_FLOAT,smartSrProbeResidualPass_,1);
             D3D12_UNORDERED_ACCESS_VIEW_DESC stats{};
             stats.Format=DXGI_FORMAT_UNKNOWN;stats.ViewDimension=D3D12_UAV_DIMENSION_BUFFER;
-            stats.Buffer.NumElements=UINT(kSmartSrCandidates.size()*kSmartSrProbeRows);stats.Buffer.StructureByteStride=16;
+            stats.Buffer.NumElements=UINT(kSmartSrProbes*kSmartSrProbeRows);stats.Buffer.StructureByteStride=16;
             context_.device()->CreateUnorderedAccessView(smartSrProbeStats_.Get(),nullptr,&stats,cpu(smartSrProbeResidualPass_,2));
         }
     }
@@ -3839,13 +3842,14 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 tracker_.uavBarrier(list,smartSrProbeReduced_.Get());
                 tracker_.transition(list,smartSrProbeReduced_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 tracker_.transition(list,smartSrProbeStats_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                const uint32_t r[8]={srcW_,kSmartSrProbeRows,axis.lowLength,rowBase,rowSpan,uint32_t(c),smartDomain,0};
-                smartSrProbeResidualPass_.bind(list,reinterpret_cast<const float*>(r),gpuHandleOf(smartSrProbeResidualPass_,0).ptr,gpuHandleOf(smartSrProbeResidualPass_,2).ptr);
+                std::array<uint32_t,16> r{srcW_,kSmartSrProbeRows,axis.lowLength,rowBase,rowSpan,uint32_t(c),smartDomain,uint32_t(axis.scaler)};
+                for(size_t t=0;t<4;++t){r[8+t]=std::bit_cast<uint32_t>(float(kSmartSrAlignedEven[t]));r[12+t]=std::bit_cast<uint32_t>(float(kSmartSrAlignedOdd[t]));}
+                smartSrProbeResidualPass_.bind(list,reinterpret_cast<const float*>(r.data()),gpuHandleOf(smartSrProbeResidualPass_,0).ptr,gpuHandleOf(smartSrProbeResidualPass_,2).ptr);
                 list->Dispatch(kSmartSrProbeRows,1,1);
             }
             tracker_.uavBarrier(list,smartSrProbeStats_.Get());
             tracker_.transition(list,smartSrProbeStats_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
-            list->CopyBufferRegion(smartSrProbeReadback_.Get(),0,smartSrProbeStats_.Get(),0,kSmartSrCandidates.size()*kSmartSrProbeRows*16);
+            list->CopyBufferRegion(smartSrProbeReadback_.Get(),0,smartSrProbeStats_.Get(),0,kSmartSrProbes*kSmartSrProbeRows*16);
             smartSrProbePending_=true;smartSrProbeFence_=0;
         }
         if(smartSrAuto_&&(!smartSrW_||!smartRuns))return;  // no render extent: finalVideoSr reads the whole source
@@ -5291,7 +5295,7 @@ void EnhanceGraph::collectSmartSrProbe(){
     if(ring_->fence()->GetCompletedValue()<smartSrProbeFence_)return;
     smartSrProbePending_=false;smartSrProbeFence_=0;
     constexpr size_t n=kSmartSrCandidates.size();
-    std::vector<float> stats(n*kSmartSrProbeRows*4);
+    std::vector<float> stats(kSmartSrProbes*kSmartSrProbeRows*4);
     void* mapped=nullptr;const D3D12_RANGE range{0,stats.size()*sizeof(float)};
     if(FAILED(smartSrProbeReadback_->Map(0,&range,&mapped))||!mapped)return;
     std::memcpy(stats.data(),mapped,range.End);
@@ -5308,44 +5312,45 @@ void EnhanceGraph::collectSmartSrProbe(){
     // Field evidence: one line per kSmartSrReportProbes probes, whatever they found.
     const auto report=[&]{
         if(++smartSrProbeCount_%kSmartSrReportProbes)return;
-        veyra::log::info("smart-sr",std::format("probes {}: in use={} kept={} none={} other={} flat={}; last fit={} knee x{:.1f} notch x{:.1f}",
+        veyra::log::info("smart-sr",std::format("probes {}: in use={} kept={} none={} other={} flat={}; last fit={}{} knee x{:.1f} notch x{:.1f}",
             smartSrProbeCount_,smartSrH_,smartSrKeptVotes_,smartSrNoneVotes_,smartSrOtherVotes_,smartSrFlatProbes_,
-            smartSrVerdict_.fit,smartSrVerdict_.knee,smartSrVerdict_.notch));
+            smartSrVerdict_.fit,smartSrVerdict_.scaler==SmartSrScaler::Aligned2x?" aligned 2x":"",smartSrVerdict_.knee,smartSrVerdict_.notch));
         smartSrKeptVotes_=smartSrNoneVotes_=smartSrOtherVotes_=smartSrFlatProbes_=0;
     };
     // An almost flat frame (black, a fade, a loading screen) is no evidence either way:
     // the extent stays as it is.
     if(energy<kSmartSrMinDeviation*kSmartSrMinDeviation*double(kSmartSrProbeRows)*double(srcW_)){++smartSrFlatProbes_;report();return;}
-    std::array<double,n> errors{};
-    for(size_t c=0;c<n;++c){
+    const auto errorOf=[&](size_t c){
         double residual=0.0;
         for(uint32_t r=0;r<kSmartSrProbeRows;++r)residual+=stats[(c*kSmartSrProbeRows+r)*4];
-        errors[c]=smartSrProbeAxes_[c].taps.empty()?std::numeric_limits<double>::quiet_NaN():residual/energy;
-    }
-    smartSrVerdict_=smartSrDecide(errors);
+        return smartSrProbeAxes_[c].taps.empty()?std::numeric_limits<double>::quiet_NaN():residual/energy;
+    };
+    std::array<double,n> errors{};
+    for(size_t c=0;c<n;++c)errors[c]=errorOf(c);
+    smartSrVerdict_=smartSrDecide(errors,errorOf(kSmartSrAlignedProbe),srcH_/2);
     // Only a spatial upscale is re-rendered; native and reconstructed frames keep the ordinary
     // SR. A weak fit at the height in use (a dark picture) counts for it.
-    const uint32_t target=smartSrVote(smartSrVerdict_,smartSrH_);
-    ++(!target?smartSrNoneVotes_:target==smartSrH_?smartSrKeptVotes_:smartSrOtherVotes_);
+    const SmartSrTarget current{smartSrH_,smartSrScaler_},target=smartSrVote(smartSrVerdict_,current);
+    ++(!target.height?smartSrNoneVotes_:target==current?smartSrKeptVotes_:smartSrOtherVotes_);
     report();
     smartSrProbeStreak_=target==smartSrProbeTarget_?smartSrProbeStreak_+1:1;
     smartSrProbeTarget_=target;
-    if(smartSrProbeStreak_!=smartSrVotesNeeded(target,smartSrH_))return;  // act, and log, once per settled verdict
+    if(smartSrProbeStreak_!=smartSrVotesNeeded(target,current))return;  // act, and log, once per settled verdict
     smartSrSettled_=true;
-    if(target!=smartSrH_){
-        smartSrW_=smartSrH_=0;
-        if(target){
-            const auto e=smartSrRenderExtent({srcW_,srcH_},target);
-            auto x=smartSrInverseAxis(srcW_,e.width),y=smartSrInverseAxis(srcH_,e.height);
+    if(target!=current){
+        smartSrW_=smartSrH_=0;smartSrScaler_=SmartSrScaler::Bilinear;
+        if(target.height){
+            const auto e=smartSrRenderExtent({srcW_,srcH_},target.height);
+            auto x=smartSrInverseAxis(srcW_,e.width,target.scaler),y=smartSrInverseAxis(srcH_,e.height,target.scaler);
             // RTX Video SR enlarges up to 4x: a render extent further below the work size keeps the ordinary path.
             const bool enlargeable=uint64_t(e.width)*4>=workW_&&uint64_t(e.height)*4>=workH_;
             if(x.q&&y.q&&x.q<=kSmartSrMaxPhases&&y.q<=kSmartSrMaxPhases&&enlargeable){
-                smartSrX_=std::move(x);smartSrY_=std::move(y);smartSrW_=e.width;smartSrH_=e.height;
+                smartSrX_=std::move(x);smartSrY_=std::move(y);smartSrW_=e.width;smartSrH_=e.height;smartSrScaler_=target.scaler;
             }
         }
     }
     veyra::log::info("smart-sr",std::format("auto: {} (knee x{:.1f} notch x{:.1f}, {} equal probes)",
-        smartSrW_?std::format("render {}x{}",smartSrW_,smartSrH_):std::string(desc_.smartSrNativeCopy?"pass-through":"whole-source SR"),
+        smartSrW_?std::format("render {}x{}{}",smartSrW_,smartSrH_,smartSrScaler_==SmartSrScaler::Aligned2x?" aligned 2x":""):std::string(desc_.smartSrNativeCopy?"pass-through":"whole-source SR"),
         smartSrVerdict_.knee,smartSrVerdict_.notch,smartSrProbeStreak_));
 }
 

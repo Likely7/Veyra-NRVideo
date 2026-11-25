@@ -164,7 +164,8 @@ RTX 5070 Ti, SR quality 4, list mode, about 10 minutes of log): 14 settled verdi
 all 1920x1080, 2560x1440 or pass-through (knee x13.4 to x26.9, notch x7.9 to x15.7
 for the render extents); in 960 probes (33 almost flat) no other height settled;
 1080p <-> 1440p followed in both directions. Pass-through for the first 100 s (knee
-x1.8 to x2.4, no upscale found), and the NR switch, an anti-aliasing switch and a
+x1.8 to x2.4): part of it has the signature of the missed HOME screen in the next
+section (1872, knee x2.4, notch x0.9). The NR switch, an anti-aliasing switch and a
 stage ahead of SR (`not running` logged) each rebuilt as designed. GPU ready P95 per
 second:
 
@@ -177,6 +178,46 @@ second:
 
 So 1440p -> 4K HDR with DLAA sits at the 16.7 ms limit on this card. Not checked:
 the text of the blocked status on screen (unit tests and the log line only).
+
+## Second scaler (2026-11-26)
+
+Report from the same play test: after switching games (the signal drops), HOME is
+1080p but nothing is found any more. Not a stuck detector: a restarted capture gave
+the same result, and a HOME screen without a game settled 4 s after a signal loss.
+
+Two HDR10 screenshots of HOME (Veyra F7, SR off), The Witcher 3 open in the
+background / no game open:
+
+- No game: bilinear 1080p as known (knee x16.0, notch x9.5).
+- Game open: best bilinear height 1728, knee x2.5, notch x0.5, as in the log. It is
+  still exactly 1080p -> 4K, through another scaler: even samples sit on the render
+  samples and odd ones half way (bilinear has both a quarter off). Odd samples follow
+  from the even ones within 0.33 ten-bit codes on both axes with the same
+  coefficients, i.e. at the rounding noise; the reverse does not hold (2.4 codes),
+  and neither does a period of 3 (a 1440p signal).
+- Kernel from the same icons in both screenshots, in PQ codes (other domains fit
+  worse): 0, 1, 2, 3 render samples away 0.7856, 0.1121, -0.0126, 0.0077; 0.5, 1.5,
+  2.5, 3.5 away 0.5362, -0.0599, 0.0214, 0.0023. Whether the console or the capture
+  card (GC573) scales is not known; the signal loss suggests a change of the HDMI mode.
+
+Added: `SmartSrScaler::Aligned2x`, one more probe (half the source height, 28-tap
+inverse, the kernel above in `SmartSrProbeResidual.hlsl`) behind the 22 candidates.
+It is taken when its residual is at least 3 times below the bilinear ones of its own
+and of the next height; votes, hold rule and descale work as before, the descale just
+gets the other taps (exact inverse, error 4e-5, noise gain 1.09).
+
+Checks: offline, gain x61 and more on the screenshots; at most x2.2 on everything else
+(HDR10 and SDR captures, native, bilinear from all 22 heights at 8 / 10 bit, 126
+almost flat pictures). Synthetic aligned 1080p pictures: x77 to x171 at 10 bit, x6 to
+x16 at 8 bit; a picture dimmed to 30 % at 8 bit can miss it (x1.7 to x3.7). The 1080p picture
+recovered from the game-open screenshot matches the one behind the other screenshot at
+39.6-42.7 dB on the same icons (area shrink 30.4-39.6 dB). App, HDR10 10-bit clip of
+the screenshots: before `whole-source SR (knee x2.5 notch x0.5)`, now `render 1920x1080
+aligned 2x (knee x51.3 notch x53.8)`, then bilinear 1080p (no game), 1440p (game),
+none (native) and aligned 2x again, each within 3 probes of the cut. Unit tests: effect
+chain 573 PASS / 0 FAIL, preset library 0 FAIL, repair presets exit 0, ui i18n 0 failures.
+Not checked: a game's own picture in that mode, other ratios (a 1440p signal) and other
+capture cards, whose filters will differ.
 
 The sections below record the work on the 2.1.1 base (feature/smart-sr), where
 `VEYRA_TEST_SMART_SR_HEIGHT` was the test switch.

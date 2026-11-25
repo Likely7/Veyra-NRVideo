@@ -1747,6 +1747,18 @@ static void testSmartSr(){
         check(phases,"smart SR: every 4K candidate is exact 16:9 within the phase limit");
         std::printf("smart SR: largest candidate inverse error %.3e\n",worst);
         check(worst<2e-2,"smart SR: every 4K candidate inverts its bilinear upscale");
+        using pipeline::SmartSrScaler;
+        const auto wide=pipeline::smartSrInverseAxis(3840,1920,SmartSrScaler::Aligned2x),tall=pipeline::smartSrInverseAxis(2160,1080,SmartSrScaler::Aligned2x);
+        check(wide.p==2&&wide.q==1&&wide.taps.size()==1&&wide.lowLength==1920&&wide.scaler==SmartSrScaler::Aligned2x&&tall.taps==wide.taps&&
+              pipeline::smartSrInverseAxis(3840,2560,SmartSrScaler::Aligned2x).taps.empty()&&pipeline::smartSrInverseAxis(2161,1080,SmartSrScaler::Aligned2x).taps.empty(),
+              "smart SR: the aligned scaler is inverted at exactly 2x only");
+        double alignedSum=0.0,alignedNoise=0.0;for(const float t:wide.taps[0]){alignedSum+=t;alignedNoise+=double(t)*t;}
+        std::printf("smart SR: aligned inverse error %.3e, noise gain %.3f\n",pipeline::smartSrSelfCheck(wide),std::sqrt(alignedNoise));
+        check(pipeline::smartSrSelfCheck(wide)<1e-3&&pipeline::smartSrSelfCheck(tall)<1e-3&&std::abs(alignedSum-1.0)<1e-6&&alignedNoise<1.5,
+              "smart SR: the aligned inverse recovers its 2x upscale, keeps a flat picture and hardly amplifies noise");
+        double even=0.0,odd=0.0;for(int i=80;i<=120;++i){even+=pipeline::smartSrAlignedWeight(200,i);odd+=pipeline::smartSrAlignedWeight(201,i);}
+        check(std::abs(even-1.0)<1e-12&&std::abs(odd-1.0)<1e-12&&pipeline::smartSrAlignedWeight(200,97)==pipeline::smartSrAlignedWeight(200,103)&&
+              pipeline::smartSrAlignedWeight(201,100)==pipeline::smartSrAlignedWeight(201,101),"smart SR: both aligned phases are symmetric and sum to one");
     }
     {
         // The probe of one row (SmartSrProbeReduce / Residual) on almost flat pictures.
@@ -1773,6 +1785,25 @@ static void testSmartSr(){
             }
             return errors;
         };
+        // The aligned 2x probe of the same row.
+        const auto probeAligned=[](const std::vector<float>& row){
+            const uint32_t w=uint32_t(row.size());
+            double s1=0.0,s2=0.0;for(const float v:row){s1+=v;s2+=double(v)*v;}
+            const auto axis=pipeline::smartSrInverseAxis(w,w/2,pipeline::SmartSrScaler::Aligned2x);
+            std::vector<float> low(axis.lowLength);
+            for(uint32_t i=0;i<axis.lowLength;++i){
+                const int base=int(pipeline::smartSrCentre(i,axis.p,axis.q))-pipeline::kSmartSrTapOrigin;
+                float v=0.f;for(uint32_t t=0;t<pipeline::kSmartSrTaps;++t)v+=axis.taps[0][t]*row[size_t(std::clamp(base+int(t),0,int(w)-1))];
+                low[i]=v;
+            }
+            double residual=0.0;
+            for(uint32_t j=0;j<w;++j){
+                float back=0.f;
+                for(int i=int(j/2)-3;i<=int(j/2)+4;++i)back+=float(pipeline::smartSrAlignedWeight(j,i))*low[size_t(std::clamp(i,0,int(axis.lowLength)-1))];
+                residual+=(double(row[j])-back)*(double(row[j])-back);
+            }
+            return residual/(s2-s1*s1/w);
+        };
         bool quiet=true;
         for(const double level:{0.1,0.5,0.9})for(const double steps:{0.0,1023.0,255.0})for(const double swing:{0.04,0.2}){
             std::vector<float> row(3840);
@@ -1781,7 +1812,7 @@ static void testSmartSr(){
                 if(steps>0.0)v=std::round(v*steps)/steps;
                 row[j]=float(v);
             }
-            quiet=quiet&&!pipeline::smartSrDecide(probe(row)).spatial;
+            quiet=quiet&&!pipeline::smartSrDecide(probe(row),probeAligned(row),1080).spatial;
         }
         check(quiet,"smart SR: an almost flat picture is no render height (live 2026-11-24: 1152)");
         std::vector<float> render(1920),row(3840);
@@ -1790,8 +1821,21 @@ static void testSmartSr(){
             int i0,i1;double w0,w1;pipeline::smartSrBilinear(j,3840,1920,i0,w0,i1,w1);
             row[j]=float(std::round((w0*render[size_t(i0)]+w1*render[size_t(i1)])*255.0)/255.0);
         }
-        const auto v=pipeline::smartSrDecide(probe(row));
-        check(v.height==1080&&v.spatial&&v.fit==1080,"smart SR: the same probe finds a detailed 8-bit 1080p upscale");
+        auto v=pipeline::smartSrDecide(probe(row),probeAligned(row),1080);
+        check(v.height==1080&&v.spatial&&v.fit==1080&&v.scaler==pipeline::SmartSrScaler::Bilinear,"smart SR: the same probe finds a detailed 8-bit 1080p upscale");
+        for(const double steps:{255.0,1023.0}){
+            for(uint32_t j=0;j<row.size();++j){
+                double y=0.0;
+                for(int i=int(j/2)-3;i<=int(j/2)+4;++i)y+=pipeline::smartSrAlignedWeight(j,i)*render[size_t(std::clamp(i,0,1919))];
+                row[j]=float(std::round(y*steps)/steps);
+            }
+            check(!pipeline::smartSrDecide(probe(row)).spatial,"smart SR: bilinear candidates alone do not find an aligned 2x upscale (live 2026-11-26)");
+            v=pipeline::smartSrDecide(probe(row),probeAligned(row),1080);
+            check(v.height==1080&&v.spatial&&v.scaler==pipeline::SmartSrScaler::Aligned2x&&v.knee>10.0&&v.notch>10.0,
+                  "smart SR: the aligned probe finds an aligned 2x upscale of 1080p");
+        }
+        for(size_t j=0;j<row.size();++j)row[j]=float(0.5+0.2*std::sin(double(j)*2.3)+0.2*std::sin(double(j)*0.41)*std::cos(double(j)*1.1));
+        check(!pipeline::smartSrDecide(probe(row),probeAligned(row),1080).spatial,"smart SR: native detail is no aligned upscale");
     }
     {
         constexpr size_t n=pipeline::kSmartSrCandidates.size();
@@ -1814,6 +1858,23 @@ static void testSmartSr(){
         for(size_t i=0;i<n;++i)fhd[i]=pipeline::kSmartSrCandidates[i]>=1080?nan:i<at(1008)?0.08:1e-4;
         v=pipeline::smartSrDecide(fhd);
         check(v.height==1008&&v.notch==1.0&&v.spatial,"smart SR: the top measured height needs no notch past the source");
+        {
+            // Aligned 2x: only a clear gain over the bilinear fits of its own and of the next height.
+            using pipeline::SmartSrScaler;
+            auto errors=native;errors[at(1080)]=6e-4;errors[at(1152)]=6.5e-4;
+            auto a=pipeline::smartSrDecide(errors,1e-5,1080);
+            check(a.height==1080&&a.spatial&&a.scaler==SmartSrScaler::Aligned2x&&a.knee>50&&a.notch>50,"smart SR: a clear aligned fit settles at half the source height");
+            a=pipeline::smartSrDecide(errors,5e-4,1080);
+            check(!a.spatial&&a.scaler==SmartSrScaler::Bilinear,"smart SR: an aligned fit like the bilinear ones is no aligned upscale");
+            a=pipeline::smartSrDecide(errors,6e-4/2.7,1080);
+            check(!a.spatial&&!a.height&&a.scaler==SmartSrScaler::Aligned2x&&a.fit==1080,"smart SR: a weak aligned fit only counts where it is in use");
+            check(pipeline::smartSrDecide(upscaled,2e-5,1080).scaler==SmartSrScaler::Aligned2x&&
+                  pipeline::smartSrDecide(upscaled,8e-4,1080).scaler==SmartSrScaler::Bilinear,"smart SR: the better scaler of the same height wins");
+            a=pipeline::smartSrDecide(upscaled,nan,1080);
+            check(a.height==1080&&a.scaler==SmartSrScaler::Bilinear,"smart SR: an unmeasured aligned probe changes nothing");
+            check(pipeline::smartSrDecide(errors,1e-5,1000).scaler==SmartSrScaler::Bilinear&&pipeline::smartSrDecide(errors,0.5,1080).scaler==SmartSrScaler::Bilinear,
+                  "smart SR: the aligned probe needs a measured height and a fit under 2 %");
+        }
         std::array<double,n> flat{};flat.fill(1.0);
         check(!pipeline::smartSrDecide(flat).height,"smart SR: no fit under 2 % gives no render height");
         std::array<double,n> smooth{};
@@ -1822,8 +1883,9 @@ static void testSmartSr(){
         check(v.fit==1152&&v.knee>900&&v.notch<1.2&&!v.spatial,"smart SR: a large knee alone (everything above fits alike) is no upscale");
     }
     {
-        using pipeline::SmartSrVerdict;using pipeline::smartSrVote;
-        using pipeline::smartSrVotesNeeded;
+        using pipeline::SmartSrVerdict;using pipeline::SmartSrTarget;using pipeline::SmartSrScaler;
+        const auto smartSrVote=[](const SmartSrVerdict& v,uint32_t current){return pipeline::smartSrVote(v,{current}).height;};
+        const auto smartSrVotesNeeded=[](uint32_t vote,uint32_t current){return pipeline::smartSrVotesNeeded({vote},{current});};
         const SmartSrVerdict spatial1080{1080,1000.0,6.0,true,1080},dark1440{0,2.9,1.8,false,1440},native{0,1.6,1.0,false,2016};
         const SmartSrVerdict weak1440{1440,3.1,1.9,false,1440},reconstructed1080{1080,8.0,1.2,false,1080};
         check(smartSrVote(spatial1080,0)==1080&&smartSrVote(dark1440,0)==0&&smartSrVote(weak1440,0)==0,
@@ -1837,6 +1899,13 @@ static void testSmartSr(){
               smartSrVotesNeeded(0,0)==pipeline::kSmartSrProbeStreak&&smartSrVotesNeeded(0,1440)==pipeline::kSmartSrOffStreak&&
               pipeline::kSmartSrOffStreak>pipeline::kSmartSrProbeStreak,
               "smart SR: dropping a height for none takes more votes than finding one");
+        const SmartSrTarget bilinear{1080},aligned{1080,SmartSrScaler::Aligned2x};
+        const SmartSrVerdict clear{1080,60.0,60.0,true,1080,SmartSrScaler::Aligned2x},weak{0,2.7,2.6,false,1080,SmartSrScaler::Aligned2x};
+        check(pipeline::smartSrVote(clear,{})==aligned&&pipeline::smartSrVote(clear,bilinear)==aligned&&pipeline::smartSrVote(clear,aligned)==aligned&&
+              pipeline::smartSrVote(spatial1080,aligned)==bilinear,"smart SR: a vote names the height and its scaler");
+        check(pipeline::smartSrVote(weak,aligned)==aligned&&!pipeline::smartSrVote(weak,bilinear).height&&!pipeline::smartSrVote(weak,{}).height,
+              "smart SR: a weak aligned fit holds the aligned scaler only");
+        check(pipeline::smartSrVotesNeeded(aligned,bilinear)==pipeline::kSmartSrProbeStreak,"smart SR: the scaler changes like a height does");
     }
     {
         using pipeline::SmartSrCoding;using pipeline::smartSrCoding;

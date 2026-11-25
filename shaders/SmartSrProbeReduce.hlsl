@@ -1,6 +1,6 @@
 // SmartSrProbeReduce: smart SR render detection, step 1 of 2. Reduces the luma
-// of the probed source rows to one candidate width with the least-squares
-// inverse of the pixel-centre bilinear upscale (taps: pipeline/SmartSr.h).
+// of the probed source rows to one candidate width with the inverse of its
+// scaler (taps: pipeline/SmartSr.h).
 // One dispatch per tap phase: outputs phase, phase + q, ... of every row.
 // The probes read the linear source; the console scaled coded values.
 #include "SmartSrCoding.hlsli"

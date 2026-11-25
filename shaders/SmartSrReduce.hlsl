@@ -1,5 +1,5 @@
-// SmartSrReduce: one separable pass of the least-squares inverse of a
-// pixel-centre bilinear upscale ("descale"). Smart SR uses it when the source
+// SmartSrReduce: one separable pass of the inverse of the source's own upscale
+// ("descale"). Smart SR uses it when the source
 // enlarged its own render (a console's 1080p game sent as 4K): an area shrink
 // blurs that render again, the inverse recovers it. The console scaled coded values, so the filter runs on coded
 // samples (sRGB for SDR, PQ for HDR10: SmartSrCoding.hlsli): rows read the

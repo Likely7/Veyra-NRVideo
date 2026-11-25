@@ -996,20 +996,22 @@ private:
     // Smart SR (SmartSr.h): probes every kSmartSrProbeInterval frames; after
     // kSmartSrProbeStreak equal votes the render extent (smartSrW_ x smartSrH_,
     // top-left of the source-sized srPrescaled_) follows. The descale inverts the
-    // source's own bilinear upscale, rows into smartSrMid_ (coded, render width x
+    // source's own upscale (smartSrScaler_), rows into smartSrMid_ (coded, render width x
     // source height), columns into srPrescaled_. A zero extent keeps the ordinary
     // SR of the whole source (or the same-size copy of a raw frame).
     bool smartSrAuto_ = false, smartSrSettled_ = false;
     SmartSrAxis smartSrX_, smartSrY_;
     ComPtr<ID3D12Resource> smartSrMid_;
     uint32_t smartSrW_ = 0, smartSrH_ = 0;
-    std::vector<SmartSrAxis> smartSrProbeAxes_;  // inverse taps per candidate width
+    SmartSrScaler smartSrScaler_ = SmartSrScaler::Bilinear;
+    std::vector<SmartSrAxis> smartSrProbeAxes_;  // inverse taps per candidate width, then the aligned 2x probe
     ComPtr<ID3D12Resource> smartSrProbeReduced_, smartSrProbeStats_;
     ComPtr<ID3D12Resource> smartSrProbeReadback_; // one probe at a time
     bool smartSrProbePending_ = false;            // recorded, not collected yet
     uint64_t smartSrProbeFence_ = 0;              // ring fence value that covers it (0: not known yet)
     uint64_t smartSrProbeFrames_ = 0, smartSrProbeCount_ = 0;
-    uint32_t smartSrProbeTarget_ = 0, smartSrProbeStreak_ = 0;
+    SmartSrTarget smartSrProbeTarget_{};
+    uint32_t smartSrProbeStreak_ = 0;
     uint32_t smartSrKeptVotes_ = 0, smartSrNoneVotes_ = 0, smartSrOtherVotes_ = 0, smartSrFlatProbes_ = 0; // since the last report
     SmartSrVerdict smartSrVerdict_{};
     void collectSmartSrProbe();
