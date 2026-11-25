@@ -8789,19 +8789,6 @@
    "ru": "Хранит последние фрагменты эфира в памяти объёмом до 256 МиБ. Чем выше битрейт, тем короче доступный интервал."
   },
   {
-   "zh": "保留画质增强和补帧，缩短增强后的原帧等待。",
-   "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "保留畫質增強和補幀，縮短增強後原始影格的等待。",
-   "en": "Keep enhancement and frame generation, and reduce the wait for enhanced source frames.",
-   "ja": "画質補正とフレーム生成を維持し、補正後の元フレームの待ち時間を短縮します。",
-   "ko": "화질 향상과 프레임 생성을 유지하면서 향상된 원본 프레임의 대기 시간을 줄입니다.",
-   "es": "Mantiene la mejora y la generación de fotogramas, y reduce la espera de los fotogramas de origen mejorados.",
-   "fr": "Conserve l’amélioration et la génération d’images, et réduit l’attente des images source améliorées.",
-   "de": "Bildverbesserung und Frame-Generierung bleiben aktiv, verbesserte Quellbilder warten kürzer.",
-   "pt-BR": "Mantém os efeitos e a geração de quadros e reduz a espera pelos quadros de origem aprimorados.",
-   "ru": "Сохраняет улучшение и генерацию кадров, сокращая ожидание улучшенных исходных кадров."
-  },
-  {
    "zh": "信号",
    "src": "qml/ProPage.qml",
    "zh-TW": "信號",
@@ -37467,19 +37454,6 @@
    "de": "Schritt halten, jeden Frame ableiten",
    "pt-BR": "mantendo-se, inferindo cada quadro",
    "ru": "Успокойся, выводя каждый кадр"
-  },
-  {
-   "zh": "跟手优先",
-   "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "操作回應優先",
-   "en": "Prefer responsive video",
-   "ja": "操作応答を優先",
-   "ko": "입력 반응 우선",
-   "es": "Priorizar la respuesta",
-   "fr": "Priorité à la réactivité",
-   "de": "Direkte Reaktion priorisieren",
-   "pt-BR": "Priorizar resposta",
-   "ru": "Приоритет отклика"
   },
   {
    "zh": "跟踪平滑",

@@ -12,8 +12,7 @@ DialogLayer {
     dialogWidth: 992
     minimumBodyWidth: 0
     actions: [{ label: qsTr("返回") }]
-    property var videoControls: typeof veyra !== "undefined" ? veyra : null
-    property var input: videoControls?.ps5Input || null
+    property var input: typeof veyra !== "undefined" ? (veyra.ps5Input || null) : null
     property int selected: -1
     property bool showList: panel.bodyWidth>0 && panel.bodyWidth<500
     property bool confirmReset: false
@@ -113,18 +112,6 @@ DialogLayer {
     }
     Text { visible: !panel.input?.keyboardEnabled; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
         text: qsTr("当前使用实体手柄。切到键鼠映射后，点击画面即可接管。") }
-    VRow {
-        visible: panel.videoControls !== null && (!panel.videoControls.hasSource ||
-                  panel.videoControls.sourceKind === "ps5" || panel.videoControls.sourceKind === "capture")
-        label: qsTr("跟手优先")
-        hint: qsTr("保留画质增强和补帧，缩短增强后的原帧等待。")
-        hintBelow: true
-        VSwitch {
-            objectName: "ps5-responsive-video"
-            checked: panel.videoControls?.ps5ResponsePacing === true
-            onToggled: on => panel.videoControls.ps5ResponsePacing = on
-        }
-    }
     VRow {
         label: qsTr("键位布局")
         VSeg {

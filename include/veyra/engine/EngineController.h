@@ -289,7 +289,6 @@ public:
 #endif
     void stop();
     sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
-    void setPs5ResponsePacing(bool on){ps5ResponsePacing_=on;}
     void comparison(int mode,bool base,float split=.5f){comparisonMode_=mode;comparisonBase_=base;comparisonSplit_=std::clamp(split,0.0f,1.0f);}
     void pause(bool p);
     bool setPlaybackRate(double rate);
@@ -399,7 +398,6 @@ private:
 #endif
     std::atomic<bool> hdrCoverageObserved_{false};
     int pendingAudioTrack_=-1;uint64_t pendingAudioSession_=0; // mutex_
-    std::atomic<bool> ps5ResponsePacing_{false};
     std::atomic<int> comparisonMode_{0};std::atomic<bool> comparisonBase_{false};std::atomic<float> comparisonSplit_{.5f};
     // Guarded by mutex_: DLSSG MultiFrameCountMax of the active session.
     int fgMultiFrameMaxCap_=0;

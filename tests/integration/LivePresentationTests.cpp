@@ -444,7 +444,6 @@ int wmain(int argc,wchar_t**argv){
     std::wstring dedupMode=dedupRun?std::wstring(argv[3]).substr(8):L"";
     const bool dedupNoFg=dedupMode.ends_with(L"-nofg");if(dedupNoFg)dedupMode.resize(dedupMode.size()-5);
     if(dedupRun){
-        engine.setPs5ResponsePacing(GetEnvironmentVariableW(L"VEYRA_TEST_PS5_RESPONSE_PACING",nullptr,0)>0);
         options.softwareDecode=true;options.fg=!dedupNoFg;options.fgMultiplier=2;
         if(dedupMode.ends_with(L"-vsync")){
             dedupMode.resize(dedupMode.size()-6);

@@ -2099,3 +2099,11 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 构建使用 `tmp/ps5-gta-response-20261125/build-local.py`，主程序、实时呈现探针及调度测试的最终构建日志为 `logs/codex-ps5-input-subtitle-20261125/build-20261125-103447`。`fg-ab.py` 以 RTX 5070、1080p60 合成源模拟采集卡，用相同 NR、VFG 2×、60→30 和自动显示同步比较。取稳定后同长 8 秒窗口，两组各 240 张增强原帧，实际送出 240／239 张生成帧。输入帧抵达后到 Present 返回的增强原帧 P95 从 29.334 降至 26.543 ms，生成帧从 12.860 降至 10.310 ms，送帧间隔 P95 为 17.270／17.286 ms，输出 1% 低帧为 56.61／55.94。原始数据在 `reports/ps5-gta-response-20261125/fg-ab.csv`，两次逐帧日志分别在同任务 logs 的 normal 与 responsive。测试值未包含真实鼠标到屏幕的完整链路。
 
 `verify.py input quick`、现有实时调度与时钟单元测试以及九语言提取通过。Qt Quick 265 项通过，输入回归核对 GTA V 两套布局和 135 项 Moonlight 检查。测试版在 `tests/ps5-gta-response-20261125`，使用独立档案。完整 PS5 串流与采集实卡手感待用户验证。
+
+## 2026-11-25 撤回 PS5 跟手优先实验
+
+用户选择稳定性。移除实验开关、偏好读取、提前相位、过期组提前呈现和对应的实验测试分支。送显引擎、桥接和调度回归源码与加入实验之前的 `3810018c` 逐文件一致。GTA V 档案、步行／驾驶切换、L2 刹车／倒车与点击开始改键包含在稳定测试版中。前一节的 A/B 结果仅供追溯。
+
+通过过去的 GTA V 测试档案复制配置到独立的 `E:/项目/Veyra/tests/ps5-gta-stable-20261125/manual-profile`，去除实验偏好。原档案及正在运行的测试进程由用户继续掌控。稳定版沿用原应用的画面处理设置。
+
+`tmp/ps5-gta-stable-20261125/build-local.py` 构建通过，日志在 `logs/codex-ps5-input-subtitle-20261125/build-20261125-104151`。同目录下 `stage.py --final`、`verify.py input quick`、`fg-smoke.py`、实时呈现和时钟单元测试及 `scripts/i18n/extract.py --check` 均已核对。Qt Quick 265 项通过。10 秒 NR + VFG 2× + 60→30 回放送出 301 张增强原帧及 300 张生成帧，送显时限过期记录为 0。日志位于 `logs/ps5-gta-stable-20261125`。稳定版已打开映射面板，前版生成的启动器已指向稳定版。
