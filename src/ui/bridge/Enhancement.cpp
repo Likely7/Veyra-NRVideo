@@ -41,6 +41,41 @@ void QmlPlayerBridge::setDlssSrModel(int value) {
     s.dlssSrModel = unsigned(value);
     if (impl_->commit(s)) emit settingsChanged();
 }
+// FSR SR provider generation. "Auto" hands the choice to FfxVersionSelect, which ranks
+// what the installed runtime actually carries; the explicit modes never fall back silently.
+int QmlPlayerBridge::fsrSrVersion() const { return int(settings().fsrSrVersion); }
+QVariantList QmlPlayerBridge::fsrSrVersionChoices() const {
+    return {QVariantMap{{"id", "0"}, {"label", tr("自动（优先最新）")}},
+            QVariantMap{{"id", "1"}, {"label", "FSR 3.1"}},
+            QVariantMap{{"id", "2"}, {"label", "FSR 4.x"}}};
+}
+void QmlPlayerBridge::setFsrSrVersion(int value) {
+    if (value < 0 || unsigned(value) >= engine::kFsrSrVersionCount) return;
+    const auto cap = effectCapabilities().value("sr5").toMap();
+    if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return; }
+    auto s = settings();
+    if (s.fsrSrVersion == engine::FsrSrVersion(unsigned(value))) return;
+    s.fsrSrVersion = engine::FsrSrVersion(unsigned(value));
+    if (impl_->commit(s)) emit settingsChanged();
+}
+// FSR's built-in RCAS pass. Two decimals keep a slider drag from committing on
+// every pixel of travel, and 0 is the documented off state.
+double QmlPlayerBridge::fsrSrSharpness() const { return double(settings().fsrSrSharpness); }
+void QmlPlayerBridge::setFsrSrSharpness(double value) {
+    if (!std::isfinite(value)) return;
+    const double v = std::round(std::clamp(value, 0.0, 1.0) * 100.0) / 100.0;
+    const auto cap = effectCapabilities().value("sr5").toMap();
+    if (!cap.value("available").toBool()) { emit notice(cap.value("reason").toString(), true); return; }
+    auto s = settings();
+    if (std::abs(double(s.fsrSrSharpness) - v) < 1e-6) return;
+    s.fsrSrSharpness = float(v);
+    if (impl_->commit(s)) emit settingsChanged();
+}
+QString QmlPlayerBridge::fsrSrProviderText() const {
+    const auto& snap = impl_->snapshot;
+    if (!snap.running || !snap.applied.usesFsrSr() || snap.fsrSrProviderVersion.empty()) return {};
+    return tr("实际运行：FSR %1").arg(QString::fromStdString(snap.fsrSrProviderVersion));
+}
 int QmlPlayerBridge::srPrescale() const { return int(settings().srPrescale); }
 bool QmlPlayerBridge::dualSrEnabled() const { return settings().dualSrEnabled; }
 // Double SR takes every SR backend (user 2026-11-08: DLSS SR and FSR as well).

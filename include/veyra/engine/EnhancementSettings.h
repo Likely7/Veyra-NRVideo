@@ -143,6 +143,11 @@ constexpr uint32_t videoSrQualityFor(VideoSrFamily family,uint32_t tier){
 // (preset M), 2 = DLSS 4.5 Ultra Performance model (preset L). Both 4.5
 // models ship in the DLSS 310.5+ runtime already packaged (310.7).
 inline constexpr uint32_t kDlssSrModelCount=3;
+// FSR SR provider generation (kVideoSrFsr passes): Auto keeps the newest
+// installed provider, Fsr31/Fsr4 pin one and never fall back. Stored values are
+// the preset/wire integers, so the enum order is part of the format.
+enum class FsrSrVersion : uint32_t { Auto=0, Fsr31=1, Fsr4=2 };
+constexpr uint32_t kFsrSrVersionCount=3;
 // Capture audio ingress policy. Automatic is what the pipeline did before the
 // manual selector existed; the other two exist because Dolby/DTS passthrough
 // negotiation depends on the device and the console, and users reported that
@@ -472,6 +477,10 @@ struct EnhancementSettings {
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=kDefaultVideoSrQuality; // 0 DLSS SR; 5 FSR; RTX Video SR family/tier values (videoSrFamily)
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
+    // FSR SR only (base or the second of a double SR). fsrSrSharpness is the
+    // provider's own RCAS strength, 0 = off, 1 = maximum; a live uniform.
+    FsrSrVersion fsrSrVersion=FsrSrVersion::Auto;
+    float fsrSrSharpness=0.0f;
     // Base SR uses srTarget; the optional second SR has its own target/quality.
     // srPrescale now lowers the first AI result only when dualSrEnabled.
     // srOutput shrinks a single RTX Video SR result (supersampling); double SR
@@ -483,6 +492,11 @@ struct EnhancementSettings {
     uint32_t dualSrQuality=kDefaultVideoSrQuality; // any SR value (DLSS SR, RTX Video SR family/tier, FSR), independent of the base
     // A DLSS SR / FSR pass reads srMotion: the base, or the second of a double SR.
     bool temporalSr() const { return temporalVideoSr(videoSrQuality)||(dualSrEnabled&&temporalVideoSr(dualSrQuality)); }
+    // Any FSR SR pass (base or the second of a double SR) in this configuration.
+    bool usesFsrSr() const {
+        return sr&&(currentVideoSrQuality(videoSrQuality)==kVideoSrFsr||
+                    (dualSrEnabled&&currentVideoSrQuality(dualSrQuality)==kVideoSrFsr));
+    }
     bool usesDlaa() const {
         if(antiAlias.enabled&&antiAlias.usesDlaa())return true;
         for(unsigned i=0;i<additionalAntiAliasCount;++i)
@@ -595,6 +609,8 @@ struct EnhancementSettings {
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
         if(!usesDlaa()&&(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0))))active.dlssSrModel=defaults.dlssSrModel;
+        // Version selection and sharpening only exist for an FSR SR pass.
+        if(!usesFsrSr()){active.fsrSrVersion=defaults.fsrSrVersion;active.fsrSrSharpness=defaults.fsrSrSharpness;}
         if(!sr||!dualSrEnabled){
             active.srPrescale=defaults.srPrescale;
             active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
@@ -689,6 +705,9 @@ struct EnhancementSettings {
         video.videoHdr=target.videoHdr;
         video.videoHdr.enabled=videoHdr.enabled;
         video.videoDenoise=target.videoDenoise;
+        // The FSR sharpening is a live uniform; the provider version decides which
+        // context is created, so it stays in the comparison (rebuild).
+        video.fsrSrSharpness=target.fsrSrSharpness;
         // Anti-aliasing thresholds and history weights are uniforms; the method,
         // tier and temporal mode decide which passes exist.
         if(video.antiAlias.sameStructure(target.antiAlias))video.antiAlias=target.antiAlias;
@@ -764,6 +783,7 @@ struct EnhancementSettings {
         if(frameGenerationBackend==FrameGenerationBackend::Rife&&multiplier>3)return "RIFE supports 2X and 3X";
         if(!validVideoSrQuality(videoSrQuality))return "invalid video SR quality";
         if(dlssSrModel>=kDlssSrModelCount)return "invalid DLSS SR model";
+        if(uint32_t(fsrSrVersion)>=kFsrSrVersionCount||!range(fsrSrSharpness,1))return "invalid FSR SR version or sharpness";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(!pipeline::validSrPrescale(srPrescale))return "invalid SR prescale";
         if(!pipeline::validSrOutput(srOutput))return "invalid SR output";

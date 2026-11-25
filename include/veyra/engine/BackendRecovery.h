@@ -59,7 +59,14 @@ inline bool disableFailedBackend(EnhancementSettings& settings,FailedBackend bac
     case FailedBackend::Dlaa:disableDlaa();break;
     case FailedBackend::VideoHdr:settings.videoHdr.enabled=false;break;
     case FailedBackend::Nr:settings.nr=false;break;
-    case FailedBackend::Sr:settings.sr=false;break;
+    case FailedBackend::Sr:
+        // FSR 4 SR needs an RX 9000 whose driver provider offers the ML version.
+        // Downgrading to FSR 3.1 (any DirectX 12 GPU) keeps upscaling running
+        // instead of turning the stage off; the caller says so. A failing FSR 3.1
+        // then disables SR as before.
+        if(settings.fsrSrVersion==FsrSrVersion::Fsr4&&settings.usesFsrSr())settings.fsrSrVersion=FsrSrVersion::Fsr31;
+        else settings.sr=false;
+        break;
     // FSR 4 ML needs an RX 9000 whose driver provider offers the ML version.
     // Without it FSR 3.1 (any DirectX 12 GPU) keeps 2X frame generation running
     // instead of turning it off; the caller says so. A failing FSR 3.1 then

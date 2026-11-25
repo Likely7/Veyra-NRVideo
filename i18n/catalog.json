@@ -2575,6 +2575,32 @@
    "ru": "FSR Генерация кадров 4 ML поддерживается AMD GPU RX 9000; это GPU Не может использовать его, поэтому текущая генерация кадров сохраняется."
   },
   {
+   "zh": "FSR 4 ML 超分提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "FSR 4 ML 超解析提供方不可用（需要支援的 RX 9000 和驅動），已改用 FSR 3.1；原因見日誌",
+   "en": "FSR 4 ML super resolution provider unavailable (needs a supported RX 9000 and driver); switched to FSR 3.1. See the log",
+   "ja": "FSR 4 ML 超解像プロバイダーが使用できません（対応する RX 9000 とドライバーが必要）。FSR 3.1 に切り替えました。理由はログを参照してください",
+   "ko": "FSR 4 ML 초해상도 공급자를 사용할 수 없어 FSR 3.1로 전환했습니다(지원되는 RX 9000 및 드라이버 필요). 자세한 내용은 로그를 확인하세요.",
+   "es": "FSR 4 ML proveedor de super resolución no disponible (necesita un RX 9000 compatible y controlador); conmutado a FSR 3.1. Ver el registro",
+   "fr": "FSR 4 fournisseur de superrésolution LM non disponible (besoin d'un RX 9000 pris en charge et driver); commuté à FSR 3.1. Voir le journal",
+   "de": "FSR 4 ML-Superauflösungsanbieter nicht verfügbar (benötigt einen unterstützten RX 9000 und Treiber); auf FSR 3.1 umgestellt. Siehe Protokoll",
+   "pt-BR": "FSR 4 ML provedor de super resolução não disponível (necessita de um RX 9000 suportado e de um condutor); comutado para FSR 3.1. Veja o registro",
+   "ru": "FSR 4 ML провайдер суперразрешения недоступен (нужны поддерживаемый RX 9000 и драйвер); переключен на FSR 3.1. Посмотреть журнал"
+  },
+  {
+   "zh": "FSR 4 ML 超分未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "FSR 4 ML 超解析未能啟用（需要支援的 RX 9000 和驅動），已恢復上一套參數",
+   "en": "FSR 4 ML super resolution could not be enabled (needs a supported RX 9000 and driver); previous settings restored",
+   "ja": "FSR 4 ML 超解像を有効にできませんでした（対応する RX 9000 とドライバーが必要）。以前の設定に戻しました",
+   "ko": "FSR 4 ML 초해상도를 활성화할 수 없습니다(지원되는 RX 9000 및 드라이버 필요). 이전 설정이 복원되었습니다.",
+   "es": "FSR 4 ML super resolución no se pudo habilitar (necesita un RX 9000 compatible y controlador); ajustes anteriores restaurados",
+   "fr": "FSR 4 ML superrésolution n'a pas pu être activée (besoin d'un RX 9000 et driver pris en charge); les réglages précédents ont été restaurés",
+   "de": "FSR 4 ML Superauflösung konnte nicht aktiviert werden (benötigt einen unterstützten RX 9000 und Treiber); frühere Einstellungen wurden wiederhergestellt",
+   "pt-BR": "FSR 4 ML não foi possível activar a super resolução (precisa de um RX 9000 suportado e de um driver); as configurações anteriores foram restauradas",
+   "ru": "FSR 4 ML суперразрешение не удалось включить (необходимы поддерживаемый RX 9000 и драйвер); предыдущие настройки восстановлены"
+  },
+  {
    "zh": "FSR 4 ML 运行失败，已改用 FSR 3.1；错误码见日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "FSR 4 ML 執行失敗，已改用 FSR 3.1；錯誤碼見日誌",
@@ -2599,6 +2625,45 @@
    "de": "FSR 4 ML benötigt einen unterstützten RX 9000 und Treiber und wechselt zu FSR 3.1, wenn er nicht verfügbar ist; noch nicht auf einem tatsächlichen RX 9000 verifiziert",
    "pt-BR": "FSR 4 ML necessita de um RX 9000 suportado e condutor e muda para FSR 3.1 quando não estiver disponível; ainda não verificado num RX 9000 efectivo",
    "ru": "FSR 4 ML нуждается в поддерживаемом RX 9000 и драйвере и переключается на FSR 3.1, когда он недоступен; еще не проверен на фактическом RX 9000"
+  },
+  {
+   "zh": "FSR 内置 RCAS 锐化，0 为关闭。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "FSR 內建 RCAS 銳化，0 為關閉。",
+   "en": "FSR's built-in RCAS sharpening; 0 turns it off.",
+   "ja": "FSR 内蔵の RCAS シャープネス。0 でオフ。",
+   "ko": "FSR 내장 RCAS 선명도이며 0이면 꺼집니다.",
+   "es": "Nitidez RCAS integrada de FSR; 0 la desactiva.",
+   "fr": "Netteté RCAS intégrée à FSR ; 0 la désactive.",
+   "de": "In FSR integrierte RCAS-Schärfe; 0 schaltet sie aus.",
+   "pt-BR": "Nitidez RCAS integrada do FSR; 0 a desativa.",
+   "ru": "Встроенная в FSR резкость RCAS; 0 — выключено."
+  },
+  {
+   "zh": "FSR 版本",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "FSR 版本",
+   "en": "FSR version",
+   "ja": "FSR バージョン",
+   "ko": "FSR 버전",
+   "es": "Versión de FSR",
+   "fr": "Version de FSR",
+   "de": "FSR-Version",
+   "pt-BR": "Versão do FSR",
+   "ru": "Версия FSR"
+  },
+  {
+   "zh": "FSR 锐化",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "FSR 銳化",
+   "en": "FSR sharpness",
+   "ja": "FSR シャープネス",
+   "ko": "FSR 선명도",
+   "es": "Nitidez de FSR",
+   "fr": "Netteté de FSR",
+   "de": "FSR-Schärfe",
+   "pt-BR": "Nitidez do FSR",
+   "ru": "Резкость FSR"
   },
   {
    "zh": "FXAA：最快，整体略柔",
@@ -15459,6 +15524,19 @@
    "ru": "Используется потоков: %1"
   },
   {
+   "zh": "实际运行：FSR %1",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "實際執行：FSR %1",
+   "en": "Actually running: FSR %1",
+   "ja": "実際の動作：FSR %1",
+   "ko": "실제로 실행 중: FSR %1",
+   "es": "En realidad corriendo: FSR %1",
+   "fr": "En cours d'exécution: FSR %1",
+   "de": "Tatsächlich läuft: FSR %1",
+   "pt-BR": "Na verdade em execução: FSR %1",
+   "ru": "На самом деле бегать: FSR %1"
+  },
+  {
    "zh": "实际运行：FSR %1 · 2X",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "實際執行：FSR %1 · 2X",
@@ -16942,7 +17020,7 @@
   },
   {
    "zh": "已关闭当前硬件或包不支持的效果，参数仍保留：",
-   "src": "src/ui/bridge/Preferences.cpp",
+   "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已關閉目前硬體或套件不支援的效果，參數仍保留：",
    "en": "Unavailable effects have been disabled; their parameters are preserved: ",
    "ja": "非対応の効果を無効にしました。設定値は保持されています：",
@@ -32436,6 +32514,19 @@
    "de": "Auto (PCM zuerst, Bitstream-Decodierung bei Bedarf)",
    "pt-BR": "Auto (PCM primeiro, decodificação de bitstream quando necessário)",
    "ru": "Auto (PCM, расшифровка битового потока при необходимости)"
+  },
+  {
+   "zh": "自动（优先最新）",
+   "src": "src/ui/bridge/Enhancement.cpp",
+   "zh-TW": "自動（優先最新）",
+   "en": "Auto (newest first)",
+   "ja": "自動（最新を優先）",
+   "ko": "자동(최신 우선)",
+   "es": "Automático (la más reciente primero)",
+   "fr": "Automatique (la plus récente d'abord)",
+   "de": "Automatisch (neueste bevorzugt)",
+   "pt-BR": "Automático (mais recente primeiro)",
+   "ru": "Авто (сначала новейшая)"
   },
   {
    "zh": "自动（按分辨率）",

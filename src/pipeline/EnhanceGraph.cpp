@@ -1708,6 +1708,9 @@ void EnhanceGraph::transferAmfSdr(ID3D12GraphicsCommandList* list,unsigned slot,
 bool EnhanceGraph::initFsrSr()
 {
     if (!fsrSrRequested()) return true;
+    // The provider generation is chosen at creation time; the inventory and the
+    // requested mode are logged by the backend so an artifact report is diagnosable.
+    veyra::log::info("fsr-sr", std::format("requested version={}",uint32_t(desc_.fsrSrVersion)));
     if (desc_.noFeatures) {
         veyra::log::warn("fsr-sr", "feature-disabled configuration: AMD FSR upscaling skipped");
         return true;
@@ -1720,13 +1723,15 @@ bool EnhanceGraph::initFsrSr()
     // docs/RECORD_HDR_DLAA_2026-11-08.md).
     const bool hdr=desc_.hdrWorking();
     failedBackend_=engine::FailedBackend::Sr;
+    dualSrSharpnessLogged_=false;
     // Double SR may run FSR in either pass, each with its own context and history:
     // the final pass renders the reduced first result, the first pass the source.
     const bool finalFsr=desc_.finalSrQuality()==engine::kVideoSrFsr,firstFsr=desc_.firstSrRuns(engine::kVideoSrFsr);
     const uint32_t renderW=desc_.dualSr?srInW_:srcW_,renderH=desc_.dualSr?srInH_:srcH_;
+    const auto versionMode=static_cast<gfx::FsrSrVersionMode>(desc_.fsrSrVersion);
     const auto create=[&](std::unique_ptr<gfx::FsrSrBackend>& backend,uint32_t inW,uint32_t inH,uint32_t outW,uint32_t outH,const char* pass){
         backend=std::make_unique<gfx::FsrSrBackend>();
-        if(!backend->initialize(context_.device(),inW,inH,outW,outH,hdr)){
+        if(!backend->initialize(context_.device(),inW,inH,outW,outH,hdr,versionMode)){
             backend.reset();
             // The engine checks fsrSrRequested() && !fsrSrEnabled() after the graph
             // is created and disables the stage with a user-visible warning, so a
@@ -1745,6 +1750,13 @@ bool EnhanceGraph::initFsrSr()
 
 bool EnhanceGraph::fsrActive() const { return fsrFgBackend_&&fsrFgBackend_->available(); }
 const char* EnhanceGraph::fsrProviderVersion() const { return fsrFgBackend_?fsrFgBackend_->providerVersion():""; }
+const char* EnhanceGraph::fsrSrProviderVersion() const {
+    // The FSR SR provider version comes from the context that was actually
+    // created (inventory name or provider readback), never from the request.
+    if(fsrSrBackend_&&fsrSrBackend_->created())return fsrSrBackend_->providerVersion();
+    if(firstFsrSrBackend_&&firstFsrSrBackend_->created())return firstFsrSrBackend_->providerVersion();
+    return "";
+}
 bool EnhanceGraph::initFsrFg() {
     if(!fsrEnabled()||!fgEnabled_)return true;
     failedBackend_=engine::FailedBackend::Fg;
@@ -4036,8 +4048,16 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto& restore=first?firstSrHdrRestore_:srHdrRestore_;
             auto* target=restore.raw?restore.raw.Get():output;
             const bool fsrReset=reset||(desc_.srUsesFlow()&&motion==fsrSrZeroMotion_.Get());
+            // In a double SR the first FSR pass feeds the second one, so provider
+            // RCAS belongs on the final pass only; otherwise its ringing is amplified.
+            const bool zeroSharpness=first&&desc_.dualSr&&desc_.dualSrQuality==engine::kVideoSrFsr;
+            const float passSharpness=zeroSharpness?0.0f:desc_.fsrSrSharpness;
+            if(zeroSharpness&&!dualSrSharpnessLogged_&&passSharpness!=desc_.fsrSrSharpness){
+                dualSrSharpnessLogged_=true;
+                veyra::log::info("dual-sr",std::format("FSR SR sharpness {:.2f} applies to the final pass only; first pass forced to 0",desc_.fsrSrSharpness));
+            }
             readable({color,motion,fsrSrDepth_.Get()});tracker_.transition(list,target,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            if(!backend.evaluate(list,color,motion,fsrSrDepth_.Get(),target,inW,inH,outW,outH,fsrReset,float(deltaMs))){
+            if(!backend.evaluate(list,color,motion,fsrSrDepth_.Get(),target,inW,inH,outW,outH,fsrReset,float(deltaMs),passSharpness)){
                 failedBackend_=engine::FailedBackend::Sr;veyra::log::error("dual-sr","FSR evaluate failed");return false;
             }
             finishTemporalOutput(list,restore,output);
@@ -4114,7 +4134,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         auto* fsrTarget=srHdrRestore_.raw?srHdrRestore_.raw.Get():workRgba_.Get();
         tracker_.transition(list,fsrTarget,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         if(!fsrSrBackend_->evaluate(list,srInput,srMotion,fsrSrDepth_.Get(),fsrTarget,
-                                    srcW_,srcH_,workW_,workH_,reset||(desc_.srUsesFlow()&&!fsrSourceMotion),float(deltaMs))){
+                                    srcW_,srcH_,workW_,workH_,reset||(desc_.srUsesFlow()&&!fsrSourceMotion),float(deltaMs),
+                                    desc_.fsrSrSharpness)){
             failedBackend_=engine::FailedBackend::Sr;
             return false;
         }
@@ -4948,10 +4969,16 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     if((presentSinkFg()||desc_.enableFg)&&desc_.fgUsesFlow()&&s.fgMotionRefine!=desc_.fgMotionRefine)return false;
     // The DLSS-G performance mode selects the runtime and a create-time parameter.
     if(desc_.enableFg&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Dlss&&s.dlssgLite!=desc_.dlssgLite)return false;
+    // The FSR SR provider generation is fixed when the context is created, so a
+    // change that involves an FSR SR pass on either side must rebuild.
+    const bool srUsesFsr=desc_.videoSrQuality==engine::kVideoSrFsr||(desc_.dualSr&&desc_.dualSrQuality==engine::kVideoSrFsr);
+    const bool nextUsesFsr=s.sr&&(engine::currentVideoSrQuality(s.videoSrQuality)==engine::kVideoSrFsr||
+                                  (s.dualSrEnabled&&engine::currentVideoSrQuality(s.dualSrQuality)==engine::kVideoSrFsr));
     // DLSS allocates multiplier-specific feature/output resources.
     // XeSS has a fixed 2X proxy swapchain contract. Settings callers must
     // rebuild instead of accepting a change that cannot take effect in place.
-    if((desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
+    if((s.fsrSrVersion!=desc_.fsrSrVersion&&(srUsesFsr||nextUsesFsr))||
+       (desc_.enableNr&&s.nrRuntime!=desc_.nrRuntime)||
        (desc_.enableFg&&(std::max(2u,s.multiplier)!=desc_.fgMultiplier||s.frameGenerationBackend!=desc_.frameGenerationBackend||
         (desc_.frameGenerationBackend==engine::FrameGenerationBackend::Vfg&&(s.vfgQuality!=desc_.vfgQuality||s.vfgAutoRegulate!=desc_.vfgAutoRegulate))))||
        (desc_.enableSr&&(engine::currentVideoSrQuality(s.videoSrQuality)!=desc_.videoSrQuality||
@@ -5029,6 +5056,8 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     desc_.antiAlias=nextNr.antiAlias;
     for(size_t i=0;i<antiAliasPasses_.size();++i)if(antiAliasPasses_[i])antiAliasPasses_[i]->refresh(desc_.antiAlias[i]);
     desc_.videoDenoise=s.videoDenoise;
+    // FSR SR sharpening is a dispatch uniform, so it applies without a rebuild.
+    desc_.fsrSrSharpness=s.fsrSrSharpness;
     desc_.beauty=nextNr.beauty;desc_.beautyDetection=nextNr.beautyDetection;
     for(size_t i=0;i<beautyPasses_.size();++i)if(beautyPasses_[i])beautyPasses_[i]->refresh(desc_.beauty[i]);
     if(faceTracker_)faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());
