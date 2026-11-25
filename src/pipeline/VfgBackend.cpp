@@ -685,7 +685,7 @@ bool VfgBackend::capture(ID3D12GraphicsCommandList* list,ID3D12Resource* texture
     else{std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);}
     ++p.inputRevision;return true;
 #else
-    (void)list;(void)texture;(void)parity;(void)comparePrevious;return false;
+    (void)list;(void)texture;(void)parity;(void)mode;return false;
 #endif
 }
 bool VfgBackend::fastReady()const{
