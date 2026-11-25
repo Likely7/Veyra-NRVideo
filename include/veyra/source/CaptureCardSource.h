@@ -34,6 +34,7 @@ struct CaptureDevice {
     bool hasEmbeddedAudio=false;
     bool wasapi=false; // Audio only: path is a Windows endpoint ID.
     bool virtualSpeaker=false;
+    unsigned pcmSurroundLayouts=0; // Bit 6 (5.1) and bit 8 (7.1) from DirectShow audio pins.
     int audioMode() const {
         return virtualSpeaker ? kCaptureAudioVirtualSpeaker : wasapi ? kCaptureAudioWasapi : 0;
     }
@@ -55,10 +56,10 @@ bool isCaptureDisconnect(long code);
 class CaptureCardSource final:public IFrameSource {
 public:
     CaptureCardSource();~CaptureCardSource()override;
-    static std::vector<CaptureDevice> deviceDetails(bool audio=false);
+    static std::vector<CaptureDevice> deviceDetails(bool audio=false, bool includePcmLayouts=false);
     static std::vector<std::wstring> devices(bool audio=false);
     static std::wstring makeCapturePath(unsigned videoIndex,const CaptureDevice& video,
-        int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={});
+        int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={},unsigned audioChannels=0);
     static std::vector<CaptureFormat> formats(unsigned device);
     static std::vector<CaptureFormat> formatsByPath(std::wstring_view devicePath,CaptureFormatQueryInfo* query=nullptr,
         std::wstring_view preferredKey={},std::wstring_view requestedResolution={});

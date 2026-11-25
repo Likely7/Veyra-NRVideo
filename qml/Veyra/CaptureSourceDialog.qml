@@ -336,6 +336,17 @@ DialogLayer {
             }
         }
         VRow {
+            visible: veyra.captureAudioLayouts.length > 0
+            label: qsTr("PCM 输入声道")
+            hint: qsTr("选择与主机一致的声道布局。重新连接采集后生效。")
+            VSeg {
+                objectName: "capture-audio-pcm-layout"
+                options: veyra.captureAudioLayouts
+                current: String(veyra.captureAudioChannels)
+                onPicked: id => veyra.captureAudioChannels = Number(id)
+            }
+        }
+        VRow {
             label: qsTr("本机音频监听")
             hint: qsTr("关闭后仍可录制和保存回放；本机不播放采集声音")
             VSwitch {
@@ -376,7 +387,7 @@ DialogLayer {
             }
         }
         VRow {
-            visible: !captureDialog.pcmOnlyInput
+            visible: !captureDialog.pcmOnlyInput && veyra.captureAudioChannels === 0
             label: qsTr("Dolby / DTS 位流")
             VSeg {
                 objectName: "capture-audio-ingress"

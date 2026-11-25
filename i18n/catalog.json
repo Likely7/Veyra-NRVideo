@@ -3888,6 +3888,19 @@
    "ru": "Трансляция с ПК…"
   },
   {
+   "zh": "PCM 输入声道",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "PCM 輸入聲道",
+   "en": "PCM input channels",
+   "ja": "PCM 入力チャンネル",
+   "ko": "PCM 입력 채널",
+   "es": "Canales de entrada PCM",
+   "fr": "Canaux d’entrée PCM",
+   "de": "PCM-Eingangskanäle",
+   "pt-BR": "Canais de entrada PCM",
+   "ru": "Входные каналы PCM"
+  },
+  {
    "zh": "PNG 图片 (*.png);;JPEG 图片 (*.jpg)",
    "src": "src/ui/bridge/Export.cpp",
    "zh-TW": "PNG 圖片 (*.png);;JPEG 圖片 (*.jpg)",
@@ -20319,6 +20332,19 @@
    "de": "Alle Erweiterungen ausgeschaltet",
    "pt-BR": "Todas as melhorias desligadas",
    "ru": "Все улучшения отключены"
+  },
+  {
+   "zh": "所选多声道 PCM 输入不可用；视频继续运行",
+   "src": "src/source/CaptureCardSource.cpp",
+   "zh-TW": "所選多聲道 PCM 輸入無法使用，影像擷取會繼續。",
+   "en": "The selected multichannel PCM input is unavailable. Video capture continues.",
+   "ja": "選択したマルチチャンネル PCM 入力は利用できません。映像のキャプチャは続行します。",
+   "ko": "선택한 다채널 PCM 입력을 사용할 수 없습니다. 영상 캡처는 계속됩니다.",
+   "es": "La entrada PCM multicanal seleccionada no está disponible. La captura de vídeo continúa.",
+   "fr": "L’entrée PCM multicanal sélectionnée est indisponible. La capture vidéo continue.",
+   "de": "Der gewählte Mehrkanal-PCM-Eingang ist nicht verfügbar. Die Videoaufnahme läuft weiter.",
+   "pt-BR": "A entrada PCM multicanal selecionada não está disponível. A captura de vídeo continua.",
+   "ru": "Выбранный многоканальный вход PCM недоступен. Захват видео продолжается."
   },
   {
    "zh": "所选文件的音轨与内嵌字幕",
@@ -38546,6 +38572,19 @@
    "de": "Auswählen…",
    "pt-BR": "Escolher…",
    "ru": "Выбрать…"
+  },
+  {
+   "zh": "选择与主机一致的声道布局。重新连接采集后生效。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "選擇與主機相同的聲道配置。重新連線擷取後生效。",
+   "en": "Match the console’s speaker layout. Applies when capture reconnects.",
+   "ja": "ゲーム機と同じチャンネル構成を選択します。キャプチャを再接続すると適用されます。",
+   "ko": "콘솔의 스피커 구성과 맞춰 선택하세요. 캡처를 다시 연결하면 적용됩니다.",
+   "es": "Elige la misma configuración de altavoces que en la consola. Se aplica al reconectar la captura.",
+   "fr": "Choisissez la même configuration d’enceintes que sur la console. Le réglage s’applique à la reconnexion de la capture.",
+   "de": "Wähle dieselbe Lautsprecherkonfiguration wie auf der Konsole. Die Einstellung gilt nach dem erneuten Verbinden der Aufnahme.",
+   "pt-BR": "Escolha a mesma configuração de alto-falantes do console. A alteração é aplicada ao reconectar a captura.",
+   "ru": "Выберите ту же конфигурацию динамиков, что и на консоли. Настройка вступит в силу при повторном подключении захвата."
   },
   {
    "zh": "选择你接入的采集卡",

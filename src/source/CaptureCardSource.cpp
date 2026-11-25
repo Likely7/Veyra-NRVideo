@@ -424,23 +424,91 @@ HRESULT audioPinFor(ICaptureGraphBuilder2* builder,IBaseFilter* filter,ComPtr<IP
     if(SUCCEEDED(categorized))return categorized;
     pin.Reset();return findAudioOutputPin(filter,pin);
 }
-AM_MEDIA_TYPE* gc573LpcmFormat(IAMStreamConfig* config) {
+using AudioType = std::unique_ptr<AM_MEDIA_TYPE, decltype([](AM_MEDIA_TYPE* type) { freeType(type); })>;
+
+std::vector<AudioType> audioStreamCaps(IAMStreamConfig* config) {
     int count = 0, bytes = 0;
-    if (config->GetNumberOfCapabilities(&count, &bytes) != S_OK || bytes <= 0 || bytes > 4096)
-        return nullptr;
+    if (!config || config->GetNumberOfCapabilities(&count, &bytes) != S_OK ||
+        count <= 0 || count > 1024 || bytes <= 0 || bytes > 4096) return {};
+    std::vector<AudioType> formats;
     std::vector<BYTE> capabilities(static_cast<size_t>(bytes));
     for (int i = 0; i < count; ++i) {
-        AM_MEDIA_TYPE* type = nullptr;
-        const auto hr = config->GetStreamCaps(i, &type, capabilities.data());
-        sink::WavePcmFormat pcm{};
-        if (hr == S_OK && type && type->majortype == MEDIATYPE_Audio && type->formattype == FORMAT_WaveFormatEx &&
-            sink::parseWavePcm(type->pbFormat, type->cbFormat, pcm) && pcm.layout.channels == 8 &&
-            pcm.layout.mask == KSAUDIO_SPEAKER_7POINT1_SURROUND && pcm.wave.nSamplesPerSec == 48000 &&
-            pcm.wave.wBitsPerSample == 16 && pcm.validBits == 16 && !pcm.floating)
-            return type;
-        freeType(type);
+        AM_MEDIA_TYPE* raw = nullptr;
+        const auto hr = config->GetStreamCaps(i, &raw, capabilities.data());
+        AudioType type(raw);
+        if (hr == S_OK && type) formats.push_back(std::move(type));
     }
-    return nullptr;
+    return formats;
+}
+
+bool audioPcm(const AM_MEDIA_TYPE& type, sink::WavePcmFormat& pcm) {
+    return type.majortype == MEDIATYPE_Audio && type.formattype == FORMAT_WaveFormatEx &&
+           sink::parseWavePcm(type.pbFormat, type.cbFormat, pcm);
+}
+
+unsigned pcmSurroundChannels(const AM_MEDIA_TYPE& type) {
+    sink::WavePcmFormat pcm{};
+    if (!audioPcm(type, pcm)) return 0;
+    switch (pcm.layout.mask) {
+    case KSAUDIO_SPEAKER_5POINT1:
+    case KSAUDIO_SPEAKER_5POINT1_SURROUND: return 6;
+    case KSAUDIO_SPEAKER_7POINT1:
+    case KSAUDIO_SPEAKER_7POINT1_SURROUND: return 8;
+    default: return 0;
+    }
+}
+
+std::vector<AudioType> audioPinFormats(IPin* pin, IAMStreamConfig* config) {
+    std::vector<AudioType> formats;
+    if (config) {
+        AM_MEDIA_TYPE* raw = nullptr;
+        const auto hr = config->GetFormat(&raw);
+        AudioType current(raw);
+        if (SUCCEEDED(hr) && current) formats.push_back(std::move(current));
+    }
+    ComPtr<IEnumMediaTypes> types;
+    if (SUCCEEDED(pin->EnumMediaTypes(&types))) {
+        for (;;) {
+            AM_MEDIA_TYPE* raw = nullptr;
+            const auto hr = types->Next(1, &raw, nullptr);
+            AudioType type(raw);
+            if (hr != S_OK || !type) break;
+            formats.push_back(std::move(type));
+        }
+    }
+    return formats;
+}
+
+std::vector<ComPtr<IPin>> audioOutputPins(IBaseFilter* filter, IPin* first = nullptr) {
+    std::vector<ComPtr<IPin>> pins;
+    if (first) pins.emplace_back(first);
+    ComPtr<IEnumPins> enumerator;
+    if (FAILED(filter->EnumPins(&enumerator))) return pins;
+    for (;;) {
+        ComPtr<IPin> pin;
+        if (enumerator->Next(1, &pin, nullptr) != S_OK) break;
+        if (pin.Get() != first && audioOutputPin(pin.Get())) pins.push_back(std::move(pin));
+    }
+    return pins;
+}
+
+std::vector<AudioType> surroundAudioFormats(IPin* pin) {
+    ComPtr<IAMStreamConfig> config;
+    pin->QueryInterface(IID_PPV_ARGS(&config));
+    auto types = audioPinFormats(pin, config.Get());
+    for (auto& type : audioStreamCaps(config.Get())) types.push_back(std::move(type));
+    std::erase_if(types, [](const AudioType& type) { return !pcmSurroundChannels(*type); });
+    return types;
+}
+
+AudioType gc573LpcmFormat(IAMStreamConfig* config) {
+    for (auto& type : audioStreamCaps(config)) {
+        sink::WavePcmFormat pcm{};
+        if (audioPcm(*type, pcm) && pcm.layout.mask == KSAUDIO_SPEAKER_7POINT1_SURROUND &&
+            pcm.wave.nSamplesPerSec == 48000 && pcm.wave.wBitsPerSample == 16 && pcm.validBits == 16 && !pcm.floating)
+            return std::move(type);
+    }
+    return {};
 }
 std::wstring encodePath(std::wstring_view value){
     static constexpr wchar_t digits[]=L"0123456789ABCDEF";std::wstring encoded;encoded.reserve(value.size()*4);
@@ -461,12 +529,12 @@ bool parseInt(std::wstring_view text,int& value){
     if(text.empty())return false;const std::wstring copy(text);size_t consumed=0;try{value=std::stoi(copy,&consumed);}catch(...){return false;}return consumed==copy.size();
 }
 bool parseUnsigned(std::wstring_view text,unsigned& value){int parsed=0;if(!parseInt(text,parsed)||parsed<0)return false;value=static_cast<unsigned>(parsed);return true;}
-struct CaptureSelection {unsigned videoIndex=0;int format=0;int audio=kCaptureAudioDisabled;unsigned colorOverride=0;double requestedFps=0;bool stable=false;std::wstring videoPath,audioPath,formatKey;};
+struct CaptureSelection {unsigned videoIndex=0;int format=0;int audio=kCaptureAudioDisabled;unsigned colorOverride=0,audioChannels=0;double requestedFps=0;bool stable=false;std::wstring videoPath,audioPath,formatKey;};
 bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
     selection={};
     if(const auto query=path.find(L'?');query!=std::wstring_view::npos){
         std::wstring encodedKey;
-        if(!parseCapturePathOptions(path.substr(query+1),selection.requestedFps,encodedKey)||!decodePath(encodedKey,selection.formatKey))return false;
+        if(!parseCapturePathOptions(path.substr(query+1),selection.requestedFps,encodedKey,selection.audioChannels)||!decodePath(encodedKey,selection.formatKey))return false;
         path=path.substr(0,query);
     }
     constexpr std::wstring_view prefix=L"capture2:";
@@ -476,11 +544,13 @@ bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
         if(fields[0].empty()||!decodePath(fields[0],selection.videoPath)||!parseInt(fields[1],selection.format)||!parseInt(fields[2],selection.audio)||!decodePath(fields[3],selection.audioPath)||!parseUnsigned(fields[4],selection.colorOverride)||selection.format<0||!validCaptureColorOverride(selection.colorOverride))return false;
         if(selection.audio!=kCaptureAudioDisabled&&!captureAudioIsEmbedded(selection.audio)&&!captureAudioIsWasapi(selection.audio)&&selection.audio<0)return false;
         if(selection.audio==kCaptureAudioGc573Lpcm&&!isGc573CaptureDevice(selection.videoPath))return false;
+        if(selection.audioChannels&&((selection.audio<0&&selection.audio!=kCaptureAudioFromVideoDevice)||
+           (selection.audio==kCaptureAudioFromVideoDevice&&decklink::isPath(selection.videoPath))))return false;
         if((selection.audio>=0||captureAudioIsWasapi(selection.audio))&&selection.audioPath.empty())return false;selection.stable=true;return true;
     }
     unsigned videoIndex=0,colorOverride=0;int format=0,audio=kCaptureAudioDisabled;const std::wstring legacy(path);
     const int fields=swscanf_s(legacy.c_str(),L"capture:%u:%d:%d:%u",&videoIndex,&format,&audio,&colorOverride);
-    if(fields<3||format<0||audio<kCaptureAudioFromVideoDevice||!validCaptureColorOverride(colorOverride))return false;
+    if(fields<3||format<0||audio<kCaptureAudioFromVideoDevice||selection.audioChannels||!validCaptureColorOverride(colorOverride))return false;
     selection.videoIndex=videoIndex;selection.format=format;selection.audio=audio;selection.colorOverride=fields>=4?colorOverride:0;return true;
 }
 }
@@ -1023,14 +1093,26 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
 CaptureCardSource::CaptureCardSource():p_(std::make_unique<Impl>()){}
 HANDLE CaptureCardSource::frameEvent()const{return p_->frameEvent;}
 CaptureCardSource::~CaptureCardSource(){close();if(p_->frameEvent){CloseHandle(p_->frameEvent);p_->frameEvent=nullptr;}}
-std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio){
+std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio,bool includePcmLayouts){
     std::vector<CaptureDevice> result;
     for(auto& moniker:monikers(audio)){
         CaptureDevice device;device.name=propertyString(moniker.Get(),L"FriendlyName");
         if(device.name.empty())device.name=L"Unknown capture device";
         device.path=monikerPath(moniker.Get());
-        if(!audio){ComPtr<IBaseFilter> filter;ComPtr<IPin> audioPin;
-            if(SUCCEEDED(moniker->BindToObject(nullptr,nullptr,IID_PPV_ARGS(&filter)))&&SUCCEEDED(findAudioOutputPin(filter.Get(),audioPin)))device.hasEmbeddedAudio=true;
+        if(!audio||includePcmLayouts){
+            ComPtr<IBaseFilter> filter;
+            if(SUCCEEDED(moniker->BindToObject(nullptr,nullptr,IID_PPV_ARGS(&filter)))){
+                if(includePcmLayouts){
+                    const auto pins=audioOutputPins(filter.Get());
+                    device.hasEmbeddedAudio=!audio&&!pins.empty();
+                    for(const auto& pin:pins)
+                        for(const auto& type:surroundAudioFormats(pin.Get()))
+                            device.pcmSurroundLayouts|=1u<<pcmSurroundChannels(*type);
+                }else{
+                    ComPtr<IPin> pin;
+                    device.hasEmbeddedAudio=SUCCEEDED(findAudioOutputPin(filter.Get(),pin));
+                }
+            }
         }
         result.push_back(std::move(device));
     }
@@ -1039,10 +1121,12 @@ std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio){
     return result;
 }
 std::vector<std::wstring> CaptureCardSource::devices(bool audio){std::vector<std::wstring> result;for(auto& device:deviceDetails(audio))result.push_back(std::move(device.name));return result;}
-std::wstring CaptureCardSource::makeCapturePath(unsigned videoIndex,const CaptureDevice& video,int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride,double requestedFps,std::wstring_view formatKey){
-    if(!validCaptureFrameRate(requestedFps)||!validCaptureColorOverride(colorOverride))return {};
+std::wstring CaptureCardSource::makeCapturePath(unsigned videoIndex,const CaptureDevice& video,int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride,double requestedFps,std::wstring_view formatKey,unsigned audioChannels){
+    if(!validCaptureFrameRate(requestedFps)||!validCaptureColorOverride(colorOverride)||!validCaptureAudioChannels(audioChannels))return {};
     if(audioMode==kCaptureAudioGc573Lpcm&&(audio||!isGc573CaptureDevice(video.path)))return {};
-    const auto suffix=capturePathOptions(requestedFps,encodePath(formatKey));
+    if(audioChannels&&(video.path.empty()||(audioMode==kCaptureAudioFromVideoDevice
+       ? audio||decklink::isPath(video.path) : audioMode<0||!audio||audio->wasapi||audio->path.empty())))return {};
+    const auto suffix=capturePathOptions(requestedFps,encodePath(formatKey),audioChannels);
     if(audio&&audio->wasapi){
         if(video.path.empty()||audio->path.empty())return {};
         return std::format(L"capture2:{}:{}:{}:{}:{}{}",encodePath(video.path),format,audio->audioMode(),encodePath(audio->path),colorOverride,suffix);
@@ -1614,12 +1698,12 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
             if(!selection.stable){auto list=monikers(false);if(selection.videoIndex<list.size())wantedPath=monikerPath(list[selection.videoIndex].Get());}
             wantedName=captureDeviceName(wantedPath);
         }
-        const bool useVendor=avermedia::eligible(wantedName,wantedPath,p.audioIngressMode)
+        const bool useVendor=!selection.audioChannels&&avermedia::eligible(wantedName,wantedPath,p.audioIngressMode)
             &&!AverMediaAudioSwitch::locateComponentRoot().empty();
         // Preserve the explicit receiver passthrough preference. Automatic mode
         // uses the vendor graph, PCM-only never arms the non-PCM component.
         bool audioReady=false;
-        if(audio==kCaptureAudioGc573Lpcm){
+        if(audio==kCaptureAudioGc573Lpcm||selection.audioChannels){
             audioReady=connectDirectShowAudio(desc);
         }else if(p.audioIngressMode==2){
             if(useVendor)applyVendorAudioSwitch(wantedName,wantedPath);
@@ -1630,7 +1714,7 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
             if(!audioReady)audioReady=connectDirectShowAudio(desc);
         }
         if(!audioReady){
-            p.audioError=audio==kCaptureAudioGc573Lpcm
+            p.audioError=selection.audioChannels?L"所选多声道 PCM 输入不可用；视频继续运行":audio==kCaptureAudioGc573Lpcm
                 ? L"GC573 的 HDMI LPCM 7.1 格式不可用；视频继续运行"
                 : L"采集音频设备或 PCM 格式不可用；视频继续运行";
             log::warn("capture-audio","audio connection unavailable; retaining video capture");
@@ -1891,7 +1975,7 @@ bool CaptureCardSource::connectDirectShowAudio(const SourceOpenDesc& desc){
     // GC573 pin 2 carries raw HDMI PCM. The default capture pin is a stereo mixer.
     ComPtr<IPin> audioPin;
     hr=gc573Lpcm?audioFilter->FindPin(L"2",&audioPin):audioPinFor(p.builder.Get(),audioFilter.Get(),audioPin);
-    if(FAILED(hr)){
+    if(FAILED(hr)&&!selection.audioChannels){
         if(embedded)p.embeddedAudioUnavailable=true;
         log::warn("capture-audio",std::format("audio output pin not found embedded={} hr=0x{:08X}{}",embedded?1:0,uint32_t(hr),
             embedded?" (this video filter exposes no audio pin; select the separate audio device)":""));
@@ -1899,27 +1983,38 @@ bool CaptureCardSource::connectDirectShowAudio(const SourceOpenDesc& desc){
     }
     // Preserve the device's actual speaker layout. Enumeration order is
     // commonly stereo first even when native 5.1 is available.
-    auto releaseType=[](AM_MEDIA_TYPE* type){freeType(type);};
-    using AudioType=std::unique_ptr<AM_MEDIA_TYPE,decltype(releaseType)>;
     std::vector<AudioType> candidates;
-    ComPtr<IAMStreamConfig> audioConfig;
-    audioPin.As(&audioConfig);
+    std::vector<std::pair<ComPtr<IPin>,std::vector<AudioType>>> surroundPins;
+    const auto preferFormat=[](const AudioType& a,const AudioType& b){
+        sink::WavePcmFormat lhs{},rhs{};
+        return audioPcm(*a,lhs)&&audioPcm(*b,rhs)&&sink::preferCaptureAudioFormat(lhs,rhs);
+    };
     if(gc573Lpcm){
-        AudioType surround(audioConfig?gc573LpcmFormat(audioConfig.Get()):nullptr,releaseType);
+        ComPtr<IAMStreamConfig> audioConfig;
+        audioPin.As(&audioConfig);
+        auto surround=gc573LpcmFormat(audioConfig.Get());
         if(!surround){log::warn("capture-audio","GC573 HDMI pin has no 7.1 LPCM capability");return false;}
         const auto formatHr=audioConfig->SetFormat(surround.get());
         log::info("capture-audio",std::format("GC573 HDMI LPCM pin 2 SetFormat hr=0x{:08X}",uint32_t(formatHr)));
         if(FAILED(formatHr))return false;
         candidates.push_back(std::move(surround));
-    }else{
-        ComPtr<IEnumMediaTypes> types;hr=audioPin->EnumMediaTypes(&types);if(FAILED(hr)){types.Reset();log::warn("capture-audio",std::format("EnumMediaTypes hr=0x{:08X}; trying current driver format",uint32_t(hr)));}
-        if(audioConfig){
-            AM_MEDIA_TYPE* current=nullptr;const auto currentHr=audioConfig->GetFormat(&current);
-            log::info("capture-audio",std::format("current driver format hr=0x{:08X}",uint32_t(currentHr)));
-            if(SUCCEEDED(currentHr)&&current)candidates.emplace_back(current,releaseType);else if(current)freeType(current);
+    }else if(selection.audioChannels){
+        for(auto& pin:audioOutputPins(audioFilter.Get(),audioPin.Get())){
+            auto formats=surroundAudioFormats(pin.Get());
+            std::erase_if(formats,[&](const auto& type){return pcmSurroundChannels(*type)!=selection.audioChannels;});
+            if(formats.empty())continue;
+            std::stable_sort(formats.begin(),formats.end(),preferFormat);
+            surroundPins.emplace_back(std::move(pin),std::move(formats));
         }
-        while(types){AM_MEDIA_TYPE* type=nullptr;const auto next=types->Next(1,&type,nullptr);
-            if(next!=S_OK||!type){if(type)freeType(type);break;}candidates.emplace_back(type,releaseType);}
+        if(surroundPins.empty()){
+            if(embedded)p.embeddedAudioUnavailable=true;
+            log::warn("capture-audio",std::format("capture pin has no {}-channel surround PCM type",selection.audioChannels));
+            return false;
+        }
+    }else{
+        ComPtr<IAMStreamConfig> audioConfig;
+        audioPin.As(&audioConfig);
+        candidates=audioPinFormats(audioPin.Get(),audioConfig.Get());
     }
 std::vector<AudioType> audioTypes;std::vector<AudioType> bitstreamTypes;unsigned typeIndex=0;
 // Dolby/DTS bitstream capability probe: the capture card may expose AC-3 /
@@ -1960,21 +2055,23 @@ if(name){
         else if(bitstreamName(type->subtype))bitstreamTypes.push_back(std::move(owned));
     }
 log::info("capture-audio-bitstream",std::format("device bitstream types={} [{}] pcmTypes={}",bitstreamTypeCount,bitstreamSummary.empty()?"none":bitstreamSummary,audioTypes.size()));
-const bool wantBitstreamFirst=!gc573Lpcm&&p.audioIngressMode==2;
-const bool allowBitstream=!gc573Lpcm&&p.audioIngressMode!=1;
+const bool wantBitstreamFirst=!gc573Lpcm&&!selection.audioChannels&&p.audioIngressMode==2;
+const bool allowBitstream=!gc573Lpcm&&!selection.audioChannels&&p.audioIngressMode!=1;
 if(p.audioIngressMode==1&&bitstreamTypeCount>0)log::info("capture-audio-ingress","manual PCM-only selected: bitstream types are ignored even though the device offers them");
-if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("capture-audio","audio pin has no usable media type for the selected ingress mode");return false;}
-    std::stable_sort(audioTypes.begin(),audioTypes.end(),[](const auto& a,const auto& b){
-        sink::WavePcmFormat lhs{},rhs{};
-        if(!sink::parseWavePcm(a->pbFormat,a->cbFormat,lhs)||!sink::parseWavePcm(b->pbFormat,b->cbFormat,rhs))return false;
-        return sink::preferCaptureAudioFormat(lhs,rhs);
-    });
+if(surroundPins.empty()&&audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("capture-audio","audio pin has no usable media type for the selected ingress mode");return false;}
+    std::stable_sort(audioTypes.begin(),audioTypes.end(),preferFormat);
     bool connectedAudio=false;
     // PCM attempt as a lambda so the bitstream-preferred mode can try it after
     // the compressed types instead of before them.
-    auto connectPcm=[&]()->bool{
-    for(const auto& owned:audioTypes){
+    auto connectPcm=[&](IPin* pin,const std::vector<AudioType>& formats)->bool{
+    ComPtr<IAMStreamConfig> config;
+    if(selection.audioChannels)pin->QueryInterface(IID_PPV_ARGS(&config));
+    for(const auto& owned:formats){
         auto* type=owned.get();
+        if(config){
+            const auto formatHr=config->SetFormat(type);
+            log::info("capture-audio",std::format("explicit PCM channels={} SetFormat hr=0x{:08X}",selection.audioChannels,uint32_t(formatHr)));
+        }
         auto session=std::make_unique<sink::CaptureAudioSession>();ComPtr<IBaseFilter> candidate;ComPtr<IPin> terminal;
         sink::WavePcmFormat parsed{};
         if(type->formattype==FORMAT_WaveFormatEx&&type->pbFormat&&type->cbFormat>=sizeof(WAVEFORMATEX)&&sink::parseWavePcm(type->pbFormat,type->cbFormat,parsed)&&session->configure(parsed)){
@@ -2037,8 +2134,8 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
             // Request small input blocks before connection; downstream
             // playback cannot undo time spent filling a driver buffer.
             // Some devices reject this advisory API, so do not fail capture.
-            if(SUCCEEDED(hr))suggestCaptureAudioBuffering(audioPin.Get(),*reinterpret_cast<const WAVEFORMATEX*>(type->pbFormat));
-            if(SUCCEEDED(hr))hr=p.graph->ConnectDirect(audioPin.Get(),terminal.Get(),type);
+            if(SUCCEEDED(hr))suggestCaptureAudioBuffering(pin,*reinterpret_cast<const WAVEFORMATEX*>(type->pbFormat));
+            if(SUCCEEDED(hr))hr=p.graph->ConnectDirect(pin,terminal.Get(),type);
             if(SUCCEEDED(hr)){p.audioSink=candidate;p.audioSession=std::move(session);p.carrierProbe=probe;connectedAudio=true;log::info("capture-audio",std::format("selected media type channels={} mask=0x{:X} rate={} containerBits={} validBits={} floating={}",parsed.layout.channels,parsed.layout.mask,parsed.wave.nSamplesPerSec,parsed.wave.wBitsPerSample,parsed.validBits,parsed.floating?1:0));}
             else if(candidate)p.graph->RemoveFilter(candidate.Get());
             log::info("capture-audio",std::format("PCM ConnectDirect hr=0x{:X}",unsigned(hr)));
@@ -2047,7 +2144,10 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
     }
     return false;
     };
-    if(!wantBitstreamFirst)connectedAudio=connectPcm();
+    if(selection.audioChannels){
+        return std::ranges::any_of(surroundPins,[&](const auto& entry){return connectPcm(entry.first.Get(),entry.second);});
+    }
+    if(!wantBitstreamFirst)connectedAudio=connectPcm(audioPin.Get(),audioTypes);
     // Dolby/DTS passthrough fallback: no PCM type connected, so take the best
     // compressed type the device offers and decode it back to PCM. This is the
     // path a PS5 feeding Dolby Atmos / Dolby Audio / DTS needs.
@@ -2178,7 +2278,7 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
             if(connectedAudio)break;
         }
     }
-    if(!connectedAudio&&wantBitstreamFirst)connectedAudio=connectPcm();
+    if(!connectedAudio&&wantBitstreamFirst)connectedAudio=connectPcm(audioPin.Get(),audioTypes);
     return connectedAudio;
 }
 bool CaptureCardSource::start(){
@@ -2390,7 +2490,7 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
         return false;
     }
     auto reopen=desc;reopen.path=std::format(L"capture2:{}:{}:{}:{}:{}",encodePath(selection.videoPath),format,selection.audio,encodePath(selection.audioPath),selection.colorOverride);
-    reopen.path+=capturePathOptions(selection.requestedFps,encodePath(key));
+    reopen.path+=capturePathOptions(selection.requestedFps,encodePath(key),selection.audioChannels);
     bool ok=configure(reopen);
     if(ok&&!decklink::isPath(selection.videoPath)){const auto& current=p_->info;
         ok=current.width==expected.width&&current.height==expected.height&&captureFrameRateMatches(expected.averageFps,p_->layout.duration)&&current.color.pixelFormat==expected.color.pixelFormat&&

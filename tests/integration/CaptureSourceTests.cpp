@@ -22,8 +22,13 @@ int wmain(int argc,wchar_t** argv){
         const CaptureDevice other{L"Other card",L"PCI#VEN_1461&DEV_0054&SUBSYS_00001461"};
         const bool encoded=CaptureCardSource::makeCapturePath(0,gc573,0,kCaptureAudioGc573Lpcm,nullptr).find(L":-6::")!=std::wstring::npos;
         const bool scoped=CaptureCardSource::makeCapturePath(0,other,0,kCaptureAudioGc573Lpcm,nullptr).empty();
-        printf("%s GC573 HDMI LPCM audio selection is scoped to its PCI device\n",encoded&&scoped?"PASS":"FAIL");
-        return encoded&&scoped?0:1;
+        const auto embedded=CaptureCardSource::makeCapturePath(0,other,0,kCaptureAudioFromVideoDevice,nullptr,0,0,L"",6);
+        const CaptureDevice audio{L"DirectShow PCM",L"dshow-audio-path"};
+        const auto separate=CaptureCardSource::makeCapturePath(0,other,0,0,&audio,0,0,L"",8);
+        const auto disabled=CaptureCardSource::makeCapturePath(0,other,0,kCaptureAudioDisabled,nullptr,0,0,L"",8);
+        const bool ok=encoded&&scoped&&embedded.ends_with(L"?audioChannels=6")&&separate.ends_with(L"?audioChannels=8")&&disabled.empty();
+        printf("%s explicit DirectShow surround layouts and GC573 device scoping\n",ok?"PASS":"FAIL");
+        return ok?0:1;
     }
     if (argc == 4 && wcscmp(argv[1], L"--bitstream-capture") == 0) {
         if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 2;
