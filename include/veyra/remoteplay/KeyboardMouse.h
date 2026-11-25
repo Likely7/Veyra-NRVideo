@@ -4,6 +4,7 @@
 #include <atomic>
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <mutex>
 #include <string>
 #include <string_view>
@@ -25,8 +26,9 @@ public:
     void stop();
     void retire();
     void physical(ControllerState state);
+    void requireConnection(std::function<bool()> connected);
+    bool ready() const;
     bool active() const;
-    void pausePhysical(bool pause);
     int situation() const;
     bool select(std::string_view name);
     void key(uint16_t scan, bool down, Clock::time_point captured = Clock::now());
@@ -44,13 +46,14 @@ private:
     void warnOnce(WarningBit, const char*) noexcept;
     void feedback(stickmouse_mapper_feedback packet, Clock::time_point captured);
     void stopLocked();
+    bool readyLocked() const { return submit_ && (!connected_ || connected_()); }
     static void receive(void*, const stickmouse_mapper_frame*, uint8_t) noexcept;
     void frame(const stickmouse_mapper_frame&, bool overflow);
     mutable std::mutex mutex_;
     Submit submit_, submitPhysical_;
     Warning warning_;
+    std::function<bool()> connected_;
     std::atomic<unsigned> warnings_{0};
-    bool physicalPaused_=false;
     stickmouse_mapper_auto_session* session_ = nullptr;
     Clock::time_point origin_;
     stickmouse_mapper_profile* profile_ = nullptr;
@@ -60,5 +63,15 @@ private:
     int manualSituation_ = -1;
     uint64_t manualTimeNs_ = 0;
     ControllerState previous_; // worker only, reset after the worker joins
+};
+
+// The engine owns this gate across streams, control-only connections and retries.
+// The engine mutex serializes route selection, pause and submission.
+class PhysicalControllerGate {
+public:
+    void setPaused(bool pause, const std::shared_ptr<KeyboardMouse>& target);
+    void submit(const std::shared_ptr<KeyboardMouse>& target, ControllerState state) const;
+private:
+    bool paused_ = false;
 };
 }

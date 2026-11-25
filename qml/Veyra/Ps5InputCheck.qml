@@ -97,7 +97,7 @@ FocusScope {
                     Rectangle { Layout.fillWidth: true; implicitHeight: 1; color: Theme.stroke2 }
                     Label { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.t1; text: qsTr("键盘：%1").arg([check.settings.inputDevices.keyboard, check.lastKey].filter(Boolean).join(" · ") || "—") }
                     Label { Layout.fillWidth: true; elide: Text.ElideMiddle; color: Theme.t1; text: qsTr("鼠标：%1").arg([check.settings.inputDevices.mouse, check.moved ? qsTr("已检测到移动") : ""].filter(Boolean).join(" · ") || "—") }
-                    Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t2; text: qsTr("切换控制 · %1     显示按键 · %2").arg(Bindings.caption(check.settings.controlKey)).arg(Bindings.caption(check.settings.overlayKey)) }
+                    Label { Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t2; text: qsTr("切换控制 · %1     显示按键 · %2").arg(Bindings.shortcutName(check.settings.controlKey)).arg(Bindings.shortcutName(check.settings.overlayKey)) }
                     Label { Layout.fillWidth: true; visible: check.localOverlay; text: qsTr("按键浮层") + " · " + Bindings.situationName(check.settings.profile, check.settings.situation || (check.settings.profile.contexts || [])[0]); color: Theme.t1 }
                     Repeater {
                         model: check.localOverlay ? Bindings.records(check.settings.profile,

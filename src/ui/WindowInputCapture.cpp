@@ -64,19 +64,27 @@ bool WindowInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     if ((!captured_ && !listenForLocalKeys_) || eventType != "windows_generic_MSG") return false;
     const MSG* msg = static_cast<const MSG*>(message);
     if (!msg->hwnd || GetAncestor(msg->hwnd, GA_ROOT) != window_) return false;
-    if (!captured_) {
-        // Windows sends an unmodified F10 as a system key. Leave Alt chords
-        // and other system keys to the focused window.
-        const bool bareF10 = msg->wParam == VK_F10 && !(msg->lParam & (LPARAM{1} << 29)) &&
-                             (msg->message == WM_SYSKEYDOWN || msg->message == WM_SYSKEYUP);
-        if (!bareF10 && msg->message != WM_KEYDOWN && msg->message != WM_KEYUP) return false;
-        if (GetKeyState(VK_CONTROL) < 0 || GetKeyState(VK_SHIFT) < 0 || GetKeyState(VK_MENU) < 0 ||
-            GetKeyState(VK_LWIN) < 0 || GetKeyState(VK_RWIN) < 0) return false;
-        const bool down = msg->message == WM_KEYDOWN || msg->message == WM_SYSKEYDOWN;
-        const bool consumed = router_.localKey(msg->lParam, down);
-        if (consumed && result) *result = 0;
-        return consumed;
+    const bool down = msg->message == WM_KEYDOWN || msg->message == WM_SYSKEYDOWN;
+    const bool up = msg->message == WM_KEYUP || msg->message == WM_SYSKEYUP;
+    if (releaseOnly_ && (down || up)) {
+        const bool altContext = (msg->lParam & (LPARAM{1} << 29)) != 0;
+        const bool altTab = msg->wParam == VK_TAB && (altContext || GetKeyState(VK_MENU) < 0);
+        if (captured_ && down && (altTab || msg->wParam == VK_LWIN || msg->wParam == VK_RWIN)) {
+            capture(false);
+            return false;
+        }
+        // An unmodified F10 is a system key. The thread keyboard state also
+        // covers modifiers pressed before this window acquired capture.
+        const bool bareF10 = msg->message == WM_SYSKEYDOWN && msg->wParam == VK_F10 && !altContext;
+        const bool plain = (msg->message == WM_KEYDOWN || bareF10) &&
+                           GetKeyState(VK_CONTROL) >= 0 && GetKeyState(VK_SHIFT) >= 0 &&
+                           GetKeyState(VK_MENU) >= 0 && GetKeyState(VK_LWIN) >= 0 && GetKeyState(VK_RWIN) >= 0;
+        if (router_.localKey(msg->lParam, down, plain)) {
+            if (result) *result = 0;
+            return true;
+        }
     }
+    if (!captured_) return false;
 
     switch (msg->message) {
     case WM_INPUT: {
@@ -112,13 +120,6 @@ bool WindowInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
         break;
     }
 
-    const bool altTab = msg->wParam == VK_TAB
-        && ((msg->message == WM_SYSKEYDOWN && (msg->lParam & (1L << 29))) || (GetKeyState(VK_MENU) & 0x8000));
-    if (releaseOnly_ && (msg->message == WM_SYSKEYDOWN || msg->message == WM_KEYDOWN) &&
-        (altTab || msg->wParam == VK_LWIN || msg->wParam == VK_RWIN)) {
-        capture(false);
-        return false;
-    }
     const bool consumed = router_.message(msg->message, msg->wParam, msg->lParam);
     if (consumed && result) *result = 0;
     if (const auto reserved = router_.takeReserved(); reserved != moonlight::Reserved::None) {

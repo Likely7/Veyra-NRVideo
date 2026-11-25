@@ -106,6 +106,42 @@ Item {
             verify(fixture.nativeKey(0x72, 0x3d, false))
             compare(testSettings.captured, false)
         }
+        function test_captured_shortcuts_require_a_plain_press() {
+            verify(testSettings.setShortcut("overlay", "F2"))
+            verify(testSettings.resume(), testSettings.error)
+            // Windows can send Alt+F3 as a system key even when capture began
+            // after Alt was pressed.
+            verify(fixture.nativeSystemKey(0x72, 0x3d, true, true))
+            verify(testSettings.captured)
+            verify(fixture.nativeKey(0x72, 0x3d, false))
+            for (const [modifier, scan] of [[0x11, 0x1d], [0x10, 0x2a], [0x12, 0x38]]) {
+                verify(fixture.nativeKey(modifier, scan, true))
+                verify(fixture.nativeKey(0x71, 0x3c, true))
+                verify(fixture.nativeKey(modifier, scan, false))
+                verify(fixture.nativeRepeat(0x71, 0x3c))
+                verify(fixture.nativeKey(0x71, 0x3c, false))
+                verify(!testSettings.overlayVisible && testSettings.captured)
+            }
+            verify(fixture.nativeKey(0x71, 0x3c, true))
+            verify(testSettings.overlayVisible)
+            verify(fixture.nativeKey(0x10, 0x2a, true))
+            verify(fixture.nativeRepeat(0x71, 0x3c))
+            verify(fixture.nativeKey(0x71, 0x3c, false))
+            verify(fixture.nativeKey(0x10, 0x2a, false))
+            verify(testSettings.overlayVisible && testSettings.captured)
+            verify(!fixture.nativeKey(0x5b, 0x5b, true)) // Windows key hands control back to the OS.
+            verify(!testSettings.captured)
+        }
+        function test_control_key_keeps_its_release_after_capture_ends() {
+            verify(testSettings.resume(), testSettings.error)
+            verify(fixture.nativeKey(0x72, 0x3d, true))
+            verify(!testSettings.captured)
+            // Alt was pressed after F3. Its modified key-up still belongs to the player.
+            verify(fixture.nativeSystemKey(0x72, 0x3d, false, true))
+            verify(!fixture.nativeSystemKey(0x72, 0x3d, true, true))
+            verify(!fixture.nativeKey(0x72, 0x3d, false))
+            verify(!testSettings.captured)
+        }
         function test_live_overlay_and_control_handoff_data() {
             return [{ tag: "visible hints", showHints: true }, { tag: "hidden hints", showHints: false }]
         }

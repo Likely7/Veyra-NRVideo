@@ -3,6 +3,7 @@
 #include "veyra/Log.h"
 #include "veyra/media/FfmpegLog.h"
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/remoteplay/KeyboardMouse.h"
 
 #include <algorithm>
 #include <chrono>
@@ -120,6 +121,10 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     auto token = inbox_->begin(static_cast<remoteplay::HostTime>(origin100ns_));
     inbox_->streamProfile(videoProfile_);
     token_ = token; // Keep a second weak token; backend owns the moved copy.
+    if (desc.request.keyboardMouse) {
+        // Each attempt has its own inbox. Saved input handles keep that attempt's state.
+        desc.request.keyboardMouse->requireConnection([inbox = inbox_] { return inbox->controllerReady(); });
+    }
     const auto started = backend_.start(desc.request, token, discardMedia_);
     if (!started.ok) {
         veyra::log::error("remoteplay", std::format("{} failed code={}", started.operation, started.code));

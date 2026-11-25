@@ -4,22 +4,26 @@ import importlib.util
 import json
 from pathlib import Path
 import stat
+import tempfile
 import unittest
 import zipfile
 
 SPEC = importlib.util.spec_from_file_location('package', Path(__file__).resolve().parents[1] / 'package-qml-release.py')
 PACKAGE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(PACKAGE)
-OUT = Path('E:/项目/Veyra/tests/release-2.0.0-20261002/package-validator')
-OUT.mkdir(parents=True, exist_ok=False)
 
 class PackageTests(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.output = Path(tmp.name)
+
     def archive(self, *, extra=None, mutate=None, omit=None, symlink=False):
         payload = {name: b'test bytes' for name in PACKAGE.REQUIRED if name != omit}
         records = [dict(path=n, size=len(b), sha256=hashlib.sha256(b).hexdigest()) for n, b in payload.items()]
         if mutate:
             mutate(records)
-        path = OUT / (self.id().split('.')[-1] + '.zip')
+        path = self.output / (self.id().split('.')[-1] + '.zip')
         with zipfile.ZipFile(path, 'x') as z:
             for name, data in payload.items():
                 z.writestr('Veyra/' + name, data)
@@ -35,6 +39,21 @@ class PackageTests(unittest.TestCase):
 
     def test_valid(self):
         self.assertEqual(PACKAGE.verify_zip(self.archive())['status'], 'pass')
+
+    def test_remoteplay_packages_mapper_for_enabled_cmake_options(self):
+        cache = self.output / 'CMakeCache.txt'
+        payload = {'stickmouse_mapper.dll', 'profiles/gta-vi-ps5-0.6.87-calibrated.v2.json',
+                   'licenses/stickmouse/LICENSE', 'licenses/stickmouse/NOTICE.md'}
+        for value in ('ON', 'True', 'TRUE', '1', 'yes', 'Y', '2'):
+            with self.subTest(value=value):
+                cache.write_text(f'VEYRA_ENABLE_REMOTEPLAY:BOOL={value}\n', encoding='utf8')
+                self.assertEqual(set(PACKAGE.mapper_files(self.output)), payload)
+        for value in ('OFF', 'False', '0', 'no', 'N', '', 'IGNORE', 'sdk-NOTFOUND'):
+            with self.subTest(value=value):
+                cache.write_text(f'VEYRA_ENABLE_REMOTEPLAY:BOOL={value}\n', encoding='utf8')
+                self.assertEqual(PACKAGE.mapper_files(self.output), ())
+        cache.write_text('', encoding='utf8')
+        self.assertEqual(PACKAGE.mapper_files(self.output), ())
 
     def test_corrupt_hash(self):
         with self.assertRaises(ValueError):

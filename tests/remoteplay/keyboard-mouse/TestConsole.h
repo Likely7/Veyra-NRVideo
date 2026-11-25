@@ -8,7 +8,11 @@
 
 namespace veyra::remoteplay::test {
 struct TestConsole {
-    bool connect(source::RemotePlaySessionSource& source, bool captureCard, bool viewOnly);
+    bool connect(source::RemotePlaySessionSource& source, bool captureCard, bool viewOnly, bool deferConnected = false);
+    std::optional<SessionInbox::Token> events;
+    bool deferConnected = false;
+    std::atomic_bool connected = false;
+    std::atomic_uint64_t videoCallbacks = 0;
     std::shared_ptr<KeyboardMouse> feedback;
     std::thread::id owner;
     bool discardMedia = false;

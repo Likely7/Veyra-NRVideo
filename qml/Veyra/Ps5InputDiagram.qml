@@ -44,7 +44,7 @@ Column {
         focusPolicy: Qt.StrongFocus
         padding: 5
         Accessible.name: [Bindings.inputName(diagram.profile, code), shortcut,
-                          ...bindings.map(r => r.input + " · " + r.shortTitle + " · " + r.output)].filter(Boolean).join("\n")
+                          ...bindings.map(r => [r.input, r.shortTitle, r.output].filter(Boolean).join(" · "))].filter(Boolean).join("\n")
         Accessible.selected: selectedTile
         ToolTip.visible: enabled && (hovered || visualFocus)
         ToolTip.delay: 450

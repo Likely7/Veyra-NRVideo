@@ -21,7 +21,7 @@ int16_t axis(float x) {
 }
 std::string KeyboardMouse::start(std::string_view json, unsigned dpi, std::string_view initial) {
     std::lock_guard lock(mutex_);
-    if (!submit_) return "Session ended";
+    if (!readyLocked()) return "PS5 control channel is not connected";
     stopLocked();
     warnings_.store(0);
     if (stickmouse_mapper_profile_load(span(json), &profile_)) return lastError();
@@ -77,14 +77,24 @@ std::string KeyboardMouse::start(std::string_view json, unsigned dpi, std::strin
     return {};
 }
 bool KeyboardMouse::active() const { std::lock_guard lock(mutex_); return session_ != nullptr; }
-void KeyboardMouse::pausePhysical(bool pause) {
+void KeyboardMouse::requireConnection(std::function<bool()> connected) {
     std::lock_guard lock(mutex_);
-    if(pause && !physicalPaused_ && !session_ && submit_)submit_({});
-    physicalPaused_=pause;
+    connected_ = std::move(connected);
+}
+bool KeyboardMouse::ready() const {
+    std::lock_guard lock(mutex_);
+    return readyLocked();
 }
 void KeyboardMouse::physical(ControllerState state) {
     std::lock_guard lock(mutex_);
-    if (!session_ && !physicalPaused_ && submitPhysical_) submitPhysical_(std::move(state));
+    if (!session_ && readyLocked()) submitPhysical_(std::move(state));
+}
+void PhysicalControllerGate::setPaused(bool pause, const std::shared_ptr<KeyboardMouse>& target) {
+    if (pause && !paused_ && target) target->physical({});
+    paused_ = pause;
+}
+void PhysicalControllerGate::submit(const std::shared_ptr<KeyboardMouse>& target, ControllerState state) const {
+    if (!paused_ && target) target->physical(std::move(state));
 }
 void KeyboardMouse::stopLocked() {
     if (session_) {
@@ -103,7 +113,7 @@ void KeyboardMouse::stopLocked() {
     profile_ = nullptr;
 }
 void KeyboardMouse::stop() { std::lock_guard lock(mutex_); stopLocked(); }
-void KeyboardMouse::retire() { std::lock_guard lock(mutex_); stopLocked(); submit_ = {}; submitPhysical_ = {}; }
+void KeyboardMouse::retire() { std::lock_guard lock(mutex_); stopLocked(); submit_ = {}; submitPhysical_ = {}; connected_ = {}; }
 int KeyboardMouse::situation() const {
     std::lock_guard lock(mutex_);
     if (manualSituation_ >= 0 && frameTimeNs_.load() < manualTimeNs_)

@@ -15,7 +15,8 @@ QObject* QmlPlayerBridge::ps5Keyboard() {
     if(!i.ps5Keyboard)i.ps5Keyboard=std::make_unique<Ps5KeyboardSettings>(
         QString::fromStdWString(i.dataDir.wstring()),
         QCoreApplication::applicationDirPath()+QStringLiteral("/profiles/gta-vi-ps5-0.6.87-calibrated.v2.json"),
-        [this]{return impl_->engine.remoteKeyboardMouse();});
+        [this]{return impl_->engine.remoteKeyboardMouse();},
+        [this](bool paused){impl_->engine.pauseRemotePlayPhysicalInput(paused);});
     return i.ps5Keyboard.get();
 #else
     return nullptr;

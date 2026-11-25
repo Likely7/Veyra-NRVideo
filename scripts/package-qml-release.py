@@ -40,7 +40,11 @@ REQUIRED = {'veyra_qml_ui.exe', 'qml/Veyra/Main.qml', 'platforms/qwindows.dll',
 
 def mapper_files(build):
     cache = (build / 'CMakeCache.txt').read_text(encoding='utf8')
-    if not re.search(r'^VEYRA_ENABLE_REMOTEPLAY:BOOL=ON$', cache, re.M):
+    entry = re.search(r'^VEYRA_ENABLE_REMOTEPLAY:[^=\n]+=(.*)$', cache, re.M)
+    value = entry.group(1) if entry else ''
+    # Match CMake's if(variable), including its case-sensitive NOTFOUND suffix.
+    if (value.upper() in {'', '0', 'OFF', 'NO', 'FALSE', 'N', 'IGNORE'}
+            or value == 'NOTFOUND' or value.endswith('-NOTFOUND')):
         return ()
     return ('stickmouse_mapper.dll', 'profiles/gta-vi-ps5-0.6.87-calibrated.v2.json',
             'licenses/stickmouse/LICENSE', 'licenses/stickmouse/NOTICE.md')

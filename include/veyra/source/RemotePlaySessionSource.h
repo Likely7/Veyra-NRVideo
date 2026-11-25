@@ -23,7 +23,7 @@ public:
     bool seek(const pipeline::Rational&) override { return false; }
     void close() noexcept override;
     void controller(remoteplay::ControllerState state);
-    std::shared_ptr<remoteplay::KeyboardMouse> keyboardMouse() const { std::lock_guard lock(mutex_); return keyboardMouse_; }
+    std::shared_ptr<remoteplay::KeyboardMouse> keyboardMouse() const;
     void loginPin(std::string pin);
     remoteplay::ControllerFeedback takeFeedback();
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;

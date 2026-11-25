@@ -2,7 +2,8 @@ function physical(spec) { return spec.split(":")[0] }
 function caption(id) {
     if (!id) return ""
     const [key, gesture] = id.split(":")
-    const words = key.replace(/^Key(?=[A-Z]$)|^Digit(?=[0-9]$)/, "")
+    const words = /^Numpad\d$/.test(key) ? qsTr("小键盘 %1").arg(key.slice(-1))
+        : key.replace(/^Key(?=[A-Z]$)|^Digit(?=[0-9]$)/, "")
         .replace(/_/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").replace(/^./, c => c.toUpperCase())
     return gesture ? words + " · " + gesture : words
 }
@@ -16,6 +17,10 @@ function situationName(profile, id) {
     const names = {on_foot: qsTr("步行"), aiming: qsTr("瞄准"), driving: qsTr("驾驶"),
                    flying: qsTr("飞行"), menu: qsTr("游戏菜单"), map: qsTr("地图"), system_nav: qsTr("主机菜单")}
     return label((profile.context_labels || {})[id], names[id] || caption(id))
+}
+function layerName(profile, spec) {
+    const layer = /:layer(?:_toggle)?=(.+)$/.exec(spec)
+    return layer ? label(profile.layers?.[layer[1]]?.label, situationName(profile, layer[1])) : ""
 }
 function detectionSources(profile, situation) {
     const rules = (profile.recognition_rules || []).filter(rule => rule.target === situation)
@@ -68,9 +73,12 @@ function controlMark(id) {
 function keycap(id) {
     if (inactiveLegends[id]) return inactiveLegends[id]
     if (id.startsWith("Numpad")) return id.slice(6)
+    return ({ShiftLeft:"Shift", ShiftRight:"Shift", ControlLeft:"Ctrl", ControlRight:"Ctrl",
+             AltLeft:"Alt", AltRight:"Alt"})[id] || shortcutName(id)
+}
+function shortcutName(id) {
     return ({Escape:"Esc", ArrowUp:"↑", ArrowDown:"↓", ArrowRight:"→", ArrowLeft:"←",
-             ShiftLeft:"Shift", ShiftRight:"Shift", ControlLeft:"Ctrl", ControlRight:"Ctrl",
-             AltLeft:"Alt", AltRight:"Alt", CapsLock:"Caps Lock", Insert:"Ins",
+             CapsLock:"Caps Lock", Insert:"Ins",
              Delete:"Del", PageUp:"PgUp", PageDown:"PgDn"})[id] || caption(id)
 }
 function table(profile, scene) {
@@ -90,13 +98,14 @@ function inputName(profile, spec) {
                    MouseMiddle: qsTr("鼠标中键"), WheelUp: qsTr("滚轮向上"), WheelDown: qsTr("滚轮向下")})[key]
                  || (side ? qsTr("侧键 %1").arg(key.slice(-1)) : caption(key))
     if (gesture && gesture.startsWith("layer="))
-        return qsTr("按住 %1 · %2").arg(name).arg(situationName(profile, gesture.slice(6)))
+        return qsTr("按住 %1 · %2").arg(name).arg(layerName(profile, spec))
     return gesture ? name + " · " + gestureName(profile, spec) : name
 }
 function gestureName(profile, spec) {
     const gesture = spec.split(":")[1]
     if (!gesture) return qsTr("按下")
-    if (gesture.startsWith("layer=")) return qsTr("按住") + " · " + situationName(profile, gesture.slice(6))
+    const layer = layerName(profile, spec)
+    if (layer) return (gesture.startsWith("layer=") ? qsTr("按住") : qsTr("切换")) + " · " + layer
     return ({hold: qsTr("按住"), double: qsTr("双击"), toggle: qsTr("切换"), tap: qsTr("轻触")})[gesture] || gesture
 }
 function mouseMotion(profile, scene) {
@@ -130,15 +139,26 @@ function records(profile, scene) {
     // An explicit console menu maps physical inputs straight to buttons.
     const menu = scene === "system_nav" && profile.console_menu
     const effective = menu || table(profile,scene)
-    return Object.keys(effective).sort().map(spec => {
+    const motion = mouseMotion(profile, scene)
+    const rows = motion ? [motion] : []
+    const shortcuts = Object.values(profile.context_hotkeys || {})
+    for (const spec of Object.keys(effective).sort()) {
+        if (shortcuts.includes(physical(spec))) continue
         const action = effective[spec], out = menu ? {button: action} : (profile.outputs || {})[action] || {}
-        const controls = controllerOutputs(profile, out)
-        const title = label(out.label,caption(action))
+        let controls = controllerOutputs(profile, out)
+        let title = label(out.label,caption(action))
+        if (controls.includes("none")) {
+            const layer = layerName(profile, spec)
+            if (!layer) continue
+            controls = []
+            title = qsTr("按键层 · %1").arg(layer)
+        }
         const output = controls.map(caption).join(" + ")
         const suffix = " (" + output + ")"
         const shortTitle = title.endsWith(suffix) ? title.slice(0, -suffix.length) : title
-        return {spec:spec, key:physical(spec), input:inputName(profile,spec), action:action, title:title, shortTitle:shortTitle, controls:controls, output:output}
-    }).filter(r => !r.controls.includes("none") && !Object.values(profile.context_hotkeys || {}).includes(r.key))
+        rows.push({spec:spec, key:physical(spec), input:inputName(profile,spec), action:action, title:title, shortTitle:shortTitle, controls:controls, output:output})
+    }
+    return rows
 }
 function group(bindings,key) { return Object.keys(bindings).filter(s => physical(s) === key) }
 function changesIn(profile,from,to) {

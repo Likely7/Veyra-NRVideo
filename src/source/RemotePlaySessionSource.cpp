@@ -79,7 +79,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             if(failed_)recovery_.message=desc.controlOnly?L"PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。":L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
         ready_.notify_all();
         const auto sendController = [&] {
-            if(desc.request.viewOnly)return;
+            if(desc.request.viewOnly || !source.telemetryInbox()->controllerReady())return;
             remoteplay::ControllerState state;
             {std::lock_guard lock(mutex_);state=takeControllerLocked(remoteplay::monotonic100ns());}
             const auto r=source.submitController(state);
@@ -261,16 +261,16 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
         latest_.reset();pendingControllers_.clear();controller_={};feedback_={};
     }
     log::info("remoteplay-recovery",std::format("teardown begin attempt={} retry={} cancelled={}",recovery.reconnects(),retry,stop.stop_requested()));
-    if(monitor.joinable()){monitor.request_stop();monitor.join();}
-    if(feeder.joinable()){feeder.request_stop();feeder.join();}
     if (desc.request.keyboardMouse) {
         desc.request.keyboardMouse->retire();
-        if(source.connected())source.submitController({});
+        if(source.connected() && source.telemetryInbox()->controllerReady())source.submitController({});
         std::lock_guard lock(mutex_);
         keyboardMouse_.reset();
         pendingControllers_.clear();
         controller_={};
     }
+    if(monitor.joinable()){monitor.request_stop();monitor.join();}
+    if(feeder.joinable()){feeder.request_stop();feeder.join();}
     audio_.stop();
     source.close();
     log::info("remoteplay-recovery",std::format("teardown complete attempt={}",recovery.reconnects()));
@@ -321,6 +321,11 @@ void RemotePlaySessionSource::close() noexcept {
 }
 void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
     if(auto input=keyboardMouse()) input->physical(std::move(state));
+}
+std::shared_ptr<remoteplay::KeyboardMouse> RemotePlaySessionSource::keyboardMouse() const {
+    std::shared_ptr<remoteplay::KeyboardMouse> input;
+    { std::lock_guard lock(mutex_); input = keyboardMouse_; }
+    return input && input->ready() ? input : nullptr;
 }
 void RemotePlaySessionSource::enqueueController(remoteplay::ControllerState state, bool mapped){
     std::lock_guard lock(mutex_);controllerStamp_=remoteplay::monotonic100ns();

@@ -462,6 +462,43 @@ Item {
             verify(control(editor, "selected-binding").text.includes("Enter vehicle"))
             control(editor, "done").clicked()
         }
+        function test_layer_without_button_requires_a_move_decision() {
+            const personal = JSON.parse(JSON.stringify(testSettings.profile))
+            personal.bindings["F11:layer=aiming"] = "no_function"
+            personal.layers = {quick: {label: {en: "Quick actions"}, bindings: {KeyB: "jump"}}}
+            personal.bindings["F2:layer_toggle=quick"] = "no_function"
+            personal.bindings.F12 = "no_function"
+            verify(testSettings.saveCopy("Layer binding", personal), testSettings.error)
+            openFrom(remote)
+            mode(0)
+            clickIn(editor, control(editor, "key-F2"))
+            compare(editor.selectedSpec, "F2:layer_toggle=quick")
+            verify(editor.chosen.title.includes("Quick actions"))
+            verify(editor.chosen.input.includes(qsTr("切换")))
+            clickIn(editor, control(editor, "key-F11"))
+            compare(editor.selectedSpec, "F11:layer=aiming")
+            verify(editor.chosen.title.includes("Aiming"))
+            compare(editor.chosen.controls, [])
+            verify(!control(editor, "selected-binding").text.includes("No function"))
+            clickIn(editor, control(editor, "key-KeyF"))
+            editDestination("F11")
+            verify(control(editor, "conflict").text.includes("Aiming"))
+            clickIn(editor, control(editor, "cancel-move"))
+            compare(testSettings.profile, personal)
+            editDestination("F11")
+            clickIn(editor, control(editor, "swap"))
+            let changed = testSettings.profile.bindings_per_context.on_foot
+            compare(changed["KeyF:layer=aiming"], "no_function")
+            compare(changed.F11, "enter_vehicle")
+            editDestination("KeyF")
+            clickIn(editor, control(editor, "replace"))
+            changed = testSettings.profile.bindings_per_context.on_foot
+            compare(changed.KeyF, "enter_vehicle")
+            compare(changed["KeyF:layer=aiming"], undefined)
+            editDestination("F12")
+            compare(testSettings.profile.bindings_per_context.on_foot.F12, "enter_vehicle")
+            verify(!control(editor, "conflict").visible)
+        }
         function test_swap_gesture_groups_and_combined_outputs() {
             const personal = JSON.parse(JSON.stringify(testSettings.profile))
             personal.bindings["KeyF:double"] = "jump"

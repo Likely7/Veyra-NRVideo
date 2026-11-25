@@ -4,12 +4,14 @@ using namespace std::chrono_literals;
 namespace veyra::remoteplay::test {
 TestConsole console;
 
-bool TestConsole::connect(source::RemotePlaySessionSource& source, bool captureCard, bool viewOnly) {
+bool TestConsole::connect(source::RemotePlaySessionSource& source, bool captureCard, bool viewOnly, bool wait) {
     veyra::source::RemotePlayConnectDesc request;
     request.request.host = "offline.invalid";
     request.controlOnly = captureCard;
     request.request.viewOnly = viewOnly;
+    source.close();
     sent.clear();
+    deferConnected = wait;
     return source.connect(std::move(request)) && discardMedia == captureCard;
 }
 }
@@ -25,11 +27,16 @@ PairingCredentials::PairingCredentials(PairingCredentials&&) noexcept = default;
 PairingCredentials& PairingCredentials::operator=(PairingCredentials&&) noexcept = default;
 PairingCredentials::~PairingCredentials() = default;
 BackendResult ChiakiBackend::start(const NativeConnectRequest& request, SessionInbox::Token token, bool discardMedia) {
+    std::lock_guard lock(console.mutex);
     console.feedback = request.keyboardMouse;
     console.owner = std::this_thread::get_id();
     console.discardMedia = discardMedia;
     p_ = std::make_unique<Impl>();
-    token.connected();
+    console.events = token;
+    console.videoCallbacks = 0;
+    console.connected = !console.deferConnected;
+    if (console.connected) token.connected();
+    console.changed.notify_all();
     return {true};
 }
 BackendResult ChiakiBackend::submitController(const ControllerState& state) {
@@ -46,7 +53,11 @@ BackendResult ChiakiBackend::submitController(const ControllerState& state) {
 BackendResult ChiakiBackend::submitLoginPin(std::string_view) {return {true};}
 BackendResult ChiakiBackend::requestIdr() {return {true};}
 ControllerFeedback ChiakiBackend::takeFeedback() {return {};}
-NativeSnapshot ChiakiBackend::snapshot() const {return {bool(p_),bool(p_)};}
+NativeSnapshot ChiakiBackend::snapshot() const {
+    NativeSnapshot snapshot{bool(p_),p_ && console.connected.load()};
+    snapshot.videoCallbacks = console.videoCallbacks;
+    return snapshot;
+}
 BackendResult ChiakiBackend::stop() {p_.reset(); return {true};}
 }
 

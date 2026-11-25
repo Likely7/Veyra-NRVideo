@@ -46,6 +46,7 @@ public:
     bool takeIdrRequest(HostTime now);
     void decodeFailed(Generation);
     bool isCurrent(Generation)const;
+    bool controllerReady() const;
     Snapshot snapshot()const;
     void decodeStarted(HostTime now,HostTime arrival);
     void decodeFinished(HostTime now);

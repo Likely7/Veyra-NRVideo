@@ -20,8 +20,10 @@ bool saveJson(const QString& path,const QJsonObject& data) {
 }
 }
 Ps5KeyboardSettings::Ps5KeyboardSettings(QString directory,QString presetPath,std::function<Session()> provider,
+                                       std::function<void(bool)> pausePhysical,
                                        WindowInputCapture::MouseGrab mouseGrab)
-    : directory_(std::move(directory)), provider_(std::move(provider)), capture_(*this,true,nullptr,std::move(mouseGrab)) {
+    : directory_(std::move(directory)), provider_(std::move(provider)), pausePhysical_(std::move(pausePhysical)),
+      capture_(*this,true,nullptr,std::move(mouseGrab)) {
     QFile preset(presetPath);
     if(preset.open(QIODevice::ReadOnly))preset_=QJsonDocument::fromJson(preset.readAll()).object();
     if(preset_.isEmpty())error_=tr("无法加载已校准的 GTA VI 控制配置。");
@@ -147,7 +149,6 @@ void Ps5KeyboardSettings::refresh(){
 }
 void Ps5KeyboardSettings::refreshSession(const Session& session){
     if(playing_ && (!playing_->active() || playing_!=session) && captured())release();
-    if(editing_ && session)session->pausePhysical(true);
     QString now=situation_;
     if(connection_.lock()!=session || available_!=bool(session))
         now=session ? situations().value(0) : QString{};
@@ -170,8 +171,8 @@ void Ps5KeyboardSettings::setPlayerWindow(QWindow* window, bool shortcutsEnabled
         capture_.setWindow(GetAncestor(reinterpret_cast<HWND>(window->winId()), GA_ROOT));
 }
 void Ps5KeyboardSettings::edit(bool open){
+    if (editing_ != open) pausePhysical_(open);
     editing_=open;
-    if(auto session=provider_())session->pausePhysical(open);
     if(open)release();
     if (open && shortcutConflict_.isEmpty()) hasShortcutConflict(store_, false);
     if (!open) cancelShortcutConflict();
@@ -205,23 +206,19 @@ void Ps5KeyboardSettings::correct(QString name){
 void Ps5KeyboardSettings::key(uint32_t vk,uint32_t scan,bool extended,bool down){
     if(playing_ && (vk==VK_PAUSE || (scan>0 && scan<128)))playing_->key(vk==VK_PAUSE?256:uint16_t(scan+(extended?128:0)),down);
 }
-bool Ps5KeyboardSettings::localKey(uint32_t scan, bool extended, bool down, bool repeat) {
+bool Ps5KeyboardSettings::localKeyPressed(uint32_t scan, bool extended) {
     const auto key = ps5PlayerKeyName(scan, extended);
     if (key.isEmpty()) return false;
     if (captured() && key == overlayKey()) {
-        if (down && !repeat) {
-            overlayVisible_ = !overlayVisible_;
-            emit sessionChanged();
-        }
+        overlayVisible_ = !overlayVisible_;
+        emit sessionChanged();
         return true;
     }
     if (key != controlKey() || editing_) return false;
     if (!captured() && (!playerWindow_ || QGuiApplication::focusWindow() != playerWindow_ ||
                         QGuiApplication::modalWindow() || !provider_())) return false;
-    if (down && !repeat) {
-        if (captured()) release();
-        else emit controlRequested();
-    }
+    if (captured()) release();
+    else emit controlRequested();
     return true;
 }
 void Ps5KeyboardSettings::mouseMove(int dx,int dy){if(playing_)playing_->motion(dx,dy);}

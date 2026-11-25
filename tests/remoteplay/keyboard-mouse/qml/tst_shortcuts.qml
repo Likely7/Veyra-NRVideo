@@ -3,9 +3,11 @@ import QtTest
 import "../../../../qml/Veyra" as V
 
 Item {
+    id: root
     width: 900
     height: 680
     V.Ps5KeyboardDialog { id: page; anchors.fill: parent; settings: testSettings }
+    V.Ps5KeyboardWindow { id: controlsWindow; owner: root.Window.window; settings: testSettings }
 
     TestCase {
         name: "Ps5PlayerShortcuts"
@@ -28,11 +30,31 @@ Item {
             picker.activated(picker.currentIndex)
         }
         function cleanup() {
+            controlsWindow.close()
             testSettings.cancelShortcutConflict()
             verify(testSettings.setShortcut("overlay", "F1"))
             verify(testSettings.setShortcut("control", "F3"))
             choose(testSettings.profiles[0])
             compare(testSettings.selected, testSettings.profiles[0])
+        }
+        function test_physical_input_stays_local_across_connection_changes_data() {
+            return [{ tag: "editor", mode: "editor" }, { tag: "practice", mode: "practice" }]
+        }
+        function test_physical_input_stays_local_across_connection_changes(data) {
+            fixture.disconnectConsole()
+            controlsWindow.open(null, data.mode)
+            tryCompare(controlsWindow, "visible", true)
+            fixture.connectConsole()
+            const before = fixture.submissions()
+            fixture.physicalCross()
+            compare(fixture.submissions(), before)
+            fixture.connectConsole()
+            fixture.physicalCross()
+            compare(fixture.submissions(), before)
+            controlsWindow.close()
+            fixture.physicalCross()
+            verify(fixture.crossDown())
+            fixture.disconnectConsole()
         }
         function test_00_remember_each_shortcut_on_this_pc() {
             compare(testSettings.overlayKey, "F1")

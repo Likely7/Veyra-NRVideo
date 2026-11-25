@@ -36,6 +36,11 @@ SessionInbox::Token SessionInbox::begin(HostTime origin){
 void SessionInbox::invalidate(){auto& s=*shared_;std::lock_guard l(s.mutex);s.accepting=false;if(s.state!=SessionState::Idle)s.state=SessionState::Stopping;s.video.close();s.audio.close();}
 void SessionInbox::finishStop(){auto& s=*shared_;std::lock_guard l(s.mutex);if(s.accepting)throw std::logic_error("Invalidate before join/finishStop");s.state=SessionState::Idle;}
 bool SessionInbox::isCurrent(Generation g)const{auto& s=*shared_;std::lock_guard l(s.mutex);return s.accepting&&s.generation==g;}
+bool SessionInbox::controllerReady() const {
+    auto& s = *shared_;
+    std::lock_guard lock(s.mutex);
+    return s.state == SessionState::WaitingFirstFrame || s.state == SessionState::Streaming;
+}
 bool SessionInbox::decodedFrameReady(Generation g){
     auto& s=*shared_;std::lock_guard l(s.mutex);
     if(!s.accepting||s.generation!=g||(s.state!=SessionState::WaitingFirstFrame&&s.state!=SessionState::Streaming))return false;

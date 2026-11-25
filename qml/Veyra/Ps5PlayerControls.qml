@@ -52,7 +52,7 @@ Item {
                 objectName: "ps5-player-control"
                 primary: true
                 visible: !player.captured
-                text: player.settings ? qsTr("控制 PS5 · %1").arg(Bindings.keycap(player.settings.controlKey)) : ""
+                text: player.settings ? qsTr("控制 PS5 · %1").arg(Bindings.shortcutName(player.settings.controlKey)) : ""
                 onClicked: player.controlRequested()
             }
             Ps5EditorButton {
@@ -69,7 +69,7 @@ Item {
                 height: edit.height
                 leftPadding: 4
                 verticalAlignment: Text.AlignVCenter
-                text: player.settings ? qsTr("返回 Windows · %1").arg(Bindings.keycap(player.settings.controlKey)) : ""
+                text: player.settings ? qsTr("返回 Windows · %1").arg(Bindings.shortcutName(player.settings.controlKey)) : ""
                 color: Theme.t1; font.family: Theme.fontUi; font.bold: true
             }
             Label {
@@ -80,7 +80,7 @@ Item {
                 verticalAlignment: Text.AlignVCenter
                 text: !player.settings ? "" : (player.settings.captured
                       ? Bindings.situationName(player.settings.profile, player.settings.situation) + "   ·   " : "")
-                      + qsTr("显示按键 · %1").arg(Bindings.keycap(player.settings.overlayKey))
+                      + qsTr("显示按键 · %1").arg(Bindings.shortcutName(player.settings.overlayKey))
                 color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12
             }
         }
@@ -153,13 +153,13 @@ Item {
             Label {
                 objectName: "ps5-live-control-key"
                 Layout.maximumWidth: overlay.width * 0.39
-                text: overlay.visible ? qsTr("返回 Windows · %1").arg(Bindings.keycap(player.settings.controlKey)) : ""
+                text: overlay.visible ? qsTr("返回 Windows · %1").arg(Bindings.shortcutName(player.settings.controlKey)) : ""
                 wrapMode: Text.Wrap
                 font.family: Theme.fontUi; font.pixelSize: 12; color: Theme.t2
             }
             Label {
                 objectName: "ps5-live-hide-key"
-                text: overlay.visible ? qsTr("隐藏 · %1").arg(Bindings.keycap(player.settings.overlayKey)) : ""
+                text: overlay.visible ? qsTr("隐藏 · %1").arg(Bindings.shortcutName(player.settings.overlayKey)) : ""
                 font.family: Theme.fontUi; font.pixelSize: 12; color: Theme.t2
             }
         }
@@ -187,7 +187,7 @@ Item {
                     spacing: 6
                     Label {
                         objectName: "ps5-mode-key-" + mode.modelData.id
-                        text: Bindings.keycap(mode.modelData.key)
+                        text: Bindings.shortcutName(mode.modelData.key)
                         leftPadding: 5; rightPadding: 5
                         color: Theme.accent; font.family: Theme.fontMono; font.pixelSize: 12
                         background: Rectangle { color: mode.current ? Theme.accentSoft : Theme.card2; radius: 3; border.color: mode.current ? Theme.accent : Theme.stroke2 }
@@ -220,17 +220,19 @@ Item {
                     height: overlay.rowHeight
                     spacing: 6
                     Label {
+                        objectName: "ps5-live-input-" + binding.modelData.spec
                         Layout.maximumWidth: binding.width * 0.42
                         text: binding.modelData.spec.includes(":") || binding.modelData.key.startsWith("Mouse")
                             ? binding.modelData.input
-                            : Bindings.keycap(binding.modelData.spec)
+                            : Bindings.shortcutName(binding.modelData.spec)
                         wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
                         color: Theme.accent; font.family: Theme.fontMono; font.pixelSize: 12
                     }
                     Label {
                         objectName: "ps5-live-" + binding.modelData.spec
                         Layout.fillWidth: true; Layout.rightMargin: 8
-                        text: binding.modelData.shortTitle
+                        text: binding.modelData.fixed ? binding.modelData.shortTitle + " · " + binding.modelData.output
+                                                      : binding.modelData.shortTitle
                         wrapMode: Text.Wrap; maximumLineCount: 2; elide: Text.ElideRight
                         color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: 12
                     }

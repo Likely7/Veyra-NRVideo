@@ -9,7 +9,7 @@ Item {
         id: diagram
         width: parent.width
         profile: testSettings.profile
-        rows: [Bindings.mouseMotion(profile, "on_foot")].concat(Bindings.records(profile, "on_foot"))
+        rows: Bindings.records(profile, "on_foot")
         selectedSpec: "KeyF"
         onInputSelected: key => selectedSpec = (byKey[key] || [{spec: key}])[0].spec
     }
@@ -29,6 +29,8 @@ Item {
             compare(Bindings.keyboard.filter(cap => cap.bindable).length + Bindings.extraKeys.length, 91)
             verify(!key("Backquote").enabled && !key("End").enabled)
             verify(key("Numpad8").enabled && key("Home").enabled)
+            compare(key("Digit2").text, "2")
+            compare(key("Numpad2").text, "2")
             const pitch = key("KeyE").x - key("KeyW").x
             for (const entry of Bindings.keyboard) {
                 const cap = key(entry.key)

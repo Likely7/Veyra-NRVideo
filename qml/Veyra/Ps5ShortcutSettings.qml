@@ -69,7 +69,7 @@ ColumnLayout {
                 objectName: "shortcut-" + row.modelData
                 readonly property bool waiting: shortcuts.listening === row.modelData
                 readonly property string currentKey: row.modelData === "overlay" ? shortcuts.settings.overlayKey : shortcuts.settings.controlKey
-                text: waiting ? qsTr("按下新按键") : Bindings.caption(currentKey)
+                text: waiting ? qsTr("按下新按键") : Bindings.shortcutName(currentKey)
                 Accessible.name: shortcuts.actionLabel(row.modelData) + " · " + text
                 Layout.preferredWidth: Math.max(108, implicitWidth)
                 checked: waiting
@@ -164,14 +164,14 @@ ColumnLayout {
                 color: Theme.t1
                 wrapMode: Text.Wrap
                 textFormat: Text.PlainText
-                text: qsTr("此电脑 · %1 · %2").arg(shortcuts.actionLabel(shortcuts.conflict.action)).arg(Bindings.caption(shortcuts.conflict.key))
+                text: qsTr("此电脑 · %1 · %2").arg(shortcuts.actionLabel(shortcuts.conflict.action)).arg(Bindings.shortcutName(shortcuts.conflict.key))
             }
             Label {
                 Layout.fillWidth: true
                 color: Theme.t1
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
-                text: shortcuts.conflict.otherAction ? qsTr("此电脑 · %1 · %2").arg(shortcuts.actionLabel(shortcuts.conflict.otherAction)).arg(Bindings.caption(shortcuts.conflict.key))
+                text: shortcuts.conflict.otherAction ? qsTr("此电脑 · %1 · %2").arg(shortcuts.actionLabel(shortcuts.conflict.otherAction)).arg(Bindings.shortcutName(shortcuts.conflict.key))
                       : qsTr("控制配置 · %1").arg(shortcuts.conflict.profile || "")
             }
             ScrollView {
@@ -197,8 +197,8 @@ ColumnLayout {
                 Accessible.name: qsTr("替代按键")
                 Layout.fillWidth: true
                 model: shortcuts.conflict.freeKeys || []
-                displayText: Bindings.caption(currentText)
-                delegate: ItemDelegate { required property string modelData; width: replacement.width; text: Bindings.caption(modelData) }
+                displayText: Bindings.shortcutName(currentText)
+                delegate: ItemDelegate { required property string modelData; width: replacement.width; text: Bindings.shortcutName(modelData) }
             }
             Flow {
                 Layout.fillWidth: true

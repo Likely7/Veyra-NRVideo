@@ -16707,6 +16707,19 @@
    "ru": "Мелкий"
   },
   {
+   "zh": "小键盘 %1",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "數字鍵盤 %1",
+   "en": "Numpad %1",
+   "ja": "テンキー %1",
+   "ko": "숫자 키패드 %1",
+   "es": "Teclado numérico %1",
+   "fr": "Pavé numérique %1",
+   "de": "Ziffernblock %1",
+   "pt-BR": "Teclado numérico %1",
+   "ru": "Цифровая клавиатура %1"
+  },
+  {
    "zh": "尚无导出任务",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "尚無匯出任務",

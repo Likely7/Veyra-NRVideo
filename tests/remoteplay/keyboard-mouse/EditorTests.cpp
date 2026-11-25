@@ -32,6 +32,7 @@ class Setup : public QObject {
     int submissions_ = 0;
     bool allowGrab_ = true;
     std::shared_ptr<KeyboardMouse> session_;
+    veyra::remoteplay::PhysicalControllerGate physicalGate_;
     std::unique_ptr<Ps5KeyboardSettings> settings_;
 #ifdef VEYRA_TEST_CONSOLE
     std::unique_ptr<veyra::source::RemotePlaySessionSource> route_;
@@ -76,7 +77,9 @@ public slots:
         // Exercise the real filter and translator. The test window does not register
         // devices or clip the desktop cursor.
         settings_ = std::make_unique<Ps5KeyboardSettings>(directory_.path(), preset(),
-            [this] { return session_; }, [this](HWND, bool on) { return !on || allowGrab_; });
+            [this] { return session_; },
+            [this](bool pause) { physicalGate_.setPaused(pause, session_); },
+            [this](HWND, bool on) { return !on || allowGrab_; });
         engine->addImportPath(QStringLiteral(VEYRA_TEST_QML));
         veyra::ui::i18n::apply("en");
         engine->setUiLanguage("en");
@@ -130,12 +133,12 @@ public slots:
     bool sentNeutral() { return sentSince(-1, [](const auto& s) { return s == ControllerState{}; }); }
 #endif
     bool reloadCopy(QString selected, int dpi) {
-        Ps5KeyboardSettings reopened(directory_.path(), preset(), [] { return nullptr; });
+        Ps5KeyboardSettings reopened(directory_.path(), preset(), [] { return nullptr; }, [](bool) {});
         return reopened.selected() == selected && reopened.dpi() == dpi && reopened.profile() == settings_->profile();
     }
     QUrl exportUrl() { return QUrl::fromLocalFile(directory_.filePath("roundtrip.json")); }
     bool reloadShortcuts(const QString& overlay, const QString& control) {
-        Ps5KeyboardSettings reopened(directory_.path(), preset(), [] { return nullptr; });
+        Ps5KeyboardSettings reopened(directory_.path(), preset(), [] { return nullptr; }, [](bool) {});
         return reopened.overlayKey() == overlay && reopened.controlKey() == control
             && reopened.showShortcutHints() == settings_->showShortcutHints();
     }
@@ -197,13 +200,7 @@ public slots:
     void physicalCross() {
         ControllerState state;
         state.buttons = ControllerState::Cross;
-#ifdef VEYRA_TEST_CONSOLE
-        if (route_) {
-            route_->controller(state);
-            return;
-        }
-#endif
-        session_->physical(state);
+        physicalGate_.submit(session_, state);
     }
     int submissions() { std::lock_guard lock(mutex_); return submissions_; }
     bool triangleDown() { std::lock_guard lock(mutex_); return (last_.buttons & ControllerState::Triangle) != 0; }

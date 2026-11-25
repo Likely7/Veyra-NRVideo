@@ -38,9 +38,7 @@ Pane {
     property bool baseEdit: false
     property int viewMode: 2
     readonly property var rows: Bindings.records(doc,scene)
-    readonly property var mouseMotion: Bindings.mouseMotion(doc,scene)
-    readonly property var displayedRows: mouseMotion ? [mouseMotion].concat(rows) : rows
-    readonly property var chosen: displayedRows.find(r => r.spec === selectedSpec)
+    readonly property var chosen: rows.find(r => r.spec === selectedSpec)
     readonly property var selectedGestures: chosen ? rows.filter(row => row.key === chosen.key) : []
     function shortcutSituation(key) {
         return Object.keys(doc.context_hotkeys || {}).find(context => doc.context_hotkeys[context] === key) || ""
@@ -93,11 +91,11 @@ Pane {
         baseEdit = false
         listening = false
         const row = chosen && chosen.controls.includes(control)
-            ? chosen : displayedRows.find(binding => binding.controls.includes(control))
+            ? chosen : rows.find(binding => binding.controls.includes(control))
         selectedSpec = row ? row.spec : ""
     }
     function destination(key) {
-        if(!chosen || !key || key===chosen.key || !scopeRows.some(r=>r.spec===selectedSpec && r.action===chosen.action))return
+        if(!chosen || chosen.fixed || !key || key===chosen.key || !scopeRows.some(r=>r.spec===selectedSpec && r.action===chosen.action))return
         pending=key
         if(!baseEdit && !occupied.length)applyMove("replace")
     }
@@ -223,7 +221,7 @@ Pane {
                                 objectName:"view-"+mode
                                 onClicked:{
                                     page.viewMode=mode
-                                    page.filterControl=(mode===1 && page.chosen) ? page.chosen.controls[0] : ""
+                                    page.filterControl=(mode===1 && page.chosen) ? (page.chosen.controls[0] || "") : ""
                                     page.pending=""
                                     if (mode === 2) {
                                         if (page.Window.window) page.Window.window.requestActivate()
@@ -238,7 +236,7 @@ Pane {
                         Layout.minimumWidth: 0
                         Layout.topMargin: 4
                         profile: page.doc
-                        rows: page.displayedRows
+                        rows: page.rows
                         selectedSpec: page.selectedSpec
                         onInputSelected: key => page.selectInput(key)
                         onInputFocused: key => {
@@ -251,7 +249,7 @@ Pane {
                     Ps5ControllerDiagram {
                         visible: page.viewMode === 1
                         Layout.fillWidth: true
-                        rows: page.displayedRows
+                        rows: page.rows
                         viewportHeight: scroll.height
                         selectedControl: page.filterControl
                         unassigned: qsTr("未分配")
@@ -277,7 +275,7 @@ Pane {
                         }
                         Repeater {
                             id: matches
-                            model:page.viewMode===0?[]:page.displayedRows.filter(r=>page.viewMode===1 ? r.controls.includes(page.filterControl) :
+                            model:page.viewMode===0?[]:page.rows.filter(r=>page.viewMode===1 ? r.controls.includes(page.filterControl) :
                                     [r.input,r.title,r.output].join(" ").toLowerCase().includes(search.text.toLowerCase()))
                             Ps5EditorButton {
                                 id: resultRow
@@ -285,7 +283,7 @@ Pane {
                                 quiet: true
                                 required property var modelData
                                 objectName:"binding-"+modelData.spec
-                                text:[modelData.input,modelData.title,modelData.output].join("   ·   ")
+                                text:[modelData.input,modelData.title,modelData.output].filter(Boolean).join("   ·   ")
                                 Accessible.name: text
                                 contentItem: RowLayout {
                                     spacing: 12
@@ -398,7 +396,7 @@ Pane {
                                 Caption {
                                     id: shortcut
                                     width: Math.min(implicitWidth, parent.width)
-                                    text: line.heading ? qsTr("快捷键") : Bindings.keycap(line.hotkey) || "—"
+                                    text: line.heading ? qsTr("快捷键") : Bindings.shortcutName(line.hotkey) || "—"
                                     readonly property bool isKey: !line.heading && !!line.hotkey
                                     leftPadding: isKey ? 8 : 0
                                     rightPadding: leftPadding
@@ -539,7 +537,7 @@ Pane {
                 Caption { text: qsTr("已选输入"); color:Theme.t2; font.pixelSize:12 }
                 Caption {
                     objectName:"selected-binding";Layout.fillWidth:true; font.pixelSize:page.compact ? 15 : 18; font.weight:Font.DemiBold
-                    text:page.chosen ? [page.chosen.input,page.chosen.shortTitle,page.chosen.output].join("   →   ")
+                    text:page.chosen ? [page.chosen.input,page.chosen.shortTitle,page.chosen.output].filter(Boolean).join("   →   ")
                                      : page.selectedShortcut ? [Bindings.caption(page.selectedSpec),
                                                                Bindings.situationName(page.doc, page.selectedShortcut)].join("   →   ")
                                      : [page.filterControl ? Bindings.controllerName(page.filterControl) : Bindings.caption(page.selectedSpec),

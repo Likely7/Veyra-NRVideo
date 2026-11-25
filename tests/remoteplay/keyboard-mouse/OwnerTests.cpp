@@ -53,6 +53,122 @@ auto walking = [](const ControllerState& state){return state.leftY < 0 && !state
 auto driving = [](const ControllerState& state){return !state.leftY && state.r2 == 255;};
 auto neutral = [](const ControllerState& state){return state == ControllerState{};};
 
+void testHandshake(bool captureCard, const std::string& profile) {
+    RemotePlaySessionSource source;
+    require(console.connect(source, captureCard, false, true), "could not start handshake");
+    auto events = *console.events;
+    auto pending = console.feedback;
+    require(source.sessionSnapshot().state == SessionState::Connecting && !source.keyboardMouse(),
+            "capture was available during handshake");
+    require(!pending->start(profile, 1600, "on_foot").empty(), "pending mapper accepted input");
+    events.loginPinRequired();
+    source.loginPin("0000");
+    require(source.sessionSnapshot().state == SessionState::LoginPinRequired && !source.keyboardMouse(),
+            "login PIN exposed capture before console acceptance");
+    ControllerState pad;
+    pad.inputActive = true;
+    pad.buttons = ControllerState::PS;
+    source.controller(pad);
+    require(console.mark() == 0, "sender ran before the console connected");
+    console.connected = true;
+    events.connected();
+    require(source.keyboardMouse() == pending, "connected event did not publish the input handle");
+
+    // Keep the owner inside submit so the disconnect check cannot rely on its next poll.
+    console.stallSender();
+    console.connected = false;
+    events.failed(2004);
+    require(!source.keyboardMouse() && !pending->start(profile, 1600, "on_foot").empty(),
+            "disconnected input handle still accepted capture");
+    console.resumeSender();
+    source.close();
+
+    require(console.connect(source, captureCard, false, true), "could not start a replacement connection");
+    events.connected();
+    require(!source.keyboardMouse(), "late connected event published a replacement mapper");
+    console.connected = true;
+    console.events->connected();
+    require(source.keyboardMouse() && source.keyboardMouse() != pending &&
+            !pending->start(profile, 1600, "on_foot").empty(),
+            "replacement connection revived a stale input handle");
+}
+
+void testPausedReplacement(bool captureCard) {
+    RemotePlaySessionSource source;
+    PhysicalControllerGate gate;
+    ControllerState pad;
+    pad.inputActive = true;
+    pad.buttons = ControllerState::Cross;
+    const auto cross = [&](const auto& state) { return state == pad; };
+    connect(source, captureCard);
+    size_t cursor = console.mark();
+    gate.submit(source.keyboardMouse(), pad);
+    console.expect(cursor, cross, "initial physical input did not reach console");
+    gate.setPaused(true, source.keyboardMouse());
+    console.expect(cursor, neutral, "editor did not release the physical controller");
+    source.close();
+
+    require(console.connect(source, !captureCard, false, true), "could not replace paused connection");
+    gate.submit(source.keyboardMouse(), pad);
+    console.connected = true;
+    console.events->connected();
+    console.stallSender();
+    cursor = console.mark();
+    gate.submit(source.keyboardMouse(), pad);
+    console.resumeSender();
+    require(neutral(console.expect(cursor, [](const auto&) { return true; }, "replacement sender was idle")),
+            "physical input reached the replacement connection during editing");
+    gate.setPaused(false, source.keyboardMouse());
+    gate.submit(source.keyboardMouse(), pad);
+    console.expect(cursor, cross, "leaving the editor did not restore physical input");
+}
+
+void testAutomaticRetry(const std::string& profile) {
+    RemotePlaySessionSource source;
+    require(console.connect(source, true, false, true), "could not start automatic retry fixture");
+    auto firstEvents = *console.events;
+    console.connected = true;
+    firstEvents.connected();
+    auto firstInput = source.keyboardMouse();
+    require(bool(firstInput), "first control connection was unavailable");
+    PhysicalControllerGate gate;
+    gate.setPaused(true, firstInput);
+    console.videoCallbacks = 1; // A keepalive enables recovery on this control-only route.
+    size_t cursor = console.mark();
+    const auto deadline = std::chrono::steady_clock::now() + 1s;
+    while (!source.rates().received && std::chrono::steady_clock::now() < deadline)
+        console.expect(cursor, neutral, "owner stopped during the keepalive");
+    require(source.rates().received == 1, "owner missed keepalive before outage");
+    console.connected = false;
+    firstEvents.failed(2004);
+    {
+        std::unique_lock lock(console.mutex);
+        require(console.changed.wait_for(lock, 4s, [&] { return console.feedback != firstInput; }),
+                "owner did not reconnect after the outage");
+    }
+    firstEvents.connected();
+    require(!source.keyboardMouse() && !firstInput->start(profile, 1600, "on_foot").empty(),
+            "old attempt re-enabled capture during retry handshake");
+    console.events->loginPinRequired();
+    require(!source.keyboardMouse(), "retry PIN exposed capture");
+    console.connected = true;
+    console.events->connected();
+    console.stallSender();
+    auto replacement = source.keyboardMouse();
+    require(replacement && replacement != firstInput, "connected retry did not publish its own mapper");
+    ControllerState pad;
+    pad.inputActive = true;
+    pad.buttons = ControllerState::PS;
+    gate.submit(replacement, pad);
+    cursor = console.mark();
+    console.resumeSender();
+    require(neutral(console.expect(cursor, [](const auto&) { return true; }, "retry owner stopped")),
+            "physical input escaped during automatic retry");
+    gate.setPaused(false, replacement);
+    gate.submit(replacement, pad);
+    console.expect(cursor, [&](const auto& state) { return state == pad; }, "physical pad failed after retry");
+}
+
 void testOwnership(bool captureCard, const std::string& profile) {
     RemotePlaySessionSource source;
     connect(source, captureCard);
@@ -115,9 +231,10 @@ void testOwnership(bool captureCard, const std::string& profile) {
     console.expect(cursor, [&](auto& s){return s == pad;}, "physical handoff failed");
     input->key(0x11, true);
     require(!input->active(), "foreground change restarted capture");
-    input->pausePhysical(true);
+    PhysicalControllerGate physicalGate;
+    physicalGate.setPaused(true, input);
     cursor = console.mark();
-    source.controller(pad);
+    physicalGate.submit(input, pad);
     console.expect(cursor, neutral, "settings did not pause physical input");
     std::this_thread::sleep_for(30ms);
     {
@@ -125,7 +242,7 @@ void testOwnership(bool captureCard, const std::string& profile) {
         for (size_t i = cursor; i < console.sent.size(); ++i)
             require(neutral(console.sent[i]), "editor submitted gameplay");
     }
-    input->pausePhysical(false);
+    physicalGate.setPaused(false, input);
     require(input->start(profile,1600,"driving").empty(), "explicit resume failed");
     input->key(0x11,true);
     console.expect(cursor, driving, "resumed W did not operate throttle");
@@ -305,6 +422,9 @@ int main(int argc, char** argv) try {
     for (bool captureCard : {false, true}) {
         if (test == "all" || test == "ownership") {
             testFeedbackConnection(captureCard);
+            testHandshake(captureCard,profile);
+            testPausedReplacement(captureCard);
+            if (captureCard) testAutomaticRetry(profile);
             testViewOnly(captureCard);
             testOwnership(captureCard,profile);
             testOverflow(captureCard,profile);

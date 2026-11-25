@@ -34,6 +34,7 @@ class Ps5KeyboardSettings final : public QObject, private moonlight::InputSink {
 public:
     using Session=std::shared_ptr<remoteplay::KeyboardMouse>;
     Ps5KeyboardSettings(QString directory, QString presetPath, std::function<Session()> provider,
+                        std::function<void(bool)> pausePhysical,
                         WindowInputCapture::MouseGrab mouseGrab = {});
     ~Ps5KeyboardSettings() override;
     QVariantMap profile() const;
@@ -84,7 +85,7 @@ private:
     bool validate(const QByteArray& json);
     void refresh();
     void refreshSession(const Session& session);
-    bool localKey(uint32_t scan, bool extended, bool down, bool repeat) override;
+    bool localKeyPressed(uint32_t scan, bool extended) override;
     void key(uint32_t vk,uint32_t scan,bool extended,bool down) override;
     void mouseMove(int dx,int dy) override;
     void mouseButton(int button,bool down) override;
@@ -95,6 +96,7 @@ private:
     QVariantMap shortcutConflict_;
     bool pendingEditedCopy_ = false;
     std::function<Session()> provider_;
+    std::function<void(bool)> pausePhysical_;
     std::weak_ptr<remoteplay::KeyboardMouse> connection_;
     Session playing_;
     QStringList playingContexts_;
