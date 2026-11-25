@@ -3,6 +3,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/Log.h"
 #include "veyra/engine/PresetStore.h"
+#include "veyra/media/NetworkScheme.h"
 
 #include <windows.h>
 
@@ -231,14 +232,30 @@ bool PlayerUiFacade::importLegacyStores() {
     return true;
 }
 
+namespace {
+std::wstring recentLabel(const std::wstring& path) {
+    const auto slash = path.find_last_of(L"\\/");
+    std::wstring label = slash == std::wstring::npos ? path : path.substr(slash + 1);
+    if (media::networkMediaInput(path)) {
+        const auto query = label.find(L'?');
+        if (query != std::wstring::npos) label.erase(query);
+        const auto fragment = label.find(L'#');
+        if (fragment != std::wstring::npos) label.erase(fragment);
+        if (label.empty()) label = path;
+    }
+    return label;
+}
+bool recentTargetPresent(const std::wstring& path) {
+    return media::networkMediaInput(path) || std::filesystem::exists(path);
+}
+}
 void PlayerUiFacade::noteRecentFile(const std::wstring& path) {
     if (path.empty()) return;
     recent_.erase(std::remove_if(recent_.begin(), recent_.end(),
         [&](const RecentEntry& e) { return e.path == path; }), recent_.end());
     RecentEntry entry;
     entry.path = path;
-    const auto slash = path.find_last_of(L"\\/");
-    entry.label = slash == std::wstring::npos ? path : path.substr(slash + 1);
+    entry.label = recentLabel(path);
     entry.exists = true;
     recent_.insert(recent_.begin(), std::move(entry));
     if (recent_.size() > 8) recent_.resize(8);
@@ -246,7 +263,7 @@ void PlayerUiFacade::noteRecentFile(const std::wstring& path) {
 }
 
 void PlayerUiFacade::refreshRecentFiles() {
-    for (auto& entry : recent_) entry.exists = std::filesystem::exists(entry.path);
+    for (auto& entry : recent_) entry.exists = recentTargetPresent(entry.path);
 }
 
 bool PlayerUiFacade::clearRecentFiles() {
@@ -319,7 +336,7 @@ bool PlayerUiFacade::loadPreferences() {
         entry.path = wide(path);
         entry.label = wide(label);
         if (entry.path.empty()) continue;
-        entry.exists = std::filesystem::exists(entry.path);
+        entry.exists = recentTargetPresent(entry.path);
         recent.push_back(std::move(entry));
     }
     CaptureSession session;

@@ -47,6 +47,9 @@ public:
     bool advanceAfterEnd();
     Q_INVOKABLE void addPaths(const QStringList& paths);
     Q_INVOKABLE void addUrls(const QList<QUrl>& urls);
+    // A played network address. Stored and reopened as that URL. Local scans,
+    // suffix checks, and next/auto-advance still walk files only.
+    Q_INVOKABLE bool addNetworkSource(const QString& url);
     Q_INVOKABLE QString pathAt(int row) const;
     Q_INVOKABLE int indexOfPath(const QString& path) const;
     Q_INVOKABLE bool play(int row);

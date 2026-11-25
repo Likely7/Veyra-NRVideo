@@ -123,6 +123,42 @@ int main(int argc, char** argv) {
     { PlaylistModel closing; closing.addPaths({folder}); } // joins without use-after-free callbacks
     QCoreApplication::processEvents();
     check(!model.move(-1, 1) && !model.remove(9000) && !model.play(-1), "invalid selections safely rejected");
+    {
+        const QString url = QStringLiteral("https://cdn.example.com/show/movie.mp4?token=1");
+        const QString hls = QStringLiteral("https://example.com/live/index.m3u8");
+        check(PlaylistModel::normalizedPath(url) == url, "a network URL is not rewritten as a local path");
+        check(!PlaylistModel::supported(hls), "an extension outside the file set stays unsupported");
+        PlaylistModel net(root + "/network-playlist.json");
+        QString requested;
+        QObject::connect(&net, &PlaylistModel::playRequested, [&](const QString& path) { requested = path; });
+        check(!net.addNetworkSource(root + "/other/extra.mp4"), "a local file is not stored as a network source");
+        check(net.addNetworkSource(url) && net.count() == 1, "a played URL is stored once");
+        check(net.addNetworkSource(url) && net.count() == 1, "the same URL is not duplicated");
+        check(net.data(net.index(0), PlaylistModel::NameRole).toString() == "movie.mp4", "URL row name drops the query");
+        check(net.data(net.index(0), PlaylistModel::PathRole).toString() == url, "URL row keeps the address punctuation");
+        check(net.play(0) && requested == url, "selecting the URL reopens that address");
+        check(net.addNetworkSource(hls) && net.count() == 2, "a playable URL need not use a local suffix");
+        check(net.save(), "URL playlist saved");
+        PlaylistModel restored(root + "/network-playlist.json");
+        check(restored.count() == 2 && restored.pathAt(0) == url && restored.pathAt(1) == hls, "URL playlist reloads the same addresses");
+        make(root + "/netseq/a.mp4", 10, time);
+        make(root + "/netseq/b.mp4", 12, time + 1);
+        PlaylistModel seq(root + "/netseq.json");
+        seq.addPaths({root + "/netseq"});
+        check(wait([&] { return !seq.busy(); }) && seq.count() == 2, "local pair imported beside the URL cases");
+        const QString first = seq.pathAt(0), second = seq.pathAt(1);
+        check(seq.addNetworkSource(url), "URL joins an existing local list");
+        check(seq.move(seq.indexOfPath(url), 1), "URL can sit between local files");
+        check(seq.pathAt(0) == first && seq.pathAt(2) == second, "local files keep their order around the URL");
+        seq.setPlayback(first, "ended");
+        requested.clear();
+        QObject::connect(&seq, &PlaylistModel::playRequested, [&](const QString& path) { requested = path; });
+        check(seq.advanceAfterEnd() && PlaylistModel::normalizedPath(requested) == second, "auto-advance stays on the next local file");
+        requested.clear();
+        check(seq.play(1) && requested == url, "the URL between local files is still directly playable");
+        seq.addPaths({url});
+        check(wait([&] { return !seq.busy(); }) && seq.count() == 3, "a folder scan does not ingest a URL as a file");
+    }
     std::printf("%s playlist assertions=%d importReturnMs=%lld scan321Ms=%lld uiHeartbeats=%d\n",
                 failures ? "FAIL" : "PASS", assertions, submitted, scanned, heartbeats);
     return failures ? 1 : 0;

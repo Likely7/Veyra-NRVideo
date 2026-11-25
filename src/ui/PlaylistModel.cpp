@@ -1,4 +1,5 @@
 #include "veyra/ui/PlaylistModel.h"
+#include "veyra/media/NetworkScheme.h"
 #include <QCollator>
 #include <QDateTime>
 #include <QDir>
@@ -26,6 +27,18 @@
 namespace veyra::ui {
 namespace {
 constexpr int maxEntries = 10000, maxJobs = 16, maxVisited = 100000;
+bool networkPath(const QString& path) {
+    return media::networkMediaInput(path.toStdWString());
+}
+QString networkName(const QString& path) {
+    const auto slash = path.lastIndexOf(QLatin1Char('/'));
+    auto name = slash >= 0 ? path.mid(slash + 1) : path;
+    const auto query = name.indexOf(QLatin1Char('?'));
+    if (query >= 0) name.truncate(query);
+    const auto fragment = name.indexOf(QLatin1Char('#'));
+    if (fragment >= 0) name.truncate(fragment);
+    return name.isEmpty() ? path : name;
+}
 bool reparse(const QFileInfo& info) {
     if (info.isSymLink()) return true;
 #ifdef Q_OS_WIN
@@ -53,10 +66,13 @@ PlaylistModel::~PlaylistModel() {
 }
 int PlaylistModel::rowCount(const QModelIndex& parent) const { return parent.isValid() ? 0 : count(); }
 QString PlaylistModel::normalizedPath(const QString& path) {
+    const auto trimmed = path.trimmed();
+    if (networkPath(trimmed)) return trimmed;
     return QDir::cleanPath(QFileInfo(QDir::fromNativeSeparators(path)).absoluteFilePath());
 }
 QString PlaylistModel::keyOf(const QString& path) {
     auto value = normalizedPath(path);
+    if (networkPath(value)) return value;
 #ifdef Q_OS_WIN
     value = value.toCaseFolded();
 #endif
@@ -74,7 +90,7 @@ QVariant PlaylistModel::data(const QModelIndex& index, int role) const {
     const auto& entry = entries_[index.row()];
     switch (role) {
     case Qt::DisplayRole: case NameRole: return entry.name;
-    case PathRole: return QDir::toNativeSeparators(entry.path);
+    case PathRole: return networkPath(entry.path) ? entry.path : QDir::toNativeSeparators(entry.path);
     case SizeRole: return QLocale().formattedDataSize(entry.size);
     case ModifiedRole: return QDateTime::fromMSecsSinceEpoch(entry.modified).toString("yyyy-MM-dd HH:mm");
     case CurrentRole: return entry.key == currentKey_;
@@ -108,6 +124,25 @@ void PlaylistModel::setAutoAdvance(bool enabled) {
 void PlaylistModel::setStatus(QString text) {
     if (status_ == text) return;
     status_ = std::move(text); emit statusChanged();
+}
+bool PlaylistModel::addNetworkSource(const QString& url) {
+    const auto path = url.trimmed();
+    if (!networkPath(path)) return false;
+    const auto key = keyOf(path);
+    if (keys_.contains(key)) return true;
+    if (count() >= maxEntries) {
+        emit error(tr("列表或导入任务已达上限，请稍后重试或移除部分条目"));
+        return false;
+    }
+    beginInsertRows({}, count(), count());
+    keys_.insert(key);
+    entries_.push_back({path, networkName(path), key, 0, 0});
+    endInsertRows();
+    emit countChanged();
+    emit currentChanged();
+    if (sort_ != Manual) sortBy(sort_);
+    saveTimer_.start();
+    return true;
 }
 void PlaylistModel::addUrls(const QList<QUrl>& urls) {
     QStringList paths;
@@ -160,6 +195,7 @@ PlaylistModel::Result PlaylistModel::scan(const Job& job, std::stop_token stop) 
     };
     for (const auto& path : job.paths) {
         if (cancelled()) return {};
+        if (networkPath(path)) { ++result.skipped; continue; }
         const QFileInfo info(path);
         if (info.isDir() && !reparse(info)) directories << path;
         else file(info);
@@ -228,6 +264,7 @@ int PlaylistModel::indexOfPath(const QString& path) const {
 bool PlaylistModel::play(int row) {
     if (row < 0 || row >= count()) return false;
     const QString path = entries_[row].path;
+    if (networkPath(path)) { emit playRequested(path); return true; }
     if (!QFileInfo(path).isFile()) { emit error(tr("文件不存在或已移动：%1").arg(QDir::toNativeSeparators(path))); return false; }
     emit playRequested(QDir::toNativeSeparators(path)); return true;
 }
@@ -311,11 +348,12 @@ void PlaylistModel::load() {
     autoAdvance_ = object.value("autoAdvance").toBool(true);
     for (const auto& value : object.value("entries").toArray()) {
         const auto entry = value.toObject(); const auto path = entry.value("path").toString();
-        if (path.isEmpty() || !QDir::isAbsolutePath(path) || !supported(path)) continue;
+        const bool network = networkPath(path);
+        if (path.isEmpty() || (!network && (!QDir::isAbsolutePath(path) || !supported(path)))) continue;
         const auto normalized = normalizedPath(path), key = keyOf(normalized);
         if (keys_.contains(key)) continue;
         keys_.insert(key);
-        entries_.push_back({normalized, QFileInfo(normalized).fileName(), key,
+        entries_.push_back({normalized, network ? networkName(normalized) : QFileInfo(normalized).fileName(), key,
                            std::max(qint64(0), entry.value("size").toInteger()),
                            entry.value("modified").toInteger()});
         if (count() >= maxEntries) break;

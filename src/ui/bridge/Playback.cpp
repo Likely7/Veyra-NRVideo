@@ -217,7 +217,8 @@ void QmlPlayerBridge::tickPlaylist() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (!impl_->playlistSession) return;
-    if (!impl_->liveKind.isEmpty() || utf8Of(impl_->sourceLabel) != impl_->playlistPath) {
+    const bool network = impl_->liveKind == QLatin1String("url");
+    if ((!network && !impl_->liveKind.isEmpty()) || utf8Of(impl_->sourceLabel) != impl_->playlistPath) {
         impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return;
     }
     if (s.sessionId != impl_->playlistSession) return; // Ignore old session snapshots after open.
@@ -232,6 +233,10 @@ void QmlPlayerBridge::tickPlaylist() {
     default: break;
     }
     impl_->playlist->setPlayback(impl_->playlistPath, state);
+    // A network source can show its row, but ending it must not start the next
+    // local file. playFrom also skips non-files, so a URL between files does
+    // not change which local file auto-advance opens.
+    if (network) return;
     if (s.transport != T::Ended || s.failed || s.image || impl_->openingSource ||
         impl_->playlistCompletedSession == s.sessionId) return;
     impl_->playlistCompletedSession = s.sessionId;
@@ -255,7 +260,11 @@ void QmlPlayerBridge::openPath(const QString& path) {
     if (QFileInfo(path).isDir()) {
         impl_->playlist->addPaths({path}); emit playlistRequested(); return;
     }
+    // URL playback used to skip both lists: the playlist only understood files,
+    // and a URL failed the recent-file existence check. Keep file scans on the
+    // file path. A network address is stored as itself.
     if (!network&&PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
+    else if (network && !impl_->playlist->containsPath(path)) impl_->playlist->addNetworkSource(path);
     impl_->playlistPath = path;
     impl_->playlist->setPlayback(path, QStringLiteral("opening"));
     rememberPosition(true);
@@ -275,7 +284,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     ++impl_->thumbnailGeneration;
     emit thumbnailSourceChanged(network?QString():path);
     emit thumbnailGenerationChanged();
-    if(!network)impl_->facade.noteRecentFile(wide);
+    impl_->facade.noteRecentFile(wide);
     emit recentFilesChanged();
     // Switch to a page with a video area, then settle the native window's
     // geometry, and only then open. The presenter samples the window's client
@@ -297,7 +306,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
-    impl_->playlistSession = network?0:impl_->openingSessionId;
+    impl_->playlistSession = impl_->openingSessionId;
     impl_->resumeSession = 0;
     if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();

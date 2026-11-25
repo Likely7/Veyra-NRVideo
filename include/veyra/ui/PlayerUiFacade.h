@@ -73,8 +73,8 @@ public:
     };
     void noteRecentFile(const std::wstring& path);
     const std::vector<RecentEntry>& recentFiles() const { return recent_; }
-    // Drops entries whose file no longer exists (checked lazily, not on every
-    // poll: the list is short and the check is a filesystem call).
+    // Marks local files that are gone. A network URL is not a filesystem path
+    // and stays available (checked lazily, not on every poll).
     void refreshRecentFiles();
     // Persists the empty list, keeping existing entries if saving fails.
     bool clearRecentFiles();

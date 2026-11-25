@@ -80,9 +80,23 @@ int main(int argc, char** argv) {
         veyra::ui::PlayerUiFacade history(playbackEngine, dataDirectory);
         history.noteRecentFile(playing.toStdWString());
         history.noteRecentFile((path + "/missing.mp4").toStdWString());
+        history.noteRecentFile(L"https://cdn.example.com/show/movie.mp4?token=1");
     }
     veyra::ui::QmlPlayerBridge historyBridge(playbackEngine, dataDirectory);
-    check(historyBridge.recentFiles().size() == 2, "saved history loads existing and missing files");
+    check(historyBridge.recentFiles().size() == 3, "saved history loads local files and a network URL");
+    int presentLocal = 0, missingLocal = 0, networkUrls = 0;
+    for (const auto& value : historyBridge.recentFiles()) {
+        const auto item = value.toMap();
+        const auto itemPath = item.value(QStringLiteral("path")).toString();
+        if (itemPath.startsWith(QStringLiteral("https://"))) {
+            ++networkUrls;
+            check(item.value(QStringLiteral("exists")).toBool(), "a network URL is not shown as a deleted local file");
+            check(item.value(QStringLiteral("label")).toString() == QStringLiteral("movie.mp4"), "network recent label is the media name");
+            check(itemPath.contains(QStringLiteral("token=1")), "network recent entry keeps the address needed to reopen it");
+        } else if (item.value(QStringLiteral("exists")).toBool()) ++presentLocal;
+        else ++missingLocal;
+    }
+    check(networkUrls == 1 && presentLocal == 1 && missingLocal == 1, "a missing local file is still marked missing");
     model.setPlayback(playing, "playing");
     QString requested;
     QObject::connect(&model, &veyra::ui::PlaylistModel::playRequested, [&](const auto& selected) { requested = selected; });
