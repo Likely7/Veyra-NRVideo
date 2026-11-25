@@ -239,6 +239,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString recordingDirectory READ recordingDirectory NOTIFY preferencesChanged)
     Q_PROPERTY(int recordingBitrateMbps READ recordingBitrateMbps NOTIFY preferencesChanged)
     Q_PROPERTY(int recordingFpsLimit READ recordingFpsLimit NOTIFY preferencesChanged)
+    Q_PROPERTY(int recordingCfrFps READ recordingCfrFps CONSTANT)
     Q_PROPERTY(bool recordingHevc READ recordingHevc NOTIFY preferencesChanged)
     Q_PROPERTY(bool recordingAudio READ recordingAudio NOTIFY preferencesChanged)
     // Microphone (#101): mixed into the recorded sound, or on a track of its own.
@@ -1441,6 +1442,7 @@ public:
     QString recordingDirectory() const;
     int recordingBitrateMbps() const;
     int recordingFpsLimit() const;
+    int recordingCfrFps() const;
     bool recordingHevc() const;
     bool recordingAudio() const;
     bool recordingMicrophone() const;

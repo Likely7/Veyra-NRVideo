@@ -19658,6 +19658,19 @@
    "ru": "Частота кадров записи"
   },
   {
+   "zh": "录制帧率模式",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄製幀率模式",
+   "en": "Recording frame rate mode",
+   "ja": "録画フレームレートモード",
+   "ko": "녹화 프레임률 모드",
+   "es": "Modo de frecuencia de grabación",
+   "fr": "Mode de fréquence d’enregistrement",
+   "de": "Bildratenmodus für Aufnahmen",
+   "pt-BR": "Modo de taxa de quadros da gravação",
+   "ru": "Режим частоты кадров записи"
+  },
+  {
    "zh": "录制描述符分配失败",
    "src": "src/engine/LiveRecorder.cpp",
    "zh-TW": "錄製描述元分配失敗",
@@ -20033,6 +20046,32 @@
    "de": "Gesamtstärke der Änderung",
    "pt-BR": "Intensidade geral da mudança",
    "ru": "Общая сила изменений"
+  },
+  {
+   "zh": "恒定帧率供剪辑软件使用。缺帧时重复上一画面；下次录制生效。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "恆定幀率供剪輯軟體使用。缺幀時重複上一畫面；下次錄製生效。",
+   "en": "CFR is for video editors. Missing frames repeat the previous picture. Applies to the next recording.",
+   "ja": "固定フレームレートは動画編集ソフト向けです。欠けたフレームは直前の映像で補います。次の録画から適用されます。",
+   "ko": "CFR은 편집 프로그램용입니다. 새 프레임이 없으면 직전 화면을 반복합니다. 다음 녹화부터 적용됩니다.",
+   "es": "CFR es para editores de vídeo. Si falta un cuadro, se repite el anterior. Se aplica en la próxima grabación.",
+   "fr": "Le CFR est destiné aux logiciels de montage. Les images manquantes reprennent la précédente. Prend effet au prochain enregistrement.",
+   "de": "CFR ist für Schnittprogramme vorgesehen. Bei fehlenden Bildern wird das vorherige wiederholt. Gilt ab der nächsten Aufnahme.",
+   "pt-BR": "CFR é para programas de edição. Se faltar um quadro, o anterior é repetido. Vale a partir da próxima gravação.",
+   "ru": "CFR предназначен для видеоредакторов. Вместо пропущенного кадра повторяется предыдущий. Действует со следующей записи."
+  },
+  {
+   "zh": "恒定帧率录制无法赶上录制时钟，已停止",
+   "src": "src/engine/LiveRecorder.cpp",
+   "zh-TW": "恆定幀率錄製無法趕上錄製時鐘，已停止",
+   "en": "Constant frame rate recording stopped because the encoder fell behind.",
+   "ja": "エンコードが間に合わなかったため固定フレームレート録画を停止しました。",
+   "ko": "인코딩이 지연되어 고정 프레임률 녹화를 중지했습니다.",
+   "es": "La grabación a frecuencia constante se detuvo porque el codificador se retrasó.",
+   "fr": "L’enregistrement à fréquence constante s’est arrêté en raison d’un retard de l’encodeur.",
+   "de": "Die Aufnahme mit konstanter Bildrate wurde aufgrund eines Encoder-Rückstands gestoppt.",
+   "pt-BR": "A gravação com taxa constante parou porque o codificador se atrasou.",
+   "ru": "Запись с постоянной частотой остановлена из-за отставания кодировщика."
   },
   {
    "zh": "恒定质量：大小取决于画面，开始后按已写入量推算",

@@ -683,6 +683,7 @@ VPage {
                             }
                         }
                         VRow {
+                            visible: veyra.preferences.recordCfr !== true
                             label: qsTr("录制帧率")
                             hint: qsTr("跟随显示可录到补帧后的画面；限速则按该帧率抽帧")
                             VSeg {
@@ -722,6 +723,17 @@ VPage {
                                 options: [{ id: "0", label: "H.264" }, { id: "1", label: "HEVC" }]
                                 current: veyra.recordingHevc ? "1" : "0"
                                 onPicked: id => veyra.setPreference("recordHevc", id === "1")
+                            }
+                        }
+                        VRow {
+                            label: qsTr("录制帧率模式")
+                            hint: qsTr("恒定帧率供剪辑软件使用。缺帧时重复上一画面；下次录制生效。")
+                            VSeg {
+                                objectName: "set-reccfr"
+                                options: [{ id: "vfr", label: "VFR" },
+                                          { id: "cfr", label: "CFR · " + veyra.recordingCfrFps + " fps" }]
+                                current: veyra.preferences.recordCfr === true ? "cfr" : "vfr"
+                                onPicked: id => veyra.setPreference("recordCfr", id === "cfr")
                             }
                         }
                         VRow {
