@@ -608,9 +608,18 @@ void StreamInputCapture::cancelLearning() {
 }
 void StreamInputCapture::applyDefaults(bool drivingLayout) {
     releasePs5();
-    if (drivingLayout) mapper_.resetDrivingBindings();
-    else {
-        mapper_.resetBindings();
+    if (drivingLayout) {
+        if (gtaVProfile_) {
+            mapper_.resetGtaVBindings(true);
+            if (mapper_.tuning().unlock == 0) mapper_.setBinding(Mapper::Options, 0, true);
+        }
+        else mapper_.resetDrivingBindings();
+    } else {
+        if (gtaVProfile_) {
+            mapper_.resetGtaVBindings(false);
+            if (mapper_.tuning().unlock == 0) mapper_.setBinding(Mapper::Options, 0);
+        }
+        else mapper_.resetBindings();
         mapper_.setToggleMask(0);
     }
     const auto toggle = mapper_.driveKey();
@@ -685,6 +694,7 @@ QString StreamInputCapture::unlockLabel()const{
 }
 void StreamInputCapture::readProfile(const QJsonObject& json){
     mapper_.setTuning(readTuning(json.value("tuning").toObject().toVariantMap()));
+    gtaVProfile_ = json.value("gtaVProfile").toBool();
     mapper_.setDriveKey(0);
     mapper_.resetBindings();
     const auto readBindings = [this](const QJsonArray& bindings, bool driving) {
@@ -715,6 +725,7 @@ QJsonObject StreamInputCapture::activeProfile()const{
     for (const int key : mapper_.bindings()) walking.append(key);
     for (const int key : mapper_.bindings(true)) driving.append(key);
     return {{"bindings",walking},{"drivingBindings",driving},{"drivingLayoutVersion",2},{"driveKey",mapper_.driveKey()},
+            {"gtaVProfile",gtaVProfile_},
             {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}
@@ -730,6 +741,29 @@ void StreamInputCapture::selectProfile(const QString& value,bool create){
     if(!create)readProfile(profiles_.value(name).toObject());
     selectDriving(false);
     save();emit mappingChanged();
+}
+void StreamInputCapture::useGtaVProfile() {
+    const auto name = QStringLiteral("GTA V");
+    if (profiles_.contains(name)) {
+        selectProfile(name, false);
+        return;
+    }
+    if (profiles_.size() >= 16) return;
+    releasePs5();
+    profiles_[profile_] = activeProfile();
+    profile_ = name;
+    gtaVProfile_ = true;
+    auto tuning = mapper_.tuning();
+    tuning.unlock = 3; // F1 leaves Escape available for the game's pause menu.
+    mapper_.setTuning(tuning);
+    mapper_.setDriveKey(0);
+    mapper_.resetGtaVBindings(false);
+    mapper_.resetGtaVBindings(true);
+    mapper_.setToggleMask(0);
+    mapper_.setDriveKey(VK_F6);
+    selectDriving(false);
+    save();
+    emit mappingChanged();
 }
 void StreamInputCapture::useTemplate(int index){
     if(index<0||index>2)return;

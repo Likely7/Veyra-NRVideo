@@ -50,6 +50,7 @@ Item {
             tuning = next
         }
         property string profile:"Default"
+        function useGtaVProfile() { profile = "GTA V" }
         property var profiles:["Default"]
         property string unlockLabel:"Esc"
         function toggleAction(id){return false}
@@ -57,11 +58,20 @@ Item {
         function preview(on) { previewing = on }
         function releasePs5() { learning = -1; previewing = false }
     }
+    QtObject {
+        id: picture
+        property bool hasSource: true
+        property string sourceKind: "capture"
+        property bool ps5ResponsePacing: false
+        property int fgMultiplier: 2
+        property int contentRate: 4
+    }
     Ps5MappingDialog {
         id: editor
         dialogHost: host
         instantTransition: true
         input: mapper
+        videoControls: picture
     }
     TestCase {
         name: "Ps5KeyboardMappingEditor"
@@ -70,6 +80,8 @@ Item {
             fixture.width = 980
             host.dialog = "ps5-mapping"
             mapper.driving=false
+            picture.sourceKind="file"
+            mapper.profile="Default"
             editor.selected=-1
             editor.showList = Qt.binding(() => editor.bodyWidth > 0 && editor.bodyWidth < 500)
             editor.editDriving=false
@@ -152,6 +164,18 @@ Item {
             compare(editor.selected,0)
             compare(mapper.learning,0)
             editor.showList = false
+        }
+        function test_gta_profile_and_responsive_video() {
+            findChild(editor, "ps5-gta-v-profile").clicked()
+            compare(mapper.profile, "GTA V")
+            const action = findChild(editor, "ps5-responsive-video")
+            verify(!action.visible)
+            picture.sourceKind = "capture"
+            verify(action.visible && action.enabled)
+            mouseClick(action)
+            compare(picture.ps5ResponsePacing, true)
+            compare(picture.fgMultiplier, 2)
+            compare(picture.contentRate, 4)
         }
         function test_narrow_geometry() {
             fixture.width = 453

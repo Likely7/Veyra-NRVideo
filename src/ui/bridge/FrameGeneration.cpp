@@ -179,6 +179,16 @@ void QmlPlayerBridge::setFgStrict(bool value) {
 
 // 低延迟队列 is the presentation queue (1.4.4 PresentationSettings.enabled),
 // not EnhancementSettings::lowLatency, which means "NR before SR".
+bool QmlPlayerBridge::ps5ResponsePacing() const {
+    return impl_->prefBool("ps5ResponsePacing", false);
+}
+void QmlPlayerBridge::setPs5ResponsePacing(bool value) {
+    if (ps5ResponsePacing() == value) return;
+    impl_->prefs[QStringLiteral("ps5ResponsePacing")] = value;
+    impl_->engine.setPs5ResponsePacing(value);
+    if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "PS5 response pacing not saved");
+    emit settingsChanged();
+}
 bool QmlPlayerBridge::fgLowQueue() const { return impl_->presentation.enabled; }
 void QmlPlayerBridge::setFgLowQueue(bool value) {
     if (impl_->presentation.enabled == value) return;

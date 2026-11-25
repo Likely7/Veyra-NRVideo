@@ -87,6 +87,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QVariantList fgMultiplierChoices READ fgMultiplierChoices NOTIFY fgChoicesChanged)
     Q_PROPERTY(bool fgStrict READ fgStrict WRITE setFgStrict NOTIFY settingsChanged)
     Q_PROPERTY(bool fgLowQueue READ fgLowQueue WRITE setFgLowQueue NOTIFY settingsChanged)
+    Q_PROPERTY(bool ps5ResponsePacing READ ps5ResponsePacing WRITE setPs5ResponsePacing NOTIFY settingsChanged)
     Q_PROPERTY(int nvidiaLowLatency READ nvidiaLowLatency WRITE setNvidiaLowLatency NOTIFY presentationChanged)
     Q_PROPERTY(bool nvidiaLowLatencyAvailable READ nvidiaLowLatencyAvailable NOTIFY effectCapabilitiesChanged)
 
@@ -730,6 +731,8 @@ public:
     void setNvidiaLowLatency(int value);
     bool nvidiaLowLatencyAvailable() const;
     void setFgLowQueue(bool value);
+    bool ps5ResponsePacing() const;
+    void setPs5ResponsePacing(bool value);
 
     double colorExposure() const;
     void setColorExposure(double v);

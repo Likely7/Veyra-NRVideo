@@ -2089,3 +2089,13 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 手柄图和列表点中按键时立即录入，同一次点击保留粉色高亮，点另一按键改录该按键。原生鼠标事件允许这些界面控件正常接收左键，其他可录制位置仍支持绑定鼠标左键。已去掉第二次点击「改键」，保留取消与清除。
 
 `tmp/ps5-brake-rebind-20261125/build-local.py` 使用原构建目录增量编译，构建日志在 `logs/codex-ps5-input-subtitle-20261125/build-20261125-101239`。输入边界覆盖 S 按住和松开、步行 L2 的切换设定，以及换档时释放输入。实际播放器读入上一版布局，确认 L2 为 S、R1 恢复 R、用户的自定义驾驶叉键 K 保留。Windows 原生点击探针因前台归其它窗口而没有发送点击。界面回归单独验证手柄图、键位列表和取消。九种翻译缺失和占位符错误为 0。运行目录为 `tests/ps5-brake-rebind-20261125`，日志目录为 `logs/ps5-brake-rebind-20261125`。修正版已用独立档案对着映射页启动。
+
+## 2026-11-25 PS5 镜头响应与 GTA V 键位
+
+用户反馈鼠标先动、画面镜头后动。复查 `E:/项目/Veyra/logs/ps5-drive-aim-20261125/manual-player.log`，该轮走采集卡画面加 PS5 仅控制，协商约 60 FPS。仅选采集回调帧率至少 58 的日志窗口。revision 2 保留输入帧率且关闭补帧，11 个窗口的回调到 Present 返回的 P95 中位数为 6.04 ms。revision 4 保留原始帧率并开启补帧，10 个窗口为 17.13 ms。revision 10 启用 60→30 兼容和补帧，256 个窗口为 24.26 ms，其中调度等待 P95 的中位数为 19.23 ms。日志范围从软件收到采集帧起算，未包含主机输入处理、HDMI/采集卡内部、显示器扫描和最终像素发光。
+
+键鼠面板添加「跟手优先」。它保留图及内容帧率选项，给 PS5 串流启用以观测 GPU 就绪为基准的补帧相位。在自动显示同步的采集与 PS5 串流中，最初单独把原帧提前最多 4 ms 的尝试使 1% 低帧落到 47.8。最终改为根据 GPU 就绪分位数提前整组，保持组内间隔。已经拒绝或过期的组可立即送出增强原帧。显示端补帧提供器、固定垂直同步和自定义输出限速沿用既有呈现。GTA V 独立档案复用既有用户鼠标参数，按 Rockstar PC/PlayStation 控制文档映射常用步行和车辆键。F 上下车，F6 独立切换布局，ESC 送游戏菜单，F1 解锁软件。驾驶为 W/R2、S/L2、A/D 和空格/R1。已存在的用户档案保留，首次添加 GTA V 后可以继续改键。参考 [Rockstar PC 操作说明](https://www.rockstargames.com/newswire/article/51974aa3a724o2/rockstar-game-tips-tailoring-your-settings-and-controls-in) 和 [PS5 镜头切换说明](https://support.rockstargames.com/articles/4SLMPiZCrVUVcuL71dBD29/changing-camera-perspective-to-1st-person-in-gtav)。
+
+构建使用 `tmp/ps5-gta-response-20261125/build-local.py`，主程序、实时呈现探针及调度测试的最终构建日志为 `logs/codex-ps5-input-subtitle-20261125/build-20261125-103447`。`fg-ab.py` 以 RTX 5070、1080p60 合成源模拟采集卡，用相同 NR、VFG 2×、60→30 和自动显示同步比较。取稳定后同长 8 秒窗口，两组各 240 张增强原帧，实际送出 240／239 张生成帧。输入帧抵达后到 Present 返回的增强原帧 P95 从 29.334 降至 26.543 ms，生成帧从 12.860 降至 10.310 ms，送帧间隔 P95 为 17.270／17.286 ms，输出 1% 低帧为 56.61／55.94。原始数据在 `reports/ps5-gta-response-20261125/fg-ab.csv`，两次逐帧日志分别在同任务 logs 的 normal 与 responsive。测试值未包含真实鼠标到屏幕的完整链路。
+
+`verify.py input quick`、现有实时调度与时钟单元测试以及九语言提取通过。Qt Quick 265 项通过，输入回归核对 GTA V 两套布局和 135 项 Moonlight 检查。测试版在 `tests/ps5-gta-response-20261125`，使用独立档案。完整 PS5 串流与采集实卡手感待用户验证。

@@ -27,7 +27,7 @@ public:
         selected_=std::min(std::max(selected_,need),limit);
         return selected_;
     }
-    int64_t select(int64_t now,int64_t legacyDelay,int64_t interval,unsigned multiplier,int64_t samplingAllowance=0){
+    int64_t select(int64_t now,int64_t legacyDelay,int64_t interval,unsigned multiplier,int64_t samplingAllowance=0,bool responsive=false){
         std::vector<int64_t> current;
         for(const auto& sample:samples_)if(sample.time>=now-10000000)current.push_back(sample.delay);
         if(interval<=0||multiplier<2){selected_=0;return legacyDelay;}
@@ -45,7 +45,15 @@ public:
         // later sample can move readiness past a deadline on the continuous
         // content clock, and FG whose own interpolation does not fit in the
         // legacy delay (FgRecoveryBudget::phaseAllowance).
-        const auto target=std::min(limit,current[index]+kMargin100ns);
+        const auto p95=current[index];
+        auto target=std::min(limit,p95+kMargin100ns);
+        if(responsive){
+            // Release the whole pair earlier, keeping its interpolation spacing.
+            // The 90th percentile can recover at most 2 ms from the learned 95th.
+            const auto earlier=(current.size()*90+99)/100-1;
+            std::nth_element(current.begin(),current.begin()+earlier,current.begin()+index+1);
+            target=std::min(limit,std::max(current[earlier],p95-20000));
+        }
         const auto step=std::min<int64_t>(5000,interval/multiplier/8);
         selected_=std::clamp(selected_?selected_-step:legacyDelay,target,limit);
         return selected_;

@@ -234,6 +234,10 @@ int main(){
     check(phase.select(10000008,420000,333333,4)==415000,"phase advance is gradual rather than a burst");
     for(int i=0;i<32;++i)phase.select(10000100+i,420000,333333,4);
     check(phase.select(10000200,420000,333333,4)==375000,"4X keeps measured readiness plus jitter margin");
+    veyra::engine::LivePairLatency responsive;
+    for(int i=0;i<20;++i)responsive.observe(10000000+i,i<18?330000:390000);
+    for(int i=0;i<25;++i)responsive.select(10000100+i,420000,333333,2,0,true);
+    check(responsive.select(10000200,420000,333333,2,0,true)==370000,"responsive pulls the entire phase by at most 2 ms from the 95th percentile");
     phase.observe(10000201,415000); // legacy 420000 minus the 0.5 ms margin
     check(phase.select(10000202,420000,333333,4)==420000,"slow batch immediately restores conservative phase");
     check(phase.select(21000000,420000,333333,4)==420000,"stale readiness retains the previous phase");

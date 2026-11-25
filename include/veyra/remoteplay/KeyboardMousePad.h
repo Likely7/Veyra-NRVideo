@@ -33,6 +33,17 @@ public:
         0x0D, 0x08, 'T', 'P', MouseRight, MouseLeft, 'W', 'S', 'A', 'D', 0, 0, 0, 0
     };
 
+    // GTA V's common keyboard actions mapped to the standard PS controller.
+    // F6 changes layout separately from F, so a failed entry cannot latch the layout.
+    static constexpr std::array<int, ActionCount> GtaVWalking = {
+        0xA0, 'R', 0x20, 'F', 0x25, 'E', 0x26, 0x28, 0x09, 'Q', 0xA2, 'C',
+        0x1B, 0x08, 'V', 'P', MouseRight, MouseLeft, 'W', 'S', 'A', 'D'
+    };
+    static constexpr std::array<int, ActionCount> GtaVDriving = {
+        0x0D, 'R', 'X', 'F', 0x25, 'H', 0x26, 0x28, MouseLeft, 0x20, 'E', 'C',
+        0x1B, 0x08, 'V', 'P', 'S', 'W', 0, 0, 'A', 'D'
+    };
+
     using Tuning = MouseStick::Tuning;
 
     static int modifier(int key) {
@@ -86,6 +97,11 @@ public:
         return true;
     }
     void resetBindings() { bindings_ = Defaults; reset(); }
+    void resetGtaVBindings(bool driving) {
+        if (driving) drivingBindings_ = GtaVDriving;
+        else bindings_ = GtaVWalking;
+        reset();
+    }
     void setTuning(Tuning t) { tuning_ = t; }
 
     int modifiers() const {

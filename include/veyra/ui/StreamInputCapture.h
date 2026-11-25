@@ -63,6 +63,7 @@ public:
     QString unlockLabel() const;
     Q_INVOKABLE void selectProfile(const QString& name,bool create=false);
     Q_INVOKABLE void useTemplate(int index);
+    Q_INVOKABLE void useGtaVProfile();
     Q_INVOKABLE bool toggleAction(int action) const;
     Q_INVOKABLE void setToggleAction(int action,bool on);
     int learning() const { return learning_; }
@@ -136,6 +137,7 @@ private:
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
+    bool gtaVProfile_ = false;
     QPointer<QObject> learningControls_;
     int learning_ = -1;
     int learningModifier_ = 0;

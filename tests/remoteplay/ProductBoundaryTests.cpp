@@ -268,6 +268,23 @@ static bool calibratedMouse(){
     for(int i=0;i<10;++i){dpi800.move(1,0,origin+i*1000);dpi1600.move(1,0,origin+i*1000);}
     const auto a800=dpi800.sample(origin+9000).first,a1600=dpi1600.sample(origin+9000).first;
     if(a1600<=0||std::abs(a800-2*a1600)>2)return false;
+    Pad gta;
+    auto gtaTuning=gta.tuning();
+    gtaTuning.unlock=3;
+    gta.setTuning(gtaTuning);
+    gta.resetGtaVBindings(false);
+    gta.resetGtaVBindings(true);
+    if(gta.bindings()[Pad::Triangle]!='F' || gta.bindings()[Pad::Square]!=32 ||
+       gta.bindings()[Pad::L1]!=9 || gta.bindings()[Pad::Touchpad]!='V' ||
+       gta.bindings()[Pad::Options]!=27 || gta.bindings()[Pad::Cross]!=0xA0 || gta.bindings()[Pad::Right]!='E') return false;
+    gta.digital('F',true);
+    if(!(gta.state().buttons&remoteplay::ControllerState::Triangle) || gta.driving()) return false;
+    gta.digital(0x75,true);
+    gta.digital('W',true);gta.digital('S',true);gta.digital(32,true);gta.digital('E',true);
+    const auto vehicle=gta.state();
+    if(vehicle.r2!=255 || vehicle.l2!=255 || !(vehicle.buttons&remoteplay::ControllerState::R1) ||
+       !(vehicle.buttons&remoteplay::ControllerState::L3) || (vehicle.buttons&remoteplay::ControllerState::Triangle)) return false;
+    std::cout<<"PS5_GTA_V on-foot and driving layout pass\n";
     std::cout<<"PS5_DRIVING_LAYOUT independent, W/R2 S/L2, steering ramp, held keys neutral, 100 counts/s min/max="
              <<minAxis<<'/'<<maxAxis<<" DPI raw equal axes="<<a800<<'/'<<a1600<<"\n";
     std::cout<<"PS5_GESTURES ADS delay, smoothed reversal, toggle, four swipe origins, Escape, gyro, menu and bounded carry pass\n";
