@@ -49,10 +49,16 @@ public:
     Q_INVOKABLE bool set(const QString& key, const QVariant& value);
 
     QString lastLabel() const { return lastName_; }
+    std::shared_ptr<xbox::Account> account() const { return account_; }
+    bool signedIn() const { return account_ && account_->signedIn(); }
+    QString selectedId() const { return !signedIn() ? QString() : (selected_.isEmpty() ? lastId_ : selected_); }
+    QString selectedName() const;
 
 signals:
     void changed();
     void started();
+    void selectionChanged(const QString& id, const QString& name);
+    void signedOut();
     void notice(const QString& text, bool isError);
 
 private:

@@ -24,11 +24,12 @@ VPage {
         capturingKey = ""
         if (settingsBodyScroll) settingsBodyScroll.contentY = settingsBodyScroll.originY
         if (section === "ps5") veyra.ps5Load()
+        if (section === "xbox" && veyra.xbox) veyra.xbox.load()
         // M32: the section's groups redraw one after another (pages-b.js
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
-    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
+    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, xbox: secXbox, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
     readonly property var portableUpdate: veyra.updates.portable
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
@@ -50,6 +51,7 @@ VPage {
         { id: "perf",   label: qsTr("性能"), icon: "gauge" },
         { id: "compat", label: qsTr("兼容"), icon: "monitor" },
         { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad" },
+        { id: "xbox",  label: qsTr("Xbox 串流"), icon: "gamepad" },
         { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
         { id: "about", label: qsTr("关于"), icon: "info" },
@@ -1248,6 +1250,197 @@ VPage {
                             anchors.fill: parent
                             anchors.margins: 10
                             text: qsTr("这里和 PS5 串流窗口是同一份设置，下次连接时一起保存到该主机的配对档案。")
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSmall
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                // --- Xbox 串流 -------------------------------------------
+                ColumnLayout {
+                    id: secXbox
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "xbox"
+                    readonly property var xb: veyra.xbox || null
+                    readonly property var xst: xb ? xb.state : ({})
+                    readonly property var xc: veyra.xboxControl || ({})
+                    readonly property bool xcAvailable: xc.available === true
+                    readonly property bool xcOn: xcAvailable && xc.enabled === true
+                    readonly property var consoleOptions: {
+                        const list = xb && xb.consoles ? xb.consoles : []
+                        return list.map(c => ({ id: c.id, label: c.name + (c.power ? " · " + c.power : "") }))
+                    }
+                    readonly property string xcTag: {
+                        switch (xc.state) {
+                        case "starting": return qsTr("连接中")
+                        case "connected": return qsTr("已连接")
+                        case "recovering": return qsTr("重连中")
+                        case "failed": return qsTr("已停止")
+                        case "nosignin": return qsTr("未登录")
+                        case "noconsole": return qsTr("未选主机")
+                        default: return qsTr("未连接")
+                        }
+                    }
+                    readonly property string xcStatus: {
+                        switch (xc.state) {
+                        case "starting": return xc.message || qsTr("正在连接 Xbox…")
+                        case "connected": return xc.keepaliveFps >= 0
+                            ? qsTr("Xbox 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）").arg(xc.keepaliveFps)
+                            : qsTr("Xbox 手柄控制已连接")
+                        case "recovering": case "failed": case "nosignin": case "noconsole": return xc.message || ""
+                        default: return qsTr("采集卡连上后自动连接 Xbox")
+                        }
+                    }
+                    VH1 { text: qsTr("Xbox 串流") }
+                    Text {
+                        text: qsTr("微软账号登录凭据加密保存在用户数据目录。")
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsBody
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                    }
+                    VGroup {
+                        visible: !secXbox.xb
+                        VRow {
+                            label: qsTr("Xbox 串流")
+                            hint: qsTr("此版本未包含 Xbox 串流组件。")
+                        }
+                    }
+                    VGroup {
+                        visible: !!secXbox.xb
+                        VRow {
+                            label: qsTr("Xbox 账号")
+                            hint: secXbox.xst.signedIn
+                                  ? ((secXbox.xst.selectedName || secXbox.xst.lastLabel || "").length > 0
+                                     ? qsTr("已登录") + " · " + (secXbox.xst.selectedName || secXbox.xst.lastLabel)
+                                     : qsTr("已登录"))
+                                  : qsTr("未登录，点击管理进行微软账号设备码登录")
+                            VButton { objectName: "set-xbox-manage"; text: qsTr("管理"); onClicked: veyra.openXboxDialog() }
+                        }
+                        VRow {
+                            visible: !!secXbox.xst.signedIn
+                            label: qsTr("目标主机")
+                            hint: secXbox.consoleOptions.length > 0
+                                  ? qsTr("用于 Xbox 串流与后台手柄控制；切换后会记住这台主机")
+                                  : ((secXbox.xst.selectedName || secXbox.xst.lastLabel || "").length > 0
+                                     ? qsTr("已记住主机：%1；点刷新获取最新在线状态").arg(secXbox.xst.selectedName || secXbox.xst.lastLabel)
+                                     : qsTr("还没有选择主机，点击刷新或在「Xbox 串流」里选择"))
+                            RowLayout {
+                                spacing: 6
+                                VSelect {
+                                    objectName: "set-xbox-console"
+                                    visible: secXbox.consoleOptions.length > 0
+                                    implicitWidth: 200
+                                    value: {
+                                        const cur = secXbox.consoleOptions.find(o => o.id === (secXbox.xst.selected || ""))
+                                        return cur ? cur.label : qsTr("请选择")
+                                    }
+                                    options: secXbox.consoleOptions
+                                    onPicked: id => secXbox.xb.select(id)
+                                }
+                                VSpinner { visible: secXbox.xst.busy === true; Layout.alignment: Qt.AlignVCenter }
+                                VButton {
+                                    objectName: "set-xbox-refresh"
+                                    text: qsTr("刷新")
+                                    ghost: true
+                                    enabled: !secXbox.xst.busy
+                                    onClicked: secXbox.xb.refresh()
+                                }
+                            }
+                        }
+                        VRow {
+                            label: qsTr("手柄")
+                            hint: qsTr("把电脑手柄当作主机上的手柄")
+                            VSwitch {
+                                objectName: "set-xbox-gamepad"
+                                checked: secXbox.xst.gamepad !== false
+                                onToggled: checked => secXbox.xb.set("gamepad", checked)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("软件视频解码")
+                            hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
+                            VSwitch {
+                                objectName: "set-xbox-software-decode"
+                                checked: secXbox.xst.softwareDecode === true
+                                onToggled: checked => secXbox.xb.set("softwareDecode", checked)
+                            }
+                        }
+                    }
+                    VGroup {
+                        visible: secXbox.xcAvailable
+                        VRow {
+                            label: qsTr("采集卡时后台串流（仅传手柄）")
+                            hint: qsTr("画面和声音来自采集卡，手柄经 Xbox 远程游玩发给主机（保活画面收到即丢弃），适合采集卡补帧或再串流给掌机")
+                            VSwitch {
+                                objectName: "set-xbox-control-enabled"
+                                checked: secXbox.xcOn
+                                onToggled: checked => veyra.xboxControlSet("enabled", checked)
+                            }
+                        }
+                        VRow {
+                            visible: secXbox.xcOn
+                            label: qsTr("后台也转发手柄")
+                            hint: qsTr("再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 Xbox")
+                            VSwitch {
+                                objectName: "set-xbox-control-background"
+                                checked: secXbox.xc.background === true
+                                onToggled: checked => veyra.xboxControlSet("background", checked)
+                            }
+                        }
+                        VRow {
+                            visible: secXbox.xcOn
+                            label: qsTr("后台连接状态")
+                            hint: secXbox.xcStatus
+                            RowLayout {
+                                spacing: 6
+                                VTag {
+                                    objectName: "set-xbox-control-state"
+                                    Layout.alignment: Qt.AlignVCenter
+                                    text: secXbox.xcTag
+                                    kind: secXbox.xc.state === "connected" ? "ok"
+                                        : secXbox.xc.state === "failed" || secXbox.xc.state === "nosignin" || secXbox.xc.state === "noconsole" ? "warn" : ""
+                                }
+                                VButton {
+                                    objectName: "set-xbox-control-restart"
+                                    visible: secXbox.xc.state === "failed"
+                                    text: qsTr("重连")
+                                    ghost: true
+                                    onClicked: veyra.xboxControlRestart()
+                                }
+                            }
+                        }
+                        VRow {
+                            visible: secXbox.xcOn
+                            label: qsTr("当前手柄")
+                            hint: qsTr("谁按键就用谁：本机手柄、串流软件建的虚拟手柄都可以")
+                            Text {
+                                objectName: "set-xbox-control-pad"
+                                text: (secXbox.xc.pad || "").length > 0
+                                      ? secXbox.xc.pad
+                                      : (secXbox.xc.state === "off" || secXbox.xc.state === "nosignin" || secXbox.xc.state === "noconsole" ? "—" : qsTr("未检测到手柄"))
+                                color: Theme.t1
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsSmall
+                                elide: Text.ElideRight
+                                width: Math.min(implicitWidth, 260)
+                            }
+                        }
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: xboxNote.implicitHeight + 20
+                        radius: 9
+                        color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
+                        Text {
+                            id: xboxNote
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            text: qsTr("这里和「Xbox 串流」「采集卡」窗口共用同一份设置与账号。Xbox 同一时间只允许一个远程游玩连接；后台串流时主机仍会发送保活画面，本机收到即丢弃且不解码。")
                             color: Theme.t2
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSmall

@@ -31,6 +31,7 @@ struct XboxConnectDesc {
     std::string serverId;            // the console
     std::string consoleName;         // for messages
     bool gamepad = true;             // forward the PC's controller
+    bool controlOnly = false;        // capture card owns video & audio; drop keepalive media on receipt
     bool softwareDecode = false;    // opt-in workaround for silent hardware decode corruption
     std::string locale = "zh-CN";
     std::shared_ptr<ID3D12Device> decodeDevice;
@@ -70,6 +71,7 @@ public:
     void close() noexcept override;
 
     XboxStats stats() const;
+    bool alive() const;
     uint64_t skipped() const;
     uint64_t unitsReceived() const;
     sink::CaptureAudioState audioState() const { return audio_.snapshot(); }

@@ -143,6 +143,15 @@ DialogLayer {
             hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
             VSwitch { objectName: "xbox-software-decode"; checked: xbDialog.st.softwareDecode === true; onToggled: checked => xbDialog.xb.set("softwareDecode", checked) }
         }
+        // The mirror of standalone Xbox streaming: only the pad via Remote Play, picture from a capture card.
+        VRow {
+            visible: !!veyra.xboxControl && veyra.xboxControl.available === true
+            label: qsTr("画面用采集卡")
+            hint: veyra.xboxControl && veyra.xboxControl.enabled === true
+                  ? qsTr("已在「采集卡」或设置里打开 Xbox 手柄控制：连接采集卡时只用远程游玩传手柄")
+                  : qsTr("Xbox 的 HDMI 接了采集卡时，可以只用远程游玩传手柄、画面用采集卡原画（可 4K/HDR），也方便再串流给掌机")
+            VButton { objectName: "xbox-open-capture"; text: qsTr("采集卡设置"); ghost: true; onClicked: dialogHost.open("capture") }
+        }
     }
     DialogNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? qsTr("处理中 · ") : "") + (xbDialog.st.status || "") }
 }

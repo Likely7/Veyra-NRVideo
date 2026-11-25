@@ -286,9 +286,24 @@ public:
 #endif
 #ifdef VEYRA_ENABLE_XBOX
     void openXbox(HWND, source::XboxConnectDesc, PlayerOptions);
-    // Pad and rumble for the running Xbox session; no-ops when none is streaming.
+    // Pad and rumble for the running Xbox stream, or Xbox 手柄控制 when no Xbox stream runs.
     void xboxController(const remoteplay::ControllerState&);
     remoteplay::ControllerFeedback xboxFeedback();
+    // Xbox 手柄控制 beside a capture card: a controller-only Xbox Remote Play session
+    // (the console's keepalive video and audio are dropped on receipt without decoding).
+    // Start and stop run on a dedicated thread so callers never wait on the console,
+    // and opening any non-capture source or a full Xbox stream stops it first.
+    void startXboxControl(source::XboxConnectDesc);
+    void stopXboxControl();
+    struct XboxControlStatus {
+        bool requested = false;
+        bool starting = false, alive = false, connected = false, recovering = false, failed = false;
+        bool keepaliveReady = false;
+        double keepaliveFps = 0, rttMs = 0;
+        std::wstring message;
+    };
+    XboxControlStatus xboxControlStatus() const;
+    bool xboxControlRequested() const;
 #endif
     void stop();
     sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
@@ -344,6 +359,10 @@ private:
     void controlLoop(std::stop_token);
     void waitRemoteControlIdle();
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    void xboxControlLoop(std::stop_token);
+    void waitXboxControlIdle();
+#endif
     mutable std::mutex mutex_;
     PlayerSnapshot snapshot_;
     PresentationSettings presentation_;
@@ -363,6 +382,17 @@ private:
 #endif
     std::shared_ptr<source::MoonlightSessionSource> activeMoonlight_;
     std::shared_ptr<source::XboxSessionSource> activeXbox_;
+#ifdef VEYRA_ENABLE_XBOX
+    std::shared_ptr<source::XboxSessionSource> controlXbox_; // mutex_; Xbox 手柄控制
+    mutable std::mutex xboxControlMutex_;
+    std::condition_variable_any xboxControlWake_;
+    std::condition_variable xboxControlIdle_;
+    std::optional<std::shared_ptr<source::XboxConnectDesc>> xboxControlPending_; // empty pointer = stop
+    std::shared_ptr<source::XboxSessionSource> xboxControlConnecting_;
+    bool xboxControlBusy_=false,xboxControlStarting_=false,xboxControlRecovering_=false,xboxControlFailed_=false,xboxControlExited_=false;
+    std::wstring xboxControlMessage_;
+    std::jthread xboxControlThread_;
+#endif
     PreviewView previewView_;
     std::wstring savePath_;
     // Live recorder: every session's presenter records into it; it owns its

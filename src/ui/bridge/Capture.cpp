@@ -501,10 +501,13 @@ bool QmlPlayerBridge::startCaptureSession() {
     rememberSource(QStringLiteral("capture"), utf8Of(i.captureVideo[size_t(device)].name));
     i.prefs["captureFormatLabel"] = utf8Of(format->label);
     i.savePrefs();
-    // Started beside the capture open, not after it. A running PS5 stream still
+    // Started beside the capture open, not after it. A running console stream still
     // holds the console's slot until the capture replaces it; the tick starts
-    // PS5 手柄控制 once the capture card is live instead.
+    // 手柄控制 once the capture card is live instead.
     if (i.prefBool("ps5CaptureControl", false) && !i.snapshot.remotePlay) startPs5Control(false);
+#ifdef VEYRA_ENABLE_XBOX
+    if (i.prefBool("xboxCaptureControl", false) && !i.snapshot.xboxActive) startXboxControl(false);
+#endif
     openSourceUri(path, i.captureVideo[size_t(device)].name);
     emit snapshotChanged();
     return true;

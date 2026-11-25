@@ -71,11 +71,60 @@ QObject* QmlPlayerBridge::xboxModel() const {
     return nullptr;
 #endif
 }
+QVariantMap QmlPlayerBridge::xboxControl() const {
+    QVariantMap out = impl_->xboxControlState;
+    if (!out.contains(QStringLiteral("state"))) out[QStringLiteral("state")] = QStringLiteral("off");
+#ifdef VEYRA_ENABLE_XBOX
+    out[QStringLiteral("available")] = true;
+#else
+    out[QStringLiteral("available")] = false;
+#endif
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    out[QStringLiteral("padSupported")] = true;
+#else
+    out[QStringLiteral("padSupported")] = false;
+#endif
+    out[QStringLiteral("enabled")] = impl_->prefBool("xboxCaptureControl", false);
+    out[QStringLiteral("background")] = impl_->prefBool("xboxControlBackground", false);
+    return out;
+}
 void QmlPlayerBridge::openXboxDialog() { emit navigate(QStringLiteral("xbox")); }
 void QmlPlayerBridge::xboxDisconnect() {
 #ifdef VEYRA_ENABLE_XBOX
     if (impl_->snapshot.xboxActive) stopPlayback();
 #endif
+}
+void QmlPlayerBridge::xboxControlSet(const QString& key, const QVariant& value) {
+    static const QHash<QString, QString> keys{{QStringLiteral("enabled"), QStringLiteral("xboxCaptureControl")},
+                                              {QStringLiteral("background"), QStringLiteral("xboxControlBackground")}};
+    if (!keys.contains(key)) return;
+    const bool on = value.toBool();
+    const auto previous = impl_->prefs;
+    const bool disabledPs5 = key == QLatin1String("enabled") && on && impl_->prefBool("ps5CaptureControl", false);
+    impl_->prefs[keys.value(key)] = on;
+    if (disabledPs5) impl_->prefs[QStringLiteral("ps5CaptureControl")] = false;
+    if (!impl_->savePrefs()) {
+        impl_->prefs = previous;
+        emit notice(tr("Xbox 手柄控制设置保存失败"), true);
+        emit xboxControlChanged();
+        return;
+    }
+    veyra::log::info("xbox-control", std::format("ui {}={}", key.toStdString(), on));
+    if (disabledPs5) {
+        stopPs5Control();
+        emit ps5ControlChanged();
+    }
+    if (key == QLatin1String("enabled")) {
+        impl_->xboxControlNoSignIn = false;
+        impl_->xboxControlNoConsole = false;
+        if (!on) stopXboxControl();
+        else if (captureCardLive()) startXboxControl(false);
+        tickXboxControl(true);
+    }
+    emit xboxControlChanged();
+}
+void QmlPlayerBridge::xboxControlRestart() {
+    if (impl_->prefBool("xboxCaptureControl", false) && captureCardLive()) startXboxControl(true);
 }
 
 #ifdef VEYRA_ENABLE_XBOX
@@ -83,6 +132,23 @@ void QmlPlayerBridge::setupXbox() {
     auto& i = *impl_;
     i.xbox = std::make_unique<ui::XboxModel>();
     connect(i.xbox.get(), &ui::XboxModel::notice, this, &QmlPlayerBridge::notice);
+    connect(i.xbox.get(), &ui::XboxModel::selectionChanged, this, [this](const QString& id, const QString&) {
+        if (!id.isEmpty()) impl_->xboxControlNoConsole = false;
+        if (impl_->engine.xboxControlRequested()) startXboxControl(true);
+        tickXboxControl(true);
+    });
+    connect(i.xbox.get(), &ui::XboxModel::signedOut, this, [this] {
+        impl_->xboxControlNoSignIn = false;
+        impl_->xboxControlNoConsole = false;
+        stopXboxControl();
+        tickXboxControl(true);
+    });
+    connect(i.xbox.get(), &ui::XboxModel::changed, this, [this] {
+        auto& j = *impl_;
+        if (j.xbox && j.xbox->signedIn()) j.xboxControlNoSignIn = false;
+        if (j.xbox && !j.xbox->selectedId().isEmpty()) j.xboxControlNoConsole = false;
+        tickXboxControl(true);
+    });
     i.xbox->setLaunchHandler([this](ui::XboxModel::Launch launch) -> bool {
         auto& j = *impl_;
         if (!j.videoWindow) return false;
@@ -144,9 +210,132 @@ void QmlPlayerBridge::tickXbox() {
         i.xboxStatsTicks = 0;
         i.xbox->updateStream(true, s.xbox);
     }
+    tickXboxControl();
+}
+void QmlPlayerBridge::startXboxControl(bool restart) {
+    auto& i = *impl_;
+    if (!i.xbox || !i.xbox->signedIn()) {
+        i.engine.stopXboxControl();
+        if (!i.xboxControlNoSignIn) emit notice(tr("Xbox 手柄控制：还没有登录 Xbox 账号，先在「Xbox 串流」里登录一次"), true);
+        i.xboxControlNoSignIn = true;
+        i.xboxControlNoConsole = false;
+        tickXboxControl(true);
+        return;
+    }
+    const QString consoleId = i.xbox->selectedId();
+    if (consoleId.isEmpty()) {
+        i.engine.stopXboxControl();
+        if (!i.xboxControlNoConsole) emit notice(tr("Xbox 手柄控制：还没有选择 Xbox 主机，先在「Xbox 串流」或设置里选择主机"), true);
+        i.xboxControlNoSignIn = false;
+        i.xboxControlNoConsole = true;
+        tickXboxControl(true);
+        return;
+    }
+    const std::string serverId = consoleId.toStdString();
+    const auto running = i.engine.xboxControlStatus();
+    if (!restart && running.requested && (running.alive || running.starting || running.recovering) && serverId == i.xboxControlConsoleId) {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+        if (!(i.padUsers & Impl::PadXboxControl)) i.acquirePad(Impl::PadXboxControl);
+        if (i.xboxControlTimer && !i.xboxControlTimer->isActive()) i.xboxControlTimer->start(4);
+#endif
+        return;
+    }
+    source::XboxConnectDesc desc;
+    desc.account = i.xbox->account();
+    desc.serverId = serverId;
+    desc.consoleName = i.xbox->selectedName().toStdString();
+    desc.gamepad = true;
+    desc.controlOnly = true;
+    veyra::log::info("xbox-control", std::format("start console={} restart={} background={}", serverId, restart, i.prefBool("xboxControlBackground", false)));
+    i.xboxControlConsoleId = serverId;
+    i.xboxControlNoticed.clear();
+    i.xboxControlNoSignIn = false;
+    i.xboxControlNoConsole = false;
+    i.engine.startXboxControl(std::move(desc));
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    // Polled on the UI thread at 250 Hz, matching the Xbox stream; the session sends on change and every 33 ms.
+    if (!i.acquirePad(Impl::PadXboxControl)) veyra::log::warn("xbox-input", "SDL gamepad initialization failed");
+    if (!i.xboxControlTimer) {
+        i.xboxControlTimer = new QTimer(this);
+        i.xboxControlTimer->setTimerType(Qt::PreciseTimer);
+        connect(i.xboxControlTimer, &QTimer::timeout, this, [this] {
+            auto& j = *impl_;
+            // A full Xbox stream owns the pad with its own timer.
+            if (j.snapshot.xboxActive || !j.engine.xboxControlRequested()) {
+                j.xboxControlTimer->stop();
+                j.releasePad(Impl::PadXboxControl);
+                return;
+            }
+            const bool focused = QGuiApplication::focusWindow() != nullptr || j.prefBool("xboxControlBackground", false);
+            j.engine.xboxController(j.controller.poll(focused));
+            j.controller.feedback(j.engine.xboxFeedback(), focused);
+        });
+    }
+    i.xboxControlTimer->start(4);
+#endif
+    tickXboxControl(true);
+}
+void QmlPlayerBridge::stopXboxControl() {
+    auto& i = *impl_;
+    if (i.xboxControlTimer) i.xboxControlTimer->stop();
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    i.releasePad(Impl::PadXboxControl);
+#endif
+    if (!i.engine.xboxControlRequested()) return;
+    veyra::log::info("xbox-control", "stop");
+    i.engine.stopXboxControl();
+    i.xboxControlConsoleId.clear();
+    tickXboxControl(true);
+}
+void QmlPlayerBridge::tickXboxControl(bool force) {
+    auto& i = *impl_;
+    if (!force && ++i.xboxControlTicks % 15) return; // ~4 Hz from the 60 Hz poll
+    if (!force && !i.xboxControlNoSignIn && !i.xboxControlNoConsole &&
+        i.prefBool("xboxCaptureControl", false) && captureCardLive() && !i.engine.xboxControlRequested())
+        startXboxControl(false);
+    const auto st = i.engine.xboxControlStatus();
+    QString state = QStringLiteral("off");
+    if (i.xboxControlNoSignIn && !st.requested) state = QStringLiteral("nosignin");
+    else if (i.xboxControlNoConsole && !st.requested) state = QStringLiteral("noconsole");
+    else if (st.requested) {
+        state = st.recovering ? QStringLiteral("recovering")
+              : st.alive && st.connected ? QStringLiteral("connected")
+              : st.failed || (!st.alive && !st.starting) ? QStringLiteral("failed")
+              : QStringLiteral("starting");
+    }
+    if (const QString forced = qEnvironmentVariable("VEYRA_TEST_XBOX_CONTROL_STATE"); !forced.isEmpty() && st.requested) state = forced;
+    QVariantMap next;
+    next[QStringLiteral("state")] = state;
+    next[QStringLiteral("message")] = state == QLatin1String("nosignin")
+        ? tr("还没有登录 Xbox 账号，先在「Xbox 串流」里登录一次")
+        : state == QLatin1String("noconsole")
+          ? tr("还没有选择 Xbox 主机，先在「Xbox 串流」或设置里选择主机")
+          : uiText(st.message);
+    next[QStringLiteral("keepaliveFps")] = st.keepaliveReady ? std::round(st.keepaliveFps) : -1.0;
+    next[QStringLiteral("rttMs")] = st.rttMs;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    const auto c = i.controller.capabilities();
+    next[QStringLiteral("pad")] = (i.padUsers & Impl::PadXboxControl) && c.connected ? QString::fromStdString(c.name) : QString();
+#else
+    next[QStringLiteral("pad")] = QString();
+#endif
+    if (next == i.xboxControlState) return;
+    i.xboxControlState = next;
+    if (state != i.xboxControlNoticed) {
+        if (state == QLatin1String("connected")) emit notice(tr("Xbox 手柄控制已连接"), false);
+        else if (state == QLatin1String("failed")) {
+            const QString reason = next.value(QStringLiteral("message")).toString();
+            emit notice(reason.isEmpty() ? tr("Xbox 手柄控制已停止") : reason, true);
+        }
+        if (state == QLatin1String("connected") || state == QLatin1String("failed")) i.xboxControlNoticed = state;
+    }
+    emit xboxControlChanged();
 }
 #else
 void QmlPlayerBridge::tickXbox() {}
+void QmlPlayerBridge::startXboxControl(bool) {}
+void QmlPlayerBridge::stopXboxControl() {}
+void QmlPlayerBridge::tickXboxControl(bool) {}
 #endif
 
 void QmlPlayerBridge::moonlightCapture(bool on) {
@@ -646,9 +835,15 @@ void QmlPlayerBridge::ps5ControlSet(const QString& key, const QVariant& value) {
     if (!keys.contains(key)) return;
     const bool on = value.toBool();
     const auto previous = impl_->prefs;
+    const bool disabledXbox = key == QLatin1String("enabled") && on && impl_->prefBool("xboxCaptureControl", false);
     impl_->prefs[keys.value(key)] = on;
+    if (disabledXbox) impl_->prefs[QStringLiteral("xboxCaptureControl")] = false;
     if (!impl_->savePrefs()) { impl_->prefs = previous; emit notice(tr("PS5 手柄控制设置保存失败"), true); emit ps5ControlChanged(); return; }
     veyra::log::info("remoteplay-control", std::format("ui {}={}", key.toStdString(), on));
+    if (disabledXbox) {
+        stopXboxControl();
+        emit xboxControlChanged();
+    }
     if (key == QLatin1String("enabled")) {
         impl_->ps5ControlNoPair = false;
         if (!on) stopPs5Control();

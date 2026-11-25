@@ -114,6 +114,18 @@ EngineController::~EngineController(){
     // The PS5 手柄控制 thread starts closing its session now; joined below.
     controlThread_.request_stop();
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    xboxControlThread_.request_stop();
+    {
+        std::shared_ptr<source::XboxSessionSource> connecting;
+        {std::lock_guard lock(xboxControlMutex_);connecting=xboxControlConnecting_;}
+        if(connecting)connecting->cancel();
+        std::shared_ptr<source::XboxSessionSource> active;
+        {std::lock_guard lock(mutex_);active=controlXbox_;}
+        if(active)active->cancel();
+    }
+    xboxControlWake_.notify_all();
+#endif
     {std::lock_guard lock(mutex_);shutdown_=true;pending_={};stop_=true;}wake_.notify_one();
     if(!worker_.joinable()){watchdog_.reset();return;}
     // Field logs(15): an owner thread blocked inside a driver call never returns,
@@ -142,6 +154,20 @@ EngineController::~EngineController(){
             }
         }
         controlThread_.join();
+    }
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    if(xboxControlThread_.joinable()){
+        const auto closing=Clock::now();
+        {std::unique_lock lock(xboxControlMutex_);
+            while(!xboxControlIdle_.wait_for(lock,std::chrono::milliseconds(100),[&]{return xboxControlExited_;})){
+                if(elapsedMs(closing)<8000.0)continue;
+                veyra::log::error("engine-hang","shutdown: Xbox controller-only session still closing after 8 s; ending the process instead of waiting");
+                Logger::instance().flush();
+                TerminateProcess(GetCurrentProcess(),0);
+            }
+        }
+        xboxControlThread_.join();
     }
 #endif
     // The watchdog callback reads snapshot_ and hangPreviousStatus_. Detach it
@@ -219,6 +245,10 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // PS5 手柄控制 belongs to a capture card source; any other source ends it.
     if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopRemoteControl();
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    // Xbox 手柄控制 belongs to a capture card source; any other source ends it.
+    if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopXboxControl();
+#endif
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
@@ -230,6 +260,9 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc desc,PlayerOptions opts){
     stopRemoteControl();
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
+#endif
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;waitRemoteControlIdle();run(window,L"remoteplay:",opts,request);});
@@ -325,13 +358,207 @@ void EngineController::moonlightReleaseInput(){VEYRA_MOONLIGHT_INPUT(releaseInpu
 #undef VEYRA_MOONLIGHT_INPUT
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-void EngineController::xboxController(const remoteplay::ControllerState& state){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_;}if(x)x->controller(state);}
-remoteplay::ControllerFeedback EngineController::xboxFeedback(){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_;}return x?x->takeFeedback():remoteplay::ControllerFeedback{};}
+// A full Xbox stream (activeXbox_) takes precedence; otherwise Xbox 手柄控制.
+void EngineController::xboxController(const remoteplay::ControllerState& state){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_?activeXbox_:controlXbox_;}if(x)x->controller(state);}
+remoteplay::ControllerFeedback EngineController::xboxFeedback(){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_?activeXbox_:controlXbox_;}return x?x->takeFeedback():remoteplay::ControllerFeedback{};}
+void EngineController::startXboxControl(source::XboxConnectDesc desc){
+    desc.controlOnly=true;desc.gamepad=true;
+    auto request=std::make_shared<source::XboxConnectDesc>(std::move(desc));
+    std::shared_ptr<source::XboxSessionSource> connecting;
+    {std::lock_guard lock(xboxControlMutex_);
+        xboxControlPending_=std::move(request);
+        xboxControlFailed_=false;xboxControlRecovering_=false;xboxControlMessage_.clear();
+        connecting=xboxControlConnecting_;
+        if(!xboxControlThread_.joinable()){xboxControlExited_=false;xboxControlThread_=std::jthread([this](std::stop_token stop){xboxControlLoop(stop);});}
+    }
+    if(connecting)connecting->cancel();
+    xboxControlWake_.notify_all();
+}
+void EngineController::stopXboxControl(){
+    std::shared_ptr<source::XboxSessionSource> connecting,active;
+    {std::lock_guard lock(xboxControlMutex_);
+        if(!xboxControlThread_.joinable())return;
+        xboxControlPending_=std::shared_ptr<source::XboxConnectDesc>{};
+        connecting=xboxControlConnecting_;
+    }
+    {std::lock_guard lock(mutex_);active=controlXbox_;}
+    if(connecting)connecting->cancel();
+    if(active)active->cancel();
+    xboxControlWake_.notify_all();
+}
+void EngineController::xboxControlLoop(std::stop_token stop){
+    auto closeActive=[&]{
+        std::shared_ptr<source::XboxSessionSource> old;
+        {std::lock_guard lock(mutex_);old=std::move(controlXbox_);}
+        if(old){const auto closing=Clock::now();old->close();veyra::log::info("xbox-control",std::format("controller-only session closed in {:.0f} ms",elapsedMs(closing)));}
+    };
+    auto hasPending=[&]{std::lock_guard lock(xboxControlMutex_);return xboxControlPending_.has_value();};
+    std::shared_ptr<source::XboxConnectDesc> activeRequest;
+    xbox::ReconnectBudget budget;
+    uint64_t lastUnits=0;
+    for(;;){
+        std::shared_ptr<source::XboxConnectDesc> request;
+        bool hadRequest=false;
+        {std::unique_lock lock(xboxControlMutex_);
+            const bool watching=activeRequest!=nullptr;
+            if(watching){
+                xboxControlWake_.wait_for(lock,stop,std::chrono::milliseconds(100),[&]{return xboxControlPending_.has_value();});
+            }else{
+                if(!xboxControlWake_.wait(lock,stop,[&]{return xboxControlPending_.has_value();}))break;
+            }
+            if(stop.stop_requested())break;
+            if(xboxControlPending_.has_value()){
+                request=std::move(*xboxControlPending_);xboxControlPending_.reset();hadRequest=true;
+                xboxControlBusy_=true;xboxControlStarting_=bool(request);
+                xboxControlRecovering_=false;xboxControlFailed_=false;xboxControlMessage_.clear();
+            }
+        }
+        if(hadRequest){
+            activeRequest.reset();
+            budget={};lastUnits=0;
+            closeActive();
+            if(request&&!stop.stop_requested()){
+                auto session=std::make_shared<source::XboxSessionSource>();
+                {std::lock_guard lock(xboxControlMutex_);xboxControlConnecting_=session;}
+                const bool ok=session->connect(*request);
+                {std::lock_guard lock(xboxControlMutex_);xboxControlConnecting_.reset();}
+                const auto st=session->stats();
+                veyra::log::info("xbox-control",std::format("controller-only session start ok={} alive={} state={}",ok,session->alive(),int(st.state)));
+                if(ok&&!stop.stop_requested()&&!hasPending()){
+                    {std::lock_guard lock(mutex_);controlXbox_=std::move(session);}
+                    activeRequest=std::move(request);
+                    lastUnits=0;
+                    std::lock_guard lock(xboxControlMutex_);
+                    xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=xboxControlFailed_=false;
+                    xboxControlMessage_.clear();
+                }else if(!stop.stop_requested()&&!hasPending()){
+                    session->close();
+                    std::lock_guard lock(xboxControlMutex_);
+                    xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=false;
+                    xboxControlFailed_=true;
+                    xboxControlMessage_=st.message.empty()?L"Xbox 手柄控制连接失败，请检查主机及网络后重试。":st.message;
+                }else{
+                    session->close();
+                    std::lock_guard lock(xboxControlMutex_);
+                    xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=false;
+                }
+            }else{
+                std::lock_guard lock(xboxControlMutex_);
+                xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=xboxControlFailed_=false;
+                xboxControlMessage_.clear();
+            }
+            xboxControlIdle_.notify_all();
+            continue;
+        }
+        // Watch the active controller-only session for keepalive progress or disconnect.
+        std::shared_ptr<source::XboxSessionSource> live;
+        {std::lock_guard lock(mutex_);live=controlXbox_;}
+        if(!live){activeRequest.reset();continue;}
+        const uint64_t units=live->unitsReceived();
+        if(units>lastUnits){lastUnits=units;budget.decoded(monotonic100ns());}
+        if(live->alive())continue;
+        const auto failure=live->stats();
+        closeActive();
+        if(stop.stop_requested()||hasPending()){activeRequest.reset();continue;}
+        if(failure.reconnectable&&activeRequest){
+            budget.disconnected();
+            bool reconnected=false;
+            std::wstring lastError=failure.message;
+            while(!stop.stop_requested()&&!hasPending()&&budget.take()){
+                const unsigned attempt=budget.attempts();
+                {std::lock_guard lock(xboxControlMutex_);
+                    xboxControlBusy_=true;xboxControlRecovering_=true;xboxControlStarting_=true;xboxControlFailed_=false;
+                    xboxControlMessage_=std::format(L"Xbox 手柄控制中断，正在重新连接（{}/3）…",attempt);}
+                veyra::log::warn("xbox-control",std::format("disconnected reason={} reconnect attempt={}/3",failure.disconnectReason,attempt));
+                {std::unique_lock lock(xboxControlMutex_);
+                    xboxControlWake_.wait_for(lock,stop,std::chrono::seconds(2),[&]{return xboxControlPending_.has_value();});}
+                if(stop.stop_requested()||hasPending())break;
+                auto session=std::make_shared<source::XboxSessionSource>();
+                {std::lock_guard lock(xboxControlMutex_);xboxControlConnecting_=session;}
+                const bool ok=session->connect(*activeRequest);
+                {std::lock_guard lock(xboxControlMutex_);xboxControlConnecting_.reset();}
+                const auto st=session->stats();
+                if(ok&&!stop.stop_requested()&&!hasPending()){
+                    {std::lock_guard lock(mutex_);controlXbox_=std::move(session);}
+                    lastUnits=0;reconnected=true;
+                    std::lock_guard lock(xboxControlMutex_);
+                    xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=xboxControlFailed_=false;
+                    xboxControlMessage_.clear();
+                    veyra::log::info("xbox-control","controller-only session reconnected");
+                    break;
+                }
+                session->close();
+                if(!st.message.empty())lastError=st.message;
+            }
+            if(!reconnected){
+                activeRequest.reset();
+                std::lock_guard lock(xboxControlMutex_);
+                xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=false;
+                if(!stop.stop_requested()&&!xboxControlPending_.has_value()){
+                    xboxControlFailed_=true;
+                    xboxControlMessage_=lastError.empty()?L"Xbox 手柄控制没有恢复，请检查主机及网络后重新打开。":lastError;
+                }
+            }
+            xboxControlIdle_.notify_all();
+        }else{
+            activeRequest.reset();
+            std::lock_guard lock(xboxControlMutex_);
+            xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=false;
+            xboxControlFailed_=true;
+            xboxControlMessage_=failure.message.empty()?L"Xbox 手柄控制已中断，请检查主机状态后重连。":failure.message;
+            xboxControlIdle_.notify_all();
+        }
+    }
+    closeActive();
+    {std::lock_guard lock(xboxControlMutex_);xboxControlConnecting_.reset();xboxControlBusy_=xboxControlStarting_=xboxControlRecovering_=false;xboxControlPending_.reset();xboxControlExited_=true;}
+    xboxControlIdle_.notify_all();
+}
+void EngineController::waitXboxControlIdle(){
+    const auto deadline=Clock::now()+std::chrono::seconds(10);
+    std::unique_lock lock(xboxControlMutex_);
+    while((xboxControlBusy_||xboxControlPending_.has_value())&&!stop_.load()){
+        if(Clock::now()>=deadline){veyra::log::warn("xbox-control","controller-only session still closing after 10 s; starting the Xbox stream anyway");return;}
+        xboxControlIdle_.wait_for(lock,std::chrono::milliseconds(100));
+    }
+}
+EngineController::XboxControlStatus EngineController::xboxControlStatus()const{
+    XboxControlStatus out;
+    std::shared_ptr<source::XboxSessionSource> session,connecting;
+    {std::lock_guard lock(mutex_);session=controlXbox_;}
+    {std::lock_guard lock(xboxControlMutex_);
+        out.starting=xboxControlStarting_||(xboxControlPending_.has_value()&&*xboxControlPending_);
+        out.recovering=xboxControlRecovering_;
+        out.failed=xboxControlFailed_;
+        out.message=xboxControlMessage_;
+        connecting=xboxControlConnecting_;
+    }
+    out.requested=out.starting||out.recovering||out.failed||bool(session);
+    if(session){
+        const auto s=session->stats();
+        out.alive=session->alive();
+        out.connected=out.alive&&s.state==source::XboxStats::State::Streaming;
+        out.keepaliveReady=s.units>0&&s.receivedFps>0.0;
+        out.keepaliveFps=s.receivedFps;
+        out.rttMs=s.rttMs;
+        if(out.message.empty())out.message=s.message;
+    }else if(out.starting&&connecting&&out.message.empty()){
+        out.message=connecting->stats().message;
+    }
+    return out;
+}
+bool EngineController::xboxControlRequested()const{
+    {std::lock_guard lock(mutex_);if(controlXbox_)return true;}
+    std::lock_guard lock(xboxControlMutex_);
+    return xboxControlStarting_||xboxControlRecovering_||xboxControlFailed_||(xboxControlPending_.has_value()&&*xboxControlPending_);
+}
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc desc,PlayerOptions opts){
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     stopRemoteControl();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
 #endif
     auto request=std::make_shared<source::MoonlightConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.moonlightActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
@@ -343,9 +570,10 @@ void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerO
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     stopRemoteControl();
 #endif
+    stopXboxControl();
     auto request=std::make_shared<source::XboxConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.xboxActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
-    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);});
+    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;waitXboxControlIdle();run(window,L"xbox:",opts,{},{},request);});
 }
 #endif
 void EngineController::stop(){
@@ -438,6 +666,9 @@ void EngineController::startExport(const std::wstring& input,const std::wstring&
     }
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     stopRemoteControl(); // the export replaces the capture run it belonged to
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl(); // the export replaces the capture run it belonged to
 #endif
     const auto frozen=opts.snapshot();const int audioStream=opts.audioStreamIndex;
     post([this,input,output,frozen,audioStream,hevc]{prewarmed_.reset();CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});

@@ -53,6 +53,7 @@ QString settingsPath() { return QString::fromStdWString((xbox::dataDirectory() /
 
 XboxModel::XboxModel(QObject* parent) : QObject(parent) {
     account_ = std::make_shared<xbox::Account>(xbox::makeWinHttpTransport(), xbox::dataDirectory() / L"account.bin");
+    loadSettings();
 }
 
 XboxModel::~XboxModel() { cancel_ = true; }
@@ -63,6 +64,7 @@ void XboxModel::loadSettings() {
     const QJsonObject o = QJsonDocument::fromJson(file.readAll()).object();
     lastId_ = o.value("lastConsole").toString();
     lastName_ = o.value("lastName").toString();
+    if (selected_.isEmpty() && !lastId_.isEmpty()) selected_ = lastId_;
     gamepad_ = o.value("gamepad").toBool(true);
     softwareDecode_ = o.value("softwareDecode").toBool(false);
 }
@@ -76,10 +78,22 @@ void XboxModel::saveSettings() const {
     file.commit();
 }
 
+QString XboxModel::selectedName() const {
+    const QString id = selectedId();
+    for (const QVariant& c : std::as_const(consoles_)) {
+        const QVariantMap m = c.toMap();
+        if (m.value("id").toString() == id) {
+            const QString name = m.value("name").toString();
+            if (!name.isEmpty()) return name;
+        }
+    }
+    return lastName_;
+}
+
 QVariantMap XboxModel::state() const {
     return QVariantMap{
         {"signedIn", account_->signedIn()}, {"busy", busy_}, {"status", status_}, {"code", code_},
-        {"verificationUri", verificationUri_}, {"signingIn", signingIn_}, {"selected", selected_}, {"gamepad", gamepad_},
+        {"verificationUri", verificationUri_}, {"signingIn", signingIn_}, {"selected", selectedId()}, {"selectedName", selectedName()}, {"gamepad", gamepad_},
         {"streaming", streamActive_}, {"stream", stream_}, {"lastLabel", lastName_}, {"softwareDecode", softwareDecode_},
     };
 }
@@ -158,7 +172,12 @@ void XboxModel::signIn() {
             signingIn_ = false;
             code_.clear();
             consoles_ = consoles;
-            if (selected_.isEmpty() && !consoles_.isEmpty()) selected_ = consoles_.front().toMap().value("id").toString();
+            if (selected_.isEmpty() && !consoles_.isEmpty()) {
+                selected_ = consoles_.front().toMap().value("id").toString();
+                lastId_ = selected_;
+                lastName_ = consoles_.front().toMap().value("name").toString();
+                saveSettings();
+            }
             status_ = consoles_.isEmpty() ? tr("已登录，但这个账号下没有找到主机。请在主机上用同一个账号登录，并在 设置 → 设备和连接 → 远程功能 里启用远程功能。")
                                           : tr("已登录。");
             emit notice(tr("已登录 Xbox"), false);
@@ -176,6 +195,7 @@ void XboxModel::signOut() {
     consoles_.clear();
     selected_.clear();
     status_ = tr("已退出登录，本机保存的登录信息已删除。");
+    emit signedOut();
     emit changed();
 }
 
@@ -192,6 +212,19 @@ void XboxModel::refresh() {
             bool known = false;
             for (const QVariant& c : std::as_const(consoles_)) known = known || c.toMap().value("id").toString() == selected_;
             if (!known) selected_ = consoles_.isEmpty() ? QString() : (lastId_.isEmpty() ? consoles_.front().toMap().value("id").toString() : lastId_);
+            if (!selected_.isEmpty()) {
+                for (const QVariant& c : std::as_const(consoles_)) {
+                    const QVariantMap m = c.toMap();
+                    if (m.value("id").toString() == selected_) {
+                        if (lastId_ != selected_ || lastName_ != m.value("name").toString()) {
+                            lastId_ = selected_;
+                            lastName_ = m.value("name").toString();
+                            saveSettings();
+                        }
+                        break;
+                    }
+                }
+            }
             status_ = consoles_.isEmpty() ? tr("这个账号下没有找到主机。请在主机上用同一个账号登录，并启用远程功能。") : QString();
         };
     });
@@ -200,6 +233,17 @@ void XboxModel::refresh() {
 void XboxModel::select(const QString& id) {
     if (selected_ == id) return;
     selected_ = id;
+    QString name;
+    for (const QVariant& c : std::as_const(consoles_)) {
+        const QVariantMap m = c.toMap();
+        if (m.value("id").toString() == id) { name = m.value("name").toString(); break; }
+    }
+    if (!id.isEmpty()) {
+        lastId_ = id;
+        if (!name.isEmpty()) lastName_ = name;
+        saveSettings();
+    }
+    emit selectionChanged(selected_, selectedName());
     emit changed();
 }
 

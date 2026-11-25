@@ -500,23 +500,31 @@ struct QmlPlayerBridge::Impl {
     QString ps5ControlNoticed;               // state the last notice was shown for
     int ps5ControlTicks = 0;
     bool ps5ControlNoPair = false;           // switched on without a pairing; cleared once pairings exist
+    // Xbox 手柄控制 (settings & capture card dialog).
+    QTimer* xboxControlTimer = nullptr;
+    QVariantMap xboxControlState;
+    std::string xboxControlConsoleId;
+    QString xboxControlNoticed;
+    int xboxControlTicks = 0;
+    bool xboxControlNoSignIn = false;
+    bool xboxControlNoConsole = false;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     remoteplay::ControllerInput controller;
-    // One SDL pad reader shared by PS5 stream, PS5 手柄控制, PC and Xbox streaming.
+    // One SDL pad reader shared by PS5 stream, PS5/Xbox 手柄控制, PC and Xbox streaming.
     // Each user acquires it and only the last release stops it, so the timer of a
     // source that just ended never cuts off the pad the next source started using.
-    enum PadUser : unsigned { PadPs5 = 1, PadPs5Control = 2, PadMoonlight = 4, PadXbox = 8 };
+    enum PadUser : unsigned { PadPs5 = 1, PadPs5Control = 2, PadMoonlight = 4, PadXbox = 8, PadXboxControl = 16 };
     unsigned padUsers = 0;
     bool acquirePad(unsigned user) {
         const bool ok = controller.start(); // no-op once initialized
         padUsers |= user;
-        controller.setFollowLastPressed((padUsers & PadPs5Control) != 0);
+        controller.setFollowLastPressed((padUsers & (PadPs5Control | PadXboxControl)) != 0);
         return ok;
     }
     void releasePad(unsigned user) {
         padUsers &= ~user;
         if (!padUsers) controller.stop();
-        else controller.setFollowLastPressed((padUsers & PadPs5Control) != 0);
+        else controller.setFollowLastPressed((padUsers & (PadPs5Control | PadXboxControl)) != 0);
     }
 #endif
     std::jthread ps5Worker;                  // last: joined before what it touches

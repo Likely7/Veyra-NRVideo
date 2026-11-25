@@ -308,13 +308,13 @@ VPage {
                             }
                         }
                     }
-                    // PS5 手柄控制 is switched on for the capture card.
+                    // PS5 / Xbox 手柄控制 is switched on for the capture card.
                     VTag {
                         anchors.top: parent.top
                         anchors.right: parent.right
                         anchors.margins: 12
-                        visible: modelData.act === "capture" && veyra.ps5Control.enabled === true
-                        text: qsTr("PS5 手柄")
+                        visible: modelData.act === "capture" && (veyra.ps5Control.enabled === true || (veyra.xboxControl && veyra.xboxControl.enabled === true))
+                        text: veyra.xboxControl && veyra.xboxControl.enabled === true ? qsTr("Xbox 手柄") : qsTr("PS5 手柄")
                         kind: "acc"
                     }
                     HoverHandler { id: cardHover; cursorShape: Qt.PointingHandCursor }

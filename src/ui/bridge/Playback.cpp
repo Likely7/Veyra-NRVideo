@@ -407,6 +407,7 @@ void QmlPlayerBridge::stopPlayback() {
     impl_->openingSessionId = 0;
     impl_->engine.stop();
     stopPs5Control();
+    stopXboxControl();
 }
 void QmlPlayerBridge::seekTo(double seconds) {
     if(!timelineSeekable())return;

@@ -215,6 +215,11 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
     // Xbox home streaming (unofficial): sign-in, consoles and stream state; null without Xbox support.
     Q_PROPERTY(QObject* xbox READ xboxModel CONSTANT)
+    // Xbox 手柄控制 (设置 → Xbox 串流 & 采集卡对话框): a controller-only Xbox Remote Play session
+    // beside the capture card, using the signed-in account and selected console. {available, enabled,
+    // background, state: off|starting|connected|recovering|failed|nosignin|noconsole, message,
+    // keepaliveFps (-1 = not yet), rttMs, pad}
+    Q_PROPERTY(QVariantMap xboxControl READ xboxControl NOTIFY xboxControlChanged)
     Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
     Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
 
@@ -848,8 +853,12 @@ public:
     Q_INVOKABLE void moonlightCapture(bool on);
     Q_INVOKABLE void moonlightDisconnect();
     QObject* xboxModel() const;
+    QVariantMap xboxControl() const;
     Q_INVOKABLE void openXboxDialog();
     Q_INVOKABLE void xboxDisconnect();
+    // key: enabled | background (saved preferences xboxCaptureControl / xboxControlBackground).
+    Q_INVOKABLE void xboxControlSet(const QString& key, const QVariant& value);
+    Q_INVOKABLE void xboxControlRestart();
     Q_INVOKABLE void ps5Load();
     Q_INVOKABLE bool ps5Set(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5SelectProfile(const QString& id);
@@ -1532,6 +1541,7 @@ signals:
     void nodeAnchorsChanged();
     void ps5Changed();
     void ps5ControlChanged();
+    void xboxControlChanged();
     void moonlightUiChanged();
     void imageBatchChanged();
     void audioDevicesChanged();
@@ -1645,6 +1655,9 @@ private:
     bool captureCardLive() const;
     void tickMoonlight();
     void tickXbox();
+    void tickXboxControl(bool force = false);
+    void startXboxControl(bool restart);
+    void stopXboxControl();
     void tickPlaylist();
 #ifdef VEYRA_ENABLE_XBOX
     void setupXbox();

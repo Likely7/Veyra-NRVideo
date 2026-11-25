@@ -537,6 +537,64 @@ void webrtcTests() {
     check(!session.ready(), "remote/local close with active sends is contained and clears readiness");
 }
 
+void controlOnlyWebrtcTests() {
+    FakeConsole console;
+    WebRtcSession session;
+    session.setBindAddress("127.0.0.1");
+    session.setControlOnly(true);
+    std::mutex m;
+    std::optional<Vibration> vibration;
+    WebRtcCallbacks callbacks;
+    // Controller-only mode omits video and audio callbacks: media is dropped on receipt without copying or decoding.
+    callbacks.vibration = [&](const Vibration& v) { std::lock_guard l(m); vibration = v; };
+    session.setCallbacks(callbacks);
+
+    std::string error;
+    const bool started = session.start(console, &error, std::chrono::seconds(15));
+    check(started, ("controller-only session connects to a local peer: " + error).c_str());
+    if (!started) return;
+    check(session.waitReady(std::chrono::seconds(5)), "controller-only handshake completes");
+    check(console.waitFor([&] {
+        for (const auto& s : console.messages) if (s.find("/streaming/characteristics/dimensionschanged") != std::string::npos) return true;
+        return false;
+    }), "controller-only sends dimensionschanged");
+
+    GamepadFrame pad;
+    pad.buttons = BtnA | BtnX;
+    pad.rightX = -4321;
+    session.sendGamepad(pad);
+    check(console.waitFor([&] { return console.reports.size() >= 2; }), "controller-only forwards gamepad reports");
+
+    const uint8_t vib[] = {128, 0, 0, 0, 50, 30, 0, 0, 80, 0, 0, 0, 0};
+    console.input->send(reinterpret_cast<const std::byte*>(vib), sizeof(vib));
+
+    check(console.waitFor([&] { return console.video && console.video->isOpen() && console.audio && console.audio->isOpen(); }), "controller-only console tracks open");
+    const auto idr = nal(0x65, 1024, 9);
+    const auto p1 = nal(0x41, 256, 10);
+    console.videoConfig->timestamp = 0;
+    console.video->sendFrame(reinterpret_cast<const std::byte*>(idr.data()), idr.size(), rtc::FrameInfo(uint32_t(0)));
+    console.videoConfig->timestamp = 1500;
+    console.video->sendFrame(reinterpret_cast<const std::byte*>(p1.data()), p1.size(), rtc::FrameInfo(uint32_t(1500)));
+    const std::vector<uint8_t> opus1 = {0xFC, 1, 2, 3};
+    console.audio->sendFrame(reinterpret_cast<const std::byte*>(opus1.data()), opus1.size(), rtc::FrameInfo(uint32_t(0)));
+
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (std::chrono::steady_clock::now() < deadline) {
+        const auto st = session.stats();
+        std::lock_guard l(m);
+        if (st.videoUnits >= 1 && st.audioPackets >= 1 && vibration) break;
+        std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    }
+    const auto stats = session.stats();
+    check(stats.videoUnits >= 1 && stats.audioPackets >= 1, "controller-only counts dropped keepalive video and audio packets");
+    {
+        std::lock_guard l(m);
+        check(vibration && vibration->leftMotor == 50 && vibration->rightMotor == 30, "controller-only still receives vibration feedback");
+    }
+    session.close();
+    check(!session.ready(), "controller-only closes cleanly");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -600,6 +658,7 @@ int main(int argc, char** argv) {
     apiTests();
     accountTests();
     webrtcTests();
+    controlOnlyWebrtcTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
     rtc::Cleanup();
     return g_failures == 0 ? 0 : 1;

@@ -5539,6 +5539,32 @@
    "ru": "Xbox потоковое соединение не удалось; см. Диагностика"
   },
   {
+   "zh": "Xbox 主机",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Xbox 主機",
+   "en": "Xbox console",
+   "ja": "Xbox 本体",
+   "ko": "Xbox 콘솔",
+   "es": "Consola Xbox",
+   "fr": "Console Xbox",
+   "de": "Xbox-Konsole",
+   "pt-BR": "Console Xbox",
+   "ru": "Консоль Xbox"
+  },
+  {
+   "zh": "Xbox 仍会发一路保活画面，本机收到即丢弃且不解码；Xbox 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Xbox 仍會傳送一路保活畫面，本機收到即丟棄且不解碼；Xbox 同一時間只允許一個遠端遊玩連線。再次串流時記得選擇上方的「音訊輸入」。",
+   "en": "Xbox still sends a keepalive video stream that is dropped on arrival without decoding; Xbox allows only one Remote Play session at a time. Remember to choose an Audio input above when re-streaming.",
+   "ja": "Xbox からはキープアライブ映像が送信されますが、受信時にデコードせず破棄されます。Xbox のリモートプレイは同時に 1 接続のみです。再配信する場合は上の「音声入力」を選択してください。",
+   "ko": "Xbox는 연결 유지용 영상을 계속 전송하지만 수신 즉시 디코딩 없이 폐기합니다. Xbox는 한 번에 하나의 원격 플레이 연결만 허용합니다. 재스트리밍할 때는 위의 '오디오 입력'을 선택하세요.",
+   "es": "Xbox sigue enviando un flujo de vídeo de mantenimiento que se descarta al llegar sin decodificar; Xbox solo permite una conexión de juego remoto a la vez. Recuerda elegir una «Entrada de audio» arriba al volver a transmitir.",
+   "fr": "La Xbox continue d'envoyer un flux vidéo de maintien ignoré dès réception sans décodage ; la Xbox n'autorise qu'une seule connexion Remote Play à la fois. Pensez à sélectionner une « Entrée audio » ci-dessus en cas de rediffusion.",
+   "de": "Die Xbox sendet weiterhin einen Keepalive-Videostream, der beim Empfang ohne Dekodierung verworfen wird; die Xbox erlaubt nur eine Remote-Play-Verbindung gleichzeitig. Denke beim Weiterstreamen daran, oben einen „Audioeingang“ zu wählen.",
+   "pt-BR": "O Xbox continua enviando um fluxo de vídeo keepalive descartado ao chegar sem decodificação; o Xbox permite apenas uma conexão de Jogo Remoto por vez. Ao retransmitir, lembre-se de escolher uma «Entrada de áudio» acima.",
+   "ru": "Xbox продолжает отправлять видеопоток поддержания связи, который отбрасывается при получении без декодирования; одновременно разрешено только одно подключение Remote Play. При ретрансляции не забудьте выбрать «Аудиовход» выше."
+  },
+  {
    "zh": "Xbox 已重新连接",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "Xbox 已重新連接",
@@ -5550,6 +5576,162 @@
    "de": "Xbox Wiedereinschaltung",
    "pt-BR": "Xbox reconectado",
    "ru": "Xbox Восстановление"
+  },
+  {
+   "zh": "Xbox 手柄",
+   "src": "qml/HomePage.qml",
+   "zh-TW": "Xbox 手把",
+   "en": "Xbox pad",
+   "ja": "Xbox パッド",
+   "ko": "Xbox 패드",
+   "es": "Mando Xbox",
+   "fr": "Manette Xbox",
+   "de": "Xbox-Pad",
+   "pt-BR": "Controle Xbox",
+   "ru": "Геймпад Xbox"
+  },
+  {
+   "zh": "Xbox 手柄控制",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Xbox 手把控制",
+   "en": "Xbox controller control",
+   "ja": "Xbox コントローラー制御",
+   "ko": "Xbox 컨트롤러 제어",
+   "es": "Control de mando Xbox",
+   "fr": "Contrôle manette Xbox",
+   "de": "Xbox-Controller-Steuerung",
+   "pt-BR": "Controle do gamepad Xbox",
+   "ru": "Управление геймпадом Xbox"
+  },
+  {
+   "zh": "Xbox 手柄控制中断，正在重新连接（{}/3）…",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 手把控制中斷，正在重新連線（{}/3）…",
+   "en": "Xbox controller control disconnected, reconnecting ({}/3)…",
+   "ja": "Xbox コントローラー制御が切断されました。再接続中（{}/3）…",
+   "ko": "Xbox 컨트롤러 제어 연결이 끊어졌습니다. 다시 연결하는 중 ({}/3)…",
+   "es": "Control de mando Xbox interrumpido, reconectando ({}/3)…",
+   "fr": "Contrôle manette Xbox interrompu, reconnexion ({}/3)…",
+   "de": "Xbox-Controller-Steuerung unterbrochen, verbinde neu ({}/3)…",
+   "pt-BR": "Controle do gamepad Xbox interrompido, reconectando ({}/3)…",
+   "ru": "Управление геймпадом Xbox прервано, переподключение ({}/3)…"
+  },
+  {
+   "zh": "Xbox 手柄控制已中断，请检查主机状态后重连。",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 手把控制已中斷，請檢查主機狀態後重新連線。",
+   "en": "Xbox controller control disconnected; check the console status and reconnect.",
+   "ja": "Xbox コントローラー制御が中断されました。本体の状態を確認して再接続してください。",
+   "ko": "Xbox 컨트롤러 제어가 중단되었습니다. 콘솔 상태를 확인한 후 다시 연결하세요.",
+   "es": "El control de mando Xbox se ha interrumpido; comprueba el estado de la consola y vuelve a conectar.",
+   "fr": "Le contrôle manette Xbox a été interrompu ; vérifiez l'état de la console puis reconnectez.",
+   "de": "Xbox-Controller-Steuerung wurde unterbrochen; prüfe den Konsolenstatus und verbinde neu.",
+   "pt-BR": "O controle do gamepad Xbox foi interrompido; verifique o status do console e reconecte.",
+   "ru": "Управление геймпадом Xbox прервано; проверьте состояние консоли и переподключитесь."
+  },
+  {
+   "zh": "Xbox 手柄控制已停止",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "Xbox 手把控制已停止",
+   "en": "Xbox controller control stopped",
+   "ja": "Xbox コントローラー制御を停止しました",
+   "ko": "Xbox 컨트롤러 제어가 중지되었습니다",
+   "es": "Control de mando Xbox detenido",
+   "fr": "Contrôle manette Xbox arrêté",
+   "de": "Xbox-Controller-Steuerung gestoppt",
+   "pt-BR": "Controle do gamepad Xbox parado",
+   "ru": "Управление геймпадом Xbox остановлено"
+  },
+  {
+   "zh": "Xbox 手柄控制已连接",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Xbox 手把控制已連線",
+   "en": "Xbox controller control connected",
+   "ja": "Xbox コントローラー制御が接続されました",
+   "ko": "Xbox 컨트롤러 제어가 연결되었습니다",
+   "es": "Control de mando Xbox conectado",
+   "fr": "Contrôle manette Xbox connecté",
+   "de": "Xbox-Controller-Steuerung verbunden",
+   "pt-BR": "Controle do gamepad Xbox conectado",
+   "ru": "Управление геймпадом Xbox подключено"
+  },
+  {
+   "zh": "Xbox 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "Xbox 手把控制已連線 · 保活畫面 %1 fps（收到即丟棄）",
+   "en": "Xbox controller control connected · keepalive picture %1 fps (dropped on arrival)",
+   "ja": "Xbox コントローラー制御接続済み · キープアライブ映像 %1 fps（受信時破棄）",
+   "ko": "Xbox 컨트롤러 제어 연결됨 · 유지 영상 %1 fps (수신 즉시 폐기)",
+   "es": "Control de mando Xbox conectado · imagen keepalive %1 fps (descartada al llegar)",
+   "fr": "Contrôle manette Xbox connecté · image keepalive %1 ips (ignorée à réception)",
+   "de": "Xbox-Controller-Steuerung verbunden · Keepalive-Bild %1 fps (beim Empfang verworfen)",
+   "pt-BR": "Controle do gamepad Xbox conectado · vídeo keepalive %1 fps (descartado ao chegar)",
+   "ru": "Управление геймпадом Xbox подключено · keepalive-видео %1 к/с (отбрасывается при получении)"
+  },
+  {
+   "zh": "Xbox 手柄控制没有恢复，请检查主机及网络后重新打开。",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 手把控制沒有恢復，請檢查主機及網路後重新開啟。",
+   "en": "Xbox controller control did not recover; check the console and network, then turn it on again.",
+   "ja": "Xbox コントローラー制御を復旧できませんでした。本体とネットワークを確認して再度有効にしてください。",
+   "ko": "Xbox 컨트롤러 제어가 복구되지 않았습니다. 콘솔과 네트워크를 확인한 후 다시 켜세요.",
+   "es": "El control de mando Xbox no se recuperó; comprueba la consola y la red y vuelve a activarlo.",
+   "fr": "Le contrôle manette Xbox n'a pas pu reprendre ; vérifiez la console et le réseau puis réactivez-le.",
+   "de": "Xbox-Controller-Steuerung konnte nicht wiederhergestellt werden; prüfe Konsole und Netzwerk und aktiviere sie erneut.",
+   "pt-BR": "O controle do gamepad Xbox não foi recuperado; verifique o console e a rede e ative novamente.",
+   "ru": "Управление геймпадом Xbox не восстановилось; проверьте консоль и сеть, затем включите снова."
+  },
+  {
+   "zh": "Xbox 手柄控制设置保存失败",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "Xbox 手把控制設定儲存失敗",
+   "en": "Xbox controller control setting could not be saved",
+   "ja": "Xbox コントローラー制御の設定を保存できませんでした",
+   "ko": "Xbox 컨트롤러 제어 설정을 저장하지 못했습니다",
+   "es": "No se pudo guardar la configuración del control de mando Xbox",
+   "fr": "Impossible d'enregistrer le paramètre de contrôle manette Xbox",
+   "de": "Einstellung der Xbox-Controller-Steuerung konnte nicht gespeichert werden",
+   "pt-BR": "Não foi possível salvar a configuração do controle do gamepad Xbox",
+   "ru": "Не удалось сохранить настройку управления геймпадом Xbox"
+  },
+  {
+   "zh": "Xbox 手柄控制连接失败，请检查主机及网络后重试。",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "Xbox 手把控制連線失敗，請檢查主機及網路後重試。",
+   "en": "Xbox controller control could not connect; check the console and network and try again.",
+   "ja": "Xbox コントローラー制御の接続に失敗しました。本体とネットワークを確認して再試行してください。",
+   "ko": "Xbox 컨트롤러 제어에 연결하지 못했습니다. 콘솔과 네트워크를 확인하고 다시 시도하세요.",
+   "es": "No se pudo conectar el control de mando Xbox; comprueba la consola y la red e inténtalo de nuevo.",
+   "fr": "Échec de connexion du contrôle manette Xbox ; vérifiez la console et le réseau puis réessayez.",
+   "de": "Xbox-Controller-Steuerung konnte keine Verbindung herstellen; prüfe Konsole und Netzwerk und versuche es erneut.",
+   "pt-BR": "Falha ao conectar o controle do gamepad Xbox; verifique o console e a rede e tente novamente.",
+   "ru": "Не удалось подключить управление геймпадом Xbox; проверьте консоль и сеть и повторите попытку."
+  },
+  {
+   "zh": "Xbox 手柄控制：还没有登录 Xbox 账号，先在「Xbox 串流」里登录一次",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "Xbox 手把控制：還沒有登入 Xbox 帳號，先在「Xbox 串流」裡登入一次",
+   "en": "Xbox controller control: not signed in to Xbox yet. Sign in once under Xbox streaming",
+   "ja": "Xbox コントローラー制御：Xbox アカウントに未サインインです。先に「Xbox ストリーミング」でサインインしてください",
+   "ko": "Xbox 컨트롤러 제어: 아직 Xbox 계정에 로그인하지 않았습니다. 먼저 'Xbox 스트리밍'에서 로그인하세요",
+   "es": "Control de mando Xbox: aún no has iniciado sesión en Xbox. Inicia sesión primero en «Transmisión Xbox»",
+   "fr": "Contrôle manette Xbox : aucun compte Xbox connecté. Connectez-vous d'abord dans « Streaming Xbox »",
+   "de": "Xbox-Controller-Steuerung: Noch kein Xbox-Konto angemeldet. Melde dich zuerst unter „Xbox-Streaming“ an",
+   "pt-BR": "Controle do gamepad Xbox: nenhuma conta Xbox conectada. Entre primeiro em «Streaming Xbox»",
+   "ru": "Управление геймпадом Xbox: вход в аккаунт Xbox не выполнен. Сначала войдите в разделе «Стриминг Xbox»"
+  },
+  {
+   "zh": "Xbox 手柄控制：还没有选择 Xbox 主机，先在「Xbox 串流」或设置里选择主机",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "Xbox 手把控制：還沒有選擇 Xbox 主機，先在「Xbox 串流」或設定裡選擇主機",
+   "en": "Xbox controller control: no Xbox console selected yet. Choose one under Xbox streaming or Settings",
+   "ja": "Xbox コントローラー制御：Xbox 本体が未選択です。「Xbox ストリーミング」または設定で選択してください",
+   "ko": "Xbox 컨트롤러 제어: 선택한 Xbox 콘솔이 없습니다. 'Xbox 스트리밍' 또는 설정에서 콘솔을 선택하세요",
+   "es": "Control de mando Xbox: aún no se ha seleccionado ninguna consola Xbox. Elígela en «Transmisión Xbox» o en Ajustes",
+   "fr": "Contrôle manette Xbox : aucune console Xbox sélectionnée. Choisissez-en une dans « Streaming Xbox » ou les paramètres",
+   "de": "Xbox-Controller-Steuerung: Noch keine Xbox-Konsole ausgewählt. Wähle eine unter „Xbox-Streaming“ oder in den Einstellungen",
+   "pt-BR": "Controle do gamepad Xbox: nenhum console Xbox selecionado. Escolha um em «Streaming Xbox» ou nas Configurações",
+   "ru": "Управление геймпадом Xbox: консоль Xbox не выбрана. Выберите её в разделе «Стриминг Xbox» или в настройках"
   },
   {
    "zh": "Xbox 服务结束了串流（",
@@ -5617,6 +5799,19 @@
    "ru": "Xbox Срок регистрации истек; введите еще раз."
   },
   {
+   "zh": "Xbox 的 HDMI 接了采集卡时，可以只用远程游玩传手柄、画面用采集卡原画（可 4K/HDR），也方便再串流给掌机",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "Xbox 的 HDMI 接了擷取卡時，可以只用遠端遊玩傳手把、畫面用擷取卡原畫（可 4K/HDR），也方便再串流給掌機",
+   "en": "With the Xbox HDMI on a capture card, Remote Play can carry only the controller while the picture comes from the capture card (4K/HDR possible), which also suits re-streaming to a handheld",
+   "ja": "Xbox の HDMI をキャプチャーカードに接続している場合、リモートプレイでコントローラー入力のみを送り、映像はキャプチャーカードの原画（4K/HDR 対応）を使えます。携帯機への再配信にも便利です",
+   "ko": "Xbox HDMI를 캡처 카드에 연결한 경우 원격 플레이로 컨트롤러 입력만 전달하고 화면은 캡처 카드 원본(4K/HDR 지원)을 사용할 수 있어 휴대용 기기 재스트리밍에도 편리합니다",
+   "es": "Con el HDMI de Xbox conectado a una capturadora, el juego remoto puede llevar solo el mando mientras la imagen viene de la capturadora (hasta 4K/HDR), ideal también para retransmitir a una portátil",
+   "fr": "Lorsque le HDMI de la Xbox est relié à une carte d'acquisition, Remote Play peut ne transporter que la manette tandis que l'image vient de la carte (4K/HDR possible), pratique aussi pour rediffuser vers une console portable",
+   "de": "Wenn der HDMI-Ausgang der Xbox an einer Capture-Karte hängt, überträgt Remote Play nur den Controller, während das Bild von der Capture-Karte kommt (4K/HDR möglich) – ideal auch zum Weiterstreamen auf ein Handheld",
+   "pt-BR": "Com o HDMI do Xbox em uma placa de captura, o Jogo Remoto pode levar apenas o controle enquanto a imagem vem da placa (até 4K/HDR), ótimo também para retransmitir a um portátil",
+   "ru": "Если HDMI-выход Xbox подключён к карте захвата, Remote Play может передавать только ввод с геймпада, а изображение пойдёт с карты захвата (вплоть до 4K/HDR), что удобно и для ретрансляции на портативную консоль"
+  },
+  {
    "zh": "Xbox 视频解码连续失败，恢复后仍无法出画。请重连，并保留日志。",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "Xbox 影片解碼連續失敗，恢復後仍無法顯示畫面。請重新連線，並保留日誌。",
@@ -5628,6 +5823,19 @@
    "de": "Xbox Video-Dekodierung scheiterte wiederholt und konnte ein Bild nicht wiederherstellen. Verbinden und halten Sie die Protokolle.",
    "pt-BR": "Xbox a decodificação de vídeo falhou repetidamente e não conseguiu recuperar uma imagem. Reconectar e manter os registos.",
    "ru": "Xbox Декодирование видео неоднократно терпело неудачу и не могло восстановить изображение. Соедините и сохраните бревна."
+  },
+  {
+   "zh": "Xbox 账号",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "Xbox 帳號",
+   "en": "Xbox account",
+   "ja": "Xbox アカウント",
+   "ko": "Xbox 계정",
+   "es": "Cuenta de Xbox",
+   "fr": "Compte Xbox",
+   "de": "Xbox-Konto",
+   "pt-BR": "Conta Xbox",
+   "ru": "Аккаунт Xbox"
   },
   {
    "zh": "Xbox 连接失败：",
@@ -9688,7 +9896,7 @@
   },
   {
    "zh": "兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。",
-   "src": "qml/XboxSourceDialog.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "相容選項：畫面持續出現破圖時可嘗試開啟，斷線後重新連線生效。可能增加 CPU 使用率與延遲；超解析度和補幀仍使用 GPU。",
    "en": "Compatibility option: try this if picture corruption persists, then disconnect and reconnect. May increase CPU usage and latency; super resolution and frame generation still use the GPU.",
    "ja": "互換性オプション：映像の乱れが続く場合に有効にし、切断して再接続してください。CPU 使用率と遅延が増える場合があります。超解像とフレーム生成には引き続き GPU を使用します。",
@@ -9958,6 +10166,19 @@
    "de": "Empfohlen beim Re-Streaming: Input geht weiter, während Veyra ist nicht vorne, während auf, der Controller auch steuert die PS5 wenn Sie andere Programme auf diesem PC verwenden",
    "pt-BR": "Recomendado quando re-streaming: entrada continua enquanto Veyra não está na frente. Enquanto estiver ligado, o controlador também dirige a PS5 quando você usa outros programas neste PC",
    "ru": "Рекомендован при повторной потоковой передаче: ввод продолжается, пока Veyra не впереди.В то время как контроллер также управляет PS5, когда вы используете другие программы на этом ПК"
+  },
+  {
+   "zh": "再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 Xbox",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "再次串流時建議開啟：Veyra 不在前台也繼續轉發。開啟後在這台電腦上使用別的程式時，手把也會操作 Xbox",
+   "en": "Recommended when re-streaming: keep forwarding while Veyra is in the background. When enabled, the controller also controls the Xbox while you use other apps on this PC",
+   "ja": "再配信時はオン推奨：Veyra がバックグラウンドでも入力を転送し続けます。オンの間はこの PC で他のアプリを使っていてもコントローラーが Xbox を操作します",
+   "ko": "재스트리밍 시 켜는 것을 권장합니다: Veyra가 백그라운드에 있어도 계속 전달합니다. 켜면 이 PC에서 다른 프로그램을 사용할 때도 컨트롤러가 Xbox를 조작합니다",
+   "es": "Recomendado al retransmitir: sigue enviando el mando aunque Veyra esté en segundo plano. Al activarlo, el mando también controlará la Xbox mientras usas otros programas en este PC",
+   "fr": "Recommandé pour la rediffusion : continue de transmettre même si Veyra est en arrière-plan. Une fois activé, la manette contrôle aussi la Xbox pendant que vous utilisez d'autres logiciels sur ce PC",
+   "de": "Beim Weiterstreamen empfohlen: Eingaben auch weiterleiten, wenn Veyra im Hintergrund ist. Solange aktiv, steuert der Controller die Xbox auch beim Nutzen anderer Programme auf diesem PC",
+   "pt-BR": "Recomendado ao retransmitir: continua encaminhando mesmo com o Veyra em segundo plano. Quando ativado, o controle também opera o Xbox enquanto você usa outros programas neste PC",
+   "ru": "Рекомендуется при ретрансляции: продолжать передачу ввода в фоновом режиме. Пока включено, геймпад также управляет Xbox при работе в других программах на этом ПК"
   },
   {
    "zh": "再次降低到",
@@ -11637,6 +11858,19 @@
    "ru": "Удаление дымки"
   },
   {
+   "zh": "去登录",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "去登入",
+   "en": "Sign in",
+   "ja": "サインインへ",
+   "ko": "로그인하기",
+   "es": "Iniciar sesión",
+   "fr": "Se connecter",
+   "de": "Anmelden",
+   "pt-BR": "Fazer login",
+   "ru": "Войти"
+  },
+  {
    "zh": "去配对",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "去配對",
@@ -12755,6 +12989,19 @@
    "ru": "Вперед контроллер в фоновом режиме"
   },
   {
+   "zh": "后台连接状态",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "背景連線狀態",
+   "en": "Background connection",
+   "ja": "バックグラウンド接続状態",
+   "ko": "백그라운드 연결 상태",
+   "es": "Estado de conexión en segundo plano",
+   "fr": "État de connexion en arrière-plan",
+   "de": "Hintergrundverbindung",
+   "pt-BR": "Status da conexão em segundo plano",
+   "ru": "Фоновое подключение"
+  },
+  {
    "zh": "后端切换失败，已恢复上一套参数",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "後端切換失敗，已恢復上一套參數",
@@ -13039,6 +13286,19 @@
    "de": "Aktienpaarungen mit PS5 Streaming",
    "pt-BR": "Compartilha emparelhamentos com PS5 streaming",
    "ru": "Shares pairings с потоковой передачей PS5"
+  },
+  {
+   "zh": "和「Xbox 串流」及设置共用主机选择",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "和「Xbox 串流」及設定共用主機選擇",
+   "en": "Shares console selection with Xbox streaming and Settings",
+   "ja": "「Xbox ストリーミング」および設定と本体選択を共有します",
+   "ko": "'Xbox 스트리밍' 및 설정과 콘솔 선택을 공유합니다",
+   "es": "Comparte la selección de consola con Transmisión Xbox y Ajustes",
+   "fr": "Partage la sélection de console avec Streaming Xbox et les paramètres",
+   "de": "Teilt die Konsolenauswahl mit Xbox-Streaming und den Einstellungen",
+   "pt-BR": "Compartilha a seleção do console com Streaming Xbox e Configurações",
+   "ru": "Использует тот же выбор консоли, что и «Стриминг Xbox» и настройки"
   },
   {
    "zh": "唤醒",
@@ -17292,6 +17552,19 @@
    "ru": "В паре с хозяином"
   },
   {
+   "zh": "已在「采集卡」或设置里打开 Xbox 手柄控制：连接采集卡时只用远程游玩传手柄",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "已在「擷取卡」或設定裡開啟 Xbox 手把控制：連線擷取卡時只用遠端遊玩傳手把",
+   "en": "Xbox controller control is enabled under Capture card or Settings: Remote Play carries only the controller while capturing",
+   "ja": "「キャプチャーカード」または設定で Xbox コントローラー制御が有効です：キャプチャー接続中はリモートプレイで入力のみ送信します",
+   "ko": "'캡처 카드' 또는 설정에서 Xbox 컨트롤러 제어가 켜져 있습니다: 캡처 연결 시 원격 플레이로 컨트롤러만 전달합니다",
+   "es": "El control de mando Xbox está activado en Capturadora o Ajustes: al capturar, el juego remoto solo envía el mando",
+   "fr": "Le contrôle manette Xbox est activé dans Carte d'acquisition ou les paramètres : Remote Play ne transmet que la manette pendant la capture",
+   "de": "Xbox-Controller-Steuerung ist unter Capture-Karte oder in den Einstellungen aktiv: Remote Play überträgt beim Capturing nur den Controller",
+   "pt-BR": "O controle do gamepad Xbox está ativado em Placa de captura ou Configurações: o Jogo Remoto envia apenas o controle durante a captura",
+   "ru": "Управление геймпадом Xbox включено в разделе «Карта захвата» или в настройках: при захвате Remote Play передаёт только геймпад"
+  },
+  {
    "zh": "已在「采集卡」里打开 PS5 手柄控制：连接采集卡时只用远程游玩传手柄",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "已在「擷取卡」裡打開 PS5 手把控制：連接擷取卡時只用遠程遊玩傳手把",
@@ -17735,7 +18008,7 @@
   },
   {
    "zh": "已登录",
-   "src": "qml/XboxSourceDialog.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "已登入",
    "en": "Signed in",
    "ja": "サインイン済み",
@@ -17875,6 +18148,19 @@
    "de": "Kurven für %1 Filme gespeichert; bei der nächsten Wiedergabe wiederhergestellt",
    "pt-BR": "Curvas gravadas para %1 filmes; restauradas na reprodução seguinte",
    "ru": "Кривые сохранены для %1 фильмов; восстановлены в следующем воспроизведении"
+  },
+  {
+   "zh": "已记住主机：%1；点刷新获取最新在线状态",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "已記住主機：%1；點重新整理取得最新上線狀態",
+   "en": "Remembered console: %1; click Refresh for current power state",
+   "ja": "保存済み本体：%1。更新を押すと最新の電源状態を取得します",
+   "ko": "저장된 콘솔: %1; 최신 상태를 확인하려면 새로고침을 누르세요",
+   "es": "Consola guardada: %1; pulsa Actualizar para ver el estado actual",
+   "fr": "Console mémorisée : %1 ; cliquez sur Actualiser pour l'état actuel",
+   "de": "Gespeicherte Konsole: %1; auf Aktualisieren klicken für aktuellen Status",
+   "pt-BR": "Console salvo: %1; clique em Atualizar para ver o estado atual",
+   "ru": "Сохранённая консоль: %1; нажмите «Обновить» для актуального состояния"
   },
   {
    "zh": "已设为“强制硬解”，这个文件无法用硬件解码打开；可在 设置 → 播放 改回“自动”",
@@ -19203,6 +19489,19 @@
    "ru": "Текущая кадровая ставка %1 fps превышает частоту обновления %2 Hz; опустите ее до %3 X для более низкой задержки"
   },
   {
+   "zh": "当前手柄",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前手把",
+   "en": "Active controller",
+   "ja": "現在のコントローラー",
+   "ko": "현재 컨트롤러",
+   "es": "Mando actual",
+   "fr": "Manette active",
+   "de": "Aktiver Controller",
+   "pt-BR": "Controle atual",
+   "ru": "Текущий геймпад"
+  },
+  {
    "zh": "当前执行器尚不支持此节点顺序，原配置保持不变",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前執行器尚不支援此節點順序，原設定保持不變",
@@ -19409,6 +19708,19 @@
    "de": "Kann die aktuelle Framegröße nicht aufzeichnen {} × {}",
    "pt-BR": "Não é possível gravar o tamanho do quadro actual {} × {}",
    "ru": "Невозможно записать текущий размер кадра {} × {}"
+  },
+  {
+   "zh": "当前目标主机：%1",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "目前目標主機：%1",
+   "en": "Current target console: %1",
+   "ja": "現在の対象本体：%1",
+   "ko": "현재 대상 콘솔: %1",
+   "es": "Consola objetivo actual: %1",
+   "fr": "Console cible actuelle : %1",
+   "de": "Aktuelle Zielkonsole: %1",
+   "pt-BR": "Console alvo atual: %1",
+   "ru": "Текущая целевая консоль: %1"
   },
   {
    "zh": "当前硬件或包不支持所选效果，请查看组件页",
@@ -19916,6 +20228,19 @@
    "de": "WeChat Pay",
    "pt-BR": "WeChat Pay",
    "ru": "WeChat Pay"
+  },
+  {
+   "zh": "微软账号登录凭据加密保存在用户数据目录。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "微軟帳號登入憑據加密儲存在使用者資料目錄。",
+   "en": "Microsoft account credentials are stored encrypted in the user data directory.",
+   "ja": "Microsoft アカウントの認証情報はユーザーデータディレクトリに暗号化して保存されます。",
+   "ko": "Microsoft 계정 로그인 자격 증명은 사용자 데이터 디렉터리에 암호화되어 저장됩니다.",
+   "es": "Las credenciales de la cuenta Microsoft se guardan cifradas en el directorio de datos de usuario.",
+   "fr": "Les identifiants du compte Microsoft sont enregistrés de façon chiffrée dans le dossier de données utilisateur.",
+   "de": "Microsoft-Konto-Anmeldedaten werden verschlüsselt im Benutzerdatenverzeichnis gespeichert.",
+   "pt-BR": "As credenciais da conta Microsoft são armazenadas criptografadas no diretório de dados do usuário.",
+   "ru": "Учётные данные аккаунта Microsoft хранятся в зашифрованном виде в каталоге пользовательских данных."
   },
   {
    "zh": "心理视觉调优",
@@ -21063,7 +21388,7 @@
   },
   {
    "zh": "把电脑手柄当作主机上的手柄",
-   "src": "qml/XboxSourceDialog.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "把電腦手把當作主機上的手把",
    "en": "Use this PC's controller as a controller on the console",
    "ja": "この PC のコントローラーを本体のコントローラーとして使う",
@@ -25393,7 +25718,7 @@
   },
   {
    "zh": "未登录",
-   "src": "qml/XboxSourceDialog.qml",
+   "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "未登入",
    "en": "Not signed in",
    "ja": "未サインイン",
@@ -25403,6 +25728,19 @@
    "de": "Nicht angemeldet",
    "pt-BR": "Sem login",
    "ru": "Вход не выполнен"
+  },
+  {
+   "zh": "未登录，点击管理进行微软账号设备码登录",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "未登入，點擊管理進行微軟帳號裝置碼登入",
+   "en": "Not signed in; click Manage to sign in with a Microsoft device code",
+   "ja": "未サインインです。「管理」から Microsoft デバイスコードでサインインしてください",
+   "ko": "로그인되지 않았습니다. 관리를 눌러 Microsoft 디바이스 코드로 로그인하세요",
+   "es": "Sin iniciar sesión; pulsa Gestionar para entrar con un código de dispositivo de Microsoft",
+   "fr": "Non connecté ; cliquez sur Gérer pour vous connecter par code d'appareil Microsoft",
+   "de": "Nicht angemeldet; klicke auf Verwalten für die Anmeldung per Microsoft-Gerätecode",
+   "pt-BR": "Não conectado; clique em Gerenciar para entrar com o código de dispositivo da Microsoft",
+   "ru": "Вход не выполнен; нажмите «Управление» для входа по коду устройства Microsoft"
   },
   {
    "zh": "未知",
@@ -25637,6 +25975,19 @@
    "de": "Nicht verbunden",
    "pt-BR": "Não conectado",
    "ru": "Не подключено"
+  },
+  {
+   "zh": "未选主机",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "未選主機",
+   "en": "No console",
+   "ja": "本体未選択",
+   "ko": "콘솔 미선택",
+   "es": "Sin consola",
+   "fr": "Aucune console",
+   "de": "Keine Konsole",
+   "pt-BR": "Sem console",
+   "ru": "Нет консоли"
   },
   {
    "zh": "未选择目标",
@@ -27499,7 +27850,7 @@
   },
   {
    "zh": "正在连接 Xbox…",
-   "src": "src/engine/EngineController.cpp",
+   "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "正在連接 Xbox…",
    "en": "Connecting to Xbox…",
    "ja": "Xbox に接続中…",
@@ -27665,6 +28016,19 @@
    "de": "Diese Version enthält nicht die PS5 Remote Play Komponente.",
    "pt-BR": "Esta versão não inclui o componente PS5 Remote Play.",
    "ru": "Эта версия не включает в себя компонент PS5 Remote Play."
+  },
+  {
+   "zh": "此版本未包含 Xbox 串流组件。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "此版本未包含 Xbox 串流元件。",
+   "en": "This build does not include the Xbox streaming component.",
+   "ja": "このビルドには Xbox ストリーミングコンポーネントが含まれていません。",
+   "ko": "이 빌드에는 Xbox 스트리밍 구성 요소가 포함되어 있지 않습니다.",
+   "es": "Esta compilación no incluye el componente de transmisión Xbox.",
+   "fr": "Cette version n'inclut pas le composant de streaming Xbox.",
+   "de": "Dieser Build enthält keine Xbox-Streaming-Komponente.",
+   "pt-BR": "Esta compilação não inclui o componente de streaming Xbox.",
+   "ru": "Эта сборка не содержит компонент стриминга Xbox."
   },
   {
    "zh": "此版本未包含美乐威 SDK 支持",
@@ -28967,6 +29331,19 @@
    "ru": "Читает субтитры на изображении с помощью распознавания текста (OCR) Windows: карта захвата, PS5 Remote Play, стриминг Xbox/ПК или видео."
   },
   {
+   "zh": "用于 Xbox 串流与后台手柄控制；切换后会记住这台主机",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "用於 Xbox 串流與背景手把控制；切換後會記住這台主機",
+   "en": "Used for Xbox streaming and background controller control; switching saves this console",
+   "ja": "Xbox ストリーミングとバックグラウンドコントローラー制御に使用され、切り替えると保存されます",
+   "ko": "Xbox 스트리밍과 백그라운드 컨트롤러 제어에 사용되며 변경 시 이 콘솔이 저장됩니다",
+   "es": "Se usa para la transmisión Xbox y el control en segundo plano; al cambiar se guarda esta consola",
+   "fr": "Utilisée pour le streaming Xbox et le contrôle manette en arrière-plan ; le choix est mémorisé",
+   "de": "Wird für Xbox-Streaming und Hintergrund-Controller-Steuerung verwendet; Auswahl wird gespeichert",
+   "pt-BR": "Usado para streaming Xbox e controle em segundo plano; ao trocar, este console é salvo",
+   "ru": "Используется для стриминга Xbox и фонового управления геймпадом; выбор запоминается"
+  },
+  {
    "zh": "用你的 Xbox（微软）账号在微软的页面登录，软件看不到密码",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "用你的 Xbox（微軟）帳號在微軟的頁面登入，軟體看不到密碼",
@@ -29030,6 +29407,19 @@
    "de": "Kontrollieren Sie die PS5 durch Remote Play",
    "pt-BR": "Controlar o PS5 até Remote Play",
    "ru": "Управляйте PS5 через Remote Play"
+  },
+  {
+   "zh": "用远程游玩控制 Xbox",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "用遠端遊玩控制 Xbox",
+   "en": "Control Xbox via Remote Play",
+   "ja": "リモートプレイで Xbox を操作",
+   "ko": "원격 플레이로 Xbox 제어",
+   "es": "Controlar Xbox mediante juego remoto",
+   "fr": "Contrôler la Xbox via Remote Play",
+   "de": "Xbox über Remote Play steuern",
+   "pt-BR": "Controlar Xbox via Jogo Remoto",
+   "ru": "Управлять Xbox через Remote Play"
   },
   {
    "zh": "由旧的 NR 预设导入",
@@ -29212,6 +29602,32 @@
    "de": "Bild und Ton kommen von der Capture-Karte; der Controller geht über PS5 Remote Play zur Konsole. Wenn dieses Bild auf ein Handheld oder einen anderen PC gestreamt wird, spielen Sie die PS5 mit dem dortigen Controller ab",
    "pt-BR": "A imagem e o som vêm do cartão de captura; o controlador vai para o console através de PS5 Remote Play. Quando esta imagem é re-streamed para um handheld ou outro PC, jogar o PS5 com o controlador lá",
    "ru": "Изображение и звук поступают с карты захвата; контроллер переходит на консоль через PS5 Remote Play. Когда это изображение повторно передается на портативный или другой PC, воспроизводите PS5 с контроллером там."
+  },
+  {
+   "zh": "画面和声音来自采集卡，手柄经 Xbox 远程游玩发给主机。把处理后的画面再串流给掌机或别的电脑时，用那边的手柄玩 Xbox",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "畫面和聲音來自擷取卡，手把經 Xbox 遠端遊玩發給主機。把處理後的畫面再串流給掌機或別的電腦時，用那邊的手把玩 Xbox",
+   "en": "Picture and sound come from the capture card; the controller goes to the console over Xbox Remote Play. When re-streaming the processed picture to a handheld or another PC, play Xbox with its controller",
+   "ja": "映像と音声はキャプチャーカードから取得し、コントローラー入力のみ Xbox リモートプレイで本体へ送信します。処理後の映像を携帯機や別 PC へ再配信した際、そちらのコントローラーで Xbox を遊べます",
+   "ko": "화면과 소리는 캡처 카드에서 오고 컨트롤러 입력은 Xbox 원격 플레이로 콘솔에 전달됩니다. 처리된 화면을 휴대용 기기나 다른 PC로 재스트리밍할 때 그쪽 컨트롤러로 Xbox를 플레이할 수 있습니다",
+   "es": "La imagen y el sonido provienen de la capturadora; el mando se envía a la consola mediante Xbox Remote Play. Al retransmitir la imagen procesada a una portátil u otro PC, juega a Xbox con su mando",
+   "fr": "L'image et le son viennent de la carte d'acquisition ; la manette passe par Xbox Remote Play. En rediffusant l'image traitée vers une console portable ou un autre PC, jouez à la Xbox avec sa manette",
+   "de": "Bild und Ton kommen von der Capture-Karte, der Controller läuft über Xbox Remote Play. Beim Weiterstreamen an ein Handheld oder einen anderen PC spielst du Xbox mit dem dortigen Controller",
+   "pt-BR": "Imagem e som vêm da placa de captura; o controle vai para o console via Xbox Remote Play. Ao retransmitir a imagem processada para um portátil ou outro PC, jogue Xbox com o controle de lá",
+   "ru": "Изображение и звук идут с карты захвата, а ввод геймпада передаётся на консоль через Xbox Remote Play. При ретрансляции на портативную консоль или другой ПК можно играть на Xbox с их геймпада"
+  },
+  {
+   "zh": "画面和声音来自采集卡，手柄经 Xbox 远程游玩发给主机（保活画面收到即丢弃），适合采集卡补帧或再串流给掌机",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "畫面和聲音來自擷取卡，手把經 Xbox 遠端遊玩發給主機（保活畫面收到即丟棄），適合擷取卡補幀或再串流給掌機",
+   "en": "Picture and sound come from the capture card while the controller is forwarded over Xbox Remote Play (keepalive video dropped on arrival), ideal for capture frame generation or re-streaming to a handheld",
+   "ja": "映像と音声はキャプチャーカードを使い、コントローラー入力のみ Xbox リモートプレイで送信します（キープアライブ映像は受信時破棄）。キャプチャー補間や携帯機への再配信に最適です",
+   "ko": "화면과 소리는 캡처 카드를 사용하고 컨트롤러 입력은 Xbox 원격 플레이로 전달합니다(유지 영상은 수신 즉시 폐기). 캡처 프레임 보간이나 휴대용 기기 재스트리밍에 적합합니다",
+   "es": "La imagen y el sonido vienen de la capturadora mientras el mando se envía por Xbox Remote Play (el vídeo keepalive se descarta al llegar), ideal para interpolación con capturadora o retransmisión a portátiles",
+   "fr": "L'image et le son proviennent de la carte d'acquisition et la manette est transmise via Xbox Remote Play (flux vidéo keepalive ignoré), idéal pour l'interpolation sur capture ou la rediffusion vers une console portable",
+   "de": "Bild und Ton stammen von der Capture-Karte, der Controller wird über Xbox Remote Play übertragen (Keepalive-Video wird verworfen) – ideal für Capture-Frame-Generation oder Weiterstreaming auf Handhelds",
+   "pt-BR": "Imagem e som vêm da placa de captura enquanto o controle é enviado via Xbox Remote Play (vídeo keepalive descartado ao chegar), ideal para interpolação na captura ou retransmissão para portáteis",
+   "ru": "Изображение и звук берутся с карты захвата, а геймпад передаётся через Xbox Remote Play (keepalive-видео отбрасывается), что идеально для генерации кадров на захвате или ретрансляции на портативную консоль"
   },
   {
    "zh": "画面在主窗口播放",
@@ -29745,6 +30161,19 @@
    "de": "Ziel",
    "pt-BR": "Alvo",
    "ru": "Цель"
+  },
+  {
+   "zh": "目标主机",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目標主機",
+   "en": "Target console",
+   "ja": "対象本体",
+   "ko": "대상 콘솔",
+   "es": "Consola objetivo",
+   "fr": "Console cible",
+   "de": "Zielkonsole",
+   "pt-BR": "Console alvo",
+   "ru": "Целевая консоль"
   },
   {
    "zh": "目标尺寸",
@@ -30694,6 +31123,19 @@
    "de": "Verwalten",
    "pt-BR": "Gerenciar",
    "ru": "Управление"
+  },
+  {
+   "zh": "管理…",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "管理…",
+   "en": "Manage…",
+   "ja": "管理…",
+   "ko": "관리…",
+   "es": "Gestionar…",
+   "fr": "Gérer…",
+   "de": "Verwalten…",
+   "pt-BR": "Gerenciar…",
+   "ru": "Управление…"
   },
   {
    "zh": "管理预设",
@@ -36937,7 +37379,7 @@
   },
   {
    "zh": "软件视频解码",
-   "src": "qml/XboxSourceDialog.qml",
+   "src": "qml/SettingsPage.qml",
    "zh-TW": "軟體視訊解碼",
    "en": "Software video decoding",
    "ja": "ソフトウェア動画デコード",
@@ -37820,6 +38262,58 @@
    "ru": "Пока нечего продолжать"
   },
   {
+   "zh": "还没有登录 Xbox 账号，先在「Xbox 串流」里登录一次",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "還沒有登入 Xbox 帳號，先在「Xbox 串流」裡登入一次",
+   "en": "Not signed in to Xbox yet. Sign in once under Xbox streaming",
+   "ja": "Xbox アカウントに未サインインです。先に「Xbox ストリーミング」でサインインしてください",
+   "ko": "아직 Xbox 계정에 로그인하지 않았습니다. 먼저 'Xbox 스트리밍'에서 로그인하세요",
+   "es": "Aún no has iniciado sesión en Xbox. Inicia sesión primero en «Transmisión Xbox»",
+   "fr": "Aucun compte Xbox connecté. Connectez-vous d'abord dans « Streaming Xbox »",
+   "de": "Noch kein Xbox-Konto angemeldet. Melde dich zuerst unter „Xbox-Streaming“ an",
+   "pt-BR": "Ainda não entrou na conta Xbox. Entre primeiro em «Streaming Xbox»",
+   "ru": "Вход в аккаунт Xbox ещё не выполнен. Сначала войдите в разделе «Стриминг Xbox»"
+  },
+  {
+   "zh": "还没有选择 Xbox 主机，先在「Xbox 串流」或设置里选择主机",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "還沒有選擇 Xbox 主機，先在「Xbox 串流」或設定裡選擇主機",
+   "en": "No Xbox console selected yet. Choose one under Xbox streaming or Settings",
+   "ja": "Xbox 本体が未選択です。「Xbox ストリーミング」または設定で選択してください",
+   "ko": "선택한 Xbox 콘솔이 없습니다. 'Xbox 스트리밍' 또는 설정에서 콘솔을 선택하세요",
+   "es": "Aún no se ha seleccionado ninguna consola Xbox. Elígela en «Transmisión Xbox» o en Ajustes",
+   "fr": "Aucune console Xbox sélectionnée. Choisissez-en une dans « Streaming Xbox » ou les paramètres",
+   "de": "Noch keine Xbox-Konsole ausgewählt. Wähle eine unter „Xbox-Streaming“ oder in den Einstellungen",
+   "pt-BR": "Nenhum console Xbox selecionado. Escolha um em «Streaming Xbox» ou nas Configurações",
+   "ru": "Консоль Xbox ещё не выбрана. Выберите её в разделе «Стриминг Xbox» или в настройках"
+  },
+  {
+   "zh": "还没有选择主机，先在「Xbox 串流」里选择一次",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "還沒有選擇主機，先在「Xbox 串流」裡選擇一次",
+   "en": "No console selected yet. Choose one once under Xbox streaming",
+   "ja": "本体が未選択です。先に「Xbox ストリーミング」で選択してください",
+   "ko": "선택한 콘솔이 없습니다. 먼저 'Xbox 스트리밍'에서 콘솔을 선택하세요",
+   "es": "Aún no se ha seleccionado ninguna consola. Elígela primero en «Transmisión Xbox»",
+   "fr": "Aucune console sélectionnée. Choisissez-en une d'abord dans « Streaming Xbox »",
+   "de": "Noch keine Konsole ausgewählt. Wähle zuerst eine unter „Xbox-Streaming“ aus",
+   "pt-BR": "Nenhum console selecionado. Escolha um primeiro em «Streaming Xbox»",
+   "ru": "Консоль ещё не выбрана. Сначала выберите её в разделе «Стриминг Xbox»"
+  },
+  {
+   "zh": "还没有选择主机，点击刷新或在「Xbox 串流」里选择",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "還沒有選擇主機，點擊重新整理或在「Xbox 串流」裡選擇",
+   "en": "No console selected yet; click Refresh or choose one under Xbox streaming",
+   "ja": "本体が未選択です。更新を押すか「Xbox ストリーミング」で選択してください",
+   "ko": "선택한 콘솔이 없습니다. 새로고침을 누르거나 'Xbox 스트리밍'에서 선택하세요",
+   "es": "Aún no se ha seleccionado consola; pulsa Actualizar o elígela en «Transmisión Xbox»",
+   "fr": "Aucune console sélectionnée ; cliquez sur Actualiser ou choisissez-en une dans « Streaming Xbox »",
+   "de": "Noch keine Konsole ausgewählt; klicke auf Aktualisieren oder wähle sie unter „Xbox-Streaming“",
+   "pt-BR": "Nenhum console selecionado; clique em Atualizar ou escolha em «Streaming Xbox»",
+   "ru": "Консоль не выбрана; нажмите «Обновить» или выберите её в разделе «Стриминг Xbox»"
+  },
+  {
    "zh": "还没有配对的 PS5，先在「PS5 串流」里配对一次",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "還沒有配對的 PS5，先在「PS5 串流」裡配對一次",
@@ -38130,6 +38624,19 @@
    "de": "Dies sind die gleichen Einstellungen wie im PS5 Streaming-Fenster; sie werden bei der nächsten Verbindung im Pairing-Profil des Hosts gespeichert.",
    "pt-BR": "Estas são as mesmas configurações que na janela de streaming PS5; elas são salvas no perfil de pareamento da máquina na próxima conexão.",
    "ru": "Это те же настройки, что и в потоковом окне PS5; они сохраняются в профиле сопряжения хоста при следующем соединении."
+  },
+  {
+   "zh": "这里和「Xbox 串流」「采集卡」窗口共用同一份设置与账号。Xbox 同一时间只允许一个远程游玩连接；后台串流时主机仍会发送保活画面，本机收到即丢弃且不解码。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "這裡和「Xbox 串流」「擷取卡」視窗共用同一份設定與帳號。Xbox 同一時間只允許一個遠端遊玩連線；背景串流時主機仍會傳送保活畫面，本機收到即丟棄且不解碼。",
+   "en": "These settings and the signed-in account are shared with the Xbox streaming and Capture card dialogs. Xbox allows only one Remote Play connection at a time; during background streaming the console still sends a keepalive picture that is dropped without decoding.",
+   "ja": "ここでの設定とアカウントは「Xbox ストリーミング」および「キャプチャーカード」ウィンドウと共有されます。Xbox のリモートプレイは同時に 1 接続のみです。バックグラウンド配信中も本体からキープアライブ映像が送られますが、デコードせず受信時に破棄されます。",
+   "ko": "이 설정과 계정은 'Xbox 스트리밍' 및 '캡처 카드' 창과 공유됩니다. Xbox는 한 번에 하나의 원격 플레이 연결만 허용하며, 백그라운드 스트리밍 중 콘솔이 보내는 유지 영상은 디코딩 없이 수신 즉시 폐기됩니다.",
+   "es": "Estos ajustes y la cuenta se comparten con las ventanas de «Transmisión Xbox» y «Capturadora». Xbox solo permite una conexión de juego remoto a la vez; en segundo plano la consola sigue enviando vídeo keepalive que se descarta sin decodificar.",
+   "fr": "Ces paramètres et ce compte sont partagés avec les fenêtres « Streaming Xbox » et « Carte d'acquisition ». La Xbox n'autorise qu'une connexion Remote Play à la fois ; en arrière-plan, le flux vidéo keepalive est ignoré sans décodage.",
+   "de": "Diese Einstellungen und das Konto werden mit den Fenstern „Xbox-Streaming“ und „Capture-Karte“ geteilt. Die Xbox erlaubt nur eine Remote-Play-Verbindung gleichzeitig; im Hintergrund gesendete Keepalive-Videos werden ohne Dekodierung verworfen.",
+   "pt-BR": "Estas configurações e a conta são compartilhadas com as janelas «Streaming Xbox» e «Placa de captura». O Xbox permite apenas uma conexão de Jogo Remoto por vez; em segundo plano o vídeo keepalive é descartado sem decodificação.",
+   "ru": "Эти настройки и учётная запись общие с окнами «Стриминг Xbox» и «Карта захвата». Xbox допускает только одно подключение Remote Play одновременно; в фоновом режиме keepalive-видео отбрасывается без декодирования."
   },
   {
    "zh": "这里是「基础设置」里 暗部提亮、整体观感、高光保护 这三项的精确数值版（强度与显示峰值不在此列，它们本身就是直接调节）。",
@@ -39107,6 +39614,19 @@
    "ru": "Как выбрать карту захвата"
   },
   {
+   "zh": "采集卡时后台串流（仅传手柄）",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "擷取卡時背景串流（僅傳手把）",
+   "en": "Background stream during capture (controller only)",
+   "ja": "キャプチャー時にバックグラウンド配信（コントローラーのみ）",
+   "ko": "캡처 중 백그라운드 스트리밍(컨트롤러만 전송)",
+   "es": "Transmisión en segundo plano al capturar (solo mando)",
+   "fr": "Streaming en arrière-plan pendant la capture (manette uniquement)",
+   "de": "Hintergrund-Streaming bei Capture (nur Controller)",
+   "pt-BR": "Streaming em segundo plano na captura (somente controle)",
+   "ru": "Фоновый стриминг при захвате (только геймпад)"
+  },
+  {
    "zh": "采集卡设置",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "擷取卡設定",
@@ -39183,6 +39703,19 @@
    "de": "Verbindet sich mit der PS5, sobald die Capture Card verbunden ist",
    "pt-BR": "Liga-se ao PS5 uma vez que a placa de captura está conectada",
    "ru": "Подключается к PS5 после подключения карты захвата"
+  },
+  {
+   "zh": "采集卡连上后自动连接 Xbox",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "擷取卡連上後自動連線 Xbox",
+   "en": "Connects to Xbox automatically once the capture card is live",
+   "ja": "キャプチャーカードの接続後に Xbox へ自動接続します",
+   "ko": "캡처 카드가 연결되면 Xbox에 자동으로 연결합니다",
+   "es": "Se conecta automáticamente a Xbox cuando la capturadora esté activa",
+   "fr": "Se connecte automatiquement à la Xbox dès que la carte d'acquisition est active",
+   "de": "Verbindet sich automatisch mit der Xbox, sobald die Capture-Karte aktiv ist",
+   "pt-BR": "Conecta-se automaticamente ao Xbox assim que a placa de captura estiver ativa",
+   "ru": "Автоматически подключается к Xbox после запуска карты захвата"
   },
   {
    "zh": "采集卡连续两次重连未出画面，正在释放设备后重试",

@@ -33,6 +33,7 @@ DialogLayer {
             veyra.refreshCaptureDevices()
             // The PS5 手柄控制 host list is the PS5 dialog's saved pairings.
             if (veyra.ps5Control.available === true) veyra.ps5Load()
+            if (veyra.xboxControl && veyra.xboxControl.available === true && veyra.xbox) veyra.xbox.load()
         }
     }
     function onboardingTarget(key) {
@@ -68,6 +69,33 @@ DialogLayer {
         case "pin": return qsTr("PS5 要求输入登录 PIN")
         case "recovering": case "failed": case "nopair": return pc.message || ""
         default: return qsTr("采集卡连上后自动连接 PS5")
+        }
+    }
+    readonly property var xc: veyra.xboxControl || ({})
+    readonly property bool xcOn: xc.available === true && xc.enabled === true
+    readonly property var xb: veyra.xbox || null
+    readonly property var xst: xb ? xb.state : ({})
+    readonly property var xboxConsoleOptions: {
+        const list = xb && xb.consoles ? xb.consoles : []
+        return list.map(c => ({ id: c.id, label: c.name }))
+    }
+    readonly property string xcTag: {
+        switch (xc.state) {
+        case "starting": return qsTr("连接中")
+        case "connected": return qsTr("已连接")
+        case "recovering": return qsTr("重连中")
+        case "failed": return qsTr("已停止")
+        case "nosignin": return qsTr("未登录")
+        case "noconsole": return qsTr("未选主机")
+        default: return qsTr("未连接")
+        }
+    }
+    readonly property string xcStatus: {
+        switch (xc.state) {
+        case "starting": return xc.message || qsTr("正在连接 Xbox…")
+        case "connected": return xc.keepaliveFps >= 0 ? qsTr("Xbox 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）").arg(xc.keepaliveFps) : qsTr("Xbox 手柄控制已连接")
+        case "recovering": case "failed": case "nosignin": case "noconsole": return xc.message || ""
+        default: return qsTr("采集卡连上后自动连接 Xbox")
         }
     }
 
@@ -548,6 +576,97 @@ DialogLayer {
         visible: captureDialog.pcOn
         text: (captureDialog.pcStatus.length > 0 ? captureDialog.pcStatus + "\n" : "")
               + qsTr("PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。")
+    }
+    // Xbox 手柄控制: the capture card stays the picture and the sound; Xbox Remote
+    // Play only carries the pad (also from a handheld this picture is re-streamed to).
+    DialogSection { visible: captureDialog.xc.available === true; text: qsTr("Xbox 手柄控制") }
+    DialogGroup {
+        visible: captureDialog.xc.available === true
+        VRow {
+            label: qsTr("用远程游玩控制 Xbox")
+            hint: qsTr("画面和声音来自采集卡，手柄经 Xbox 远程游玩发给主机。把处理后的画面再串流给掌机或别的电脑时，用那边的手柄玩 Xbox")
+            VSwitch {
+                objectName: "capture-xbox-control"
+                checked: captureDialog.xcOn
+                onToggled: checked => veyra.xboxControlSet("enabled", checked)
+            }
+        }
+        VRow {
+            visible: captureDialog.xcOn
+            label: qsTr("Xbox 主机")
+            hint: !captureDialog.xst.signedIn
+                  ? qsTr("还没有登录 Xbox 账号，先在「Xbox 串流」里登录一次")
+                  : (captureDialog.xboxConsoleOptions.length > 0
+                     ? qsTr("和「Xbox 串流」及设置共用主机选择")
+                     : ((captureDialog.xst.selectedName || captureDialog.xst.lastLabel || "").length > 0
+                        ? qsTr("当前目标主机：%1").arg(captureDialog.xst.selectedName || captureDialog.xst.lastLabel)
+                        : qsTr("还没有选择主机，先在「Xbox 串流」里选择一次")))
+            RowLayout {
+                spacing: 6
+                VSelect {
+                    objectName: "capture-xbox-host"
+                    visible: !!captureDialog.xst.signedIn && captureDialog.xboxConsoleOptions.length > 0
+                    implicitWidth: 170
+                    value: {
+                        const c = captureDialog.xboxConsoleOptions.find(x => x.id === (captureDialog.xst.selected || ""))
+                        return c ? c.label : qsTr("请选择")
+                    }
+                    options: captureDialog.xboxConsoleOptions
+                    onPicked: id => captureDialog.xb.select(id)
+                }
+                VTag {
+                    objectName: "capture-xbox-state"
+                    Layout.alignment: Qt.AlignVCenter
+                    text: captureDialog.xcTag
+                    kind: captureDialog.xc.state === "connected" ? "ok"
+                        : captureDialog.xc.state === "failed" || captureDialog.xc.state === "nosignin" || captureDialog.xc.state === "noconsole" ? "warn" : ""
+                }
+                VButton {
+                    objectName: "capture-xbox-restart"
+                    visible: captureDialog.xc.state === "failed"
+                    text: qsTr("重连"); ghost: true
+                    onClicked: veyra.xboxControlRestart()
+                }
+                VButton {
+                    objectName: "capture-xbox-manage"
+                    text: !captureDialog.xst.signedIn ? qsTr("去登录") : qsTr("管理…")
+                    ghost: true
+                    onClicked: dialogHost.open("xbox")
+                }
+            }
+        }
+        VRow {
+            visible: captureDialog.xcOn
+            label: qsTr("后台也转发手柄")
+            hint: qsTr("再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 Xbox")
+            VSwitch {
+                objectName: "capture-xbox-background"
+                checked: captureDialog.xc.background === true
+                onToggled: checked => veyra.xboxControlSet("background", checked)
+            }
+        }
+        VRow {
+            visible: captureDialog.xcOn
+            label: qsTr("手柄")
+            hint: qsTr("谁按键就用谁：本机手柄、串流软件建的虚拟手柄都可以")
+            Text {
+                objectName: "capture-xbox-pad"
+                text: (captureDialog.xc.pad || "").length > 0
+                      ? captureDialog.xc.pad
+                      : captureDialog.xc.state === "off" || captureDialog.xc.state === "nosignin" || captureDialog.xc.state === "noconsole" ? "—" : qsTr("未检测到手柄")
+                color: Theme.t1
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSmall
+                elide: Text.ElideRight
+                width: Math.min(implicitWidth, 260)
+            }
+        }
+    }
+    DialogNote {
+        objectName: "capture-xbox-note"
+        visible: captureDialog.xcOn
+        text: (captureDialog.xcStatus.length > 0 ? captureDialog.xcStatus + "\n" : "")
+              + qsTr("Xbox 仍会发一路保活画面，本机收到即丢弃且不解码；Xbox 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。")
     }
     DialogSection { text: qsTr("格式与画面") }
     DialogGroup {

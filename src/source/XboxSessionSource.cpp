@@ -269,37 +269,40 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         }
 
         setState(XboxStats::State::Connecting, L"正在建立连接…");
+        p.rtc.setControlOnly(p.desc.controlOnly);
         xbox::WebRtcCallbacks callbacks;
-        callbacks.video = [this](std::vector<uint8_t>&& unit, uint32_t rtp, int64_t arrival) {
-            auto& q = *p_;
-            ++q.units;
-            std::lock_guard lock(q.queueMutex);
-            // Latency first: keep only a short backlog; a decoder that falls behind drops the oldest.
-            const auto lost = xbox::trimVideoInputs(q.queue, 8);
-            q.dropped += lost;
-            q.queue.push_back({std::move(unit), rtp, arrival, lost>0&&q.queue.empty()});
-            q.queueCv.notify_one();
-        };
-        callbacks.audio = [this](const uint8_t* data, size_t size, uint32_t rtp) {
-            auto& q = *p_;
-            if (!q.audioReady || !q.opus) return;
-            // Lost packets never reach this callback: time comes from RTP, not from
-            // counting decoded samples, so a loss leaves a gap instead of pulling audio ahead.
-            if (q.haveAudioRtp) {
-                const auto advance = int32_t(rtp - q.lastAudioRtp);
-                if (advance <= 0) return; // late or repeated Opus packet
-                q.audioRtpTicks += advance;
-            }
-            q.lastAudioRtp = rtp;
-            q.haveAudioRtp = true;
-            const int frames = opus_decode_float(q.opus, data, opus_int32(size), q.pcm.data(), 5760, 0);
-            if (frames <= 0) { q.audioDiscontinuity = true; return; }
-            const double ptsMs = double(q.audioRtpTicks) / 48.0;
-            const bool accepted = audio_.push(q.pcm.data(), size_t(frames) * 2 * sizeof(float), ptsMs, q.audioDiscontinuity);
-            if (!q.audioSamples) log::info("xbox-audio", std::format("first Opus block samples={} accepted={}", frames, accepted));
-            q.audioDiscontinuity = false;
-            q.audioSamples += uint64_t(frames);
-        };
+        if (!p.desc.controlOnly) {
+            callbacks.video = [this](std::vector<uint8_t>&& unit, uint32_t rtp, int64_t arrival) {
+                auto& q = *p_;
+                ++q.units;
+                std::lock_guard lock(q.queueMutex);
+                // Latency first: keep only a short backlog; a decoder that falls behind drops the oldest.
+                const auto lost = xbox::trimVideoInputs(q.queue, 8);
+                q.dropped += lost;
+                q.queue.push_back({std::move(unit), rtp, arrival, lost>0&&q.queue.empty()});
+                q.queueCv.notify_one();
+            };
+            callbacks.audio = [this](const uint8_t* data, size_t size, uint32_t rtp) {
+                auto& q = *p_;
+                if (!q.audioReady || !q.opus) return;
+                // Lost packets never reach this callback: time comes from RTP, not from
+                // counting decoded samples, so a loss leaves a gap instead of pulling audio ahead.
+                if (q.haveAudioRtp) {
+                    const auto advance = int32_t(rtp - q.lastAudioRtp);
+                    if (advance <= 0) return; // late or repeated Opus packet
+                    q.audioRtpTicks += advance;
+                }
+                q.lastAudioRtp = rtp;
+                q.haveAudioRtp = true;
+                const int frames = opus_decode_float(q.opus, data, opus_int32(size), q.pcm.data(), 5760, 0);
+                if (frames <= 0) { q.audioDiscontinuity = true; return; }
+                const double ptsMs = double(q.audioRtpTicks) / 48.0;
+                const bool accepted = audio_.push(q.pcm.data(), size_t(frames) * 2 * sizeof(float), ptsMs, q.audioDiscontinuity);
+                if (!q.audioSamples) log::info("xbox-audio", std::format("first Opus block samples={} accepted={}", frames, accepted));
+                q.audioDiscontinuity = false;
+                q.audioSamples += uint64_t(frames);
+            };
+        }
         callbacks.vibration = [this](const xbox::Vibration& v) {
             if (v.gamepad != 0) return;
             auto& q = *p_;
@@ -328,20 +331,22 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         };
         p.rtc.setCallbacks(std::move(callbacks));
 
-        // Audio output: stereo float at 48 kHz.
-        int opusError = 0;
-        p.opus = opus_decoder_create(48000, 2, &opusError);
-        if (p.opus && opusError == OPUS_OK) {
-            p.pcm.assign(5760 * 2, 0.f);
-            sink::AudioFormat layout;
-            layout.channels = 2;
-            layout.mask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
-            const WAVEFORMATEXTENSIBLE wave = sink::floatWave(layout);
-            p.audioReady = audio_.configure(wave.Format, sizeof(wave)) && audio_.start();
-            if (!p.audioReady) log::warn("xbox-audio", "the audio output could not be started; the stream continues without sound");
-            else log::info("xbox-audio", "Opus stereo 48000 Hz: output worker started");
-        } else {
-            log::error("xbox-audio", std::format("Opus decoder creation failed code={}", opusError));
+        // Audio output: stereo float at 48 kHz (skipped in controller-only mode; capture card owns audio).
+        if (!p.desc.controlOnly) {
+            int opusError = 0;
+            p.opus = opus_decoder_create(48000, 2, &opusError);
+            if (p.opus && opusError == OPUS_OK) {
+                p.pcm.assign(5760 * 2, 0.f);
+                sink::AudioFormat layout;
+                layout.channels = 2;
+                layout.mask = SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT;
+                const WAVEFORMATEXTENSIBLE wave = sink::floatWave(layout);
+                p.audioReady = audio_.configure(wave.Format, sizeof(wave)) && audio_.start();
+                if (!p.audioReady) log::warn("xbox-audio", "the audio output could not be started; the stream continues without sound");
+                else log::info("xbox-audio", "Opus stereo 48000 Hz: output worker started");
+            } else {
+                log::error("xbox-audio", std::format("Opus decoder creation failed code={}", opusError));
+            }
         }
 
         ApiSignaling signaling(*p.api, p.sessionId);
@@ -356,7 +361,8 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 
         // Decode and keepalive.
         p.stopDecode = false;
-        p.decodeThread = std::thread([this] { decodeLoop(); });
+        if (!p.desc.controlOnly) p.decodeThread = std::thread([this] { decodeLoop(); });
+        else log::info("xbox-control", "controller-only session started (keepalive media dropped on receipt)");
         p.keepaliveThread = std::thread([this] {
             auto& q = *p_;
             auto next = Clock::now() + std::chrono::seconds(30);
@@ -704,12 +710,12 @@ XboxStats XboxSessionSource::stats() const {
     }
     if (!p_) return s;
     auto& p = *p_;
-    s.units = p.units.load();
+    const xbox::WebRtcStats r = p.rtc.stats();
+    s.units = p.desc.controlOnly ? r.videoUnits : p.units.load();
     s.decoded = p.decoded.load();
     s.dropped = p.dropped.load() + skipped();
     s.decodeErrors = p.errors.load();
     s.hardwareDecode = p.hardwareDecodeStatus.load(std::memory_order_relaxed);
-    const xbox::WebRtcStats r = p.rtc.stats();
     s.keyframeRequests = r.keyframeRequests;
     s.rttMs = r.rttMs;
     std::lock_guard lock(p.statsMutex);
@@ -731,7 +737,14 @@ XboxStats XboxSessionSource::stats() const {
     return s;
 }
 
-uint64_t XboxSessionSource::unitsReceived() const { return p_ ? p_->units.load() : 0; }
+bool XboxSessionSource::alive() const {
+    return p_ && p_->streaming.load() && !p_->ended.load() && !cancel_.load();
+}
+
+uint64_t XboxSessionSource::unitsReceived() const {
+    if (!p_) return 0;
+    return p_->desc.controlOnly ? p_->rtc.stats().videoUnits : p_->units.load();
+}
 
 uint64_t XboxSessionSource::skipped() const {
     std::lock_guard lock(mutex_);

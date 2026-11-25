@@ -274,9 +274,11 @@ bool WebRtcSession::sendClientConfig() {
     sent &= sendMessageJson(message("/streaming/characteristics/orientationchanged", {{"orientation", 0}}));
     sent &= sendMessageJson(message("/streaming/characteristics/touchinputenabledchanged", {{"touchInputEnabled", false}}));
     sent &= sendMessageJson(message("/streaming/characteristics/clientdevicecapabilities", json::object()));
+    const int width = controlOnly_ ? 1280 : 1920;
+    const int height = controlOnly_ ? 720 : 1080;
     sent &= sendMessageJson(message("/streaming/characteristics/dimensionschanged", {
-        {"horizontal", 1920}, {"vertical", 1080}, {"preferredWidth", 1920}, {"preferredHeight", 1080},
-        {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", 1920}, {"safeAreaBottom", 1080}, {"supportsCustomResolution", true}}));
+        {"horizontal", width}, {"vertical", height}, {"preferredWidth", width}, {"preferredHeight", height},
+        {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", width}, {"safeAreaBottom", height}, {"supportsCustomResolution", true}}));
     return sent;
 }
 
