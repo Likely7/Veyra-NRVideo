@@ -122,7 +122,8 @@ DialogLayer {
             label: qsTr("控制方式")
             VButton {
                 objectName: "open-ps5-mapping"
-                text: veyra.ps5Input && veyra.ps5Input.keyboardEnabled ? qsTr("键鼠映射") : qsTr("设置键鼠映射")
+                enabled: !veyra.ps5.viewOnly
+                text: (veyra.ps5Input?.keyboardEnabled ? qsTr("键鼠映射") : qsTr("实体手柄")) + " · " + (veyra.ps5Input?.profile || "Default")
                 onClicked: dialogHost.openPs5Mapping()
             }
         }

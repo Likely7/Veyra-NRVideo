@@ -40,6 +40,11 @@ Item {
             next[name] = value
             tuning = next
         }
+        property string profile:"Default"
+        property var profiles:["Default"]
+        property string unlockLabel:"Esc"
+        function toggleAction(id){return false}
+        function cancelLearning(){learning=-1}
         function preview(on) { previewing = on }
         function releasePs5() { learning = -1; previewing = false }
     }
@@ -55,6 +60,7 @@ Item {
         function init() {
             fixture.width = 980
             host.dialog = "ps5-mapping"
+            editor.advanced=false
             mapper.applyDefaults()
             mapper.resetMouseTuning()
             mapper.releasePs5()
@@ -65,10 +71,14 @@ Item {
             verify(trigger && trigger.visible)
             mouseClick(trigger)
             compare(editor.selected, 17)
-            compare(mapper.learning, 17)
+            compare(mapper.learning, -1)
+            findChild(editor,"ps5-bind-selected").clicked()
+            compare(mapper.learning,17)
             mapper.releasePs5()
             mouseClick(findChild(editor, "ps5-bind-0"))
-            compare(mapper.learning, 0)
+            compare(mapper.learning,-1)
+            findChild(editor,"ps5-bind-selected").clicked()
+            compare(mapper.learning,0)
             mapper.releasePs5()
             mouseClick(findChild(editor, "ps5-clear-binding"))
             compare(editor.binding(0), "—")
@@ -87,6 +97,7 @@ Item {
             compare(slider.value, 3.2)
             mapper.setTuning("horizontal", 2.1)
             compare(slider.value, 2.1)
+            editor.advanced=true
             const boost = findChild(editor, "ps5-tune-turnBoost")
             const filter = findChild(editor, "ps5-tune-inputDeadzone")
             compare(boost.value, 3.6)
@@ -105,6 +116,9 @@ Item {
         }
         function test_narrow_geometry() {
             fixture.width = 453
+            wait(30)
+            verify(editor.showList)
+            editor.showList=false
             wait(30)
             const board = findChild(editor, "ps5-controller-board")
             const trigger = findChild(editor, "ps5-bind-17")

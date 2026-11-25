@@ -6,12 +6,16 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QCursor>
+#include <QQuickItem>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
 
 #include <chrono>
+#include <format>
+#pragma comment(lib,"imm32.lib")
 
 #include "veyra/Log.h"
 #include "veyra/engine/EngineController.h"
@@ -35,6 +39,16 @@ QString bindingLabel(int binding) {
     const int key = binding & Mapper::KeyMask;
     using T = StreamInputCapture;
     switch (key) {
+    case VK_LEFT:return text+QStringLiteral("←");
+    case VK_RIGHT:return text+QStringLiteral("→");
+    case VK_UP:return text+QStringLiteral("↑");
+    case VK_DOWN:return text+QStringLiteral("↓");
+    case VK_LSHIFT:return text+QStringLiteral("LShift");
+    case VK_RSHIFT:return text+QStringLiteral("RShift");
+    case VK_LCONTROL:return text+QStringLiteral("LCtrl");
+    case VK_RCONTROL:return text+QStringLiteral("RCtrl");
+    case VK_LMENU:return text+QStringLiteral("LAlt");
+    case VK_RMENU:return text+QStringLiteral("RAlt");
     case Mapper::MouseLeft: return text + T::tr("鼠标左键");
     case Mapper::MouseMiddle: return text + T::tr("鼠标中键");
     case Mapper::MouseRight: return text + T::tr("鼠标右键");
@@ -57,6 +71,8 @@ QString bindingLabel(int binding) {
 QVariantMap tuningMap(const Mapper::Tuning& t) {
     return {{QStringLiteral("horizontal"), t.horizontal}, {QStringLiteral("vertical"), t.vertical},
             {QStringLiteral("turnBoost"), t.turnBoost}, {QStringLiteral("inputDeadzone"), t.inputDeadzone},
+            {"dpi",t.dpi},{"adsScale",t.adsScale},{"adsDelayMs",t.adsDelayMs},{"adsAction",t.adsAction},
+            {"deadzoneShape",t.deadzoneShape},{"walkScale",t.walkScale},{"unlock",t.unlock},{"gyro",t.gyro},{"carry",t.carry},
             {QStringLiteral("curve"), t.curve}, {QStringLiteral("deadzone"), t.deadzone},
             {QStringLiteral("smoothing"), t.smoothingMs}, {QStringLiteral("invertY"), t.invertY},
             {QStringLiteral("mouseLook"), t.mouseLook}};
@@ -69,11 +85,15 @@ Mapper::Tuning readTuning(const QVariantMap& map) {
         return ok && std::isfinite(value) ? std::clamp(value, lo, hi) : fallback;
     };
     Mapper::Tuning t;
+    t.dpi=bounded("dpi",t.dpi,200,6400);t.adsScale=bounded("adsScale",t.adsScale,.1,3.);
+    t.adsDelayMs=int(bounded("adsDelayMs",0,0,300));t.adsAction=int(bounded("adsAction",16,0,17));
+    t.deadzoneShape=bounded("deadzoneShape",0,0,1);t.walkScale=bounded("walkScale",.45,.2,.8);
+    t.unlock=int(bounded("unlock",0,0,4));t.gyro=int(bounded("gyro",0,0,2));t.carry=map.value("carry").toBool();
     t.horizontal = bounded("horizontal", t.horizontal, 0.1, 6.0);
     t.vertical = bounded("vertical", t.vertical, 0.1, 6.0);
     t.turnBoost = bounded("turnBoost", t.turnBoost, 1.0, 6.0);
     t.inputDeadzone = bounded("inputDeadzone", t.inputDeadzone, 0.0, 0.10);
-    t.curve = bounded("curve", t.curve, 0.5, 2.5);
+    t.curve = bounded("curve", t.curve, 0.3, 2.5);
     t.deadzone = bounded("deadzone", t.deadzone, 0.0, 0.30);
     t.smoothingMs = bounded("smoothing", t.smoothingMs, 0, 32);
     t.invertY = map.value(QStringLiteral("invertY"), t.invertY).toBool();
@@ -86,6 +106,7 @@ StreamInputCapture::StreamInputCapture(engine::EngineController& engine, QString
                                        std::function<uint64_t()> ps5Target)
     : engine_(engine), router_(*this), profilePath_(std::move(profilePath)), ps5Target_(std::move(ps5Target)) {
     load();
+    profiles_[profile_]=activeProfile();
     timer_.setTimerType(Qt::PreciseTimer);
     timer_.setInterval(8);
     connect(&timer_, &QTimer::timeout, this, &StreamInputCapture::tick);
@@ -99,11 +120,12 @@ StreamInputCapture::StreamInputCapture(engine::EngineController& engine, QString
 
 StreamInputCapture::~StreamInputCapture() {
     end();
+    cancelLearning();
     if (auto* app = QCoreApplication::instance()) app->removeNativeEventFilter(this);
 }
 
 void StreamInputCapture::setWindow(HWND window) {
-    if (window_ != window) end();
+    if (window_ != window) {end();cancelLearning();}
     window_ = window;
 }
 
@@ -138,6 +160,11 @@ bool StreamInputCapture::begin(Route route) {
     mapper_.reset();
     route_ = route;
     target_ = route_ == Route::Ps5 ? ps5Target_() : 0;
+    if(route_!=Route::Moonlight){
+        restoreCursor_=GetCursorPos(&savedCursor_)!=FALSE;
+        maxQueueMs_=0;staleReports_=0;
+        suspendIme();
+    }
     clipToWindow();
     SetCursor(nullptr);
     if (route_ != Route::Moonlight) {
@@ -160,6 +187,13 @@ void StreamInputCapture::end() {
     RAWINPUTDEVICE device{0x01, 0x02, RIDEV_REMOVE, nullptr};
     RegisterRawInputDevices(&device, 1, sizeof(device));
     ClipCursor(nullptr);
+    if(old!=Route::Moonlight){
+        restoreIme();
+        if(restoreCursor_ && MonitorFromPoint(savedCursor_,MONITOR_DEFAULTTONULL))SetCursorPos(savedCursor_.x,savedCursor_.y);
+        restoreCursor_=false;
+        veyra::log::info("ps5-input",std::format("raw queue maxMs={} staleDropped={}",maxQueueMs_,staleReports_));
+    }
+    wheelQueue_.clear();wheelGapUs_=0;
     SetCursor(LoadCursorW(nullptr, IDC_ARROW));
     router_.reset();
     mapper_.reset();
@@ -182,6 +216,12 @@ void StreamInputCapture::clipToWindow() {
     POINT topLeft{client.left, client.top}, bottomRight{client.right, client.bottom};
     ClientToScreen(window_, &topLeft);
     ClientToScreen(window_, &bottomRight);
+    if(route_!=Route::Moonlight){
+        POINT center{(topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2};
+        RECT point{center.x,center.y,center.x+1,center.y+1};
+        ClipCursor(&point);
+        return;
+    }
     const RECT screen{topLeft.x, topLeft.y, bottomRight.x, bottomRight.y};
     ClipCursor(&screen);
 }
@@ -190,19 +230,37 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     if ((route_ == Route::None && learning_ < 0) || eventType != "windows_generic_MSG") return false;
     const MSG* msg = static_cast<const MSG*>(message);
     if (!msg->hwnd || GetAncestor(msg->hwnd, GA_ROOT) != window_) return false;
+    WPARAM keyParam=msg->wParam;
     const bool keyMessage = msg->message == WM_KEYDOWN || msg->message == WM_KEYUP ||
         msg->message == WM_SYSKEYDOWN || msg->message == WM_SYSKEYUP;
     const auto consume = [result] { if (result) *result = 0; return true; };
-    if (!captured() && keyMessage && msg->wParam == VK_ESCAPE) {
-        if (learning_ >= 0) cancelLearning();
-        else end();
-        return consume();
+    if(!captured() && keyMessage){
+        if(keyParam==VK_PROCESSKEY){
+            UINT sc=(msg->lParam>>16)&0xff;
+            if(msg->lParam&(1<<24))sc|=0xe000;
+            keyParam=MapVirtualKeyW(sc,MAPVK_VSC_TO_VK_EX);
+            if(!keyParam || keyParam==VK_PROCESSKEY)return consume();
+        }
+        const int setting=mapper_.tuning().unlock;
+        const auto mods=mapper_.modifiers();
+        const bool unlock=setting==0?keyParam==VK_ESCAPE:setting==1?keyParam=='Z'&&(mods&6)==6:
+                          setting==2?keyParam=='Q'&&(mods&4):setting==3?keyParam==VK_F1:keyParam==VK_OEM_3;
+        if(unlock){
+            if(learning_>=0)cancelLearning();else end();
+            return consume();
+        }
     }
+    if(learning_>=0 && (msg->message==WM_KILLFOCUS||(msg->message==WM_ACTIVATE&&LOWORD(msg->wParam)==WA_INACTIVE))){cancelLearning();return false;}
     if (learning_ >= 0) {
+        if (msg->message == WM_LBUTTONDOWN) {
+            auto* button = qobject_cast<QQuickItem*>(cancelButton_.data());
+            if (button && button->isVisible() && button->contains(button->mapFromGlobal(QCursor::pos())))
+                return false;
+        }
         if (!keyMessage && msg->message != WM_MOUSEWHEEL && msg->message != WM_MOUSEHWHEEL &&
             msg->message != WM_LBUTTONDOWN && msg->message != WM_RBUTTONDOWN &&
             msg->message != WM_MBUTTONDOWN && msg->message != WM_XBUTTONDOWN) return false;
-        return router_.message(msg->message, msg->wParam, msg->lParam, false) && consume();
+        return router_.message(msg->message, keyParam, msg->lParam, false) && consume();
     }
     if (!captured() && keyMessage && msg->wParam >= VK_F7 && msg->wParam <= VK_F10) return false;
     switch (msg->message) {
@@ -214,14 +272,10 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
             raw.header.dwType == RIM_TYPEMOUSE && (raw.data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == 0) {
             const auto dx = raw.data.mouse.lLastX, dy = raw.data.mouse.lLastY;
             if (mouse_ && (dx || dy)) {
-                // MSG.time uses the coarse uptime clock. Allow one tick of
-                // skew and date queued reports so a GUI stall cannot replay
-                // a large movement as one new instantaneous turn.
-                const DWORD queueMs = GetTickCount() - msg->time;
-                if (queueMs <= 40 || queueMs >= 0x80000000u) {
-                    const auto reportMs = nowUs() / 1000 - (queueMs > 16 && queueMs <= 40 ? queueMs : 0);
-                    mouse_->move(dx, dy, reportMs * 1000);
-                }
+                const DWORD lag=GetTickCount()-msg->time;
+                if(lag<0x80000000u)maxQueueMs_=std::max<int64_t>(maxQueueMs_,lag);
+                if(lag<=40 || lag>=0x80000000u)mouse_->move(dx,dy,nowUs());
+                else ++staleReports_;
             } else if (captured()) {
                 router_.rawMouse(dx, dy);
             }
@@ -240,7 +294,7 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     case WM_KILLFOCUS: end(); return false;
     default: break;
     }
-    const bool consumed = router_.message(msg->message, msg->wParam, msg->lParam, captured());
+    const bool consumed = router_.message(msg->message, keyParam, msg->lParam, captured());
     if (captured()) {
         switch (router_.takeReserved()) {
         case moonlight::Reserved::ReleaseCapture: end(); emit releaseRequested(); break;
@@ -288,10 +342,10 @@ void StreamInputCapture::scroll(int delta, bool horizontal) {
     const int key = horizontal ? (delta > 0 ? Mapper::WheelRight : Mapper::WheelLeft) :
         (delta > 0 ? Mapper::WheelUp : Mapper::WheelDown);
     if (learning_ >= 0) { bind(key, mapper_.modifiers()); return; }
-    if (wheelKey_) digital(wheelKey_, false);
-    digital(key, true);
-    wheelKey_ = key;
-    wheelReleaseUs_ = nowUs() + 24000;
+    if(!delta)return;
+    const auto steps=std::clamp(std::abs(delta)/120,1,16);
+    for(int i=0;i<steps&&wheelQueue_.size()<16;++i)wheelQueue_.push_back(key);
+    tick();
 }
 
 void StreamInputCapture::digital(int key, bool down) {
@@ -310,7 +364,11 @@ void StreamInputCapture::digital(int key, bool down) {
 void StreamInputCapture::tick() {
     if (wheelKey_ && nowUs() >= wheelReleaseUs_) {
         mapper_.digital(wheelKey_, false);
-        wheelKey_ = 0;
+        wheelKey_ = 0;wheelGapUs_=nowUs()+32000;
+    }
+    if(!wheelKey_ && !wheelQueue_.empty() && nowUs()>=wheelGapUs_){
+        wheelKey_=wheelQueue_.front();wheelQueue_.pop_front();
+        mapper_.digital(wheelKey_,true);wheelReleaseUs_=nowUs()+55000;
     }
     emitPad();
 }
@@ -318,6 +376,7 @@ void StreamInputCapture::tick() {
 void StreamInputCapture::emitPad() {
     bool useMouse = false;
     auto pad = mapper_.state(&useMouse);
+    if(mouse_)mouse_->menu(mapper_.menuActive());
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     if (ps5Captured()) {
         if (!target_ || ps5Target_() != target_) { end(); return; }
@@ -326,11 +385,10 @@ void StreamInputCapture::emitPad() {
 #endif
     if (previewing()) {
         if (useMouse) {
-            const auto [x, y] = mouse_->sample(nowUs());
-            pad.rightX = x;
-            pad.rightY = y;
+            mouse_->apply(pad,nowUs());
         }
-        if (pad != previewState_) { previewState_ = pad; emit padStateChanged(); }
+        const double speed=mouse_?std::round(mouse_->speed()):0.;
+        if (pad != previewState_||speed!=previewSpeed_) { previewSpeed_=speed;previewState_ = pad; emit padStateChanged(); }
     }
 }
 
@@ -341,7 +399,9 @@ QVariantList StreamInputCapture::bindings() const {
 }
 QVariantMap StreamInputCapture::tuning() const { return tuningMap(mapper_.tuning()); }
 QVariantMap StreamInputCapture::padState() const {
-    return {{QStringLiteral("buttons"), previewState_.buttons}, {QStringLiteral("leftX"), previewState_.leftX / 32767.0},
+    const int a=mapper_.tuning().adsAction;
+    const bool ads=a==16?previewState_.l2!=0:a==17?previewState_.r2!=0:(previewState_.buttons&(1u<<a))!=0;
+    return {{"ads",ads},{"speed",previewing()?previewSpeed_:0.}, {QStringLiteral("buttons"), previewState_.buttons}, {QStringLiteral("leftX"), previewState_.leftX / 32767.0},
             {QStringLiteral("leftY"), previewState_.leftY / 32767.0}, {QStringLiteral("rightX"), previewState_.rightX / 32767.0},
             {QStringLiteral("rightY"), previewState_.rightY / 32767.0}, {QStringLiteral("l2"), previewState_.l2},
             {QStringLiteral("r2"), previewState_.r2}};
@@ -356,9 +416,10 @@ void StreamInputCapture::setKeyboardEnabled(bool enabled) {
     save();
     emit mappingChanged();
 }
-void StreamInputCapture::learn(int action) {
+void StreamInputCapture::learn(int action, QObject* cancelButton) {
     if (action < 0 || action >= Mapper::ActionCount) return;
     end();
+    cancelLearning();
     // The editor can be opened from Home before any video HWND exists.
     window_ = GetForegroundWindow();
     DWORD pid = 0;
@@ -366,6 +427,8 @@ void StreamInputCapture::learn(int action) {
     if (pid != GetCurrentProcessId()) return;
     mapper_.reset();
     router_.reset();
+    suspendIme();
+    cancelButton_ = cancelButton;
     learning_ = action;
     learningModifier_ = 0;
     feedback_.clear();
@@ -373,7 +436,7 @@ void StreamInputCapture::learn(int action) {
 }
 void StreamInputCapture::bind(int key, int modifiers) {
     const int encoded = Mapper::encode(key, modifiers);
-    if (!Mapper::validBinding(encoded)) {
+    if (!Mapper::validBinding(encoded,mapper_.tuning().unlock!=0)) {
         feedback_ = tr("此键用于系统或 Veyra 快捷键，请换一个键。");
         emit mappingChanged();
         return;
@@ -383,6 +446,7 @@ void StreamInputCapture::bind(int key, int modifiers) {
     feedback_ = used != all.end() && int(used - all.begin()) != learning_ ?
         tr("已将 %1 从原按键移到此处。").arg(bindingLabel(encoded)) : QString{};
     mapper_.setBinding(learning_, encoded);
+    restoreIme();
     learning_ = -1;
     save();
     emit mappingChanged();
@@ -393,6 +457,7 @@ void StreamInputCapture::clearBinding(int action) {
 }
 void StreamInputCapture::cancelLearning() {
     if (learning_ < 0) return;
+    restoreIme();
     learning_ = -1;
     mapper_.reset();
     router_.reset();
@@ -401,7 +466,7 @@ void StreamInputCapture::cancelLearning() {
 void StreamInputCapture::applyDefaults() {
     releasePs5();
     mapper_.resetBindings();
-    mapper_.setTuning({});
+    mapper_.setToggleMask(0);
     feedback_.clear();
     save();
     emit mappingChanged();
@@ -442,20 +507,71 @@ void StreamInputCapture::load() {
     if (!file.open(QIODevice::ReadOnly) || file.size() > 64 * 1024) return;
     const auto json = QJsonDocument::fromJson(file.readAll()).object();
     if (json.value(QStringLiteral("version")).toInt() != 1) return;
-    const auto list = json.value(QStringLiteral("bindings")).toArray();
-    if (list.size() == Mapper::ActionCount) {
-        for (int i = 0; i < Mapper::ActionCount; ++i) mapper_.setBinding(i, 0);
-        for (int i = 0; i < Mapper::ActionCount; ++i)
-            mapper_.setBinding(i, list[i].toInt(Mapper::Defaults[i]));
+    profiles_=json.value("profiles").toObject();
+    profile_=json.value("profile").toString(QStringLiteral("Default"));
+    keyboardEnabled_=json.value("enabled").toBool();
+    readProfile(json);
+    profiles_[profile_]=activeProfile();
+}
+void StreamInputCapture::suspendIme(){
+    if(!imeWindow_&&window_){
+        imeWindow_=window_;
+        oldIme_=ImmAssociateContext(window_,nullptr);
+        const auto current=ImmGetContext(window_);
+        veyra::log::info("ps5-input",std::format("ime suspended={} previousContext={}",current==nullptr,oldIme_!=nullptr));
+        if(current)ImmReleaseContext(window_,current);
     }
-    keyboardEnabled_ = json.value(QStringLiteral("enabled")).toBool();
-    mapper_.setTuning(readTuning(json.value(QStringLiteral("tuning")).toObject().toVariantMap()));
+}
+void StreamInputCapture::restoreIme(){
+    if(imeWindow_&&IsWindow(imeWindow_)){
+        ImmAssociateContext(imeWindow_,oldIme_);
+        const auto current=ImmGetContext(imeWindow_);
+        veyra::log::info("ps5-input",std::format("ime restored={}",current==oldIme_));
+        if(current)ImmReleaseContext(imeWindow_,current);
+    }
+    imeWindow_=nullptr;oldIme_=nullptr;
+}
+QString StreamInputCapture::unlockLabel()const{
+    static const QStringList values={"Esc","Ctrl+Alt+Z","Alt+Q","F1","~"};
+    return values.value(mapper_.tuning().unlock);
+}
+void StreamInputCapture::readProfile(const QJsonObject& json){
+    mapper_.setTuning(readTuning(json.value("tuning").toObject().toVariantMap()));
+    mapper_.resetBindings();
+    const auto list=json.value("bindings").toArray();
+    if(list.size()>=26&&list.size()<=Mapper::ActionCount){
+        for(int i=0;i<list.size();++i)mapper_.setBinding(i,0);
+        for(int i=0;i<list.size();++i)mapper_.setBinding(i,list[i].toInt(Mapper::Defaults[i]));
+    }
+    mapper_.setToggleMask(uint64_t(json.value("toggles").toInteger()));
+}
+QJsonObject StreamInputCapture::activeProfile()const{
+    QJsonArray list;for(int key:mapper_.bindings())list.append(key);
+    return {{"bindings",list},{"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
+}
+bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}
+void StreamInputCapture::setToggleAction(int action,bool on){
+    if(action!=Mapper::L2&&action!=Mapper::L3&&action!=Mapper::Circle&&action!=Mapper::MenuStick)return;
+    releasePs5();auto bit=uint64_t{1}<<action;
+    mapper_.setToggleMask(on?mapper_.toggleMask()|bit:mapper_.toggleMask()&~bit);save();emit mappingChanged();
+}
+void StreamInputCapture::selectProfile(const QString& value,bool create){
+    const auto name=value.trimmed();if(name.isEmpty()||name.size()>40||name==profile_)return;
+    if(create?(profiles_.contains(name)||profiles_.size()>=16):!profiles_.contains(name))return;
+    releasePs5();profiles_[profile_]=activeProfile();profile_=name;
+    if(!create)readProfile(profiles_.value(name).toObject());
+    save();emit mappingChanged();
+}
+void StreamInputCapture::useTemplate(int index){
+    if(index<0||index>2)return;
+    auto t=mapper_.tuning();
+    t.deadzone=index==1?.18:index==2?.05:.08;t.curve=index==1?.60:index==2?1.:.65;
+    t.deadzoneShape=index==1?.5:0.;t.turnBoost=index==1?1.5:1.;
+    applyMouseTuning(t);
 }
 void StreamInputCapture::save() {
-    QJsonArray list;
-    for (const int binding : mapper_.bindings()) list.append(binding);
-    const QJsonObject json{{QStringLiteral("version"), 1}, {QStringLiteral("enabled"), keyboardEnabled_},
-        {QStringLiteral("bindings"), list}, {QStringLiteral("tuning"), QJsonObject::fromVariantMap(tuning())}};
+    auto json=activeProfile();profiles_[profile_]=json;
+    json["version"]=1;json["enabled"]=keyboardEnabled_;json["profile"]=profile_;json["profiles"]=profiles_;
     QDir().mkpath(QFileInfo(profilePath_).absolutePath());
     QSaveFile file(profilePath_);
     const auto data = QJsonDocument(json).toJson(QJsonDocument::Compact);

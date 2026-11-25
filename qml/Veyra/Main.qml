@@ -741,6 +741,7 @@ Window {
             veyra.moonlightCapture(true)
         }
     }
+    readonly property bool ps5InputLocked: !!veyra.ps5Input && (veyra.ps5Input.ps5Captured || veyra.ps5Input.previewing)
     readonly property bool ps5KeyboardReady: !!veyra.ps5Input && veyra.ps5Input.keyboardEnabled &&
         ((veyra.ps5.active === true && veyra.ps5.viewOnly !== true) ||
          (veyra.ps5Control.state === "connected" && veyra.isCapture))
@@ -755,9 +756,12 @@ Window {
     }
     Rectangle {
         objectName: "ps5-input-hint"
+        property bool capturedNow: root.ps5InputLocked
+        onCapturedNowChanged: { if(capturedNow)hintTimer.restart();else hintTimer.stop() }
+        Timer {id: hintTimer;interval:1800}
         readonly property bool videoCover: true
         readonly property real coverRadius: radius
-        visible: root.ps5KeyboardReady && dialogs.dialog === "" && veyra.hasSource
+        visible: (root.ps5KeyboardReady || capturedNow) && (!capturedNow || hintTimer.running) && dialogs.dialog === "" && veyra.hasSource
                  && (root.page === "min" || root.page === "pro" || root.page === "node")
         anchors.top: parent.top
         anchors.topMargin: 55
@@ -770,9 +774,10 @@ Window {
         z: 62
         Text {
             id: ps5InputHint
+            TapHandler {enabled: !veyra.ps5Input?.ps5Captured; onTapped: dialogs.openPs5Mapping()}
             anchors.centerIn: parent
-            text: veyra.ps5Input && veyra.ps5Input.ps5Captured
-                ? qsTr("键鼠已锁定 · Esc 释放") : qsTr("点击画面锁定键鼠")
+            text: parent.capturedNow
+                ? (qsTr("键鼠映射")+" · "+veyra.ps5Input.unlockLabel) : (qsTr("点击画面锁定键鼠")+"  ·  "+qsTr("键鼠设置"))
             color: Theme.t1
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsSmall
@@ -785,6 +790,22 @@ Window {
         sequence: "Ctrl+Alt+Shift+S"
         enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
         onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
+    }
+    Shortcut {
+        sequence: "Ctrl+Alt+F1"
+        enabled: !!veyra.ps5Input && !veyra.ps5Input.ps5Captured && !veyra.moonlightCaptured
+        onActivated: dialogs.openPs5Mapping()
+    }
+    VButton {
+        objectName: "ps5-quick-mapping"
+        readonly property bool videoCover: true
+        visible: root.quickPanelShown && !!veyra.ps5Input && !veyra.ps5Input.ps5Captured
+                 && (veyra.sourceKind==="ps5" || veyra.sourceKind==="capture") && dialogs.dialog===""
+        anchors.right: parent.right; anchors.bottom: parent.bottom
+        anchors.margins: 16
+        z: 91
+        text: qsTr("键鼠设置")
+        onClicked: dialogs.openPs5Mapping()
     }
     StreamHud {
         id: streamHud
@@ -808,7 +829,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: !root.ps5InputLocked && !veyra.moonlightCaptured && !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)

@@ -160,7 +160,7 @@ QObject* QmlPlayerBridge::ps5Input() const {
 uint64_t QmlPlayerBridge::ps5InputTarget() const {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     const auto& i = *impl_;
-    const auto s = i.engine.snapshot();
+    const auto& s = i.snapshot;
     if (s.remotePlay)
         return s.running && i.controllerTimer && i.controllerTimer->isActive() ? (s.sessionId << 1) : 0;
     if (!i.ps5ControlTimer || !i.ps5ControlTimer->isActive() || !captureCardLive()) return 0;
@@ -510,7 +510,7 @@ bool QmlPlayerBridge::ps5Connect() {
                     if (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening)) {
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
                         const auto physical = j.controller.poll(focused);
-                        if (!j.streamInput->keyboardEnabled()) j.engine.remotePlayController(physical);
+                        if (!j.streamInput->ps5Captured()) j.engine.remotePlayController(physical);
                         j.controller.feedback(j.engine.remotePlayFeedback(), focused);
                     } else {
                         j.engine.remotePlayController({}); j.releasePad(Impl::PadPs5); j.controllerTimer->stop();
@@ -746,7 +746,7 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
             }
             const bool focused = QGuiApplication::focusWindow() != nullptr || j.prefBool("ps5ControlBackground", false);
             const auto physical = j.controller.poll(focused);
-            if (!j.streamInput->keyboardEnabled()) j.engine.remotePlayController(physical);
+            if (!j.streamInput->ps5Captured()) j.engine.remotePlayController(physical);
             j.controller.feedback(j.engine.remotePlayFeedback(), focused);
         });
     }

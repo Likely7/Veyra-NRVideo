@@ -3,12 +3,16 @@
 
 #include <QAbstractNativeEventFilter>
 #include <QObject>
+#include <QPointer>
 #include <QString>
 #include <QTimer>
 #include <QVariant>
 #include <functional>
+#include <deque>
+#include <QJsonObject>
 #include <memory>
 #include <windows.h>
+#include <imm.h>
 
 #include "veyra/moonlight/InputRouter.h"
 #include "veyra/remoteplay/KeyboardMousePad.h"
@@ -22,6 +26,9 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_OBJECT
     Q_PROPERTY(bool keyboardEnabled READ keyboardEnabled WRITE setKeyboardEnabled NOTIFY mappingChanged)
     Q_PROPERTY(QVariantList bindings READ bindings NOTIFY mappingChanged)
+    Q_PROPERTY(QStringList profiles READ profiles NOTIFY mappingChanged)
+    Q_PROPERTY(QString profile READ profile NOTIFY mappingChanged)
+    Q_PROPERTY(QString unlockLabel READ unlockLabel NOTIFY mappingChanged)
     Q_PROPERTY(QVariantMap tuning READ tuning NOTIFY mappingChanged)
     Q_PROPERTY(int learning READ learning NOTIFY mappingChanged)
     Q_PROPERTY(QString feedback READ feedback NOTIFY mappingChanged)
@@ -43,12 +50,19 @@ public:
     void setKeyboardEnabled(bool enabled);
     QVariantList bindings() const;
     QVariantMap tuning() const;
+    QStringList profiles() const {return profiles_.keys();}
+    QString profile() const {return profile_;}
+    QString unlockLabel() const;
+    Q_INVOKABLE void selectProfile(const QString& name,bool create=false);
+    Q_INVOKABLE void useTemplate(int index);
+    Q_INVOKABLE bool toggleAction(int action) const;
+    Q_INVOKABLE void setToggleAction(int action,bool on);
     int learning() const { return learning_; }
     QString feedback() const { return feedback_; }
     bool ps5Captured() const { return route_ == Route::Ps5; }
     bool previewing() const { return route_ == Route::Preview; }
     QVariantMap padState() const;
-    Q_INVOKABLE void learn(int action);
+    Q_INVOKABLE void learn(int action, QObject* cancelButton = nullptr);
     Q_INVOKABLE void clearBinding(int action);
     Q_INVOKABLE void cancelLearning();
     Q_INVOKABLE void applyDefaults();
@@ -84,6 +98,10 @@ private:
     void digital(int key, bool down);
     void bind(int key, int modifiers);
     void applyMouseTuning(const Mapper::Tuning& tuning);
+    void suspendIme();
+    void restoreIme();
+    void readProfile(const QJsonObject& json);
+    QJsonObject activeProfile() const;
     void save();
     void load();
 
@@ -91,7 +109,16 @@ private:
     moonlight::InputRouter router_;
     QString profilePath_;
     std::function<uint64_t()> ps5Target_;
-    HWND window_ = nullptr;
+    HWND window_ = nullptr,imeWindow_=nullptr;
+    HIMC oldIme_=nullptr;
+    POINT savedCursor_{};
+    bool restoreCursor_=false;
+    std::deque<int> wheelQueue_;
+    int64_t wheelGapUs_=0, maxQueueMs_=0;
+    unsigned staleReports_=0;
+    QJsonObject profiles_;
+    QString profile_=QStringLiteral("Default");
+    double previewSpeed_=0;
     Route route_ = Route::None;
     Mapper mapper_;
     std::shared_ptr<remoteplay::MouseStick> mouse_;
@@ -99,6 +126,7 @@ private:
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
+    QPointer<QObject> cancelButton_;
     int learning_ = -1;
     int learningModifier_ = 0;
     int wheelKey_ = 0;

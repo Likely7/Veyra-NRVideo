@@ -9,32 +9,47 @@ DialogLayer {
     key: "ps5-mapping"
     title: qsTr("PS5 键鼠映射")
     glyph: "gamepad"
-    dialogWidth: 918
+    dialogWidth: 992
     minimumBodyWidth: 0
     actions: [{ label: qsTr("返回") }]
     property var input: typeof veyra !== "undefined" ? (veyra.ps5Input || null) : null
     property int selected: 0
+    property bool showList: panel.bodyWidth>0 && panel.bodyWidth<500
+    property bool confirmReset: false
+    property bool advanced: false
+    Timer { interval: 3000; running: panel.confirmReset; onTriggered: panel.confirmReset=false }
     readonly property var pad: input ? input.padState : ({})
     readonly property var tune: input ? input.tuning : ({})
     readonly property var names: [
         "×", "○", "□", "△", qsTr("方向键 左"), qsTr("方向键 右"), qsTr("方向键 上"), qsTr("方向键 下"),
         "L1", "R1", "L3", "R3", qsTr("选项键"), qsTr("创建键"), qsTr("触摸板按下"), "PS", "L2", "R2",
         qsTr("左摇杆 上"), qsTr("左摇杆 下"), qsTr("左摇杆 左"), qsTr("左摇杆 右"),
-        qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右")
+        qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"), qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"), qsTr("触摸板左滑"), qsTr("触摸板右滑")
     ]
 
-    onActionTriggered: dialogHost.open(dialogHost.ps5MappingReturn || "ps5")
+    onActionTriggered: dialogHost.ps5MappingReturn ? dialogHost.open(dialogHost.ps5MappingReturn) : dialogHost.close()
     Connections {
         target: panel
         function onShownChanged() { if (!panel.shown && panel.input) panel.input.releasePs5() }
     }
 
     function binding(id) { return input && input.bindings[id] !== undefined ? input.bindings[id] : "—" }
+    function shortBinding(id) {
+        const value=binding(id)
+        if(value===qsTr("鼠标左键"))return "M1"
+        if(value===qsTr("鼠标右键"))return "M2"
+        if(value===qsTr("鼠标中键"))return "M3"
+        if(value==="Backspace")return "Bksp"
+        if(value==="Enter")return "↵"
+        if(value==="Space")return "␣"
+        return value
+    }
     function choose(id) {
         selected = id
-        if (input) input.learn(id)
+        if (input && input.learning >= 0) input.cancelLearning()
     }
     function active(id) {
+        if(id>=26)return false
         if (id < 16) return (Number(pad.buttons || 0) & (1 << id)) !== 0
         if (id === 16 || id === 17) return Number(id === 16 ? pad.l2 : pad.r2) > 0
         const value = id < 22 ? ((id < 20) ? pad.leftY : pad.leftX) : ((id < 24) ? pad.rightY : pad.rightX)
@@ -52,6 +67,31 @@ DialogLayer {
         }
     }
 
+    VSubGroup {
+        Layout.fillWidth: true
+        label: qsTr("游戏档案") + " · " + (panel.input?.profile || "Default")
+        VRow { label: qsTr("游戏档案")
+            VSelect { title: qsTr("游戏档案"); value: panel.input?.profile || "Default"
+                options: (panel.input?.profiles || []).map(n => ({id:n,label:n}))
+                onPicked: id => panel.input.selectProfile(id,false)
+            }
+        }
+        VRow { label: qsTr("新建档案")
+            RowLayout {
+                TextField { id: profileName; Layout.preferredWidth: 100; maximumLength: 40; selectByMouse: true }
+                VButton { text: qsTr("新建"); enabled: profileName.text.trim().length>0
+                    onClicked: {panel.input.selectProfile(profileName.text,true);profileName.clear()} }
+            }
+        }
+        VRow { label: qsTr("手感模板")
+            VSelect { title: qsTr("手感模板"); value: qsTr("选择")
+                options: [{id:"0",label:qsTr("低死区 FPS")},{id:"1",label:qsTr("第三人称")},{id:"2",label:qsTr("线性")}]
+                onPicked: id => panel.input.useTemplate(Number(id))
+            }
+        }
+    }
+    Text { visible: !panel.input?.keyboardEnabled; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
+        text: qsTr("当前使用实体手柄。切到键鼠映射后，点击画面即可接管。") }
     GridLayout {
         columns: panel.bodyWidth >= 810 ? 2 : 1
         columnSpacing: 14
@@ -62,7 +102,20 @@ DialogLayer {
             Layout.fillWidth: true
             Layout.preferredWidth: 550
             spacing: 8
+            VSeg { current: panel.showList?"list":"diagram"
+                options: [{id:"diagram",label:qsTr("手柄图示")},{id:"list",label:qsTr("键位列表")}]
+                onPicked: id => panel.showList=id==="list"
+            }
+            GridLayout {
+                visible: panel.showList; Layout.fillWidth: true; columns: panel.bodyWidth<340?1:2
+                Repeater { model: panel.names
+                    VButton { required property int index; required property string modelData
+                        text: modelData+" · "+panel.binding(index); Layout.fillWidth: true
+                        primary: panel.selected===index; onClicked: panel.choose(index) }
+                }
+            }
             Rectangle {
+                visible: !panel.showList
                 id: board
                 objectName: "ps5-controller-board"
                 Layout.fillWidth: true
@@ -160,6 +213,7 @@ DialogLayer {
                     ]
                     delegate: Rectangle {
                         id: keyCap
+                        opacity: panel.input?.previewing && (padKey===10||padKey===11) ? .25 : 1
                         required property var modelData
                         readonly property int padKey: modelData[0]
                         readonly property bool marked: panel.selected === padKey
@@ -184,7 +238,10 @@ DialogLayer {
                             width: parent.width - 4
                             horizontalAlignment: Text.AlignHCenter
                             elide: Text.ElideRight
-                            text: keyCap.padKey === 14 ? panel.binding(14) : keyCap.modelData[5]
+                            text: (keyCap.padKey===14?qsTr("触摸板按下"):keyCap.modelData[5])+"\n"+panel.shortBinding(keyCap.padKey)
+                            lineHeight: .88
+                            minimumPixelSize: 6; fontSizeMode: Text.Fit
+                            height: parent.height-2; verticalAlignment: Text.AlignVCenter
                             font.pixelSize: Math.max(8, (keyCap.padKey < 4 ? 17 : 12) * board.unit)
                             font.bold: true
                             color: keyCap.pressed ? "#15242a" : keyCap.marked ? Theme.accentInk : "#f1f4ff"
@@ -202,9 +259,15 @@ DialogLayer {
             }
 
             VRow {
+                visible: [1,10,16,27].includes(panel.selected)
+                label: qsTr("切换模式")
+                VSwitch { checked: { const b=panel.input?.bindings;return panel.input?.toggleAction?.(panel.selected) || false }
+                    onToggled: on => panel.input.setToggleAction(panel.selected,on) }
+            }
+            VRow {
                 label: panel.names[panel.selected]
-                hint: panel.input && panel.input.learning >= 0 ? qsTr("按键、组合键或鼠标键 · Esc 取消") :
-                      (panel.input && panel.input.feedback ? panel.input.feedback : qsTr("点击手柄上的按键开始绑定"))
+                hint: panel.input && panel.input.learning >= 0 ? qsTr("正在录键") + " · " + panel.names[panel.selected] :
+                      (panel.input && panel.input.feedback ? panel.input.feedback : qsTr("选择按键后点击改键"))
                 hintBelow: true
                 RowLayout {
                     Text {
@@ -216,10 +279,11 @@ DialogLayer {
                         elide: Text.ElideRight
                     }
                     VButton {
+                        id: bindSelected
                         objectName: "ps5-bind-selected"
-                        text: qsTr("改键")
+                        text: panel.input?.learning>=0?qsTr("取消"):qsTr("改键")
                         enabled: panel.input !== null
-                        onClicked: panel.choose(panel.selected)
+                        onClicked: panel.input.learning>=0?panel.input.cancelLearning():panel.input.learn(panel.selected, bindSelected)
                     }
                     VButton {
                         objectName: "ps5-clear-binding"
@@ -234,7 +298,7 @@ DialogLayer {
 
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.preferredWidth: panel.bodyWidth >= 810 ? 270 : panel.bodyWidth
+            Layout.preferredWidth: panel.bodyWidth >= 810 ? 355 : panel.bodyWidth
             Layout.alignment: Qt.AlignTop
             spacing: 6
             VRow {
@@ -244,23 +308,35 @@ DialogLayer {
                     onToggled: on => panel.input?.setTuning("mouseLook", on)
                 }
             }
+            VSeg { current: panel.advanced?"advanced":"basic"
+                options: [{id:"basic",label:qsTr("基础")},{id:"advanced",label:qsTr("进阶")}]
+                onPicked: id => panel.advanced=id==="advanced"
+            }
             Repeater {
                 model: [
+                    {id:"dpi",title:"DPI",min:200,max:6400,step:1,scale:1,initial:800,decimals:0,unit:""},
+                    {id:"adsScale",title:qsTr("开镜灵敏度"),min:.1,max:3,step:.05,scale:1,initial:1,decimals:2,unit:"×"},
+                    {id:"adsDelayMs",title:qsTr("开镜延时"),min:0,max:300,step:1,scale:1,initial:0,decimals:0,unit:" ms"},
+                    {id:"walkScale",title:qsTr("慢走"),min:.2,max:.8,step:.01,scale:100,initial:.45,decimals:0,unit:"%"},
+                    {id:"deadzoneShape",title:qsTr("方形死区比例"),min:0,max:1,step:.01,scale:100,initial:0,decimals:0,unit:"%"},
                     {id:"horizontal", title:qsTr("横向灵敏度"), min:0.1, max:6, step:0.1, scale:1, initial:1, decimals:1, unit:"×"},
                     {id:"vertical", title:qsTr("纵向灵敏度"), min:0.1, max:6, step:0.1, scale:1, initial:1, decimals:1, unit:"×"},
-                    {id:"turnBoost", title:qsTr("快速转身倍率"), min:1, max:6, step:0.1, scale:1, initial:3.6, decimals:1, unit:"×"},
-                    {id:"curve", title:qsTr("瞄准曲线"), min:0.5, max:2.5, step:0.05, scale:1, initial:1, decimals:2, unit:""},
+                    {id:"turnBoost", title:qsTr("快速转身倍率"), min:1, max:6, step:0.1, scale:1, initial:1, decimals:1, unit:"×"},
+                    {id:"curve", title:qsTr("瞄准曲线"), min:0.3, max:2.5, step:0.05, scale:1, initial:1, decimals:2, unit:""},
                     {id:"inputDeadzone", title:qsTr("输入死区"), min:0, max:0.1, step:0.005, scale:100, initial:0, decimals:1, unit:"%"},
-                    {id:"deadzone", title:qsTr("死区补偿"), min:0, max:0.3, step:0.01, scale:100, initial:0.15, decimals:0, unit:"%"},
+                    {id:"deadzone", title:qsTr("死区补偿"), min:0, max:0.3, step:0.01, scale:100, initial:.08, decimals:0, unit:"%"},
                     {id:"smoothing", title:qsTr("平滑时间"), min:0, max:32, step:1, scale:1, initial:0, decimals:0, unit:" ms"}
                 ]
                 delegate: VRow {
                     required property var modelData
+                    enabled: panel.tune.mouseLook!==false
+                    opacity: enabled?1:.45
+                    visible: panel.advanced===["curve","turnBoost","smoothing","inputDeadzone","walkScale","adsDelayMs","deadzoneShape"].includes(modelData.id)
                     label: modelData.title
                     RowLayout {
                         VSlider {
                             objectName: "ps5-tune-" + modelData.id
-                            Layout.preferredWidth: 91
+                            Layout.preferredWidth: panel.bodyWidth<500?100:137
                             Layout.minimumWidth: 50
                             from: modelData.min
                             to: modelData.max
@@ -285,9 +361,66 @@ DialogLayer {
                 }
             }
             VRow {
+                enabled: panel.tune.mouseLook!==false; visible: !panel.advanced
                 label: qsTr("反转纵向")
                 VSwitch { checked: panel.tune.invertY === true; onToggled: on => panel.input?.setTuning("invertY", on) }
             }
+            VRow { visible: panel.advanced; label: qsTr("解锁快捷键")
+                VSelect { title: qsTr("解锁快捷键"); value: panel.input?.unlockLabel || "Esc"
+                    options: ["Esc","Ctrl+Alt+Z","Alt+Q","F1","~"].map((n,i)=>({id:String(i),label:n}))
+                    onPicked: id=>panel.input.setTuning("unlock",Number(id)) }
+            }
+            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("开镜触发键")
+                VSelect {title: qsTr("开镜触发键"); options: panel.names.slice(0,18).map((n,i)=>({id:String(i),label:n}))
+                    value: panel.names[Number(panel.tune.adsAction??16)]; onPicked: id=>panel.input.setTuning("adsAction",Number(id))}
+            }
+            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("鼠标陀螺仪")
+                VSelect {title: qsTr("鼠标陀螺仪"); options: [{id:"0",label:qsTr("关闭")},{id:"1",label:qsTr("始终开启")},{id:"2",label:qsTr("仅开镜")}]
+                    value: options[Number(panel.tune.gyro||0)].label; onPicked: id=>panel.input.setTuning("gyro",Number(id))}
+            }
+            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("快速转身补偿")
+                VSwitch {checked: panel.tune.carry===true; onToggled: on=>panel.input.setTuning("carry",on)}
+            }
+            Canvas {
+                Layout.fillWidth: true; implicitHeight: 54; visible: panel.advanced
+                property var settings: panel.tune
+                onSettingsChanged: requestPaint()
+                onWidthChanged: requestPaint()
+                onPaint: {
+                    const c=getContext("2d");c.reset();c.fillStyle="#181f2d";c.fillRect(0,0,width,height)
+                    c.strokeStyle="#92b7ff";c.lineWidth=2;c.beginPath()
+                    for(let i=0;i<=100;i++){
+                        const u=Math.max(0,i/100-(settings.inputDeadzone||0)), k=Math.min(1,Math.max(0,(u-.10)/.35))
+                        const b=u*(1+((settings.turnBoost||1)-1)*k*k*(3-2*k)), d=settings.deadzone||0
+                        const y=height-2-(height-4)*(u>0?d+(1-d)*Math.pow(Math.min(1,b),settings.curve||1):0)
+                        if(i===0)c.moveTo(0,y);else c.lineTo(width*i/100,y)
+                    }
+                    c.stroke()
+                }
+            }
+            Text { visible: panel.advanced; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
+                text: qsTr("曲线小于 1 提高低速响应；等于 1 为线性；大于 1 便于微调。") }
+            Canvas {
+                visible: !!panel.input?.previewing
+                Layout.alignment: Qt.AlignHCenter; implicitWidth: 76; implicitHeight: 76
+                property real xAxis: panel.pad.rightX||0
+                property real yAxis: panel.pad.rightY||0
+                property real dz: panel.tune.deadzone||0
+                onXAxisChanged: requestPaint()
+                onYAxisChanged: requestPaint()
+                onDzChanged: requestPaint()
+                onPaint: {
+                    const c=getContext("2d"),r=width/2-3,m=width/2;c.reset()
+                    c.strokeStyle="#91a5c5";c.lineWidth=1
+                    c.beginPath();c.arc(m,m,r,0,2*Math.PI);c.stroke()
+                    c.beginPath();c.moveTo(m-r,m);c.lineTo(m+r,m);c.moveTo(m,m-r);c.lineTo(m,m+r);c.stroke()
+                    for(let a=0;a<2*Math.PI;a+=Math.PI/8){c.beginPath();c.arc(m,m,r*dz,a,a+Math.PI/14);c.stroke()}
+                    c.fillStyle=Math.hypot(xAxis,yAxis)>.98?"#ffad65":"#73dfcc"
+                    c.beginPath();c.arc(m+r*xAxis,m+r*yAxis,3.5,0,2*Math.PI);c.fill()
+                }
+            }
+            Text {visible: !!panel.input?.previewing; color: Math.hypot(panel.pad.rightX||0,panel.pad.rightY||0)>.98?"#ffad65":Theme.t1
+                text: Math.round(panel.pad.speed||0)+" counts/s   X "+Math.round(100*(panel.pad.rightX||0))+"%   Y "+Math.round(100*(panel.pad.rightY||0))+"%   ADS "+(panel.pad.ads?"●":"○") }
             VButton {
                 objectName: "ps5-reset-mouse"
                 Layout.alignment: Qt.AlignRight
@@ -303,17 +436,17 @@ DialogLayer {
         Layout.fillWidth: true
         VButton {
             objectName: "ps5-input-preview"
-            text: panel.input && panel.input.previewing ? qsTr("预览中 · Esc 结束") : qsTr("本地输入预览")
+            text: panel.input && panel.input.previewing ? qsTr("本地输入预览")+" · "+(panel.input?.unlockLabel||"Esc") : qsTr("本地输入预览")
             primary: true
             enabled: panel.input !== null
             onClicked: panel.input.preview(!panel.input.previewing)
         }
         VButton {
             objectName: "ps5-reset-bindings"
-            text: qsTr("恢复默认")
+            text: panel.confirmReset?qsTr("确认重置键位"):qsTr("重置键位")
             ghost: true
             enabled: panel.input !== null
-            onClicked: panel.input.applyDefaults()
+            onClicked: {if(panel.confirmReset)panel.input.applyDefaults();panel.confirmReset=!panel.confirmReset}
         }
         Item { Layout.fillWidth: true }
     }
