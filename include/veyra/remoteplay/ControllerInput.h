@@ -35,8 +35,9 @@ private:
     bool initialized_=false;
     HostTime enumerateAt_=0;uint32_t preferredDevice_=0;
     std::array<int8_t,2> touchIds_{-1,-1};uint8_t nextTouchId_=0;
-    bool gyro_=false,accel_=false,effectsActive_=false,audioInitialized_=false,hapticAttempted_=false;
+    bool gyro_=false,accel_=false,effectsActive_=false,audioInitialized_=false,hapticWarned_=false;
     SDL_AudioStream* hapticStream_=nullptr;
+    HostTime hapticRetryAt_=0; // a failed haptic endpoint lookup is retried, not given up
     // Console-set light bar and player indicator: kept while unfocused, applied to the read pad.
     std::array<uint8_t,3> ledColor_{};uint8_t player_=0;bool haveLed_=false,havePlayer_=false,lightsDirty_=false;
     std::array<ControllerState::Touch,2> touchState_{};

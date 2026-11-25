@@ -22,7 +22,7 @@ void ControllerInput::stop(){
     for(auto* pad:others_)SDL_CloseGamepad(pad);
     others_.clear();follow_=false;
     releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}
-    if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}hapticAttempted_=false;
+    if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}hapticRetryAt_=0;hapticWarned_=false;
     touchQueue_.clear();touchState_={};haveGyro_=haveAccel_=false;calibrating_=false;gyroBias_={};enumerateAt_=0;
     if(gamepad_){SDL_CloseGamepad(gamepad_);gamepad_=nullptr;}
     if(initialized_){SDL_QuitSubSystem(SDL_INIT_GAMEPAD);initialized_=false;}
@@ -47,7 +47,7 @@ void ControllerInput::activate(SDL_Gamepad* pad){
 }
 // The pad stops being read: its rumble/trigger effects and haptic stream end.
 void ControllerInput::deactivate(){
-    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}hapticAttempted_=false;
+    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}hapticRetryAt_=0;hapticWarned_=false;
     if(gamepad_&&SDL_GamepadConnected(gamepad_)){
         if(gyro_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,false);
         if(accel_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,false);
@@ -187,22 +187,33 @@ void ControllerInput::feedback(ControllerFeedback f,bool focused){
         if(!SDL_SendGamepadEffect(gamepad_,effect.data(),int(effect.size())))veyra::log::warn("remoteplay-feedback",SDL_GetError());
     }
     if(f.haptics.empty()||SDL_GetGamepadType(gamepad_)!=SDL_GAMEPAD_TYPE_PS5)return;
-    if(!hapticAttempted_){
-        hapticAttempted_=true;
+    // A failed lookup is retried every 2 s instead of being given up for the session:
+    // the endpoint can show up after the pad, and another pad can be there only briefly.
+    if(!hapticStream_){
+        const auto now=monotonic100ns();
+        if(now<hapticRetryAt_)return;
+        hapticRetryAt_=now+20000000;
         if(!audioInitialized_)audioInitialized_=SDL_InitSubSystem(SDL_INIT_AUDIO);
-        if(!audioInitialized_){veyra::log::error("remoteplay-haptics",SDL_GetError());return;}
-        // Never use the default speakers or a stereo endpoint. Ambiguity fails closed.
+        if(!audioInitialized_){if(!hapticWarned_){hapticWarned_=true;veyra::log::error("remoteplay-haptics",SDL_GetError());}return;}
+        // Never use the default speakers or a stereo endpoint. Ambiguity fails closed:
+        // one four-channel DualSense endpoint and one DualSense pad. Other pads (an Xbox
+        // pad, a streaming tool's virtual pad) cannot own that endpoint, so they don't count.
         int count=0;auto* devices=SDL_GetAudioPlaybackDevices(&count);SDL_AudioDeviceID selected=0;int matches=0;
         for(int i=0;i<count;++i){const auto* name=SDL_GetAudioDeviceName(devices[i]);SDL_AudioSpec spec{};
             if(name&&(std::strstr(name,"Wireless Controller")||std::strstr(name,"DualSense"))&&SDL_GetAudioDeviceFormat(devices[i],&spec,nullptr)&&spec.channels==4){selected=devices[i];++matches;}
         }
         SDL_free(devices);
-        int gamepadCount=0;auto* gamepads=SDL_GetGamepads(&gamepadCount);SDL_free(gamepads);
-        if(matches!=1||gamepadCount!=1){veyra::log::warn("remoteplay-haptics","No unique four-channel DualSense endpoint/controller pair; haptics not routed");return;}
+        int padCount=0,dualSenses=0;auto* pads=SDL_GetGamepads(&padCount);
+        for(int i=0;i<padCount;++i)if(SDL_GetGamepadTypeForID(pads[i])==SDL_GAMEPAD_TYPE_PS5)++dualSenses;
+        SDL_free(pads);
+        if(matches!=1||dualSenses!=1){
+            if(!hapticWarned_){hapticWarned_=true;veyra::log::warn("remoteplay-haptics","No unique four-channel DualSense endpoint/controller pair (endpoints="+std::to_string(matches)+", DualSense pads="+std::to_string(dualSenses)+"); haptics not routed, retrying");}
+            return;
+        }
         SDL_AudioSpec input{SDL_AUDIO_S16,4,3000};
         hapticStream_=SDL_OpenAudioDeviceStream(selected,&input,nullptr,nullptr);
-        if(!hapticStream_||!SDL_ResumeAudioStreamDevice(hapticStream_)){veyra::log::error("remoteplay-haptics",SDL_GetError());if(hapticStream_)SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;return;}
-        veyra::log::info("remoteplay-haptics","Dedicated four-channel endpoint opened; speaker channels silent");
+        if(!hapticStream_||!SDL_ResumeAudioStreamDevice(hapticStream_)){if(!hapticWarned_){hapticWarned_=true;veyra::log::error("remoteplay-haptics",SDL_GetError());}if(hapticStream_)SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;return;}
+        veyra::log::info("remoteplay-haptics",hapticWarned_?"Dedicated four-channel endpoint opened after a retry; speaker channels silent":"Dedicated four-channel endpoint opened; speaker channels silent");
     }
     if(!hapticStream_)return;
     std::vector<int16_t> quad;quad.reserve(f.haptics.size()*2);
