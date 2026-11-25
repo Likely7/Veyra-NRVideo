@@ -6,6 +6,7 @@
 #include <windows.h>
 #include <windowsx.h>
 
+#include <bitset>
 #include <cstdint>
 
 #include "veyra/moonlight/InputMap.h"
@@ -15,6 +16,7 @@ namespace veyra::moonlight {
 class InputSink {
 public:
     virtual ~InputSink() = default;
+    virtual bool localKeyPressed(uint32_t, bool) { return false; }
     virtual void key(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) = 0;
     virtual void mouseMove(int dx, int dy) = 0;
     virtual void mouseButton(int button, bool down) = 0;   // 1 left, 2 middle, 3 right, 4 X1, 5 X2
@@ -23,7 +25,7 @@ public:
 
 class InputRouter {
 public:
-    explicit InputRouter(InputSink& sink) : sink_(sink) {}
+    explicit InputRouter(InputSink& sink, bool releaseOnly=false) : sink_(sink), releaseOnly_(releaseOnly) {}
 
     // True when the message was consumed (it must not reach the UI underneath).
     bool message(UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -52,6 +54,22 @@ public:
     // Relative movement from a WM_INPUT mouse report.
     void rawMouse(long dx, long dy) { sink_.mouseMove(int(dx), int(dy)); }
 
+    // The first press selects the owner until key-up, even if a modifier changes.
+    bool localKey(LPARAM flags, bool down, bool plain) {
+        const auto scan = uint32_t((flags >> 16) & 0xff);
+        const bool extended = ((flags >> 24) & 1) != 0;
+        const auto physical = scan | (extended ? 0x100u : 0u);
+        if (down && !(flags & (LPARAM{1} << 30))) {
+            // The action can synchronously start or stop capture and reset this router.
+            const bool consumed = plain && !held_.modifiers() && sink_.localKeyPressed(scan, extended);
+            localKeys_.set(physical, consumed);
+            return consumed;
+        }
+        const bool consumed = localKeys_.test(physical);
+        if (!down) localKeys_.reset(physical);
+        return consumed;
+    }
+
     // Set when the last key press was one of the app's own hotkeys; cleared by taking it.
     Reserved takeReserved() {
         const Reserved r = reserved_;
@@ -60,7 +78,7 @@ public:
     }
 
     // Forget what is held (capture ended; the session releases the host side itself).
-    void reset() { held_.clear(); reserved_ = Reserved::None; }
+    void reset() { held_.clear(); localKeys_.reset(); reserved_ = Reserved::None; swallowedUp_ = 0; }
 
 private:
     bool key(WPARAM wParam, LPARAM lParam, bool down) {
@@ -71,7 +89,7 @@ private:
         if (down) {
             if (vk != 0x10 && vk != 0x11 && vk != 0x12) {   // a modifier alone is never a hotkey
                 const Reserved r = reservedHotkey(vk, held_.modifiers());
-                if (r != Reserved::None) { reserved_ = r; swallowedUp_ = vk; return true; }
+                if (r != Reserved::None && (!releaseOnly_ || r == Reserved::ReleaseCapture)) { reserved_ = r; swallowedUp_ = vk; return true; }
             }
             held_.press(host.code, host.modifier);
         } else {
@@ -88,7 +106,9 @@ private:
     }
 
     InputSink& sink_;
+    bool releaseOnly_;
     HeldKeys held_;
+    std::bitset<512> localKeys_; // scan code plus the extended bit
     Reserved reserved_ = Reserved::None;
     uint32_t swallowedUp_ = 0;
 };

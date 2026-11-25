@@ -730,6 +730,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 QObject* QmlPlayerBridge::liveTranslation() const { return liveTranslation_; }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    impl_->ps5Keyboard.reset();
+#endif
     // Before anything is torn down: this reads the playback position.
     // The overlay is a child window: it has to go before the video window does.
     flushHdrMemory();

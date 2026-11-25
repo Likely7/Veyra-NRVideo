@@ -27,6 +27,7 @@ DialogLayer {
     readonly property var qualities: [{ id: "0", label: "720p · 30 fps" }, { id: "1", label: "720p · 60 fps" }, { id: "2", label: "1080p · 30 fps" }, { id: "3", label: "1080p · 60 fps" }]
     readonly property var bitrates: [5, 10, 15, 20, 30, 50, 80, 100].map((m, i) => ({ id: String(i), label: m + " Mbps" }))
 
+    Ps5KeyboardEntry { host:ps5Dialog.dialogHost; settings:veyra.ps5Keyboard || null }
     DialogSection { text: qsTr("主机") }
     DialogGroup {
         VRow {

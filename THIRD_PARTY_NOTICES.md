@@ -596,9 +596,13 @@ FRUC was evaluated during development and has been removed from the product. No 
 
 ## PS5 Remote Play / chiaki-ng (0.0.5)
 
+The Veyra patch `scripts/remoteplay/patches/0006-chiaki-view-only.patch` disables Chiaki’s outgoing controller feedback sender and its controller attachment message for a view-only PS5 connection. The patch applies to the pinned chiaki-ng source and is included with the corresponding Remote Play source.
+
+The Veyra patch `scripts/remoteplay/patches/0007-chiaki-haptics-gaps.patch` adds an optional haptics callback to chiaki-ng’s `lib/include/chiaki/session.h`. In `lib/src/audioreceiver.c`, this callback delivers recovered PCM units in sequence and marks the first unit after a gap. Veyra uses the marker to clear incomplete game feedback. The patch is included with the corresponding Remote Play source under the same AGPL license and OpenSSL exception.
+
 The optional `VEYRA_ENABLE_REMOTEPLAY` build compiles chiaki-ng at
 `0e16950165f06e5c3291537c2eeba6e852be7120` from https://github.com/streetpea/chiaki-ng,
-with the two reviewed patches in `scripts/remoteplay/patches/`. Chiaki code and
+with the patches listed in `scripts/remoteplay/verify-chiaki-stage.py`. Chiaki code and
 these derived patches retain AGPL-3.0-only with the upstream OpenSSL exception;
 see `licenses/remoteplay/CHIAKI_AGPL3_OPENSSL.txt`. The metadata patch was adapted
 from the user-supplied Code 01 change description and checked against this pin.
@@ -1420,3 +1424,11 @@ Linux OBS filter work is adopted from andreanjoes PR #96 at
 validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
 centres and preserves premultiplied transparency. OBS's public colour-filter
 shader was consulted for the alpha contract; no OBS DLL is bundled here.
+
+## Stickmouse Mapper
+
+PS5 Remote Play builds use the Windows C wrapper from Stickmouse Mapper. Veyra builds the wrapper from the unmodified source at commit `826547879659100e5e3b3e4c975f205d15cf66fb` and includes its calibrated GTA VI PS5 profile, revision 0.6.87. The application package includes the upstream AGPL-3.0-only license and provenance notice in `licenses/stickmouse/`. The notice credits ConsoleMouse and its contributors for the vehicle recordings and profile settings. [Pinned source, license and notices](https://github.com/tprjd/stickmouse-mapper/tree/826547879659100e5e3b3e4c975f205d15cf66fb)
+
+The response graph in `qml/Veyra/Ps5Curve.js` adapts the sampled curve calculation in `crates/stickmouse-mapper/src/mouse_aim/curve_fit.rs` from the same commit. It converts the sampled camera speeds back to degrees per second for display and retains the upstream AGPL-3.0-only license.
+
+The controller drawing and binding labels adapt `src/keys/ControllerDiagram.tsx`, `ControllerBindings.tsx`, and `controller-bindings.css` from the Stickmouse application at commit `cc2e75ff026c3ddc38f391ce3414403e0147db9e` (AGPL-3.0-only). On 2026-11-25 Veyra adapted the control outlines using Sony's DualSense front view and connected the labels to Veyra profiles in Qt Quick. The adapted files are `qml/Veyra/controller/DualSense.js`, `qml/Veyra/Ps5ControllerDiagram.qml`, and `qml/Veyra/Ps5Bindings.js`. [Stickmouse license](qml/Veyra/controller/LICENSE) · [DualSense reference](https://www.playstation.com/en-us/accessories/dualsense-wireless-controller/)

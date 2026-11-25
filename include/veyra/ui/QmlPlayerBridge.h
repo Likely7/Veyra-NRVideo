@@ -203,6 +203,7 @@ class QmlPlayerBridge : public QObject {
     // %LOCALAPPDATA%\Veyra\remoteplay, encrypted), discovery, pairing, Account ID lookup,
     // wake, stream profile, decode/sampling, view-only, login PIN, controller
     // forwarding and gyro calibration. `ps5` carries the form state.
+    Q_PROPERTY(QObject* ps5Keyboard READ ps5Keyboard CONSTANT)
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
     // PS5 手柄控制 (采集卡对话框): a controller-only Remote Play session beside the
@@ -837,6 +838,7 @@ public:
     Q_INVOKABLE void toggleSubtitles();
     Q_INVOKABLE void autoAlignSubtitle();
 
+    QObject* ps5Keyboard();
     QVariantMap ps5() const;
     QVariantList ps5Profiles() const;
     QVariantMap ps5Control() const;

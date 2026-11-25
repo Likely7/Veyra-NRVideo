@@ -1471,6 +1471,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_options(veyra_ui_i18n_tests PRIVATE /utf-8)
   target_link_libraries(veyra_ui_i18n_tests PRIVATE veyra_ui_i18n)
   qt_add_resources(veyra_ui_i18n_tests "veyra_i18n_tests" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
+  if(VEYRA_ENABLE_MOONLIGHT OR VEYRA_ENABLE_REMOTEPLAY)
+    target_sources(veyra_qml_bridge PRIVATE src/ui/WindowInputCapture.cpp include/veyra/ui/WindowInputCapture.h)
+  endif()
   if(VEYRA_ENABLE_MOONLIGHT)
     target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
     # The PC streaming model (hosts, pairing, apps, settings) is its own small library so it can be
@@ -2027,7 +2030,11 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
     # Qt paths under E:/项目. Those system libraries come from #pragma comment in
     # the private QmlPlayerBridge_p.h instead.
     if(TARGET veyra_qml_bridge)
-      target_sources(veyra_qml_bridge PRIVATE src/remoteplay/ControllerInput.cpp)
+      target_sources(veyra_qml_bridge PRIVATE src/remoteplay/ControllerInput.cpp src/ui/Ps5KeyboardSettings.cpp
+        src/ui/Ps5PlayerShortcuts.cpp include/veyra/ui/Ps5KeyboardSettings.h)
+      target_sources(veyra_qml_bridge PRIVATE src/ui/Ps5InputDevices.cpp include/veyra/ui/Ps5InputDevices.h)
+      target_link_libraries(veyra_qml_bridge PRIVATE cfgmgr32)
+      veyra_stage_mapper(veyra_qml_ui)
       target_link_libraries(veyra_qml_bridge PUBLIC $<TARGET_LINKER_FILE:SDL3::SDL3-static>)
       target_link_libraries(veyra_qml_bridge PRIVATE SDL3::Headers)
     endif()

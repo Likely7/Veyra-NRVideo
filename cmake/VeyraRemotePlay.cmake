@@ -1,6 +1,8 @@
 include_guard(GLOBAL)
 find_package(Threads REQUIRED)
+include("${VEYRA_ROOT}/cmake/VeyraStickmouse.cmake")
 add_library(veyra_remoteplay_core STATIC
+    "${VEYRA_ROOT}/src/remoteplay/KeyboardMouse.cpp"
     "${VEYRA_ROOT}/src/remoteplay/Validation.cpp"
     "${VEYRA_ROOT}/src/remoteplay/AnnexB.cpp"
     "${VEYRA_ROOT}/src/remoteplay/Timeline.cpp"
@@ -9,7 +11,7 @@ add_library(veyra_remoteplay_core STATIC
 target_include_directories(veyra_remoteplay_core PUBLIC "${VEYRA_ROOT}/include")
 target_compile_features(veyra_remoteplay_core PUBLIC cxx_std_20)
 set_target_properties(veyra_remoteplay_core PROPERTIES CXX_EXTENSIONS OFF)
-target_link_libraries(veyra_remoteplay_core PUBLIC Threads::Threads)
+target_link_libraries(veyra_remoteplay_core PUBLIC Threads::Threads veyra_stickmouse)
 # Shared pinned native dependency for the product and probes. No stub fallback.
 enable_language(C)
 set(VEYRA_RP_CHIAKI_SOURCE_DIR "" CACHE PATH "Patched chiaki-ng staging source tree")
@@ -63,6 +65,13 @@ add_library(veyra_remoteplay_chiaki STATIC
 target_compile_features(veyra_remoteplay_chiaki PUBLIC cxx_std_20)
 target_compile_definitions(veyra_remoteplay_chiaki PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 target_link_libraries(veyra_remoteplay_chiaki PUBLIC veyra_remoteplay_core PRIVATE chiaki-lib crypt32 iphlpapi shell32 ole32 winhttp)
+if(TARGET veyra_base)
+    target_link_libraries(veyra_remoteplay_chiaki PRIVATE veyra_base)
+else()
+    target_sources(veyra_remoteplay_chiaki PRIVATE
+        "${VEYRA_ROOT}/src/base/Log.cpp"
+        "${VEYRA_ROOT}/src/base/PrivateFrameTrace.cpp")
+endif()
 
 # Real sender + Takion encryption over loopback only; never contacts a console.
 add_executable(veyra_remoteplay_feedback_wire_tests
@@ -71,6 +80,11 @@ target_link_libraries(veyra_remoteplay_feedback_wire_tests PRIVATE chiaki-lib ws
 enable_testing()
 add_test(NAME remoteplay-feedback-wire COMMAND veyra_remoteplay_feedback_wire_tests)
 set_tests_properties(remoteplay-feedback-wire PROPERTIES TIMEOUT 15)
+
+add_executable(veyra_remoteplay_haptics_receiver_tests "${VEYRA_ROOT}/tests/remoteplay/HapticsReceiverTests.c")
+target_link_libraries(veyra_remoteplay_haptics_receiver_tests PRIVATE chiaki-lib)
+add_test(NAME remoteplay-haptics-receiver COMMAND veyra_remoteplay_haptics_receiver_tests)
+set_tests_properties(remoteplay-haptics-receiver PROPERTIES TIMEOUT 15 LABELS "native-core")
 
 # Exercise both real Takion socket-setup paths without contacting a console.
 add_executable(veyra_remoteplay_udp_buffer_tests

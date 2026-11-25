@@ -236,12 +236,21 @@ void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc 
 }
 // A PS5 stream (activeRemote_) takes precedence; otherwise PS5 手柄控制.
 remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(activeRemote_)return activeRemote_->takeFeedback();return controlRemote_?controlRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
+std::shared_ptr<remoteplay::KeyboardMouse> EngineController::remoteKeyboardMouse(){
+    std::lock_guard lock(mutex_);
+    const auto& target=activeRemote_?activeRemote_:controlRemote_;
+    return target?target->keyboardMouse():nullptr;
+}
 void EngineController::remotePlayController(const remoteplay::ControllerState& state){
     std::lock_guard lock(mutex_);
     const auto& target=activeRemote_?activeRemote_:controlRemote_;
-    if(!target)return;
-    if(remotePlayTouchpadPressOnly_)target->controller(remoteplay::touchpadPressOnly(state));
-    else target->controller(state);
+    if(target)physicalControllerGate_.submit(target->keyboardMouse(),
+        remotePlayTouchpadPressOnly_ ? remoteplay::touchpadPressOnly(state) : state);
+}
+void EngineController::pauseRemotePlayPhysicalInput(bool paused) {
+    std::lock_guard lock(mutex_);
+    const auto& target = activeRemote_ ? activeRemote_ : controlRemote_;
+    physicalControllerGate_.setPaused(paused, target ? target->keyboardMouse() : nullptr);
 }
 void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
 void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){

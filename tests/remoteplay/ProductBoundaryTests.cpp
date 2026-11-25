@@ -1,5 +1,6 @@
 #include "veyra/source/RemotePlaySessionSource.h"
 #include "veyra/remoteplay/ControllerInput.h"
+#include "veyra/remoteplay/KeyboardMouse.h"
 #include "veyra/remoteplay/Discovery.h"
 #include <string_view>
 #include <SDL3/SDL.h>
@@ -13,8 +14,13 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 struct RemotePlaySessionSourceTestAccess {
+static void openInput(RemotePlaySessionSource& s){
+    s.started_=true;
+    s.keyboardMouse_=std::make_shared<remoteplay::KeyboardMouse>(
+        [&s](auto state){s.enqueueController(std::move(state));});
+}
 static bool slowConsumer(){
-    RemotePlaySessionSource s;s.started_=true;
+    RemotePlaySessionSource s;openInput(s);
     const auto base=remoteplay::monotonic100ns();
     unsigned neutral=0,lagged=0;size_t highWater=0;
     // UI at 125 Hz; decoder/controller owner at 62.5 Hz, matching the field
@@ -63,7 +69,7 @@ static bool slowConsumer(){
     return neutral==0&&lagged==0&&fresh&&stale&&focus&&ordered&&triggerEdges&&bounded;
 }
 static void mailbox(){
-    RemotePlaySessionSource s;s.started_=true;
+    RemotePlaySessionSource s;openInput(s);
     const auto now=remoteplay::monotonic100ns();
     auto inbox=std::make_shared<remoteplay::SessionInbox>();auto token=inbox->begin(now-20000000);token.connected();
     inbox->decodeStarted(now-15000000,now-15050000);inbox->decodeFinished(now-14900000);inbox->frameDecoded(now-14900000);
@@ -109,7 +115,7 @@ static void controlOnlyBoundary(){
         s.close();
         if(s.alive())throw std::runtime_error("closed controller-only session must not be alive");
     }
-    RemotePlaySessionSource s;s.started_=true;
+    RemotePlaySessionSource s;openInput(s);
     const auto now=remoteplay::monotonic100ns();
     remoteplay::ControllerState down;down.inputActive=true;down.buttons=remoteplay::ControllerState::Cross;
     s.controller(down);

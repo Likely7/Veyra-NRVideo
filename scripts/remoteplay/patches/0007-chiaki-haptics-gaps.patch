@@ -1,0 +1,58 @@
+diff --git a/lib/include/chiaki/session.h b/lib/include/chiaki/session.h
+index 1e17323..f87e19d 100644
+--- a/lib/include/chiaki/session.h
++++ b/lib/include/chiaki/session.h
+@@ -296,6 +296,8 @@ typedef struct chiaki_session_t
+ 	ChiakiStreamConnection stream_connection;
+ 
+ 	ChiakiControllerState controller_state;
++	// Optional Veyra sink. Uses haptics_sink.user and reports gaps before the PCM unit.
++	void (*veyra_haptics_frame_cb)(uint8_t *buf, size_t size, bool gap_before, void *user);
+ } ChiakiSession;
+ 
+ CHIAKI_EXPORT ChiakiErrorCode chiaki_session_init(ChiakiSession *session, ChiakiConnectInfo *connect_info, ChiakiLog *log);
+diff --git a/lib/src/audioreceiver.c b/lib/src/audioreceiver.c
+index af91910..7593cc9 100644
+--- a/lib/src/audioreceiver.c
++++ b/lib/src/audioreceiver.c
+@@ -118,8 +118,13 @@ CHIAKI_EXPORT void chiaki_audio_receiver_av_packet(ChiakiAudioReceiver *audio_re
+ 	if(packet->frame_index > (1 << 15))
+ 		audio_receiver->frame_index_startup = false;
+ 
+-	for(size_t i = 0; i < source_units_count + fec_units_count; i++)
++	bool ordered_haptics = packet->is_haptics && audio_receiver->session->veyra_haptics_frame_cb;
++	for(size_t order = 0; order < source_units_count + fec_units_count; order++)
+ 	{
++		// Recovered units precede the source units in time but follow them in the packet.
++		size_t i = order;
++		if(ordered_haptics)
++			i = order < fec_units_count ? source_units_count + order : order - fec_units_count;
+ 		ChiakiSeqNum16 frame_index;
+ 		if(i < source_units_count)
+ 			frame_index = packet->frame_index + i;
+@@ -157,8 +162,13 @@ static void chiaki_audio_receiver_frame(ChiakiAudioReceiver *audio_receiver, Chi
+ 
+ 		if(is_haptics)
+ 		{
+-			if(chiaki_seq_num_16_gt(frame_index, audio_receiver->frame_index_prev))
++			bool gap_before = false;
++			if((audio_receiver->session->veyra_haptics_frame_cb && !audio_receiver->next_frame_index_valid)
++				|| chiaki_seq_num_16_gt(frame_index, audio_receiver->frame_index_prev))
+ 			{
++				gap_before = audio_receiver->next_frame_index_valid && frame_index != audio_receiver->next_frame_index;
++				audio_receiver->next_frame_index = (ChiakiSeqNum16)(frame_index + 1);
++				audio_receiver->next_frame_index_valid = true;
+ 				audio_receiver->frame_index_prev = frame_index;
+ 				frame_cb = audio_receiver->session->haptics_sink.frame_cb;
+ 				frame_cb_user = audio_receiver->session->haptics_sink.user;
+@@ -171,7 +181,9 @@ static void chiaki_audio_receiver_frame(ChiakiAudioReceiver *audio_receiver, Chi
+ 				CHIAKI_LOGE(audio_receiver->log, "Failed to unlock audio receiver mutex: %s", chiaki_error_string(err));
+ 				return;
+ 			}
+-			if(frame_cb)
++			if(deliver_buf && audio_receiver->session->veyra_haptics_frame_cb)
++				audio_receiver->session->veyra_haptics_frame_cb(deliver_buf, deliver_buf_size, gap_before, frame_cb_user);
++			else if(frame_cb)
+ 				frame_cb(deliver_buf, deliver_buf_size, frame_cb_user);
+ 			return;
+ 		}

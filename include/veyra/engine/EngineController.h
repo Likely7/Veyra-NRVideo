@@ -18,6 +18,9 @@
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/sink/HdmiBitstreamOutput.h"
 #include "veyra/remoteplay/SessionInbox.h"
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+#include "veyra/remoteplay/KeyboardMouse.h"
+#endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 #include "veyra/source/MoonlightSessionSource.h"
 #endif
@@ -33,7 +36,7 @@
 #include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
-namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
+namespace veyra::remoteplay { class KeyboardMouse; struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::engine {
@@ -252,7 +255,9 @@ public:
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
+    std::shared_ptr<remoteplay::KeyboardMouse> remoteKeyboardMouse();
     void remotePlayController(const remoteplay::ControllerState&);
+    void pauseRemotePlayPhysicalInput(bool paused);
     void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
@@ -352,6 +357,7 @@ private:
     std::shared_ptr<source::RemotePlaySessionSource> activeRemote_;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     std::shared_ptr<source::RemotePlaySessionSource> controlRemote_; // mutex_; PS5 手柄控制
+    remoteplay::PhysicalControllerGate physicalControllerGate_; // mutex_
     // controlMutex_ guards the queue below; the session thread never holds it
     // (nor mutex_) while it talks to the console.
     mutable std::mutex controlMutex_;

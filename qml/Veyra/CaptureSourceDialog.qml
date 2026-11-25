@@ -140,6 +140,7 @@ DialogLayer {
         }
     }
 
+    Ps5KeyboardEntry { host: captureDialog.dialogHost; settings: veyra.ps5Keyboard || null }
     DialogSection { text: qsTr("设备") }
     DialogGroup {
         VRow {

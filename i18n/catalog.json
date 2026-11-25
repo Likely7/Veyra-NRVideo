@@ -963,6 +963,19 @@
    "ru": "%1 × %2 · %3 опубликованные кадры · %4 пропущено"
   },
   {
+   "zh": "%1 与 %2 在 %3 上冲突",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "%1 與 %2 在 %3 上衝突",
+   "en": "%1 conflicts with %2 on %3",
+   "ja": "%3 で %1 と %2 が競合しています",
+   "ko": "%3에서 %1 및 %2 충돌",
+   "es": "%1 entra en conflicto con %2 en %3",
+   "fr": "%1 et %2 utilisent tous deux %3",
+   "de": "%1 und %2 verwenden beide %3",
+   "pt-BR": "%1 e %2 usam a mesma entrada %3",
+   "ru": "%1 и %2 используют один ввод %3"
+  },
+  {
    "zh": "%1 关闭",
    "src": "qml/FullscreenTimingPanel.qml",
    "zh-TW": "%1 關閉",
@@ -1065,6 +1078,19 @@
    "de": "%1 Posten",
    "pt-BR": "%1 itens",
    "ru": "%1 Пункты"
+  },
+  {
+   "zh": "%1（个人副本）",
+   "src": "src/ui/Ps5PlayerShortcuts.cpp",
+   "en": "%1 (personal copy)",
+   "zh-TW": "%1（個人副本）",
+   "ja": "%1（個人用コピー）",
+   "ko": "%1 (개인 복사본)",
+   "es": "%1 (copia personal)",
+   "fr": "%1 (copie personnelle)",
+   "de": "%1 (persönliche Kopie)",
+   "pt-BR": "%1 (cópia pessoal)",
+   "ru": "%1 (личная копия)"
   },
   {
    "zh": "(未命名设备)",
@@ -4174,6 +4200,19 @@
    "ru": "PS5 управление контроллером: пока нет PS5. Пара один раз под PS5 стримингом"
   },
   {
+   "zh": "PS5 手柄输出",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "PS5 control",
+   "zh-TW": "PS5 控制器輸出",
+   "ja": "PS5 の操作",
+   "ko": "PS5 조작",
+   "es": "Control de PS5",
+   "fr": "Commande PS5",
+   "de": "PS5-Steuerelement",
+   "pt-BR": "Controle do PS5",
+   "ru": "Элемент управления PS5"
+  },
+  {
    "zh": "PS5 提示时填写",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "PS5 提示時填寫",
@@ -6059,6 +6098,19 @@
    "ru": "Быстрые пресеты"
   },
   {
+   "zh": "三角键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "三角按鈕",
+   "en": "Triangle",
+   "ja": "△ボタン",
+   "ko": "세모 버튼",
+   "es": "Triángulo",
+   "fr": "Triangle",
+   "de": "Dreieck",
+   "pt-BR": "Triângulo",
+   "ru": "Треугольник"
+  },
+  {
    "zh": "上一任务仍在回收，请等待取消完成",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "上一任務仍在回收，請等待取消完成",
@@ -6811,6 +6863,19 @@
    "de": "Strikte Taktung der Frame-Generierung",
    "pt-BR": "Ritmo rigoroso da geração de quadros",
    "ru": "Строгий ритм генерации кадров"
+  },
+  {
+   "zh": "个人副本名称",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "個人副本名稱",
+   "en": "Personal copy name",
+   "ja": "個人用コピーの名前",
+   "ko": "개인 복사본 이름",
+   "es": "Nombre de la copia personal",
+   "fr": "Nom de la copie personnelle",
+   "de": "Name der persönlichen Kopie",
+   "pt-BR": "Nome da cópia pessoal",
+   "ru": "Имя личной копии"
   },
   {
    "zh": "中",
@@ -7593,6 +7658,19 @@
    "ru": "Сертификат хоста не соответствует тому, который был сохранен при спаривании (хост был переустановлен, или это не спаренный). Удалите этого хозяина и снова попаритесь."
   },
   {
+   "zh": "主机菜单",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Console menu",
+   "zh-TW": "主機選單",
+   "ja": "本体メニュー",
+   "ko": "콘솔 메뉴",
+   "es": "Menú de la consola",
+   "fr": "Menu de la console",
+   "de": "Konsolenmenü",
+   "pt-BR": "Menu do console",
+   "ru": "Меню консоли"
+  },
+  {
    "zh": "主机要用同一个账号登录，并在 设置 → 设备和连接 → 远程功能 里启用远程功能",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "主機要用同一個帳號登入，並在 設定 → 裝置和連接 → 遠程功能 裡啟用遠程功能",
@@ -7734,6 +7812,19 @@
    "de": "Zwei-Pass-Codierung",
    "pt-BR": "Codificação em duas passagens",
    "ru": "Двухпропускная кодировка"
+  },
+  {
+   "zh": "交换",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "交換",
+   "en": "Swap",
+   "ja": "入れ替え",
+   "ko": "맞바꾸기",
+   "es": "Intercambiar",
+   "fr": "Permuter",
+   "de": "Tauschen",
+   "pt-BR": "Trocar",
+   "ru": "Поменять местами"
   },
   {
    "zh": "交流群",
@@ -8347,6 +8438,19 @@
    "ru": "Запас "
   },
   {
+   "zh": "你的输入",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Your input",
+   "zh-TW": "你的輸入",
+   "ja": "入力",
+   "ko": "사용자 입력",
+   "es": "Tu entrada",
+   "fr": "Votre entrée",
+   "de": "Deine Eingabe",
+   "pt-BR": "Sua entrada",
+   "ru": "Ваш ввод"
+  },
+  {
    "zh": "使用 Windows 实时字幕识别系统播放的声音，译文显示在 Veyra 预览画面内。",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "使用 Windows 即時字幕辨識系統播放的聲音，譯文顯示在 Veyra 預覽畫面內。",
@@ -8412,6 +8516,19 @@
    "ru": "напр. Вечерняя игра"
   },
   {
+   "zh": "侧键 %1",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "側鍵 %1",
+   "en": "Side button %1",
+   "ja": "サイドボタン %1",
+   "ko": "측면 버튼 %1",
+   "es": "Botón lateral %1",
+   "fr": "Bouton latéral %1",
+   "de": "Seitentaste %1",
+   "pt-BR": "Botão lateral %1",
+   "ru": "Боковая кнопка %1"
+  },
+  {
    "zh": "便携版更新 · %1",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "可攜版更新 · %1",
@@ -8462,6 +8579,32 @@
    "de": "Speichern in",
    "pt-BR": "Salvar em",
    "ru": "Сохранить в"
+  },
+  {
+   "zh": "保存到个人配置",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Save to personal profile",
+   "zh-TW": "儲存至個人設定檔",
+   "ja": "個人プロファイルに保存",
+   "ko": "개인 프로필에 저장",
+   "es": "Guardar en el perfil personal",
+   "fr": "Enregistrer dans le profil personnel",
+   "de": "Im persönlichen Profil speichern",
+   "pt-BR": "Salvar no perfil pessoal",
+   "ru": "Сохранить в личном профиле"
+  },
+  {
+   "zh": "保存副本",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "儲存副本",
+   "en": "Save copy",
+   "ja": "コピーを保存",
+   "ko": "복사본 저장",
+   "es": "Guardar copia",
+   "fr": "Enregistrer la copie",
+   "de": "Kopie speichern",
+   "pt-BR": "Salvar cópia",
+   "ru": "Сохранить копию"
   },
   {
    "zh": "保存即时回放",
@@ -10376,6 +10519,19 @@
    "ru": "В разделе «Интерполяция» выберите алгоритм, множитель и качество. Множитель определяет число кадров, создаваемых между исходными."
   },
   {
+   "zh": "切换",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "切換",
+   "en": "Toggle",
+   "ja": "切り替え",
+   "ko": "전환",
+   "es": "Alternar",
+   "fr": "Basculer",
+   "de": "Umschalten",
+   "pt-BR": "Alternar",
+   "ru": "Переключить"
+  },
+  {
    "zh": "切换会重建处理链，画面可能停顿几百毫秒。",
    "src": "qml/NodePage.qml",
    "zh-TW": "切換會重建處理鏈，畫面可能停頓幾百毫秒。",
@@ -10439,6 +10595,45 @@
    "de": "Zurück zum Listenmodus?",
    "pt-BR": "Voltar ao modo lista?",
    "ru": "Вернуться в режим списка?"
+  },
+  {
+   "zh": "切换情境",
+   "src": "qml/Veyra/Ps5PlayerControls.qml",
+   "zh-TW": "切換情境",
+   "en": "Switch situation",
+   "ja": "状況を切り替える",
+   "ko": "상황 전환",
+   "es": "Cambiar de situación",
+   "fr": "Changer de situation",
+   "de": "Situation wechseln",
+   "pt-BR": "Mudar de situação",
+   "ru": "Сменить ситуацию"
+  },
+  {
+   "zh": "切换情境 · %1",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Switch situation · %1",
+   "zh-TW": "切換情境 · %1",
+   "ja": "状況切替 · %1",
+   "ko": "상황 전환 · %1",
+   "es": "Cambiar de situación · %1",
+   "fr": "Changer de situation · %1",
+   "de": "Situation wechseln · %1",
+   "pt-BR": "Mudar de situação · %1",
+   "ru": "Сменить ситуацию · %1"
+  },
+  {
+   "zh": "切换控制 · %1     显示按键 · %2",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Switch control · %1     Show controls · %2",
+   "zh-TW": "切換控制 · %1     顯示按鍵 · %2",
+   "ja": "操作切替 · %1     操作一覧 · %2",
+   "ko": "조작 전환 · %1     조작 표시 · %2",
+   "es": "Cambiar control · %1     Ver controles · %2",
+   "fr": "Changer de contrôle · %1     Voir les commandes · %2",
+   "de": "Steuerung wechseln · %1     Belegung anzeigen · %2",
+   "pt-BR": "Alternar controle · %1     Mostrar controles · %2",
+   "ru": "Переключить управление · %1     Показать клавиши · %2"
   },
   {
    "zh": "切换极简 / 专业",
@@ -10582,6 +10777,19 @@
    "de": "Ausgangsspur erstellen",
    "pt-BR": "Criar uma faixa de saída",
    "ru": "Создать выходной трек"
+  },
+  {
+   "zh": "创建键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "建立按鈕",
+   "en": "Create",
+   "ja": "クリエイトボタン",
+   "ko": "만들기 버튼",
+   "es": "Crear",
+   "fr": "Création",
+   "de": "Create-Taste",
+   "pt-BR": "Criar",
+   "ru": "Создание"
   },
   {
    "zh": "初始化失败；详细原因见诊断日志",
@@ -10959,6 +11167,19 @@
    "de": "Datei laden…",
    "pt-BR": "Carregar arquivo…",
    "ru": "Загрузить файл…"
+  },
+  {
+   "zh": "动作列表",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Action list",
+   "zh-TW": "動作清單",
+   "ja": "アクション一覧",
+   "ko": "동작 목록",
+   "es": "Lista de acciones",
+   "fr": "Liste des actions",
+   "de": "Aktionsliste",
+   "pt-BR": "Lista de ações",
+   "ru": "Список действий"
   },
   {
    "zh": "动态 HUD 保护",
@@ -11858,6 +12079,32 @@
    "ru": "Используйте среднюю яркость"
   },
   {
+   "zh": "叉键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "交叉按鈕",
+   "en": "Cross",
+   "ja": "×ボタン",
+   "ko": "가위표 버튼",
+   "es": "Cruz",
+   "fr": "Croix",
+   "de": "Kreuz",
+   "pt-BR": "X",
+   "ru": "Крест"
+  },
+  {
+   "zh": "双击",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "按兩下",
+   "en": "Double tap",
+   "ja": "2 回押す",
+   "ko": "두 번 누르기",
+   "es": "Pulsar dos veces",
+   "fr": "Appuyer deux fois",
+   "de": "Doppelt drücken",
+   "pt-BR": "Pressionar duas vezes",
+   "ru": "Нажать дважды"
+  },
+  {
    "zh": "双层",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "雙層",
@@ -12103,6 +12350,19 @@
    "de": "Update abbrechen",
    "pt-BR": "Cancelar atualização",
    "ru": "Отменить обновление"
+  },
+  {
+   "zh": "受影响的情境：%1",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "受影響的情境：%1",
+   "en": "Affected situations: %1",
+   "ja": "影響を受ける状況：%1",
+   "ko": "영향을 받는 상황: %1",
+   "es": "Situaciones afectadas: %1",
+   "fr": "Situations concernées : %1",
+   "de": "Betroffene Situationen: %1",
+   "pt-BR": "Situações afetadas: %1",
+   "ru": "Затронутые ситуации: %1"
   },
   {
    "zh": "变化容差",
@@ -12558,6 +12818,32 @@
    "de": "Unten rechts",
    "pt-BR": "Inferior direito",
    "ru": "Справа внизу"
+  },
+  {
+   "zh": "右摇杆",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "右搖桿",
+   "en": "Right stick",
+   "ja": "右スティック",
+   "ko": "오른쪽 스틱",
+   "es": "Stick derecho",
+   "fr": "Joystick droit",
+   "de": "Rechter Stick",
+   "pt-BR": "Controle analógico direito",
+   "ru": "Правый джойстик"
+  },
+  {
+   "zh": "右摇杆位置 (%)",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Right stick position (%)",
+   "zh-TW": "右搖桿位置 (%)",
+   "ja": "右スティック位置 (%)",
+   "ko": "오른쪽 스틱 위치 (%)",
+   "es": "Posición del stick derecho (%)",
+   "fr": "Position du stick droit (%)",
+   "de": "Rechte Stickposition (%)",
+   "pt-BR": "Posição do analógico direito (%)",
+   "ru": "Положение правого стика (%)"
   },
   {
    "zh": "右键空白添加 · 拖到连线上插入 · 拖远（上下超过一截）或按住 Alt 松手即断开 · 端口拖拽/点击连线 · 中键平移 · 滚轮缩放",
@@ -13457,6 +13743,19 @@
    "ru": "Распределение ресурсов изображения провалилось"
   },
   {
+   "zh": "圆圈键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "圓圈按鈕",
+   "en": "Circle",
+   "ja": "○ボタン",
+   "ko": "동그라미 버튼",
+   "es": "Círculo",
+   "fr": "Rond",
+   "de": "Kreis",
+   "pt-BR": "Círculo",
+   "ru": "Круг"
+  },
+  {
    "zh": "圆形 ",
    "src": "qml/MaskEditor.qml",
    "zh-TW": "圓形 ",
@@ -13717,6 +14016,19 @@
    "ru": "Показывает число отправленных кадров в секунду и 1% Low поверх видео. В полноэкранном режиме нажмите %1 для переключения."
   },
   {
+   "zh": "在预览中移动鼠标并按 W。输入仅在本机生效。",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Move your mouse and press W in the preview. Your input stays on this PC.",
+   "zh-TW": "在預覽中移動滑鼠並按 W。輸入僅在這部電腦生效。",
+   "ja": "プレビューでマウスを動かし、W を押してください。入力はこの PC 内で処理されます。",
+   "ko": "미리보기에서 마우스를 움직이고 W를 누르세요. 입력은 이 PC에서만 처리됩니다.",
+   "es": "Mueve el ratón y pulsa W en la vista previa. La entrada se queda en este PC.",
+   "fr": "Bougez la souris et appuyez sur W dans l’aperçu. Les entrées restent sur ce PC.",
+   "de": "Bewege die Maus und drücke W in der Vorschau. Die Eingaben bleiben auf diesem PC.",
+   "pt-BR": "Mova o mouse e pressione W na prévia. A entrada fica neste PC.",
+   "ru": "В окне проверки подвигайте мышью и нажмите W. Ввод обрабатывается только на этом ПК."
+  },
+  {
    "zh": "在首页打开「采集卡」，进入 HDMI 画面的采集设置。",
    "src": "qml/OnboardingGuide.qml",
    "zh-TW": "在首頁開啟「擷取卡」，進入 HDMI 畫面的擷取設定。",
@@ -13728,6 +14040,19 @@
    "de": "Öffne auf der Startseite Capture-Karte, um die Aufnahme des HDMI-Signals einzurichten.",
    "pt-BR": "Na tela inicial, abra Placa de captura para configurar a captura do sinal HDMI.",
    "ru": "На главной странице откройте «Карта захвата», чтобы настроить захват сигнала HDMI."
+  },
+  {
+   "zh": "地图",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "地圖",
+   "en": "Map",
+   "ja": "マップ",
+   "ko": "지도",
+   "es": "Mapa",
+   "fr": "Carte",
+   "de": "Karte",
+   "pt-BR": "Mapa",
+   "ru": "Карта"
   },
   {
    "zh": "地址格式不对。",
@@ -13754,6 +14079,19 @@
    "de": "Ausgewogen",
    "pt-BR": "Equilibrado",
    "ru": "Сбалансированный"
+  },
+  {
+   "zh": "垂直",
+   "src": "qml/Ps5MouseAim.qml",
+   "en": "Vertical",
+   "zh-TW": "垂直",
+   "ja": "垂直",
+   "ko": "세로",
+   "es": "Vertical",
+   "fr": "Vertical",
+   "de": "Vertikal",
+   "pt-BR": "Vertical",
+   "ru": "По вертикали"
   },
   {
    "zh": "垂直同步",
@@ -13793,6 +14131,19 @@
    "de": "VSync: Anzeige-Warteschlangensteuerung nicht verfügbar",
    "pt-BR": "VSync: não está disponível o controle da fila de exibição",
    "ru": "VSync: управление очередями дисплея недоступно"
+  },
+  {
+   "zh": "基础绑定",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "基礎綁定",
+   "en": "Base binding",
+   "ja": "基本の割り当て",
+   "ko": "기본 바인딩",
+   "es": "Asignación base",
+   "fr": "Affectation de base",
+   "de": "Grundbelegung",
+   "pt-BR": "Atribuição base",
+   "ru": "Базовое назначение"
   },
   {
    "zh": "基础设置",
@@ -16356,6 +16707,19 @@
    "ru": "Мелкий"
   },
   {
+   "zh": "小键盘 %1",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "數字鍵盤 %1",
+   "en": "Numpad %1",
+   "ja": "テンキー %1",
+   "ko": "숫자 키패드 %1",
+   "es": "Teclado numérico %1",
+   "fr": "Pavé numérique %1",
+   "de": "Ziffernblock %1",
+   "pt-BR": "Teclado numérico %1",
+   "ru": "Цифровая клавиатура %1"
+  },
+  {
    "zh": "尚无导出任务",
    "src": "src/engine/ExportJobManager.cpp",
    "zh-TW": "尚無匯出任務",
@@ -16770,6 +17134,19 @@
    "de": "Unten links",
    "pt-BR": "Inferior esquerdo",
    "ru": "Слева внизу"
+  },
+  {
+   "zh": "左摇杆",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "左搖桿",
+   "en": "Left stick",
+   "ja": "左スティック",
+   "ko": "왼쪽 스틱",
+   "es": "Stick izquierdo",
+   "fr": "Joystick gauche",
+   "de": "Linker Stick",
+   "pt-BR": "Controle analógico esquerdo",
+   "ru": "Левый джойстик"
   },
   {
    "zh": "已从上次位置 %1 继续",
@@ -17643,6 +18020,19 @@
    "ru": "Предварительный набор с этим именем уже существует; выберите другое имя для сохранения."
   },
   {
+   "zh": "已有控制配置使用此名称。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "已有控制設定檔使用此名稱。",
+   "en": "A control profile already uses this name.",
+   "ja": "この名前の操作プロファイルはすでに存在します。",
+   "ko": "같은 이름의 컨트롤 프로필이 이미 있습니다.",
+   "es": "Ya existe un perfil de controles con este nombre.",
+   "fr": "Un profil de commandes porte déjà ce nom.",
+   "de": "Ein Steuerungsprofil mit diesem Namen ist bereits vorhanden.",
+   "pt-BR": "Já existe um perfil de controles com esse nome.",
+   "ru": "Профиль управления с таким именем уже существует."
+  },
+  {
    "zh": "已检测到 VB-CABLE · 用于转接 Windows 侦听",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "已檢測到 VB-CABLE · 用於轉接 Windows 偵聽",
@@ -17667,6 +18057,19 @@
    "de": "VB-CABLE ist bereits installiert",
    "pt-BR": "O VB-CABLE já está instalado",
    "ru": "VB-CABLE уже установлен"
+  },
+  {
+   "zh": "已检测到移动",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Movement detected",
+   "zh-TW": "已偵測到移動",
+   "ja": "移動を検出",
+   "ko": "이동 감지됨",
+   "es": "Movimiento detectado",
+   "fr": "Mouvement détecté",
+   "de": "Bewegung erkannt",
+   "pt-BR": "Movimento detectado",
+   "ru": "Движение обнаружено"
   },
   {
    "zh": "已添加 %1 项 · 列表共 %2 项",
@@ -18044,6 +18447,19 @@
    "de": "Gewähltes Gerät (nicht verbunden)",
    "pt-BR": "Dispositivo escolhido (não conectado)",
    "ru": "Выбранное устройство (не подключено)"
+  },
+  {
+   "zh": "已选输入",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "所選輸入",
+   "en": "Selected input",
+   "ja": "選択中の入力",
+   "ko": "선택한 입력",
+   "es": "Entrada seleccionada",
+   "fr": "Entrée sélectionnée",
+   "de": "Gewählte Eingabe",
+   "pt-BR": "Entrada selecionada",
+   "ru": "Выбранный ввод"
   },
   {
    "zh": "已配对",
@@ -18616,6 +19032,19 @@
    "de": "Sekunden zu sammeln, bevor die Wiedergabe beginnt; \"Follow buffer level\" verwendet den oben gewählten Level. Wird beim nächsten Öffnen eines Netzwerkvideos wirksam",
    "pt-BR": "Segundos para coletar antes da reprodução começar; “Siga o nível de buffer” usa o nível escolhido acima. Faz efeito na próxima vez que um vídeo de rede é aberto",
    "ru": "Секунды для сбора перед началом воспроизведения; «Следующий уровень буфера» использует уровень, выбранный выше. Вступает в силу в следующий раз, когда открывается сетевое видео"
+  },
+  {
+   "zh": "开始游戏前，可以检查设备并练习切换控制。也可稍后在“设备与快捷键”中进行。",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Check your devices and practice switching control before you play. You can also do this later in Devices & shortcuts.",
+   "zh-TW": "開始遊戲前，可以檢查裝置並練習切換控制。也可稍後在「裝置與快速鍵」中進行。",
+   "ja": "プレイ前にデバイスと操作の切り替えを確認できます。「デバイスとショートカット」から後でも試せます。",
+   "ko": "플레이 전에 장치를 확인하고 조작 전환을 연습하세요. 나중에 장치 및 단축키에서도 할 수 있습니다.",
+   "es": "Comprueba los dispositivos y practica el cambio de control. También puedes hacerlo más tarde en Dispositivos y atajos.",
+   "fr": "Vérifiez vos appareils et essayez le changement de contrôle. Vous pourrez le refaire dans Appareils et raccourcis.",
+   "de": "Teste Geräte und Steuerungswechsel vor dem Spielen oder später unter Geräte und Tastenkürzel.",
+   "pt-BR": "Confira os dispositivos e pratique a troca de controle. Você também pode fazer isso depois em Dispositivos e atalhos.",
+   "ru": "Проверьте устройства и попробуйте переключить управление. Это можно сделать позже в разделе «Устройства и сочетания клавиш»."
   },
   {
    "zh": "开播自动选档",
@@ -19201,6 +19630,32 @@
    "de": "Aktuelle Bildrate %1 fps überschreitet die Bildwiederholrate %2 Hz; senken Sie sie auf %3 X für niedrigere Latenz",
    "pt-BR": "Taxa de quadros actual %1 fps excede a taxa de actualização %2 Hz; reduza-a para %3 X para uma latência inferior",
    "ru": "Текущая кадровая ставка %1 fps превышает частоту обновления %2 Hz; опустите ее до %3 X для более низкой задержки"
+  },
+  {
+   "zh": "当前情境",
+   "src": "qml/Ps5KeyboardEntry.qml",
+   "zh-TW": "目前情境",
+   "en": "Active situation",
+   "ja": "現在の状況",
+   "ko": "현재 상황",
+   "es": "Situación activa",
+   "fr": "Situation active",
+   "de": "Aktive Situation",
+   "pt-BR": "Situação atual",
+   "ru": "Текущая ситуация"
+  },
+  {
+   "zh": "当前情境：%1　·　Ctrl+Alt+Shift+Z 释放",
+   "src": "qml/Main.qml",
+   "zh-TW": "目前情境：%1　·　Ctrl+Alt+Shift+Z 釋放",
+   "en": "%1 · Ctrl+Alt+Shift+Z to release",
+   "ja": "%1 · Ctrl+Alt+Shift+Z で解除",
+   "ko": "%1 · Ctrl+Alt+Shift+Z로 해제",
+   "es": "%1 · Ctrl+Alt+Mayús+Z para liberar",
+   "fr": "%1 · Ctrl+Alt+Maj+Z pour libérer",
+   "de": "%1 · Freigeben mit Strg+Alt+Umschalt+Z",
+   "pt-BR": "%1 · Ctrl+Alt+Shift+Z para liberar",
+   "ru": "%1 · Ctrl+Alt+Shift+Z для освобождения ввода"
   },
   {
    "zh": "当前执行器尚不支持此节点顺序，原配置保持不变",
@@ -19931,6 +20386,19 @@
    "ru": "Психовизуальная оптимизация"
   },
   {
+   "zh": "必需",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "必要",
+   "en": "Required",
+   "ja": "必須",
+   "ko": "필수",
+   "es": "Obligatorio",
+   "fr": "Obligatoire",
+   "de": "Erforderlich",
+   "pt-BR": "Obrigatório",
+   "ru": "Обязательно"
+  },
+  {
    "zh": "快捷键",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "快速鍵",
@@ -19968,6 +20436,19 @@
    "de": "Tastenkürzel konnte nicht gespeichert werden",
    "pt-BR": "Não foi possível salvar o atalho",
    "ru": "Не удалось сохранить сочетание клавиш"
+  },
+  {
+   "zh": "快捷键冲突",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Shortcut conflict",
+   "zh-TW": "快速鍵衝突",
+   "ja": "ショートカットの競合",
+   "ko": "단축키 충돌",
+   "es": "Conflicto de atajos",
+   "fr": "Conflit de raccourcis",
+   "de": "Tastenkonflikt",
+   "pt-BR": "Conflito de atalhos",
+   "ru": "Конфликт клавиш"
   },
   {
    "zh": "性能",
@@ -20074,6 +20555,32 @@
    "ru": "Восстановить исходный"
   },
   {
+   "zh": "恢复捕获输入",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "恢復擷取輸入",
+   "en": "Resume capture",
+   "ja": "入力の取り込みを再開",
+   "ko": "입력 캡처 재개",
+   "es": "Reanudar captura de entrada",
+   "fr": "Reprendre la capture des entrées",
+   "de": "Eingabeerfassung fortsetzen",
+   "pt-BR": "Retomar captura de entrada",
+   "ru": "Возобновить захват ввода"
+  },
+  {
+   "zh": "恢复此轴的预设曲线",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Restore preset curve for this axis",
+   "zh-TW": "還原此軸的預設曲線",
+   "ja": "この軸のプリセット曲線を復元",
+   "ko": "이 축의 기본 곡선 복원",
+   "es": "Restaurar la curva predefinida de este eje",
+   "fr": "Rétablir la courbe prédéfinie de cet axe",
+   "de": "Vorgabekurve dieser Achse wiederherstellen",
+   "pt-BR": "Restaurar a curva predefinida deste eixo",
+   "ru": "Восстановить исходную кривую этой оси"
+  },
+  {
    "zh": "恢复记录与当前配置不一致",
    "src": "src/ui/NvidiaVrrProfileController.cpp",
    "zh-TW": "還原記錄與目前設定不一致",
@@ -20098,6 +20605,45 @@
    "de": "Auf Standard zurücksetzen",
    "pt-BR": "Restaurar padrão",
    "ru": "Вернуть по умолчанию"
+  },
+  {
+   "zh": "情境",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Situations",
+   "zh-TW": "情境",
+   "ja": "状況",
+   "ko": "상황",
+   "es": "Situaciones",
+   "fr": "Situations",
+   "de": "Situationen",
+   "pt-BR": "Situações",
+   "ru": "Ситуации"
+  },
+  {
+   "zh": "情境切换",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Situation switches",
+   "zh-TW": "情境切換",
+   "ja": "状況の切り替え",
+   "ko": "상황 전환",
+   "es": "Cambios de situación",
+   "fr": "Changements de situation",
+   "de": "Situationswechsel",
+   "pt-BR": "Trocas de situação",
+   "ru": "Смена ситуации"
+  },
+  {
+   "zh": "情境检测",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "情境偵測",
+   "en": "Situation detection",
+   "ja": "状況の検出",
+   "ko": "상황 감지",
+   "es": "Detección de situación",
+   "fr": "Détection de situation",
+   "de": "Situationserkennung",
+   "pt-BR": "Detecção de situação",
+   "ru": "Определение ситуации"
   },
   {
    "zh": "想把 SDR 画面转换为 HDR，可以在支持的显卡和 HDR 显示器上试用 RTX Video HDR。",
@@ -20163,6 +20709,19 @@
    "de": "Bei vergleichbaren Karten lag der Unterschied in meinen Tests meist bei höchstens rund 5 ms. Prüfe zuerst, ob deine Auflösung, Bildrate und der Farbmodus stabil laufen. Entscheide dich danach für eine Marke. Viel Spaß beim Spielen!",
    "pt-BR": "Nos meus testes, placas comparáveis geralmente ficaram a cerca de 5 ms umas das outras. Confira se a resolução, a taxa de quadros e o modo de cor que você quer funcionam bem. Depois escolha a marca. Bom jogo!",
    "ru": "При сравнении похожих карт разница в задержке у меня обычно была в пределах примерно 5 мс. Сначала проверьте, что нужные разрешение, частота и режим цвета работают стабильно, затем выбирайте марку. Приятной игры!"
+  },
+  {
+   "zh": "我的 GTA VI",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "我的 GTA VI",
+   "en": "My GTA VI",
+   "ja": "自分の GTA VI",
+   "ko": "내 GTA VI",
+   "es": "Mi GTA VI",
+   "fr": "Mon GTA VI",
+   "de": "Mein GTA VI",
+   "pt-BR": "Meu GTA VI",
+   "ru": "Мой GTA VI"
   },
   {
    "zh": "我的屏能到多少 nit；0 = 自动",
@@ -20516,6 +21075,19 @@
    "ru": "Добавить вручную"
   },
   {
+   "zh": "手动选择",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "en": "Manual selection",
+   "zh-TW": "手動選擇",
+   "ja": "手動選択",
+   "ko": "수동 선택",
+   "es": "Selección manual",
+   "fr": "Sélection manuelle",
+   "de": "Manuelle Auswahl",
+   "pt-BR": "Seleção manual",
+   "ru": "Ручной выбор"
+  },
+  {
    "zh": "手动选择最多 64 条；保留全部不限制轨道数量",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "手動選擇最多 64 條；保留全部不限制軌道數量",
@@ -20553,6 +21125,32 @@
    "de": "Regler",
    "pt-BR": "Controle",
    "ru": "Контроллер"
+  },
+  {
+   "zh": "手柄反馈",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "en": "Controller feedback",
+   "zh-TW": "控制器回饋",
+   "ja": "コントローラーの反応",
+   "ko": "컨트롤러 피드백",
+   "es": "Respuesta del mando",
+   "fr": "Retour de la manette",
+   "de": "Controller-Rückmeldung",
+   "pt-BR": "Resposta do controle",
+   "ru": "Отклик геймпада"
+  },
+  {
+   "zh": "手柄布局",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Controller map",
+   "zh-TW": "控制器配置",
+   "ja": "コントローラー配置",
+   "ko": "컨트롤러 배치",
+   "es": "Mapa del mando",
+   "fr": "Schéma de la manette",
+   "de": "Controllerbelegung",
+   "pt-BR": "Mapa do controle",
+   "ru": "Схема геймпада"
   },
   {
    "zh": "手柄支持陀螺仪",
@@ -21257,6 +21855,32 @@
    "ru": "Перетащите края или переместите рамку обрезки · %1 × %2"
   },
   {
+   "zh": "按下",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "按下",
+   "en": "Press",
+   "ja": "押す",
+   "ko": "누르기",
+   "es": "Pulsar",
+   "fr": "Appuyer",
+   "de": "Drücken",
+   "pt-BR": "Pressionar",
+   "ru": "Нажать"
+  },
+  {
+   "zh": "按下新按键",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Press a new key",
+   "zh-TW": "按下新按鍵",
+   "ja": "新しいキーを押す",
+   "ko": "새 키를 누르세요",
+   "es": "Pulsa una tecla nueva",
+   "fr": "Appuyez sur une nouvelle touche",
+   "de": "Neue Taste drücken",
+   "pt-BR": "Pressione uma nova tecla",
+   "ru": "Нажмите новую клавишу"
+  },
+  {
    "zh": "按下新按键…",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "按下新按鍵…",
@@ -21268,6 +21892,45 @@
    "de": "Neue Taste drücken…",
    "pt-BR": "Pressione a nova tecla…",
    "ru": "Нажмите новую клавишу…"
+  },
+  {
+   "zh": "按住",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "按住",
+   "en": "Hold",
+   "ja": "長押し",
+   "ko": "길게 누르기",
+   "es": "Mantener",
+   "fr": "Maintenir",
+   "de": "Halten",
+   "pt-BR": "Manter pressionado",
+   "ru": "Удерживать"
+  },
+  {
+   "zh": "按住 %1",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "按住 %1",
+   "en": "Hold %1",
+   "ja": "%1 を長押し",
+   "ko": "%1 길게 누르기",
+   "es": "Mantener %1",
+   "fr": "Maintenir %1",
+   "de": "%1 halten",
+   "pt-BR": "Manter %1 pressionado",
+   "ru": "Удерживать %1"
+  },
+  {
+   "zh": "按住 %1 · %2",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "按住 %1 · %2",
+   "en": "Hold %1 · %2",
+   "ja": "%1 を長押し · %2",
+   "ko": "%1 길게 누르기 · %2",
+   "es": "Mantener %1 · %2",
+   "fr": "Maintenir %1 · %2",
+   "de": "%1 halten · %2",
+   "pt-BR": "Manter %1 pressionado · %2",
+   "ru": "Удерживать %1 · %2"
   },
   {
    "zh": "按住 V 查看原画",
@@ -21387,6 +22050,32 @@
    "ru": "Ключи можно менять в настройках → ярлыки"
   },
   {
+   "zh": "按键层 · %1",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Binding layer · %1",
+   "zh-TW": "按鍵層 · %1",
+   "ja": "割り当てレイヤー · %1",
+   "ko": "키 할당 레이어 · %1",
+   "es": "Capa de asignaciones · %1",
+   "fr": "Couche d’affectations · %1",
+   "de": "Belegungsebene · %1",
+   "pt-BR": "Camada de atribuições · %1",
+   "ru": "Слой назначений · %1"
+  },
+  {
+   "zh": "按键浮层",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Controls overlay",
+   "zh-TW": "按鍵浮層",
+   "ja": "操作一覧表示",
+   "ko": "조작 오버레이",
+   "es": "Panel de controles",
+   "fr": "Panneau des commandes",
+   "de": "Tastenübersicht",
+   "pt-BR": "Sobreposição de controles",
+   "ru": "Панель управления"
+  },
+  {
    "zh": "按音轨自动对齐",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "按音軌自動對齊",
@@ -21476,6 +22165,84 @@
    "de": "API-Modellname",
    "pt-BR": "Nome do modelo da API",
    "ru": "Имя модели API"
+  },
+  {
+   "zh": "控制 PS5",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Control PS5",
+   "zh-TW": "控制 PS5",
+   "ja": "PS5 を操作",
+   "ko": "PS5 조작",
+   "es": "Controlar PS5",
+   "fr": "Contrôler la PS5",
+   "de": "PS5 steuern",
+   "pt-BR": "Controlar o PS5",
+   "ru": "Управлять PS5"
+  },
+  {
+   "zh": "控制 PS5 · %1",
+   "src": "qml/Ps5PlayerControls.qml",
+   "en": "Control PS5 · %1",
+   "zh-TW": "控制 PS5 · %1",
+   "ja": "PS5 を操作 · %1",
+   "ko": "PS5 조작 · %1",
+   "es": "Controlar PS5 · %1",
+   "fr": "Contrôler la PS5 · %1",
+   "de": "PS5 steuern · %1",
+   "pt-BR": "Controlar o PS5 · %1",
+   "ru": "Управлять PS5 · %1"
+  },
+  {
+   "zh": "控制配置",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "控制設定檔",
+   "en": "Control profile",
+   "ja": "操作プロファイル",
+   "ko": "컨트롤 프로필",
+   "es": "Perfil de controles",
+   "fr": "Profil de commandes",
+   "de": "Steuerungsprofil",
+   "pt-BR": "Perfil de controles",
+   "ru": "Профиль управления"
+  },
+  {
+   "zh": "控制配置 · %1",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Control profile · %1",
+   "zh-TW": "控制設定檔 · %1",
+   "ja": "操作プロファイル · %1",
+   "ko": "컨트롤 프로필 · %1",
+   "es": "Perfil de controles · %1",
+   "fr": "Profil de commandes · %1",
+   "de": "Steuerungsprofil · %1",
+   "pt-BR": "Perfil de controles · %1",
+   "ru": "Профиль управления · %1"
+  },
+  {
+   "zh": "控制键",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Switch control",
+   "zh-TW": "切換控制",
+   "ja": "操作先を切り替える",
+   "ko": "제어 전환",
+   "es": "Cambiar el control",
+   "fr": "Changer le contrôle",
+   "de": "Steuerung wechseln",
+   "pt-BR": "Alternar controle",
+   "ru": "Переключить управление"
+  },
+  {
+   "zh": "推荐",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "建議",
+   "en": "Recommended",
+   "ja": "推奨",
+   "ko": "권장",
+   "es": "Recomendado",
+   "fr": "Recommandé",
+   "de": "Empfohlen",
+   "pt-BR": "Recomendado",
+   "ru": "Рекомендуется"
   },
   {
    "zh": "描边",
@@ -21684,6 +22451,32 @@
    "de": "Bildrate der Kamera",
    "pt-BR": "Taxa de quadros da câmara",
    "ru": "Кадровая частота камеры"
+  },
+  {
+   "zh": "摇杆位置 (%)",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Stick position (%)",
+   "zh-TW": "搖桿位置 (%)",
+   "ja": "スティック位置 (%)",
+   "ko": "스틱 위치 (%)",
+   "es": "Posición del stick (%)",
+   "fr": "Position du stick (%)",
+   "de": "Stickposition (%)",
+   "pt-BR": "Posição do analógico (%)",
+   "ru": "Положение стика (%)"
+  },
+  {
+   "zh": "摇杆位置须在相邻点之间，最后一点须为 100%。",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Enter a stick position between the adjacent points. The last point must be at 100%.",
+   "zh-TW": "搖桿位置須在相鄰點之間，最後一點須為 100%。",
+   "ja": "隣の点の間にスティック位置を入力してください。最後の点は100%です。",
+   "ko": "인접한 두 점 사이의 스틱 위치를 입력하세요. 마지막 점은 100%여야 합니다.",
+   "es": "Introduce una posición entre los puntos adyacentes. El último punto debe estar al 100 %.",
+   "fr": "Saisissez une position entre les points voisins. Le dernier point doit être à 100 %.",
+   "de": "Gib eine Position zwischen den Nachbarpunkten ein. Der letzte Punkt muss bei 100 % liegen.",
+   "pt-BR": "Insira uma posição entre os pontos adjacentes. O último ponto deve estar em 100%.",
+   "ru": "Введите положение между соседними точками. Последняя точка должна быть на 100 %."
   },
   {
    "zh": "撤销",
@@ -22636,6 +23429,71 @@
    "ru": "Имя нового пресета"
   },
   {
+   "zh": "方向键上",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "方向鍵上",
+   "en": "D-pad up",
+   "ja": "方向キー上",
+   "ko": "방향키 위",
+   "es": "Cruceta arriba",
+   "fr": "Croix directionnelle haut",
+   "de": "Steuerkreuz oben",
+   "pt-BR": "Direcional para cima",
+   "ru": "Крестовина вверх"
+  },
+  {
+   "zh": "方向键下",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "方向鍵下",
+   "en": "D-pad down",
+   "ja": "方向キー下",
+   "ko": "방향키 아래",
+   "es": "Cruceta abajo",
+   "fr": "Croix directionnelle bas",
+   "de": "Steuerkreuz unten",
+   "pt-BR": "Direcional para baixo",
+   "ru": "Крестовина вниз"
+  },
+  {
+   "zh": "方向键右",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "方向鍵右",
+   "en": "D-pad right",
+   "ja": "方向キー右",
+   "ko": "방향키 오른쪽",
+   "es": "Cruceta derecha",
+   "fr": "Croix directionnelle droite",
+   "de": "Steuerkreuz rechts",
+   "pt-BR": "Direcional para a direita",
+   "ru": "Крестовина вправо"
+  },
+  {
+   "zh": "方向键左",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "方向鍵左",
+   "en": "D-pad left",
+   "ja": "方向キー左",
+   "ko": "방향키 왼쪽",
+   "es": "Cruceta izquierda",
+   "fr": "Croix directionnelle gauche",
+   "de": "Steuerkreuz links",
+   "pt-BR": "Direcional para a esquerda",
+   "ru": "Крестовина влево"
+  },
+  {
+   "zh": "方块键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "方塊按鈕",
+   "en": "Square",
+   "ja": "□ボタン",
+   "ko": "네모 버튼",
+   "es": "Cuadrado",
+   "fr": "Carré",
+   "de": "Quadrat",
+   "pt-BR": "Quadrado",
+   "ru": "Квадрат"
+  },
+  {
    "zh": "方式",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "方式",
@@ -22777,6 +23635,19 @@
    "de": "Konnte den decodierten Frame nicht behalten; die Wiedergabe wurde gestoppt",
    "pt-BR": "Não foi possível manter o quadro descodificado; a reprodução parou",
    "ru": "Не удалось сохранить расшифрованный кадр; воспроизведение прекратилось"
+  },
+  {
+   "zh": "无法保存键盘和鼠标设置。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "無法儲存鍵盤和滑鼠設定。",
+   "en": "Cannot save the keyboard and mouse settings.",
+   "ja": "キーボードとマウスの設定を保存できません。",
+   "ko": "키보드와 마우스 설정을 저장할 수 없습니다.",
+   "es": "No se pudieron guardar los ajustes del teclado y del ratón.",
+   "fr": "Impossible d’enregistrer les réglages du clavier et de la souris.",
+   "de": "Die Einstellungen für Tastatur und Maus konnten nicht gespeichert werden.",
+   "pt-BR": "Não foi possível salvar as configurações de teclado e mouse.",
+   "ru": "Не удалось сохранить настройки клавиатуры и мыши."
   },
   {
    "zh": "无法写入内容亮度元数据（MaxCLL/MaxFALL）",
@@ -23143,6 +24014,19 @@
    "ru": "Не удалось инициализировать процесс экспорта"
   },
   {
+   "zh": "无法加载已校准的 GTA VI 控制配置。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "無法載入已校準的 GTA VI 控制設定檔。",
+   "en": "Cannot load the calibrated GTA VI profile.",
+   "ja": "調整済みの GTA VI プロファイルを読み込めません。",
+   "ko": "보정된 GTA VI 프로필을 불러올 수 없습니다.",
+   "es": "No se pudo cargar el perfil calibrado de GTA VI.",
+   "fr": "Impossible de charger le profil GTA VI étalonné.",
+   "de": "Das kalibrierte GTA VI-Profil konnte nicht geladen werden.",
+   "pt-BR": "Não foi possível carregar o perfil calibrado de GTA VI.",
+   "ru": "Не удалось загрузить откалиброванный профиль GTA VI."
+  },
+  {
    "zh": "无法启动 Windows 字幕读取器",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "無法啟動 Windows 字幕讀取器",
@@ -23247,6 +24131,19 @@
    "ru": "Не удалось начать захват; см. Диагностика"
   },
   {
+   "zh": "无法在此窗口捕获输入。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "無法在此視窗擷取輸入。",
+   "en": "Cannot capture input in this window.",
+   "ja": "このウィンドウの入力を取り込めません。",
+   "ko": "이 창의 입력을 캡처할 수 없습니다.",
+   "es": "No se puede capturar la entrada en esta ventana.",
+   "fr": "Impossible de capturer les entrées dans cette fenêtre.",
+   "de": "In diesem Fenster können keine Eingaben erfasst werden.",
+   "pt-BR": "Não foi possível capturar a entrada nesta janela.",
+   "ru": "Не удалось захватить ввод в этом окне."
+  },
+  {
    "zh": "无法复制轨道参数",
    "src": "src/engine/VideoExportJob.cpp",
    "zh-TW": "無法複製軌道參數",
@@ -23271,6 +24168,19 @@
    "de": "Einige Modelldateien konnten nicht gelöscht werden",
    "pt-BR": "Não foi possível excluir todos os arquivos do modelo",
    "ru": "Не удалось удалить все файлы модели"
+  },
+  {
+   "zh": "无法导出此控制配置。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "無法匯出此控制設定檔。",
+   "en": "Cannot export this profile.",
+   "ja": "このプロファイルを書き出せません。",
+   "ko": "이 프로필을 내보낼 수 없습니다.",
+   "es": "No se puede exportar este perfil.",
+   "fr": "Impossible d’exporter ce profil.",
+   "de": "Dieses Profil konnte nicht exportiert werden.",
+   "pt-BR": "Não foi possível exportar este perfil.",
+   "ru": "Не удалось экспортировать профиль."
   },
   {
    "zh": "无法建立串流连接（错误码 {}）。",
@@ -23648,6 +24558,19 @@
    "de": "Konnte die importierte Datei nicht lesen",
    "pt-BR": "Não foi possível ler o arquivo importado",
    "ru": "Не удалось прочитать импортный файл"
+  },
+  {
+   "zh": "无法读取此控制配置。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "無法讀取此控制設定檔。",
+   "en": "Cannot read this profile.",
+   "ja": "このプロファイルを読み取れません。",
+   "ko": "이 프로필을 읽을 수 없습니다.",
+   "es": "No se puede leer este perfil.",
+   "fr": "Impossible de lire ce profil.",
+   "de": "Dieses Profil konnte nicht gelesen werden.",
+   "pt-BR": "Não foi possível ler este perfil.",
+   "ru": "Не удалось прочитать профиль."
   },
   {
    "zh": "无法读取源文件",
@@ -24131,6 +25054,19 @@
    "ru": "Показать или скрыть частоту кадров в полноэкранном режиме"
   },
   {
+   "zh": "显示 PS5 快捷键提示",
+   "src": "qml/Veyra/TopDock.qml",
+   "zh-TW": "顯示 PS5 快速鍵提示",
+   "en": "Show PS5 shortcut hints",
+   "ja": "PS5 のショートカットのヒントを表示",
+   "ko": "PS5 단축키 힌트 표시",
+   "es": "Mostrar indicaciones de atajos de PS5",
+   "fr": "Afficher les raccourcis PS5 à l’écran",
+   "de": "PS5-Tastenhinweise anzeigen",
+   "pt-BR": "Mostrar dicas de atalhos do PS5",
+   "ru": "Показать подсказки клавиш PS5"
+  },
+  {
    "zh": "显示全部可用帧率",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "顯示全部可用幀率",
@@ -24324,6 +25260,32 @@
    "de": "Anzeige-Spitzenhelligkeit",
    "pt-BR": "Pico da tela",
    "ru": "Пик экрана"
+  },
+  {
+   "zh": "显示按键 · %1",
+   "src": "qml/Ps5PlayerControls.qml",
+   "en": "Show controls · %1",
+   "zh-TW": "顯示按鍵 · %1",
+   "ja": "操作一覧を表示 · %1",
+   "ko": "조작 표시 · %1",
+   "es": "Ver controles · %1",
+   "fr": "Voir les commandes · %1",
+   "de": "Belegung anzeigen · %1",
+   "pt-BR": "Mostrar controles · %1",
+   "ru": "Показать клавиши · %1"
+  },
+  {
+   "zh": "显示控制说明",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Show controls",
+   "zh-TW": "顯示按鍵",
+   "ja": "操作一覧を表示",
+   "ko": "조작 표시",
+   "es": "Ver controles",
+   "fr": "Voir les commandes",
+   "de": "Belegung anzeigen",
+   "pt-BR": "Mostrar controles",
+   "ru": "Показать клавиши"
   },
   {
    "zh": "显示播放条",
@@ -24755,6 +25717,19 @@
    "ru": "На кривой нет жёсткого предела"
   },
   {
+   "zh": "更改%1",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Change %1",
+   "zh-TW": "變更「%1」",
+   "ja": "「%1」を変更",
+   "ko": "%1 변경",
+   "es": "Cambiar «%1»",
+   "fr": "Modifier « %1 »",
+   "de": "„%1“ ändern",
+   "pt-BR": "Alterar “%1”",
+   "ru": "Изменить «%1»"
+  },
+  {
    "zh": "更改…",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "更改…",
@@ -24766,6 +25741,45 @@
    "de": "Ändern…",
    "pt-BR": "Alterar…",
    "ru": "Изменить…"
+  },
+  {
+   "zh": "更改个人副本的游戏绑定",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Change game binding in personal copy",
+   "zh-TW": "變更個人副本的遊戲綁定",
+   "ja": "個人用コピーのゲーム割り当てを変更",
+   "ko": "개인 복사본에서 게임 키 할당 변경",
+   "es": "Cambiar la asignación del juego en la copia personal",
+   "fr": "Modifier l’affectation du jeu dans la copie personnelle",
+   "de": "Spielbelegung in der persönlichen Kopie ändern",
+   "pt-BR": "Alterar atribuição do jogo na cópia pessoal",
+   "ru": "Изменить назначение в личной копии"
+  },
+  {
+   "zh": "更改基础绑定",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "變更基礎綁定",
+   "en": "Change base binding",
+   "ja": "基本の割り当てを変更",
+   "ko": "기본 바인딩 변경",
+   "es": "Cambiar asignación base",
+   "fr": "Modifier l’affectation de base",
+   "de": "Grundbelegung ändern",
+   "pt-BR": "Alterar atribuição base",
+   "ru": "Изменить базовое назначение"
+  },
+  {
+   "zh": "更改按键",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Change key",
+   "zh-TW": "變更按鍵",
+   "ja": "キーを変更",
+   "ko": "키 변경",
+   "es": "Cambiar tecla",
+   "fr": "Changer de touche",
+   "de": "Taste ändern",
+   "pt-BR": "Alterar tecla",
+   "ru": "Изменить клавишу"
   },
   {
    "zh": "更新下载或校验失败，请重试",
@@ -24818,6 +25832,32 @@
    "de": "Aktualisierungskomponenten",
    "pt-BR": "Atualizar componentes",
    "ru": "Обновление компонентов"
+  },
+  {
+   "zh": "替代按键",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Replacement key",
+   "zh-TW": "替代按鍵",
+   "ja": "代わりのキー",
+   "ko": "대체 키",
+   "es": "Tecla de reemplazo",
+   "fr": "Touche de remplacement",
+   "de": "Ersatztaste",
+   "pt-BR": "Tecla de substituição",
+   "ru": "Клавиша для замены"
+  },
+  {
+   "zh": "替换",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "取代",
+   "en": "Replace",
+   "ja": "置き換え",
+   "ko": "바꾸기",
+   "es": "Reemplazar",
+   "fr": "Remplacer",
+   "de": "Ersetzen",
+   "pt-BR": "Substituir",
+   "ru": "Заменить"
   },
   {
    "zh": "最后看帧率和耗时",
@@ -25065,6 +26105,19 @@
    "de": "Unbenutzt",
    "pt-BR": "Sem uso",
    "ru": "Не используется"
+  },
+  {
+   "zh": "未分配",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "未指派",
+   "en": "Unassigned",
+   "ja": "未割り当て",
+   "ko": "할당되지 않음",
+   "es": "Sin asignar",
+   "fr": "Non affecté",
+   "de": "Nicht belegt",
+   "pt-BR": "Sem atribuição",
+   "ru": "Не назначено"
   },
   {
    "zh": "未加载",
@@ -25782,6 +26835,19 @@
    "ru": "Разрешение экрана этого ПК"
   },
   {
+   "zh": "本机输入预览",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Local input preview",
+   "zh-TW": "本機輸入預覽",
+   "ja": "ローカル入力プレビュー",
+   "ko": "로컬 입력 미리보기",
+   "es": "Vista previa de entrada local",
+   "fr": "Aperçu des entrées locales",
+   "de": "Lokale Eingabevorschau",
+   "pt-BR": "Prévia da entrada local",
+   "ru": "Проверка локального ввода"
+  },
+  {
    "zh": "本机音频监听",
    "src": "qml/AudioSettingsDialog.qml",
    "zh-TW": "本機音訊監聽",
@@ -25793,6 +26859,19 @@
    "de": "Lokales Mithören",
    "pt-BR": "Monitoramento local do áudio",
    "ru": "Локальное прослушивание"
+  },
+  {
+   "zh": "本机鼠标 DPI",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "本機滑鼠 DPI",
+   "en": "Local DPI",
+   "ja": "ローカルのマウス DPI",
+   "ko": "로컬 마우스 DPI",
+   "es": "DPI del ratón local",
+   "fr": "DPI de la souris locale",
+   "de": "Lokale Maus-DPI",
+   "pt-BR": "DPI do mouse local",
+   "ru": "DPI локальной мыши"
   },
   {
    "zh": "本次导出使用 AMD FSR 超分",
@@ -25975,6 +27054,19 @@
    "de": "Suchen",
    "pt-BR": "Pesquisar",
    "ru": "Поиск"
+  },
+  {
+   "zh": "查找输入、游戏动作或手柄输出",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "尋找輸入、遊戲動作或控制器輸出",
+   "en": "Find an input, action, or controller output",
+   "ja": "入力、アクション、コントローラー出力を検索",
+   "ko": "입력, 동작 또는 컨트롤러 출력 검색",
+   "es": "Buscar una entrada, acción o salida del mando",
+   "fr": "Rechercher une entrée, une action ou une sortie de manette",
+   "de": "Eingabe, Aktion oder Controller-Ausgabe suchen",
+   "pt-BR": "Buscar uma entrada, ação ou saída do controle",
+   "ru": "Найти ввод, действие или выход геймпада"
   },
   {
    "zh": "查看",
@@ -27680,6 +28772,32 @@
    "ru": "Эта версия не включает поддержку Magewell SDK."
   },
   {
+   "zh": "此电脑 · %1 · %2",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "This PC · %1 · %2",
+   "zh-TW": "這部電腦 · %1 · %2",
+   "ja": "この PC · %1 · %2",
+   "ko": "이 PC · %1 · %2",
+   "es": "Este PC · %1 · %2",
+   "fr": "Ce PC · %1 · %2",
+   "de": "Dieser PC · %1 · %2",
+   "pt-BR": "Este PC · %1 · %2",
+   "ru": "Этот ПК · %1 · %2"
+  },
+  {
+   "zh": "此电脑上的播放器快捷键",
+   "src": "qml/Ps5ShortcutSettings.qml",
+   "en": "Player shortcuts on this PC",
+   "zh-TW": "這部電腦上的播放器快速鍵",
+   "ja": "この PC のプレーヤーのショートカット",
+   "ko": "이 PC의 플레이어 단축키",
+   "es": "Atajos del reproductor en este PC",
+   "fr": "Raccourcis du lecteur sur ce PC",
+   "de": "Player-Tastenkürzel auf diesem PC",
+   "pt-BR": "Atalhos do player neste PC",
+   "ru": "Клавиши плеера на этом ПК"
+  },
+  {
    "zh": "此补帧提供方暂不支持独立输出限帧，已保留设置",
    "src": "src/engine/VideoPresenter.cpp",
    "zh-TW": "此補幀提供方暫不支援獨立輸出限幀，已保留設定",
@@ -27706,6 +28824,32 @@
    "ru": "Этот пакет не включает в себя DLSS Frame Generation 310.9.16 время выполнения в режиме производительности"
   },
   {
+   "zh": "此配置使用未知的拟合模式，仅显示测量点。",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "This profile uses an unknown curve fit. The graph shows its measured points.",
+   "zh-TW": "此設定檔使用未知的擬合模式，僅顯示測量點。",
+   "ja": "このプロファイルの補間方式は不明です。グラフには測定点を表示します。",
+   "ko": "이 프로필의 보간 방식은 알 수 없습니다. 그래프에 측정점을 표시합니다.",
+   "es": "El perfil usa un ajuste de curva desconocido. El gráfico muestra los puntos medidos.",
+   "fr": "Le profil utilise une interpolation inconnue. Le graphique affiche les points mesurés.",
+   "de": "Das Profil verwendet eine unbekannte Kurvenanpassung. Die Grafik zeigt die Messpunkte.",
+   "pt-BR": "O perfil usa um ajuste de curva desconhecido. O gráfico mostra os pontos medidos.",
+   "ru": "Неизвестный метод аппроксимации. На графике показаны измеренные точки."
+  },
+  {
+   "zh": "此配置没有相机测量点。",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "This profile has no camera measurements.",
+   "zh-TW": "此設定檔沒有攝影機測量點。",
+   "ja": "このプロファイルにはカメラの測定値がありません。",
+   "ko": "이 프로필에는 카메라 측정값이 없습니다.",
+   "es": "El perfil no contiene mediciones de cámara.",
+   "fr": "Ce profil ne contient aucune mesure de caméra.",
+   "de": "Dieses Profil enthält keine Kameramessungen.",
+   "pt-BR": "Este perfil não contém medições de câmera.",
+   "ru": "В профиле нет измерений камеры."
+  },
+  {
    "zh": "此采集卡无此格式，请重新选择分辨率、帧率和像素格式。",
    "src": "src/source/CaptureCardSource.cpp",
    "zh-TW": "此擷取卡無此格式，請重新選擇解析度、幀率和像素格式。",
@@ -27717,6 +28861,19 @@
    "de": "Diese Capture Card bietet dieses Format nicht an. Wählen Sie eine unterstützte Auflösung, Bildrate und Pixelformat.",
    "pt-BR": "Esta placa de captura não oferece este formato. Escolha uma resolução suportada, taxa de quadros e formato de pixel.",
    "ru": "Эта карта захвата не предлагает этот формат. Выберите поддерживаемое разрешение, частоту кадров и формат пикселей."
+  },
+  {
+   "zh": "步行",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "步行",
+   "en": "On foot",
+   "ja": "徒歩",
+   "ko": "도보",
+   "es": "A pie",
+   "fr": "À pied",
+   "de": "Zu Fuß",
+   "pt-BR": "A pé",
+   "ru": "Пешком"
   },
   {
    "zh": "残差",
@@ -27849,6 +29006,19 @@
    "ru": "Сравнивает источник с предыдущим кадром: пиксели без четкого изменения повторно используют предыдущий вывод; четко измененные области принимают новый результат напрямую."
   },
   {
+   "zh": "水平",
+   "src": "qml/Ps5MouseAim.qml",
+   "en": "Horizontal",
+   "zh-TW": "水平",
+   "ja": "水平",
+   "ko": "가로",
+   "es": "Horizontal",
+   "fr": "Horizontal",
+   "de": "Horizontal",
+   "pt-BR": "Horizontal",
+   "ru": "По горизонтали"
+  },
+  {
    "zh": "没有匹配的格式",
    "src": "qml/CaptureLegacyPicker.qml",
    "zh-TW": "沒有相符的格式",
@@ -27860,6 +29030,19 @@
    "de": "Keine passenden Formate",
    "pt-BR": "Nenhum formato correspondente",
    "ru": "Нет подходящих форматов"
+  },
+  {
+   "zh": "没有匹配的绑定",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "沒有相符的綁定",
+   "en": "No matching bindings",
+   "ja": "一致する割り当てがありません",
+   "ko": "일치하는 바인딩 없음",
+   "es": "No hay asignaciones coincidentes",
+   "fr": "Aucune affectation correspondante",
+   "de": "Keine passenden Belegungen",
+   "pt-BR": "Nenhum vínculo correspondente",
+   "ru": "Совпадающих назначений нет"
   },
   {
    "zh": "没有可保存的画面",
@@ -28174,6 +29357,19 @@
    "ru": "Светло-зелёный"
   },
   {
+   "zh": "测量点",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Measured point",
+   "zh-TW": "測量點",
+   "ja": "測定点",
+   "ko": "측정점",
+   "es": "Punto medido",
+   "fr": "Point mesuré",
+   "de": "Messpunkt",
+   "pt-BR": "Ponto medido",
+   "ru": "Измеренная точка"
+  },
+  {
    "zh": "深黑底上的极轻渐变与抖动（防色带）",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "深黑底上的極輕漸變與抖動（防色帶）",
@@ -28434,6 +29630,32 @@
    "ru": "Игры и программы · "
   },
   {
+   "zh": "游戏中可在播放器里手动选择情境，也可使用下列快捷键。",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "遊戲中可在播放器裡手動選擇情境，也可使用下列快速鍵。",
+   "en": "During play, select a situation in the player or use its shortcut.",
+   "ja": "プレイ中はプレーヤーで状況を選ぶか、ショートカットを使います。",
+   "ko": "플레이 중에는 플레이어에서 상황을 선택하거나 단축키를 사용하세요.",
+   "es": "Durante la partida, selecciona una situación en el reproductor o usa su atajo.",
+   "fr": "En jeu, choisissez une situation dans le lecteur ou utilisez son raccourci.",
+   "de": "Wähle beim Spielen eine Situation im Player oder verwende ihr Tastenkürzel.",
+   "pt-BR": "Durante o jogo, escolha uma situação no player ou use o atalho correspondente.",
+   "ru": "Во время игры выберите ситуацию в плеере или нажмите соответствующую клавишу."
+  },
+  {
+   "zh": "游戏内设置",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "遊戲內設定",
+   "en": "In-game settings",
+   "ja": "ゲーム内設定",
+   "ko": "게임 내 설정",
+   "es": "Ajustes del juego",
+   "fr": "Réglages du jeu",
+   "de": "Einstellungen im Spiel",
+   "pt-BR": "Configurações do jogo",
+   "ru": "Настройки в игре"
+  },
+  {
    "zh": "游戏加加（GamePP）",
    "src": "qml/Main.qml",
    "zh-TW": "遊戲加加（GamePP）",
@@ -28445,6 +29667,58 @@
    "de": "GamePP",
    "pt-BR": "GamePP",
    "ru": "Игровой автомат"
+  },
+  {
+   "zh": "游戏动作",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Game action",
+   "zh-TW": "遊戲動作",
+   "ja": "ゲームアクション",
+   "ko": "게임 동작",
+   "es": "Acción del juego",
+   "fr": "Action du jeu",
+   "de": "Spielaktion",
+   "pt-BR": "Ação do jogo",
+   "ru": "Действие в игре"
+  },
+  {
+   "zh": "游戏菜单",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "遊戲選單",
+   "en": "Menu",
+   "ja": "ゲームメニュー",
+   "ko": "게임 메뉴",
+   "es": "Menú del juego",
+   "fr": "Menu du jeu",
+   "de": "Spielmenü",
+   "pt-BR": "Menu do jogo",
+   "ru": "Меню игры"
+  },
+  {
+   "zh": "游戏输入",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "遊戲輸入",
+   "en": "Game input",
+   "ja": "ゲーム入力",
+   "ko": "게임 입력",
+   "es": "Entrada del juego",
+   "fr": "Commande de jeu",
+   "de": "Spieleingabe",
+   "pt-BR": "Entrada do jogo",
+   "ru": "Игровой ввод"
+  },
+  {
+   "zh": "游玩时显示快捷键提示",
+   "src": "qml/Veyra/Ps5ShortcutSettings.qml",
+   "zh-TW": "遊玩時顯示快速鍵提示",
+   "en": "Show shortcut hints during play",
+   "ja": "プレイ中にショートカットのヒントを表示",
+   "ko": "플레이 중 단축키 힌트 표시",
+   "es": "Mostrar las indicaciones de atajos durante la partida",
+   "fr": "Afficher les raccourcis à l’écran pendant le jeu",
+   "de": "Tastenhinweise beim Spielen anzeigen",
+   "pt-BR": "Mostrar dicas de atalhos durante o jogo",
+   "ru": "Показывать подсказки клавиш во время игры"
   },
   {
    "zh": "源 %1 fps",
@@ -28590,6 +29864,32 @@
    "ru": "Шаг клавиатуры для ползунков"
   },
   {
+   "zh": "滚轮向上",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "滾輪向上",
+   "en": "Wheel up",
+   "ja": "上にスクロール",
+   "ko": "휠 올리기",
+   "es": "Rueda hacia arriba",
+   "fr": "Molette vers le haut",
+   "de": "Mausrad hoch",
+   "pt-BR": "Roda para cima",
+   "ru": "Прокрутка вверх"
+  },
+  {
+   "zh": "滚轮向下",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "滾輪向下",
+   "en": "Wheel down",
+   "ja": "下にスクロール",
+   "ko": "휠 내리기",
+   "es": "Rueda hacia abajo",
+   "fr": "Molette vers le bas",
+   "de": "Mausrad runter",
+   "pt-BR": "Roda para baixo",
+   "ru": "Прокрутка вниз"
+  },
+  {
    "zh": "滚降强度 (%)",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "滾降強度 (%)",
@@ -28601,6 +29901,19 @@
    "de": "Abrollfestigkeit (%)",
    "pt-BR": "Resistência ao rolamento (%)",
    "ru": "Сила отката (%)"
+  },
+  {
+   "zh": "灵敏度保存在个人副本中。",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "靈敏度儲存在個人副本中。",
+   "en": "Sensitivity is saved in your personal copy.",
+   "ja": "感度は個人用コピーに保存されます。",
+   "ko": "감도는 개인 복사본에 저장됩니다.",
+   "es": "La sensibilidad se guarda en tu copia personal.",
+   "fr": "La sensibilité est enregistrée dans votre copie personnelle.",
+   "de": "Die Empfindlichkeit wird in deiner persönlichen Kopie gespeichert.",
+   "pt-BR": "A sensibilidade é salva na sua cópia pessoal.",
+   "ru": "Чувствительность сохраняется в вашей личной копии."
   },
   {
    "zh": "点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退",
@@ -28900,6 +30213,19 @@
    "de": "Umgebungskompensation: Fügen Sie einige in einem hellen Raum hinzu; Verwenden Sie keine in einem dunklen Raum",
    "pt-BR": "Compensação ambiente: adicione alguns em uma sala brilhante; não use nenhum em uma sala escura",
    "ru": "Окружающая компенсация: добавьте немного в светлую комнату; не используйте в темной комнате"
+  },
+  {
+   "zh": "环视",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "環視",
+   "en": "Look around",
+   "ja": "周囲を見回す",
+   "ko": "둘러보기",
+   "es": "Mirar alrededor",
+   "fr": "Regarder autour de soi",
+   "de": "Umsehen",
+   "pt-BR": "Olhar ao redor",
+   "ru": "Осмотреться"
   },
   {
    "zh": "生效中",
@@ -29968,6 +31294,32 @@
    "ru": "относительно размера лица; отрицательный уменьшает его"
   },
   {
+   "zh": "相机响应曲线",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Camera response curve",
+   "zh-TW": "攝影機響應曲線",
+   "ja": "カメラ応答曲線",
+   "ko": "카메라 응답 곡선",
+   "es": "Curva de respuesta de cámara",
+   "fr": "Courbe de réponse de la caméra",
+   "de": "Kamera-Reaktionskurve",
+   "pt-BR": "Curva de resposta da câmera",
+   "ru": "Кривая отклика камеры"
+  },
+  {
+   "zh": "相机转速 (°/s)",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Camera turn speed (°/s)",
+   "zh-TW": "攝影機轉速 (°/s)",
+   "ja": "カメラ旋回速度 (°/s)",
+   "ko": "카메라 회전 속도 (°/s)",
+   "es": "Velocidad de giro de cámara (°/s)",
+   "fr": "Vitesse de rotation de la caméra (°/s)",
+   "de": "Kameradrehgeschwindigkeit (°/s)",
+   "pt-BR": "Velocidade de giro da câmera (°/s)",
+   "ru": "Скорость поворота камеры (°/с)"
+  },
+  {
    "zh": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原帖举例",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "看 4K60 NV12、1440p60 HDR 或 4K30 HDR。原文舉例",
@@ -29992,6 +31344,45 @@
    "de": "Schlafen (kann geweckt werden)",
    "pt-BR": "Dormir (pode ser acordado)",
    "ru": "Сон (можно разбудить)"
+  },
+  {
+   "zh": "瞄准",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "瞄準",
+   "en": "Aiming",
+   "ja": "照準",
+   "ko": "조준",
+   "es": "Apuntar",
+   "fr": "Visée",
+   "de": "Zielen",
+   "pt-BR": "Mira",
+   "ru": "Прицеливание"
+  },
+  {
+   "zh": "瞄准灵敏度",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "瞄準靈敏度",
+   "en": "Aim",
+   "ja": "照準感度",
+   "ko": "조준 감도",
+   "es": "Sensibilidad al apuntar",
+   "fr": "Sensibilité de visée",
+   "de": "Zielempfindlichkeit",
+   "pt-BR": "Sensibilidade da mira",
+   "ru": "Чувствительность прицеливания"
+  },
+  {
+   "zh": "瞄准输入",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "en": "Aim input",
+   "zh-TW": "瞄準輸入",
+   "ja": "照準入力",
+   "ko": "조준 입력",
+   "es": "Entrada de puntería",
+   "fr": "Commande de visée",
+   "de": "Zieleingabe",
+   "pt-BR": "Entrada de mira",
+   "ru": "Ввод прицеливания"
   },
   {
    "zh": "矩形 ",
@@ -30239,6 +31630,45 @@
    "de": "s",
    "pt-BR": "s",
    "ru": "с"
+  },
+  {
+   "zh": "移动",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "移動",
+   "en": "Move",
+   "ja": "移動",
+   "ko": "이동",
+   "es": "Moverse",
+   "fr": "Se déplacer",
+   "de": "Bewegen",
+   "pt-BR": "Mover-se",
+   "ru": "Двигаться"
+  },
+  {
+   "zh": "移动光标",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "移動游標",
+   "en": "Move cursor",
+   "ja": "カーソル移動",
+   "ko": "커서 이동",
+   "es": "Mover el cursor",
+   "fr": "Déplacer le curseur",
+   "de": "Zeiger bewegen",
+   "pt-BR": "Mover o cursor",
+   "ru": "Переместить курсор"
+  },
+  {
+   "zh": "移至此输入",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "移至此輸入",
+   "en": "Move to input",
+   "ja": "この入力に移動",
+   "ko": "이 입력으로 이동",
+   "es": "Mover a esta entrada",
+   "fr": "Déplacer vers cette entrée",
+   "de": "Auf diese Eingabe legen",
+   "pt-BR": "Mover para esta entrada",
+   "ru": "Перенести на этот ввод"
   },
   {
    "zh": "程序启动时的页面、窗口和恢复行为。",
@@ -31021,6 +32451,19 @@
    "ru": "Микрофон системы по умолчанию"
   },
   {
+   "zh": "紧急释放 · %1",
+   "src": "qml/Veyra/Ps5ShortcutSettings.qml",
+   "en": "Emergency release · %1",
+   "ja": "緊急解除 · %1",
+   "ko": "긴급 해제 · %1",
+   "es": "Liberación de emergencia · %1",
+   "fr": "Libération d’urgence · %1",
+   "de": "Notfreigabe · %1",
+   "ru": "Экстренный возврат управления · %1",
+   "zh-TW": "緊急釋放 · %1",
+   "pt-BR": "Liberação de emergência · %1"
+  },
+  {
    "zh": "紫色",
    "src": "qml/ColourMixer.qml",
    "zh-TW": "紫色",
@@ -31357,6 +32800,19 @@
    "de": "Der Encoder gab eine unbekannte Rahmennummer zurück",
    "pt-BR": "O codificador devolveu um número de quadro desconhecido",
    "ru": "Кодер вернул неизвестное число кадра"
+  },
+  {
+   "zh": "编辑控制设置",
+   "src": "qml/Ps5PlayerControls.qml",
+   "en": "Edit controls",
+   "zh-TW": "編輯控制設定",
+   "ja": "操作設定を編集",
+   "ko": "조작 설정 편집",
+   "es": "Editar controles",
+   "fr": "Modifier les commandes",
+   "de": "Steuerung bearbeiten",
+   "pt-BR": "Editar controles",
+   "ru": "Настроить управление"
   },
   {
    "zh": "缺少此字幕格式的解码器",
@@ -32308,6 +33764,19 @@
    "ru": "Авто настраивает обработку предварительного просмотра со 100% до 40% с использованием времени улучшения. Предварительно построенные экземпляры добавляют около 1,7 GB VRAM и половину секунды времени запуска. Для экспорта видео используется фиксированный максимум 1440p; размер выхода не изменяется."
   },
   {
+   "zh": "自动检测",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "自動偵測",
+   "en": "Automatic detection",
+   "ja": "自動検出",
+   "ko": "자동 감지",
+   "es": "Detección automática",
+   "fr": "Détection automatique",
+   "de": "Automatische Erkennung",
+   "pt-BR": "Detecção automática",
+   "ru": "Автоопределение"
+  },
+  {
    "zh": "自动检测实际信号",
    "src": "include/veyra/source/CaptureFormatSelection.h",
    "zh-TW": "自動偵測實際訊號",
@@ -32735,6 +34204,19 @@
    "de": "Adaptiver Multiplikator",
    "pt-BR": "Multiplicador adaptativo",
    "ru": "Адаптивный множитель"
+  },
+  {
+   "zh": "自适应扳机",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "自適應扳機",
+   "en": "Adaptive triggers",
+   "ja": "アダプティブトリガー",
+   "ko": "적응형 트리거",
+   "es": "Gatillos adaptativos",
+   "fr": "Gâchettes adaptatives",
+   "de": "Adaptive Trigger",
+   "pt-BR": "Gatilhos adaptáveis",
+   "ru": "Адаптивные триггеры"
   },
   {
    "zh": "自适应量化：把码率挪到眼睛更敏感的地方（平坦天空、暗部、静止细节），减少色块；仅 NVIDIA（NVENC），显卡支持时再加时间自适应量化 · 默认关闭",
@@ -34076,6 +35558,19 @@
    "ru": "Обрезка (пиксели)"
   },
   {
+   "zh": "视角灵敏度",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "視角靈敏度",
+   "en": "Look",
+   "ja": "視点感度",
+   "ko": "시점 감도",
+   "es": "Sensibilidad de cámara",
+   "fr": "Sensibilité de la caméra",
+   "de": "Kameraempfindlichkeit",
+   "pt-BR": "Sensibilidade da câmera",
+   "ru": "Чувствительность обзора"
+  },
+  {
    "zh": "视频",
    "src": "qml/ExportPage.qml",
    "zh-TW": "影片",
@@ -34440,6 +35935,19 @@
    "ru": "Жесткая крышка %1% · выделение сжатия %2% · поднятие тени %3%"
   },
   {
+   "zh": "触摸板",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "觸碰板",
+   "en": "Touchpad",
+   "ja": "タッチパッド",
+   "ko": "터치패드",
+   "es": "Panel táctil",
+   "fr": "Pavé tactile",
+   "de": "Touchpad",
+   "pt-BR": "Touchpad",
+   "ru": "Сенсорная панель"
+  },
+  {
    "zh": "触摸板仅转发按压",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "觸控板只轉發按壓",
@@ -34451,6 +35959,19 @@
    "de": "Nur Touchpad-Klicks",
    "pt-BR": "Apenas cliques do touchpad",
    "ru": "Только нажатия сенсорной панели"
+  },
+  {
+   "zh": "触觉反馈",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "觸覺回饋",
+   "en": "Haptic feedback",
+   "ja": "ハプティックフィードバック",
+   "ko": "햅틱 피드백",
+   "es": "Respuesta háptica",
+   "fr": "Retour haptique",
+   "de": "Haptisches Feedback",
+   "pt-BR": "Resposta tátil",
+   "ru": "Тактильная отдача"
   },
   {
    "zh": "让主机切换到串流分辨率",
@@ -34542,6 +36063,19 @@
    "de": "Gerät",
    "pt-BR": "Dispositivo",
    "ru": "Устройство"
+  },
+  {
+   "zh": "设备与快捷键",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Devices & shortcuts",
+   "zh-TW": "裝置與快速鍵",
+   "ja": "デバイスとショートカット",
+   "ko": "장치 및 단축키",
+   "es": "Dispositivos y atajos",
+   "fr": "Appareils et raccourcis",
+   "de": "Geräte und Tastenkürzel",
+   "pt-BR": "Dispositivos e atalhos",
+   "ru": "Устройства и сочетания клавиш"
   },
   {
    "zh": "设备属性",
@@ -34999,6 +36533,19 @@
    "ru": "Потоки распознавания"
   },
   {
+   "zh": "识别规则",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "辨識規則",
+   "en": "Recognition rule",
+   "ja": "認識ルール",
+   "ko": "인식 규칙",
+   "es": "Regla de reconocimiento",
+   "fr": "Règle de reconnaissance",
+   "de": "Erkennungsregel",
+   "pt-BR": "Regra de reconhecimento",
+   "ru": "Правило распознавания"
+  },
+  {
    "zh": "诊断信息",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "診斷資訊",
@@ -35062,6 +36609,19 @@
    "de": "Maximale Zeilen für die Übersetzung",
    "pt-BR": "Máximo de linhas traduzidas",
    "ru": "Максимум строк перевода"
+  },
+  {
+   "zh": "试用控制",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Try controls",
+   "zh-TW": "試用控制",
+   "ja": "操作を試す",
+   "ko": "조작 시험",
+   "es": "Probar controles",
+   "fr": "Essayer les commandes",
+   "de": "Steuerung testen",
+   "pt-BR": "Testar controles",
+   "ru": "Проверить управление"
   },
   {
    "zh": "该地址没有视频流",
@@ -35192,6 +36752,19 @@
    "de": "Spracherkennungsmodell",
    "pt-BR": "Modelo de reconhecimento de fala",
    "ru": "Модель распознавания речи"
+  },
+  {
+   "zh": "请为导入的副本选择新名称。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "請為匯入的副本選擇新名稱。",
+   "en": "Choose a new name for the imported copy.",
+   "ja": "インポートするコピーに新しい名前を指定してください。",
+   "ko": "가져올 복사본에 새 이름을 지정하세요.",
+   "es": "Elige otro nombre para la copia importada.",
+   "fr": "Choisissez un nouveau nom pour la copie importée.",
+   "de": "Einen neuen Namen für die importierte Kopie wählen.",
+   "pt-BR": "Escolha um novo nome para a cópia importada.",
+   "ru": "Выберите новое имя для импортируемой копии."
   },
   {
    "zh": "请以管理员身份启动本软件后重试；完成配置后可恢复普通方式启动。",
@@ -35415,6 +36988,19 @@
    "ru": "Войдите в свою учетную запись Xbox первым."
   },
   {
+   "zh": "请先解决播放器快捷键冲突。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "en": "Resolve the player shortcut conflict first.",
+   "zh-TW": "請先解決播放器快速鍵衝突。",
+   "ja": "先にプレーヤーのショートカットの競合を解決してください。",
+   "ko": "먼저 플레이어 단축키 충돌을 해결하세요.",
+   "es": "Resuelve primero el conflicto de atajos del reproductor.",
+   "fr": "Résolvez d’abord le conflit de raccourcis du lecteur.",
+   "de": "Behebe zuerst den Tastenkonflikt im Player.",
+   "pt-BR": "Resolva primeiro o conflito de atalhos do player.",
+   "ru": "Сначала устраните конфликт клавиш плеера."
+  },
+  {
    "zh": "请先连接串流及带陀螺仪的电脑手柄。仅观看模式不使用电脑手柄。",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "請先連接串流及帶陀螺儀的電腦手把。僅觀看模式不使用電腦手把。",
@@ -35597,6 +37183,19 @@
    "ru": "Нажмите Win + Ctrl + L, чтобы открыть субтитры"
   },
   {
+   "zh": "请按键…",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Press a key…",
+   "zh-TW": "請按鍵…",
+   "ja": "キーを押す…",
+   "ko": "키 누르기…",
+   "es": "Pulsa una tecla…",
+   "fr": "Appuyez sur une touche…",
+   "de": "Taste drücken…",
+   "pt-BR": "Pressione uma tecla…",
+   "ru": "Нажмите клавишу…"
+  },
+  {
    "zh": "请检查安装目录的访问权限、系统策略和安全软件的保护历史记录。",
    "src": "include/veyra/base/LauncherDiagnostics.h",
    "zh-TW": "請檢查安裝資料夾的存取權限、系統原則，以及安全軟體的保護歷程記錄。",
@@ -35727,6 +37326,19 @@
    "ru": "Enter скорость между 0,25 и 4,00"
   },
   {
+   "zh": "请输入个人副本的名称。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "請輸入個人副本的名稱。",
+   "en": "Enter a name for your personal copy.",
+   "ja": "個人用コピーの名前を入力してください。",
+   "ko": "개인 복사본 이름을 입력하세요.",
+   "es": "Escribe un nombre para tu copia personal.",
+   "fr": "Saisissez un nom pour votre copie personnelle.",
+   "de": "Einen Namen für die persönliche Kopie eingeben.",
+   "pt-BR": "Digite um nome para a cópia pessoal.",
+   "ru": "Введите имя личной копии."
+  },
+  {
    "zh": "请输入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 视频地址",
    "src": "src/ui/bridge/Playback.cpp",
    "zh-TW": "請輸入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 影片網址",
@@ -35738,6 +37350,19 @@
    "de": "Gib eine gültige Video-URL mit HTTP, HTTPS, RTSP, RTP oder UDP ein.",
    "pt-BR": "Insira uma URL de vídeo válida via HTTP, HTTPS, RTSP, RTP ou UDP.",
    "ru": "Введите действительный URL видео по HTTP, HTTPS, RTSP, RTP или UDP."
+  },
+  {
+   "zh": "请连接 PS5 控制通道，然后切换到播放器窗口。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "請連接 PS5 控制通道，然後切換到播放器視窗。",
+   "en": "Open a PS5 control connection and focus the player.",
+   "ja": "PS5 の操作接続を開始してプレイヤーウィンドウを選んでください。",
+   "ko": "PS5 제어 연결을 열고 플레이어 창을 선택하세요.",
+   "es": "Abre una conexión de control con la PS5 y selecciona la ventana del reproductor.",
+   "fr": "Ouvrez une connexion de commande PS5 et sélectionnez la fenêtre du lecteur.",
+   "de": "Eine PS5-Steuerverbindung öffnen und das Playerfenster auswählen.",
+   "pt-BR": "Abra uma conexão de controle com o PS5 e selecione a janela do player.",
+   "ru": "Откройте соединение управления с PS5 и выберите окно плеера."
   },
   {
    "zh": "请选择",
@@ -35831,6 +37456,19 @@
    "ru": "Выберите частоту кадров"
   },
   {
+   "zh": "请选择有效的播放器快捷键。",
+   "src": "src/ui/Ps5PlayerShortcuts.cpp",
+   "en": "Choose a valid player shortcut.",
+   "zh-TW": "請選擇有效的播放器快速鍵。",
+   "ja": "有効なプレーヤーのショートカットを選んでください。",
+   "ko": "유효한 플레이어 단축키를 선택하세요.",
+   "es": "Elige un atajo válido para el reproductor.",
+   "fr": "Choisissez un raccourci valide pour le lecteur.",
+   "de": "Wähle ein gültiges Tastenkürzel für den Player.",
+   "pt-BR": "Escolha um atalho válido para o player.",
+   "ru": "Выберите допустимую клавишу для плеера."
+  },
+  {
    "zh": "请选择有效的输出目录",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "請選擇有效的輸出目錄",
@@ -35842,6 +37480,19 @@
    "de": "Wählen Sie einen gültigen Ausgabeordner",
    "pt-BR": "Escolha uma pasta de saída válida",
    "ru": "Выберите действительную выходную папку"
+  },
+  {
+   "zh": "请选择未分配的按键。",
+   "src": "src/ui/Ps5PlayerShortcuts.cpp",
+   "en": "Choose an unassigned key.",
+   "zh-TW": "請選擇尚未指派的按鍵。",
+   "ja": "未割り当てのキーを選んでください。",
+   "ko": "할당되지 않은 키를 선택하세요.",
+   "es": "Elige una tecla sin asignar.",
+   "fr": "Choisissez une touche libre.",
+   "de": "Wähle eine freie Taste.",
+   "pt-BR": "Escolha uma tecla livre.",
+   "ru": "Выберите свободную клавишу."
   },
   {
    "zh": "请选择本地视频与有效导出设置",
@@ -36754,6 +38405,19 @@
    "ru": "Поиск провалился"
   },
   {
+   "zh": "跳过",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Skip",
+   "zh-TW": "略過",
+   "ja": "スキップ",
+   "ko": "건너뛰기",
+   "es": "Omitir",
+   "fr": "Passer",
+   "de": "Überspringen",
+   "pt-BR": "Pular",
+   "ru": "Пропустить"
+  },
+  {
    "zh": "跳过源帧",
    "src": "qml/ProPage.qml",
    "zh-TW": "跳過源幀",
@@ -36832,6 +38496,19 @@
    "ru": "Показывать как SDR"
   },
   {
+   "zh": "转向",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "轉向",
+   "en": "Steer",
+   "ja": "ハンドル操作",
+   "ko": "조향",
+   "es": "Girar el volante",
+   "fr": "Tourner le volant",
+   "de": "Lenken",
+   "pt-BR": "Virar o volante",
+   "ru": "Поворачивать руль"
+  },
+  {
    "zh": "转换为 ASS 文本字幕",
    "src": "src/engine/ExportStreams.cpp",
    "zh-TW": "轉換為 ASS 文字字幕",
@@ -36869,6 +38546,32 @@
    "de": "Untertitel konvertieren",
    "pt-BR": "Converter legendas",
    "ru": "Преобразовать субтитры"
+  },
+  {
+   "zh": "转速 (°/s)",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Turn speed (°/s)",
+   "zh-TW": "轉速 (°/s)",
+   "ja": "旋回速度 (°/s)",
+   "ko": "회전 속도 (°/s)",
+   "es": "Velocidad de giro (°/s)",
+   "fr": "Vitesse de rotation (°/s)",
+   "de": "Drehgeschwindigkeit (°/s)",
+   "pt-BR": "Velocidade de giro (°/s)",
+   "ru": "Скорость поворота (°/с)"
+  },
+  {
+   "zh": "转速须为正且不能递减，满杆转速范围为 10 至 3600 °/s。",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Enter a positive speed at least as high as the previous point and no higher than the next. Full stick must turn at 10–3600°/s.",
+   "zh-TW": "轉速須為正且不能遞減，滿桿轉速範圍為 10 至 3600 °/s。",
+   "ja": "隣接点の範囲内で正の速度を入力してください。スティック最大時は10～3600°/sです。",
+   "ko": "인접한 두 값 사이의 양수를 입력하세요. 최대 스틱 속도는 10~3600°/s입니다.",
+   "es": "Introduce una velocidad positiva entre los valores vecinos. Al máximo, el stick debe girar a 10–3600 °/s.",
+   "fr": "Saisissez une vitesse positive entre les valeurs voisines. En butée, la vitesse doit être de 10 à 3600 °/s.",
+   "de": "Gib eine positive Geschwindigkeit zwischen den Nachbarwerten ein. Bei Vollausschlag gelten 10–3600 °/s.",
+   "pt-BR": "Insira uma velocidade positiva entre os valores vizinhos. No limite do analógico, use 10–3600 °/s.",
+   "ru": "Введите положительную скорость между соседними значениями. При полном отклонении допустимо 10–3600 °/с."
   },
   {
    "zh": "软件",
@@ -37027,6 +38730,19 @@
    "ru": "Слабый"
   },
   {
+   "zh": "轻触",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "輕觸",
+   "en": "Tap",
+   "ja": "短押し",
+   "ko": "짧게 누르기",
+   "es": "Toque breve",
+   "fr": "Appui bref",
+   "de": "Kurz drücken",
+   "pt-BR": "Toque breve",
+   "ru": "Короткое нажатие"
+  },
+  {
    "zh": "载入片源",
    "src": "qml/CineBar.qml",
    "zh-TW": "載入片源",
@@ -37155,6 +38871,19 @@
    "de": "Fehlanpassung im Eingangsraum",
    "pt-BR": "Descompatibilidade do espaço de entrada",
    "ru": "Несоответствие входного пространства"
+  },
+  {
+   "zh": "输入绑定",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "輸入綁定",
+   "en": "Bindings",
+   "ja": "入力割り当て",
+   "ko": "입력 바인딩",
+   "es": "Asignaciones de entrada",
+   "fr": "Affectations des entrées",
+   "de": "Eingabebelegung",
+   "pt-BR": "Atribuições de entrada",
+   "ru": "Назначения ввода"
   },
   {
    "zh": "输入至输出尚未连接完整，保留上个运行链",
@@ -37740,6 +39469,19 @@
    "de": "Ausführen Node Order fehlt Instanzeinstellungen",
    "pt-BR": "A execução da ordem do nó está a faltar a configuração da instância",
    "ru": "Запуск Node Order отсутствует в настройках экземпляра"
+  },
+  {
+   "zh": "返回 Windows · %1",
+   "src": "qml/Ps5PlayerControls.qml",
+   "en": "Return to Windows · %1",
+   "zh-TW": "返回 Windows · %1",
+   "ja": "Windows に戻る · %1",
+   "ko": "Windows로 돌아가기 · %1",
+   "es": "Volver a Windows · %1",
+   "fr": "Revenir à Windows · %1",
+   "de": "Zurück zu Windows · %1",
+   "pt-BR": "Voltar ao Windows · %1",
+   "ru": "Вернуться в Windows · %1"
   },
   {
    "zh": "返回列表",
@@ -38457,6 +40199,19 @@
    "ru": "Вписать в окно"
   },
   {
+   "zh": "适用于所有控制配置。",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "適用於所有控制設定檔。",
+   "en": "Applies to all control profiles.",
+   "ja": "すべての操作プロファイルに適用されます。",
+   "ko": "모든 조작 프로필에 적용됩니다.",
+   "es": "Se aplica a todos los perfiles de control.",
+   "fr": "Ce réglage s’applique à tous les profils de commandes.",
+   "de": "Gilt für alle Steuerungsprofile.",
+   "pt-BR": "Aplica-se a todos os perfis de controle.",
+   "ru": "Применяется ко всем профилям управления."
+  },
+  {
    "zh": "选中",
    "src": "qml/MaskEditor.qml",
    "zh-TW": "選中",
@@ -38587,6 +40342,19 @@
    "ru": "Выбрать папку снимков экрана"
   },
   {
+   "zh": "选择目标输入",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "選擇目標輸入",
+   "en": "Choose an input",
+   "ja": "入力を選択",
+   "ko": "입력 선택",
+   "es": "Elegir una entrada",
+   "fr": "Choisir une entrée",
+   "de": "Eingabe wählen",
+   "pt-BR": "Escolher uma entrada",
+   "ru": "Выберите ввод"
+  },
+  {
    "zh": "选择要处理的图片",
    "src": "src/ui/bridge/Export.cpp",
    "zh-TW": "選擇要處理的圖片",
@@ -38674,6 +40442,19 @@
    "es": "Opciones",
    "fr": "Options",
    "de": "Optionen",
+   "pt-BR": "Opções",
+   "ru": "Параметры"
+  },
+  {
+   "zh": "选项键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "選項按鈕",
+   "en": "Options",
+   "ja": "オプションボタン",
+   "ko": "옵션 버튼",
+   "es": "Opciones",
+   "fr": "Options",
+   "de": "Options-Taste",
    "pt-BR": "Opções",
    "ru": "Параметры"
   },
@@ -38871,6 +40652,19 @@
    "de": "Koppeln (erstes Mal)",
    "pt-BR": "Parear (primeira vez)",
    "ru": "Сопрячь (первый раз)"
+  },
+  {
+   "zh": "配置与游戏设置",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Profiles & game setup",
+   "zh-TW": "設定檔與遊戲設定",
+   "ja": "プロファイルとゲーム設定",
+   "ko": "프로필 및 게임 설정",
+   "es": "Perfiles y ajustes del juego",
+   "fr": "Profils et réglages du jeu",
+   "de": "Profile und Spieleinstellungen",
+   "pt-BR": "Perfis e ajustes do jogo",
+   "ru": "Профили и настройки игры"
   },
   {
    "zh": "配置或恢复记录发生变化，已停止本次操作。请重新检查，必要时使用 Profile Inspector 手动处理。",
@@ -39809,6 +41603,32 @@
    "ru": "Ошибка 112"
   },
   {
+   "zh": "键盘与鼠标",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "鍵盤與滑鼠",
+   "en": "Keyboard & Mouse",
+   "ja": "キーボードとマウス",
+   "ko": "키보드 및 마우스",
+   "es": "Teclado y ratón",
+   "fr": "Clavier et souris",
+   "de": "Tastatur und Maus",
+   "pt-BR": "Teclado e mouse",
+   "ru": "Клавиатура и мышь"
+  },
+  {
+   "zh": "键盘和鼠标",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "鍵盤和滑鼠",
+   "en": "Keyboard & mouse",
+   "ja": "キーボードとマウス",
+   "ko": "키보드 및 마우스",
+   "es": "Teclado y ratón",
+   "fr": "Clavier et souris",
+   "de": "Tastatur und Maus",
+   "pt-BR": "Teclado e mouse",
+   "ru": "Клавиатура и мышь"
+  },
+  {
    "zh": "键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · +Q 断开",
    "src": "qml/StreamHud.qml",
    "zh-TW": "鍵盤滑鼠已交給主機 · Ctrl+Alt+Shift+Z 釋放 · +Q 斷開",
@@ -39833,6 +41653,32 @@
    "de": "Tastatur und Maus nicht erfasst · Klicken Sie auf das Bild",
    "pt-BR": "Teclado e mouse não capturado · clique na imagem para capturar",
    "ru": "Клавиатура и мышь не захвачены · щелкните картинку для захвата"
+  },
+  {
+   "zh": "键盘：%1",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Keyboard: %1",
+   "zh-TW": "鍵盤：%1",
+   "ja": "キーボード：%1",
+   "ko": "키보드: %1",
+   "es": "Teclado: %1",
+   "fr": "Clavier : %1",
+   "de": "Tastatur: %1",
+   "pt-BR": "Teclado: %1",
+   "ru": "Клавиатура: %1"
+  },
+  {
+   "zh": "键鼠布局",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Keyboard & mouse map",
+   "zh-TW": "鍵鼠配置",
+   "ja": "キーボード・マウス配置",
+   "ko": "키보드 및 마우스 배치",
+   "es": "Mapa de teclado y ratón",
+   "fr": "Plan clavier et souris",
+   "de": "Tastatur- und Mausbelegung",
+   "pt-BR": "Mapa de teclado e mouse",
+   "ru": "Схема клавиатуры и мыши"
   },
   {
    "zh": "镜像失败时自动改用 GitHub 直连。",
@@ -40002,6 +41848,32 @@
    "de": "Die Entrauschungsstärke liegt außerhalb des gültigen Bereichs",
    "pt-BR": "Intensidade de redução de ruído fora da faixa",
    "ru": "Сила шумоподавления вне допустимого диапазона"
+  },
+  {
+   "zh": "隐藏 PS5 快捷键提示",
+   "src": "qml/Veyra/TopDock.qml",
+   "zh-TW": "隱藏 PS5 快速鍵提示",
+   "en": "Hide PS5 shortcut hints",
+   "ja": "PS5 のショートカットのヒントを隠す",
+   "ko": "PS5 단축키 힌트 숨기기",
+   "es": "Ocultar indicaciones de atajos de PS5",
+   "fr": "Masquer les raccourcis PS5 à l’écran",
+   "de": "PS5-Tastenhinweise ausblenden",
+   "pt-BR": "Ocultar dicas de atalhos do PS5",
+   "ru": "Скрыть подсказки клавиш PS5"
+  },
+  {
+   "zh": "隐藏 · %1",
+   "src": "qml/Ps5PlayerControls.qml",
+   "en": "Hide · %1",
+   "zh-TW": "隱藏 · %1",
+   "ja": "非表示 · %1",
+   "ko": "숨기기 · %1",
+   "es": "Ocultar · %1",
+   "fr": "Masquer · %1",
+   "de": "Ausblenden · %1",
+   "pt-BR": "Ocultar · %1",
+   "ru": "Скрыть · %1"
   },
   {
    "zh": "隐藏播放条",
@@ -40912,6 +42784,32 @@
    "de": "Vorschau",
    "pt-BR": "Prévia",
    "ru": "Предпросмотр"
+  },
+  {
+   "zh": "预览 · PS5 控制",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Preview · PS5 control",
+   "zh-TW": "預覽 · PS5 控制",
+   "ja": "プレビュー · PS5 操作",
+   "ko": "미리보기 · PS5 조작",
+   "es": "Vista previa · Control de PS5",
+   "fr": "Aperçu · Contrôle PS5",
+   "de": "Vorschau · PS5-Steuerung",
+   "pt-BR": "Prévia · Controle do PS5",
+   "ru": "Проверка · Управление PS5"
+  },
+  {
+   "zh": "预览 · Windows 控制",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Preview · Windows control",
+   "zh-TW": "預覽 · Windows 控制",
+   "ja": "プレビュー · Windows 操作",
+   "ko": "미리보기 · Windows 조작",
+   "es": "Vista previa · Control de Windows",
+   "fr": "Aperçu · Contrôle Windows",
+   "de": "Vorschau · Windows-Steuerung",
+   "pt-BR": "Prévia · Controle do Windows",
+   "ru": "Проверка · Управление Windows"
   },
   {
    "zh": "预览不可用",
@@ -42045,6 +43943,19 @@
    "ru": "Стиль · экспериментально"
   },
   {
+   "zh": "飞行",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "飛行",
+   "en": "Flying",
+   "ja": "飛行",
+   "ko": "비행",
+   "es": "Vuelo",
+   "fr": "Vol",
+   "de": "Fliegen",
+   "pt-BR": "Voo",
+   "ru": "Полёт"
+  },
+  {
    "zh": "饱和度",
    "src": "qml/ColourMixer.qml",
    "zh-TW": "飽和度",
@@ -42329,6 +44240,32 @@
    "de": "Fahrereinstellung (kein Override)",
    "pt-BR": "Padrão do controlador (sem sobreposição)",
    "ru": "Водитель по умолчанию (без переопределения)"
+  },
+  {
+   "zh": "驾驶",
+   "src": "qml/Ps5Bindings.js",
+   "zh-TW": "駕駛",
+   "en": "Driving",
+   "ja": "運転",
+   "ko": "운전",
+   "es": "Conducción",
+   "fr": "Conduite",
+   "de": "Fahren",
+   "pt-BR": "Direção",
+   "ru": "Вождение"
+  },
+  {
+   "zh": "驾驶灵敏度",
+   "src": "qml/Veyra/Ps5MouseAim.qml",
+   "en": "Driving sensitivity",
+   "zh-TW": "駕駛靈敏度",
+   "ja": "運転時の感度",
+   "ko": "운전 감도",
+   "es": "Sensibilidad al conducir",
+   "fr": "Sensibilité en conduite",
+   "de": "Empfindlichkeit beim Fahren",
+   "pt-BR": "Sensibilidade ao dirigir",
+   "ru": "Чувствительность при вождении"
   },
   {
    "zh": "验证运行库",
@@ -42862,6 +44799,136 @@
    "de": "Der voreingestellte Bearbeitungsmodus ist ungültig",
    "pt-BR": "O modo de edição predefinido é inválido",
    "ru": "Режим редактирования по умолчанию является недействительным"
+  },
+  {
+   "zh": "鼠标",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "滑鼠",
+   "en": "Mouse",
+   "ja": "マウス",
+   "ko": "마우스",
+   "es": "Ratón",
+   "fr": "Souris",
+   "de": "Maus",
+   "pt-BR": "Mouse",
+   "ru": "Мышь"
+  },
+  {
+   "zh": "鼠标 DPI 超出支持范围。",
+   "src": "src/ui/Ps5KeyboardSettings.cpp",
+   "zh-TW": "滑鼠 DPI 超出支援範圍。",
+   "en": "Mouse DPI is outside the supported range.",
+   "ja": "マウス DPI が対応範囲外です。",
+   "ko": "마우스 DPI가 지원 범위를 벗어났습니다.",
+   "es": "Los DPI del ratón están fuera del intervalo admitido.",
+   "fr": "Les DPI de la souris sont hors de la plage prise en charge.",
+   "de": "Der Maus-DPI-Wert liegt außerhalb des unterstützten Bereichs.",
+   "pt-BR": "O DPI do mouse está fora do intervalo aceito.",
+   "ru": "Значение DPI мыши вне допустимого диапазона."
+  },
+  {
+   "zh": "鼠标与瞄准",
+   "src": "qml/Veyra/Ps5KeyboardDialog.qml",
+   "en": "Mouse & aim",
+   "zh-TW": "滑鼠與瞄準",
+   "ja": "マウスと照準",
+   "ko": "마우스 및 조준",
+   "es": "Ratón y puntería",
+   "fr": "Souris et visée",
+   "de": "Maus und Zielen",
+   "pt-BR": "Mouse e mira",
+   "ru": "Мышь и прицеливание"
+  },
+  {
+   "zh": "鼠标中键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "滑鼠中鍵",
+   "en": "Middle mouse button",
+   "ja": "マウスの中央ボタン",
+   "ko": "마우스 가운데 버튼",
+   "es": "Botón central del ratón",
+   "fr": "Bouton central de la souris",
+   "de": "Mittlere Maustaste",
+   "pt-BR": "Botão central do mouse",
+   "ru": "Средняя кнопка мыши"
+  },
+  {
+   "zh": "鼠标右键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "滑鼠右鍵",
+   "en": "Right mouse button",
+   "ja": "マウスの右ボタン",
+   "ko": "마우스 오른쪽 버튼",
+   "es": "Botón derecho del ratón",
+   "fr": "Bouton droit de la souris",
+   "de": "Rechte Maustaste",
+   "pt-BR": "Botão direito do mouse",
+   "ru": "Правая кнопка мыши"
+  },
+  {
+   "zh": "鼠标左键",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "滑鼠左鍵",
+   "en": "Left mouse button",
+   "ja": "マウスの左ボタン",
+   "ko": "마우스 왼쪽 버튼",
+   "es": "Botón izquierdo del ratón",
+   "fr": "Bouton gauche de la souris",
+   "de": "Linke Maustaste",
+   "pt-BR": "Botão esquerdo do mouse",
+   "ru": "Левая кнопка мыши"
+  },
+  {
+   "zh": "鼠标灵敏度",
+   "src": "qml/Ps5MouseAim.qml",
+   "zh-TW": "滑鼠靈敏度",
+   "en": "Mouse sensitivity",
+   "ja": "マウス感度",
+   "ko": "마우스 감도",
+   "es": "Sensibilidad del ratón",
+   "fr": "Sensibilité de la souris",
+   "de": "Mausempfindlichkeit",
+   "pt-BR": "Sensibilidade do mouse",
+   "ru": "Чувствительность мыши"
+  },
+  {
+   "zh": "鼠标移动",
+   "src": "qml/Veyra/Ps5Bindings.js",
+   "zh-TW": "滑鼠移動",
+   "en": "Mouse movement",
+   "ja": "マウス移動",
+   "ko": "마우스 움직임",
+   "es": "Movimiento del ratón",
+   "fr": "Mouvement de la souris",
+   "de": "Mausbewegung",
+   "pt-BR": "Movimento do mouse",
+   "ru": "Движение мыши"
+  },
+  {
+   "zh": "鼠标设置",
+   "src": "qml/Ps5KeyboardDialog.qml",
+   "zh-TW": "滑鼠設定",
+   "en": "Mouse settings",
+   "ja": "マウス設定",
+   "ko": "마우스 설정",
+   "es": "Ajustes del ratón",
+   "fr": "Réglages de la souris",
+   "de": "Mauseinstellungen",
+   "pt-BR": "Configurações do mouse",
+   "ru": "Настройки мыши"
+  },
+  {
+   "zh": "鼠标：%1",
+   "src": "qml/Veyra/Ps5InputCheck.qml",
+   "en": "Mouse: %1",
+   "zh-TW": "滑鼠：%1",
+   "ja": "マウス：%1",
+   "ko": "마우스: %1",
+   "es": "Ratón: %1",
+   "fr": "Souris : %1",
+   "de": "Maus: %1",
+   "pt-BR": "Mouse: %1",
+   "ru": "Мышь: %1"
   },
   {
    "zh": "（MP4，录下处理后的画面和正在播放的声音）",

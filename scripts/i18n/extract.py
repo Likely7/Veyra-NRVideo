@@ -116,7 +116,8 @@ def collect():
         if s and HAN.search(s):
             found.setdefault((s, ctx), where)
 
-    for f in sorted((ROOT / 'qml/Veyra').glob('*.qml')):
+    qml_dir = ROOT / 'qml/Veyra'
+    for f in sorted((*qml_dir.glob('*.qml'), *qml_dir.glob('*.js'))):
         for s, ctx in qml_strings(f.read_text(encoding='utf-8')):
             add(s, 'qml/' + f.name, ctx)
     cpp = list((ROOT / 'src/ui').rglob('*.cpp')) + list((ROOT / 'apps/veyra-qml').glob('*.cpp'))

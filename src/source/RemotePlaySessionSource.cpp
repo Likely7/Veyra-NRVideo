@@ -1,5 +1,6 @@
 #include "veyra/source/RemotePlaySessionSource.h"
 #include "veyra/Log.h"
+#include "veyra/remoteplay/KeyboardMouse.h"
 #include "veyra/remoteplay/StreamRecovery.h"
 #include <cmath>
 #include <format>
@@ -66,11 +67,24 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     std::jthread feeder;
     std::jthread monitor;
     try {
+        desc.request.keyboardMouse = desc.request.viewOnly ? nullptr :
+            std::make_shared<remoteplay::KeyboardMouse>(
+                [this](auto state) { enqueueController(std::move(state), true); },
+                [this](auto state) { enqueueController(std::move(state)); },
+                [](const char* message) { log::warn("remoteplay-input",message); });
         const bool ok=source.connect(desc);
+        { std::lock_guard lock(mutex_); keyboardMouse_ = ok ? desc.request.keyboardMouse : nullptr; }
         if(!ok){retryWasRpInUse=source.nativeSnapshot().startupRetryAllowed;retryAfterLiveSession=false;retry=recovery.poll(milliseconds(),false,true)==remoteplay::StreamRecovery::Action::Reconnect;}
         {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;telemetryInbox_=source.telemetryInbox();
             if(failed_)recovery_.message=desc.controlOnly?L"PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。":L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
         ready_.notify_all();
+        const auto sendController = [&] {
+            if(desc.request.viewOnly || !source.telemetryInbox()->controllerReady())return;
+            remoteplay::ControllerState state;
+            {std::lock_guard lock(mutex_);state=takeControllerLocked(remoteplay::monotonic100ns());}
+            const auto r=source.submitController(state);
+            if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
+        };
         if(ok&&desc.controlOnly) {
             // PS5 手柄控制: the capture card is the picture. No decoder, no WASAPI,
             // no mailbox: the backend counts and drops the console's keepalive
@@ -92,10 +106,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                 }
                 auto now=std::chrono::steady_clock::now();
                 if(now>=nextController) {
-                    remoteplay::ControllerState controller;
-                    {std::lock_guard lock(mutex_);controller=takeControllerLocked(remoteplay::monotonic100ns());}
-                    const auto r=source.submitController(controller);
-                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
+                    sendController();
                     nextController=now+std::chrono::milliseconds(4);
                 }
                 const auto native=source.nativeSnapshot();
@@ -174,11 +185,8 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                     if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
                 }
                 const auto now=std::chrono::steady_clock::now();
-                if(!desc.request.viewOnly&&now>=nextController) {
-                    remoteplay::ControllerState controller;
-                    {std::lock_guard lock(mutex_);controller=takeControllerLocked(remoteplay::monotonic100ns());}
-                    const auto r=source.submitController(controller);
-                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
+                if(now>=nextController) {
+                    sendController();
                     nextController=now+std::chrono::milliseconds(4);
                 }
                 pipeline::FramePacket packet; const AVFrame* frame=nullptr;
@@ -253,6 +261,14 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
         latest_.reset();pendingControllers_.clear();controller_={};feedback_={};
     }
     log::info("remoteplay-recovery",std::format("teardown begin attempt={} retry={} cancelled={}",recovery.reconnects(),retry,stop.stop_requested()));
+    if (desc.request.keyboardMouse) {
+        desc.request.keyboardMouse->retire();
+        if(source.connected() && source.telemetryInbox()->controllerReady())source.submitController({});
+        std::lock_guard lock(mutex_);
+        keyboardMouse_.reset();
+        pendingControllers_.clear();
+        controller_={};
+    }
     if(monitor.joinable()){monitor.request_stop();monitor.join();}
     if(feeder.joinable()){feeder.request_stop();feeder.join();}
     audio_.stop();
@@ -304,6 +320,14 @@ void RemotePlaySessionSource::close() noexcept {
     SecureZeroMemory(pin_.data(),pin_.size());pin_.clear();
 }
 void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
+    if(auto input=keyboardMouse()) input->physical(std::move(state));
+}
+std::shared_ptr<remoteplay::KeyboardMouse> RemotePlaySessionSource::keyboardMouse() const {
+    std::shared_ptr<remoteplay::KeyboardMouse> input;
+    { std::lock_guard lock(mutex_); input = keyboardMouse_; }
+    return input && input->ready() ? input : nullptr;
+}
+void RemotePlaySessionSource::enqueueController(remoteplay::ControllerState state, bool mapped){
     std::lock_guard lock(mutex_);controllerStamp_=remoteplay::monotonic100ns();
     // A neutral input (focus/device loss) cancels queued actions immediately.
     if(!state.inputActive)pendingControllers_.clear();
@@ -313,7 +337,13 @@ void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
         // Keep real press/release and touch-contact edges. Axes, pressure,
         // touch motion and sensor updates are current state, not a FIFO of
         // actions: a 125 Hz UI must not build latency behind a 60 Hz owner.
-        const bool sameEdges=state.inputActive==previous.inputActive&&state.buttons==previous.buttons&&
+        // A short mouse or movement-key pulse may return a stick to centre
+        // between decoder polls. Preserve the two positions across that edge.
+        const auto sign=[](int16_t axis){return (axis>0)-(axis<0);};
+        const bool sameDirection=!mapped ||
+            (sign(state.leftX)==sign(previous.leftX) && sign(state.leftY)==sign(previous.leftY) &&
+             sign(state.rightX)==sign(previous.rightX) && sign(state.rightY)==sign(previous.rightY));
+        const bool sameEdges=sameDirection&&state.inputActive==previous.inputActive&&state.buttons==previous.buttons&&
             bool(state.l2)==bool(previous.l2)&&bool(state.r2)==bool(previous.r2)&&
             state.touches[0].id==previous.touches[0].id&&state.touches[1].id==previous.touches[1].id;
         if(sameEdges){
@@ -342,7 +372,10 @@ remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remote
     if(now-controllerStamp_>1000000){pendingControllers_.clear();controller_={};return controller_;}
     // Remove only expired states so a fresh press and release still reach the
     // console in order, even when the decoder owner has stalled.
-    while(!pendingControllers_.empty()&&now-pendingControllers_.front().first>1000000)
+    // An inactive state is a handoff barrier. A fresh pad poll after an owner
+    // stall must still follow that release, even when the release itself is old.
+    while(!pendingControllers_.empty() && pendingControllers_.front().second.inputActive &&
+          now-pendingControllers_.front().first>1000000)
         pendingControllers_.pop_front();
     if(!pendingControllers_.empty()){controller_=std::move(pendingControllers_.front().second);pendingControllers_.pop_front();}
     return controller_;

@@ -27,7 +27,9 @@ struct BackendResult {
     // One of our fixed operation names, never an unfiltered server string.
     std::string operation;
 };
+class KeyboardMouse;
 struct NativeConnectRequest {
+    std::shared_ptr<KeyboardMouse> keyboardMouse;
     std::string host;
     std::string consoleId; // Stable discovery host_id / registration MAC, normalized hex.
     VideoProfile video;
@@ -60,7 +62,7 @@ public:
     // discardMedia (PS5 手柄控制): video samples are counted and accepted without
     // a copy, audio goes to a no-op sink, so Chiaki keeps its reference-frame
     // bookkeeping and never reports a dropped sample to the console as a
-    // corrupt frame. The DualSense channel is forced on; feedback is unchanged.
+    // corrupt frame. View-only sessions never register or submit a controller.
     BackendResult start(const NativeConnectRequest&,SessionInbox::Token,bool discardMedia=false);
     BackendResult stop(); // Does not call PS5 goto_bed; must precede inbox.finishStop().
     BackendResult requestIdr();

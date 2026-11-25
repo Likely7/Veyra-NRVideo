@@ -30,6 +30,7 @@ Item {
     property bool pillToggleVisible: false
     property bool pillHidden: false
     signal requestTogglePill()
+    property var ps5KeyboardSettings: null
 
     property bool opened: false
     // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
@@ -242,23 +243,32 @@ Item {
             Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
 
             // Show / hide the cinema pill (field request 2026-10-01). Only where the pill lives.
-            Item {
-                objectName: "dock-pill-toggle"
-                visible: dockRoot.pillToggleVisible
-                implicitWidth: visible ? 32 : 0
+            component VisibilityButton: AbstractButton {
+                id: visibilityButton
+                required property string glyph
+                property bool accented: false
+                implicitWidth: 32
                 implicitHeight: 30
-                scale: pillTap.pressed ? 0.86 : 1
+                enabled: dockRoot.opened
+                focusPolicy: Qt.StrongFocus
+                hoverEnabled: true
+                scale: down ? 0.86 : 1
                 Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
+                background: Rectangle {
+                    radius: 7
+                    color: visibilityButton.accented ? Theme.accentSoft : "transparent"
+                    border.color: visibilityButton.visualFocus ? Theme.accent : "transparent"
+                }
                 VIcon {
                     anchors.centerIn: parent
-                    name: dockRoot.pillHidden ? "eye" : "eyeoff"
-                    color: "#FFFFFF"
-                    opacity: pillHover.hovered ? 1.0 : 0.45
+                    name: visibilityButton.glyph
+                    color: visibilityButton.accented ? Theme.accent : "#FFFFFF"
+                    opacity: visibilityButton.accented || visibilityButton.hovered || visibilityButton.visualFocus ? 1 : 0.55
                 }
                 Rectangle {
                     objectName: "videoCover"
                     property real coverRadius: 7
-                    readonly property bool on: pillHover.hovered
+                    readonly property bool on: visibilityButton.hovered || visibilityButton.visualFocus
                     x: (parent.width - width) / 2
                     y: 38
                     width: pillTipText.implicitWidth + 18
@@ -273,14 +283,28 @@ Item {
                     Text {
                         id: pillTipText
                         anchors.centerIn: parent
-                        text: dockRoot.pillHidden ? qsTr("显示播放条") : qsTr("隐藏播放条")
+                        text: visibilityButton.text
                         color: "#FFFFFF"
                         font.family: Theme.fontUi
                         font.pixelSize: 11
                     }
                 }
-                HoverHandler { id: pillHover; cursorShape: Qt.PointingHandCursor }
-                TapHandler { id: pillTap; onTapped: dockRoot.requestTogglePill() }
+                HoverHandler { cursorShape: Qt.PointingHandCursor }
+            }
+            VisibilityButton {
+                objectName: "dock-pill-toggle"
+                visible: dockRoot.pillToggleVisible
+                glyph: dockRoot.pillHidden ? "eye" : "eyeoff"
+                text: dockRoot.pillHidden ? qsTr("显示播放条") : qsTr("隐藏播放条")
+                onClicked: dockRoot.requestTogglePill()
+            }
+            VisibilityButton {
+                objectName: "dock-ps5-shortcut-hints"
+                visible: dockRoot.pillToggleVisible && !!dockRoot.ps5KeyboardSettings
+                accented: !!dockRoot.ps5KeyboardSettings && dockRoot.ps5KeyboardSettings.showShortcutHints
+                glyph: accented ? "keyboard" : "keyboard-off"
+                text: accented ? qsTr("隐藏 PS5 快捷键提示") : qsTr("显示 PS5 快捷键提示")
+                onClicked: dockRoot.ps5KeyboardSettings.setShowShortcutHints(!accented)
             }
 
             // .dock-live: the engine-running lamp. Lit only when the engine really

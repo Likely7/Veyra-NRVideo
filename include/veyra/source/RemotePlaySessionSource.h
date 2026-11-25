@@ -23,6 +23,7 @@ public:
     bool seek(const pipeline::Rational&) override { return false; }
     void close() noexcept override;
     void controller(remoteplay::ControllerState state);
+    std::shared_ptr<remoteplay::KeyboardMouse> keyboardMouse() const;
     void loginPin(std::string pin);
     remoteplay::ControllerFeedback takeFeedback();
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;
@@ -42,6 +43,8 @@ private:
     void run(std::stop_token, RemotePlayConnectDesc);
     remoteplay::ControllerState takeControllerLocked(remoteplay::HostTime now);
     struct Frame { std::shared_ptr<AVFrame> frame; pipeline::FramePacket packet; SourceInfo info; };
+    void enqueueController(remoteplay::ControllerState, bool mapped = false);
+    std::shared_ptr<remoteplay::KeyboardMouse> keyboardMouse_;
     mutable std::mutex mutex_;
     std::condition_variable ready_;
     std::jthread owner_;
