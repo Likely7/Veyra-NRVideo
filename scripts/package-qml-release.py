@@ -38,6 +38,14 @@ REQUIRED = {'veyra_qml_ui.exe', 'qml/Veyra/Main.qml', 'platforms/qwindows.dll',
             'runtime/experimental/release-runtime-manifest.json'}
 
 
+def mapper_files(build):
+    cache = (build / 'CMakeCache.txt').read_text(encoding='utf8')
+    if not re.search(r'^VEYRA_ENABLE_REMOTEPLAY:BOOL=ON$', cache, re.M):
+        return ()
+    return ('stickmouse_mapper.dll', 'profiles/gta-vi-ps5-0.6.87-calibrated.v2.json',
+            'licenses/stickmouse/LICENSE', 'licenses/stickmouse/NOTICE.md')
+
+
 def digest(path):
     with path.open('rb') as stream:
         return hashlib.file_digest(stream, 'sha256').hexdigest()
@@ -245,6 +253,8 @@ def main():
 
     # Only compiled production assets come from the current build.
     copy(args.build / 'veyra_qml_ui.exe', 'veyra_qml_ui.exe')
+    for name in mapper_files(args.build):
+        copy(args.build / name, name)
     # Open-source libdovi is built externally, never imported from contributor Git history.
     if re.search(r'^VEYRA_ENABLE_LIBDOVI:BOOL=ON$', cache, re.M):
         root_match = re.search(r'^VEYRA_LIBDOVI_ROOT:[^=]+=(.+)$', cache, re.M)

@@ -42,5 +42,9 @@
   "trigger_effects_patch": "patches/0004-chiaki-pad-proc-no.patch",
   "trigger_effects_upstream_commit": "27ab96fd000bd0904f8ea3953c81f3ddb75b188b",
   "udp_receive_buffer_patch": "patches/0005-chiaki-udp-receive-buffer.patch",
-  "udp_receive_buffer_bytes": 4194304
+  "udp_receive_buffer_bytes": 4194304,
+  "view_only_patch": "patches/0006-chiaki-view-only.patch",
+  "view_only_scope": "lib/include/chiaki/session.h and lib/src/streamconnection.c. Opt out of controller registration and the feedback sender before starting a view-only stream.",
+  "haptics_gap_patch": "patches/0007-chiaki-haptics-gaps.patch",
+  "haptics_gap_scope": "lib/include/chiaki/session.h adds an optional haptics sink with sequence-gap status. lib/src/audioreceiver.c delivers recovered units in time order and flags gaps before the first subsequent PCM unit."
 }

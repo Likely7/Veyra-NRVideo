@@ -47,6 +47,8 @@ Qt 主程序是 `veyra_qml_ui.exe`。默认开发构建可通过 `Veyra.cmd` 启
 
 完整 Windows 构建默认启用 libdovi，必须提供 `VEYRA_LIBDOVI_ROOT`（include/libdovi、lib、bin、MIT LICENSE）；不得把贡献 PR 的 DLL/LIB 合进源码。固定来源 quietvoid/dovi_tool `d1abe0e27ff2c7ab3339614d06db9f8a058af6b2`，libdovi 3.4.0，Rust 1.88+；用其 cbindgen.toml 生成匹配头，`cargo rustc --manifest-path dolby_vision/Cargo.toml --lib --release --locked --features capi --crate-type cdylib -- -Cpanic=abort`。DLL 与 MIT LICENSE 跟随用户包，SDK/导入库不打包。仅精简开发构建可显式关闭 VEYRA_ENABLE_LIBDOVI，不能把关闭版当完整交付。
 
-PS5 使用新的独立 Chiaki stage，按 `scripts/remoteplay/patches/0001..0005` 顺序打补丁并运行 verify-chiaki-stage.py；保留原 stage。nanopb 生成器需把依赖包的 protobuf/tools/protoc 放入**子进程** PATH。不得改全局 PATH 或复用未核验的生成缓存。
+PS5 使用新的独立 Chiaki stage，按 `scripts/remoteplay/verify-chiaki-stage.py` 中的顺序应用 `scripts/remoteplay/patches/` 下的补丁并运行 verify-chiaki-stage.py；保留原 stage。nanopb 生成器需把依赖包的 protobuf/tools/protoc 放入**子进程** PATH。不得改全局 PATH 或复用未核验的生成缓存。
+
+PS5 键鼠的操作说明、Mapper 构建依赖及测试命令见[PS5 键盘和鼠标](PS5_KEYBOARD_MOUSE.md)。
 
 Linux 独立 OBS 模块与验证见 [OBS_FILTER.md](OBS_FILTER.md)。

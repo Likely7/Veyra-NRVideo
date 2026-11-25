@@ -106,13 +106,7 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
         veyra::log::error("remoteplay", "connect rejected: invalid host or video profile");
         return false;
     }
-    request_ = remoteplay::NativeConnectRequest{};
-    request_.host = desc.request.host;
-    request_.video = desc.request.video;
-    request_.viewOnly = desc.request.viewOnly;
-    request_.credentials.accountId = desc.request.credentials.accountId;
-    request_.credentials.registrationKey = desc.request.credentials.registrationKey;
-    request_.credentials.sessionKey = desc.request.credentials.sessionKey;
+    videoProfile_ = desc.request.video;
     decodeMode_=desc.decodeMode;decodeDevice_=desc.decodeDevice;hardwareFallback_=false;
     discardMedia_=desc.controlOnly;
 
@@ -120,14 +114,13 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     try {
         inbox_ = std::make_shared<remoteplay::SessionInbox>(desc.queueLimits);
     } catch (...) {
-        request_.credentials = remoteplay::PairingCredentials{};
         veyra::log::error("remoteplay", "invalid queue limits");
         return false;
     }
     auto token = inbox_->begin(static_cast<remoteplay::HostTime>(origin100ns_));
-    inbox_->streamProfile(request_.video);
+    inbox_->streamProfile(videoProfile_);
     token_ = token; // Keep a second weak token; backend owns the moved copy.
-    const auto started = backend_.start(request_, token, discardMedia_);
+    const auto started = backend_.start(desc.request, token, discardMedia_);
     if (!started.ok) {
         veyra::log::error("remoteplay", std::format("{} failed code={}", started.operation, started.code));
         close();
@@ -136,17 +129,17 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     info_ = SourceInfo{};
     info_.opened = true;
     info_.kind = pipeline::SourceKind::RemotePlay;
-    info_.width = request_.video.width;
-    info_.displayAspect = request_.video.height>0?double(request_.video.width)/request_.video.height:0.0;
-    info_.height = request_.video.height;
-    info_.averageFps = static_cast<double>(request_.video.fps);
-    info_.nominalRateNum = static_cast<int>(request_.video.fps);
+    info_.width = videoProfile_.width;
+    info_.displayAspect = videoProfile_.height>0?double(videoProfile_.width)/videoProfile_.height:0.0;
+    info_.height = videoProfile_.height;
+    info_.averageFps = static_cast<double>(videoProfile_.fps);
+    info_.nominalRateNum = static_cast<int>(videoProfile_.fps);
     info_.nominalRateDen = 1;
     info_.timestampQuantum = 1.0 / info_.averageFps;
     info_.duration = pipeline::Rational::unknown();
     info_.hardwareDecodeActive = false;
-    initializeColorContract(request_.video.codec, desc.highQualitySampling);
-    clock_.reset(static_cast<remoteplay::HostTime>(origin100ns_), request_.video.fps);
+    initializeColorContract(videoProfile_.codec, desc.highQualitySampling);
+    clock_.reset(static_cast<remoteplay::HostTime>(origin100ns_), videoProfile_.fps);
     sequence_ = 0;
     fallbackSourceIndex_ = 0;
     decoderEpoch_ = 1;
@@ -155,8 +148,8 @@ bool RemotePlaySource::connect(const RemotePlayConnectDesc& desc)
     waitingForFirstFrame_ = true;
     pendingOpenFlag_ = true;
     veyra::log::info("remoteplay", std::format("session started host={} profile={}x{}@{} codec={} requestedBitrateKbps={} (bandwidth request, not measured throughput)",
-        request_.host, request_.video.width, request_.video.height, request_.video.fps,
-        request_.video.codec == remoteplay::Codec::H264 ? "H264" : request_.video.codec == remoteplay::Codec::H265Hdr ? "H265_HDR" : "H265",request_.video.bitrateKbps));
+        desc.request.host, videoProfile_.width, videoProfile_.height, videoProfile_.fps,
+        videoProfile_.codec == remoteplay::Codec::H264 ? "H264" : videoProfile_.codec == remoteplay::Codec::H265Hdr ? "H265_HDR" : "H265",videoProfile_.bitrateKbps));
     return true;
 }
 
@@ -196,7 +189,7 @@ bool RemotePlaySource::openDecoder(remoteplay::Codec codec, std::uint32_t width,
     codecContext_->codec_id = codecId;
     codecContext_->width = static_cast<int>(width);
     codecContext_->height = static_cast<int>(height);
-    codecContext_->time_base = AVRational{1, static_cast<int>(request_.video.fps)};
+    codecContext_->time_base = AVRational{1, static_cast<int>(videoProfile_.fps)};
     codecContext_->pkt_timebase = codecContext_->time_base;
     // Allow the 1088-line coded padding of 1080p H.264; bound allocation before decode.
     codecContext_->max_pixels = 1920LL * 1088;
@@ -302,7 +295,7 @@ bool RemotePlaySource::drainDecoder(std::uint64_t sourceIndex, const pipeline::F
         // A previous stream profile's explicit siting must not survive a new
         // frame with unspecified siting; PS5 fallback is documented as left.
         fallback.chromaLocation=pipeline::ChromaLocation::Unknown;
-        if(request_.video.codec==remoteplay::Codec::H265Hdr&&pixelFormatFromFrame(*decoderFrame_)!=pipeline::SourcePixelFormat::P010){
+        if(videoProfile_.codec==remoteplay::Codec::H265Hdr&&pixelFormatFromFrame(*decoderFrame_)!=pipeline::SourcePixelFormat::P010){
             // A negotiated 8-bit fallback is not automatically a PQ signal.
             fallback.transfer=pipeline::TransferFunction::BT709;fallback.transferAssumed=true;
             fallback.preserveSdrCodeValues=true;
@@ -317,7 +310,7 @@ bool RemotePlaySource::drainDecoder(std::uint64_t sourceIndex, const pipeline::F
         if (decoderFrame_->width <= 0 || decoderFrame_->height <= 0 ||
             decoderFrame_->width > 1920 || decoderFrame_->height > 1080 ||
             packet.colorInfo.pixelFormat == pipeline::SourcePixelFormat::Unknown ||
-            (packet.colorInfo.isHdrPath()&&request_.video.codec!=remoteplay::Codec::H265Hdr)) return false;
+            (packet.colorInfo.isHdrPath()&&videoProfile_.codec!=remoteplay::Codec::H265Hdr)) return false;
         if (info_.width != static_cast<uint32_t>(decoderFrame_->width) ||
             info_.height != static_cast<uint32_t>(decoderFrame_->height)) {
             info_.width = static_cast<uint32_t>(decoderFrame_->width);
@@ -423,11 +416,11 @@ SourceReadStatus RemotePlaySource::read(pipeline::FramePacket& out, const AVFram
     if (queued->resetDecoder) {
         flushDecoder();
         ++decoderEpoch_;
-        if(request_.video.codec==remoteplay::Codec::H265Hdr){
+        if(videoProfile_.codec==remoteplay::Codec::H265Hdr){
         info_.color.pixelFormat=pipeline::SourcePixelFormat::P010;info_.color.matrix=pipeline::YuvMatrix::BT2020NCL;
         info_.color.transfer=pipeline::TransferFunction::PQ;info_.color.primaries=pipeline::ColorPrimaries::BT2020;info_.color.displayReferred709=true;info_.color.preserveSdrCodeValues=false;
     }
-    clock_.reset(static_cast<remoteplay::HostTime>(origin100ns_), request_.video.fps);
+    clock_.reset(static_cast<remoteplay::HostTime>(origin100ns_), videoProfile_.fps);
         pendingOpenFlag_ = true;
     }
     const auto extended = sample.wireFrameIndex ? wireSequence_.observe(*sample.wireFrameIndex)
@@ -544,7 +537,6 @@ void RemotePlaySource::close() noexcept
     decodeDevice_.reset();
     audioBlock_.reset(); audioAnchorSample_.reset(); audioOffset_ = 0;
     audioNextSample_ = 0; audioRate_ = 0; wireSequence_.reset();
-    request_.credentials = remoteplay::PairingCredentials{};
     info_ = SourceInfo{};
 }
 

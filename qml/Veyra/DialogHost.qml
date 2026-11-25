@@ -13,6 +13,7 @@ Item {
     property string dialog: ""
     property bool onboardingActive: false
     readonly property alias captureSettings: captureDialog
+    readonly property bool ps5KeyboardBusy: keyboardWindow.visible || keyboardWindow.pendingResume
     readonly property bool captureGuideOpen: captureGuide.visible
     onDialogChanged: {
         if (dialog !== "capture") {
@@ -21,7 +22,9 @@ Item {
         }
     }
 
+    function openPs5Keyboard(opener) { keyboardWindow.open(opener) }
     function open(key) {
+        if (key === "ps5-keyboard") { openPs5Keyboard(null); return }
         if (key === "save") saveDialog.resetForOpen()
         if (key === "manage") {
             manageDialog.mode = veyra.nodeMode === 1 ? "node" : "list"
@@ -31,6 +34,7 @@ Item {
         host.dialog = key
     }
     function close() { host.dialog = "" }
+    function resumePs5Keyboard() { host.close(); keyboardWindow.requestControl() }
 
     signal startPs5()
     signal startMoonlight()
@@ -88,6 +92,12 @@ Item {
     // --- PS5 串流 ---------------------------------------------------------
     // The 1.4.4 Remote Play panel: saved pairings are encrypted in the user's
     // %LOCALAPPDATA%\Veyra\remoteplay and shared with 1.4.4.
+    Ps5KeyboardWindow {
+        id: keyboardWindow
+        owner: host.Window.window
+        settings: veyra.ps5Keyboard || null
+        onResumeRequested: host.resumePs5Keyboard()
+    }
     Ps5SourceDialog {
         id: ps5Dialog
         dialogHost: host    }

@@ -417,6 +417,7 @@ Window {
         onRequestMove: if (!root.fullscreen) root.startSystemMove()
         pillToggleVisible: veyra.hasSource && (root.page === "min" || root.fullscreen)
         pillHidden: root.pillHidden
+        ps5KeyboardSettings: veyra.ps5Keyboard || null
         onRequestTogglePill: root.setPillHidden(!root.pillHidden)
     }
 
@@ -747,6 +748,17 @@ Window {
         sequence: "Ctrl+Alt+Shift+S"
         enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
         onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
+    }
+    Ps5PlayerControls {
+        x: videoHost.x; y: videoHost.y
+        width: videoHost.width; height: videoHost.height
+        z: 90
+        settings: veyra.ps5Keyboard || null
+        playerActive: veyra.hasSource && (root.page === "min" || root.page === "pro" || root.page === "node") &&
+                      width > 0 && height > 0 && dialogs.dialog === "" && !dialogs.ps5KeyboardBusy &&
+                      !root.onboardingActive && !screenCrop.editing
+        onControlRequested: dialogs.resumePs5Keyboard()
+        onEditRequested: opener => dialogs.openPs5Keyboard(opener)
     }
     StreamHud {
         id: streamHud

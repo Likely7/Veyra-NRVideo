@@ -11,6 +11,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+from contextlib import contextmanager
+from tempfile import NamedTemporaryFile
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE = Path('E:/项目/Veyra')
@@ -45,9 +47,21 @@ def audit_amd_source(directory):
     return amd
 
 
-def write_json(path, value):
+@contextmanager
+def stage_file(path):
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf8')
+    with NamedTemporaryFile(dir=path.parent, delete=False) as tmp:
+        pending = Path(tmp.name)
+    try:
+        yield pending
+        pending.replace(path)
+    finally:
+        pending.unlink(missing_ok=True)
+
+
+def write_json(path, value):
+    with stage_file(path) as pending:
+        pending.write_text(json.dumps(value, ensure_ascii=False, indent=2) + '\n', encoding='utf8')
 
 
 def record(path, name):
@@ -58,9 +72,8 @@ def checked_copy(source, stage, name, identity=None):
     pkg.validate_payload(name)
     if identity and (source.stat().st_size != identity['size'] or pkg.digest(source) != identity['sha256'].lower()):
         raise ValueError('Publisher identity mismatch: ' + str(source))
-    target = stage / name
-    target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copyfile(source, target)
+    with stage_file(stage / name) as pending:
+        shutil.copyfile(source, pending)
 
 
 def keep_common(name, flavor):
@@ -232,6 +245,8 @@ def refresh(args):
             f = stage / row['path']
             assert f.stat().st_size == row['size'] and pkg.digest(f) == row['sha256'], row['path']
         checked_copy(args.build / 'veyra_qml_ui.exe', stage, 'veyra_qml_ui.exe')
+        for name in pkg.mapper_files(args.build):
+            checked_copy(args.build / name, stage, name)
         for f in (args.build / 'qml/Veyra').rglob('*'):
             if f.is_file(): checked_copy(f, stage, 'qml/Veyra/' + f.relative_to(args.build / 'qml/Veyra').as_posix())
         manifest.update(worktreeDirty=True, releaseReady=False)

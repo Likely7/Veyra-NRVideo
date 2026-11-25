@@ -85,6 +85,17 @@ CaptureSourceDialog 1.0 CaptureSourceDialog.qml
 CaptureGuideDialog 1.0 CaptureGuideDialog.qml
 OnboardingGuide 1.0 OnboardingGuide.qml
 DynamicHudRow 1.0 DynamicHudRow.qml
+Ps5KeyboardEntry 1.0 Ps5KeyboardEntry.qml
+Ps5PlayerControls 1.0 Ps5PlayerControls.qml
+Ps5KeyboardDialog 1.0 Ps5KeyboardDialog.qml
+Ps5InputDiagram 1.0 Ps5InputDiagram.qml
+Ps5ControllerDiagram 1.0 Ps5ControllerDiagram.qml
+Ps5ShortcutSettings 1.0 Ps5ShortcutSettings.qml
+Ps5KeyboardWindow 1.0 Ps5KeyboardWindow.qml
+Ps5InputCheck 1.0 Ps5InputCheck.qml
+Ps5MouseAim 1.0 Ps5MouseAim.qml
+Ps5EditorButton 1.0 Ps5EditorButton.qml
+Ps5EditorPicker 1.0 Ps5EditorPicker.qml
 Ps5SourceDialog 1.0 Ps5SourceDialog.qml
 PcSourceDialog 1.0 PcSourceDialog.qml
 XboxSourceDialog 1.0 XboxSourceDialog.qml

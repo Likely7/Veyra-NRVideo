@@ -85,6 +85,7 @@
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "dinput8.lib")
 #include "veyra/remoteplay/ControllerInput.h"
+#include "veyra/ui/Ps5KeyboardSettings.h"
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/ProfileStore.h"
 #include "veyra/source/RemotePlaySource.h"
@@ -501,6 +502,7 @@ struct QmlPlayerBridge::Impl {
     int ps5ControlTicks = 0;
     bool ps5ControlNoPair = false;           // switched on without a pairing; cleared once pairings exist
 #ifdef VEYRA_ENABLE_REMOTEPLAY
+    std::unique_ptr<Ps5KeyboardSettings> ps5Keyboard;
     remoteplay::ControllerInput controller;
     // One SDL pad reader shared by PS5 stream, PS5 手柄控制, PC and Xbox streaming.
     // Each user acquires it and only the last release stops it, so the timer of a

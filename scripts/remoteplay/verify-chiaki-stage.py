@@ -13,6 +13,8 @@ PATCHES = (
     "0003-chiaki-feedback-history.patch",
     "0004-chiaki-pad-proc-no.patch",
     "0005-chiaki-udp-receive-buffer.patch",
+    "0006-chiaki-view-only.patch",
+    "0007-chiaki-haptics-gaps.patch",
 )
 
 

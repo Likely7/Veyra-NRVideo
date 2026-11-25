@@ -349,9 +349,15 @@ void routerTests() {
     bool zSent = false;
     for (const auto& k : other.keys) zSent = zSent || k.vk == 'Z';
     check(!zSent, "the hotkey key itself never reaches the host");
+    // Capture releases on key-down. Windows delivers its matching key-up to
+    // the focused app while Veyra is released. A later Z tap must be complete.
+    hotkeys.message(WM_KEYDOWN, 'Z', keyParam(0x2C, false));
+    check(hotkeys.takeReserved() == Reserved::ReleaseCapture, "release capture on key-down");
     hotkeys.reset();
     hotkeys.message(WM_KEYDOWN, 'Z', keyParam(0x2C, false));
     check(other.keys.back().vk == 'Z' && hotkeys.takeReserved() == Reserved::None, "after a reset Z is an ordinary key");
+    hotkeys.message(WM_KEYUP, 'Z', keyParam(0x2C, false, true));
+    check(other.keys.back().vk == 'Z' && !other.keys.back().down, "resumed capture forwards the next Z release");
 }
 
 void discoveryTests() {

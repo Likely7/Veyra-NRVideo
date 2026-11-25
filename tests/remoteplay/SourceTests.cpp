@@ -28,8 +28,11 @@ static void check(bool ok, const std::source_location where=std::source_location
     ++checks;
     if(!ok) throw std::runtime_error("RemotePlay source regression failed at line " + std::to_string(where.line()));
 }
-static std::vector<uint8_t> bytes(const char* path) {
-    std::ifstream f(std::filesystem::u8path(path),std::ios::binary);check(f.good()); return {std::istreambuf_iterator<char>(f),{}};
+static std::vector<uint8_t> bytes(std::string_view path) {
+    const std::u8string utf8Path(path.begin(), path.end());
+    std::ifstream f(std::filesystem::path(utf8Path), std::ios::binary);
+    check(f.good());
+    return {std::istreambuf_iterator<char>(f), {}};
 }
 static void setup(RemotePlaySource& s) {
     if(testHardware){
@@ -87,7 +90,7 @@ static void colorContracts() {
     std::cout<<"INITIAL_SDR_HDR_COLOR_CONTRACTS_PASS\n";
 }
 static void splitTest(const char* prefix, Codec codec=Codec::H264, bool expectHdr=false) {
-    RemotePlaySource s;setup(s);s.initializeColorContract(codec,false);s.request_.video.codec=codec;auto config=bytes((std::string(prefix)+"-config.bin").c_str());
+    RemotePlaySource s;setup(s);s.initializeColorContract(codec,false);s.videoProfile_.codec=codec;auto config=bytes((std::string(prefix)+"-config.bin").c_str());
     auto au=bytes((std::string(prefix)+"-au.bin").c_str());
     VideoSample c;c.generation=s.token_->generation();c.width=1280;c.height=720;
     c.codec=codec;c.arrival100ns=monotonic100ns();c.kind=SampleKind::CodecConfig;c.payload=PaddedBytes::copy(config);

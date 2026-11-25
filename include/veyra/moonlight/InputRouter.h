@@ -15,6 +15,7 @@ namespace veyra::moonlight {
 class InputSink {
 public:
     virtual ~InputSink() = default;
+    virtual bool localKey(uint32_t scan, bool extended, bool down, bool repeat) { return false; }
     virtual void key(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) = 0;
     virtual void mouseMove(int dx, int dy) = 0;
     virtual void mouseButton(int button, bool down) = 0;   // 1 left, 2 middle, 3 right, 4 X1, 5 X2
@@ -23,7 +24,7 @@ public:
 
 class InputRouter {
 public:
-    explicit InputRouter(InputSink& sink) : sink_(sink) {}
+    explicit InputRouter(InputSink& sink, bool releaseOnly=false) : sink_(sink), releaseOnly_(releaseOnly) {}
 
     // True when the message was consumed (it must not reach the UI underneath).
     bool message(UINT msg, WPARAM wParam, LPARAM lParam) {
@@ -52,6 +53,12 @@ public:
     // Relative movement from a WM_INPUT mouse report.
     void rawMouse(long dx, long dy) { sink_.mouseMove(int(dx), int(dy)); }
 
+    // A host can reserve a focused player's keys before or during capture.
+    bool localKey(LPARAM flags, bool down) {
+        return sink_.localKey(uint32_t((flags >> 16) & 0xff), ((flags >> 24) & 1) != 0,
+                              down, ((flags >> 30) & 1) != 0);
+    }
+
     // Set when the last key press was one of the app's own hotkeys; cleared by taking it.
     Reserved takeReserved() {
         const Reserved r = reserved_;
@@ -60,7 +67,7 @@ public:
     }
 
     // Forget what is held (capture ended; the session releases the host side itself).
-    void reset() { held_.clear(); reserved_ = Reserved::None; }
+    void reset() { held_.clear(); reserved_ = Reserved::None; swallowedUp_ = 0; }
 
 private:
     bool key(WPARAM wParam, LPARAM lParam, bool down) {
@@ -71,14 +78,14 @@ private:
         if (down) {
             if (vk != 0x10 && vk != 0x11 && vk != 0x12) {   // a modifier alone is never a hotkey
                 const Reserved r = reservedHotkey(vk, held_.modifiers());
-                if (r != Reserved::None) { reserved_ = r; swallowedUp_ = vk; return true; }
+                if (r != Reserved::None && (!releaseOnly_ || r == Reserved::ReleaseCapture)) { reserved_ = r; swallowedUp_ = vk; return true; }
             }
             held_.press(host.code, host.modifier);
         } else {
             if (swallowedUp_ == vk) { swallowedUp_ = 0; return true; }   // the matching key-up of a hotkey
             held_.release(host.code);
         }
-        sink_.key(vk, scan, extended, down);
+        if (!localKey(lParam, down)) sink_.key(vk, scan, extended, down);
         return true;
     }
 
@@ -88,6 +95,7 @@ private:
     }
 
     InputSink& sink_;
+    bool releaseOnly_;
     HeldKeys held_;
     Reserved reserved_ = Reserved::None;
     uint32_t swallowedUp_ = 0;

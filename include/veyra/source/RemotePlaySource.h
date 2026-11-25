@@ -88,7 +88,7 @@ private:
     remoteplay::ChiakiBackend backend_;
     std::optional<remoteplay::SessionInbox::Token> token_;
     remoteplay::RemotePlayClock clock_;
-    remoteplay::NativeConnectRequest request_;
+    remoteplay::VideoProfile videoProfile_;
     SourceInfo info_{};
     AVCodecContext* codecContext_ = nullptr;
     AVFrame* decoderFrame_ = nullptr;

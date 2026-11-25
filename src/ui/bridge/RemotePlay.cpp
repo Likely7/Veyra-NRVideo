@@ -9,6 +9,18 @@ constexpr uint32_t kPs5Bitrates[] = {5000, 10000, 15000, 20000, 30000, 50000, 80
 std::filesystem::path ps5Settings() { return remoteplay::profileDirectory() / L"settings.ini"; }
 #endif
 }
+QObject* QmlPlayerBridge::ps5Keyboard() {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    auto& i=*impl_;
+    if(!i.ps5Keyboard)i.ps5Keyboard=std::make_unique<Ps5KeyboardSettings>(
+        QString::fromStdWString(i.dataDir.wstring()),
+        QCoreApplication::applicationDirPath()+QStringLiteral("/profiles/gta-vi-ps5-0.6.87-calibrated.v2.json"),
+        [this]{return impl_->engine.remoteKeyboardMouse();});
+    return i.ps5Keyboard.get();
+#else
+    return nullptr;
+#endif
+}
 QVariantMap QmlPlayerBridge::ps5() const {
     QVariantMap out = impl_->ps5Form;
     out["status"] = impl_->ps5Status;

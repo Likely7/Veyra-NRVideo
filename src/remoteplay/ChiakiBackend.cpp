@@ -2,6 +2,7 @@
 // Uses chiaki-ng's AGPL-3.0-only + OpenSSL-exception APIs; retain both licenses.
 // Windows native initialization and source regression evidence: see execution log.
 #include "veyra/remoteplay/ChiakiBackend.h"
+#include "veyra/remoteplay/KeyboardMouse.h"
 #include "veyra/Log.h"
 #include <format>
 #include <chiaki/session.h>
@@ -20,7 +21,7 @@
 #include <mutex>
 #include <thread>
 #include <cstdio>
-#include <cstdlib>
+#include <windows.h>
 namespace veyra::remoteplay {
 static_assert(CHIAKI_PSN_ACCOUNT_ID_SIZE == 8);
 static_assert(CHIAKI_SESSION_AUTH_SIZE == 16);
@@ -68,26 +69,27 @@ struct ChiakiBackend::Impl {
     std::atomic<int64_t> serverTargetBitrate=-1;
     std::atomic<uint64_t> qualityReports=0;
     // PS5 手柄控制: set before the session starts, read only by the callbacks.
-    bool discardMedia=false;
+    bool discardMedia=false,viewOnly=false;
     // Only the upstream audio/Opus callback thread reads/writes these fields.
     std::uint32_t channels=0,rate=0;
     std::uint64_t sampleIndex=0;
     bool audioDiscontinuity=true;
     ChiakiOrientationTracker orientation{};ChiakiAccelNewZero accelZero{};
     uint64_t lastMotion=0;
+    std::shared_ptr<KeyboardMouse> keyboardMouse;
     std::mutex feedbackMutex;ControllerFeedback feedback;
 
     static void logCallback(ChiakiLogLevel level,const char* message,void* user) noexcept {
         auto& self=*static_cast<Impl*>(user);
         if(message&&level==CHIAKI_LOG_VERBOSE){
             int target=-1;
-            if(std::sscanf(message,"StreamConnection received connection quality: target_bitrate=%d,",&target)==1&&target>=0){self.serverTargetBitrate=target;++self.qualityReports;}
+            if(sscanf_s(message,"StreamConnection received connection quality: target_bitrate=%d,",&target)==1&&target>=0){self.serverTargetBitrate=target;++self.qualityReports;}
         }
         // Raw upstream log strings/hexdumps may contain keys. Do not forward them.
         if(level==CHIAKI_LOG_ERROR){
             ++self.errors;
             unsigned reason=0;
-            if(message&&std::sscanf(message,"Reported Application Reason: %x",&reason)==1)
+            if(message&&sscanf_s(message,"Reported Application Reason: %x",&reason)==1)
                 self.applicationReason=reason;
         }
         if(level==CHIAKI_LOG_WARNING)++self.warnings;
@@ -105,11 +107,23 @@ struct ChiakiBackend::Impl {
         case CHIAKI_EVENT_CONNECTED:self.connected=true;self.token.connected();break;
         case CHIAKI_EVENT_LOGIN_PIN_REQUEST:self.token.loginPinRequired();break;
         case CHIAKI_EVENT_QUIT:
+            if(self.keyboardMouse)self.keyboardMouse->disconnected();
             self.connected=false;self.quitReason=static_cast<int>(event->quit.reason);
             // A remote termination is not a successful decoded EOF.
             self.token.failed(2000+static_cast<int>(event->quit.reason));break;
         case CHIAKI_EVENT_RUMBLE:{std::lock_guard lock(self.feedbackMutex);self.feedback.rumble=true;self.feedback.left=event->rumble.left;self.feedback.right=event->rumble.right;break;}
-        case CHIAKI_EVENT_TRIGGER_EFFECTS:{std::lock_guard lock(self.feedbackMutex);auto& f=self.feedback;f.triggers=true;f.leftTrigger[0]=event->trigger_effects.type_left;f.rightTrigger[0]=event->trigger_effects.type_right;std::copy_n(event->trigger_effects.left,10,f.leftTrigger.begin()+1);std::copy_n(event->trigger_effects.right,10,f.rightTrigger.begin()+1);break;}
+        case CHIAKI_EVENT_TRIGGER_EFFECTS:{
+            const auto captured=KeyboardMouse::Clock::now();
+            std::array<uint8_t,11> left{event->trigger_effects.type_left},right{event->trigger_effects.type_right};
+            std::copy_n(event->trigger_effects.left,10,left.begin()+1);
+            std::copy_n(event->trigger_effects.right,10,right.begin()+1);
+            if(self.keyboardMouse)
+                self.keyboardMouse->triggerPair(left,right,captured);
+            std::lock_guard lock(self.feedbackMutex);
+            self.feedback.triggers=true;
+            self.feedback.leftTrigger=left;
+            self.feedback.rightTrigger=right;
+            break;}
         case CHIAKI_EVENT_MOTION_RESET:{std::lock_guard lock(self.feedbackMutex);self.feedback.motionReset=true;break;}
         // Light bar colour and player indicator, as chiaki-ng's StreamSession forwards them.
         case CHIAKI_EVENT_LED_COLOR:{std::lock_guard lock(self.feedbackMutex);auto& f=self.feedback;f.led=true;std::copy_n(event->led_state,3,f.ledColor.begin());break;}
@@ -118,9 +132,11 @@ struct ChiakiBackend::Impl {
 
         }
     }
-    static void hapticsCallback(uint8_t* data,size_t size,void* user)noexcept{
+    static void hapticsCallback(uint8_t* data,size_t size,bool gapBefore,void* user)noexcept{
         auto& self=*static_cast<Impl*>(user);
-        if(!self.active||!data||!size||size%4||size>1200)return;
+        if(!self.active)return;
+        if(self.keyboardMouse)self.keyboardMouse->haptics(data,size,KeyboardMouse::Clock::now(),gapBefore);
+        if(!data||!size||size%4||size>1200)return;
         try{std::lock_guard lock(self.feedbackMutex);auto& pcm=self.feedback.haptics;
             if(pcm.size()+size/2>600)pcm.clear();
             const auto at=pcm.size();pcm.resize(at+size/2);std::memcpy(pcm.data()+at,data,size);
@@ -195,9 +211,11 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
     auto init=initializeChiaki();if(!init.ok)return init;
     p_=std::make_unique<Impl>(std::move(token));auto& s=*p_;s.host=request.host;s.profile=request.video;
     s.discardMedia=discardMedia;
+    s.viewOnly=request.viewOnly;
+    if(!request.viewOnly)s.keyboardMouse=request.keyboardMouse;
     // Verbose formatting has per-packet overhead: enable only for explicit diagnostics.
     // Callback above whitelists numeric quality fields and never forwards raw text.
-    const bool qualityTrace=std::getenv("VEYRA_TEST_PS5_QUALITY_TRACE")!=nullptr;
+    const bool qualityTrace=GetEnvironmentVariableW(L"VEYRA_TEST_PS5_QUALITY_TRACE",nullptr,0)!=0;
     chiaki_log_init(&s.log,CHIAKI_LOG_WARNING|CHIAKI_LOG_ERROR|(qualityTrace?CHIAKI_LOG_VERBOSE:0),Impl::logCallback,&s);
     ChiakiConnectInfo info{};info.ps5=true;info.host=s.host.c_str();
     std::memcpy(info.regist_key,request.credentials.registrationKey.data(),request.credentials.registrationKey.size());
@@ -208,20 +226,22 @@ BackendResult ChiakiBackend::start(const NativeConnectRequest& request,SessionIn
         request.video.fps==30?CHIAKI_VIDEO_FPS_PRESET_30:CHIAKI_VIDEO_FPS_PRESET_60);
     info.video_profile.codec=request.video.codec==Codec::H264?CHIAKI_CODEC_H264:request.video.codec==Codec::H265Hdr?CHIAKI_CODEC_H265_HDR:CHIAKI_CODEC_H265;
     info.video_profile.bitrate=request.video.bitrateKbps;
-    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;info.enable_dualsense=!request.viewOnly||discardMedia;
+    info.video_profile_auto_downgrade=false;info.enable_keyboard=false;info.enable_dualsense=!request.viewOnly;
     info.auto_regist=false;info.packet_loss_max=0.05;info.enable_idr_on_fec_failure=true;
     const auto code=chiaki_session_init(&s.session,&info,&s.log);
     wipe(info.regist_key,sizeof(info.regist_key));wipe(info.morning,sizeof(info.morning));wipe(info.psn_account_id,sizeof(info.psn_account_id));
     if(code!=CHIAKI_ERR_SUCCESS){auto out=s.record(code,"chiaki_session_init");s.token.failed(out.code);p_.reset();return out;}
     s.initialized=true;
+    chiaki_session_set_veyra_view_only(&s.session,request.viewOnly);
     if(discardMedia){ChiakiAudioSink sink{};sink.user=&s;sink.frame_cb=Impl::discardAudio;chiaki_session_set_audio_sink(&s.session,&sink);}
     else{
         chiaki_opus_decoder_init(&s.opus,&s.log);s.opusInitialized=true;
         chiaki_opus_decoder_set_cb(&s.opus,Impl::opusSettings,Impl::opusFrame,&s);
         ChiakiAudioSink sink{};chiaki_opus_decoder_get_sink(&s.opus,&sink);chiaki_session_set_audio_sink(&s.session,&sink);
     }
-    ChiakiAudioSink hapticSink{};hapticSink.user=&s;hapticSink.frame_cb=Impl::hapticsCallback;
+    ChiakiAudioSink hapticSink{};hapticSink.user=&s;
     chiaki_session_set_haptics_sink(&s.session,&hapticSink);
+    s.session.veyra_haptics_frame_cb=Impl::hapticsCallback;
     chiaki_session_set_event_cb(&s.session,Impl::eventCallback,&s);
     chiaki_session_set_veyra_video_sample_cb(&s.session,Impl::videoCallback,&s);
     s.active=true;
@@ -236,8 +256,10 @@ BackendResult ChiakiBackend::stop(){
     s.active=false;
     ChiakiErrorCode stopResult=CHIAKI_ERR_SUCCESS;
     if(s.started){
-        ChiakiControllerState idle;chiaki_controller_state_set_idle(&idle);
-        (void)s.record(chiaki_session_set_controller_state(&s.session,&idle),"release_controller");
+        if(!s.viewOnly){
+            ChiakiControllerState idle;chiaki_controller_state_set_idle(&idle);
+            (void)s.record(chiaki_session_set_controller_state(&s.session,&idle),"release_controller");
+        }
         const auto stopCode=chiaki_session_stop(&s.session);
         stopResult=stopCode;
         // Join even if stop reported an error. Never fini while a callback is alive.
@@ -262,6 +284,7 @@ BackendResult ChiakiBackend::submitLoginPin(std::string_view pin){
 }
 BackendResult ChiakiBackend::submitController(const ControllerState& state){
     if(!p_||!p_->onOwner()||!p_->started)return {false,-1106,"controller_without_session"};
+    if(p_->viewOnly)return {false,-1106,"controller_in_view_only_session"};
     ChiakiControllerState c;chiaki_controller_state_set_idle(&c);
     struct Mapping{std::uint32_t semantic;ChiakiControllerButton target;};
     static constexpr Mapping buttons[]={
@@ -290,8 +313,8 @@ BackendResult ChiakiBackend::submitController(const ControllerState& state){
     c.l2_state=state.l2;c.r2_state=state.r2;c.left_x=state.leftX;c.left_y=state.leftY;c.right_x=state.rightX;c.right_y=state.rightY;
     const auto sent=p_->record(chiaki_session_set_controller_state(&p_->session,&c),"chiaki_session_set_controller_state");
     static const bool traceInput=[]{
-        const auto* value=std::getenv("VEYRA_TEST_RP_INPUT_LOG");
-        return value&&std::string_view(value)=="1";
+        wchar_t value[2]{};
+        return GetEnvironmentVariableW(L"VEYRA_TEST_RP_INPUT_LOG",value,2)==1 && value[0]==L'1';
     }();
     if(traceInput&&sent.ok){
         const bool clicked=(c.buttons&CHIAKI_CONTROLLER_BUTTON_TOUCHPAD)!=0;

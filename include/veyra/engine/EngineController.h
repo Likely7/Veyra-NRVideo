@@ -33,7 +33,7 @@
 #include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
-namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback; }
+namespace veyra::remoteplay { class KeyboardMouse; struct ControllerState;struct ControllerFeedback; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::engine {
@@ -252,6 +252,7 @@ public:
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
+    std::shared_ptr<remoteplay::KeyboardMouse> remoteKeyboardMouse();
     void remotePlayController(const remoteplay::ControllerState&);
     void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);

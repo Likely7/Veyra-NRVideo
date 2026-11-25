@@ -1,0 +1,91 @@
+diff --git a/lib/include/chiaki/session.h b/lib/include/chiaki/session.h
+--- a/lib/include/chiaki/session.h
++++ b/lib/include/chiaki/session.h
+@@ -240,6 +240,7 @@
+ 		ChiakiDisableAudioVideo disable_audio_video;
+ 		bool enable_keyboard;
+ 		bool enable_dualsense;
++		bool veyra_view_only;
+ 		uint8_t psn_account_id[CHIAKI_PSN_ACCOUNT_ID_SIZE];
+ 		bool enable_idr_on_fec_failure;
+ 	} connect_info;
+@@ -360,6 +361,12 @@
+ 	session->display_sink = *sink;
+ }
+ 
++// Set after init and before start. Zero-initialized sessions retain the upstream controller.
++static inline void chiaki_session_set_veyra_view_only(ChiakiSession *session, bool enabled)
++{
++	session->connect_info.veyra_view_only = enabled;
++}
++
+ #ifdef __cplusplus
+ }
+ #endif
+diff --git a/lib/src/streamconnection.c b/lib/src/streamconnection.c
+--- a/lib/src/streamconnection.c
++++ b/lib/src/streamconnection.c
+@@ -287,18 +287,21 @@
+ 
+ 	CHIAKI_LOGI(session->log, "StreamConnection successfully received streaminfo");
+ 
+-	err = chiaki_mutex_lock(&stream_connection->feedback_sender_mutex);
+-	assert(err == CHIAKI_ERR_SUCCESS);
+-	err = chiaki_feedback_sender_init(&stream_connection->feedback_sender, &stream_connection->takion);
+-	if(err != CHIAKI_ERR_SUCCESS)
+-	{
++	if(!session->connect_info.veyra_view_only)
++	{
++		err = chiaki_mutex_lock(&stream_connection->feedback_sender_mutex);
++		assert(err == CHIAKI_ERR_SUCCESS);
++		err = chiaki_feedback_sender_init(&stream_connection->feedback_sender, &stream_connection->takion);
++		if(err != CHIAKI_ERR_SUCCESS)
++		{
++			chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
++			CHIAKI_LOGE(stream_connection->log, "StreamConnection failed to start Feedback Sender");
++			goto disconnect;
++		}
++		stream_connection->feedback_sender_active = true;
++		chiaki_feedback_sender_set_controller_state(&stream_connection->feedback_sender, &session->controller_state);
+ 		chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
+-		CHIAKI_LOGE(stream_connection->log, "StreamConnection failed to start Feedback Sender");
+-		goto disconnect;
+-	}
+-	stream_connection->feedback_sender_active = true;
+-	chiaki_feedback_sender_set_controller_state(&stream_connection->feedback_sender, &session->controller_state);
+-	chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
++	}
+ 
+ 	stream_connection->state = STATE_IDLE;
+ 	stream_connection->state_finished = false;
+@@ -324,11 +327,14 @@
+ 			CHIAKI_LOGV(stream_connection->log, "StreamConnection sent heartbeat");
+ 	}
+ 
+-	err = chiaki_mutex_lock(&stream_connection->feedback_sender_mutex);
+-	assert(err == CHIAKI_ERR_SUCCESS);
+-	stream_connection->feedback_sender_active = false;
+-	chiaki_feedback_sender_fini(&stream_connection->feedback_sender);
+-	chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
++	if(!session->connect_info.veyra_view_only)
++	{
++		err = chiaki_mutex_lock(&stream_connection->feedback_sender_mutex);
++		assert(err == CHIAKI_ERR_SUCCESS);
++		stream_connection->feedback_sender_active = false;
++		chiaki_feedback_sender_fini(&stream_connection->feedback_sender);
++		chiaki_mutex_unlock(&stream_connection->feedback_sender_mutex);
++	}
+ 
+ 	err = CHIAKI_ERR_SUCCESS;
+ 
+@@ -959,7 +965,9 @@
+ 
+ 	stream_connection_send_streaminfo_ack(stream_connection);
+ 	
+-	ChiakiErrorCode err = stream_connection_send_controller_connection(stream_connection);
++	ChiakiErrorCode err = CHIAKI_ERR_SUCCESS;
++	if(!stream_connection->session->connect_info.veyra_view_only)
++		err = stream_connection_send_controller_connection(stream_connection);
+ 	if(err != CHIAKI_ERR_SUCCESS)
+ 	{
+ 		CHIAKI_LOGE(stream_connection->log, "StreamConnection failed to send controller connection");
