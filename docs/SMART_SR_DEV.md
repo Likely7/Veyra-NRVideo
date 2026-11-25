@@ -219,6 +219,27 @@ chain 573 PASS / 0 FAIL, preset library 0 FAIL, repair presets exit 0, ui i18n 0
 Not checked: a game's own picture in that mode, other ratios (a 1440p signal) and other
 capture cards, whose filters will differ.
 
+## Thin text in HDR (2026-11-26)
+
+Report from the play test: text gets thin with smart SR. Not the AI: the HDR restore
+(`HdrVideoSrRestore.hlsl`) adds the proxy's difference to the HDR base, and enlarged that
+base bilinearly in linear light, the proxy in sRGB codes. The gap between the two
+brightens every edge, and where the proxy is compressed (above about 150 nits) the
+base alone is shown. Dark strokes on a bright page get thin, bright ones on black fat.
+
+With smart SR the base is now enlarged in PQ codes and the proxy is the one of that
+base; highlights then show the console's own 4K picture. Other HDR enlarging keeps the
+old code (the same gap is there, not changed here).
+
+Measured with real RTX Video SR (quality 4, RTX 5070 Ti) on the two HOME screenshots,
+against the console 4K, area past half way from the page to the stroke in PQ codes: dark
+text 78-86 % before, 100-106 % now; white text 107-108 % before, 99.5-100 % now; gradient
+of the dark text x0.99-1.10 before, x1.23-1.31 now. Synthetic 1080p strokes (2-3 px), both
+scalers: dark 0.50 and bright 1.49 of the render's strokes before, 0.96 and 1.05 now
+(`veyra_sr_quality_tests OUT smart-hdr`, new; fails with the old shader). SR stage 5.3 ms
+before and now. `supersample` and `dual-restore` still pass. SDR does not restore a base
+and is not changed.
+
 The sections below record the work on the 2.1.1 base (feature/smart-sr), where
 `VEYRA_TEST_SMART_SR_HEIGHT` was the test switch.
 
