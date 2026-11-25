@@ -2065,3 +2065,11 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 - 构建使用 `python -X utf8 E:/项目/Veyra/tmp/hud-captions-20261125/build-local.py <源码工作树> veyra_realtime_preview_tests veyra_subtitle_overlay_tests veyra_repair_fg_tests veyra_preset_library_tests veyra_qml_ui veyra_qml_quick_tests veyra_ui_i18n_tests`，编译输出在 `E:/项目/Veyra/build/codex-hud-captions-20261125`。
 - 同一目录下的 `stage.py --final` 准备隔离的 NVIDIA 本地测试版，`verify.py cpu`、`verify.py gpu` 、`exercise_ui.py` 和 `restart-ui.py` 检查预设、文件调度、字幕栅格、Qt Quick 控件、像素与真实播放器偏好。Qt Quick 共 257 项通过。启动程序实测 RGB (31,151,250) 写为 `#1f97fa`，字幕位置 (72%,18%) 保存，音乐默认静音、可手动开启。重启后实测 HUD 范围、字幕位置、颜色与静音设置全部保留。另运行 `python -B -X utf8 scripts/i18n/extract.py --check` 检查九种翻译。日志目录为 `E:/项目/Veyra/logs/codex-hud-captions-20261125`，试用目录为 `E:/项目/Veyra/tests/codex-hud-captions-20261125`。
 - 最终构建用时 150.7 秒。私有测试 EXE 的 SHA-256 为 `4A4A32AAE4706269968D13A59C066AA0BBAD19BEC6A15D41C301C0C4F8004801`，与构建目录一致。真实应用控件验证结束后，已核对试用目录中 Main.qml 与源码哈希一致。
+
+## 2026-11-25 PS5 键鼠映射与游戏字幕防拖影联测
+
+本地分支 `codex/ps5-input-subtitle-20261125` 从 `af3c59ac` 带入前轮准星与 HUD/译文改动。新增 PushFPS 4.5.3 的游戏字幕识别、补帧前修复与生成帧恢复（`8665f77e`），以及 PS5 微秒鼠标采样、250 Hz 发送目标、动作映射（`d315dd89`）、多档案、界面与输入锁定（`4dc25b55`）。来源及改动记录于 THIRD_PARTY_NOTICES。
+
+构建调用 `python -B -X utf8 E:/项目/Veyra/tmp/codex-ps5-input-subtitle-20261125/build-local.py <工作树> veyra_qml_ui veyra_repair_fg_tests veyra_qml_quick_tests veyra_remoteplay_boundary_tests veyra_moonlight_protocol_tests veyra_ui_i18n_tests`。同一目录的 `stage.py --final` 准备 NVIDIA 手测版；`verify-new.py input quick gpu`、`verify-new.py providers`、`verify-new.py anr-local`、`response.cmd`、`native.py`、`native-cancel.py`、`fullscreen.py cinema|fullscreen`、`persist.py`、`paint.py` 和仓库的 `scripts/i18n/extract.py --check` 执行验收。修正了仅补帧的贴字误差及原生鼠标点击取消改键被吃掉的问题。ANR 首次独立配置缺少可选组件，校验本地已有 19 个文件后重测通过。
+
+构建目录 `E:/项目/Veyra/build/codex-ps5-input-subtitle-20261125`。11 个 D3D12 用例调试层错误为 0，输入边界、135 个 Moonlight 协议检查和 262 个 Qt Quick 检查通过。A/B 为 288 行。中文布局的真实窗口检查了按键与滚轮、光标释放、影院和全屏；真实 PS5 游戏、物理端到端延迟和当事人游戏中的字幕效果待用户手测。播放器已使用独立配置启动并打开键鼠面板。[完整验收、截图、日志和 A/B 表](<E:/项目/Veyra/reports/codex-ps5-input-subtitle-20261125/RESULTS.md>)。
