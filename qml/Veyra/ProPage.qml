@@ -100,6 +100,17 @@ VPage {
     // Design's st.tab: quality / fg / color / audio / display.
     property string tab: "quality"
     property int selectedEffect: -1
+    // The list cards in processing order. Smart SR runs anti-aliasing behind the
+    // SR / NR / beauty group instead of in front of SR (compileChainExecutionPlan).
+    readonly property bool smartSrOrder: veyra.smartSrRunning === true && veyra.nodeMode !== 1
+    function processingOrder(chain, smartSr) {
+        if (!smartSr) return chain
+        const last = ["video-hdr", "exclusion", "frame-generation"]
+        const rest = chain.filter(n => n.type !== "aa")
+        let at = rest.findIndex(n => last.indexOf(n.type) >= 0)
+        if (at < 0) at = rest.length
+        return rest.slice(0, at).concat(chain.filter(n => n.type === "aa"), rest.slice(at))
+    }
     // 处理顺序 "点击定位": switch to the chip's tab, open its card and scroll
     // the inspector so the card sits at the top.
     function locateNode(chip) {
@@ -1429,7 +1440,7 @@ VPage {
                             }
                         }
                         Repeater {
-                            model: veyra.chain
+                            model: root.processingOrder(veyra.chain, root.smartSrOrder)
                             delegate: Row {
                                 required property var modelData
                                 spacing: 2

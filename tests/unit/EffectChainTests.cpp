@@ -1657,6 +1657,71 @@ static void testSupersampleSr(){
 
 // Smart SR (2026-11-22): render extent math, the detection verdict, settings
 // normalization and the graph description.
+// Smart SR reads the source's own scaled picture: what may run ahead of SR.
+__declspec(noinline) static void testSmartSrStages(){
+    using namespace veyra;using Slot=pipeline::EnhanceGraphDesc::PassSlot;using pipeline::Extent;
+    auto list=std::make_unique<EnhancementSettings>();
+    list->nr=false;list->sr=true;list->multiplier=1;list->videoSrQuality=4;list->srTarget=pipeline::SrTarget::Uhd4K;list->smartSr=true;
+    list->antiAlias.enabled=true;list->antiAlias.method=AntiAliasMethod::Dlaa;
+    StageRequest r;r.sr=true;r.width=3840;r.height=2160;r.nvidiaAdapter=true;r.uncompressedSource=true;
+    auto d=std::make_unique<pipeline::EnhanceGraphDesc>();
+    const auto slot=[&](EffectType type){return d->slotOfStep(d->planStepOf(type,0));};
+    const auto stepOf=[&](EffectType type){return d->planStepOf(type,0);};
+    describeStages(r,*list,*d);
+    check(d->smartSr&&!d->smartSrBlocked&&d->smartSrNativeCopy&&stepOf(EffectType::SuperResolution)<stepOf(EffectType::AntiAliasing)&&
+          slot(EffectType::AntiAliasing)==Slot::Tail&&!d->sourcePostActive()&&!d->nrBeforeSr&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: list anti-aliasing runs behind SR, also at the same size");
+    r.width=1920;r.height=1080;describeStages(r,*list,*d);
+    check(d->smartSr&&slot(EffectType::AntiAliasing)==Slot::Tail&&d->validateFixedExecutionPlan().empty()&&
+          d->fixedExecutionPlan->steps[stepOf(EffectType::AntiAliasing)].output==Extent{3840,2160},
+          "smart SR: behind an enlarging SR that is the output size");
+    r.width=3840;r.height=2160;
+    auto other=std::make_unique<EnhancementSettings>(*list);other->smartSr=false;describeStages(r,*other,*d);
+    check(!d->smartSr&&!d->smartSrBlocked&&slot(EffectType::AntiAliasing)==Slot::SourcePost&&d->sourcePostActive()&&
+          stepOf(EffectType::SuperResolution)==kMaxChainNodes,
+          "smart SR off: list anti-aliasing stays at source size and a same-size SR has no step");
+    *other=*list;other->videoDenoiseEnabled=true;describeStages(r,*other,*d);
+    check(!d->smartSr&&d->smartSrBlocked&&!d->enableSr&&slot(EffectType::AntiAliasing)==Slot::SourcePost&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: a denoise ahead of SR blocks it and the order stays the ordinary one");
+    *other=*list;other->nr=true;r.nr=true;describeStages(r,*other,*d);
+    check(d->smartSr&&!d->smartSrBlocked&&!d->nrBeforeSr&&slot(EffectType::AntiAliasing)==Slot::Tail&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: NR behind SR does not block it");
+    other->lowLatency=true;describeStages(r,*other,*d);
+    check(!d->smartSr&&d->smartSrBlocked&&d->validateFixedExecutionPlan().empty(),"smart SR: NR ahead of SR blocks it");
+    r.nr=false;describeStages(r,*other,*d);
+    check(d->smartSr&&!d->smartSrBlocked,"smart SR: an NR-first setting without NR does not block it");
+    *other=*list;other->smartSr=false;other->videoDenoiseEnabled=true;describeStages(r,*other,*d);
+    check(!d->smartSrBlocked,"smart SR off: never blocked");
+
+    const auto node=[&](const std::vector<EffectType>& types,bool enabled=true){
+        auto chain=std::make_unique<EffectChain>();chain->mode=ChainMode::Node;
+        for(const auto type:types){
+            auto& n=chain->nodes[chain->nodeCount++];n.type=type;n.enabled=type==EffectType::SuperResolution||enabled;
+            if(type==EffectType::AntiAliasing){n.aa.enabled=n.enabled;n.aa.method=AntiAliasMethod::Smaa;n.aa.quality=1;}
+            if(type==EffectType::Beauty){n.beauty.enabled=n.enabled;n.beauty.smooth=true;}
+        }
+        auto s=std::make_unique<EnhancementSettings>(*list);s->antiAlias={};fromChain(*chain,*s);s->smartSr=true;s->videoSrQuality=4;
+        const auto order=runtimeOrder(*chain);StageRequest n=r;n.nodeOrder=&*order;
+        n.nr=std::find(types.begin(),types.end(),EffectType::NrEnhance)!=types.end();
+        describeStages(n,*s,*d);
+    };
+    node({EffectType::SuperResolution,EffectType::AntiAliasing});
+    check(d->smartSr&&!d->smartSrBlocked&&slot(EffectType::AntiAliasing)==Slot::Tail&&!d->sourcePostActive()&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: node anti-aliasing behind a same-size SR runs behind it");
+    node({EffectType::AntiAliasing,EffectType::SuperResolution});
+    check(!d->smartSr&&d->smartSrBlocked&&slot(EffectType::AntiAliasing)==Slot::SourcePost,"smart SR: node anti-aliasing ahead of SR blocks it");
+    node({EffectType::AntiAliasing,EffectType::SuperResolution},false);
+    check(d->smartSr&&!d->smartSrBlocked,"smart SR: a bypassed node ahead of SR does not block it");
+    node({EffectType::Beauty,EffectType::SuperResolution});
+    check(!d->smartSr&&d->smartSrBlocked,"smart SR: a beauty node ahead of SR blocks it");
+    node({EffectType::NrEnhance,EffectType::SuperResolution});
+    check(!d->smartSr&&d->smartSrBlocked,"smart SR: an NR node ahead of SR blocks it");
+    node({EffectType::SuperResolution,EffectType::NrEnhance});
+    check(d->smartSr&&!d->smartSrBlocked&&!d->nrBeforeSr&&d->validateFixedExecutionPlan().empty(),"smart SR: an NR node behind SR does not block it");
+    node({EffectType::Color,EffectType::SuperResolution});
+    check(d->smartSr&&!d->smartSrBlocked&&!d->sourcePostActive(),"smart SR: a colour node ahead of SR is part of the input conversion");
+}
+
 static void testSmartSr(){
     using namespace veyra;using pipeline::Extent;using pipeline::SrOutput;using pipeline::SrTarget;
     {
@@ -1667,16 +1732,66 @@ static void testSmartSr(){
         check(x2.p==2&&x2.q==1&&x2.taps.size()==1&&x15.p==3&&x15.q==2&&x15.taps.size()==2&&pipeline::smartSrInverseAxis(1080,1080).taps.empty(),
               "smart SR: one tap row per phase of the scale ratio");
         check(pipeline::smartSrSelfCheck(x2)<1e-3&&pipeline::smartSrSelfCheck(x15)<1e-3,"smart SR: the inverse recovers a 2x and a 1.5x bilinear upscale");
-        bool phases=true;double worst=0.0;
+        bool phases=true;double worst=0.0,gain=0.0;
         for(const uint32_t h:pipeline::kSmartSrCandidates){
             const auto e=pipeline::smartSrRenderExtent({3840,2160},h);
             const auto ax=pipeline::smartSrInverseAxis(3840,e.width),ay=pipeline::smartSrInverseAxis(2160,e.height);
             phases=phases&&e.width*9==e.height*16&&ax.q&&ax.q<=pipeline::kSmartSrMaxPhases&&ay.q==ax.q;
             worst=std::max({worst,pipeline::smartSrSelfCheck(ax),pipeline::smartSrSelfCheck(ay)});
+            for(const auto* axis:{&ax,&ay})for(const auto& taps:axis->taps){
+                double sum=0.0;for(const float t:taps)sum+=t;
+                gain=std::max(gain,std::abs(sum-1.0));
+            }
         }
+        check(gain<1e-6,"smart SR: every tap row sums to one, a flat picture is left as it is");
         check(phases,"smart SR: every 4K candidate is exact 16:9 within the phase limit");
         std::printf("smart SR: largest candidate inverse error %.3e\n",worst);
         check(worst<2e-2,"smart SR: every 4K candidate inverts its bilinear upscale");
+    }
+    {
+        // The probe of one row (SmartSrProbeReduce / Residual) on almost flat pictures.
+        const auto probe=[](const std::vector<float>& row){
+            constexpr size_t n=pipeline::kSmartSrCandidates.size();
+            std::array<double,n> errors{};
+            const uint32_t w=uint32_t(row.size());
+            double s1=0.0,s2=0.0;for(const float v:row){s1+=v;s2+=double(v)*v;}
+            const double energy=s2-s1*s1/w;
+            for(size_t c=0;c<n;++c){
+                const auto axis=pipeline::smartSrInverseAxis(w,pipeline::smartSrRenderExtent({3840,2160},pipeline::kSmartSrCandidates[c]).width);
+                std::vector<float> low(axis.lowLength);
+                for(uint32_t i=0;i<axis.lowLength;++i){
+                    const int base=int(pipeline::smartSrCentre(i,axis.p,axis.q))-pipeline::kSmartSrTapOrigin;
+                    float v=0.f;for(uint32_t t=0;t<pipeline::kSmartSrTaps;++t)v+=axis.taps[i%axis.q][t]*row[size_t(std::clamp(base+int(t),0,int(w)-1))];
+                    low[i]=v;
+                }
+                double residual=0.0;
+                for(uint32_t j=0;j<w;++j){
+                    int i0,i1;double w0,w1;pipeline::smartSrBilinear(j,w,axis.lowLength,i0,w0,i1,w1);
+                    const double d=row[j]-(w0*low[size_t(i0)]+w1*low[size_t(i1)]);residual+=d*d;
+                }
+                errors[c]=residual/energy;
+            }
+            return errors;
+        };
+        bool quiet=true;
+        for(const double level:{0.1,0.5,0.9})for(const double steps:{0.0,1023.0,255.0})for(const double swing:{0.04,0.2}){
+            std::vector<float> row(3840);
+            for(size_t j=0;j<row.size();++j){
+                double v=level+swing*(double(j)/double(row.size()-1)-0.5);
+                if(steps>0.0)v=std::round(v*steps)/steps;
+                row[j]=float(v);
+            }
+            quiet=quiet&&!pipeline::smartSrDecide(probe(row)).spatial;
+        }
+        check(quiet,"smart SR: an almost flat picture is no render height (live 2026-11-24: 1152)");
+        std::vector<float> render(1920),row(3840);
+        for(size_t i=0;i<render.size();++i)render[i]=float(0.5+0.2*std::sin(double(i)*1.7)+0.2*std::sin(double(i)*0.37)*std::cos(double(i)*2.9));
+        for(uint32_t j=0;j<row.size();++j){
+            int i0,i1;double w0,w1;pipeline::smartSrBilinear(j,3840,1920,i0,w0,i1,w1);
+            row[j]=float(std::round((w0*render[size_t(i0)]+w1*render[size_t(i1)])*255.0)/255.0);
+        }
+        const auto v=pipeline::smartSrDecide(probe(row));
+        check(v.height==1080&&v.spatial&&v.fit==1080,"smart SR: the same probe finds a detailed 8-bit 1080p upscale");
     }
     {
         constexpr size_t n=pipeline::kSmartSrCandidates.size();
@@ -1701,18 +1816,27 @@ static void testSmartSr(){
         check(v.height==1008&&v.notch==1.0&&v.spatial,"smart SR: the top measured height needs no notch past the source");
         std::array<double,n> flat{};flat.fill(1.0);
         check(!pipeline::smartSrDecide(flat).height,"smart SR: no fit under 2 % gives no render height");
+        std::array<double,n> smooth{};
+        for(size_t i=0;i<n;++i)smooth[i]=i<at(1152)?1e-4:1e-7*(1.0+0.1*double(i-at(1152)));
+        v=pipeline::smartSrDecide(smooth);
+        check(v.fit==1152&&v.knee>900&&v.notch<1.2&&!v.spatial,"smart SR: a large knee alone (everything above fits alike) is no upscale");
     }
     {
         using pipeline::SmartSrVerdict;using pipeline::smartSrVote;
-        const SmartSrVerdict spatial1080{1080,1000.0,6.0,true},dark{0,2.9,1.0,false},native{0,1.6,1.0,false};
-        const SmartSrVerdict weak1440{1440,3.1,1.9,false},reconstructed1080{1080,8.0,1.2,false};
-        check(smartSrVote(spatial1080,0)==1080&&smartSrVote(dark,0)==0&&smartSrVote(weak1440,0)==0,
+        using pipeline::smartSrVotesNeeded;
+        const SmartSrVerdict spatial1080{1080,1000.0,6.0,true,1080},dark1440{0,2.9,1.8,false,1440},native{0,1.6,1.0,false,2016};
+        const SmartSrVerdict weak1440{1440,3.1,1.9,false,1440},reconstructed1080{1080,8.0,1.2,false,1080};
+        check(smartSrVote(spatial1080,0)==1080&&smartSrVote(dark1440,0)==0&&smartSrVote(weak1440,0)==0,
               "smart SR: without a height in use only a spatial upscale votes for one");
-        check(smartSrVote(dark,1440)==-1,"smart SR: a dark picture without a knee leaves the height in use alone");
-        check(smartSrVote(weak1440,1440)==1440,"smart SR: a weak fit at the height in use counts for it");
+        check(smartSrVote(dark1440,1440)==1440&&smartSrVote(weak1440,1440)==1440,"smart SR: a weak fit at the height in use counts for it");
+        check(smartSrVote(dark1440,1152)==0&&smartSrVote(weak1440,1152)==0,"smart SR: a weak fit elsewhere does not hold a wrong height");
         check(smartSrVote(native,1440)==0,"smart SR: a smooth (native) picture turns it off");
         check(smartSrVote(reconstructed1080,1440)==0&&smartSrVote(spatial1080,1440)==1080,
               "smart SR: a fit at another height counts against the height in use");
+        check(smartSrVotesNeeded(1080,0)==pipeline::kSmartSrProbeStreak&&smartSrVotesNeeded(1080,1440)==pipeline::kSmartSrProbeStreak&&
+              smartSrVotesNeeded(0,0)==pipeline::kSmartSrProbeStreak&&smartSrVotesNeeded(0,1440)==pipeline::kSmartSrOffStreak&&
+              pipeline::kSmartSrOffStreak>pipeline::kSmartSrProbeStreak,
+              "smart SR: dropping a height for none takes more votes than finding one");
     }
     {
         using pipeline::SmartSrCoding;using pipeline::smartSrCoding;
@@ -1898,6 +2022,7 @@ int main() {
     testThreeStepSr();
     testSupersampleSr();
     testSmartSr();
+    testSmartSrStages();
     {
         using namespace veyra;using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;
         EnhancementSettings s;s.sr=true;s.nr=false;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;

@@ -597,7 +597,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     const auto append = [&](uint32_t index) {
         const auto& node = chain.nodes[index];
         if (!node.enabled) return;
-        if (node.type == EffectType::SuperResolution && !srStage.enlarges() && cursor == srStage.output) return;
+        if (node.type == EffectType::SuperResolution && !srStage.enlarges() && cursor == srStage.output && !request.smartSr) return;
         ChainExecutionStep step;
         step.type = node.type; step.nodeIndex = index;
         step.parameterIndex = parameterIndices[index];
@@ -621,14 +621,15 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         // goes first. Anti-aliasing follows it too: NR redraws edges and its change
         // gain sharpens them again, which undid an earlier pass (user 2026-10-26).
         // Behind SR that is the output size. Without enabled NR it stays at source
-        // size, ahead of any enlargement.
+        // size, ahead of any enlargement, except for smart SR: an earlier pass would
+        // change the scaled picture whose render size is detected and restored.
         bool nrActive = false;
         for (uint32_t i = 0; i < chain.nodeCount; ++i)
             if (chain.nodes[i].enabled && chain.nodes[i].type == EffectType::NrEnhance) nrActive = true;
         const std::array<EffectType, effectTypeCount> order = nrFirst
             ? std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty,
                 EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
-            : nrActive
+            : nrActive || request.smartSr
             ? std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer,
                 EffectType::Beauty, EffectType::AntiAliasing, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
             : std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance,

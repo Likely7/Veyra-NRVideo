@@ -830,7 +830,8 @@ bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
     if (c.mode != engine::ChainMode::List) { emit notice(tr("请先添加抗锯齿节点"), true); return false; }
     // The list card's instance exists once it is used, stored after the grades
     // where toChain() puts it; the list order (compileChainExecutionPlan) runs it
-    // behind the NR group when NR is on and in front of SR otherwise.
+    // behind the NR group when NR is on and in front of SR otherwise (behind it
+    // for smart SR).
     engine::ChainNode node; node.type = engine::EffectType::AntiAliasing;
     bool enabled = false;
     if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;

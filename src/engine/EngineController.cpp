@@ -992,7 +992,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     graphBytes=adopted?graphBytes+newBytes:newBytes;
                     {std::lock_guard lock(mutex_);snapshot_.nrAutoStatus=nrAutoStatus;snapshot_.nrAutoActive=false;
                      snapshot_.nrAutoPercent=snapshot_.nrAutoWidth=snapshot_.nrAutoHeight=0;
-                     snapshot_.smartSrActive=snapshot_.smartSrSettled=false;snapshot_.smartSrWidth=snapshot_.smartSrHeight=0;}
+                     snapshot_.smartSrActive=snapshot_.smartSrSettled=snapshot_.smartSrBlocked=false;snapshot_.smartSrWidth=snapshot_.smartSrHeight=0;}
                     return true;
                 }
                 if(desc.nrAutoPoolLayer&&failure==FailedBackend::Nr&&SUCCEEDED(ctx.device()->GetDeviceRemovedReason())){
@@ -2313,7 +2313,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                        gd.nrWidth!=nextDesc.nrWidth||gd.nrHeight!=nextDesc.nrHeight||
                        gd.flowWidth!=nextDesc.flowWidth||gd.flowHeight!=nextDesc.flowHeight||
                        gd.dualSr!=nextDesc.dualSr||gd.dualSrQuality!=nextDesc.dualSrQuality||gd.firstSrWidth!=nextDesc.firstSrWidth||gd.firstSrHeight!=nextDesc.firstSrHeight||
-                       gd.smartSr!=nextDesc.smartSr||gd.smartSrNativeCopy!=nextDesc.smartSrNativeCopy||
+                       gd.smartSr!=nextDesc.smartSr||gd.smartSrNativeCopy!=nextDesc.smartSrNativeCopy||gd.smartSrBlocked!=nextDesc.smartSrBlocked||
                        gd.srInputWidth!=nextDesc.srInputWidth||gd.srInputHeight!=nextDesc.srInputHeight||
                        gd.srOutputWidth!=nextDesc.srOutputWidth||gd.srOutputHeight!=nextDesc.srOutputHeight)rebuild=true;
                     bool accepted=ring.drainQueue();out={};hasOutput=false;
@@ -4127,7 +4127,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     snapshot_.nrAutoPercent=graph->autoNrPoolReady()?AutoNrController::percent(graph->autoNrLevel()):0;
                     const auto autoExtent=graph->autoNrExtent();snapshot_.nrAutoWidth=autoExtent.width;snapshot_.nrAutoHeight=autoExtent.height;
                     const auto smartExtent=graph->smartSrExtent();snapshot_.smartSrActive=graph->smartSrDetecting();snapshot_.smartSrSettled=graph->smartSrSettled();
-                    snapshot_.smartSrWidth=smartExtent.width;snapshot_.smartSrHeight=smartExtent.height;
+                    snapshot_.smartSrWidth=smartExtent.width;snapshot_.smartSrHeight=smartExtent.height;snapshot_.smartSrBlocked=graph->smartSrBlocked();
                     snapshot_.nrAutoStatus=nrAutoStatus;
                     snapshot_.nrReuseActive=graph->nrReuseActive();snapshot_.nrReuseAutomatic=graph->nrReuseAutomatic();
                     snapshot_.nrReuseLevel=graph->nrReuseActive()?graph->nrReuseLevel():0;

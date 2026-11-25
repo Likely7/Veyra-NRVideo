@@ -876,9 +876,12 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
     // and for native frames, SR keeps the whole source. HDR tone-mapped at ingest is
     // no longer what the source's scaler enlarged.
     smartSrAuto_=smartSrSettled_=false;smartSrX_={};smartSrY_={};smartSrW_=smartSrH_=0;smartSrProbeAxes_.clear();
-    smartSrProbeFrames_=0;smartSrProbeTarget_=smartSrProbeStreak_=0;smartSrVerdict_={};
+    smartSrProbeFrames_=smartSrProbeCount_=0;smartSrProbeTarget_=smartSrProbeStreak_=0;smartSrVerdict_={};
+    smartSrKeptVotes_=smartSrNoneVotes_=smartSrOtherVotes_=smartSrFlatProbes_=0;
+    if(desc.smartSrBlocked)veyra::log::info("smart-sr","not running: a stage ahead of SR changes the picture (NR, denoise, anti-aliasing or beauty)");
+    // SR has to read the converted source itself (describeStages keeps it so).
     if(srEnabled_&&desc.smartSr&&!desc.dualSr&&!(desc.hdrInput&&!desc.hdrWorking())&&!srPrescaleActive()&&!srResolveActive()&&
-       engine::ngxVideoSr(finalVideoSrQuality(desc_))){
+       !desc.nrBeforeSr&&!desc.sourcePostActive()&&engine::ngxVideoSr(finalVideoSrQuality(desc_))){
         smartSrAuto_=true;
         uint32_t candidates=0;
         for(const uint32_t h:kSmartSrCandidates){
@@ -1143,10 +1146,9 @@ bool EnhanceGraph::createResources()
         const uint64_t statsBytes=kSmartSrCandidates.size()*kSmartSrProbeRows*16;
         smartSrProbeReduced_=makeTexture(context_.device(),srcW_,kSmartSrProbeRows,DXGI_FORMAT_R32_FLOAT,true);
         smartSrProbeStats_=makeBuffer(statsBytes,D3D12_HEAP_TYPE_DEFAULT,D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,D3D12_RESOURCE_STATE_COMMON);
-        smartSrProbeReadback_.clear();smartSrProbePending_.assign(ring_->slotCount(),0);
-        for(uint32_t s=0;s<ring_->slotCount();++s)
-            smartSrProbeReadback_.push_back(makeBuffer(statsBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_FLAG_NONE,D3D12_RESOURCE_STATE_COPY_DEST));
-        if(!smartSrProbeReduced_||!smartSrProbeStats_||std::any_of(smartSrProbeReadback_.begin(),smartSrProbeReadback_.end(),[](const auto& r){return !r;}))return false;
+        smartSrProbeReadback_=makeBuffer(statsBytes,D3D12_HEAP_TYPE_READBACK,D3D12_RESOURCE_FLAG_NONE,D3D12_RESOURCE_STATE_COPY_DEST);
+        smartSrProbePending_=false;smartSrProbeFence_=0;
+        if(!smartSrProbeReduced_||!smartSrProbeStats_||!smartSrProbeReadback_)return false;
     }
     if(srEnabled_&&desc_.dualSr){
         const bool firstVideoSr=engine::rtxVideoSr(desc_.videoSrQuality);
@@ -3349,7 +3351,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     if (list == nullptr) { veyra::log::error("graph", "ring acquire"); return false; }
     // The ring handed this slot out after its fence: the face status it carried is ready.
     if(faceTracker_)faceTracker_->collect(slot);
-    if(smartSrAuto_)collectSmartSrProbe(slot);
+    if(smartSrAuto_)collectSmartSrProbe();
     cpuTrace.mark("acquire");
     if(!captureWarmup)gpuTimer_.frame({epoch_,desc_.settingsRevision,realFrameIndex_+1},ring_->fence());
     gpuTimer_.mark(list,GpuStage::Color);
@@ -3816,10 +3818,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
     // Double SR reduces the first AI result before the second pass (exact area, linear light).
     auto reduceFirstSr=[&]{
         if(!srPrescaled_)return;
-        if(smartRuns&&smartSrProbeFrames_++%kSmartSrProbeInterval==0&&slot<smartSrProbePending_.size()&&!smartSrProbePending_[slot]){
+        if(smartRuns&&smartSrProbeFrames_++%kSmartSrProbeInterval==0&&!smartSrProbePending_){
             // Render detection on the linear source: per candidate, reduce the probed rows,
-            // then re-upscale and sum the residuals; the ring slot's readback is collected
-            // when the slot comes round again (collectSmartSrProbe).
+            // then re-upscale and sum the residuals; the readback is collected at the start
+            // of a later frame, once the GPU has passed this one (collectSmartSrProbe).
             tracker_.transition(list,srStageInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             const uint32_t rowBase=smartSrProbeRow(0,srcH_),rowSpan=srcH_*8/10;
             for(size_t c=0;c<smartSrProbeAxes_.size();++c){
@@ -3843,8 +3845,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             }
             tracker_.uavBarrier(list,smartSrProbeStats_.Get());
             tracker_.transition(list,smartSrProbeStats_.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
-            list->CopyBufferRegion(smartSrProbeReadback_[slot].Get(),0,smartSrProbeStats_.Get(),0,kSmartSrCandidates.size()*kSmartSrProbeRows*16);
-            smartSrProbePending_[slot]=1;
+            list->CopyBufferRegion(smartSrProbeReadback_.Get(),0,smartSrProbeStats_.Get(),0,kSmartSrCandidates.size()*kSmartSrProbeRows*16);
+            smartSrProbePending_=true;smartSrProbeFence_=0;
         }
         if(smartSrAuto_&&(!smartSrW_||!smartRuns))return;  // no render extent: finalVideoSr reads the whole source
         if(smartSrAuto_){
@@ -5279,15 +5281,21 @@ ID3D12Resource* EnhanceGraph::generatedFrameResource(uint32_t slot) const
 // ring and fences were alive.
 // ---------------------------------------------------------------------------
 // The ring handed this slot out after its fence, so a probe it carried is complete.
-void EnhanceGraph::collectSmartSrProbe(uint32_t slot){
-    if(slot>=smartSrProbePending_.size()||!smartSrProbePending_[slot])return;
-    smartSrProbePending_[slot]=0;
+void EnhanceGraph::collectSmartSrProbe(){
+    if(!smartSrProbePending_)return;
+    // Called at the start of a frame. The list that holds the probe need not be its frame's
+    // first one (optical flow, NR and the Video Effects SR split a frame over several ring
+    // slots), so a ring slot coming round does not tell when it ran. Everything signaled by
+    // the start of a later frame includes it; until the GPU is past that nothing waits.
+    if(!smartSrProbeFence_)smartSrProbeFence_=ring_->lastSignaledValue();
+    if(ring_->fence()->GetCompletedValue()<smartSrProbeFence_)return;
+    smartSrProbePending_=false;smartSrProbeFence_=0;
     constexpr size_t n=kSmartSrCandidates.size();
     std::vector<float> stats(n*kSmartSrProbeRows*4);
     void* mapped=nullptr;const D3D12_RANGE range{0,stats.size()*sizeof(float)};
-    if(FAILED(smartSrProbeReadback_[slot]->Map(0,&range,&mapped))||!mapped)return;
+    if(FAILED(smartSrProbeReadback_->Map(0,&range,&mapped))||!mapped)return;
     std::memcpy(stats.data(),mapped,range.End);
-    const D3D12_RANGE none{0,0};smartSrProbeReadback_[slot]->Unmap(0,&none);
+    const D3D12_RANGE none{0,0};smartSrProbeReadback_->Unmap(0,&none);
     // Row energy (mean removed) from the first candidate that ran; every candidate sums the same luma.
     const auto first=std::find_if(smartSrProbeAxes_.begin(),smartSrProbeAxes_.end(),[](const auto& a){return !a.taps.empty();});
     if(first==smartSrProbeAxes_.end())return;
@@ -5297,8 +5305,17 @@ void EnhanceGraph::collectSmartSrProbe(uint32_t slot){
         const float* s=&stats[(c0*kSmartSrProbeRows+r)*4];
         energy+=std::max(0.0,double(s[2])-double(s[1])*double(s[1])/double(srcW_));
     }
-    // A flat frame (black, a fade) is no evidence either way: the extent stays as it is.
-    if(energy<1e-6)return;
+    // Field evidence: one line per kSmartSrReportProbes probes, whatever they found.
+    const auto report=[&]{
+        if(++smartSrProbeCount_%kSmartSrReportProbes)return;
+        veyra::log::info("smart-sr",std::format("probes {}: in use={} kept={} none={} other={} flat={}; last fit={} knee x{:.1f} notch x{:.1f}",
+            smartSrProbeCount_,smartSrH_,smartSrKeptVotes_,smartSrNoneVotes_,smartSrOtherVotes_,smartSrFlatProbes_,
+            smartSrVerdict_.fit,smartSrVerdict_.knee,smartSrVerdict_.notch));
+        smartSrKeptVotes_=smartSrNoneVotes_=smartSrOtherVotes_=smartSrFlatProbes_=0;
+    };
+    // An almost flat frame (black, a fade, a loading screen) is no evidence either way:
+    // the extent stays as it is.
+    if(energy<kSmartSrMinDeviation*kSmartSrMinDeviation*double(kSmartSrProbeRows)*double(srcW_)){++smartSrFlatProbes_;report();return;}
     std::array<double,n> errors{};
     for(size_t c=0;c<n;++c){
         double residual=0.0;
@@ -5307,13 +5324,13 @@ void EnhanceGraph::collectSmartSrProbe(uint32_t slot){
     }
     smartSrVerdict_=smartSrDecide(errors);
     // Only a spatial upscale is re-rendered; native and reconstructed frames keep the ordinary
-    // SR. A verdict without evidence (a dark or flat picture) leaves the height in use alone.
-    const int64_t vote=smartSrVote(smartSrVerdict_,smartSrH_);
-    if(vote<0)return;
-    const uint32_t target=uint32_t(vote);
+    // SR. A weak fit at the height in use (a dark picture) counts for it.
+    const uint32_t target=smartSrVote(smartSrVerdict_,smartSrH_);
+    ++(!target?smartSrNoneVotes_:target==smartSrH_?smartSrKeptVotes_:smartSrOtherVotes_);
+    report();
     smartSrProbeStreak_=target==smartSrProbeTarget_?smartSrProbeStreak_+1:1;
     smartSrProbeTarget_=target;
-    if(smartSrProbeStreak_!=kSmartSrProbeStreak)return;  // act, and log, once per settled verdict
+    if(smartSrProbeStreak_!=smartSrVotesNeeded(target,smartSrH_))return;  // act, and log, once per settled verdict
     smartSrSettled_=true;
     if(target!=smartSrH_){
         smartSrW_=smartSrH_=0;
@@ -5527,7 +5544,7 @@ void EnhanceGraph::shutdown()
     for(auto& r:exclusionUi_)r.Reset();
     for(auto& r:sourceReferences_)r.Reset();for(auto& r:baseReferences_)r.Reset();workRgba_.Reset();
     preGradeRgba_.Reset();srcRgba_.Reset();videoSrInput_.Reset();videoSrOutput_.Reset();srPrescaled_.Reset();smartSrMid_.Reset();
-    smartSrProbeReduced_.Reset();smartSrProbeStats_.Reset();smartSrProbeReadback_.clear();smartSrProbePending_.clear();
+    smartSrProbeReduced_.Reset();smartSrProbeStats_.Reset();smartSrProbeReadback_.Reset();smartSrProbePending_=false;smartSrProbeFence_=0;
     firstSrInput_.Reset();firstSrOutput_.Reset();firstSrLinear_.Reset();firstSrFlow_.Reset();secondSrFlow_.Reset();fsrAuxW_=fsrAuxH_=0;
     nrHoldPass_.reset();
     nrReusePass_.reset();

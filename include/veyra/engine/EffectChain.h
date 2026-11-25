@@ -195,6 +195,9 @@ struct ChainExecutionRequest {
     pipeline::SrOutput srOutput = pipeline::SrOutput::Target;
     bool dualSrEnabled = false;
     pipeline::SrTarget dualSrTarget = pipeline::SrTarget::Uhd4K;
+    // Smart SR: SR has its step at the same size too, and the list order runs
+    // anti-aliasing behind it (SR reads the source's own scaled picture).
+    bool smartSr = false;
 };
 struct ChainExecutionStep {
     EffectType type = EffectType::NrEnhance;
@@ -213,7 +216,8 @@ struct ChainExecutionPlan {
 };
 // Node mode preserves inter-effect order; list mode uses the existing fixed
 // default/NR-first schedules. Each NR size is relative to its actual input,
-// not a global nrBeforeSr flag. Disabled nodes and identity SR need no step.
+// not a global nrBeforeSr flag. Disabled nodes and identity SR need no step
+// (smart SR keeps its identity step: it bounds what runs ahead of SR).
 // Failure is atomic. Hardware admission and port connectivity are not inferred
 // here: callers must establish those before allocating/executing this plan.
 ChainValidation compileChainExecutionPlan(const EffectChain&, const ChainExecutionRequest&, ChainExecutionPlan&);

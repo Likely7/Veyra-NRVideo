@@ -62,6 +62,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString srStageNote READ srStageNote NOTIFY snapshotChanged)
     // Smart SR: what the running graph detected (empty when it does not run).
     Q_PROPERTY(QString smartSrStatus READ smartSrStatus NOTIFY snapshotChanged)
+    // The running graph detects render extents: list-mode anti-aliasing is behind SR.
+    Q_PROPERTY(bool smartSrRunning READ smartSrRunning NOTIFY snapshotChanged)
     Q_PROPERTY(bool fullscreenMemorySafe READ fullscreenMemorySafe NOTIFY snapshotChanged)
     Q_PROPERTY(double queuedFrames READ queuedFrames NOTIFY snapshotChanged)
     Q_PROPERTY(bool queuedFramesKnown READ queuedFramesKnown NOTIFY snapshotChanged)
@@ -695,6 +697,7 @@ public:
     QString srStageSummary() const;
     QString srStageNote() const;
     QString smartSrStatus() const;
+    bool smartSrRunning() const;
     double queuedFrames() const;
     bool queuedFramesKnown() const;
     int skippedFrames() const;

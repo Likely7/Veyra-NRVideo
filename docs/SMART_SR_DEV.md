@@ -37,12 +37,16 @@ Smart SR is therefore its own switch on the single SR pass.
   the target keeps its same-size repair, and an enlarging SR (1080p signal to a
   4K target) keeps enlarging the whole source until a render extent is found.
 - EnhanceGraph: probes the linear source every 30 frames (96 rows, 22 candidate
-  heights below the source height); per ring slot the 22 x 96 stats are copied
-  to a readback buffer and read when the ring hands the slot out again, so
-  nothing waits on the GPU and no pixels are read back. A flat frame (black,
-  fade) is no evidence and keeps the current extent; with a render extent in
-  use, a verdict without a knee that is not clearly smooth (dark, low detail)
-  keeps it too (`smartSrVote`). Three equal votes set the render extent:
+  heights below the source height); the 22 x 96 stats are copied to a readback
+  buffer and read at the start of a later frame once the ring fence has passed
+  that frame, so nothing waits on the GPU and no pixels are read back. (Not when
+  a ring slot comes round: optical flow, NR and the Video Effects SR split a
+  frame over several slots, and the slot of the probe was then never a frame's
+  first one, see the 2026-11-25 fixes.) An almost flat frame (coded luma
+  deviation under 0.008: black, fade, loading screen) is no evidence and keeps
+  the current extent; a weak fit at the height in use (dark picture) counts for
+  it (`smartSrVote`). Three equal votes set a render extent, six votes for none
+  drop it (`smartSrVotesNeeded`):
   SmartSrReduce descales rows (linear to coded) and columns (back to linear)
   into the top-left of the source-sized `srPrescaled_`, the
   encode blit and the VSR input rect follow it, and VSR writes the full output.
@@ -56,15 +60,26 @@ Smart SR is therefore its own switch on the single SR pass.
   constants [5]/[6] (0: whole texture, as every other caller binds), so the HDR
   restore samples only the render extent. If smart SR cannot run on a raw frame
   at the work size, the frame is copied as without smart SR.
+- Order: SR has to read the source's own scaled picture. In list mode without
+  NR anti-aliasing normally runs at source size ahead of SR; with smart SR it
+  runs behind SR (`ChainExecutionRequest::smartSr`; the SR step then also exists
+  at the same size), and the 处理顺序 strip shows it there. A denoise or an
+  NR-first order in list mode, and any anti-aliasing, beauty, denoise or NR node
+  ahead of SR in a node chain, block smart SR (`smartSrBlocked`): the graph is
+  built as without it and the row says why. A colour grade stays (it is fused
+  into the input conversion) and only weakens the detection.
 - Status: `PlayerSnapshot::smartSr*` -> `QmlPlayerBridge::smartSrStatus`
-  ("正在检测…" / "检测到渲染分辨率 WxH…" / "画面不是放大输出…") under the switch.
+  ("超分之前有会改动画面的处理…" / "正在检测…" / "检测到渲染分辨率 WxH…" /
+  "画面不是放大输出…") under the switch.
+- Field log: one `[smart-sr] probes N: in use=.. kept=.. none=.. other=.. flat=..`
+  line per 40 probes (about 20 s at 60 fps).
 - Storage (after merging upstream 2.2.1, which took presets v38/v39, library
   v23-v26 and session v18-v21): PresetStore v40 (field after the v38 layout),
   preset library v27 and mode session v22, each saved to a `.smart-sr` sidecar
   the way upstream saves `.video-denoise`, so the file it starts from keeps its
   bytes. Export worker ABI version 17 (16 is upstream's video denoise; the
   settings struct grew; exports do not run smart SR).
-- i18n: 7 new strings (hint says "SDR 与 HDR10") in all 9 catalogue languages (`extract.py --check`:
+- i18n: 8 new strings (hint says "SDR 与 HDR10") in all 9 catalogue languages (`extract.py --check`:
   missing 0, placeholder problems 0).
 - Tests: `veyra_effect_chain_tests` (math, verdict rules incl. unmeasured
   heights, normalization, rebuild, graph description),
@@ -104,6 +119,64 @@ Smart SR is therefore its own switch on the single SR pass.
   0 FAIL, ui i18n 0 failures; repair presets: every itemized line (smart SR v38, now v40
   included) is 1, but the overall line is 0 - the same overall 0 as upstream
   c663312 built from its own sources in this environment.
+
+## Fixes from the first play test (2026-11-25)
+
+Field log: Switch 2, GC573 P010 4K60 HDR-PQ, 20 minutes with a build from before
+these fixes, list mode with a DLAA card on. Two findings, three causes:
+
+1. No verdict while DLAA is on. The probe was copied to the readback of the ring
+   slot current at that point, but collected only for the slot a frame starts
+   with. Optical flow (DLAA here; also NR and frame generation with flow) submits
+   mid-frame and takes another slot, so the probe was collected only when the
+   shared slot cursor happened to change parity: 76 s without a verdict with
+   DLAA, 1.4 s without it. Now collected by fence.
+2. DLAA ahead of SR also weakens what is measured (still clip, fixed
+   collection, DLAA ahead of / behind SR: 1080p knee x3.4 / x5.4, 1440p x4.5 /
+   x21.4) and the descale is no longer the exact inverse. Anti-aliasing runs
+   behind SR now.
+3. A false 2048x1152 (knee x992.6, notch x1.1) on a 3 s almost flat screen between
+   two cuts, held for 3 min 26 s (cause 1 fits: no later verdict was logged). Cutting
+   the inverse at 28 taps left every row with a sum off one by a different amount
+   per scale ratio (7e-3 at 576, 5e-4 at 1080, 3e-5 at 1152); on an almost flat
+   picture that gain error was all there was to measure. A float32 replay of the
+   probe gives knee x991-994, notch x1.1. Now: each tap row sums to one, an
+   almost flat picture is no evidence, and a knee alone is not enough (notch x2
+   wherever the next height up was measured; every true detection so far has
+   x2.1 or more).
+
+Checks: offline replay (float32, 28 taps), 22 heights x 2 pictures x 8/10 bit:
+same detections as before (540 has no lower candidate and is not found, as
+before); 126 almost flat pictures (6 levels, 8 / 10 bit and float, ramps and
+glows): 66 false heights before, 0 now; Switch 2 SDR and HDR captures unchanged.
+App, 4K60 H.264 clip 1080p game / almost flat / native / 1440p / almost flat:
+with DLAA on no verdict in 31 s before, now `render 1920x1080 (knee x5.4 notch
+x3.5)` after 2 s and `render 2560x1440 (knee x21.4 notch x14.3)`, the same as with
+DLAA off and with DLAA + frame generation. 10-bit HEVC clip: before `render
+2048x1152 (knee x67.9 notch x0.9)` on the almost flat part, now none. DLAA +
+smart SR keeps 60.0 fps without skips (RTX 5070 Ti, SDR file; processing 9.7 ms at
+1080p and 13.0 ms at 1440p, against 4.9 / 8.3 ms without DLAA). Unit tests: effect
+chain 556 PASS / 0 FAIL, preset library 674 / 0, repair presets exit 0, ui i18n 0
+failures, QML quick 256 passed / 0 failed / 1 skipped.
+
+Second play test with these fixes (2026-11-26, Switch 2, GC573 P010 4K60 HDR-PQ,
+RTX 5070 Ti, SR quality 4, list mode, about 10 minutes of log): 14 settled verdicts,
+all 1920x1080, 2560x1440 or pass-through (knee x13.4 to x26.9, notch x7.9 to x15.7
+for the render extents); in 960 probes (33 almost flat) no other height settled;
+1080p <-> 1440p followed in both directions. Pass-through for the first 100 s (knee
+x1.8 to x2.4, no upscale found), and the NR switch, an anti-aliasing switch and a
+stage ahead of SR (`not running` logged) each rebuilt as designed. GPU ready P95 per
+second:
+
+| Setup | GPU ready P95 | SR / flow P95 | Rate |
+|---|---|---|---|
+| 1080p, no DLAA | 7.8 ms | 7.3 / - | 60 fps |
+| 1080p + DLAA | 11.2 ms | 6.1 / 3.8 | 60 fps |
+| 1440p + DLAA | 16.2 ms (54 s) | 10.3 / 3.8 | 60 fps, no drops |
+| 1440p + DLAA, other scene | up to 18.1 ms (45 s) | 12.2 / 3.9 | 57-58 fps for the last 20 s, 50 frames dropped |
+
+So 1440p -> 4K HDR with DLAA sits at the 16.7 ms limit on this card. Not checked:
+the text of the blocked status on screen (unit tests and the log line only).
 
 The sections below record the work on the 2.1.1 base (feature/smart-sr), where
 `VEYRA_TEST_SMART_SR_HEIGHT` was the test switch.

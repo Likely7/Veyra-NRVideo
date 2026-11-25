@@ -79,13 +79,23 @@ inline SmartSrAxis smartSrInverseAxis(uint32_t high,uint32_t low){
             c[i]=i+1<low?off[i]/b:0.0;d[i]=rhs/b;
         }
         for(uint32_t i=low;i-->0;)z[i]=d[i]-(i+1<low?c[i]*z[i+1]:0.0);
-        std::array<float,kSmartSrTaps> taps{};
+        std::array<double,kSmartSrTaps> row28{};
+        double sum=0.0;uint32_t inside=0;
         const int base=int(smartSrCentre(row,axis.p,axis.q))-kSmartSrTapOrigin;
         for(uint32_t t=0;t<kSmartSrTaps;++t){
             const int j=base+int(t);
             if(j<0||j>=int(high))continue;
             int i0,i1;double w0,w1;smartSrBilinear(uint32_t(j),high,low,i0,w0,i1,w1);
-            taps[t]=float(w0*z[i0]+w1*z[i1]);
+            row28[t]=w0*z[i0]+w1*z[i1];sum+=row28[t];++inside;
+        }
+        // Cutting the inverse at 28 taps loses a little of its sum, a different amount per
+        // scale ratio (7e-3 at 576, 5e-4 at 1080, 3e-5 at 1152). On an almost flat picture that
+        // gain error was all the probes measured and looked like a render height (live
+        // 2026-11-24: 1152, knee x992.6, notch x1.1). Every row sums to exactly one.
+        std::array<float,kSmartSrTaps> taps{};
+        for(uint32_t t=0;t<kSmartSrTaps;++t){
+            const int j=base+int(t);
+            if(j>=0&&j<int(high))taps[t]=float(row28[t]+(1.0-sum)/double(inside));
         }
         axis.taps.push_back(taps);
     }
@@ -105,7 +115,14 @@ inline constexpr std::array<uint32_t,22> kSmartSrCandidates{540,576,648,720,810,
 inline constexpr uint32_t kSmartSrProbeRows=96;
 inline constexpr uint32_t kSmartSrProbeInterval=30;  // frames between probes
 inline constexpr uint32_t kSmartSrProbeStreak=3;     // equal verdicts before the render extent changes
-struct SmartSrVerdict { uint32_t height=0; double knee=1.0,notch=1.0; bool spatial=false; };
+inline constexpr uint32_t kSmartSrOffStreak=6;       // verdicts without one before a render extent is dropped
+inline constexpr uint32_t kSmartSrReportProbes=40;   // one summary line per this many probes
+// Probed rows that vary less than this (standard deviation of the coded luma: two
+// 8-bit steps) hold only quantisation and rounding noise: no evidence either way.
+inline constexpr double kSmartSrMinDeviation=0.008;
+// fit: where the error curve rises most, with or without the start rules below;
+// height: the same once the rise is a knee.
+struct SmartSrVerdict { uint32_t height=0; double knee=1.0,notch=1.0; bool spatial=false; uint32_t fit=0; };
 // errors[c]: residual of candidate c over the probed rows' energy; NaN where c
 // was not measured (not a reduction of this source).
 inline SmartSrVerdict smartSrDecide(const std::array<double,kSmartSrCandidates.size()>& errors){
@@ -117,25 +134,32 @@ inline SmartSrVerdict smartSrDecide(const std::array<double,kSmartSrCandidates.s
         if(rise>best){best=rise;at=i;}
     }
     if(at==n)return v;
-    v.knee=std::pow(10.0,best);
+    v.knee=std::pow(10.0,best);v.fit=kSmartSrCandidates[at+1];
+    const bool next=at+2<n&&std::isfinite(errors[at+2]);
+    v.notch=next?std::max(errors[at+2],1e-7)/std::max(errors[at+1],1e-7):1.0;
     if(v.knee<3.0)return v;
-    v.height=kSmartSrCandidates[at+1];
-    v.notch=at+2<n&&std::isfinite(errors[at+2])?errors[at+2]/std::max(errors[at+1],1e-9):1.0;
-    v.spatial=v.knee>=20.0||v.notch>=2.0;
+    v.height=v.fit;
+    // An upscale fits its own height better than the next one up; a smooth picture fits
+    // everything above some height alike, however large the knee. Every true detection so
+    // far has notch x2.1 or more. Only where no height above was measured the knee decides.
+    v.spatial=next?v.notch>=2.0:v.knee>=20.0;
     return v;
 }
-// The render height a probe votes for, given the height in use (0: none);
-// -1: no evidence, the streak is left alone. Live Switch 2 HDR (2026-11-22): a
-// dimmed, almost black picture has no knee (x2.8-3.1, still the best fit at the
-// height in use) and flipped smart SR on and off every few seconds. So with a
-// height in use, a verdict without a knee that is not clearly smooth keeps it,
-// and a fit at that same height counts for it even below the start rules.
-// Native frames are smooth (knee about x1.6) and still turn it off.
+// The render height a probe votes for, given the height in use (0: none). Live
+// Switch 2 HDR (2026-11-22): a dimmed, almost black picture has a weak knee
+// (x2.8-3.1) and flipped smart SR on and off every few seconds, so a fit at the
+// height in use counts for it below the start rules. A weak fit anywhere else is
+// no support for it: kept as such it held a wrong 1152 for minutes (2026-11-24).
+// Native frames are smooth (knee about x1.6) and turn it off.
 inline constexpr double kSmartSrKeepKnee=2.0;
-inline int64_t smartSrVote(const SmartSrVerdict& v,uint32_t current){
-    if(current&&v.height==current)return current;
-    if(current&&!v.height&&v.knee>=kSmartSrKeepKnee)return -1;
-    return v.spatial?int64_t(v.height):0;
+inline uint32_t smartSrVote(const SmartSrVerdict& v,uint32_t current){
+    if(current&&v.fit==current&&v.knee>=kSmartSrKeepKnee)return current;
+    return v.spatial?v.height:0;
+}
+// Equal votes needed to act: dropping the height in use for none takes longer
+// than finding one, so a few unclear frames do not switch it off.
+inline uint32_t smartSrVotesNeeded(uint32_t vote,uint32_t current){
+    return !vote&&current?kSmartSrOffStreak:kSmartSrProbeStreak;
 }
 // Source row probed for row r (both probe shaders use the same formula).
 inline uint32_t smartSrProbeRow(uint32_t r,uint32_t height){
