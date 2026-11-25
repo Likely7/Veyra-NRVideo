@@ -466,12 +466,16 @@ bool QmlPlayerBridge::ps5Connect() {
         i.engine.openRemotePlay(i.videoWindow, std::move(*request), i.options);
         i.openingSessionId = i.engine.snapshot().sessionId;
         refreshSubtitles({});
-        // Controller forwarding at 8 ms, as 1.4.4; view-only leaves the pad to the PS5.
+        // Controller forwarding at 4 ms with a precise timer, matching Xbox and
+        // Moonlight. poll() keeps the latest sticks and buttons and queues the
+        // motion samples from this interval; the session still sends one state
+        // per 4 ms. View-only leaves the pad to the PS5.
         // Started with the session: the poll stops the pad when no session runs.
         if (!viewOnly) {
             if (!i.acquirePad(Impl::PadPs5)) veyra::log::warn("remoteplay-input", "SDL gamepad initialization failed");
             if (!i.controllerTimer) {
                 i.controllerTimer = new QTimer(this);
+                i.controllerTimer->setTimerType(Qt::PreciseTimer);
                 connect(i.controllerTimer, &QTimer::timeout, this, [this] {
                     auto& j = *impl_;
                     const auto s = j.engine.snapshot();
@@ -484,7 +488,7 @@ bool QmlPlayerBridge::ps5Connect() {
                     }
                 });
             }
-            i.controllerTimer->start(8);
+            i.controllerTimer->start(4);
         } else {
             if (i.controllerTimer) i.controllerTimer->stop();
             i.releasePad(Impl::PadPs5);
@@ -687,7 +691,7 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
     const auto running = i.engine.remoteControlStatus();
     if (!restart && running.requested && (running.alive || running.starting) && profile == i.ps5ControlProfile) {
         if (!(i.padUsers & Impl::PadPs5Control)) i.acquirePad(Impl::PadPs5Control);
-        if (i.ps5ControlTimer && !i.ps5ControlTimer->isActive()) i.ps5ControlTimer->start(8);
+        if (i.ps5ControlTimer && !i.ps5ControlTimer->isActive()) i.ps5ControlTimer->start(4);
         return;
     }
     // Keepalive profile, the lightest the console accepts. Never written back to the pairing.
@@ -699,11 +703,13 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
     i.ps5ControlNoticed.clear();
     i.ps5ControlNoPair = false;
     i.engine.startRemoteControl(std::move(desc));
-    // The pad is read on the UI thread every 8 ms, as for the PS5 stream (the
-    // session sends one state per 4 ms and queues the rest).
+    // The pad is read on the UI thread every 4 ms, as for the PS5 stream. The
+    // session still sends one state per 4 ms; motion samples queued by one poll
+    // stay queued and are merged with the next poll when the edges match.
     if (!i.acquirePad(Impl::PadPs5Control)) veyra::log::warn("remoteplay-input", "SDL gamepad initialization failed");
     if (!i.ps5ControlTimer) {
         i.ps5ControlTimer = new QTimer(this);
+        i.ps5ControlTimer->setTimerType(Qt::PreciseTimer);
         connect(i.ps5ControlTimer, &QTimer::timeout, this, [this] {
             auto& j = *impl_;
             // A PS5 stream polls the pad with its own timer and takes the slot.
@@ -715,7 +721,7 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
             j.controller.feedback(j.engine.remotePlayFeedback(), focused);
         });
     }
-    i.ps5ControlTimer->start(8);
+    i.ps5ControlTimer->start(4);
     tickPs5Control(true);
 #else
     (void)restart;
