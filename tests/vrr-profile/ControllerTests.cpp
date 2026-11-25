@@ -38,6 +38,9 @@ struct HeldFile {
 
 // No production driver adapter is linked into this test executable.
 namespace veyra::gfx {
+std::string nvidiaVsyncProfileDiagnostic(const std::wstring&) {
+    return "Mock driver profile diagnostic";
+}
 VrrProfileResult inspectVrrProfile(const std::wstring& executable) {
     const std::lock_guard lock(driver.mutex);
     ++driver.inspections; driver.state.executable = executable;

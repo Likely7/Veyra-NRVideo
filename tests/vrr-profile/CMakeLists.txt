@@ -22,7 +22,7 @@ set_target_properties(vrr_policy_tests PROPERTIES AUTOMOC OFF)
 vrr_check_target(vrr_policy_tests)
 add_test(NAME vrr_policy COMMAND vrr_policy_tests)
 
-# Link-time fakes replace only the three driver entry points. This exercises
+# Link-time fakes replace the driver entry points. This exercises
 # the production controller's JSON, locking and async state without a GPU or
 # access to the runner's real driver profiles.
 add_executable(vrr_controller_tests ControllerTests.cpp LogStub.cpp
