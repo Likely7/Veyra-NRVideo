@@ -1539,6 +1539,49 @@ __declspec(noinline) void testAutomaticMultiplierCompatibility() {
     entry.chain=session->configurations[1].chain;entry.nodeConfiguration=session->configurations[1];
     check(library.put(entry),"auto FG: preset with editor v17 serializes");
 }
+__declspec(noinline) void testFrameGenerationOffPreset() {
+    auto on = sample();
+    auto chain = toChain(on);
+    auto settings = on;
+    check(chain.firstOf(EffectType::FrameGeneration) && chain.firstOf(EffectType::FrameGeneration)->enabled,
+          "FG off preset: fixture starts with frame generation on");
+    auto off = on;
+    off.multiplier = 1;
+    PresetEntry entry;
+    entry.name = L"FG off";
+    entry.kind = ChainMode::List;
+    entry.contents = presetContentMask(PresetContent::Chain);
+    entry.chain = toChain(off);
+    entry.fg = {1, on.frameGenerationBackend};
+    entry.color = off.color;
+    const auto applied = PresetLibrary::applyToChain(entry, chain, settings);
+    const auto* node = chain.firstOf(EffectType::FrameGeneration);
+    check(applied.accepted && node && !node->enabled && settings.multiplier == 1,
+          "a chain saved with frame generation off stays off after an FG preset");
+    check(PresetLibrary::matchesChain(entry.chain, chain),
+          "the off preset matches the chain it applied, so the selection can move");
+
+    chain = toChain(on);
+    settings = on;
+    entry.contents = presetContentMask(PresetContent::Chain) | presetContentMask(PresetContent::FrameGeneration);
+    entry.fg.multiplier = 1;
+    const auto explicitOff = PresetLibrary::applyToChain(entry, chain, settings);
+    node = chain.firstOf(EffectType::FrameGeneration);
+    check(explicitOff.accepted && node && !node->enabled && settings.multiplier == 1,
+          "frame-generation content of multiplier 1 disables FG");
+
+    chain = toChain(off);
+    settings = off;
+    PresetEntry twice;
+    twice.kind = ChainMode::List;
+    twice.contents = presetContentMask(PresetContent::FrameGeneration);
+    twice.fg = {2, on.frameGenerationBackend};
+    twice.chain = toChain(on);
+    const auto backOn = PresetLibrary::applyToChain(twice, chain, settings);
+    node = chain.firstOf(EffectType::FrameGeneration);
+    check(backOn.accepted && node && node->enabled && settings.multiplier == 2 && chain.fgMultiplier == 2,
+          "an FG multiplier above 1 still turns frame generation on");
+}
 __declspec(noinline) void testDisabledFrameGenerationMatch() {
     EnhancementSettings off;
     auto saved=toChain(off);
@@ -1613,6 +1656,7 @@ __declspec(noinline) void testVideoDenoiseStorage() {
 
 int main(int argc,char** argv) {
     testVideoDenoiseStorage();
+    testFrameGenerationOffPreset();
     testDisabledFrameGenerationMatch();
     if(argc==2&&std::string_view(argv[1])=="--dedup-migration"){
         testDedupModeMigration();testHalfRateVariants();testFlowStorage();testFlowApplication();return failures?1:0;

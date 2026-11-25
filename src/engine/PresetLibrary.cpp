@@ -566,15 +566,24 @@ ChainValidation PresetLibrary::applyToChain(const PresetEntry& entry, EffectChai
         next = arranged;
     }
     if (hasChain || hasFg) {
-        if (!hasFg) next.fgMultiplier = chain.fgMultiplier;
         auto* fg = next.firstOf(EffectType::FrameGeneration);
-        if (!fg && nextSettings.multiplier > 1) {
-            if (next.nodeCount == kMaxChainNodes) return {false, "合并后无法添加补帧节点"};
-            fg = &next.nodes[next.nodeCount++];
-            *fg = {}; fg->type = EffectType::FrameGeneration;
+        if (hasFg) {
+            if (!fg && nextSettings.multiplier > 1) {
+                if (next.nodeCount == kMaxChainNodes) return {false, "合并后无法添加补帧节点"};
+                fg = &next.nodes[next.nodeCount++];
+                *fg = {}; fg->type = EffectType::FrameGeneration;
+            }
+            if (fg) fg->enabled = nextSettings.multiplier > 1;
+            if (nextSettings.multiplier > 1) next.fgMultiplier = nextSettings.multiplier;
+        } else {
+            // The save dialog leaves the FG section unchecked when it is Off, so
+            // the chain itself is what records that. Do not turn that node back
+            // on from the preset that is currently applied. An enabled saved
+            // node still follows the live multiplier, so a chain-only preset
+            // does not switch 4X to 2X.
+            if (!fg || fg->enabled) next.fgMultiplier = chain.fgMultiplier;
+            if (fg && fg->enabled) fg->enabled = nextSettings.multiplier > 1;
         }
-        if (fg) fg->enabled = nextSettings.multiplier > 1;
-        if (nextSettings.multiplier > 1) next.fgMultiplier = nextSettings.multiplier;
     }
     if (const auto v = validateChain(next); !v.accepted) return v;
     if (hasChain || hasColor) fromChain(next, nextSettings);
@@ -619,12 +628,17 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
             }
         }
         if (!(entry.contents & presetContentMask(PresetContent::FrameGeneration))) {
-            PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
-            keep.contents = presetContentMask(PresetContent::FrameGeneration);
-            const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
-            keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
-            if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
-            nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
+            const auto* savedFg = nodes.firstOf(EffectType::FrameGeneration);
+            // A snapshot that already turned the node off is the Off preset.
+            // Putting the live multiplier back would enable it again.
+            if (!savedFg || savedFg->enabled) {
+                PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
+                keep.contents = presetContentMask(PresetContent::FrameGeneration);
+                const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
+                keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
+                if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
+                nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
+            }
         }
         if (entry.contents & presetContentMask(PresetContent::Audio)) {
             values.audioSync = entry.audioSync; values.audioOffsetMs = entry.audioOffsetMs;
