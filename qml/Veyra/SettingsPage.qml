@@ -1471,18 +1471,20 @@ VPage {
                             }
                         }
                         VRow {
-                            visible: root.portableUpdate.available || root.portableUpdate.downloading || root.portableUpdate.scheduled
-                            label: root.portableUpdate.scheduled ? qsTr("更新已就绪，将在退出后安装")
-                                  : root.portableUpdate.downloading ? qsTr("正在下载更新 %1%").arg(root.portableUpdate.progress)
-                                  : qsTr("便携版更新 · %1").arg(root.portableUpdate.sizeText)
-                            hint: root.portableUpdate.available ? root.portableUpdate.releaseNotes : ""
-                            hintBelow: true
+                            visible: root.portableUpdate.available || root.portableUpdate.downloading
+                                     || root.portableUpdate.installing || root.portableUpdate.ready
+                            label: qsTr("软件更新 · %1").arg(root.portableUpdate.targetVersion)
+                            hint: root.portableUpdate.available ? root.portableUpdate.sizeText : ""
                             VButton {
                                 objectName: "portable-download"
-                                text: root.portableUpdate.available ? qsTr("下载并在退出后更新") : qsTr("取消更新")
+                                primary: true
+                                enabled: !root.portableUpdate.restarting
+                                text: root.portableUpdate.ready ? qsTr("重启完成更新")
+                                      : root.portableUpdate.available ? qsTr("立即更新")
+                                      : qsTr("查看更新进度")
                                 onClicked: {
-                                    if (root.portableUpdate.available) root.portableUpdate.downloadAndSchedule()
-                                    else root.portableUpdate.cancel()
+                                    root.requestPage("update")
+                                    if (root.portableUpdate.available) root.portableUpdate.start()
                                 }
                             }
                         }

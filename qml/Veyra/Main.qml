@@ -333,7 +333,7 @@ Window {
             home: pages
             fullscreenBackground: ultrawideBackground
             onRequestPage: p => {
-                if (p === "translation") dialogs.open(p)
+                if (p === "translation" || p === "update") dialogs.open(p)
                 else root.goPage(p)
             }
         }
@@ -1109,7 +1109,15 @@ Window {
         root.x = a.x + Math.round((a.width - root.width) / 2)
         root.y = a.y + Math.round((a.height - root.height) / 2)
     }
-    onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
+    onClosing: function(event) {
+        if (veyra.updates.portable.installing) {
+            event.accepted = false
+            dialogs.open("update")
+            return
+        }
+        if (!root.fullscreen && !root.maximized && !root.cinema)
+            veyra.rememberWindowSize(root.width, root.height)
+    }
     // 日落 startup intro (DuskIntro.qml, 2026-11-15): on a plain start to the home page in the
     // dusk palette, unless 设置 → 外观 → 启动动画 is off, animations are reduced or a test
     // switch is set. Its clock starts with the first frame on screen; a page change (a file

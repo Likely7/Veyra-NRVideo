@@ -1108,7 +1108,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     // explicit handler is to close it and exit on the last window, which does run
     // teardown; this makes it explicit so a harness can also ask for a clean exit
     // with --exit-after and get the same, complete log either way.
-    QObject::connect(window, &QQuickWindow::closing, &app, [](QQuickCloseEvent*) {
+    QObject::connect(updater, &ui::PortableUpdate::restartRequested, &app, [&] {
+        if (bridge.exportRunning()) return;
+        QStringList launcherArguments;
+        if (explicitDataDirectory)
+            launcherArguments << QStringLiteral("--data-dir") << QDir::current().absoluteFilePath(
+                QString::fromStdWString(dataDirectory.wstring()));
+#ifdef VEYRA_PORTABLE_UPDATE_TEST
+        if (qEnvironmentVariableIsSet("VEYRA_PORTABLE_UPDATE_SMOKE"))
+            launcherArguments << QStringLiteral("--exit-after") << QStringLiteral("1700");
+#endif
+        if (updater->beginRestart(launcherArguments)) window->close();
+    });
+    QObject::connect(window, &QQuickWindow::closing, &app, [updater](QQuickCloseEvent*) {
+        if (updater->installing()) return;
         veyra::log::info("qml", "closing: quitting the application loop");
         // Flush before quitting: the file sink is a 64 KB _IOFBF buffer, so a run
         // that ends without this loses its last lines (the exact ones a headless
@@ -1127,15 +1140,24 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         });
     }
 #ifdef VEYRA_PORTABLE_UPDATE_TEST
-    if (!updateProbe && qEnvironmentVariableIsSet("VEYRA_PORTABLE_UPDATE_SMOKE")) {
-        QObject::connect(updater, &ui::PortableUpdate::changed, window, [window, updater, attempted = false]() mutable {
-            if (updater->available() && !attempted) {
+    const auto smoke = qgetenv("VEYRA_PORTABLE_UPDATE_SMOKE");
+    if (!updateProbe && !smoke.isEmpty()) {
+        QObject::connect(updater, &ui::PortableUpdate::changed, window,
+                         [window, updater, attempted = false, closing = false]() mutable {
+            if (!updater->errorText().isEmpty() && !closing) {
+                closing = true;
+                QTimer::singleShot(1000, window, &QWindow::close);
+            } else if (updater->available() && !attempted && !closing) {
                 attempted = true;
-                updater->downloadAndSchedule();
-            } else if (updater->scheduled()) {
-                QTimer::singleShot(200, window, &QWindow::close);
+                updater->start();
             }
         });
+        QObject::connect(updater, &ui::PortableUpdate::installationReady, window, [window, updater, smoke] {
+            if (smoke == "later") QTimer::singleShot(250, window, &QWindow::close);
+            else QTimer::singleShot(250, updater, &ui::PortableUpdate::restart);
+        });
+        if (smoke == "resume" && updater->ready())
+            QTimer::singleShot(250, updater, &ui::PortableUpdate::restart);
         QTimer::singleShot(100000, window, &QWindow::close);
     }
 #endif
@@ -1343,7 +1365,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const int rc = app.exec();
     profileInstance.stopListening();
     if (updateProbe) veyra::log::info("portable-update-probe", "QML startup completed");
-    if (rc == 0 && updater->scheduled() && !bridge.exportRunning()) {
+    if (rc == 0 && updater->restarting() && !bridge.exportRunning()) {
         if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
         return portable::applyExitCode;
     }

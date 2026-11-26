@@ -1,6 +1,19 @@
 {
  "entries": [
   {
+   "zh": "\n\n日志文件 / Log file:\n",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "",
+   "en": "",
+   "ja": "",
+   "ko": "",
+   "es": "",
+   "fr": "",
+   "de": "",
+   "pt-BR": "",
+   "ru": ""
+  },
+  {
    "zh": "\n仅观看：电脑输入已关闭，手柄由 PS5 处理。",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "\n僅觀看：電腦輸入已關閉，手把由 PS5 處理。",
@@ -6423,19 +6436,6 @@
    "ru": "Скачать и включить"
   },
   {
-   "zh": "下载并在退出后更新",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "下載並在結束後更新",
-   "en": "Download and update on exit",
-   "ja": "ダウンロードして終了時に更新",
-   "ko": "다운로드 후 종료 시 업데이트",
-   "es": "Descargar e instalar al salir",
-   "fr": "Télécharger et installer à la fermeture",
-   "de": "Herunterladen und beim Beenden installieren",
-   "pt-BR": "Baixar e instalar ao sair",
-   "ru": "Скачать и установить при выходе"
-  },
-  {
    "zh": "下载文件校验失败，请重新下载",
    "src": "src/ui/TranslationAssets.cpp",
    "zh-TW": "下載檔案驗證失敗，請重新下載",
@@ -7710,6 +7710,19 @@
    "ru": "По пути программы находится файл неподходящего типа. Восстановите Veyra официальным установщиком."
   },
   {
+   "zh": "主窗口创建失败，请检查日志并修复安装。",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "",
+   "en": "",
+   "ja": "",
+   "ko": "",
+   "es": "",
+   "fr": "",
+   "de": "",
+   "pt-BR": "",
+   "ru": ""
+  },
+  {
    "zh": "举个例子。游戏原帧是 `ABCDEFG`，采到的可能是 `AABBCCDDEEFFGG`。相同的两张图之间补不出新的运动。在「补帧」里选 **60→30** 或 **自动去除**，让补帧从 `A→B→C` 这样的不同画面开始。锁 30 帧可先试 60→30，帧率经常变化就对照自动去除和实际内容帧率。",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "舉個例子。遊戲原幀是 `ABCDEFG`，擷取到的可能是 `AABBCCDDEEFFGG`。相同畫面之間沒有新的動作可以補。在「補幀」裡選 **60→30** 或 **自動去除**，讓補幀從 `A→B→C` 這樣不同的畫面開始。鎖 30 幀可先試 60→30，幀率常變就對照自動去除和實際內容幀率。",
@@ -8436,19 +8449,6 @@
    "de": "z. B. Abends zocken",
    "pt-BR": "ex.: Jogo à noite",
    "ru": "напр. Вечерняя игра"
-  },
-  {
-   "zh": "便携版更新 · %1",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "可攜版更新 · %1",
-   "en": "Portable update · %1",
-   "ja": "ポータブル版の更新 · %1",
-   "ko": "포터블 업데이트 · %1",
-   "es": "Actualización portátil · %1",
-   "fr": "Mise à jour de la version portable · %1",
-   "de": "Update für die portable Version · %1",
-   "pt-BR": "Atualização da versão portátil · %1",
-   "ru": "Обновление портативной версии · %1"
   },
   {
    "zh": "保存",
@@ -12116,19 +12116,6 @@
    "de": "Abbrechen",
    "pt-BR": "Cancelar",
    "ru": "Отмена"
-  },
-  {
-   "zh": "取消更新",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "取消更新",
-   "en": "Cancel update",
-   "ja": "更新をキャンセル",
-   "ko": "업데이트 취소",
-   "es": "Cancelar actualización",
-   "fr": "Annuler la mise à jour",
-   "de": "Update abbrechen",
-   "pt-BR": "Cancelar atualização",
-   "ru": "Отменить обновление"
   },
   {
    "zh": "变化容差",
@@ -16146,6 +16133,19 @@
    "de": "Export abgeschlossen",
    "pt-BR": "Exportação concluída",
    "ru": "Экспорт завершён"
+  },
+  {
+   "zh": "导出完成后可重启",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "匯出完成後可重新啟動",
+   "en": "Restart when the export finishes",
+   "ja": "書き出し完了後に再起動できます",
+   "ko": "내보내기가 끝나면 다시 시작할 수 있습니다",
+   "es": "Reinicia cuando termine la exportación",
+   "fr": "Redémarrez une fois l’export terminé",
+   "de": "Nach dem Export ist ein Neustart möglich",
+   "pt-BR": "Reinicie quando a exportação terminar",
+   "ru": "Перезапуск доступен после завершения экспорта"
   },
   {
    "zh": "导出封装或轨道设置无效",
@@ -23026,6 +23026,19 @@
    "ru": "Новый профиль"
   },
   {
+   "zh": "新版已安装，重启 Veyra 后生效。",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "新版已安裝，重新啟動 Veyra 後生效。",
+   "en": "The update is installed. Restart Veyra to use the new version.",
+   "ja": "新版のインストールが完了しました。Veyra を再起動すると有効になります。",
+   "ko": "업데이트가 설치되었습니다. 새 버전을 사용하려면 Veyra를 다시 시작하세요.",
+   "es": "La actualización está instalada. Reinicia Veyra para usar la nueva versión.",
+   "fr": "La mise à jour est installée. Redémarrez Veyra pour utiliser la nouvelle version.",
+   "de": "Das Update ist installiert. Starten Sie Veyra neu, um die neue Version zu verwenden.",
+   "pt-BR": "A atualização foi instalada. Reinicie o Veyra para usar a nova versão.",
+   "ru": "Обновление установлено. Перезапустите Veyra, чтобы использовать новую версию."
+  },
+  {
    "zh": "新预设名称",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "新預設名稱",
@@ -23702,6 +23715,19 @@
    "ru": "Не удалось запустить локальный переводчик"
   },
   {
+   "zh": "无法启动根目录的 Veyra.exe，可能已被删除或被安全软件拦截。\n请检查 Windows 安全中心的保护历史记录，或使用官方安装包修复。\n\nCould not start Veyra.exe. It may be missing or blocked by security software. Check Protection history or repair with the official installer.\n\n",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "",
+   "en": "",
+   "ja": "",
+   "ko": "",
+   "es": "",
+   "fr": "",
+   "de": "",
+   "pt-BR": "",
+   "ru": ""
+  },
+  {
    "zh": "无法启动画面文字识别",
    "src": "src/engine/ScreenTextCapture.cpp",
    "zh-TW": "無法啟動畫面文字辨識",
@@ -24194,6 +24220,19 @@
    "de": "Konnte keine Verbindung zum Server herstellen, oder die Adresse ist nicht verfügbar. Überprüfen Sie das Netzwerk.",
    "pt-BR": "Não foi possível conectar ao servidor, ou o endereço não está disponível. Verifica a rede.",
    "ru": "Невозможно подключиться к серверу, или адрес недоступен. Проверьте сеть."
+  },
+  {
+   "zh": "无法重启 Veyra，请重试",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "無法重新啟動 Veyra，請再試一次",
+   "en": "Could not restart Veyra. Please try again.",
+   "ja": "Veyra を再起動できませんでした。もう一度お試しください。",
+   "ko": "Veyra를 다시 시작할 수 없습니다. 다시 시도하세요.",
+   "es": "No se pudo reiniciar Veyra. Inténtalo de nuevo.",
+   "fr": "Impossible de redémarrer Veyra. Réessayez.",
+   "de": "Veyra konnte nicht neu gestartet werden. Versuchen Sie es erneut.",
+   "pt-BR": "Não foi possível reiniciar o Veyra. Tente novamente.",
+   "ru": "Не удалось перезапустить Veyra. Повторите попытку."
   },
   {
    "zh": "无陀螺仪",
@@ -25314,17 +25353,17 @@
    "ru": "Не удалось скачать или проверить обновление. Повторите попытку."
   },
   {
-   "zh": "更新已就绪，将在退出后安装",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "更新已準備就緒，將在結束後安裝",
-   "en": "Update ready. It will be installed after exit.",
-   "ja": "更新の準備が完了しました。終了後にインストールします。",
-   "ko": "업데이트 준비가 완료되었습니다. 종료 후 설치합니다.",
-   "es": "La actualización está lista y se instalará al salir",
-   "fr": "La mise à jour est prête et sera installée à la fermeture",
-   "de": "Das Update ist bereit und wird beim Beenden installiert",
-   "pt-BR": "Atualização pronta para instalação ao sair",
-   "ru": "Обновление готово и будет установлено при выходе"
+   "zh": "更新安装失败，请重试",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "更新安裝失敗，請再試一次",
+   "en": "Could not install the update. Please try again.",
+   "ja": "更新をインストールできませんでした。もう一度お試しください。",
+   "ko": "업데이트를 설치할 수 없습니다. 다시 시도하세요.",
+   "es": "No se pudo instalar la actualización. Inténtalo de nuevo.",
+   "fr": "Impossible d’installer la mise à jour. Réessayez.",
+   "de": "Das Update konnte nicht installiert werden. Versuchen Sie es erneut.",
+   "pt-BR": "Não foi possível instalar a atualização. Tente novamente.",
+   "ru": "Не удалось установить обновление. Повторите попытку."
   },
   {
    "zh": "更新未完成，已打开可用版本",
@@ -26549,6 +26588,19 @@
    "ru": "Посмотреть обновление"
   },
   {
+   "zh": "查看更新进度",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "查看更新進度",
+   "en": "View update progress",
+   "ja": "更新の進行状況",
+   "ko": "업데이트 진행 상황 보기",
+   "es": "Ver progreso",
+   "fr": "Voir la progression",
+   "de": "Updatefortschritt anzeigen",
+   "pt-BR": "Ver progresso",
+   "ru": "Ход обновления"
+  },
+  {
    "zh": "标准",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "標準",
@@ -26586,6 +26638,19 @@
    "de": "Wird kalibriert…",
    "pt-BR": "Calibrando…",
    "ru": "Калибровка…"
+  },
+  {
+   "zh": "校验更新包",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "驗證更新套件",
+   "en": "Verifying the update package",
+   "ja": "更新パッケージを検証中",
+   "ko": "업데이트 패키지 확인 중",
+   "es": "Verificando el paquete",
+   "fr": "Vérification du paquet",
+   "de": "Updatepaket wird geprüft",
+   "pt-BR": "Verificando o pacote",
+   "ru": "Проверка пакета обновления"
   },
   {
    "zh": "样式",
@@ -26703,6 +26768,19 @@
    "de": "Wird geprüft…",
    "pt-BR": "Verificando…",
    "ru": "Проверка…"
+  },
+  {
+   "zh": "检查安装文件",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "檢查安裝檔案",
+   "en": "Checking installed files",
+   "ja": "インストールファイルを確認中",
+   "ko": "설치 파일 확인 중",
+   "es": "Comprobando los archivos",
+   "fr": "Vérification des fichiers",
+   "de": "Installationsdateien werden geprüft",
+   "pt-BR": "Verificando os arquivos",
+   "ru": "Проверка файлов установки"
   },
   {
    "zh": "检查并选择",
@@ -27147,8 +27225,21 @@
    "ru": "Положительные значения задерживают звук"
   },
   {
+   "zh": "正在下载更新",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "正在下載更新",
+   "en": "Downloading update",
+   "ja": "更新をダウンロード中",
+   "ko": "업데이트 다운로드 중",
+   "es": "Descargando actualización",
+   "fr": "Téléchargement de la mise à jour",
+   "de": "Update wird heruntergeladen",
+   "pt-BR": "Baixando atualização",
+   "ru": "Загрузка обновления"
+  },
+  {
    "zh": "正在下载更新 %1%",
-   "src": "qml/SettingsPage.qml",
+   "src": "qml/UpdateDialog.qml",
    "zh-TW": "正在下載更新 %1%",
    "en": "Downloading update · %1%",
    "ja": "更新をダウンロード中 · %1%",
@@ -27483,6 +27574,19 @@
    "de": "Das Setup der Kamerakomponenten läuft bereits.",
    "pt-BR": "A configuração do componente da câmara já está em execução. Espere por favor.",
    "ru": "Настройка компонентов камеры уже запущена."
+  },
+  {
+   "zh": "正在安装更新",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "正在安裝更新",
+   "en": "Installing update",
+   "ja": "更新をインストール中",
+   "ko": "업데이트 설치 중",
+   "es": "Instalando actualización",
+   "fr": "Installation de la mise à jour",
+   "de": "Update wird installiert",
+   "pt-BR": "Instalando atualização",
+   "ru": "Установка обновления"
   },
   {
    "zh": "正在导出：{}张源帧 / {}张编码帧（{}）",
@@ -28096,6 +28200,19 @@
    "ru": "Отказ от игры на хозяине..."
   },
   {
+   "zh": "正在重启 Veyra",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "正在重新啟動 Veyra",
+   "en": "Restarting Veyra",
+   "ja": "Veyra を再起動中",
+   "ko": "Veyra를 다시 시작하는 중",
+   "es": "Reiniciando Veyra",
+   "fr": "Redémarrage de Veyra",
+   "de": "Veyra wird neu gestartet",
+   "pt-BR": "Reiniciando o Veyra",
+   "ru": "Перезапуск Veyra"
+  },
+  {
    "zh": "正在预检本批文件和轨道",
    "src": "src/engine/ExportQueue.cpp",
    "zh-TW": "正在預檢本批檔案和軌道",
@@ -28302,6 +28419,19 @@
    "de": "Zu Fuß",
    "pt-BR": "A pé",
    "ru": "Пешком"
+  },
+  {
+   "zh": "步骤 %1/%2",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "步驟 %1/%2",
+   "en": "Step %1/%2",
+   "ja": "手順 %1/%2",
+   "ko": "%1/%2단계",
+   "es": "Paso %1/%2",
+   "fr": "Étape %1/%2",
+   "de": "Schritt %1/%2",
+   "pt-BR": "Etapa %1/%2",
+   "ru": "Шаг %1/%2"
   },
   {
    "zh": "死区补偿",
@@ -30124,6 +30254,19 @@
    "ru": "Интерфейс всегда опирается на GPU; РТСС OSD не показан в Veyra; с NVIDIAвнутриигровая оверлей или работа GamePP, Veyra может замерзнуть"
   },
   {
+   "zh": "界面模块加载失败，安装文件可能不完整。请重新解压或使用官方安装包修复。",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "",
+   "en": "",
+   "ja": "",
+   "ko": "",
+   "es": "",
+   "fr": "",
+   "de": "",
+   "pt-BR": "",
+   "ru": ""
+  },
+  {
    "zh": "界面状态写入失败",
    "src": "src/ui/PlayerUiFacade.cpp",
    "zh-TW": "介面狀態寫入失敗",
@@ -31177,6 +31320,19 @@
    "ru": "Сведение в стерео"
   },
   {
+   "zh": "立即更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "立即更新",
+   "en": "Update now",
+   "ja": "今すぐ更新",
+   "ko": "지금 업데이트",
+   "es": "Actualizar ahora",
+   "fr": "Mettre à jour",
+   "de": "Jetzt aktualisieren",
+   "pt-BR": "Atualizar agora",
+   "ru": "Обновить сейчас"
+  },
+  {
    "zh": "立即生效；日志保持中文，方便反馈问题",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "立即生效；日誌保持中文，方便反饋問題",
@@ -31188,6 +31344,19 @@
    "de": "Tritt sofort in Kraft; Protokolle bleiben auf Chinesisch, so dass Problemberichte lesbar bleiben",
    "pt-BR": "Faz efeito imediatamente; logs ficar em chinês para relatórios de problemas permanecer legível",
    "ru": "Вступает в силу немедленно; журналы остаются на китайском языке, поэтому отчеты о проблемах остаются читаемыми."
+  },
+  {
+   "zh": "立即重启",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "立即重新啟動",
+   "en": "Restart now",
+   "ja": "今すぐ再起動",
+   "ko": "지금 다시 시작",
+   "es": "Reiniciar ahora",
+   "fr": "Redémarrer",
+   "de": "Jetzt neu starten",
+   "pt-BR": "Reiniciar agora",
+   "ru": "Перезапустить сейчас"
   },
   {
    "zh": "端点已打开",
@@ -35194,6 +35363,19 @@
    "ru": "Проверка распакованных файлов модели не пройдена"
   },
   {
+   "zh": "解压更新包",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "解壓縮更新套件",
+   "en": "Extracting the update package",
+   "ja": "更新パッケージを展開中",
+   "ko": "업데이트 패키지 압축 푸는 중",
+   "es": "Extrayendo el paquete",
+   "fr": "Extraction du paquet",
+   "de": "Updatepaket wird entpackt",
+   "pt-BR": "Extraindo o pacote",
+   "ru": "Распаковка пакета обновления"
+  },
+  {
    "zh": "解码",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "解碼",
@@ -37820,6 +38002,32 @@
    "ru": "Аудио/видео смещение измеряется внутри приложения, а не у динамиков; только для карт захвата в реальном времени / PS5"
   },
   {
+   "zh": "软件更新",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "軟體更新",
+   "en": "Software update",
+   "ja": "ソフトウェア更新",
+   "ko": "소프트웨어 업데이트",
+   "es": "Actualización de software",
+   "fr": "Mise à jour",
+   "de": "Softwareupdate",
+   "pt-BR": "Atualização de software",
+   "ru": "Обновление программы"
+  },
+  {
+   "zh": "软件更新 · %1",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "軟體更新 · %1",
+   "en": "Software update · %1",
+   "ja": "ソフトウェア更新 · %1",
+   "ko": "소프트웨어 업데이트 · %1",
+   "es": "Actualización de software · %1",
+   "fr": "Mise à jour · %1",
+   "de": "Softwareupdate · %1",
+   "pt-BR": "Atualização de software · %1",
+   "ru": "Обновление программы · %1"
+  },
+  {
    "zh": "软件绘制：兼容性最好，不占显存，不和视频抢 GPU；部分阴影与模糊简化",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "軟體繪製：相容性最好，不佔顯示記憶體，不和影片搶 GPU；部分陰影與模糊簡化",
@@ -39835,6 +40043,19 @@
    "ru": "Изменился профиль или резервная копия, поэтому эта операция была остановлена. Проверьте еще раз или используйте инспектор профиля, чтобы справиться с ним вручную."
   },
   {
+   "zh": "配置数据目录初始化失败，请检查安装/数据目录权限。",
+   "src": "apps/veyra-qml/main.cpp",
+   "zh-TW": "",
+   "en": "",
+   "ja": "",
+   "ko": "",
+   "es": "",
+   "fr": "",
+   "de": "",
+   "pt-BR": "",
+   "ru": ""
+  },
+  {
    "zh": "配置未独立绑定当前程序路径，可能由其他程序共用。请使用 Profile Inspector 单独配置本软件。",
    "src": "src/ui/NvidiaVrrProfileController.cpp",
    "zh-TW": "設定未獨立繫結目前程式路徑，可能與其他程式共用。請使用 Profile Inspector 單獨設定本軟體。",
@@ -40561,6 +40782,19 @@
    "de": "Wirkt nach Neustart",
    "pt-BR": "Vale depois de reiniciar",
    "ru": "Вступит в силу после перезапуска"
+  },
+  {
+   "zh": "重启完成更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "重新啟動以完成更新",
+   "en": "Restart to finish updating",
+   "ja": "再起動して更新を完了",
+   "ko": "다시 시작하여 업데이트 완료",
+   "es": "Reiniciar para completar la actualización",
+   "fr": "Redémarrer pour terminer",
+   "de": "Zum Abschluss neu starten",
+   "pt-BR": "Reiniciar para concluir",
+   "ru": "Перезапустите для завершения обновления"
   },
   {
    "zh": "重命名 · 复制 · 删除",
@@ -43421,6 +43655,19 @@
    "de": "Fahren",
    "pt-BR": "Direção",
    "ru": "Вождение"
+  },
+  {
+   "zh": "验证新版启动",
+   "src": "qml/UpdateDialog.qml",
+   "zh-TW": "驗證新版啟動",
+   "en": "Checking that the new version starts",
+   "ja": "新版が起動するか確認中",
+   "ko": "새 버전 실행 확인 중",
+   "es": "Comprobando el inicio de la nueva versión",
+   "fr": "Vérification du démarrage de la nouvelle version",
+   "de": "Start der neuen Version wird geprüft",
+   "pt-BR": "Verificando a inicialização da nova versão",
+   "ru": "Проверка запуска новой версии"
   },
   {
    "zh": "验证运行库",

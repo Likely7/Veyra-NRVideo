@@ -108,10 +108,10 @@ def wrap(args):
         bundle.writestr(f"{prefix}/START-HERE.txt",
                         "运行 Veyra.exe。2.1.9 用户先退出旧版，再按需复制旧目录中的\n"
                         "runtime_local/user-data-2.0.0 与 runtime_local/luts 到新版根目录的 runtime_local。\n"
-                        "新版本：设置 → 关于 → 检查更新。下载完成后，正常退出会应用更新。\n\n"
+                        "设置 → 关于 → 检查更新 → 立即更新。安装就绪后点立即重启。\n\n"
                         "Start Veyra.exe. To migrate from 2.1.9, close it, then copy\n"
                         "runtime_local/user-data-2.0.0 and runtime_local/luts to this folder's runtime_local.\n"
-                        "Settings → About → Check for updates. Updates are applied after a normal exit.\n")
+                        "Settings → About → Check for updates → Update now. Click Restart now when ready.\n")
     print(destination)
 
 

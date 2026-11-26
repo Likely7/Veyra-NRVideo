@@ -193,6 +193,7 @@ Rectangle {
                     text: modelData.label
                     iconName: modelData.icon || ""
                     primary: modelData.primary === true
+                    enabled: modelData.enabled !== false
                     onClicked: dlg.actionTriggered(modelData.label)
                 }
             }

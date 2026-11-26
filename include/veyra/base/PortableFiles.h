@@ -11,7 +11,30 @@ inline bool plainPath(const std::filesystem::path& path, bool directory) {
         && bool(attrs & FILE_ATTRIBUTE_DIRECTORY) == directory;
 }
 
-// The launcher holds the installation lock while this file is being replaced.
+inline HANDLE openRunLock(const std::filesystem::path& root) {
+    return CreateFileW((root / L".veyra-running.lock").c_str(), GENERIC_READ | GENERIC_WRITE,
+                       0, nullptr, OPEN_ALWAYS, FILE_FLAG_OPEN_REPARSE_POINT, nullptr);
+}
+
+inline constexpr auto preparedState = L"prepared-version.txt";
+
+inline std::string preparedVersion(const std::filesystem::path& root, std::string_view version,
+                                   std::string_view digest) {
+    const auto receipt = root / updateFolder / preparedState;
+    const auto versions = root / versionsFolder;
+    if (!plainPath(receipt, false) || !plainPath(versions, true)) return {};
+    const auto data = readSmallFile(receipt);
+    const auto newline = data.find('\n');
+    if (newline == std::string::npos || data.substr(newline + 1) != std::string(digest) + "\n") return {};
+    const auto identifier = data.substr(0, newline);
+    if (identifier == version || versionFromDirectory(identifier) != version) return {};
+    const auto directory = versions / identifier;
+    if (!plainPath(directory, true) || !plainPath(directory / playerName, false)
+        || !plainPath(directory / workerName, false)) return {};
+    return identifier;
+}
+
+// A writer owns the installation lock, directly or through the running launcher.
 inline bool writeSmallFile(const std::filesystem::path& path, std::string_view data) {
     auto temporary = path;
     temporary += L"." + std::to_wstring(GetCurrentProcessId()) + L".new";
