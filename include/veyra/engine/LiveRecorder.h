@@ -36,7 +36,7 @@ struct RecordingSettings {
     std::wstring directory;      // output folder (created when missing)
     uint32_t bitrateMbps=0;      // 0: automatic from the picture size and frame rate
     bool hevc=false;             // H.264 unless chosen; HDR always records HEVC 10-bit
-    uint32_t fpsLimit=0;         // 0: every presented frame
+    uint32_t fpsLimit=0;         // VFR limit or CFR target; 0: follow presentation
     bool cfr=false;              // resample presented frames on the recording clock
     bool audio=true;             // record the sound the player plays
     bool microphone=false;       // record a microphone

@@ -5,8 +5,6 @@
 
 namespace veyra::engine {
 
-inline constexpr uint32_t kRecordingCfrFps=60;
-
 // A fixed, zero-based recording timeline. Capture and audio use microseconds;
 // MP4 video uses integer frame indices to keep every sample exactly one frame.
 class RecordingGrid {

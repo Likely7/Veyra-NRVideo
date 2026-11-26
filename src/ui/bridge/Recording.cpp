@@ -1,7 +1,6 @@
 // QML bridge: Recording responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/engine/MicrophoneCapture.h"
-#include "veyra/engine/RecordingGrid.h"
 
 namespace veyra::ui {
 // --- live recording of the processed picture --------------------------------
@@ -17,7 +16,6 @@ QString QmlPlayerBridge::recordingDirectory() const {
 // 0 = automatic from the picture size and frame rate (LiveRecorder).
 int QmlPlayerBridge::recordingBitrateMbps() const { return std::clamp(impl_->prefInt("recordBitrateMbps", 0), 0, 400); }
 int QmlPlayerBridge::recordingFpsLimit() const { return std::clamp(impl_->prefInt("recordFps", 0), 0, 240); }
-int QmlPlayerBridge::recordingCfrFps() const { return int(engine::kRecordingCfrFps); }
 bool QmlPlayerBridge::recordingHevc() const { return impl_->prefBool("recordHevc", false); }
 bool QmlPlayerBridge::recordingAudio() const { return impl_->prefBool("recordAudio", true); }
 bool QmlPlayerBridge::recording() const { return impl_->recordingState.value("active").toBool(); }

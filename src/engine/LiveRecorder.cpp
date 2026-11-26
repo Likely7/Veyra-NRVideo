@@ -1490,8 +1490,7 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
         segment->hevc=s.settings.hevc||frame.hdrMode!=0||segment->width>4096||segment->height>4096;
         const double hint=s.presentFps.load();
         segment->cfr=s.settings.cfr;
-        if(segment->cfr)segment->fps=kRecordingCfrFps;
-        else segment->fps=s.settings.fpsLimit?s.settings.fpsLimit:uint32_t(std::clamp<long>(std::lround(hint>1?hint:60.0),10,480));
+        segment->fps=s.settings.fpsLimit?s.settings.fpsLimit:uint32_t(std::clamp<long>(std::lround(hint>1?hint:60.0),10,480));
         segment->bitrateMbps=s.settings.bitrateMbps?s.settings.bitrateMbps:autoBitrateMbps(segment->width,segment->height,segment->fps,segment->hevc);
         segment->multipass=std::min(s.settings.multipass,2u);segment->psychoAq=s.settings.psychoAq;
         segment->sound=s.settings.audio;

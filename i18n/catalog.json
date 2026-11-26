@@ -20048,6 +20048,19 @@
    "ru": "Общая сила изменений"
   },
   {
+    "zh": "恒定帧率按所选帧率录制。跟随会在录制开始时确定帧率，并在当前录制段内保持固定。",
+    "src": "qml/SettingsPage.qml",
+    "zh-TW": "恆定幀率按照所選幀率錄製。跟隨會在錄製開始時決定幀率，並在目前錄製段內保持固定。",
+    "en": "CFR records at the selected frame rate. Follow selects a rate at the start and keeps it fixed for the recording segment.",
+    "ja": "CFR は選択したフレームレートで録画します。追従では録画開始時に決めたフレームレートを録画区間内で維持します。",
+    "ko": "CFR은 선택한 프레임률로 녹화합니다. 따름은 녹화 시작 시 정한 프레임률을 해당 녹화 구간에서 유지합니다.",
+    "es": "CFR graba a la frecuencia de fotogramas seleccionada. Seguir elige una frecuencia al inicio y la mantiene fija durante el segmento de grabación.",
+    "fr": "Le mode CFR enregistre à la cadence sélectionnée. Le mode Suivre choisit une cadence au démarrage et la conserve pendant le segment.",
+    "de": "CFR zeichnet mit der ausgewählten Bildrate auf. Folgen wählt zu Beginn eine Bildrate und hält sie für das Aufnahmesegment konstant.",
+    "pt-BR": "O CFR grava na taxa de quadros selecionada. Seguir escolhe uma taxa no início e a mantém fixa durante o segmento de gravação.",
+    "ru": "CFR записывает с выбранной частотой кадров. В режиме «Следовать» частота определяется при запуске и сохраняется до конца сегмента записи."
+  },
+  {
    "zh": "恒定帧率供剪辑软件使用。缺帧时重复上一画面；下次录制生效。",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "恆定幀率供剪輯軟體使用。缺幀時重複上一畫面；下次錄製生效。",
