@@ -32,30 +32,6 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ---
 
-### 💜 Community Support / 社区支持
-
-**English**
-
-A huge thank you to the Pump.fun community for supporting Veyra!
-
-I've received creator fees from a community-created Veyra token. These contributions will help support the continued development of Veyra.
-
-**中文**
-
-非常感谢 Pump.fun 社区对 Veyra 的支持！
-
-我已经从社区自行创建的 Veyra 代币中领取了创作者手续费。这些收入将帮助支持 Veyra 的持续开发。
-
-**Token Contract Address (CA) / 代币合约地址：**
-
-`i6Aop7z5qLaY47kseaoUt6kGq4Pi2ySg8j7cxRkpump`
-
-**Disclaimer / 免责声明：** This token was independently created by the community and is not an official Veyra release or investment recommendation. Veyra remains free and open-source.
-
-该代币由社区独立创建，并非 Veyra 官方发行的代币，也不构成投资建议。Veyra 仍然是免费开源软件。
-
----
-
 <br>
 
 <p align="center">
