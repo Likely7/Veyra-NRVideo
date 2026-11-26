@@ -1,6 +1,8 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include <QColor>
+#include <QCoreApplication>
+#include "veyra/base/PortableLayout.h"
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
 #include "veyra/gfx/RifeDmlBackend.h"
@@ -221,7 +223,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
                                    "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "captureHdmiPassthrough", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
                                    // 设置 → 外观 → 启动动画 / 启动音乐 / 剔除遮罩（2.1.9）
-                                   "introAnimation", "introMusic", "exclusionOverlay", "fullscreenFrameStats"};
+                                   "introAnimation", "introMusic", "exclusionOverlay", "fullscreenFrameStats", "checkUpdatesOnStartup"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);
@@ -341,6 +343,20 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
     applyPreference(key);
     emit preferencesChanged();
     return true;
+}
+void QmlPlayerBridge::applyPreparedUpdate() {
+    auto* portable = static_cast<UpdateChecker*>(updates_)->portableUpdate();
+    if (!portable->scheduled()) return;
+    if (exportRunning()) {
+        emit notice(tr("请等待导出完成后再安装更新"), true);
+        return;
+    }
+    rememberPosition(true);
+    if (portable->needsElevation()) {
+        portable->beginElevatedInstall();
+        return;
+    }
+    QCoreApplication::exit(portable::applyRestartExitCode);
 }
 void QmlPlayerBridge::applyPreference(const QString& key) {
     if (key == "audioDevice") sink::setPreferredRenderEndpoint(impl_->prefString("audioDevice").toStdWString());

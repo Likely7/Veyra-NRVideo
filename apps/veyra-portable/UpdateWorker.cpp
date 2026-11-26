@@ -3,6 +3,7 @@
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
+#include <QDeadlineTimer>
 #include <QDir>
 #include <QFile>
 #include <QProcess>
@@ -10,6 +11,8 @@
 #include <QTemporaryDir>
 #include <QUuid>
 #include <shobjidl.h>
+#include <softpub.h>
+#include <wintrust.h>
 
 namespace {
 using namespace veyra::portable;
@@ -43,6 +46,103 @@ bool checkWindowsAttachment(const fs::path& path, const QUrl& source) {
     if (SUCCEEDED(result)) result = attachment->Save();
     attachment->Release();
     return result == S_OK;
+}
+
+bool boundedOutput(QProcess& child, QByteArray& output, int timeoutMs) {
+    QDeadlineTimer deadline(timeoutMs);
+    while (child.state() != QProcess::NotRunning) {
+        if (deadline.hasExpired()) {
+            child.kill();
+            child.waitForFinished(10000);
+            return false;
+        }
+        child.waitForReadyRead(200);
+        output += child.readAllStandardOutput();
+        child.readAllStandardError();
+        if (output.size() > 4 * 1024 * 1024) {
+            child.kill();
+            child.waitForFinished(10000);
+            return false;
+        }
+    }
+    output += child.readAllStandardOutput();
+    return child.exitStatus() == QProcess::NormalExit && child.exitCode() == 0;
+}
+
+bool namesAreSafe(const QByteArray& output) {
+    int lines = 0;
+    int start = 0;
+    for (int i = 0; i <= output.size(); ++i) {
+        if (i != output.size() && output[i] != '\n') continue;
+        auto line = output.mid(start, i - start);
+        if (line.endsWith('\r')) line.chop(1);
+        start = i + 1;
+        if (line.isEmpty()) continue;
+        if (++lines > 30000 || !safeArchiveEntry(std::string_view(line.constData(), static_cast<size_t>(line.size()))))
+            return false;
+    }
+    return lines > 0;
+}
+
+bool modesAreSafe(const QByteArray& output) {
+    int start = 0;
+    bool any = false;
+    for (int i = 0; i <= output.size(); ++i) {
+        if (i != output.size() && output[i] != '\n') continue;
+        auto line = output.mid(start, i - start);
+        if (line.endsWith('\r')) line.chop(1);
+        start = i + 1;
+        if (line.isEmpty()) continue;
+        any = true;
+        const char kind = line.front();
+        if (kind != '-' && kind != 'd') return false;
+    }
+    return any;
+}
+
+bool archiveMembersSafe(const QString& tar, const QString& archive) {
+    const QStringList modes{QStringLiteral("-tf"), QStringLiteral("-tvf")};
+    for (const auto& flag : modes) {
+        QProcess child;
+        child.setProgram(tar);
+        child.setArguments({flag, archive});
+        child.start();
+        if (!child.waitForStarted(10000)) return false;
+        QByteArray output;
+        if (!boundedOutput(child, output, 60000)) return false;
+        if (!(flag == QLatin1String("-tvf") ? modesAreSafe(output) : namesAreSafe(output))) return false;
+    }
+    return true;
+}
+
+bool userStagingDirectory(const fs::path& staging) {
+    wchar_t local[32768]{};
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, static_cast<DWORD>(sizeof(local) / sizeof(local[0])));
+    if (!length || length >= std::size(local)) return false;
+    const fs::path base = fs::path(local) / L"Veyra" / L"update-staging";
+    return plainPath(fs::path(local), true) && plainPath(base.parent_path(), true) && plainPath(base, true)
+        && plainPath(staging, true) && stagingDirectoryId(base, staging);
+}
+
+bool acceptExecutable(const fs::path& path) {
+    WINTRUST_FILE_INFO file{};
+    file.cbStruct = sizeof(file);
+    file.pcwszFilePath = path.c_str();
+    GUID action = WINTRUST_ACTION_GENERIC_VERIFY_V2;
+    WINTRUST_DATA data{};
+    data.cbStruct = sizeof(data);
+    data.dwUIChoice = WTD_UI_NONE;
+    data.fdwRevocationChecks = WTD_REVOKE_NONE;
+    data.dwUnionChoice = WTD_CHOICE_FILE;
+    data.pFile = &file;
+    data.dwStateAction = WTD_STATEACTION_VERIFY;
+    // Cache only: a revoked certificate is not rechecked online during install.
+    data.dwProvFlags = WTD_CACHE_ONLY_URL_RETRIEVAL | WTD_SAFER_FLAG;
+    const LONG status = WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &data);
+    const DWORD error = GetLastError();
+    data.dwStateAction = WTD_STATEACTION_CLOSE;
+    WinVerifyTrust(static_cast<HWND>(INVALID_HANDLE_VALUE), &action, &data);
+    return acceptAuthenticode(status, error);
 }
 
 bool inspectExtractedTree(const fs::path& root, qint64 expectedSize) {
@@ -117,6 +217,7 @@ const char* applyUpdate(const fs::path& root, const fs::path& updates) {
     if (!count || count >= std::size(system)) return "extractor-unavailable";
     const auto tar = fs::path(system) / L"tar.exe";
     if (!plainPath(tar, false)) return "extractor-unavailable";
+    if (!archiveMembersSafe(pathString(tar), pathString(files.archive))) return "invalid-archive";
     QProcess extractor;
     if (!runChild(extractor, pathString(tar),
                   {QStringLiteral("-xf"), pathString(files.archive), QStringLiteral("-C"), staging.path(),
@@ -135,6 +236,7 @@ const char* applyUpdate(const fs::path& root, const fs::path& updates) {
 
     if (!checkWindowsAttachment(player, source) || !checkWindowsAttachment(versionDir / workerName, source))
         return "windows-blocked";
+    if (!acceptExecutable(player) || !acceptExecutable(versionDir / workerName)) return "invalid-authenticode";
     QTemporaryDir probeData(pathString(updates / L"probe-XXXXXX"));
     if (!probeData.isValid()) return "stage-create-failed";
     QProcess probe;
@@ -167,9 +269,14 @@ const char* applyUpdate(const fs::path& root, const fs::path& updates) {
 
 int main(int argc, char** argv) {
     QCoreApplication app(argc, argv);
-    if (app.arguments().size() != 2) return 1;
-    const fs::path root(app.arguments().at(1).toStdWString());
-    const auto updates = root / updateFolder;
+    const auto arguments = app.arguments();
+    if (arguments.size() != 2 && arguments.size() != 3) return 1;
+    const fs::path root(arguments.at(1).toStdWString());
+    fs::path updates = root / updateFolder;
+    if (arguments.size() == 3) {
+        updates = fs::path(arguments.at(2).toStdWString());
+        if (!userStagingDirectory(updates)) return 1;
+    }
     if (!root.is_absolute() || !plainPath(updates, true) || packageFlavor(root).empty()) return 1;
     const HRESULT com = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     const auto result = SUCCEEDED(com) ? applyUpdate(root, updates) : "windows-check-unavailable";

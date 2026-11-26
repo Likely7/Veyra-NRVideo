@@ -73,6 +73,14 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     auto* checker = new UpdateChecker(version(), this);
     updates_ = checker;
     connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);
+    connect(checker->portableUpdate(), &PortableUpdate::installFinished, this, [this](bool ok) {
+        if (!ok) return;
+        if (exportRunning()) {
+            emit notice(tr("更新已安装。请等待导出结束后重新打开软件"), false);
+            return;
+        }
+        requestApplicationRestart(false);
+    });
     impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
     connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
         openPath(path);

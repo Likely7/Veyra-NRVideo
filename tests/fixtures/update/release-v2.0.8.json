@@ -1,0 +1,21 @@
+{
+  "tag_name": "v2.0.8",
+  "draft": false,
+  "prerelease": false,
+  "html_url": "https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8",
+  "body": "Fixes capture audio.\n<b>summary</b>\u0001",
+  "assets": [
+    {
+      "name": "Veyra-portable-update-v1.json",
+      "digest": null
+    },
+    {
+      "name": "Veyra-2.0.8-NVIDIA-win64-portable.zip",
+      "digest": "sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+    },
+    {
+      "name": "Veyra-2.0.8-AMD-win64-portable.zip",
+      "digest": "sha256:fedcba9876543210fedcba9876543210fedcba9876543210fedcba9876543210"
+    }
+  ]
+}

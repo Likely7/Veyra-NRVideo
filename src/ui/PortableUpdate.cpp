@@ -1,26 +1,104 @@
 #include "veyra/ui/PortableUpdate.h"
 #include "veyra/base/PortableFiles.h"
+#include "veyra/base/PortableLayout.h"
 
 #include <QCoreApplication>
 #include <QDir>
 #include <QLocale>
 #include <QNetworkReply>
 #include <QStorageInfo>
+#include <knownfolders.h>
+#include <shellapi.h>
+#include <shlobj.h>
 
 namespace veyra::ui {
 using namespace veyra::portable;
 namespace {
 QString pathString(const std::filesystem::path& path) { return QString::fromStdWString(path.native()); }
+
+std::wstring quote(std::wstring_view argument) {
+    std::wstring result = L"\"";
+    size_t backslashes = 0;
+    for (const wchar_t character : argument) {
+        if (character == L'\\') {
+            ++backslashes;
+            continue;
+        }
+        result.append(character == L'"' ? backslashes * 2 + 1 : backslashes, L'\\');
+        result.push_back(character);
+        backslashes = 0;
+    }
+    result.append(backslashes * 2, L'\\');
+    result.push_back(L'"');
+    return result;
+}
+
+bool underKnownFolder(const std::filesystem::path& root, REFKNOWNFOLDERID id) {
+    PWSTR raw = nullptr;
+    if (FAILED(SHGetKnownFolderPath(id, KF_FLAG_DEFAULT, nullptr, &raw)) || !raw) return false;
+    const auto base = std::filesystem::path(raw).lexically_normal().wstring();
+    CoTaskMemFree(raw);
+    const auto target = root.lexically_normal().wstring();
+    if (base.empty() || target.size() < base.size()) return false;
+    if (_wcsnicmp(target.c_str(), base.c_str(), static_cast<unsigned>(base.size())) != 0) return false;
+    return target.size() == base.size() || target[base.size()] == L'\\' || target[base.size()] == L'/';
+}
+
+bool underProgramFiles(const std::filesystem::path& root) {
+    return underKnownFolder(root, FOLDERID_ProgramFiles) || underKnownFolder(root, FOLDERID_ProgramFilesX86)
+        || underKnownFolder(root, FOLDERID_ProgramFilesX64);
+}
+
+bool directoryAcceptsFiles(const std::filesystem::path& dir) {
+    std::error_code error;
+    std::filesystem::create_directories(dir, error);
+    if (error || !plainPath(dir, true)) return false;
+    const auto probe = dir / (L"write-probe-" + std::to_wstring(GetCurrentProcessId()) + L"-"
+                              + std::to_wstring(GetTickCount64()));
+    const HANDLE file = CreateFileW(probe.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                    FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE, nullptr);
+    if (file == INVALID_HANDLE_VALUE) return false;
+    CloseHandle(file);
+    return plainPath(dir, true);
+}
+
+std::filesystem::path userStaging(const std::filesystem::path& root) {
+    wchar_t local[32768]{};
+    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, static_cast<DWORD>(sizeof(local) / sizeof(local[0])));
+    if (!length || length >= std::size(local)) return {};
+    const auto id = QCryptographicHash::hash(QString::fromStdWString(root.wstring()).toUtf8(),
+                                             QCryptographicHash::Sha256).toHex().left(16);
+    return std::filesystem::path(local) / L"Veyra" / L"update-staging" / id.toStdWString();
+}
 }
 
 PortableUpdate::PortableUpdate(const QString& version, QObject* parent)
-    : QObject(parent), installed_(releaseVersion(version)), key_(updatePublicKey()) {
+    : QObject(parent), installed_(releaseVersion(version)), key_(updatePublicKey()), elevateWait_(this) {
+    connect(&elevateWait_, &QWinEventNotifier::activated, this, [this](HANDLE process) {
+        DWORD code = 1;
+        const bool read = process && GetExitCodeProcess(process, &code);
+        elevateWait_.setEnabled(false);
+        elevateWait_.setHandle(nullptr);
+        if (process) CloseHandle(process);
+        installing_ = false;
+        scheduled_ = false;
+        qInfo().noquote() << "[portable-update-elevated]" << (read ? int(code) : -1);
+        if (read && code == 0) emit installFinished(true);
+        else {
+            discardDownload();
+            emit notice(tr("更新未完成，当前版本未改变"), true);
+            emit installFinished(false);
+        }
+        emit changed();
+    });
     if (!QCoreApplication::arguments().contains(QStringLiteral("--managed-portable"))
         || installed_.isEmpty() || key_.size() != 32) return;
     const auto directory = std::filesystem::path(QCoreApplication::applicationDirPath().toStdWString());
     const auto root = rootFromVersionDirectory(directory);
     if (root.empty() || !plainPath(directory / workerName, false)
         || directory.filename().wstring() != std::filesystem::path(installedVersions(root).current).wstring()) return;
+    root_ = root;
+    worker_ = directory / workerName;
     flavor_ = QString::fromStdString(packageFlavor(root));
     updates_ = root / updateFolder;
     manifestDeadline_.setSingleShot(true);
@@ -55,6 +133,11 @@ PortableUpdate::~PortableUpdate() {
         reply_->disconnect(this);
         reply_->abort();
     }
+    if (const auto process = elevateWait_.handle()) {
+        elevateWait_.setEnabled(false);
+        elevateWait_.setHandle(nullptr);
+        CloseHandle(process);
+    }
 }
 
 int PortableUpdate::progress() const {
@@ -67,12 +150,42 @@ QString PortableUpdate::sizeText() const {
 
 QString PortableUpdate::releaseNotes() const { return package_ ? package_->notes : QString{}; }
 
+void PortableUpdate::setReleaseInventory(bool enumerated, const QHash<QString, QByteArray>& digests) {
+    assetsEnumerated_ = enumerated;
+    published_ = digests;
+}
+
+bool PortableUpdate::inventoryAccepts(const QByteArray& manifestBytes, const UpdatePackage& package) const {
+    const auto manifestName = QString::fromLatin1(manifestAsset);
+    const auto manifestHash = QCryptographicHash::hash(manifestBytes, QCryptographicHash::Sha256);
+    if (!publishedDigestAgrees(assetsEnumerated_, published_.contains(manifestName),
+                               published_.value(manifestName), manifestHash)) return false;
+    return publishedDigestAgrees(assetsEnumerated_, published_.contains(package.asset),
+                                 published_.value(package.asset), package.digest);
+}
+
 void PortableUpdate::selectRelease(const QString& version) {
-    if (updates_.empty() || reply_ || scheduled_ || (package_ && package_->version == version)) return;
+    if (reply_ || scheduled_ || installing_ || (package_ && package_->version == version)) return;
     package_.reset();
     manifest_.clear();
     selectedVersion_ = version;
-    if (!version.isEmpty()) requestManifest(route_);
+    if (version.isEmpty()) {
+        blockReason_.clear();
+        emit changed();
+        return;
+    }
+    if (updates_.empty()) {
+        blockReason_ = QStringLiteral("not-managed");
+        emit changed();
+        return;
+    }
+    if (assetsEnumerated_ && !published_.contains(QLatin1String(manifestAsset))) {
+        blockReason_ = QStringLiteral("no-package");
+        emit changed();
+        return;
+    }
+    blockReason_.clear();
+    requestManifest(route_);
     emit changed();
 }
 
@@ -104,9 +217,30 @@ void PortableUpdate::request(const QUrl& url, int buffer, int idleMs) {
     connect(reply_, &QNetworkReply::finished, this, &PortableUpdate::finish);
 }
 
+bool PortableUpdate::prepareDownloadDirectory() {
+    const auto installUpdates = root_.empty() ? std::filesystem::path{} : root_ / updateFolder;
+    if (!elevate_ && !installUpdates.empty() && directoryAcceptsFiles(installUpdates)) {
+        updates_ = installUpdates;
+        return true;
+    }
+    if (elevate_ && directoryAcceptsFiles(updates_) && stagingDirectoryId(updates_.parent_path(), updates_)) return true;
+    if (root_.empty() || !underProgramFiles(root_)) return false;
+    const auto staging = userStaging(root_);
+    if (staging.empty()) return false;
+    const auto base = staging.parent_path();
+    if (!plainPath(base.parent_path().parent_path(), true)) return false;
+    if (!directoryAcceptsFiles(base.parent_path()) || !directoryAcceptsFiles(base) || !directoryAcceptsFiles(staging))
+        return false;
+    if (!stagingDirectoryId(base, staging)) return false;
+    updates_ = staging;
+    elevate_ = true;
+    qInfo().noquote() << "[portable-update] staging outside the install directory";
+    return true;
+}
+
 void PortableUpdate::downloadAndSchedule() {
-    if (!available() || reply_) return;
-    if (!QDir().mkpath(pathString(updates_)) || !plainPath(updates_, true)) {
+    if (!available() || reply_ || installing_) return;
+    if (!prepareDownloadDirectory()) {
         emit notice(tr("无法写入更新目录"), true);
         return;
     }
@@ -168,13 +302,16 @@ void PortableUpdate::finish() {
     reply_->deleteLater();
     reply_ = nullptr;
     if (!download_) {
-        package_ = ok ? readUpdateManifest(response_, flavor_, installed_, selectedVersion_, key_) : std::nullopt;
-        if (!package_ && requestRoute_ != DownloadRoute::GitHub) {
+        auto package = ok ? readUpdateManifest(response_, flavor_, installed_, selectedVersion_, key_) : std::nullopt;
+        if (package && !inventoryAccepts(response_, *package)) package.reset();
+        package_ = package;
+        if (!package_ && !cancelled_ && requestRoute_ != DownloadRoute::GitHub) {
             qInfo().noquote() << "[portable-update-manifest] mirror fallback";
             requestManifest(DownloadRoute::GitHub);
             return;
         }
         manifest_ = package_ ? response_ : QByteArray{};
+        blockReason_ = package_ || selectedVersion_.isEmpty() || cancelled_ ? QString{} : QStringLiteral("no-package");
         qInfo().noquote() << "[portable-update-manifest]" << (package_ ? "verified" : "unavailable");
         emit changed();
         return;
@@ -197,8 +334,8 @@ void PortableUpdate::finish() {
     }
     download_.reset();
     if (scheduled_) {
-        qInfo().noquote() << "[portable-update]" << package_->version << "scheduled";
-        emit notice(tr("更新已就绪，将在退出后安装"), false);
+        qInfo().noquote() << "[portable-update]" << package_->version << (elevate_ ? "staged" : "scheduled");
+        emit notice(tr("更新已校验，重启后安装"), false);
     } else {
         discardDownload();
         if (!cancelled_) emit notice(tr("更新下载或校验失败，请重试"), true);
@@ -215,7 +352,8 @@ void PortableUpdate::discardDownload() {
 }
 
 void PortableUpdate::cancel() {
-    if (download_ && reply_) {
+    if (installing_) return;
+    if (reply_) {
         cancelled_ = true;
         reply_->abort();
     } else if (scheduled_) {
@@ -225,9 +363,37 @@ void PortableUpdate::cancel() {
             return;
         }
         scheduled_ = false;
+        elevate_ = false;
         discardDownload();
         emit changed();
     }
+}
+
+void PortableUpdate::beginElevatedInstall() {
+    if (!scheduled_ || installing_ || !elevate_ || worker_.empty() || root_.empty()) return;
+    if (!plainPath(worker_, false) || !plainPath(updates_, true) || !stagingDirectoryId(updates_.parent_path(), updates_)) {
+        emit notice(tr("无法写入更新目录"), true);
+        return;
+    }
+    const auto file = worker_.native();
+    const auto parameters = quote(root_.native()) + L" " + quote(updates_.native());
+    SHELLEXECUTEINFOW request{};
+    request.cbSize = sizeof(request);
+    request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+    request.lpVerb = L"runas";
+    request.lpFile = file.c_str();
+    request.lpParameters = parameters.c_str();
+    request.nShow = SW_SHOWNORMAL;
+    if (!ShellExecuteExW(&request) || !request.hProcess) {
+        const DWORD error = GetLastError();
+        qInfo().noquote() << "[portable-update-elevated] start" << int(error);
+        emit notice(error == ERROR_CANCELLED ? tr("已取消管理员授权") : tr("更新未完成，当前版本未改变"), true);
+        return;
+    }
+    installing_ = true;
+    elevateWait_.setHandle(request.hProcess);
+    elevateWait_.setEnabled(true);
+    emit changed();
 }
 
 } // namespace veyra::ui

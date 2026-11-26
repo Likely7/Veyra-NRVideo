@@ -920,6 +920,7 @@ Window {
             anchors.centerIn: parent
             width: Math.min(implicitWidth, root.width - 72)
             text: toast.message
+            textFormat: Text.PlainText
             color: toast.isError ? "#FFC9C9" : toast.isWarning ? "#FFE3B6" : "#BDF3D2"
             font.family: Theme.fontUi
             font.pixelSize: 12
@@ -1091,7 +1092,8 @@ Window {
         function onPageChanged() { if (introLoader.item && root.page !== "home") introLoader.item.dismiss() }
     }
     Component.onCompleted: {
-        veyra.updates.startAutomaticCheck()
+        if (veyra.preferences.checkUpdatesOnStartup === true)
+            veyra.updates.startAutomaticCheck()
         applyStartupSize()
         // Open on the configured page: the user's saved preference, or the
         // override a test passes on the command line.

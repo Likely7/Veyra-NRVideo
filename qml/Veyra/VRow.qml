@@ -56,10 +56,11 @@ Item {
             // and a layout with no filling child cannot grow, which left the control
             // beside the label instead of at the row's right edge.
             // Grow the row for long labels instead of hiding translated text.
-            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.Wrap }
+            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.Wrap; textFormat: Text.PlainText }
             Text {
                 visible: row.hint.length > 0 && !row.hintUnder
                 text: row.hint
+                textFormat: Text.PlainText
                 color: row.hintColor
                 font.family: Theme.fontUi
                 font.pixelSize: 11
@@ -98,6 +99,7 @@ Item {
         anchors.top: mainRow.bottom
         anchors.topMargin: 6
         text: row.hint
+        textFormat: Text.PlainText
         color: row.hintColor
         font.family: Theme.fontUi
         font.pixelSize: 11

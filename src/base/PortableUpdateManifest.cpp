@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <algorithm>
 #include <memory>
 #include <openssl/evp.h>
 
@@ -87,6 +88,47 @@ bool allowedRedirect(const QUrl& url) {
         && (url.host() == QStringLiteral("release-assets.githubusercontent.com")
             || url.host() == QStringLiteral("objects.githubusercontent.com"));
 #endif
+}
+
+bool allowedApiRedirect(const QUrl& url) {
+    if (!url.isValid() || !url.userInfo().isEmpty() || url.hasFragment()) return false;
+#ifdef VEYRA_UPDATE_TEST_PORT
+    return url.scheme() == QStringLiteral("http") && url.host() == QStringLiteral("127.0.0.1")
+        && url.port() == VEYRA_UPDATE_TEST_PORT;
+#else
+    if (url.scheme() != QStringLiteral("https") || url.port(-1) != -1) return false;
+    const auto host = url.host();
+    // The version document is only accepted from GitHub's API or a mirror the
+    // user explicitly selected. Asset hosts are not API hosts.
+    return host == QStringLiteral("api.github.com") || host == QStringLiteral("gh-proxy.com")
+        || host == QStringLiteral("ghfast.top");
+#endif
+}
+
+QString sanitizeReleaseNotes(const QString& body) {
+    QString out;
+    out.reserve(std::min(body.size(), qsizetype{480}));
+    int newlines = 0;
+    for (const QChar c : body) {
+        if (out.size() >= 480) break;
+        const ushort u = c.unicode();
+        if (c == u'\n' || c == u'\r') {
+            if (out.endsWith(u'\n')) continue;
+            if (++newlines > 6) continue;
+            out += u'\n';
+            continue;
+        }
+        if (u < 32 || u == 127) continue;
+        out += c;
+    }
+    return out.trimmed();
+}
+
+bool publishedDigestAgrees(bool inventoryComplete, bool listed, const QByteArray& published,
+                           const QByteArray& actual) {
+    if (!inventoryComplete) return true;
+    if (!listed) return false;
+    return published.isEmpty() || published == actual;
 }
 
 QString packageAssetName(const QString& version, const QString& flavor) {

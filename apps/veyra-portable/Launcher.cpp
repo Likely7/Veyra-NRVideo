@@ -330,6 +330,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
 
     auto args = std::move(initialArgs);
     for (;;) {
+        state = installedVersions(root);
+        if (state.current.empty()) return showError(L"便携包版本记录损坏。\nInvalid Veyra version record.");
         auto playerArgs = args;
         playerArgs.insert(playerArgs.begin(), L"--managed-portable");
         const auto started = GetTickCount64();
@@ -345,12 +347,12 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
             showFailure(program, *result.failure, logPath);
             return result.failure->kind == FailureKind::Loader ? static_cast<int>(result.exitCode) : 1;
         }
-        if (result.exitCode != 0 && result.exitCode != 42 && result.exitCode != applyExitCode
-            && result.exitCode != overlayRestartExitCode && GetTickCount64() - started < 15000) {
+        if (startupShouldRollback(false, result.exitCode, GetTickCount64() - started)) {
             if (rollback()) continue;
             return static_cast<int>(result.exitCode);
         }
-        if (result.exitCode == applyExitCode) {
+        if (result.exitCode == applyExitCode || result.exitCode == applyRestartExitCode) {
+            const bool restart = result.exitCode == applyRestartExitCode;
             const auto worker = versions / state.current / workerName;
             const auto applied = run(worker, {root.native()});
             if (applied.failure) recordFailure(root, worker, *applied.failure);
@@ -361,7 +363,11 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
                 if (readSmallFile(updates / L"result.txt").empty())
                     writeSmallFile(updates / L"result.txt", "worker-failed\n");
             }
-            return 0;
+            if (!restart || applied.failure || applied.exitCode != 0) return 0;
+            args = {L"--page", L"set"};
+            for (size_t i = 0; i + 1 < playerArgs.size(); ++i)
+                if (playerArgs[i] == L"--data-dir") args.insert(args.end(), {playerArgs[i], playerArgs[i + 1]});
+            continue;
         } else if (result.exitCode == 42 || result.exitCode == overlayRestartExitCode) {
             args = {L"--page", L"set"};
             for (size_t i = 0; i + 1 < playerArgs.size(); ++i)

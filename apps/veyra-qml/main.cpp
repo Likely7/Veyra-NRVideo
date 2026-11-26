@@ -1388,9 +1388,10 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     const int rc = app.exec();
     profileInstance.stopListening();
     if (updateProbe) veyra::log::info("portable-update-probe", "QML startup completed");
-    if (rc == 0 && updater->scheduled() && !bridge.exportRunning()) {
+    if (rc == portable::applyRestartExitCode && !(updater->scheduled() && !bridge.exportRunning())) rc = 0;
+    if ((rc == 0 || rc == portable::applyRestartExitCode) && updater->scheduled() && !bridge.exportRunning()) {
         if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
-        return portable::applyExitCode;
+        return rc == portable::applyRestartExitCode ? portable::applyRestartExitCode : portable::applyExitCode;
     }
     if (rc == 42) {
         if (args.contains(QStringLiteral("--managed-portable"))) {

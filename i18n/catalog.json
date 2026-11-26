@@ -2770,6 +2770,19 @@
    "ru": "Этапы GPU · среднее за 1 с"
   },
   {
+   "zh": "GitHub 暂时限制了更新检查，请稍后再试",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "GitHub 暫時限制了更新檢查，請稍後再試",
+   "en": "GitHub is temporarily limiting update checks. Try again later.",
+   "ja": "GitHub が更新確認を一時的に制限しています。しばらくしてから再試行してください。",
+   "ko": "GitHub가 업데이트 확인을 일시적으로 제한했습니다. 나중에 다시 시도하세요.",
+   "es": "GitHub está limitando temporalmente la búsqueda de actualizaciones. Inténtalo más tarde.",
+   "fr": "GitHub limite temporairement la recherche de mises à jour. Réessayez plus tard.",
+   "de": "GitHub begrenzt die Update-Suche vorübergehend. Versuchen Sie es später erneut.",
+   "pt-BR": "O GitHub está limitando temporariamente a verificação de atualizações. Tente mais tarde.",
+   "ru": "GitHub временно ограничивает проверку обновлений. Повторите попытку позже."
+  },
+  {
    "zh": "GitHub 直连",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "GitHub 直連",
@@ -6410,19 +6423,6 @@
    "ru": "Скачать и включить"
   },
   {
-   "zh": "下载并在退出后更新",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "下載並在結束後更新",
-   "en": "Download and update on exit",
-   "ja": "ダウンロードして終了時に更新",
-   "ko": "다운로드 후 종료 시 업데이트",
-   "es": "Descargar e instalar al salir",
-   "fr": "Télécharger et installer à la fermeture",
-   "de": "Herunterladen und beim Beenden installieren",
-   "pt-BR": "Baixar e instalar ao sair",
-   "ru": "Скачать и установить при выходе"
-  },
-  {
    "zh": "下载文件校验失败，请重新下载",
    "src": "src/ui/TranslationAssets.cpp",
    "zh-TW": "下載檔案驗證失敗，請重新下載",
@@ -8956,6 +8956,19 @@
    "de": "Tearing erlauben",
    "pt-BR": "Permitir tearing",
    "ru": "Разрешить разрывы кадра"
+  },
+  {
+   "zh": "允许系统授权并安装",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "允許系統授權並安裝",
+   "en": "Allow the system prompt and install",
+   "ja": "システムの確認を許可してインストール",
+   "ko": "시스템 확인을 허용하고 설치",
+   "es": "Permitir el aviso del sistema e instalar",
+   "fr": "Autoriser la demande du système et installer",
+   "de": "Systemabfrage zulassen und installieren",
+   "pt-BR": "Permitir o aviso do sistema e instalar",
+   "ru": "Разрешить запрос системы и установить"
   },
   {
    "zh": "先从补帧输入去掉准心，再贴回增强后的准心。动态准心或第三人称游戏可在剔除面板画紧一点的框。",
@@ -11936,6 +11949,19 @@
    "ru": "Сообщить о проблеме"
   },
   {
+   "zh": "发布信息无法通过校验，已拒绝这次更新",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "發布資訊無法通過驗證，已拒絕這次更新",
+   "en": "The release information failed verification and was rejected.",
+   "ja": "リリース情報の検証に失敗したため、この更新を拒否しました。",
+   "ko": "릴리스 정보가 검증에 실패하여 이번 업데이트를 거부했습니다.",
+   "es": "La información de la versión no superó la verificación y se rechazó.",
+   "fr": "Les informations de version n’ont pas passé la vérification et ont été refusées.",
+   "de": "Die Versionsinformationen haben die Prüfung nicht bestanden und wurden abgelehnt.",
+   "pt-BR": "As informações da versão falharam na verificação e foram recusadas.",
+   "ru": "Сведения о выпуске не прошли проверку и были отклонены."
+  },
+  {
    "zh": "发现 {} 台 PS5。",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "發現 {} 台 PS5。",
@@ -11975,17 +12001,17 @@
    "ru": "Найдено несколько PS5 консолей; введите IP одной пары, чтобы неправильная консоль не была выбрана."
   },
   {
-   "zh": "发现新版本 %1",
+   "zh": "发现新版本 %1（当前 %2），但没有可自动安装的已签名安装包",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "發現新版本 %1",
-   "en": "New version %1 available",
-   "ja": "新しいバージョン %1 があります",
-   "ko": "새 버전 %1 사용 가능",
-   "es": "Nueva versión %1 disponible",
-   "fr": "Nouvelle version %1 disponible",
-   "de": "Neue Version %1 verfügbar",
-   "pt-BR": "Nova versão %1 disponível",
-   "ru": "Новая версия %1 доступна"
+   "zh-TW": "發現新版本 %1（目前 %2），但沒有可自動安裝的已簽署安裝包",
+   "en": "Version %1 is available (this copy is %2), but there is no signed package this installation can apply.",
+   "ja": "新しいバージョン %1 があります（現在は %2）が、このインストールに適用できる署名付きパッケージがありません。",
+   "ko": "새 버전 %1이(가) 있습니다(현재 %2). 이 설치에 적용할 서명된 패키지가 없습니다.",
+   "es": "La versión %1 está disponible (esta copia es %2), pero no hay un paquete firmado que esta instalación pueda aplicar.",
+   "fr": "La version %1 est disponible (cette copie est %2), mais aucun paquet signé ne peut être appliqué à cette installation.",
+   "de": "Version %1 ist verfügbar (diese Kopie ist %2), aber es gibt kein signiertes Paket für diese Installation.",
+   "pt-BR": "A versão %1 está disponível (esta cópia é %2), mas não há um pacote assinado que esta instalação possa aplicar.",
+   "ru": "Доступна версия %1 (эта копия — %2), но нет подписанного пакета для этой установки."
   },
   {
    "zh": "发现新版本 %1，点击查看更新",
@@ -12495,6 +12521,19 @@
    "ru": "Переменное обновление: только 1 кадр в очереди выше максимума дисплея"
   },
   {
+   "zh": "可更新：当前 %1，最新 %2",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "可更新：目前 %1，最新 %2",
+   "en": "Update available: current %1, latest %2",
+   "ja": "更新可能：現在 %1、最新 %2",
+   "ko": "업데이트 가능: 현재 %1, 최신 %2",
+   "es": "Actualización disponible: actual %1, última %2",
+   "fr": "Mise à jour disponible : actuelle %1, dernière %2",
+   "de": "Update verfügbar: aktuell %1, neueste %2",
+   "pt-BR": "Atualização disponível: atual %1, mais recente %2",
+   "ru": "Доступно обновление: текущая %1, последняя %2"
+  },
+  {
    "zh": "可用",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "可用",
@@ -12846,6 +12885,19 @@
    "ru": "Продолжать автоматически при запуске"
   },
   {
+   "zh": "启动时检查更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "啟動時檢查更新",
+   "en": "Check for updates on startup",
+   "ja": "起動時に更新を確認",
+   "ko": "시작할 때 업데이트 확인",
+   "es": "Buscar actualizaciones al iniciar",
+   "fr": "Rechercher des mises à jour au démarrage",
+   "de": "Beim Start nach Updates suchen",
+   "pt-BR": "Verificar atualizações ao iniciar",
+   "ru": "Проверять обновления при запуске"
+  },
+  {
    "zh": "启动时检测到小飞机（RTSS）、NVIDIA 信息浮窗或游戏加加就改用软件绘制界面，它们只显示在视频上",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "啟動時偵測到小飛機（RTSS）、NVIDIA 遊戲內覆疊或遊戲加加就改用軟體繪製介面，它們只顯示在影片上",
@@ -12857,19 +12909,6 @@
    "de": "Wenn RivaTuner (RTSS), NVIDIA 's In-Game Overlay oder Spiel PP läuft beim Start, die Schnittstelle wird in Software gezeichnet und sie werden nur im Video angezeigt",
    "pt-BR": "Quando RivaTuner (RTSS), NVIDIA é sobreposição no jogo ou Jogo PP está rodando no início, a interface é desenhada em software e eles mostram apenas no vídeo",
    "ru": "Для игры в хэштег или хэштег RTSS NVIDIA PP работает в начале, интерфейс рисуется в программном обеспечении, и они показывают только на видео."
-  },
-  {
-   "zh": "启动时自动检查，有更新时提示",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "啟動時自動檢查，有更新時提示",
-   "en": "Checks on startup; notifies when an update is available",
-   "ja": "起動時に確認し、更新がある場合に通知します",
-   "ko": "시작할 때 새 버전을 확인하고 업데이트가 있으면 알립니다.",
-   "es": "Cheques de inicio; notifica cuando se dispone de una actualización",
-   "fr": "Vérification au démarrage; avise lorsqu'une mise à jour est disponible",
-   "de": "Checks beim Start; benachrichtigt, wenn ein Update verfügbar ist",
-   "pt-BR": "Verifica na inicialização; notifica quando uma atualização está disponível",
-   "ru": "Проверка запуска; уведомляет, когда доступно обновление"
   },
   {
    "zh": "启动时预热增强组件",
@@ -19164,17 +19203,17 @@
    "ru": "Этот дисплей не поддерживает переменное обновление"
   },
   {
-   "zh": "当前已是最新版本",
+   "zh": "当前已是最新版本（%1）",
    "src": "src/ui/UpdateChecker.cpp",
-   "zh-TW": "目前已是最新版本",
-   "en": "You are up to date",
-   "ja": "最新バージョンです",
-   "ko": "최신 버전입니다.",
-   "es": "Estás al día.",
-   "fr": "Vous êtes à jour",
-   "de": "Sie sind up to date",
-   "pt-BR": "Você está atualizado.",
-   "ru": "Ты в курсе событий."
+   "zh-TW": "目前已是最新版本（%1）",
+   "en": "This is the latest version (%1).",
+   "ja": "最新バージョンです（%1）",
+   "ko": "최신 버전입니다(%1).",
+   "es": "Esta es la última versión (%1).",
+   "fr": "Il s’agit de la dernière version (%1).",
+   "de": "Dies ist die neueste Version (%1).",
+   "pt-BR": "Esta é a versão mais recente (%1).",
+   "ru": "Это последняя версия (%1)."
   },
   {
    "zh": "当前帧率 %1 fps 超出屏幕刷新率 %2 Hz，建议关闭补帧来获得更好的延迟体验",
@@ -20475,6 +20514,19 @@
    "de": "Manueller Offset · gilt für Live-Eingaben",
    "pt-BR": "Deslocamento manual · aplica-se à entrada ao vivo",
    "ru": "Ручное смещение · применяется к живому входу"
+  },
+  {
+   "zh": "手动检查。不会自动下载或安装。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "手動檢查。不會自動下載或安裝。",
+   "en": "Manual check. Nothing is downloaded or installed automatically.",
+   "ja": "手動で確認します。自動ではダウンロードもインストールもしません。",
+   "ko": "수동으로 확인합니다. 자동으로 다운로드하거나 설치하지 않습니다.",
+   "es": "Comprobación manual. No se descarga ni se instala nada automáticamente.",
+   "fr": "Vérification manuelle. Rien n’est téléchargé ni installé automatiquement.",
+   "de": "Manuelle Prüfung. Es wird nichts automatisch heruntergeladen oder installiert.",
+   "pt-BR": "Verificação manual. Nada é baixado ou instalado automaticamente.",
+   "ru": "Проверка вручную. Ничего не скачивается и не устанавливается автоматически."
   },
   {
    "zh": "手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。",
@@ -23702,6 +23754,19 @@
    "ru": "Невозможно подключиться к серверу, или адрес недоступен. Проверьте сеть."
   },
   {
+   "zh": "无法连接更新服务器，请检查网络后重试",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "無法連接更新伺服器，請檢查網路後重試",
+   "en": "Could not reach the update server. Check your connection and try again.",
+   "ja": "更新サーバーに接続できません。接続を確認して再試行してください。",
+   "ko": "업데이트 서버에 연결할 수 없습니다. 연결을 확인하고 다시 시도하세요.",
+   "es": "No se pudo conectar con el servidor de actualizaciones. Revisa la conexión e inténtalo de nuevo.",
+   "fr": "Impossible de joindre le serveur de mise à jour. Vérifiez la connexion et réessayez.",
+   "de": "Der Update-Server ist nicht erreichbar. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
+   "pt-BR": "Não foi possível acessar o servidor de atualização. Verifique a conexão e tente novamente.",
+   "ru": "Не удалось связаться с сервером обновлений. Проверьте соединение и повторите попытку."
+  },
+  {
    "zh": "无陀螺仪",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "無陀螺儀",
@@ -24781,17 +24846,30 @@
    "ru": "Не удалось скачать или проверить обновление. Повторите попытку."
   },
   {
-   "zh": "更新已就绪，将在退出后安装",
+   "zh": "更新已安装。请等待导出结束后重新打开软件",
+   "src": "src/ui/QmlPlayerBridge.cpp",
+   "zh-TW": "更新已安裝。請等待匯出結束後重新開啟軟體",
+   "en": "The update is installed. Reopen Veyra after the export finishes.",
+   "ja": "更新をインストールしました。書き出しが終わってから Veyra を開き直してください。",
+   "ko": "업데이트를 설치했습니다. 내보내기가 끝나면 Veyra를 다시 여세요.",
+   "es": "La actualización está instalada. Vuelve a abrir Veyra cuando termine la exportación.",
+   "fr": "La mise à jour est installée. Rouvrez Veyra une fois l’exportation terminée.",
+   "de": "Das Update ist installiert. Öffnen Sie Veyra erneut, wenn der Export fertig ist.",
+   "pt-BR": "A atualização foi instalada. Abra o Veyra novamente quando a exportação terminar.",
+   "ru": "Обновление установлено. Откройте Veyra снова после завершения экспорта."
+  },
+  {
+   "zh": "更新已校验，重启后安装",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "更新已準備就緒，將在結束後安裝",
-   "en": "Update ready. It will be installed after exit.",
-   "ja": "更新の準備が完了しました。終了後にインストールします。",
-   "ko": "업데이트 준비가 완료되었습니다. 종료 후 설치합니다.",
-   "es": "La actualización está lista y se instalará al salir",
-   "fr": "La mise à jour est prête et sera installée à la fermeture",
-   "de": "Das Update ist bereit und wird beim Beenden installiert",
-   "pt-BR": "Atualização pronta para instalação ao sair",
-   "ru": "Обновление готово и будет установлено при выходе"
+   "zh-TW": "更新已驗證，重新啟動後安裝",
+   "en": "The update is verified. It installs when Veyra restarts.",
+   "ja": "更新の検証が完了しました。再起動時にインストールします。",
+   "ko": "업데이트를 검증했습니다. 다시 시작하면 설치됩니다.",
+   "es": "La actualización está verificada. Se instala al reiniciar Veyra.",
+   "fr": "La mise à jour est vérifiée. Elle s’installe au redémarrage de Veyra.",
+   "de": "Das Update ist geprüft. Es wird beim Neustart von Veyra installiert.",
+   "pt-BR": "A atualização foi verificada. Ela é instalada quando o Veyra reinicia.",
+   "ru": "Обновление проверено. Оно установится при перезапуске Veyra."
   },
   {
    "zh": "更新未完成，已打开可用版本",
@@ -24805,6 +24883,19 @@
    "de": "Das Update wurde nicht abgeschlossen. Eine funktionsfähige Version wurde gestartet.",
    "pt-BR": "A atualização não foi concluída. Uma versão funcional foi aberta.",
    "ru": "Обновление не завершилось. Запущена рабочая версия."
+  },
+  {
+   "zh": "更新未完成，当前版本未改变",
+   "src": "src/ui/PortableUpdate.cpp",
+   "zh-TW": "更新未完成，目前版本未改變",
+   "en": "The update did not finish. This version is unchanged.",
+   "ja": "更新は完了しませんでした。現在のバージョンは変わっていません。",
+   "ko": "업데이트가 끝나지 않았습니다. 현재 버전은 그대로입니다.",
+   "es": "La actualización no terminó. Esta versión no ha cambiado.",
+   "fr": "La mise à jour ne s’est pas terminée. Cette version est inchangée.",
+   "de": "Das Update wurde nicht abgeschlossen. Diese Version ist unverändert.",
+   "pt-BR": "A atualização não foi concluída. Esta versão não mudou.",
+   "ru": "Обновление не завершилось. Эта версия не изменилась."
   },
   {
    "zh": "更新组件",
@@ -26224,6 +26315,19 @@
    "ru": "Не удалось проверить обновления. Проверьте свою связь и попробуйте еще раз."
   },
   {
+   "zh": "检查更新超时，请稍后重试",
+   "src": "src/ui/UpdateChecker.cpp",
+   "zh-TW": "檢查更新逾時，請稍後重試",
+   "en": "The update check timed out. Try again later.",
+   "ja": "更新確認がタイムアウトしました。しばらくしてから再試行してください。",
+   "ko": "업데이트 확인 시간이 초과되었습니다. 나중에 다시 시도하세요.",
+   "es": "La búsqueda de actualizaciones agotó el tiempo. Inténtalo más tarde.",
+   "fr": "La recherche de mise à jour a expiré. Réessayez plus tard.",
+   "de": "Die Update-Suche hat das Zeitlimit überschritten. Versuchen Sie es später erneut.",
+   "pt-BR": "A verificação de atualização expirou. Tente mais tarde.",
+   "ru": "Время проверки обновлений истекло. Повторите попытку позже."
+  },
+  {
    "zh": "检测到 %1",
    "src": "qml/Main.qml",
    "zh-TW": "偵測到 %1",
@@ -27199,6 +27303,19 @@
    "ru": "Проверка… воспроизведение продолжается"
   },
   {
+   "zh": "正在查询版本，界面仍可操作",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "正在查詢版本，介面仍可操作",
+   "en": "Checking for a new version. The interface stays responsive.",
+   "ja": "バージョンを確認しています。画面はそのまま操作できます。",
+   "ko": "버전을 확인하는 중입니다. 화면은 계속 사용할 수 있습니다.",
+   "es": "Buscando una versión nueva. La interfaz sigue respondiendo.",
+   "fr": "Recherche d’une nouvelle version. L’interface reste utilisable.",
+   "de": "Neue Version wird gesucht. Die Oberfläche bleibt bedienbar.",
+   "pt-BR": "Verificando uma nova versão. A interface continua respondendo.",
+   "ru": "Проверка новой версии. Интерфейс остаётся доступным."
+  },
+  {
    "zh": "正在查询采集设备…当前播放继续",
    "src": "src/ui/bridge/Capture.cpp",
    "zh-TW": "正在查詢擷取裝置…當前播放繼續",
@@ -27262,6 +27379,19 @@
    "de": "Warte auf Untertitel im Bild…",
    "pt-BR": "Aguardando legendas na tela…",
    "ru": "Ожидание субтитров на экране…"
+  },
+  {
+   "zh": "正在等待系统授权",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "正在等待系統授權",
+   "en": "Waiting for the Windows permission prompt.",
+   "ja": "Windows の許可を待っています。",
+   "ko": "Windows 권한 확인을 기다리는 중입니다.",
+   "es": "Esperando el aviso de permiso de Windows.",
+   "fr": "En attente de la demande d’autorisation de Windows.",
+   "de": "Warten auf die Windows-Berechtigungsabfrage.",
+   "pt-BR": "Aguardando a solicitação de permissão do Windows.",
+   "ru": "Ожидание запроса разрешения Windows."
   },
   {
    "zh": "正在等待语音…",
@@ -30421,6 +30551,19 @@
    "de": "Stereo-Downmix",
    "pt-BR": "Downmix estéreo",
    "ru": "Сведение в стерео"
+  },
+  {
+   "zh": "立即更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "立即更新",
+   "en": "Update now",
+   "ja": "今すぐ更新",
+   "ko": "지금 업데이트",
+   "es": "Actualizar ahora",
+   "fr": "Mettre à jour",
+   "de": "Jetzt aktualisieren",
+   "pt-BR": "Atualizar agora",
+   "ru": "Обновить сейчас"
   },
   {
    "zh": "立即生效；日志保持中文，方便反馈问题",
@@ -35662,6 +35805,19 @@
    "ru": "Запрошенный битрейт"
   },
   {
+   "zh": "请等待导出完成后再安装更新",
+   "src": "src/ui/bridge/Preferences.cpp",
+   "zh-TW": "請等待匯出完成後再安裝更新",
+   "en": "Wait for the export to finish before installing the update.",
+   "ja": "書き出しが終わってから更新をインストールしてください。",
+   "ko": "내보내기가 끝난 뒤 업데이트를 설치하세요.",
+   "es": "Espera a que termine la exportación antes de instalar la actualización.",
+   "fr": "Attendez la fin de l’exportation avant d’installer la mise à jour.",
+   "de": "Warten Sie, bis der Export fertig ist, bevor Sie das Update installieren.",
+   "pt-BR": "Aguarde o fim da exportação antes de instalar a atualização.",
+   "ru": "Дождитесь окончания экспорта, прежде чем устанавливать обновление."
+  },
+  {
    "zh": "请等待当前图片导出完成",
    "src": "src/ui/bridge/Export.cpp",
    "zh-TW": "請等待當前圖片匯出完成",
@@ -39601,6 +39757,19 @@
    "ru": "Вступит в силу после перезапуска"
   },
   {
+   "zh": "重启并安装",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "重新啟動並安裝",
+   "en": "Restart and install",
+   "ja": "再起動してインストール",
+   "ko": "다시 시작하고 설치",
+   "es": "Reiniciar e instalar",
+   "fr": "Redémarrer et installer",
+   "de": "Neu starten und installieren",
+   "pt-BR": "Reiniciar e instalar",
+   "ru": "Перезапустить и установить"
+  },
+  {
    "zh": "重命名 · 复制 · 删除",
    "src": "qml/ProPage.qml",
    "zh-TW": "重命名 · 複製 · 刪除",
@@ -42771,6 +42940,19 @@
    "de": "Standardmäßig ausgeschaltet. Wenn es eingeschaltet ist, wird die aktivierte einzelne NR Schicht oder der Upscaler vorbereitet, während die Startseite im Leerlauf ist, so dass die erste Öffnung etwa 2 s schneller ist; sobald sie bereit ist, behält sie etwa 0,8-1,8 GB Videospeicher, bis sich ein Video öffnet",
    "pt-BR": "Desligado por omissão. Quando ligado, a camada única ativada NR ou upscaler é preparada enquanto a página inicial está ociosa, então o primeiro aberto é cerca de 2 s mais rápido; uma vez pronto, mantém cerca de 0,8–1,8 GB de memória de vídeo até que um vídeo abra",
    "ru": "По умолчанию. При включении включенный один NR слой или upscaler готовится, пока домашняя страница простаивает, поэтому первая открыта примерно на 2 с быстрее; после готовности она сохраняет около 0,8-1,8 GB видеопамяти, пока видео не откроется."
+  },
+  {
+   "zh": "默认关闭。开启后，启动时会连接 GitHub 或所选下载线路查询版本，不会自动下载或安装。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "預設關閉。開啟後，啟動時會連接 GitHub 或所選下載線路查詢版本，不會自動下載或安裝。",
+   "en": "Off by default. When on, startup contacts GitHub or the selected download route to compare versions. Nothing is downloaded or installed automatically.",
+   "ja": "既定ではオフです。オンにすると、起動時に GitHub または選択したダウンロード経路へ接続してバージョンを確認します。自動ではダウンロードもインストールもしません。",
+   "ko": "기본값은 꺼짐입니다. 켜면 시작할 때 GitHub 또는 선택한 다운로드 경로에 연결해 버전을 확인합니다. 자동으로 다운로드하거나 설치하지 않습니다.",
+   "es": "Desactivado de forma predeterminada. Si se activa, al iniciar se contacta con GitHub o la ruta de descarga elegida para comparar versiones. No se descarga ni se instala nada automáticamente.",
+   "fr": "Désactivé par défaut. S’il est activé, le démarrage contacte GitHub ou la route de téléchargement choisie pour comparer les versions. Rien n’est téléchargé ni installé automatiquement.",
+   "de": "Standardmäßig aus. Wenn die Option an ist, kontaktiert der Start GitHub oder den gewählten Download-Weg, um Versionen zu vergleichen. Es wird nichts automatisch heruntergeladen oder installiert.",
+   "pt-BR": "Desligado por padrão. Quando ligado, a inicialização contacta o GitHub ou a rota de download escolhida para comparar versões. Nada é baixado ou instalado automaticamente.",
+   "ru": "По умолчанию выключено. Если включено, при запуске программа обращается к GitHub или к выбранному маршруту загрузки, чтобы сравнить версии. Ничего не скачивается и не устанавливается автоматически."
   },
   {
    "zh": "默认只列常用帧率：24、25、30、50、60、100、120、144、165、240（含 59.94 这类非整数帧率）。这张卡另外上报了 %1 个帧率",
