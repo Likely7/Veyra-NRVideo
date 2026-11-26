@@ -2,18 +2,16 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Shapes
-import QtQuick.Effects
 
 RowLayout {
     id: light
-    spacing: 8
+    spacing: Theme.s8
     readonly property string action: veyra.runStatusAction
     readonly property string summary: veyra.runStatus + (action.length > 0 ? " · " + action : "")
     readonly property string description: summary + (veyra.runStatusDetail.length > 0 ? " · " + veyra.runStatusDetail : "")
     readonly property color tone: veyra.runStatusLevel === "ok" ? Theme.ok
-                                : veyra.runStatusLevel === "warn" ? "#F2B941"
-                                : veyra.runStatusLevel === "err" ? Theme.err : Qt.rgba(1, 1, 1, 0.3)
+                                : veyra.runStatusLevel === "warn" ? Theme.warn
+                                : veyra.runStatusLevel === "err" ? Theme.err : Theme.t3
     Item {
         Layout.fillWidth: true
         Layout.minimumWidth: 32
@@ -26,16 +24,6 @@ RowLayout {
             opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
             Behavior on color { enabled: strip.visible; ColorAnimation { duration: Theme.d(300) } }
         }
-        // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
-        // a screen DPI change while it walks the parent's children, and the walk then touched
-        // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
-        MultiEffect {
-            source: strip
-            anchors.fill: strip
-            visible: veyra.runStatusLevel !== "idle"
-            opacity: strip.opacity
-            shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true
-        }
     }
     ColumnLayout {
         spacing: 2
@@ -47,8 +35,8 @@ RowLayout {
             text: light.action.length > 0 ? light.summary : light.description
             color: light.tone
             font.family: Theme.fontUi
-            font.pixelSize: 11
-            font.weight: Font.Medium
+            font.pixelSize: Theme.fsEyebrow
+            font.weight: Font.Medium; font.variableAxes: Theme.axesMedium
             horizontalAlignment: Text.AlignRight
             wrapMode: Text.Wrap
             maximumLineCount: light.action.length > 0 ? 2147483647 : 2
@@ -62,7 +50,7 @@ RowLayout {
             text: veyra.runStatusDetail
             color: light.tone
             font.family: Theme.fontUi
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsEyebrow
             horizontalAlignment: Text.AlignRight
             elide: Text.ElideRight
         }
@@ -78,7 +66,7 @@ RowLayout {
                 text: statusTip.text
                 color: Theme.t1
                 font.family: Theme.fontUi
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsBody
                 wrapMode: Text.Wrap
             }
         }

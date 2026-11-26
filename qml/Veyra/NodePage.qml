@@ -83,19 +83,19 @@ VPage {
     // with it (N1).
     function hueOf(type) {
         switch (type) {
-        case "color": return "#E0C341"
-        case "sr": return "#4F7BFF"
-        case "aa": return "#7FD4FF"
-        case "video-denoise": return "#62CDB7"
-        case "beauty": return "#FF8FBF"
-        case "nr": return "#FF8A3D"
-        case "protection": return "#8A8A96"
-        case "nr-stabilizer": return "#5DCCA1"
-        case "exclusion": return "#E7B868"
-        case "video-hdr": return "#FFB547"
-        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": case "amdfrc-fg": case "rife-fg": return "#3DDC84"
+        case "color": return Theme.warn
+        case "sr": return Theme.accent
+        case "aa": return Theme.accentHover
+        case "video-denoise": return Theme.ok
+        case "beauty": return Theme.exp
+        case "nr": return Theme.accent
+        case "protection": return Theme.t3
+        case "nr-stabilizer": return Theme.ok
+        case "exclusion": return Theme.warn
+        case "video-hdr": return Theme.warn
+        case "frame-generation": case "dlss-fg": case "xess-fg": case "fsr3-fg": case "fsr4-fg": case "vfg-fg": case "anr-fg": case "amdfrc-fg": case "rife-fg": return Theme.ok
         }
-        return "#55555C"
+        return Theme.t3
     }
     // M33 .bnode.born / die: the node just added pops in (scale .6 over .6s
     // --spring); a removed one shrinks to .7 and fades over .22s first.
@@ -421,10 +421,11 @@ VPage {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
-                height: root.shortLayout ? 40 : (compact ? 72 : 40) + nodeStatus.implicitHeight + 8
+                height: Math.max(root.shortLayout ? 40 : (compact ? 72 : 40) + nodeStatus.implicitHeight + 8, statsGrid.implicitHeight + 8)
                 color: Theme.card
 
                 GridLayout {
+                    id: statsGrid
                     objectName: "node-transport-layout"
                     anchors.fill: parent
                     anchors.leftMargin: 8
@@ -611,7 +612,7 @@ VPage {
             Layout.fillWidth: true
             Layout.fillHeight: true
             radius: Theme.rCard
-            color: Theme.shade(10, 10, 13)
+            color: Theme.bg
             border.width: 1
             border.color: Theme.stroke
             clip: true
@@ -682,7 +683,7 @@ VPage {
                         const a = root.endpoint(edge.from, true), b = root.endpoint(edge.to, false)
                         if (!a || !b) continue
                         const hot = edge.from === root.hotFrom && edge.to === root.hotTo
-                        ctx.strokeStyle = hot ? (Theme.dusk ? Theme.accent : "#FF8A3D") : "#8291AA"; ctx.lineWidth = (hot ? 4 : 2) / root.zoom
+                        ctx.strokeStyle = hot ? Theme.accent : Theme.t3; ctx.lineWidth = (hot ? 4 : 2) / root.zoom
                         curve(a, b)
                     }
                     // Rubber band from the chosen output port to the pointer.
@@ -690,7 +691,7 @@ VPage {
                         const a = root.endpoint(root.wireFrom, true)
                         if (a) {
                             ctx.setLineDash([6 / root.zoom, 4 / root.zoom])
-                            ctx.strokeStyle = Theme.dusk ? Theme.accent : "#FF8A3D"; ctx.lineWidth = 2 / root.zoom
+                            ctx.strokeStyle = Theme.accent; ctx.lineWidth = 2 / root.zoom
                             curve(a, root.pointerWorld)
                             ctx.setLineDash([])
                         }
@@ -848,7 +849,7 @@ VPage {
                             Layout.fillWidth: true
                             spacing: 6
                             enabled: !veyra.presentationOwned
-                            opacity: enabled ? 1 : 0.5
+                            opacity: enabled ? 1 : Theme.disabledOpacity
                             NodeLabel { text: veyra.presentationOwned ? qsTr("显示同步 · Intel XeSS 接管呈现") : qsTr("显示同步") }
                             VSeg {
                                 objectName: "node-display-sync"
@@ -877,7 +878,7 @@ VPage {
                                 VSwitch {
                                     objectName: "node-vrr"
                                     enabled: veyra.vrrState >= 2
-                                    opacity: enabled ? 1 : 0.5
+                                    opacity: enabled ? 1 : Theme.disabledOpacity
                                     checked: veyra.variableRefresh
                                     onToggled: checked => veyra.variableRefresh = checked
                                 }
@@ -1008,7 +1009,7 @@ VPage {
                 x: Math.min(marquee.from.x, marquee.to.x); y: Math.min(marquee.from.y, marquee.to.y)
                 width: Math.abs(marquee.to.x - marquee.from.x); height: Math.abs(marquee.to.y - marquee.from.y)
                 z: 5
-                color: Qt.rgba(1, 138 / 255, 61 / 255, 0.10)
+                color: Theme.accentSoft
                 border.width: 1
                 border.color: Theme.accent
             }
@@ -1019,12 +1020,12 @@ VPage {
                 objectName: "node-canvas-tools"
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: parent.bottom
-                anchors.bottomMargin: root.shortLayout && !root.overlay ? 8 : 36
+                anchors.bottomMargin: timingStrip.visible ? (timingStrip.height + Theme.s12 + Theme.s8) : Theme.s8
                 z: 4
                 width: toolsRow.implicitWidth + 8
                 height: toolsRow.implicitHeight + 8
-                radius: 12
-                color: Theme.shade(20, 20, 24, 0.94)
+                radius: Theme.rCard
+                color: Theme.popover
                 border.width: 1
                 border.color: Theme.stroke2
                 RowLayout {
@@ -1074,11 +1075,11 @@ VPage {
                 anchors.bottom: parent.bottom
                 anchors.margins: 12
                 height: 18
-                radius: 5
-                color: Theme.shade(10, 10, 13, 0.85)
+                radius: Theme.rCtl
+                color: Theme.card
                 visible: segments.length > 0 && (!root.shortLayout || root.overlay)
-                readonly property var hues: ({ sr: "#6EA8FF", nr: "#FF8A3D", color: "#A8A8B8", "video-hdr": "#E58BD9", "video-denoise": "#62CDB7", aa: "#7FD4FF",
-                                               "frame-generation": "#3DDC84", protection: "#E7B868" })
+                readonly property var hues: ({ sr: Theme.accent, nr: Theme.accent, color: Theme.warn, "video-hdr": Theme.warn, "video-denoise": Theme.ok, aa: Theme.accentHover,
+                                               "frame-generation": Theme.ok, protection: Theme.t3 })
                 readonly property var segments: {
                     const timings = veyra.nodeTimings, chain = veyra.chain
                     const byId = {}
@@ -1186,8 +1187,8 @@ VPage {
         Behavior on y { enabled: box.animate; NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring } }
         onXChanged: wires.requestPaint()
         onYChanged: wires.requestPaint()
-        radius: 10
-        color: Theme.shade(29, 29, 34)
+        radius: Theme.rCard
+        color: Theme.card2
         border.width: 1
         border.color: Theme.stroke2
         Item {
@@ -1239,10 +1240,12 @@ VPage {
         onHeightChanged: { wires.requestPaint(); if (!headDrag.active) settleTimer.restart() }
         onWidthChanged: settleTimer.restart()
         z: root.selectedId === node.id ? 3 : (headDrag.active ? 4 : 1)
-        width: node.type === "color" ? 360 : ["nr", "protection", "exclusion"].indexOf(node.type)>=0 ? 320 : 272
+        width: Math.max(240, Math.min(canvasCard.width - 32, node.type === "color" ? 360 : ["nr", "protection", "exclusion"].indexOf(node.type)>=0 ? 320 : 272))
         height: body.implicitHeight
-        radius: 10
-        color: Theme.shade(29, 29, 34)
+        radius: Theme.rCard
+        color: Theme.card2
+        Accessible.role: Accessible.Grouping
+        Accessible.name: card.node.label || ""
         opacity: (node.enabled ? 1 : 0.74) * lifeOpacity
         property real lifeScale: 1
         property real lifeOpacity: 1
@@ -1266,8 +1269,8 @@ VPage {
             onFinished: { const f = card.dieDone; card.dieDone = null; if (f) f() }
         }
         border.width: willDetach || root.marked.indexOf(node.id) >= 0 ? 2 : 1
-        border.color: willDetach ? Theme.err : root.selectedId === node.id ? "#FFFFFF"
-                    : root.marked.indexOf(node.id) >= 0 ? Theme.accent : Qt.rgba(1, 1, 1, 0.1)
+        border.color: willDetach ? Theme.err : root.selectedId === node.id ? Theme.t1
+                    : root.marked.indexOf(node.id) >= 0 ? Theme.accent : Theme.strokeStrong
         Behavior on border.color { ColorAnimation { duration: Theme.d(200) } }
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
 
@@ -1337,15 +1340,12 @@ VPage {
                 objectName: "node-head-" + card.node.id
                 Layout.fillWidth: true
                 implicitHeight: 34
-                radius: 9
-                // .bnode .bh: linear-gradient(90deg, hue 55 % into the card
-                // colour, hue 18 %), per node type.
+                radius: Theme.rCard
                 readonly property color hue: root.hueOf(card.node.type)
-                function mix(a) { return Qt.rgba(hue.r * a + 0.114 * (1 - a), hue.g * a + 0.114 * (1 - a), hue.b * a + 0.133 * (1 - a), 1) }
-                gradient: Gradient {
-                    orientation: Gradient.Horizontal
-                    GradientStop { position: 0; color: head.mix(0.55) }
-                    GradientStop { position: 1; color: head.mix(0.18) }
+                color: Theme.card3
+                Rectangle {
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: 1; color: Theme.stroke
                 }
                 // The grip stops 14px short of both sides: the ports straddle the
                 // card's edges at header height, and a press there belongs to the
@@ -1398,14 +1398,26 @@ VPage {
                     anchors.rightMargin: 6
                     spacing: 5
                     Item {
-                        implicitWidth: 18; implicitHeight: 18
-                        VIcon { anchors.centerIn: parent; name: "down"; size: 12; color: Theme.t2; rotation: card.collapsed ? -90 : 0
+                        id: collapseBtn
+                        implicitWidth: 20; implicitHeight: 20
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.Button
+                        Accessible.name: card.collapsed ? qsTr("展开节点") : qsTr("折叠节点")
+                        Keys.onReturnPressed: { card.collapsed = !card.collapsed; Qt.callLater(() => root.settle("n" + card.node.id)) }
+                        Keys.onSpacePressed: { card.collapsed = !card.collapsed; Qt.callLater(() => root.settle("n" + card.node.id)) }
+                        Rectangle {
+                            anchors.fill: parent; radius: Theme.rCtl
+                            color: collapseTap.pressed ? Theme.pressFill : collapseHover.hovered ? Theme.hoverFill : "transparent"
+                            border.width: collapseBtn.activeFocus ? 1 : 0; border.color: Theme.focusRing
+                        }
+                        VIcon { anchors.centerIn: parent; name: "down"; size: 12; color: collapseHover.hovered ? Theme.t1 : Theme.t2; rotation: card.collapsed ? -90 : 0
                             Behavior on rotation { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } } }
-                        TapHandler { onTapped: { card.collapsed = !card.collapsed; Qt.callLater(() => root.settle("n" + card.node.id)) } }
+                        HoverHandler { id: collapseHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { id: collapseTap; onTapped: { card.collapsed = !card.collapsed; Qt.callLater(() => root.settle("n" + card.node.id)) } }
                     }
                     Rectangle {
                         width: 8; height: 8; radius: 4
-                        color: card.node.enabled ? "#FFFFFF" : Qt.rgba(1, 1, 1, 0.35)
+                        color: card.node.enabled ? head.hue : Theme.t3
                     }
                     Text {
                         Layout.fillWidth: true
@@ -1458,7 +1470,7 @@ VPage {
                         objectName: "node-enable-" + card.node.id
                         checked: card.node.enabled === true
                         enabled: card.node.enabled === true || Support.available(veyra, card.node.type)
-                        opacity: enabled ? 1 : 0.4
+                        opacity: enabled ? 1 : Theme.disabledOpacity
                         onToggled: checked => veyra.setEffectEnabled(card.node.index, checked)
                     }
                     VButton {
@@ -1618,7 +1630,7 @@ VPage {
                 objectName: "node-hdr-editor-" + card.node.id
                 spacing: 4
                 enabled: Support.available(veyra, "video-hdr")
-                opacity: enabled ? 1 : 0.4
+                opacity: enabled ? 1 : Theme.disabledOpacity
                 Text {
                     Layout.fillWidth: true
                     text: veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("SDR → HDR，在补帧之前")
@@ -1692,7 +1704,7 @@ VPage {
                     label: qsTr("DLSS 性能模式")
                     visible: veyra.fgBackendName === "dlss"
                     enabled: veyra.dlssgLiteAvailable
-                    opacity: enabled ? 1 : 0.5
+                    opacity: enabled ? 1 : Theme.disabledOpacity
                     hint: veyra.dlssgLiteHint
                     VSwitch { objectName: "node-dlssg-lite"; checked: veyra.dlssgLite; onToggled: checked => veyra.dlssgLite = checked }
                 }
@@ -1711,7 +1723,7 @@ VPage {
                     label: qsTr("VFG 自动调控")
                     visible: veyra.fgBackendName === "vfg"
                     enabled: veyra.vfgQuality !== 0 && veyra.fgMultiplier === 2
-                    opacity: enabled ? 1 : 0.5
+                    opacity: enabled ? 1 : Theme.disabledOpacity
                     hint: qsTr("实时采集 2X 时，当前档来不及赶上屏幕刷新，这一对帧就改用下一档，不丢帧也不加延迟。多占约 2 GB 显存，显存不够时不生效")
                     VSwitch { objectName: "node-vfg-auto-regulate"; checked: veyra.vfgAutoRegulate; onToggled: checked => veyra.vfgAutoRegulate = checked }
                 }
@@ -1777,7 +1789,10 @@ VPage {
         objectName: (output ? "node-out-" : "node-in-") + nodeId
         z: 5; width: 22; height: 22; radius: 11
         color: root.wireFrom === nodeId && output ? Theme.accent : (portHover.hovered ? Theme.accentSoft : Theme.card3)
-        border.width: 2; border.color: portHover.hovered ? Theme.accent : Theme.stroke2
+        border.width: 2; border.color: port.activeFocus ? Theme.focusRing : portHover.hovered ? Theme.accent : Theme.stroke2
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: output ? qsTr("输出端口") : qsTr("输入端口")
         HoverHandler { id: portHover; cursorShape: Qt.CrossCursor }
         // Click an output, then an input (or press Esc / click empty canvas).
         TapHandler {

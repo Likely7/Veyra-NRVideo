@@ -9,8 +9,9 @@ DialogLayer {
     key: "save"
     glyph: "plus"
     readonly property string kindLabel: veyra.nodeMode === 1 ? qsTr("节点") : qsTr("列表")
-    title: qsTr("另存为") + kindLabel + qsTr("预设")
-    sub: kindLabel + qsTr("预设和") + (veyra.nodeMode === 1 ? qsTr("列表") : qsTr("节点")) + qsTr("预设分开保存，互不影响；应用时只覆盖勾选的部分")
+    readonly property string otherKindLabel: veyra.nodeMode === 1 ? qsTr("列表") : qsTr("节点")
+    title: qsTr("另存为%1预设").arg(kindLabel)
+    sub: qsTr("%1预设和%2预设分开保存，互不影响；应用时只覆盖勾选的部分").arg(kindLabel).arg(otherKindLabel)
     dialogWidth: 580
     // presets.js currentItems: what the chain holds right now, one row per
     // node, with the parameters that matter.
@@ -35,6 +36,7 @@ DialogLayer {
         veyra.presets.some(p => p.name === presetNameField.text.trim())
     property var chosen: ({})
     property var parts: []
+    property bool saveDefault: false
     function resetForOpen() {
         const current = veyra.presetSaveParts
         const selected = {}
@@ -43,7 +45,7 @@ DialogLayer {
         chosen = selected
         presetNameField.text = ""
         saveNote.text = ""
-        saveAsDefault.checked = false
+        saveDefault = false
     }
     actions: [
         { label: qsTr("取消") },
@@ -75,7 +77,7 @@ DialogLayer {
         Layout.fillWidth: true
         Layout.topMargin: 4
         spacing: 6
-        Text { text: qsTr("预设名称"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+        Text { text: qsTr("预设名称"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
         DialogTextField {
             id: presetNameField
             objectName: "preset-name"
@@ -88,19 +90,19 @@ DialogLayer {
             text: saveDialog.nameTaken ? qsTr("已有同名预设，换一个名称才能保存")
                   : presetNameField.text.trim().length > 0 ? qsTr("可以保存")
                   : qsTr("名称会显示在极简模式和导出页的预设菜单里")
-            color: saveDialog.nameTaken ? Theme.warn : Theme.ok
+            color: saveDialog.nameTaken ? Theme.warn : (presetNameField.text.trim().length > 0 ? Theme.ok : Theme.t3)
             font.family: Theme.fontUi
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsEyebrow
         }
     }
-    DialogSection { text: qsTr("将保存的内容 · 当前正在使用的") + saveDialog.kindLabel + qsTr("设置") }
+    DialogSection { text: qsTr("将保存的内容 · 当前正在使用的%1设置").arg(saveDialog.kindLabel) }
     // .savelist: every node, a green dot when it runs; the list dims when
     // the effect chain itself is not part of the preset.
     ColumnLayout {
         objectName: "preset-save-list"
         Layout.fillWidth: true
         spacing: 4
-        opacity: saveDialog.chosen["chain"] === true ? 1 : 0.45
+        opacity: saveDialog.chosen["chain"] === true ? 1 : Theme.disabledOpacity
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
         Repeater {
             model: saveDialog.shown ? veyra.chain : []
@@ -108,8 +110,8 @@ DialogLayer {
                 required property var modelData
                 Layout.fillWidth: true
                 implicitHeight: 34
-                radius: 8
-                color: Qt.rgba(1, 1, 1, 0.03)
+                radius: Theme.rCard
+                color: Theme.hoverFill
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 10
@@ -117,13 +119,13 @@ DialogLayer {
                     spacing: 10
                     Rectangle {
                         implicitWidth: 7; implicitHeight: 7; radius: 3.5
-                        color: modelData.enabled ? Theme.ok : Qt.rgba(1, 1, 1, 0.25)
+                        color: modelData.enabled ? Theme.ok : Theme.t3
                     }
                     Text {
                         Layout.preferredWidth: 110
                         text: saveDialog.nodeLabel(modelData)
                         color: modelData.enabled ? Theme.t1 : Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 12
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall
                         font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                         elide: Text.ElideRight
                     }
@@ -131,7 +133,7 @@ DialogLayer {
                         Layout.fillWidth: true
                         text: saveDialog.nodeSummary(modelData)
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                         elide: Text.ElideRight
                     }
                     VTag { visible: !modelData.enabled; text: qsTr("已关闭") }
@@ -145,7 +147,7 @@ DialogLayer {
             model: saveDialog.shown ? saveDialog.parts : []
             delegate: VRow {
                 required property var modelData
-                label: qsTr("包含") + modelData.label
+                label: qsTr("包含%1").arg(modelData.label)
                 hint: modelData.summary
                 VSwitch {
                     objectName: "preset-part-" + modelData.id
@@ -163,7 +165,7 @@ DialogLayer {
         VRow {
             label: qsTr("保存后设为启动默认")
             hint: qsTr("下次启动软件时自动应用这个预设")
-            VSwitch { id: saveAsDefault; objectName: "preset-save-default"; checked: false; onToggled: v => checked = v }
+            VSwitch { id: saveAsDefault; objectName: "preset-save-default"; checked: saveDialog.saveDefault; onToggled: v => saveDialog.saveDefault = v }
         }
     }
     Text {

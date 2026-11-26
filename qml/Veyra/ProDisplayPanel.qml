@@ -2,14 +2,12 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Shapes
-import QtQuick.Effects
 
 ColumnLayout {
     id: displayCol
     readonly property bool hdrMeterObserved: visible && hdrCurveAccordion.open && hdrReadAccordion.open && veyra.hdrCurve
     Layout.fillWidth: true
-    spacing: 6
+    spacing: Theme.s8
     VGroup {
         ProPresentationRows { }
         VRow {
@@ -74,7 +72,7 @@ ColumnLayout {
                     objectName: "list-hdr-curve"
                     Layout.fillWidth: true
                     glyph: "sun"
-                    hue: "#F5C84B"
+                    hue: Theme.warn
                     title: qsTr("HDR 亮度曲线")
                     summary: veyra.hdrCurve ? qsTr("已开启") : qsTr("已关闭")
                     on: veyra.hdrCurve
@@ -82,17 +80,15 @@ ColumnLayout {
                     // 曲线图（自定义）：由 C++ 用与着色器相同的公式采样，
                     // 虚线是"不做任何处理"的参考线，橙线是当前曲线。
 
-                        VAccordion {
+                        VSubGroup {
                             id: hdrReadAccordion
                             objectName: "list-hdr-readgroup"
                             Layout.fillWidth: true
-                            glyph: "activity"
-                            hue: "#F5C84B"
-                            Layout.topMargin: 8
-                            enabledSwitch: false
-                            open: true
-                            title: qsTr("曲线图、读数与提示")
-                            summary: qsTr("2 项")
+                            Layout.topMargin: Theme.s8
+                            expanded: true
+                            readonly property bool open: expanded
+                            label: qsTr("曲线图、读数与提示")
+                            count: 2
                     // GPU 抽样统计：本卡可见且输出曲线生效时至多每秒 4 次。
                     VRow {
                         hintBelow: true
@@ -161,7 +157,7 @@ ColumnLayout {
                             ctx.beginPath();
                             ctx.moveTo(0, h); ctx.lineTo(w, 0); ctx.stroke();
                             // 当前曲线
-                            ctx.strokeStyle = g.enabled ? "#F5C84B" : Theme.t3;
+                            ctx.strokeStyle = g.enabled ? Theme.warn : Theme.t3;
                             ctx.lineWidth = 2;
                             ctx.beginPath();
                             for (var i = 0; i < g.inputs.length; ++i) {
@@ -179,19 +175,16 @@ ColumnLayout {
                         text: qsTr("曲线作用于 HDR10 或 scRGB 输出，也适用于 RTX Video HDR 转换后的画面。低亮度画面可能不会触及高光阈值。")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                         }
-                    VAccordion {
+                    VSubGroup {
                         objectName: "list-hdr-pickgroup"
                         Layout.fillWidth: true
-                        glyph: "wand"
-                        hue: "#A78BFA"
-                        Layout.topMargin: 8
-                        enabledSwitch: false
-                        open: true
-                        title: qsTr("一键选档")
-                        summary: qsTr("4 项")
+                        Layout.topMargin: Theme.s8
+                        expanded: true
+                        label: qsTr("一键选档")
+                        count: 4
                     // 选档方式（自定义）：整档预设 / 自由组合。两套写的是同一条曲线，
                     // 所以切换只影响界面，不影响存档或画面。
                     VRow {
@@ -244,11 +237,13 @@ ColumnLayout {
                         text: qsTr("选档方式：两种选法写的是同一条曲线，切换只影响界面上怎么叫它")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     Flow {
                         objectName: "list-hdrcurve-mode"
                         Layout.fillWidth: true
+                        Layout.topMargin: Theme.s4
+                        Layout.bottomMargin: Theme.s4
                         visible: true
                         Layout.preferredHeight: implicitHeight
                         spacing: 6
@@ -268,6 +263,8 @@ ColumnLayout {
                     Flow {
                         visible: veyra.hdrPresetMode === "legacy"
                         Layout.fillWidth: true
+                        Layout.topMargin: Theme.s4
+                        Layout.bottomMargin: Theme.s4
                         Layout.preferredHeight: implicitHeight
                         spacing: 6
                         Repeater {
@@ -302,7 +299,7 @@ ColumnLayout {
                             : qsTr("自定义：已用下面的滑块微调过。")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     Text {
                         Layout.fillWidth: true
@@ -310,11 +307,13 @@ ColumnLayout {
                         text: qsTr("内容：这部片子属于哪一类")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     Flow {
                         objectName: "list-hdrcurve-content"
                         Layout.fillWidth: true
+                        Layout.topMargin: Theme.s4
+                        Layout.bottomMargin: Theme.s4
                         visible: veyra.hdrPresetMode === "axes"
                         Layout.preferredHeight: implicitHeight
                         spacing: 6
@@ -337,11 +336,13 @@ ColumnLayout {
                         text: qsTr("环境光补偿：屋里亮（开灯/白天）就补偿一点，屋里暗（关灯）就不补偿")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     Flow {
                         objectName: "list-hdrcurve-environment"
                         Layout.fillWidth: true
+                        Layout.topMargin: Theme.s4
+                        Layout.bottomMargin: Theme.s4
                         visible: veyra.hdrPresetMode === "axes"
                         Layout.preferredHeight: implicitHeight
                         spacing: 6
@@ -374,7 +375,7 @@ ColumnLayout {
                             : qsTr("当前生效：自定义微调（未匹配任何整档预设）")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     // 当前组合（自定义）：自由组合模式下说清楚现在选的是哪两项 —— 手动微调
                     // 过参数后没有匹配项，这一行仍然在，不会看起来像"没生效"。
@@ -391,7 +392,7 @@ ColumnLayout {
                                 : qsTr("不补偿"))
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     // 等价说明（自定义）：两套预设写的是同一条曲线，「不补偿」时两轴组合与
                     // 整档预设数值完全相同，所以这里把等价关系直接说出来，省得看起来像两个模式
@@ -410,19 +411,16 @@ ColumnLayout {
                             : qsTr("标准"))
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     }
-                            VAccordion {
+                            VSubGroup {
                                 objectName: "list-hdr-basegroup"
                                 Layout.fillWidth: true
-                                glyph: "sliders"
-                                hue: "#4F7BFF"
-                                Layout.topMargin: 8
-                                enabledSwitch: false
-                                open: true
-                                title: qsTr("基础设置")
-                                summary: qsTr("5 项")
+                                Layout.topMargin: Theme.s8
+                                expanded: true
+                                label: qsTr("基础设置")
+                                count: 5
                     VRow {
                         hintBelow: true
                         label: qsTr("总体强度")
@@ -515,7 +513,7 @@ ColumnLayout {
                                         + " · " + qsTr("系统数值不是实测；不符时可手动填写峰值")
                                     wrapMode: Text.WordWrap
                                     color: Theme.t3
-                                    font.family: Theme.fontUi; font.pixelSize: 11
+                                    font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                                 }
                                 Text {
                                     Layout.fillWidth: true
@@ -523,33 +521,23 @@ ColumnLayout {
                                     text: qsTr("这个数值是显示器的上限声明，不是实测，因此曲线未按它缩放。")
                                     wrapMode: Text.WordWrap
                                     color: Theme.t3
-                                    font.family: Theme.fontUi; font.pixelSize: 11
+                                    font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                                 }
                             }
 
-                    // The two dials. Both scale the baseline the sliders below
-                    // edit, which is why moving either of them keeps the preset
-                    // above selected instead of falling back to "自定义".
-                    // Advanced technical parameters (custom): the exact values behind the three
-                    // dials above. Collapsed by default so the panel stays readable.
-                    // Advanced parameters (custom): the exact values behind the three dials above,
-                    // in the author's own collapsible-group style (label + chevron, no switch).
-                    VAccordion {
+                    VSubGroup {
                         objectName: "list-hdr-advanced"
                         Layout.fillWidth: true
-                        glyph: "settings"
-                        hue: "#8A93A6"
-                        Layout.topMargin: 8
-                        enabledSwitch: false
-                        open: false
-                        title: qsTr("高级设置：技术参数")
-                        summary: qsTr("6 项")
+                        Layout.topMargin: Theme.s8
+                        expanded: false
+                        label: qsTr("高级设置：技术参数")
+                        count: 6
                         Text {
                             Layout.fillWidth: true
                             text: qsTr("这里是「基础设置」里 暗部提亮、整体观感、高光保护 这三项的精确数值版（强度与显示峰值不在此列，它们本身就是直接调节）。")
                             wrapMode: Text.WordWrap
                             color: Theme.t3
-                            font.family: Theme.fontUi; font.pixelSize: 11
+                            font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                         }
                                                     Repeater {
                                                         model: [{key:"shadowLiftEv100",label:qsTr("暗部抬升"),from:-200,to:200,def:0,hint:qsTr("单位 0.01 EV：正值提亮暗部，负值压暗")},
@@ -576,16 +564,13 @@ ColumnLayout {
                                                         }
                                                     }
                     }
-                    VAccordion {
+                    VSubGroup {
                         objectName: "list-hdr-memory-group"
                         Layout.fillWidth: true
-                        glyph: "clock"
-                        hue: "#4FD1A5"
-                        Layout.topMargin: 8
-                        enabledSwitch: false
-                        open: false
-                        title: qsTr("记忆与自动化")
-                        summary: qsTr("4 项")
+                        Layout.topMargin: Theme.s8
+                        expanded: false
+                        label: qsTr("记忆与自动化")
+                        count: 4
                     // 记忆与自动化（自定义）
                     // 每台显示设备一套配置（自定义）：按显示器身份记住曲线，
                     // 换设备（投影仪 / 电视）时自动套用那台设备上的设置。
@@ -648,9 +633,9 @@ ColumnLayout {
                 VAccordion {
                     objectName: "list-hdr-dovi"
                     Layout.fillWidth: true
-                    Layout.topMargin: 12
+                    Layout.topMargin: Theme.s4
                     glyph: "sun"
-                    hue: "#A88BF0"
+                    hue: Theme.exp
                     title: qsTr("杜比视界 / HDR10+ 设置")
                     summary: {
                         const d = veyra.hdrSourceInfo;
@@ -715,7 +700,7 @@ ColumnLayout {
                         // The follow only moves where the curve's roll-off starts,
                         // so with the curve off there is nothing for it to move.
                         enabled: veyra.hdrCurve
-                        opacity: enabled ? 1 : 0.5
+                        opacity: enabled ? 1 : Theme.disabledOpacity
                         label: qsTr("跟随动态元数据")
                         hint: veyra.hdrCurve
                             ? qsTr("杜比视界（L1）和 HDR10+ 的逐场景元数据都走这里：只按每帧亮度压低高光，暗部和中间调保持你设定的样子")
@@ -731,7 +716,7 @@ ColumnLayout {
                         hintBelow: true
                         visible: veyra.doviFollow
                         enabled: veyra.hdrCurve
-                        opacity: enabled ? 1 : 0.5
+                        opacity: enabled ? 1 : Theme.disabledOpacity
                         label: qsTr("参考平均亮度")
                         hint: qsTr("勾选后，高光起点同时参考每帧的平均亮度：暗场多的片子压得更积极，亮场多的保留更多高光；取消则只看峰值")
                         VSwitch {
@@ -746,7 +731,7 @@ ColumnLayout {
                         text: qsTr("曲线当前是关闭的，跟随暂时不会改变画面。")
                         wrapMode: Text.WordWrap
                         color: Theme.t3
-                        font.family: Theme.fontUi; font.pixelSize: 11
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                     }
                     VRow {
                         hintBelow: true

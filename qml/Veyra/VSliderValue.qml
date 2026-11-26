@@ -10,8 +10,10 @@ Item {
     property Item slider: null
     property string text: ""
     property color color: Theme.t1
-    property int pixelSize: Theme.fsSmall
+    property real pixelSize: Theme.fsSmall
     property int horizontalAlignment: Text.AlignRight
+    Accessible.role: editable ? Accessible.EditableText : Accessible.StaticText
+    Accessible.name: valueText.text
     readonly property bool editable: slider !== null && slider.editable !== false && slider.enabledControl !== false
     readonly property bool editing: editor.visible
     implicitWidth: label.implicitWidth
@@ -73,15 +75,15 @@ Item {
         height: 24
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
-        radius: 6
+        radius: Theme.rCtl
         color: Theme.dialog
         border.width: 1
-        border.color: Theme.accent
+        border.color: Theme.focusRing
         TextInput {
             id: input
             objectName: "vslider-value-input"
             anchors.fill: parent
-            anchors.leftMargin: 6; anchors.rightMargin: 6
+            anchors.leftMargin: Theme.s4; anchors.rightMargin: Theme.s4
             verticalAlignment: TextInput.AlignVCenter
             horizontalAlignment: TextInput.AlignRight
             color: Theme.t1

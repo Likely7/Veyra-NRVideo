@@ -1,11 +1,8 @@
 // The timing bar: a thin strip under the video showing where each stage spent
 // its time, with the labels drawn ON the bar rather than in a legend below it.
-// The user asked for this explicitly (the first version was too tall and
-// carried a separate legend).
 //
 // Every number comes from the engine. A stage with no measurement is drawn as
-// unmeasured, never as zero: a bar that shows 0 ms for something we did not
-// measure is a lie about the latency this product is sold on.
+// unmeasured, never as zero.
 import QtQuick
 import QtQuick.Layouts
 
@@ -15,10 +12,16 @@ Item {
 
     // [{ label, ms, color, measured }]
     property var stages: []
+    readonly property real measuredTotal: {
+        let total = 0
+        for (let i = 0; i < stages.length; ++i)
+            if (stages[i].measured) total += stages[i].ms
+        return total
+    }
 
     Rectangle {
         anchors.fill: parent
-        radius: 4
+        radius: Theme.rCtl
         color: Theme.card
         clip: true
 
@@ -29,35 +32,32 @@ Item {
                 model: root.stages
                 delegate: Item {
                     required property var modelData
-                    // A stage's width is its measured share; unmeasured stages
-                    // get an equal sliver so they stay legible.
-                    readonly property real measuredTotal: root.stages.reduce(
-                        (a, s) => a + (s.measured ? s.ms : 0), 0)
+                    readonly property string fullLabel: modelData.measured
+                        ? modelData.label + " " + modelData.ms.toFixed(1)
+                        : modelData.label + " —"
                     Layout.fillHeight: true
                     Layout.fillWidth: true
+                    Layout.minimumWidth: 28
                     Layout.preferredWidth: {
-                        if (!modelData.measured) return 58
-                        if (measuredTotal <= 0) return 0
-                        return Math.max(46, modelData.ms / measuredTotal * root.width)
+                        if (!modelData.measured) return 52
+                        if (root.measuredTotal <= 0) return 44
+                        return Math.max(40, modelData.ms / root.measuredTotal * root.width)
                     }
                     Rectangle {
                         anchors.fill: parent
                         anchors.margins: 1
-                        radius: 3
+                        radius: Theme.rCtl - 2
                         color: modelData.measured ? modelData.color : Theme.card3
                         opacity: modelData.measured ? 0.92 : 0.5
                     }
                     Text {
                         anchors.centerIn: parent
-                        // Label and number on the bar itself.
-                        text: modelData.measured
-                              ? modelData.label + " " + modelData.ms.toFixed(1)
-                              : modelData.label + " —"
+                        text: parent.fullLabel
                         color: modelData.measured ? Theme.accentInk : Theme.t3
                         font.family: Theme.fontMono
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsEyebrow
                         elide: Text.ElideRight
-                        width: parent.width - 8
+                        width: Math.max(0, parent.width - Theme.s8)
                         horizontalAlignment: Text.AlignHCenter
                     }
                 }

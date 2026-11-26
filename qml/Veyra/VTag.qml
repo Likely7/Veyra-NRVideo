@@ -6,19 +6,21 @@ Rectangle {
     property string text: ""
     property string kind: ""   // "" | "exp" | "acc" | "warn" | "ok"
     property bool elideText: false
-    implicitWidth: tagText.implicitWidth + 14
+    implicitWidth: tagText.implicitWidth + Theme.s16
     implicitHeight: Theme.tagHeight
-    radius: 6
+    radius: Theme.rCtl
     color: kind === "exp" ? Theme.expSoft
          : kind === "acc" ? Theme.accentSoft
-         : kind === "warn" ? Qt.rgba(0.961, 0.784, 0.294, 0.13)
-         : kind === "ok" ? Qt.rgba(0.239, 0.863, 0.518, 0.12)
-         : Qt.rgba(1, 1, 1, 0.07)
+         : kind === "warn" ? Theme.warnGlow
+         : kind === "ok" ? Theme.okGlow
+         : Theme.hoverFill
+    Accessible.role: Accessible.StaticText
+    Accessible.name: tag.text
     Text {
         id: tagText
         anchors.centerIn: parent
         text: tag.text
-        width: tag.elideText ? Math.max(0, Math.min(implicitWidth, tag.width - 14)) : implicitWidth
+        width: tag.elideText ? Math.max(0, Math.min(implicitWidth, tag.width - Theme.s16)) : implicitWidth
         elide: tag.elideText ? Text.ElideRight : Text.ElideNone
         color: tag.kind === "exp" ? Theme.exp
              : tag.kind === "acc" ? Theme.accent

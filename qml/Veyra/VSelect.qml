@@ -15,18 +15,40 @@ Rectangle {
     signal picked(string id)
 
     implicitWidth: 150
-    implicitHeight: compactLabel ? 30 : Math.max(30, valueLabel.implicitHeight + 8)
-    radius: 9
-    color: hover.hovered ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(1, 1, 1, 0.05)
-    border.width: 1
-    border.color: Theme.stroke
-    HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
-    TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: menu.openAt(sel, "down") }
+    implicitHeight: compactLabel ? Theme.ctlHeight : Math.max(Theme.ctlHeight, valueLabel.implicitHeight + Theme.s8)
+    radius: Theme.rCtl
+    opacity: enabled ? 1.0 : Theme.disabledOpacity
+    activeFocusOnTab: enabled
+    color: tap.pressed ? Theme.pressFill : hover.hovered ? Theme.hoverFill : Theme.card2
+    border.width: activeFocus ? 2 : 1
+    border.color: activeFocus ? Theme.focusRing : Theme.stroke
+    HoverHandler { id: hover; enabled: sel.enabled; cursorShape: Qt.PointingHandCursor }
+    TapHandler {
+        id: tap
+        enabled: sel.enabled
+        gesturePolicy: TapHandler.WithinBounds
+        onTapped: {
+            sel.forceActiveFocus()
+            menu.openAt(sel, "down")
+        }
+    }
+    Keys.onSpacePressed: event => { if (enabled) { menu.openAt(sel, "down"); event.accepted = true } }
+    Keys.onReturnPressed: event => { if (enabled) { menu.openAt(sel, "down"); event.accepted = true } }
+    Keys.onEnterPressed: event => { if (enabled) { menu.openAt(sel, "down"); event.accepted = true } }
+    Keys.onDownPressed: event => { if (enabled) { menu.openAt(sel, "down"); event.accepted = true } }
+
+    Accessible.role: Accessible.ComboBox
+    Accessible.name: menu.title.length > 0 ? menu.title : sel.displayValue
+    Accessible.description: sel.displayValue
+    Accessible.focusable: sel.enabled
+    Accessible.focused: sel.activeFocus
+    Accessible.pressed: tap.pressed
+    Accessible.onPressAction: if (sel.enabled) menu.openAt(sel, "down")
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 12
-        anchors.rightMargin: 10
+        anchors.leftMargin: Theme.s12
+        anchors.rightMargin: Theme.s8
         Text {
             id: valueLabel
             Layout.fillWidth: true

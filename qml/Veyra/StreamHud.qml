@@ -15,63 +15,78 @@ Rectangle {
     readonly property bool pcOn: !!ml && ml.state.streaming === true
     readonly property var s: xboxOn ? (xb.state.stream || ({})) : pcOn ? (ml.state.stream || ({})) : ({})
     readonly property bool shown: (xboxOn || pcOn) && veyra.moonlightStatsVisible
+    property real maximumWidth: 520
     // Cut out of the native video window like the dialogs, so it is readable over the picture.
     readonly property bool videoCover: true
-    property real coverRadius: 10
+    property real coverRadius: Theme.rCard
 
     function ms(v) { return v > 0 ? v.toFixed(1) + " ms" : "—" }
     function num(v) { return v > 0 ? v.toFixed(1) : "—" }
 
     visible: shown
-    width: col.implicitWidth + 28
-    height: col.implicitHeight + 24
-    radius: 10
-    color: Qt.rgba(0.04, 0.04, 0.05, 0.86)
+    width: Math.min(Math.max(180, maximumWidth), col.implicitWidth + Theme.s24)
+    height: col.implicitHeight + Theme.s24
+    radius: Theme.rCard
+    color: Theme.shade(18, 20, 24, 0.90)
     border.width: 1
-    border.color: Theme.stroke2
+    border.color: Theme.strokeStrong
     ColumnLayout {
         id: col
-        anchors.centerIn: parent
-        spacing: 4
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.verticalCenter: parent.verticalCenter
+        anchors.leftMargin: Theme.s12
+        anchors.rightMargin: Theme.s12
+        spacing: Theme.s4
         Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             text: (hud.xboxOn ? "Xbox · " : "PC · ") + (s.width > 0 ? s.width + "×" + s.height : "") + " · " + (s.codec || "")
                 + (s.hdr ? " HDR" : "") + " · " + (s.hardware ? qsTr("硬件解码") : qsTr("软件解码"))
             color: Theme.t1
             font.family: Theme.fontMono
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsSmall
             font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
         }
         Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             visible: !hud.xboxOn
             text: qsTr("主机 ") + hud.ms(s.hostMs) + qsTr("  ·  往返 ") + hud.ms(s.rttMs) + qsTr("  ·  接收 ") + hud.ms(s.receiveMs)
                 + qsTr("  ·  排队 ") + hud.ms(s.queueMs) + qsTr("  ·  解码 ") + hud.ms(s.decodeMs)
                 + qsTr("  ·  码率 ") + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
             color: Theme.t2
             font.family: Theme.fontMono
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsEyebrow
         }
         Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             visible: hud.xboxOn
             text: qsTr("往返 ") + hud.ms(s.rttMs) + qsTr("  ·  解码 ") + hud.ms(s.decodeMs) + qsTr("  ·  码率 ") + (s.videoMbps > 0 ? s.videoMbps.toFixed(1) + " Mbps" : "—")
             color: Theme.t2
             font.family: Theme.fontMono
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsEyebrow
         }
         Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             text: hud.xboxOn
                 ? qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  丢帧 ") + (s.dropped || 0) + qsTr("  ·  关键帧请求 ") + (s.keyframes || 0)
                 : qsTr("收 ") + hud.num(s.receivedFps) + qsTr(" / 解 ") + hud.num(s.decodedFps) + qsTr(" fps  ·  包 ") + (s.packets || 0)
                   + qsTr("  ·  FEC 恢复 ") + (s.recovered || 0) + qsTr("  ·  未恢复 ") + (s.lost || 0) + qsTr("  ·  丢帧 ") + (s.dropped || 0)
             color: (s.lost || 0) > 0 ? Theme.warn : Theme.t2
             font.family: Theme.fontMono
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsEyebrow
         }
         Text {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
             text: hud.xboxOn ? qsTr("Ctrl+Alt+Shift+S 隐藏") :
-                  veyra.moonlightCaptured ? qsTr("键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · +Q 断开") : qsTr("键盘鼠标未捕获 · 点击画面捕获")
+                  veyra.moonlightCaptured ? qsTr("键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · Ctrl+Alt+Shift+Q 断开") : qsTr("键盘鼠标未捕获 · 点击画面捕获")
             color: !hud.xboxOn && veyra.moonlightCaptured ? Theme.ok : Theme.t3
             font.family: Theme.fontUi
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsEyebrow
         }
     }
 }

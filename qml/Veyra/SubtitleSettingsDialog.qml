@@ -47,14 +47,11 @@ DialogLayer {
         Layout.fillWidth: true
         Layout.topMargin: 4
         implicitHeight: 180
-        radius: 10
+        radius: Theme.rCard
+        color: Theme.videoBlack
         border.width: 1
         border.color: Theme.stroke
         clip: true
-        gradient: Gradient {
-            GradientStop { position: 0; color: "#1B2230" }
-            GradientStop { position: 1; color: "#0B0C10" }
-        }
         readonly property real scaleFactor: height / 540
         Image {
             anchors.fill: parent
@@ -86,13 +83,13 @@ DialogLayer {
                         id: line
                         anchors.centerIn: parent
                         text: modelData
-                        color: "#FFFFFF"
+                        color: Theme.t1
                         readonly property var families: ["", "SimHei", "SimSun", "DengXian", "Arial", "Segoe UI"]
                         font.family: families[subtitleDialog.pref("subtitleFont", 0)] || Theme.fontUi
                         font.pixelSize: Math.max(12, subtitleDialog.pref("subtitleSize", 22) * 0.8)
                         font.weight: Font.DemiBold
                         style: subtitleDialog.pref("subtitleOutline", 2) > 0 ? Text.Outline : Text.Normal
-                        styleColor: Qt.rgba(0, 0, 0, subtitleDialog.pref("subtitleOutline", 2) >= 3 ? 1 : 0.85)
+                        styleColor: Theme.shade(0, 0, 0, subtitleDialog.pref("subtitleOutline", 2) >= 3 ? 1 : 0.85)
                     }
                 }
             }
@@ -106,7 +103,7 @@ DialogLayer {
             hint: veyra.subtitleTracks.length === 0 ? (veyra.subtitleStatus.length > 0 ? veyra.subtitleStatus : (veyra.hasSource ? qsTr("当前片源没有字幕") : qsTr("打开视频后显示可用字幕"))) : ""
             VSelect {
                 objectName: "subtitle-primary"
-                implicitWidth: 220
+                implicitWidth: Math.min(220, Math.max(140, subtitleDialog.bodyWidth * 0.45))
                 value: subtitleDialog.trackLabel(veyra.subtitlePrimary)
                 options: subtitleDialog.trackOptions
                 onPicked: id => veyra.subtitlePrimary = Number(id)
@@ -117,7 +114,7 @@ DialogLayer {
             hint: qsTr("显示在主字幕上方")
             VSelect {
                 objectName: "subtitle-secondary"
-                implicitWidth: 220
+                implicitWidth: Math.min(220, Math.max(140, subtitleDialog.bodyWidth * 0.45))
                 value: subtitleDialog.trackLabel(veyra.subtitleSecondary)
                 options: subtitleDialog.trackOptions
                 onPicked: id => veyra.subtitleSecondary = Number(id)

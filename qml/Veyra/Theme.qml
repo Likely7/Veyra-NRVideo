@@ -18,73 +18,78 @@ QtObject {
     property string paletteName: "dusk"
     readonly property bool dusk: paletteName !== "classic"
 
-    // --- surfaces (app.css .vy) -------------------------------------------
-    readonly property color card: dusk ? "#161425" : "#131317"
-    readonly property color card2: dusk ? "#1C192C" : "#19191E"
-    readonly property color card3: dusk ? "#262238" : "#24242A"
-    readonly property color popover: dusk ? "#1D1A2D" : "#1B1B20"
-    readonly property color dialog: dusk ? "#171526" : "#141418"
-    readonly property color stroke: dusk ? Qt.rgba(0.88, 0.84, 1, 0.09) : Qt.rgba(1, 1, 1, 0.07)
-    readonly property color stroke2: dusk ? Qt.rgba(0.88, 0.84, 1, 0.16) : Qt.rgba(1, 1, 1, 0.13)
-    // The app background: a radial gradient in the prototype, approximated here
-    // with the three stops it interpolates between.
-    readonly property color bgOuter: dusk ? "#100E1D" : "#070709"
-    readonly property color bgMid: dusk ? "#161328" : "#0C0C10"
-    readonly property color bgInner: dusk ? "#201B34" : "#17171C"
+    // --- surfaces (Studio Cobalt graphite ramp) ----------------------------
+    readonly property color bg: "#0B0C0E"
+    readonly property color card: "#121418"
+    readonly property color card2: "#181B21"
+    readonly property color card3: "#21252D"
+    readonly property color popover: "#181B21"
+    readonly property color dialog: "#121418"
+    readonly property color stroke: Qt.rgba(1, 1, 1, 0.08)
+    readonly property color strokeStrong: Qt.rgba(1, 1, 1, 0.14)
+    readonly property color stroke2: strokeStrong
+    readonly property color bgOuter: bg
+    readonly property color bgMid: card
+    readonly property color bgInner: card2
     readonly property color videoBlack: "#000000"
-    // Dark neutrals some components still spell out (the cinema pill, the node
-    // canvas, the dock): exactly that colour in the classic palette, the same
-    // depth tinted indigo-violet in the dusk one.
     function shade(r, g, b, a) {
         const alpha = a === undefined ? 1 : a
-        return dusk ? Qt.rgba(Math.min(255, r + 2) / 255, Math.max(0, g - 1) / 255, Math.min(255, b + 14) / 255, alpha)
-                    : Qt.rgba(r / 255, g / 255, b / 255, alpha)
+        return Qt.rgba(r / 255, g / 255, b / 255, alpha)
     }
 
     // --- text -------------------------------------------------------------
-    readonly property color t1: dusk ? "#F7F4FC" : "#F3F3F5"
-    readonly property color t2: dusk ? Qt.rgba(0.969, 0.957, 0.988, 0.64) : Qt.rgba(0.953, 0.953, 0.961, 0.62)
-    readonly property color t3: dusk ? Qt.rgba(0.969, 0.957, 0.988, 0.40) : Qt.rgba(0.953, 0.953, 0.961, 0.38)
+    readonly property color t1: "#F4F5F7"
+    readonly property color t2: "#A6ADBB"
+    readonly property color t3: "#7E8696"
 
-    // --- accent and state -------------------------------------------------
-    // 设置 → 强调色: orange (default; the sunset accent in the dusk palette) or
-    // the design's .accent-white variant (a neon white with a pink glow in dusk).
+    // --- accent and state (Studio Cobalt) ---------------------------------
     property string accentName: "orange"
     readonly property bool accentWhite: accentName === "white"
-    readonly property color accent: accentWhite ? (dusk ? "#FFF6FB" : "#F3F3F5") : (dusk ? "#F287A7" : "#FF8A3D")
-    readonly property color accentInk: accentWhite ? (dusk ? "#1E0B1A" : "#0B0B0E") : (dusk ? "#2A0B1E" : "#1B0E04")
-    readonly property color accentSoft: accentWhite ? Qt.rgba(1, 1, 1, 0.1)
-                                      : dusk ? Qt.rgba(0.949, 0.529, 0.655, 0.15) : Qt.rgba(1, 0.541, 0.239, 0.14)
-    readonly property color accentGlow: accentWhite ? (dusk ? Qt.rgba(0.96, 0.62, 0.82, 0.42) : Qt.rgba(1, 1, 1, 0.35))
-                                      : dusk ? Qt.rgba(0.949, 0.529, 0.655, 0.38) : Qt.rgba(1, 0.541, 0.239, 0.35)
-    // The sunset accent fills as a gradient (VAccentFill.qml): peach -> pink,
-    // on to lilac along the seek bars.
-    readonly property bool accentGradient: dusk && !accentWhite
-    readonly property color accentFrom: "#F0B17B"
-    readonly property color accentTo: "#EF6FA3"
-    readonly property color accentFar: "#BB96F3"
-    // 设置 → 背景渐变强度: 0 none, 1 light (the design default), 2 medium.
-    property int backdropLevel: 1
+    readonly property color accent: accentWhite ? "#F4F5F7" : "#2563EB"
+    readonly property color accent2: accent
+    readonly property color accentHover: accentWhite ? "#FFFFFF" : "#3B82F6"
+    readonly property color accentPressed: accentWhite ? "#D4D7DD" : "#1D4ED8"
+    readonly property color accentText: accentWhite ? "#0B0C0E" : "#FFFFFF"
+    readonly property color accentInk: accentText
+    readonly property color focusRing: "#60A5FA"
+    readonly property color accentSoft: accentWhite ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(37 / 255, 99 / 255, 235 / 255, 0.16)
+    readonly property color accentGlow: Qt.rgba(37 / 255, 99 / 255, 235 / 255, 0.16)
+    readonly property bool accentGradient: false
+    readonly property color accentFrom: accent
+    readonly property color accentTo: accent
+    readonly property color accentFar: accent
+    // 设置 → 背景渐变强度: 0 none, 1 light, 2 medium (flat matte graphite by default).
+    property int backdropLevel: 0
     readonly property string backdropImage: (dusk ? "backdrop-dusk" : "backdrop") + (backdropLevel === 2 ? "-strong" : "") + ".png"
-    // The logo: the neon gradient gamepad in the dusk palette (tools/qt_probe/make-logo-dusk.py,
-    // from assets/veyra-logo-dusk.webp), the original white one in classic. Same canvas and box.
     readonly property string logoImage: dusk ? "logo-dusk.png" : "logo.png"
-    readonly property color ok: dusk ? "#5ED4B2" : "#3DDC84"
-    readonly property color okGlow: dusk ? Qt.rgba(0.369, 0.831, 0.698, 0.16) : Qt.rgba(0.239, 0.863, 0.518, 0.16)
-    readonly property color warn: "#F5C84B"
-    readonly property color warnGlow: Qt.rgba(0.961, 0.784, 0.294, 0.16)
-    readonly property color err: "#FF5D5D"
-    readonly property color errGlow: Qt.rgba(1, 0.365, 0.365, 0.16)
+    readonly property color ok: "#34D399"
+    readonly property color okGlow: Qt.rgba(52 / 255, 211 / 255, 153 / 255, 0.16)
+    readonly property color warn: "#FBBF24"
+    readonly property color warnGlow: Qt.rgba(251 / 255, 191 / 255, 36 / 255, 0.16)
+    readonly property color err: "#F87171"
+    readonly property color errGlow: Qt.rgba(248 / 255, 113 / 255, 113 / 255, 0.16)
     readonly property color exp: "#B79BFF"
     readonly property color expSoft: Qt.rgba(0.718, 0.608, 1.0, 0.14)
 
+    // --- interaction tokens -----------------------------------------------
+    readonly property color hoverFill: Qt.rgba(1, 1, 1, 0.06)
+    readonly property color pressFill: Qt.rgba(1, 1, 1, 0.10)
+    readonly property real disabledOpacity: 0.45
+
+    // --- spacing scale ----------------------------------------------------
+    readonly property int s4: 4
+    readonly property int s8: 8
+    readonly property int s12: 12
+    readonly property int s16: 16
+    readonly property int s20: 20
+    readonly property int s24: 24
+    readonly property int s32: 32
+
     // --- geometry (--r-win / --r-card / --r-ctl) --------------------------
-    // The window radius is 8px, small, because Windows' own default is small.
-    // The video surface is NEVER rounded: .video in the prototype carries
-    // border-radius:0!important because rounding crops the picture.
     readonly property int rWindow: 8
-    readonly property int rCard: 14
-    readonly property int rCtl: 10
+    readonly property int rCard: 10
+    readonly property int rCtl: 6
+    readonly property int rModal: 12
 
     // --- motion (--spring / --spring-soft / --out) ------------------------
     // easing.bezierCurve takes whole cubic segments, six numbers each
@@ -106,6 +111,8 @@ QtObject {
     property bool reduced: false
     function d(ms) { return reduced ? 0 : ms }
 
+    readonly property int animFast: 150
+    readonly property int animNormal: 200
     readonly property int durFast: 150
     readonly property int durNormal: 240
     readonly property int durSlow: 450

@@ -38,8 +38,8 @@ Popup {
           detail: qsTr("选好设备和格式后，在这里连接。先确认预览有画面、采集帧率符合预期，再看专业模式里的增强选项。") },
         { tab: "quality", target: "sr", title: qsTr("超分辨率在这里"),
           detail: qsTr("需要改变输出尺寸时，在「超分辨率」里选择算法和目标尺寸。") },
-        { tab: "quality", target: "nr", title: qsTr("DLSS 5 神经渲染（NR）"),
-          detail: qsTr("在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。") },
+        { tab: "quality", target: "nr", title: qsTr("神经渲染（NR）"),
+          detail: qsTr("在「NR 画面增强」里添加一层，对画面应用神经渲染，增强光照、材质和视觉细节。") },
         { tab: "quality", target: "hdr", title: qsTr("SDR 转 HDR 在这里"),
           detail: qsTr("想把 SDR 画面转换为 HDR，可以在支持的显卡和 HDR 显示器上试用 RTX Video HDR。") },
         { tab: "fg", target: "fg", title: qsTr("补帧在这里设置"),
@@ -187,7 +187,7 @@ Popup {
                     text: modelData
                     color: Theme.accent
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsSmall
                     font.strikeout: parent.repeated
                 }
             }
@@ -263,16 +263,10 @@ Popup {
                 anchors.fill: parent
                 anchors.margins: -2
                 color: "transparent"
-                radius: 9
+                radius: Theme.rCard
                 border.width: 2
                 border.color: Theme.accent
-                opacity: Theme.reduced ? 0.72 : 0.34
-                SequentialAnimation on opacity {
-                    running: guide.visible && hotspot.visible && !Theme.reduced
-                    loops: Animation.Infinite
-                    NumberAnimation { from: 0.34; to: 0.92; duration: 925; easing.type: Easing.InOutSine }
-                    NumberAnimation { from: 0.92; to: 0.34; duration: 925; easing.type: Easing.InOutSine }
-                }
+                opacity: 0.78
             }
         }
 
@@ -306,14 +300,14 @@ Popup {
                 Text {
                     Layout.row: 0
                     Layout.column: 0
-                    Layout.columnSpan: tip.compact ? 1 : 3
+                    Layout.columnSpan: 3
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     elide: Text.ElideRight
                     text: qsTr("第 %1 / %2 步").arg(guide.stepIndex + 1).arg(guide.steps.length)
                     color: Theme.accent
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsSmall
                 }
                 GuideButton {
                     id: closeButton
@@ -423,8 +417,8 @@ Popup {
                 GuideButton {
                     id: previousButton
                     objectName: "onboarding-previous"
-                    Layout.row: tip.compact ? 0 : 2
-                    Layout.column: tip.compact ? 1 : 0
+                    Layout.row: 2
+                    Layout.column: 0
                     Layout.maximumWidth: (tip.width - 56) / 2
                     Layout.preferredHeight: tip.compact ? 24 : implicitHeight
                     text: qsTr("上一步")
@@ -434,8 +428,8 @@ Popup {
                 GuideButton {
                     id: nextButton
                     objectName: "onboarding-next"
-                    Layout.row: tip.compact ? 0 : 2
-                    Layout.column: tip.compact ? 2 : 3
+                    Layout.row: 2
+                    Layout.column: 3
                     Layout.alignment: Qt.AlignRight
                     Layout.maximumWidth: (tip.width - 56) / 2
                     Layout.preferredHeight: tip.compact ? 24 : implicitHeight

@@ -70,11 +70,17 @@ DialogLayer {
             Layout.fillWidth: true
             Layout.topMargin: 6
             implicitHeight: 54
-            radius: 11
+            radius: Theme.rCard
             color: modelData.selected ? Theme.accentSoft : (hostHover.hovered ? Theme.card3 : Theme.card2)
-            border.width: 1
-            border.color: modelData.selected ? Theme.accent : Theme.stroke
+            border.width: activeFocus ? 2 : 1
+            border.color: modelData.selected ? Theme.accent : (activeFocus ? Theme.focusRing : Theme.stroke)
             objectName: "moonlight-host-" + modelData.id
+            activeFocusOnTab: true
+            Accessible.role: Accessible.ListItem
+            Accessible.name: hostRow.modelData.name + " · " + mlDialog.stateText(hostRow.modelData.state)
+            Keys.onReturnPressed: event => { event.accepted = true; mlDialog.ml.select(hostRow.modelData.id) }
+            Keys.onEnterPressed: event => { event.accepted = true; mlDialog.ml.select(hostRow.modelData.id) }
+            Keys.onSpacePressed: event => { event.accepted = true; mlDialog.ml.select(hostRow.modelData.id) }
             HoverHandler { id: hostHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: mlDialog.ml.select(hostRow.modelData.id) }
             RowLayout {
@@ -133,7 +139,7 @@ DialogLayer {
             hint: qsTr("IP 或主机名，端口不是 47989 时写成 192.168.1.20:47989")
             RowLayout {
                 spacing: 6
-                DialogTextField { id: mlAddress; objectName: "moonlight-address"; implicitWidth: 190; placeholder: "192.168.1.x"; onEdited: text => { if (text.length > 0) { mlDialog.ml.addHost(text); mlAddress.text = "" } } }
+                DialogTextField { id: mlAddress; objectName: "moonlight-address"; implicitWidth: Math.min(190, Math.max(120, mlDialog.bodyWidth * 0.35)); placeholder: "192.168.1.x"; onEdited: text => { if (text.length > 0) { mlDialog.ml.addHost(text); mlAddress.text = "" } } }
                 VSpinner { visible: mlDialog.st.busy === true; Layout.alignment: Qt.AlignVCenter }
                 VButton { text: qsTr("添加"); ghost: true; enabled: !mlDialog.st.busy && mlAddress.text.length > 0; onClicked: { mlDialog.ml.addHost(mlAddress.text); mlAddress.text = "" } }
                 VButton { text: qsTr("刷新"); ghost: true; enabled: !mlDialog.st.busy; onClicked: mlDialog.ml.refresh() }
@@ -147,7 +153,7 @@ DialogLayer {
         Layout.fillWidth: true
         Layout.topMargin: 8
         implicitHeight: pinCol.implicitHeight + 28
-        radius: 11
+        radius: Theme.rCard
         color: Theme.accentSoft
         border.width: 1
         border.color: Theme.accent
@@ -176,7 +182,7 @@ DialogLayer {
         }
     }
 
-    DialogSection { visible: !!mlDialog.st.paired; text: qsTr("游戏与程序 · ") + (mlDialog.st.hostName || "") }
+    DialogSection { visible: !!mlDialog.st.paired; text: qsTr("游戏与程序 · %1").arg(mlDialog.st.hostName || "") }
     DialogNote {
         visible: !!mlDialog.st.selected && !mlDialog.st.paired && !mlDialog.st.pairing
         text: qsTr("这台主机还没有和本机配对。点「配对」，在主机的 Sunshine 网页里输入软件给出的 PIN。")
@@ -196,12 +202,18 @@ DialogLayer {
                 required property var modelData
                 readonly property bool picked: mlDialog.effectiveApp === modelData.id
                 objectName: "moonlight-app-" + modelData.id
-                width: 168
+                width: Math.max(150, Math.min(200, Math.floor((mlDialog.bodyWidth - Theme.s8 * 2) / 3)))
                 height: 64
-                radius: 11
+                radius: Theme.rCard
                 color: picked ? Theme.accentSoft : (appHover.hovered ? Theme.card3 : Theme.card2)
-                border.width: 1
-                border.color: picked ? Theme.accent : Theme.stroke
+                border.width: activeFocus ? 2 : 1
+                border.color: picked ? Theme.accent : (activeFocus ? Theme.focusRing : Theme.stroke)
+                activeFocusOnTab: true
+                Accessible.role: Accessible.ListItem
+                Accessible.name: appCard.modelData.name
+                Keys.onReturnPressed: event => { event.accepted = true; mlDialog.pickedApp = appCard.modelData.id; if (mlDialog.canStart) mlDialog.ml.connectStream(appCard.modelData.id) }
+                Keys.onEnterPressed: event => { event.accepted = true; mlDialog.pickedApp = appCard.modelData.id; if (mlDialog.canStart) mlDialog.ml.connectStream(appCard.modelData.id) }
+                Keys.onSpacePressed: event => { event.accepted = true; mlDialog.pickedApp = appCard.modelData.id }
                 HoverHandler { id: appHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
                     onTapped: mlDialog.pickedApp = appCard.modelData.id
@@ -323,5 +335,5 @@ DialogLayer {
             VSwitch { objectName: "moonlight-hostaudio"; checked: mlDialog.cfg.hostAudio === true; onToggled: checked => mlDialog.ml.set("hostAudio", checked) }
         }
     }
-    DialogNote { objectName: "moonlight-status"; visible: (mlDialog.st.status || "").length > 0; text: (mlDialog.st.busy ? qsTr("处理中 · ") : "") + (mlDialog.st.status || "") }
+    DialogNote { objectName: "moonlight-status"; visible: (mlDialog.st.status || "").length > 0; text: mlDialog.st.busy ? qsTr("处理中 · %1").arg(mlDialog.st.status || "") : (mlDialog.st.status || "") }
 }

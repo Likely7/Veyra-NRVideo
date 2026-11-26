@@ -58,7 +58,7 @@ ColumnLayout {
         Text {
             Layout.fillWidth: true
             text: qsTr("人脸原画保护：按人脸轮廓混回本帧原画（没有经过任何效果）。磨皮：柔化皮肤，眼睛、眉毛和嘴唇不参与。两项可分别开关。")
-            color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
+            color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; wrapMode: Text.WordWrap
         }
         VRow {
             label: qsTr("预设")
@@ -236,6 +236,6 @@ ColumnLayout {
         Layout.fillWidth: true
         visible: editor.showDetection && editor.status.length > 0
         text: editor.status
-        color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 11; wrapMode: Text.WordWrap
+        color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; wrapMode: Text.WordWrap
     }
 }

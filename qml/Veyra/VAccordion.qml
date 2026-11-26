@@ -71,7 +71,7 @@ Rectangle {
         anchors.fill: parent
         z: 10
         radius: acc.radius
-        color: Qt.rgba(1, 138 / 255, 61 / 255, 0.08 * acc.flashLevel)
+        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.08 * acc.flashLevel)
         border.width: 2
         border.color: Theme.accent
         opacity: acc.flashLevel
@@ -91,13 +91,13 @@ Rectangle {
     // Space between the header's hairline and the first body row: a body that
     // starts with buttons or text (NR 层's 复制此层 row) sat on the line itself
     // (field report 2026-10-05).
-    readonly property int bodyTopGap: 8
+    readonly property int bodyTopGap: Theme.s8
     implicitHeight: headerHeight + (open ? body.implicitHeight + bodyTopGap + body.Layout.bottomMargin : 0)
-    radius: 12
+    radius: Theme.rCard
     color: Theme.card2
     border.width: 1
-    border.color: open ? Theme.stroke2 : Theme.stroke
-    Behavior on border.color { ColorAnimation { duration: Theme.d(250) } }
+    border.color: open ? Theme.strokeStrong : Theme.stroke
+    Behavior on border.color { ColorAnimation { duration: Theme.d(Theme.animNormal) } }
     Behavior on implicitHeight {
         enabled: !acc.instantExpansion
         NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.springSoft }
@@ -115,12 +115,33 @@ Rectangle {
             id: header
             Layout.fillWidth: true
             Layout.preferredHeight: acc.headerHeight
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: acc.title
+            Accessible.description: acc.open ? qsTr("已展开") : qsTr("已折叠")
+            Accessible.checkable: true
+            Accessible.checked: acc.open
+            Accessible.focusable: true
+            Accessible.focused: header.activeFocus
+            Accessible.pressed: headerTap.pressed
+            Accessible.onPressAction: { acc.open = !acc.open; acc.headerClicked() }
+            Keys.onSpacePressed: event => { acc.open = !acc.open; acc.headerClicked(); event.accepted = true }
+            Keys.onReturnPressed: event => { acc.open = !acc.open; acc.headerClicked(); event.accepted = true }
+            Keys.onEnterPressed: event => { acc.open = !acc.open; acc.headerClicked(); event.accepted = true }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: acc.radius
+                color: headerTap.pressed ? Theme.pressFill : headerHover.hovered ? Theme.hoverFill : "transparent"
+                border.width: header.activeFocus ? 2 : 0
+                border.color: Theme.focusRing
+            }
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: acc.compactHeader ? 8 : 9
+                anchors.leftMargin: Theme.s12
+                anchors.rightMargin: Theme.s12
+                spacing: Theme.s8
 
                 RowLayout {
                     id: leadingTools
@@ -133,7 +154,7 @@ Rectangle {
                     visible: !leadingTools.visible
                     implicitWidth: 26
                     implicitHeight: 26
-                    radius: 8
+                    radius: Theme.rCtl
                     color: Qt.rgba(acc.hue.r, acc.hue.g, acc.hue.b, 0.16)
                     VIcon {
                         anchors.centerIn: parent
@@ -181,7 +202,6 @@ Rectangle {
                     objectName: acc.switchObjectName
                     visible: acc.enabledSwitch
                     enabled: acc.switchAvailable || acc.on
-                    opacity: enabled ? 1 : 0.4
                     checked: acc.on
                     onToggled: checked => acc.toggled(checked)
                 }
@@ -195,13 +215,14 @@ Rectangle {
                 }
             }
 
-            HoverHandler { cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: point => {
+            HoverHandler { id: headerHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { id: headerTap; onTapped: point => {
                 for (const tools of [leadingTools, headerTools]) {
                     const p = tools.mapFromItem(parent, point.position.x, point.position.y)
                     if (tools.visible && p.x >= 0 && p.x <= tools.width
                             && p.y >= 0 && p.y <= tools.height) return
                 }
+                header.forceActiveFocus()
                 acc.open = !acc.open; acc.headerClicked()
             } }
         }
@@ -210,16 +231,16 @@ Rectangle {
         ColumnLayout {
             id: body
             Layout.fillWidth: true
-            Layout.leftMargin: 12 + (acc.compactHeader ? acc.border.width : 0)
-            Layout.rightMargin: 12 + (acc.compactHeader ? acc.border.width : 0)
+            Layout.leftMargin: Theme.s12 + (acc.compactHeader ? acc.border.width : 0)
+            Layout.rightMargin: Theme.s12 + (acc.compactHeader ? acc.border.width : 0)
             Layout.topMargin: acc.bodyTopGap
-            Layout.bottomMargin: 10
-            spacing: 2
+            Layout.bottomMargin: Theme.s12
+            spacing: Theme.s4
             visible: acc.open || acc.height > acc.headerHeight
             // .acc-b .inner: opacity .2s and translateY(-6px) -> 0 over .45s --spring,
             // delayed .06s when opening; closing starts at once.
             property real dy: acc.open ? 0 : -6
-            opacity: acc.open ? (acc.bypassed ? 0.45 : 1) : 0
+            opacity: acc.open ? (acc.bypassed ? Theme.disabledOpacity : 1) : 0
             transform: Translate { y: body.dy }
             Behavior on opacity { enabled: !acc.instantExpansion; SequentialAnimation {
                 PauseAnimation { duration: acc.open ? Theme.d(60) : 0 }
@@ -233,7 +254,7 @@ Rectangle {
                 delegate: VSubGroup {
                     required property var modelData
                     Layout.fillWidth: true
-                    Layout.topMargin: 6
+                    Layout.topMargin: Theme.s8
                     label: modelData.label
                     count: modelData.count
                     expanded: modelData.open === true

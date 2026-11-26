@@ -64,11 +64,14 @@ VPage {
 
         Text {
             anchors.centerIn: parent
+            width: Math.min(implicitWidth, Math.max(120, parent.width - Theme.s32))
             visible: stageTap.enabled
             text: qsTr("点击画面选择片源")
             color: Theme.t3
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsH3
+            wrapMode: Text.WordWrap
+            horizontalAlignment: Text.AlignHCenter
         }
         // Nothing open: a click on the empty picture opens the source menu where it
         // was clicked (the same menu as the professional page's 片源 button).
@@ -88,21 +91,25 @@ VPage {
             objectName: "min-live-opening"
             readonly property bool videoCover: true
             property real coverRadius: height / 2
+            readonly property real maxTextWidth: Math.max(120, parent.width - Theme.s32 * 2 - Theme.s24)
             visible: veyra.liveOpeningText.length > 0
             anchors.centerIn: parent
-            width: openingRow.implicitWidth + 32
-            height: 40
+            width: openingRow.implicitWidth + Theme.s32
+            height: Math.max(40, openingText.height + Theme.s16)
             radius: height / 2
-            color: Theme.shade(22, 22, 26, 0.92)
+            color: Theme.card
             border.width: 1
             border.color: Theme.stroke2
             Row {
                 id: openingRow
                 anchors.centerIn: parent
-                spacing: 10
+                spacing: Theme.s8
                 VSpinner { anchors.verticalCenter: parent.verticalCenter }
                 Text {
+                    id: openingText
                     anchors.verticalCenter: parent.verticalCenter
+                    width: Math.min(implicitWidth, parent.parent.maxTextWidth)
+                    wrapMode: Text.WordWrap
                     text: veyra.liveOpeningText
                     color: Theme.t1
                     font.family: Theme.fontUi
@@ -126,7 +133,7 @@ VPage {
             width: bufferingRow.implicitWidth + 32
             height: Math.max(40, bufferingText.height + 20)
             radius: coverRadius
-            color: Theme.shade(22, 22, 26, 0.92)
+            color: Theme.card
             border.width: 1
             border.color: Theme.stroke2
             Row {
@@ -152,14 +159,14 @@ VPage {
         id: sourceMenu
         objectName: "min-source-menu"
         title: qsTr("片源")
-        items: [{ label: qsTr("打开文件…"), icon: "folder", act: "file" },
+        items: [{ label: qsTr("打开视频…"), icon: "folder", act: "file" },
                 { label: qsTr("播放地址…"), icon: "cast", act: "network" },
                 { label: qsTr("PS5 串流…"), icon: "gamepad", act: "ps5" },
                 { label: qsTr("PC 串流…"), icon: "cast", act: "moonlight" },
                 { label: qsTr("Xbox 串流…"), icon: "gamepad", act: "xbox" },
                 { label: qsTr("屏幕捕获…"), icon: "monitor", act: "screen" },
                 { sep: true },
-                { label: qsTr("采集卡设置…"), icon: "settings", act: "capture" }]
+                { label: qsTr("采集卡…"), icon: "settings", act: "capture" }]
         onPicked: (i, o) => {
             if (o.act === "file") veyra.openFileDialog()
             else if (o.act === "network") veyra.openNetworkDialog()

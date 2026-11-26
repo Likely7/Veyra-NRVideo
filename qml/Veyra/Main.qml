@@ -15,6 +15,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtCore
 import "ExportLayout.js" as ExportLayout
 
 Window {
@@ -332,6 +333,8 @@ Window {
             pageId: "set"
             home: pages
             fullscreenBackground: ultrawideBackground
+            fullscreenScreenName: root.fullscreenScreenName
+            onFullscreenScreenPicked: name => root.setFullscreenScreenName(name)
             onRequestPage: p => {
                 if (p === "translation") dialogs.open(p)
                 else root.goPage(p)
@@ -442,7 +445,7 @@ Window {
             enabled: !root.fullscreen && !root.maximized
             visible: enabled
             width: corner ? 12 : (l || r) ? 6 : root.width - 24
-            height: corner ? 12 : (t || b) ? 6 : root.height - 24
+            height: corner ? 12 : (modelData.e === Qt.TopEdge) ? 4 : b ? 6 : root.height - 24
             x: l ? 0 : r ? root.width - width : 12
             y: t ? 0 : b ? root.height - height : 12
             cursorShape: modelData.c
@@ -499,10 +502,11 @@ Window {
     }
     onQuickPanelShownChanged: veyra.logUi("ui-fullscreen", "quick panel shown=" + quickPanelShown)
     FullscreenTimingPanel {
+        id: timingPanel
         anchors.right: parent.right
         anchors.top: parent.top
-        anchors.margins: 16
-        width: Math.min(330, Math.max(180, parent.width - 424))
+        anchors.margins: Theme.s16
+        width: Math.min(330, Math.max(180, parent.width - Theme.s32 - (streamHud.visible ? Math.min(360, streamHud.width + Theme.s16) : 0)))
         maximumHeight: Math.max(120, root.height - (root.page === "node" ? Math.min(root.height * 0.6, 460) : 90))
         visible: root.quickPanelShown && veyra.hasSource
         onCloseRequested: root.closeQuickPanel()
@@ -520,6 +524,57 @@ Window {
         fullHide.restart()
         videoHost.syncRect()
     }
+    Settings {
+        id: uiDisplaySettings
+        category: "display"
+        property string fullscreenScreenName: ""
+    }
+    property alias fullscreenScreenName: uiDisplaySettings.fullscreenScreenName
+    property var preFullScreen: null
+    property int preFullX: 0
+    property int preFullY: 0
+    property int preFullW: 1280
+    property int preFullH: 800
+
+    function findScreenByName(name) {
+        if (!name || name.length === 0) return null
+        const list = Qt.application.screens
+        for (let i = 0; i < list.length; ++i) {
+            if (list[i] && list[i].name === name) return list[i]
+        }
+        return null
+    }
+    function isScreenConnected(s) {
+        if (!s) return false
+        const list = Qt.application.screens
+        for (let i = 0; i < list.length; ++i) {
+            if (list[i] === s) return true
+        }
+        return false
+    }
+    function setFullscreenScreenName(name) {
+        uiDisplaySettings.fullscreenScreenName = name || ""
+        if (!fullscreen) return
+        const target = name && name.length > 0 ? findScreenByName(name) : (isScreenConnected(preFullScreen) ? preFullScreen : Qt.application.screens[0])
+        if (target && target !== root.screen) {
+            root.visibility = Window.Windowed
+            root.screen = target
+            root.x = target.virtualX
+            root.y = target.virtualY
+            root.visibility = Window.FullScreen
+            Qt.callLater(videoHost.syncRect)
+        }
+    }
+    Connections {
+        target: Qt.application
+        function onScreensChanged() {
+            if (root.fullscreen && root.fullscreenScreenName.length > 0 && !root.findScreenByName(root.fullscreenScreenName)) {
+                root.toggleFullscreen()
+                toast.show(qsTr("输出显示器已断开，已切回当前窗口"), true)
+            }
+        }
+    }
+
     function toggleFullscreen() {
         if (!fullscreen && veyra.fullscreenMemorySafe === false) {
             toast.show(qsTr("本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。"), true)
@@ -529,13 +584,39 @@ Window {
         fullLocked = false
         if (!fullscreen) {
             fullRestoreVisibility = maximized ? Window.Maximized : Window.Windowed
+            preFullScreen = root.screen
+            preFullX = root.x
+            preFullY = root.y
+            preFullW = root.width
+            preFullH = root.height
+            const target = fullscreenScreenName.length > 0 ? findScreenByName(fullscreenScreenName) : null
+            if (target && target !== root.screen) {
+                root.screen = target
+                root.x = target.virtualX
+                root.y = target.virtualY
+            }
             fullTarget = true
             visibility = Window.FullScreen
+            Qt.callLater(videoHost.syncRect)
         } else {
             fullRestorePending = fullRestoreVisibility === Window.Maximized
             fullTarget = false
             visibility = fullRestoreVisibility
-            Qt.callLater(function() { root.fullRestorePending = false })
+            Qt.callLater(function() {
+                root.fullRestorePending = false
+                const restoreScreen = root.isScreenConnected(root.preFullScreen)
+                    ? root.preFullScreen
+                    : (Qt.application.screens.length > 0 ? Qt.application.screens[0] : null)
+                if (restoreScreen && root.screen !== restoreScreen)
+                    root.screen = restoreScreen
+                if (root.fullRestoreVisibility === Window.Windowed && root.preFullW > 0 && root.preFullH > 0) {
+                    root.x = root.preFullX
+                    root.y = root.preFullY
+                    root.width = root.preFullW
+                    root.height = root.preFullH
+                }
+                videoHost.syncRect()
+            })
         }
         veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
     }
@@ -750,9 +831,10 @@ Window {
     }
     StreamHud {
         id: streamHud
-        x: 16
-        y: root.fullscreen ? 16 : 52
+        x: Theme.s16
+        y: root.fullscreen ? Theme.s16 : 52
         z: 90
+        maximumWidth: timingPanel.visible ? Math.max(180, root.width - timingPanel.width - 48) : Math.min(520, root.width - Theme.s32)
     }
     PlaylistWindow {
         id: playlistWindow
@@ -862,70 +944,74 @@ Window {
     Shortcut { sequence: "T"; onActivated: veyra.cycleSubtitle(false) }
     Shortcut { sequence: "Y"; onActivated: veyra.cycleSubtitle(true) }
 
-    // Toasts: a refused edit, a finished export, a failed open.
-    UpdateBanner {
-        id: updateBanner
+    // Toasts and update banner stacked at top-center so they never overlap.
+    Column {
         z: 35
         anchors.top: parent.top
-        anchors.topMargin: 12
+        anchors.topMargin: Theme.s12
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(500, root.width - 32)
-        onOpenRequested: {
-            settingsPage.section = "about"
-            root.goPage("set")
+        spacing: Theme.s8
+
+        UpdateBanner {
+            id: updateBanner
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(500, root.width - Theme.s32)
+            onOpenRequested: {
+                settingsPage.section = "about"
+                root.goPage("set")
+            }
+        }
+
+        Rectangle {
+            id: toast
+            anchors.horizontalCenter: parent.horizontalCenter
+            property string message: ""
+            property bool isError: false
+            property bool isWarning: false
+            property bool on: false
+            // Over the picture: cut out of the video window.
+            objectName: "videoCover"
+            property real coverRadius: Theme.rCard
+            width: Math.min(toastText.implicitWidth + Theme.s24 + 2, root.width - Theme.s24 * 2)
+            height: toastText.implicitHeight + Theme.s12 + 2
+            radius: Theme.rCard
+            color: Theme.card
+            border.width: 1
+            border.color: toast.isError ? Theme.err : toast.isWarning ? Theme.warn : Theme.ok
+            opacity: on ? 1 : 0
+            visible: opacity > 0.01
+            transform: Translate { id: toastShift; y: toast.on ? 0 : -8
+                Behavior on y { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } } }
+            Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.animNormal) } }
+            function show(message, error, warning = false) {
+                toast.message = message
+                toast.isError = error
+                toast.isWarning = warning
+                toast.on = true
+                toastTimer.restart()
+            }
+            Timer { id: toastTimer; interval: toast.isWarning ? 6500 : 2600; onTriggered: toast.on = false }
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: toast.isError ? Theme.errGlow : toast.isWarning ? Theme.warnGlow : Theme.okGlow
+            }
+            Text {
+                id: toastText
+                anchors.centerIn: parent
+                width: Math.min(implicitWidth, root.width - 72)
+                text: toast.message
+                color: Theme.t1
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsBody
+                wrapMode: Text.WordWrap
+                horizontalAlignment: Text.AlignHCenter
+            }
         }
     }
     Connections {
         target: veyra.updates
         function onUpdateAvailable(version) { updateBanner.show(version) }
-    }
-    // pages.css .canvas-toast: top 12px, padding 7px 12px, from translate -8px and
-    // opacity 0; .on: opacity .2s, translate .45s --spring; hidden after 2600 ms.
-    Rectangle {
-        id: toast
-        // Under the dock (z 40): an opened dock stays usable over a toast.
-        z: 30
-        property string message: ""
-        property bool isError: false
-        property bool isWarning: false
-        property bool on: false
-        anchors.horizontalCenter: parent.horizontalCenter
-        anchors.top: parent.top
-        anchors.topMargin: 12
-        // Over the picture: cut out of the video window.
-        objectName: "videoCover"
-        property real coverRadius: 9
-        width: Math.min(toastText.implicitWidth + 24 + 2, root.width - 48)
-        height: toastText.implicitHeight + 14 + 2
-        radius: 9
-        color: toast.isError ? "#2A1414" : toast.isWarning ? "#302315" : "#132218"
-        border.width: 1
-        border.color: toast.isError ? Qt.rgba(1, 0.365, 0.365, 0.4)
-                     : toast.isWarning ? Theme.warn : Qt.rgba(0.239, 0.863, 0.518, 0.35)
-        opacity: on ? 1 : 0
-        visible: opacity > 0.01
-        transform: Translate { id: toastShift; y: toast.on ? 0 : -8
-            Behavior on y { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } } }
-        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
-        function show(message, error, warning = false) {
-            toast.message = message
-            toast.isError = error
-            toast.isWarning = warning
-            toast.on = true
-            toastTimer.restart()
-        }
-        Timer { id: toastTimer; interval: toast.isWarning ? 6500 : 2600; onTriggered: toast.on = false }
-        Text {
-            id: toastText
-            anchors.centerIn: parent
-            width: Math.min(implicitWidth, root.width - 72)
-            text: toast.message
-            color: toast.isError ? "#FFC9C9" : toast.isWarning ? "#FFE3B6" : "#BDF3D2"
-            font.family: Theme.fontUi
-            font.pixelSize: 12
-            wrapMode: Text.WordWrap
-            horizontalAlignment: Text.AlignHCenter
-        }
     }
 
     // RivaTuner, NVIDIA's overlay or GamePP started after Veyra (QmlPlayerBridge): RTSS's
@@ -1046,7 +1132,25 @@ Window {
         root.x = a.x + Math.round((a.width - root.width) / 2)
         root.y = a.y + Math.round((a.height - root.height) / 2)
     }
-    onClosing: if (!root.fullscreen && !root.maximized && !root.cinema) veyra.rememberWindowSize(root.width, root.height)
+    onClosing: {
+        if (root.fullscreen || root.fullTarget) {
+            root.fullTarget = false
+            root.visibility = Window.Windowed
+            const restoreScreen = root.isScreenConnected(root.preFullScreen)
+                ? root.preFullScreen
+                : (Qt.application.screens.length > 0 ? Qt.application.screens[0] : null)
+            if (restoreScreen && root.screen !== restoreScreen)
+                root.screen = restoreScreen
+            if (root.preFullW > 0 && root.preFullH > 0) {
+                root.x = root.preFullX
+                root.y = root.preFullY
+                root.width = root.preFullW
+                root.height = root.preFullH
+            }
+        }
+        if (!root.fullscreen && !root.maximized && !root.cinema)
+            veyra.rememberWindowSize(root.width, root.height)
+    }
     // 日落 startup intro (DuskIntro.qml, 2026-11-15): on a plain start to the home page in the
     // dusk palette, unless 设置 → 外观 → 启动动画 is off, animations are reduced or a test
     // switch is set. Its clock starts with the first frame on screen; a page change (a file
@@ -1133,14 +1237,23 @@ Window {
         z: 1001
         anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 16
+        anchors.margins: Theme.s16
         width: 34
         height: 34
         radius: 17
         visible: root.musicSounding && !veyra.hasSource
-        color: musicHover.hovered ? Theme.card3 : Qt.rgba(0, 0, 0, 0.28)
-        border.width: 1
-        border.color: Theme.stroke2
+        activeFocusOnTab: visible
+        Accessible.role: Accessible.Button
+        Accessible.name: qsTr("停止本次启动音乐")
+        Accessible.onPressAction: root.stopStartupMusicForSession()
+        Keys.onReturnPressed: root.stopStartupMusicForSession()
+        Keys.onEnterPressed: root.stopStartupMusicForSession()
+        Keys.onSpacePressed: root.stopStartupMusicForSession()
+        scale: musicTap.pressed ? 0.9 : 1.0
+        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+        color: musicTap.pressed ? Theme.pressFill : musicHover.hovered ? Theme.card3 : Theme.card
+        border.width: activeFocus ? 2 : 1
+        border.color: activeFocus ? Theme.focusRing : Theme.stroke2
         VIcon {
             anchors.centerIn: parent
             name: "music"
@@ -1159,6 +1272,7 @@ Window {
         }
         HoverHandler { id: musicHover; cursorShape: Qt.PointingHandCursor }
         TapHandler {
+            id: musicTap
             onTapped: root.stopStartupMusicForSession()
         }
         ToolTip.visible: musicHover.hovered

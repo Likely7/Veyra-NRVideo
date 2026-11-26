@@ -56,7 +56,7 @@ Item {
     // out of it (videoCover below), so the picture beside the dialog stays undimmed.
     Rectangle {
         anchors.fill: parent
-        color: Qt.rgba(0, 0, 0, 0.55)
+        color: Theme.shade(0, 0, 0, 0.55)
         opacity: host.dialog !== "" && !host.onboardingActive ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
@@ -138,8 +138,8 @@ Item {
             spacing: 12
             Repeater {
                 model: [
-                    qsTr("Veyra 目前由我一人开发和维护，我没有精力继续跟进 PC 游戏捕获和兼容性。"),
-                    qsTr("玩 PC 游戏，我强烈推荐上游的 Magpie。它有更多缩放器和画面效果，也更侧重 PC 捕获性能。尤其推荐给玩带反作弊的网游、老游戏或使用模拟器的用户。"),
+                    qsTr("Veyra 专注于视频播放与增强，不再跟进 PC 游戏捕获与兼容性适配。"),
+                    qsTr("玩 PC 游戏推荐使用上游的 Magpie。它有更多缩放器和画面效果，也更侧重 PC 捕获性能，尤其适合带反作弊的网游、老游戏或模拟器。"),
                     qsTr("Veyra 的屏幕捕获已移除鼠标穿透，仅保留用于观看视频的窗口和显示器采集。")
                 ]
                 delegate: Text {

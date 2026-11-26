@@ -1,19 +1,38 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
 Rectangle {
     id: seg
     property var options: []      // [{ id, label }]
     property string current: ""
     signal picked(string id)
 
-    implicitWidth: segRow.implicitWidth + 6
-    implicitHeight: 30
+    implicitWidth: segRow.implicitWidth + Theme.s8
+    implicitHeight: Theme.ctlHeight
     radius: Theme.rCtl
-    color: Qt.rgba(1, 1, 1, 0.05)
-    border.width: 1
-    border.color: Theme.stroke
+    opacity: enabled ? 1.0 : Theme.disabledOpacity
+    activeFocusOnTab: enabled
+    color: Theme.card2
+    border.width: activeFocus ? 2 : 1
+    border.color: activeFocus ? Theme.focusRing : Theme.stroke
+
+    function moveSelection(delta) {
+        if (options.length === 0) return
+        let idx = currentIndex
+        for (let step = 0; step < options.length; ++step) {
+            idx = (idx + delta + options.length) % options.length
+            if (options[idx].disabled !== true) {
+                picked(options[idx].id)
+                return
+            }
+        }
+    }
+    Keys.onLeftPressed: event => { if (enabled) { moveSelection(-1); event.accepted = true } }
+    Keys.onRightPressed: event => { if (enabled) { moveSelection(1); event.accepted = true } }
+
+    Accessible.role: Accessible.PageTabList
+    Accessible.focusable: seg.enabled
+    Accessible.focused: seg.activeFocus
 
     readonly property int currentIndex: {
         for (var i = 0; i < options.length; ++i)
@@ -26,42 +45,29 @@ Rectangle {
 
     // Read by the motion probe (G0.5): where the indicator is, and where it is going.
     readonly property real indicatorX: indicator.x
-    readonly property real targetX: currentItem ? segRow.x + currentItem.x : 3
+    readonly property real targetX: currentItem ? segRow.x + currentItem.x : Theme.s4
 
     // .seg-ind: one indicator slides under the chosen button (transform and width,
     // .5s --spring), instead of each button lighting its own background.
     Rectangle {
         id: indicator
         visible: seg.currentItem !== null
-        x: seg.currentItem ? segRow.x + seg.currentItem.x : 3
-        y: 3
+        x: seg.currentItem ? segRow.x + seg.currentItem.x : Theme.s4
+        y: Theme.s4
         width: seg.currentItem ? seg.currentItem.width : 0
         height: 24
-        radius: 7
+        radius: Theme.rCtl
         color: Theme.card3
+        border.width: 1
+        border.color: Theme.strokeStrong
         Behavior on x { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
         Behavior on width { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
-        // box-shadow 0 1px 0 rgba(255,255,255,.06) inset: the lit top edge.
         Rectangle {
             anchors.left: parent.left; anchors.right: parent.right
-            anchors.leftMargin: 4; anchors.rightMargin: 4
+            anchors.leftMargin: Theme.s4; anchors.rightMargin: Theme.s4
             height: 1
-            color: Qt.rgba(1, 1, 1, 0.06)
+            color: Theme.hoverFill
         }
-    }
-
-    // box-shadow 0 4px 10px rgba(0,0,0,.35): card3 alone is the same grey as the seg
-    // background, so the shadow is what makes the indicator visible (G1.5).
-    MultiEffect {
-        source: indicator
-        anchors.fill: indicator
-        visible: indicator.visible
-        shadowEnabled: true
-        shadowColor: Qt.rgba(0, 0, 0, 0.35)
-        shadowVerticalOffset: 4
-        shadowHorizontalOffset: 0
-        blurMax: 16
-        shadowBlur: 0.625
     }
 
     RowLayout {
@@ -72,16 +78,24 @@ Rectangle {
             id: segRepeater
             model: seg.options
             delegate: Item {
+                id: segBtn
                 required property var modelData
                 enabled: modelData.disabled !== true
-                opacity: enabled ? 1 : 0.4
-                implicitWidth: segContent.implicitWidth + 20
+                opacity: enabled ? 1 : Theme.disabledOpacity
+                implicitWidth: segContent.implicitWidth + Theme.s16 + Theme.s4
                 implicitHeight: 24
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.rCtl
+                    color: btnTap.pressed ? Theme.pressFill
+                         : (btnHover.hovered && seg.current !== segBtn.modelData.id) ? Theme.hoverFill
+                         : "transparent"
+                }
                 // { id, label, icon? }: the design's 列表 / 节点 toggle carries icons.
                 Row {
                     id: segContent
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: Theme.s8
                     VIcon {
                         visible: (modelData.icon || "").length > 0
                         anchors.verticalCenter: parent.verticalCenter
@@ -94,14 +108,27 @@ Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.label
                         color: seg.current === modelData.id ? Theme.t1 : Theme.t2
-                        Behavior on color { ColorAnimation { duration: Theme.d(200) } }
+                        Behavior on color { ColorAnimation { duration: Theme.d(Theme.animNormal) } }
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
                         font.weight: Font.Medium
                     }
                 }
-                HoverHandler { cursorShape: Qt.PointingHandCursor }
-                TapHandler { enabled: parent.enabled; gesturePolicy: TapHandler.WithinBounds; onTapped: seg.picked(modelData.id) }
+                HoverHandler { id: btnHover; enabled: segBtn.enabled; cursorShape: Qt.PointingHandCursor }
+                TapHandler {
+                    id: btnTap
+                    enabled: segBtn.enabled
+                    gesturePolicy: TapHandler.WithinBounds
+                    onTapped: {
+                        seg.forceActiveFocus()
+                        seg.picked(segBtn.modelData.id)
+                    }
+                }
+                Accessible.role: Accessible.PageTab
+                Accessible.name: modelData.label
+                Accessible.selected: seg.current === modelData.id
+                Accessible.selectable: segBtn.enabled
+                Accessible.onPressAction: if (segBtn.enabled) seg.picked(modelData.id)
             }
         }
     }

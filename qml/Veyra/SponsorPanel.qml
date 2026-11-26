@@ -34,7 +34,7 @@ ColumnLayout {
         Layout.fillWidth: true
         Layout.topMargin: small ? 6 : 10
         spacing: 3
-        VH3 { id: title; font.pixelSize: section.small ? 13.5 : Theme.fsH3 }
+        VH3 { id: title; font.pixelSize: section.small ? Theme.fsBody : Theme.fsH3 }
         Text {
             id: hintText
             Layout.fillWidth: true
@@ -56,13 +56,9 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: heroRow.implicitHeight + 36
         radius: Theme.rCard
+        color: Theme.accentSoft
         border.width: 1
         border.color: Theme.stroke
-        gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: Theme.accentSoft }
-            GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.03) }
-        }
         RowLayout {
             id: heroRow
             anchors.left: parent.left
@@ -117,7 +113,7 @@ ColumnLayout {
             delegate: Item {
                 id: slot
                 required property var modelData
-                width: 128
+                width: Math.min(140, Math.max(110, (socialFlow.width - socialFlow.spacing * 3) / 4))
                 height: 138
                 Rectangle {
                     id: social
@@ -126,12 +122,18 @@ ColumnLayout {
                     height: parent.height
                     radius: Theme.rCard
                     color: socialHover.hovered ? Theme.card3 : Theme.card2
-                    border.width: 1
-                    border.color: socialHover.hovered ? Theme.stroke2 : Theme.stroke
+                    border.width: activeFocus ? 2 : 1
+                    border.color: activeFocus ? Theme.focusRing : (socialHover.hovered ? Theme.stroke2 : Theme.stroke)
                     y: socialHover.hovered ? -3 : 0
                     Behavior on y { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
                     scale: socialTap.pressed ? 0.97 : 1.0
                     Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: slot.modelData.name + " · " + qsTr("前往主页")
+                    Keys.onReturnPressed: event => { event.accepted = true; panel.openLink(slot.modelData.id) }
+                    Keys.onEnterPressed: event => { event.accepted = true; panel.openLink(slot.modelData.id) }
+                    Keys.onSpacePressed: event => { event.accepted = true; panel.openLink(slot.modelData.id) }
                     ColumnLayout {
                         anchors.centerIn: parent
                         spacing: 0
@@ -150,16 +152,17 @@ ColumnLayout {
                             text: slot.modelData.name
                             color: Theme.t1
                             font.family: Theme.fontUi
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsBody
                             font.weight: Font.Medium
+                            font.variableAxes: Theme.axesMedium
                         }
                         Rectangle {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.topMargin: 10
                             implicitWidth: goRow.implicitWidth + 20
                             implicitHeight: 26
-                            radius: 8
-                            color: socialHover.hovered ? Theme.accent : Qt.rgba(1, 1, 1, 0.06)
+                            radius: Theme.rCtl
+                            color: socialHover.hovered ? Theme.accent : Theme.hoverFill
                             Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
                             Row {
                                 id: goRow
@@ -202,8 +205,8 @@ ColumnLayout {
         spacing: 14
         Repeater {
             model: [
-                { id: "patreon", label: qsTr("Patreon 主页"), background: "#B82131", hover: "#D32F40" },
-                { id: "patreonCoffee", label: qsTr("☕ 请作者喝杯咖啡 · US$5"), background: "#92400E", hover: "#A84A10" }
+                { id: "patreon", label: qsTr("Patreon 主页"), primary: true },
+                { id: "patreonCoffee", label: qsTr("请作者喝杯咖啡 · US$5"), primary: false }
             ]
             delegate: Rectangle {
                 id: support
@@ -213,10 +216,20 @@ ColumnLayout {
                 width: Math.min(implicitWidth, patreonFlow.width)
                 height: 46
                 radius: height / 2
-                color: supportHover.hovered ? modelData.hover : modelData.background
+                color: modelData.primary
+                    ? (supportTap.pressed ? Theme.accentPressed : supportHover.hovered ? Theme.accentHover : Theme.accent)
+                    : (supportTap.pressed ? Theme.pressFill : supportHover.hovered ? Theme.card3 : Theme.card2)
+                border.width: activeFocus ? 2 : (modelData.primary ? 0 : 1)
+                border.color: activeFocus ? Theme.focusRing : Theme.stroke
                 Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
                 scale: supportTap.pressed ? 0.96 : 1.0
                 Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: support.modelData.label
+                Keys.onReturnPressed: event => { event.accepted = true; panel.openLink(support.modelData.id) }
+                Keys.onEnterPressed: event => { event.accepted = true; panel.openLink(support.modelData.id) }
+                Keys.onSpacePressed: event => { event.accepted = true; panel.openLink(support.modelData.id) }
                 RowLayout {
                     id: supportContent
                     anchors.fill: parent
@@ -233,10 +246,11 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: support.modelData.label
-                        color: "#FFFFFF"
+                        color: support.modelData.primary ? Theme.accentText : Theme.t1
                         font.family: Theme.fontUi
-                        font.pixelSize: 16
-                        font.weight: Font.Bold
+                        font.pixelSize: Theme.fsH3
+                        font.weight: Font.DemiBold
+                        font.variableAxes: Theme.axesDemiBold
                         elide: Text.ElideRight
                     }
                 }
@@ -269,19 +283,19 @@ ColumnLayout {
                 id: code
                 required property var modelData
                 objectName: "sponsor-code-" + modelData.id
-                width: 244
+                width: Math.min(244, Math.max(180, codes.width))
                 // Both cards take the taller code's height (572x602) so the labels line up.
-                height: 12 + 232 + 46
-                radius: 16
+                height: qr.height + 58
+                radius: Theme.rModal
                 color: Theme.card2
                 border.width: 1
                 border.color: Theme.stroke
                 Image {
                     id: qr
                     objectName: "sponsor-qr-" + code.modelData.id
-                    x: 12; y: 12
-                    width: 220
-                    height: 232
+                    x: (parent.width - width) / 2; y: 12
+                    width: Math.min(220, parent.width - 24)
+                    height: Math.round(width * 232 / 220)
                     source: "sponsor/" + code.modelData.id + ".png"
                     // Decoded at the shown size: the reader's smooth scaling keeps the
                     // modules crisp where a GPU-minified 572 px image would alias.
@@ -307,8 +321,9 @@ ColumnLayout {
                         text: code.modelData.label
                         color: Theme.t1
                         font.family: Theme.fontUi
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.fsBody
                         font.weight: Font.Medium
+                        font.variableAxes: Theme.axesMedium
                     }
                 }
             }

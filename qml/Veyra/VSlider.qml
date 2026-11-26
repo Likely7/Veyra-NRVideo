@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Effects
 import QtQuick.Controls
 import QtQuick.Layouts
 Item {
@@ -80,6 +79,11 @@ Item {
     // range so wide ranges still move. While focused the arrows belong to the slider, not
     // to the window's seek and volume shortcuts; Esc gives them back.
     activeFocusOnTab: enabledControl
+    opacity: enabledControl ? 1.0 : Theme.disabledOpacity
+    Accessible.role: Accessible.Slider
+    Accessible.focusable: enabledControl
+    Accessible.focused: activeFocus
+    Accessible.description: Number((displayedValue * inputScale).toFixed(inputDecimals)).toString()
     readonly property real keyStep: Math.max(stepSize, Number(typeof veyra !== "undefined" && veyra.preferences ? (veyra.preferences.sliderKeyStep || 0.1) : 0.1), (to - from) / 1000)
     function nudge(direction) {
         const next = Math.max(from, Math.min(to, value + direction * keyStep))
@@ -108,10 +112,10 @@ Item {
     Rectangle {
         id: track
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.max(1, parent.width - (slider.resettable ? 28 : 0))
+        width: Math.max(1, parent.width - (slider.resettable ? (Theme.s24 + Theme.s4) : 0))
         height: 4
-        radius: 9
-        color: Qt.rgba(1, 1, 1, 0.12)
+        radius: Theme.rCtl
+        color: Theme.card3
         gradient: slider.trackGradient
     }
     // The accent, or the sunset gradient laid along the whole track.
@@ -119,7 +123,7 @@ Item {
         objectName: "vslider-fill"
         anchors.verticalCenter: track.verticalCenter
         height: 4
-        radius: 9
+        radius: Theme.rCtl
         visible: (!slider.center || slider.showCenterFill) && !slider.trackGradient
         width: track.width * (slider.center ? Math.abs(slider.frac - 0.5) : slider.frac)
         x: slider.center ? track.width * Math.min(0.5, slider.frac) : 0
@@ -130,28 +134,14 @@ Item {
         id: knob
         width: Theme.sliderKnob
         height: Theme.sliderKnob
-        radius: width / 2
-        color: "#FFFFFF"
+        radius: 999
+        color: Theme.t1
         anchors.verticalCenter: track.verticalCenter
         x: track.width * slider.frac - width / 2
         scale: drag.active || hover.hovered ? 1.25 : 1.0
-        border.width: slider.activeFocus ? 2 : 0
-        border.color: Theme.accent
-        Behavior on scale { NumberAnimation { duration: Theme.d(350); easing.bezierCurve: Theme.spring } }
-    }
-    // box-shadow: 0 2px 6px rgba(0,0,0,.5). A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
-    // a screen DPI change while it walks the parent's children, and the walk then touched
-    // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
-    MultiEffect {
-        source: knob
-        anchors.fill: knob
-        scale: knob.scale
-        shadowEnabled: true
-        shadowColor: Qt.rgba(0, 0, 0, 0.5)
-        shadowVerticalOffset: 2
-        shadowBlur: 0.5
-        blurMax: 12
-        autoPaddingEnabled: true
+        border.width: slider.activeFocus ? 2 : 1
+        border.color: slider.activeFocus ? Theme.focusRing : Theme.strokeStrong
+        Behavior on scale { NumberAnimation { duration: Theme.d(Theme.animNormal); easing.bezierCurve: Theme.spring } }
     }
     Item {
     id: trackInput
@@ -222,15 +212,15 @@ Item {
         height: 24
         anchors.verticalCenter: parent.verticalCenter
         x: Math.max(0, Math.min(track.width - width, knob.x + knob.width / 2 - width / 2))
-        radius: 6
+        radius: Theme.rCtl
         color: Theme.dialog
         border.width: 1
-        border.color: Theme.accent
+        border.color: Theme.focusRing
         TextInput {
             id: editorInput
             objectName: "vslider-editor-input"
             anchors.fill: parent
-            anchors.leftMargin: 6; anchors.rightMargin: 6
+            anchors.leftMargin: Theme.s8; anchors.rightMargin: Theme.s8
             verticalAlignment: TextInput.AlignVCenter
             horizontalAlignment: TextInput.AlignHCenter
             color: Theme.t1
@@ -257,21 +247,33 @@ Item {
         }
     }
     ToolButton {
+        id: resetBtn
         objectName: "vslider-reset"
         anchors.right: parent.right
         anchors.verticalCenter: parent.verticalCenter
         width: 22; height: 20; padding: 0
         visible: slider.resettable
         enabled: slider.enabledControl && Math.abs(slider.value - slider.defaultValue) > 0.000001
-        text: "↺"
+        activeFocusOnTab: enabled
+        Accessible.role: Accessible.Button
         Accessible.name: qsTr("重置此参数")
+        Accessible.onPressAction: if (enabled) clicked()
         ToolTip.visible: hovered
         ToolTip.text: qsTr("还原默认值：%1").arg(slider.defaultValue)
-        contentItem: Text {
-            text: parent.text; color: parent.enabled ? Theme.t2 : Theme.t3
-            font.pixelSize: 16; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter
+        contentItem: Item {
+            VIcon {
+                anchors.centerIn: parent
+                name: "reset"
+                size: 13
+                color: resetBtn.enabled ? Theme.t2 : Theme.t3
+            }
         }
-        background: Rectangle { radius: 4; color: parent.hovered ? Qt.rgba(1,1,1,0.08) : "transparent" }
+        background: Rectangle {
+            radius: Theme.rCtl
+            color: resetBtn.down ? Theme.pressFill : resetBtn.hovered ? Theme.hoverFill : "transparent"
+            border.width: resetBtn.activeFocus ? 2 : 0
+            border.color: Theme.focusRing
+        }
         onClicked: {
             slider.commitValue(slider.defaultValue)
         }

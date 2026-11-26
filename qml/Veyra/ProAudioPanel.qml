@@ -59,8 +59,9 @@ ColumnLayout {
             }
         }
     }
-    VEyebrow { text: qsTr("音轨") }
+    VEyebrow { Layout.leftMargin: Theme.s12; Layout.topMargin: Theme.s4; text: qsTr("音轨") }
     Text {
+        Layout.leftMargin: Theme.s12
         visible: veyra.audioTracks.length === 0
         text: qsTr("当前源没有可选音轨。")
         color: Theme.t3
@@ -71,25 +72,34 @@ ColumnLayout {
         model: veyra.audioTracks
         delegate: Rectangle {
             required property var modelData
+            readonly property bool selected: veyra.selectedAudioTrack === modelData.index
             Layout.fillWidth: true
             implicitHeight: 44
-            radius: 12
-            color: Theme.card2
+            radius: Theme.rCard
+            color: trackTap.pressed ? Theme.pressFill : trackHover.hovered ? Theme.card3 : Theme.card2
             border.width: 1
-            border.color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : Theme.stroke
+            border.color: activeFocus ? Theme.focusRing : selected ? Theme.accent : Theme.stroke
+            activeFocusOnTab: true
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: modelData.label
+            Accessible.checked: selected
+            Keys.onReturnPressed: veyra.selectedAudioTrack = modelData.index
+            Keys.onSpacePressed: veyra.selectedAudioTrack = modelData.index
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 12
-                anchors.rightMargin: 12
-                spacing: 12
+                anchors.leftMargin: Theme.s12
+                anchors.rightMargin: Theme.s12
+                spacing: Theme.s12
                 VEqBars {
-                    active: veyra.selectedAudioTrack === modelData.index && veyra.running && !veyra.paused
-                    opacity: veyra.selectedAudioTrack === modelData.index ? 1 : 0.6
+                    active: selected && veyra.running && !veyra.paused
+                    opacity: selected ? 1 : 0.6
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: 2
                     Text {
+                        Layout.fillWidth: true
+                        elide: Text.ElideRight
                         text: modelData.label
                         color: Theme.t1
                         font.family: Theme.fontUi
@@ -99,12 +109,12 @@ ColumnLayout {
                         text: modelData.channels > 0 ? modelData.channels + qsTr(" 声道") : ""
                         color: Theme.t3
                         font.family: Theme.fontUi
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsEyebrow
                     }
                 }
             }
-            HoverHandler { cursorShape: Qt.PointingHandCursor }
-            TapHandler { onTapped: veyra.selectedAudioTrack = modelData.index }
+            HoverHandler { id: trackHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { id: trackTap; onTapped: veyra.selectedAudioTrack = modelData.index }
         }
     }
 }

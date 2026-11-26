@@ -65,7 +65,7 @@ DialogLayer {
                 spacing: 6
                 VSelect {
                     objectName: "screen-target"
-                    implicitWidth: 300
+                    implicitWidth: Math.min(300, Math.max(140, screenDialog.bodyWidth * 0.52))
                     value: veyra.screenTargetLabel
                     options: veyra.screenTargets
                     onPicked: id => veyra.screenTargetId = id
@@ -81,7 +81,7 @@ DialogLayer {
             hint: screenDialog.o.kind === 1 ? qsTr("DXGI 为显示器兼容方式，无鼠标指针；捕获显示器时不显示黄色边框，Veyra 自己也不会出现在截图和录屏里") : qsTr("窗口只能用 Windows Graphics Capture")
             VSeg {
                 enabled: screenDialog.o.kind === 1
-                opacity: enabled ? 1 : 0.5
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 options: [{ id: "0", label: "WGC" }, { id: "1", label: "DXGI" }]
                 current: String(screenDialog.o.method)
                 onPicked: id => veyra.setScreenOption("method", Number(id))
@@ -90,7 +90,7 @@ DialogLayer {
         VRow {
             label: qsTr("帧率上限")
             hint: qsTr("如果要开启 DLSS5（NR），建议帧率设置 60，减少 DLSS5 需要处理的画面量，减轻负担")
-            hintColor: Theme.err
+            hintColor: Theme.warn
             hintBelow: true
             VSeg {
                 options: [{ id: "0", label: qsTr("跟随") }, { id: "1", label: "30" }, { id: "2", label: "60" }, { id: "3", label: "120" }, { id: "4", label: "144" }, { id: "5", label: "240" }]
@@ -102,7 +102,7 @@ DialogLayer {
             label: qsTr("显示鼠标指针")
             VSwitch {
                 enabled: screenDialog.o.method === 0
-                opacity: enabled ? 1 : 0.5
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 checked: screenDialog.o.cursor === true
                 onToggled: checked => veyra.setScreenOption("cursor", checked)
             }
@@ -116,7 +116,7 @@ DialogLayer {
                     model: ["left", "top", "right", "bottom"]
                     delegate: DialogTextField {
                         required property string modelData
-                        implicitWidth: 58
+                        implicitWidth: Math.min(58, Math.max(40, (screenDialog.bodyWidth - 200) / 4))
                         text: String(screenDialog.o[modelData])
                         onEdited: text => veyra.setScreenOption(modelData, Number(text))
                     }

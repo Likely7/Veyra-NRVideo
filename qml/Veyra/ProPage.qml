@@ -182,13 +182,13 @@ VPage {
         title: qsTr("NR 层 ") + layerNumber
         // .lnum: the layer number where a stage card has its icon.
         headerLeadingActions: Rectangle {
-            implicitWidth: 22; implicitHeight: 22; radius: 7
-            color: Qt.rgba(1, 138 / 255, 61 / 255, 0.16)
+            implicitWidth: 22; implicitHeight: 22; radius: Theme.rCtl
+            color: Theme.accentSoft
             Text {
                 anchors.centerIn: parent
                 text: card.layerNumber
                 color: Theme.accent
-                font.family: Theme.fontMono; font.pixelSize: 11
+                font.family: Theme.fontMono; font.pixelSize: Theme.fsEyebrow
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
         }
@@ -228,18 +228,18 @@ VPage {
         property int layerNumber: 1
         objectName: "beauty-card-" + layerNumber
         Layout.fillWidth: true
-        glyph: "heart"; hue: "#FF8FBF"
+        glyph: "heart"; hue: Theme.exp
         compactHeader: true
         popIn: layerNumber === root.popBeauty
         title: qsTr("美颜层 ") + layerNumber
         headerLeadingActions: Rectangle {
-            implicitWidth: 22; implicitHeight: 22; radius: 7
-            color: Qt.rgba(1, 143 / 255, 191 / 255, 0.16)
+            implicitWidth: 22; implicitHeight: 22; radius: Theme.rCtl
+            color: Theme.expSoft
             Text {
                 anchors.centerIn: parent
                 text: card.layerNumber
-                color: "#FF8FBF"
-                font.family: Theme.fontMono; font.pixelSize: 11
+                color: Theme.exp
+                font.family: Theme.fontMono; font.pixelSize: Theme.fsEyebrow
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
         }
@@ -458,9 +458,22 @@ VPage {
                 implicitWidth: recordRow.implicitWidth + 24
                 implicitHeight: Theme.ctlHeight
                 radius: Theme.rCtl
-                color: recordMouse.containsMouse ? Theme.card3 : Theme.card2
+                opacity: recordMouse.enabled ? 1 : Theme.disabledOpacity
+                color: recordMouse.pressed ? Theme.pressFill : recordMouse.containsMouse ? Theme.card3 : Theme.card2
                 border.width: 1
-                border.color: (veyra.recording || recordControl.countdown > 0) ? Theme.err : Theme.stroke2
+                border.color: recordControl.activeFocus ? Theme.focusRing : (veyra.recording || recordControl.countdown > 0) ? Theme.err : Theme.stroke2
+                activeFocusOnTab: recordMouse.enabled
+                Accessible.role: Accessible.Button
+                Accessible.name: recordLabel.text
+                function triggerRecord() {
+                    if (!recordMouse.enabled) return
+                    if (veyra.recording) { veyra.stopRecording("pro-button"); recordControl.countdown = 0; recordTick.stop(); return }
+                    if (recordControl.countdown > 0) { recordControl.countdown = 0; recordTick.stop(); return }
+                    recordControl.countdown = 3
+                    recordTick.restart()
+                }
+                Keys.onReturnPressed: triggerRecord()
+                Keys.onSpacePressed: triggerRecord()
                 property int countdown: 0
                 // Elapsed recording time, m:ss (h:mm:ss after an hour).
                 readonly property string elapsed: {
@@ -512,12 +525,7 @@ VPage {
                     enabled: veyra.hasSource && !recordControl.saving
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (veyra.recording) { veyra.stopRecording("pro-button"); recordControl.countdown = 0; recordTick.stop(); return }
-                        if (recordControl.countdown > 0) { recordControl.countdown = 0; recordTick.stop(); return }
-                        recordControl.countdown = 3
-                        recordTick.restart()
-                    }
+                    onClicked: recordControl.triggerRecord()
                 }
                 // The countdown number pops on every tick.
                 NumberAnimation {
@@ -728,14 +736,25 @@ VPage {
                 height: 34
                 spacing: 10
                 Item {
+                    id: proPlayBtn
                     implicitWidth: 28; implicitHeight: 28
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: (veyra.running && !veyra.paused) ? qsTr("暂停") : qsTr("播放")
+                    Keys.onReturnPressed: veyra.togglePlayPause()
+                    Keys.onSpacePressed: veyra.togglePlayPause()
+                    Rectangle {
+                        anchors.fill: parent; radius: Theme.rCtl
+                        color: playTap.pressed ? Theme.pressFill : playHover.hovered ? Theme.hoverFill : "transparent"
+                        border.width: proPlayBtn.activeFocus ? 1 : 0; border.color: Theme.focusRing
+                    }
                     VIcon {
                         anchors.centerIn: parent
                         name: (veyra.running && !veyra.paused) ? "pause" : "play"
-                        color: Theme.t2
+                        color: playTap.pressed || playHover.hovered ? Theme.t1 : Theme.t2
                     }
-                    HoverHandler { cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: veyra.togglePlayPause() }
+                    HoverHandler { id: playHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { id: playTap; onTapped: veyra.togglePlayPause() }
                 }
                 Text {
                     text: veyra.positionText
@@ -748,27 +767,18 @@ VPage {
                     objectName: "pro-seek"
                     Layout.fillWidth: true
                     implicitHeight: 14
+                    opacity: veyra.timelineSeekable ? 1 : Theme.disabledOpacity
                     Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width
                         height: 3
-                        radius: 9
-                        color: Qt.rgba(1, 1, 1, 0.14)
-                        // White; the sunset gradient along the rail in the dusk palette.
+                        radius: 2
+                        color: Theme.strokeStrong
                         Rectangle {
                             width: parent.width * proSeekArea.frac
                             height: parent.height
-                            radius: 9
-                            color: "#FFFFFF"
-                            visible: !Theme.accentGradient
-                        }
-                        VAccentFill {
-                            width: parent.width * proSeekArea.frac
-                            height: parent.height
-                            radius: 9
-                            farEnd: true
-                            span: parent.width
-                            visible: Theme.accentGradient
+                            radius: 2
+                            color: veyra.timelineSeekable ? Theme.accent : Theme.t3
                         }
                     }
                     // Press or drag anywhere on the rail: the picture follows the
@@ -777,11 +787,11 @@ VPage {
                     property real scrubFrac: 0
                     readonly property real frac: scrubbing ? scrubFrac : Math.max(0, Math.min(1, veyra.progress))
                     Rectangle {
-                        width: 11; height: 11; radius: 5.5
-                        color: "#FFFFFF"
+                        width: 11; height: 11; radius: 6
+                        color: Theme.t1
                         anchors.verticalCenter: parent.verticalCenter
                         x: proSeekArea.frac * proSeekArea.width - width / 2
-                        visible: proSeekMouse.containsMouse || proSeekArea.scrubbing
+                        visible: veyra.timelineSeekable && (proSeekMouse.containsMouse || proSeekArea.scrubbing)
                     }
                     Timer {
                         id: proScrubSeek
@@ -852,13 +862,23 @@ VPage {
                     property bool highlighted: false
                     signal tapped()
                     implicitWidth: 28; implicitHeight: 28
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: barBtn.tip
+                    Keys.onReturnPressed: barBtn.tapped()
+                    Keys.onSpacePressed: barBtn.tapped()
+                    Rectangle {
+                        anchors.fill: parent; radius: Theme.rCtl
+                        color: barTap.pressed ? Theme.pressFill : barHover.hovered ? Theme.hoverFill : "transparent"
+                        border.width: barBtn.activeFocus ? 1 : 0; border.color: Theme.focusRing
+                    }
                     VIcon {
                         anchors.centerIn: parent
                         name: barBtn.glyph
-                        color: barBtn.highlighted ? Theme.warn : barHover.hovered ? Theme.t1 : Theme.t2
+                        color: barBtn.highlighted ? Theme.warn : (barHover.hovered || barTap.pressed) ? Theme.t1 : Theme.t2
                     }
                     HoverHandler { id: barHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: barBtn.tapped() }
+                    TapHandler { id: barTap; onTapped: barBtn.tapped() }
                     ToolTip.visible: barHover.hovered
                     ToolTip.text: barBtn.tip
                 }
@@ -881,11 +901,22 @@ VPage {
                 }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
                 Item {
+                    id: proFullBtn
                     objectName: "pro-fullscreen"
                     implicitWidth: 28; implicitHeight: 28
-                    VIcon { anchors.centerIn: parent; name: "max"; color: fullHover.hovered ? Theme.t1 : Theme.t2 }
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("全屏")
+                    Keys.onReturnPressed: root.requestFullscreen()
+                    Keys.onSpacePressed: root.requestFullscreen()
+                    Rectangle {
+                        anchors.fill: parent; radius: Theme.rCtl
+                        color: fullTap.pressed ? Theme.pressFill : fullHover.hovered ? Theme.hoverFill : "transparent"
+                        border.width: proFullBtn.activeFocus ? 1 : 0; border.color: Theme.focusRing
+                    }
+                    VIcon { anchors.centerIn: parent; name: "max"; color: (fullHover.hovered || fullTap.pressed) ? Theme.t1 : Theme.t2 }
                     HoverHandler { id: fullHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: root.requestFullscreen() }
+                    TapHandler { id: fullTap; onTapped: root.requestFullscreen() }
                     ToolTip.visible: fullHover.hovered
                     ToolTip.text: qsTr("全屏（双击画面 / F11）· 全屏后按 %1 打开快速调节").arg("Home")
                 }
@@ -1215,10 +1246,6 @@ VPage {
                                     g.beginPath(); g.moveTo(0, y(budget)); g.lineTo(width, y(budget)); g.stroke(); g.setLineDash([])
                                 }
                                 const x = i => i / 47 * width + (48 - pts.length) / 47 * width
-                                const grad = g.createLinearGradient(0, 0, 0, height)
-                                grad.addColorStop(0, Qt.rgba(61 / 255, 220 / 255, 132 / 255, 0.25)); grad.addColorStop(1, Qt.rgba(61 / 255, 220 / 255, 132 / 255, 0))
-                                g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)))
-                                g.lineTo(x(pts.length - 1), height); g.lineTo(x(0), height); g.closePath(); g.fillStyle = grad; g.fill()
                                 g.beginPath(); pts.forEach((v, i) => i ? g.lineTo(x(i), y(v)) : g.moveTo(x(i), y(v)))
                                 g.strokeStyle = Theme.ok; g.lineWidth = 1.5; g.stroke()
                             }
@@ -1321,7 +1348,7 @@ VPage {
         anchors.topMargin: 10
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 14
-        width: root.overlay ? 376 : root.inspectorWidth
+        width: root.overlay ? Math.min(376, Math.max(240, root.width - 32)) : root.inspectorWidth
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -1357,13 +1384,22 @@ VPage {
                         { id: "display", label: qsTr("显示") }
                     ]
                     delegate: Rectangle {
+                        id: tabBtn
                         required property var modelData
                         Layout.fillWidth: true
                         implicitWidth: tabLabel.implicitWidth + 10
                         implicitHeight: Math.max(30, tabLabel.implicitHeight + 8)
-                        radius: 9
+                        radius: Theme.rCtl
                         color: root.tab === modelData.id ? Theme.card3
-                             : tabHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
+                             : tabTap.pressed ? Theme.pressFill
+                             : tabHover.hovered ? Theme.hoverFill : "transparent"
+                        border.width: 1
+                        border.color: tabBtn.activeFocus ? Theme.focusRing : "transparent"
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.PageTab
+                        Accessible.name: modelData.label
+                        Keys.onReturnPressed: root.tab = modelData.id
+                        Keys.onSpacePressed: root.tab = modelData.id
                         Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                         Text {
                             id: tabLabel
@@ -1375,10 +1411,10 @@ VPage {
                             color: root.tab === modelData.id ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsBody
-                            font.weight: Font.Medium
+                            font.weight: Font.Medium; font.variableAxes: Theme.axesMedium
                         }
                         HoverHandler { id: tabHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: root.tab = modelData.id }
+                        TapHandler { id: tabTap; onTapped: root.tab = modelData.id }
                     }
                 }
             }
@@ -1435,24 +1471,32 @@ VPage {
                                 spacing: 2
                                 Text { text: "→"; color: Theme.t3; font.pixelSize: 10; anchors.verticalCenter: parent.verticalCenter }
                                 Rectangle {
+                                    id: chipItem
                                     width: chipLabel.implicitWidth + 18
                                     height: 24
-                                    radius: 99
-                                    color: Theme.card3
+                                    radius: Theme.rCtl
+                                    color: chipTap.pressed ? Theme.pressFill : chipHover.hovered ? Theme.hoverFill : Theme.card3
                                     border.width: 1
-                                    border.color: Theme.stroke
-                                    opacity: modelData.enabled ? 1.0 : 0.4
+                                    border.color: chipItem.activeFocus ? Theme.focusRing
+                                        : root.selectedEffect === modelData.index ? Theme.accent
+                                        : chipHover.hovered ? Theme.strokeStrong : Theme.stroke
+                                    opacity: modelData.enabled ? 1.0 : Theme.disabledOpacity
+                                    activeFocusOnTab: true
+                                    Accessible.role: Accessible.Button
+                                    Accessible.name: modelData.label
+                                    Keys.onReturnPressed: root.locateNode(modelData)
+                                    Keys.onSpacePressed: root.locateNode(modelData)
                                     Text {
                                         id: chipLabel
                                         anchors.centerIn: parent
                                         text: modelData.label
                                         color: Theme.t1
                                         font.family: Theme.fontUi
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fsSmall
                                         font.strikeout: !modelData.enabled
                                     }
-                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
-                                    TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: root.locateNode(modelData) }
+                                    HoverHandler { id: chipHover; cursorShape: Qt.PointingHandCursor }
+                                    TapHandler { id: chipTap; gesturePolicy: TapHandler.WithinBounds; onTapped: root.locateNode(modelData) }
                                 }
                             }
                         }
@@ -1478,9 +1522,9 @@ VPage {
 
                 ColumnLayout {
                     id: body
-                    // CSS thin scrollbars consume 10px on the reference host;
-                    // reserve their gutter instead of drawing over the colour card.
-                    width: parent.width - 20 - ((root.tab === "quality" || (root.tab === "color" && inspectorScroll.size < 1)) ? inspectorScroll.implicitWidth : 0)
+                    // Reserve gutter whenever the vertical scrollbar is visible (all tabs),
+                    // or on quality so collapsing cards never shifts layout.
+                    width: parent.width - 20 - ((root.tab === "quality" || inspectorScroll.size < 1) ? inspectorScroll.implicitWidth : 0)
                     x: 10
                     spacing: 6
 
@@ -1498,7 +1542,7 @@ VPage {
                             objectName: "list-video-denoise"
                             Layout.fillWidth: true
                             glyph: "sparkles"
-                            hue: "#62CDB7"
+                            hue: Theme.ok
                             title: qsTr("视频降噪")
                             summary: veyra.videoDenoiseEnabled ? qsTr("已开启") : qsTr("已关闭")
                             on: !!veyra.videoDenoiseEnabled
@@ -1518,7 +1562,7 @@ VPage {
                             objectName: "list-anti-alias"
                             Layout.fillWidth: true
                             glyph: "type"
-                            hue: "#7FD4FF"
+                            hue: Theme.accent
                             title: qsTr("抗锯齿")
                             summary: veyra.antiAliasEnabled ? veyra.antiAliasParams.summary : qsTr("已关闭")
                             on: veyra.antiAliasEnabled
@@ -1536,7 +1580,7 @@ VPage {
                             objectName: "list-sr"
                             Layout.fillWidth: true
                             glyph: "sparkles"
-                            hue: "#4F7BFF"
+                            hue: Theme.accent
                             title: qsTr("超分辨率")
                             switchAvailable: Support.available(veyra, "sr")
                             summary: !switchAvailable ? Support.reason(veyra, "sr") : (veyra.srEnabled ? (veyra.srBackendChoices?.find(o => o.id === veyra.srAlgorithmOf(veyra.videoSrQuality))?.label || qsTr("RTX 视频超分")) : qsTr("已关闭"))
@@ -1562,7 +1606,7 @@ VPage {
                                 label: qsTr("超分算法")
                                 VSelect {
                                     objectName: "list-sr-backend"
-                                    implicitWidth: 210 // the RTX Video SR family names need more than the default 150
+                                    implicitWidth: Math.min(210, Math.max(130, insp.width * 0.5))
                                     options: veyra.srBackendChoices || []
                                     value: options.find(o => o.id === veyra.srAlgorithmOf(veyra.videoSrQuality))?.label || ""
                                     // Switching between RTX families keeps the tier.
@@ -1594,7 +1638,7 @@ VPage {
                             objectName: "list-video-hdr"
                             Layout.fillWidth: true
                             glyph: "sun"
-                            hue: "#E58BD9"
+                            hue: Theme.warn
                             title: "RTX Video HDR"
                             switchAvailable: Support.available(veyra, "video-hdr")
                             summary: !switchAvailable ? Support.reason(veyra, "video-hdr") : veyra.videoHdr ? (veyra.videoHdrStatus.length > 0 ? veyra.videoHdrStatus : qsTr("已开启")) : qsTr("已关闭")
@@ -1611,7 +1655,7 @@ VPage {
                                 delegate: VRow {
                                     required property var modelData
                                     enabled: Support.available(veyra, "video-hdr")
-                                    opacity: enabled ? 1 : 0.4
+                                    opacity: enabled ? 1 : Theme.disabledOpacity
                                     label: modelData.label
                                     // modelData.scale turns an integer parameter into a
                                     // readable number (exposure is 1/100 EV); the unit
@@ -1693,7 +1737,7 @@ VPage {
                             AddLayerButton {
                                 objectName: "list-nr-add"
                                 full: veyra.nrLayers.length >= 4
-                                label: qsTr("+  添加 NR 层")
+                                label: qsTr("+ 添加 NR 层")
                                 note: full ? qsTr("（最多 4 层）") : qsTr("（加在 NR ") + veyra.nrLayers.length + qsTr(" 之后 · 最多 4 层）")
                                 onAdd: { root.markPop(veyra.nrLayers.length + 1); root.selectedEffect = veyra.addEffect("nr") }
                             }
@@ -1783,7 +1827,7 @@ VPage {
                                     visible: veyra.nrReuseMode !== 0
                                     VSelect {
                                         objectName: "list-nr-reuse-mode"
-                                        implicitWidth: 210
+                                        implicitWidth: Math.min(210, Math.max(130, insp.width * 0.5))
                                         options: [
                                             { id: "1", label: qsTr("自动") },
                                             { id: "2", label: qsTr("手动 1/2 · 每 2 帧复用 1 帧") },
@@ -1830,7 +1874,7 @@ VPage {
                             objectName: "list-beauty-stage"
                             Layout.fillWidth: true
                             glyph: "heart"
-                            hue: "#FF8FBF"
+                            hue: Theme.exp
                             title: qsTr("美颜")
                             summary: veyra.beautyLayers.length === 0 ? qsTr("未添加美颜层 · 人脸原画保护与磨皮")
                                      : !veyra.beautyAnyEnabled ? qsTr("已关闭")
@@ -1855,7 +1899,7 @@ VPage {
                             AddLayerButton {
                                 objectName: "list-beauty-add"
                                 full: veyra.beautyLayers.length >= 6
-                                label: qsTr("+  添加美颜层")
+                                label: qsTr("+ 添加美颜层")
                                 note: full ? qsTr("（最多 6 层）") : qsTr("（新层默认关闭 · 最多 6 层）")
                                 onAdd: { root.markBeautyPop(veyra.beautyLayers.length + 1); root.selectedEffect = veyra.addEffect("beauty") }
                             }
@@ -1906,7 +1950,7 @@ VPage {
                             instantExpansion: root.onboardingActive
                             Layout.fillWidth: true
                             glyph: "layers"
-                            hue: "#3DDC84"
+                            hue: Theme.ok
                             title: qsTr("补帧")
                             summary: qsTr("始终在所有画质效果之后") + (veyra.fgEnabled
                                      ? " · " + veyra.fgMultiplier + "X " + Support.fgBackendShortLabel(backendOption)
@@ -1959,7 +2003,7 @@ VPage {
                                 label: qsTr("DLSS 性能模式")
                                 visible: veyra.fgBackendName === "dlss"
                                 enabled: veyra.dlssgLiteAvailable
-                                opacity: enabled ? 1 : 0.5
+                                opacity: enabled ? 1 : Theme.disabledOpacity
                                 hint: veyra.dlssgLiteHint
                                 VSwitch {
                                     objectName: "list-dlssg-lite"
@@ -1982,7 +2026,7 @@ VPage {
                                 label: qsTr("VFG 自动调控")
                                 visible: veyra.fgBackendName === "vfg"
                                 enabled: veyra.vfgQuality !== 0 && veyra.fgMultiplier === 2
-                                opacity: enabled ? 1 : 0.5
+                                opacity: enabled ? 1 : Theme.disabledOpacity
                                 hint: qsTr("实时采集 2X 时，当前档来不及赶上屏幕刷新，这一对帧就改用下一档，不丢帧也不加延迟。多占约 2 GB 显存，显存不够时不生效")
                                 VSwitch {
                                     objectName: "list-vfg-auto-regulate"
@@ -2304,8 +2348,8 @@ VPage {
         Layout.fillWidth: true
         Layout.preferredWidth: 1
         implicitHeight: modeCol.implicitHeight + 24
-        radius: 12
-        color: active ? Qt.rgba(1, 138 / 255, 61 / 255, 0.08) : Theme.card2
+        radius: Theme.rCard
+        color: active ? Theme.accentSoft : Theme.card2
         border.width: 1
         border.color: active ? Theme.accent : Theme.stroke
         ColumnLayout {
@@ -2313,24 +2357,24 @@ VPage {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: 12
+            anchors.margins: Theme.s12
             spacing: 6
             Rectangle {
-                implicitWidth: 28; implicitHeight: 28; radius: 8
-                color: Qt.rgba(1, 1, 1, 0.06)
+                implicitWidth: 28; implicitHeight: 28; radius: Theme.rCtl
+                color: Theme.hoverFill
                 VIcon { anchors.centerIn: parent; name: mc.glyph; size: 14 }
             }
             Text {
                 text: mc.heading
                 color: Theme.t1
-                font.family: Theme.fontUi; font.pixelSize: 13
+                font.family: Theme.fontUi; font.pixelSize: Theme.fsBody
                 font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
             }
             Text {
                 Layout.fillWidth: true
                 text: mc.detail
                 color: Theme.t3
-                font.family: Theme.fontUi; font.pixelSize: 11
+                font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                 wrapMode: Text.WordWrap
             }
             VTag { text: mc.tag; kind: mc.active ? "acc" : "" }

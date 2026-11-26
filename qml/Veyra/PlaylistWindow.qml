@@ -116,10 +116,10 @@ Window {
                     VIcon { name: "list"; size: 19; color: Theme.accent }
                     Text {
                         text: qsTr("播放列表")
-                        font.family: Theme.fontUi; font.pixelSize: 16; font.weight: Font.DemiBold
+                        font.family: Theme.fontUi; font.pixelSize: Theme.fsH3; font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
                         color: Theme.t1
                     }
-                    Text { text: qsTr("%1 项").arg(win.playlist.count); font.pixelSize: 11; color: Theme.t3 }
+                    Text { text: qsTr("%1 项").arg(win.playlist.count); font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; color: Theme.t3 }
                     Item { Layout.fillWidth: true }
                     VButton {
                         objectName: "playlist-close"
@@ -168,7 +168,7 @@ Window {
                     anchors.fill: parent; clip: true; spacing: 4
                     model: win.playlist
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    ScrollBar.vertical: ScrollBar { id: listBar; policy: ScrollBar.AsNeeded }
                     delegate: Rectangle {
                         id: row
                         required property int index
@@ -179,10 +179,15 @@ Window {
                         required property bool entryCurrent
                         required property string entryState
                         objectName: "playlist-row-" + index
-                        width: list.width - 10; height: 64; radius: 9
+                        width: list.width - (listBar.visible ? listBar.width + 2 : 0); height: 64; radius: Theme.rCard
                         color: win.selectedPath === entryPath ? Theme.card3 : entryCurrent ? Theme.accentSoft : rowMouse.containsMouse ? Theme.card2 : "transparent"
                         border.width: 1
-                        border.color: win.dragging && win.dragPath === entryPath ? Theme.accent : "transparent"
+                        border.color: row.activeFocus ? Theme.focusRing : (win.dragging && win.dragPath === entryPath) ? Theme.accent : "transparent"
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.ListItem
+                        Accessible.name: row.entryName
+                        Keys.onReturnPressed: win.playlist.play(row.index)
+                        Keys.onSpacePressed: win.selectedPath = row.entryPath
                         MouseArea {
                             id: rowMouse
                             objectName: "playlist-select-" + row.index
@@ -224,7 +229,7 @@ Window {
                                 Text {
                                     Layout.fillWidth: true
                                     text: row.entryName; elide: Text.ElideRight; color: row.entryCurrent ? Theme.accent : Theme.t1
-                                    font.family: Theme.fontUi; font.pixelSize: 12
+                                    font.family: Theme.fontUi; font.pixelSize: Theme.fsBody
                                 }
                                 Text {
                                     objectName: "playlist-state-" + row.index
@@ -241,10 +246,10 @@ Window {
                                         }
                                     }
                                     color: row.entryState === "failed" ? Theme.err : Theme.accent
-                                    font.pixelSize: 10
+                                    font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                                 }
                             }
-                            Text { Layout.fillWidth: true; text: row.entrySize + " · " + row.entryModified; color: Theme.t3; elide: Text.ElideRight; font.pixelSize: 10 }
+                            Text { Layout.fillWidth: true; text: row.entrySize + " · " + row.entryModified; color: Theme.t3; elide: Text.ElideRight; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow }
                         }
                         VButton {
                             objectName: "playlist-remove-" + row.index
@@ -275,7 +280,7 @@ Window {
             }
             RowLayout {
                 Layout.fillWidth: true; spacing: 8
-                Text { text: qsTr("播完后播放下一项"); color: Theme.t2; font.pixelSize: 11 }
+                Text { text: qsTr("播完后播放下一项"); color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow }
                 VSwitch { objectName: "playlist-auto-advance"; checked: win.playlist.autoAdvance; onToggled: checked => win.playlist.autoAdvance = checked }
                 Item { Layout.fillWidth: true }
             }
@@ -286,7 +291,7 @@ Window {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     text: win.failure || win.playlist.status || qsTr("拖入只追加列表，不打断当前播放")
-                    color: win.failure ? Theme.err : Theme.t3; elide: Text.ElideRight; font.pixelSize: 10
+                    color: win.failure ? Theme.err : Theme.t3; elide: Text.ElideRight; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
                 }
                 VButton {
                     id: clearHistory
@@ -314,7 +319,7 @@ Window {
             anchors.fill: parent; anchors.margins: 2; radius: Theme.rWindow
             visible: filesDrop.containsDrag; color: Theme.accentSoft
             border.width: 2; border.color: Theme.accent
-            Text { anchors.centerIn: parent; text: qsTr("松开以追加到播放列表"); color: Theme.t1; font.pixelSize: 16 }
+            Text { anchors.centerIn: parent; text: qsTr("松开以追加到播放列表"); color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsH3 }
         }
     }
     Repeater {

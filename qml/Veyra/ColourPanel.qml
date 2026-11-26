@@ -66,10 +66,10 @@ ColumnLayout {
         property string placeholder: ""
         signal accepted()
         implicitHeight: Math.max(30, placeholderLabel.implicitHeight + 8)
-        radius: 9
-        color: Qt.rgba(1, 1, 1, 0.04)
-        border.width: 1
-        border.color: field.activeFocus ? Theme.accent : Theme.stroke
+        radius: Theme.rCtl
+        color: Theme.hoverFill
+        border.width: field.activeFocus ? 2 : 1
+        border.color: field.activeFocus ? Theme.focusRing : Theme.stroke
         TextInput {
             id: field
             anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 10
@@ -174,14 +174,14 @@ ColumnLayout {
                     Layout.fillWidth:true
                     spacing:2
                     Text {
-                        text:panel.state.index<0?qsTr("没有调色节点"):veyra.nodeMode===1?qsTr("调色 · 实例 ")+(panel.state.index+1):qsTr("调色")
-                        color:Theme.t1;font.family:Theme.fontUi;font.pixelSize:13
+                        text:panel.state.index<0?qsTr("没有调色节点"):veyra.nodeMode===1?qsTr("调色 · 实例 %1").arg(panel.state.index+1):qsTr("调色")
+                        color:Theme.t1;font.family:Theme.fontUi;font.pixelSize:Theme.fsBody
                         font.weight:Font.DemiBold;font.variableAxes:Theme.axesDemiBold
                     }
                     Text {
                         Layout.fillWidth:true
                         text:panel.state.enabled?qsTr("关闭时这条链路不存在，零开销"):qsTr("已关闭 · 参数保留但不生效")
-                        color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:11
+                        color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:Theme.fsEyebrow
                         wrapMode:Text.Wrap
                     }
                 }
@@ -290,8 +290,8 @@ ColumnLayout {
             id:lookMenu
             title:qsTr("颜色预设")
             items:[{act:"import",label:qsTr("导入 .vpcolor…"),icon:"import"}]
-                .concat(panel.api.colourLooks.map(l=>({act:"export",look:l.index,label:qsTr("导出「")+l.name+"」…",icon:"upload"})))
-                .concat(panel.api.colourLooks.map(l=>({act:"delete",look:l.index,label:qsTr("删除「")+l.name+"」",icon:"trash"})))
+                .concat(panel.api.colourLooks.map(l=>({act:"export",look:l.index,label:qsTr("导出「%1」…").arg(l.name),icon:"upload"})))
+                .concat(panel.api.colourLooks.map(l=>({act:"delete",look:l.index,label:qsTr("删除「%1」").arg(l.name),icon:"trash"})))
             onPicked:(i,item)=>{
                 if(item.act==="import")panel.api.importColourLookDialog()
                 else if(item.act==="export")panel.api.exportColourLookDialog(item.look)
@@ -306,8 +306,8 @@ ColumnLayout {
             required property int index
             objectName:"colour-section-"+index
             Layout.fillWidth:true
-            title:panel.sections[index];glyph:"palette";hue:"#E0C341"
-            summary:panel.compact?panel.sectionCounts[index]+qsTr(" 项"):""
+            title:panel.sections[index];glyph:"palette";hue:Theme.warn
+            summary:panel.compact?qsTr("%1 项").arg(panel.sectionCounts[index]):""
             open:!panel.compact&&index<2
             enabledSwitch:false
             compactHeader:true
@@ -317,8 +317,8 @@ ColumnLayout {
                     objectName:"colour-bypass-"+section.index
                     visible:section.index<7
                     icon:true;iconName:section.bypassed?"eyeoff":"eye"
-                    ghost:true;implicitWidth:24;implicitHeight:24;radius:7
-                    Accessible.name:panel.sections[section.index]+(section.bypassed?qsTr(" · 恢复"):qsTr(" · 旁路"))
+                    ghost:true;implicitWidth:24;implicitHeight:24;radius:Theme.rCtl
+                    Accessible.name:section.bypassed?qsTr("%1 · 恢复").arg(panel.sections[section.index]):qsTr("%1 · 旁路").arg(panel.sections[section.index])
                     onClicked:panel.api.setColourOption("groupBypassMask",panel.state.groupBypassMask^(1<<section.index))
                 }
             ]
@@ -326,7 +326,7 @@ ColumnLayout {
                 VButton {
                     objectName:"colour-reset-"+section.index
                     icon:true;iconName:"reset";ghost:true;implicitWidth:26;implicitHeight:26
-                    Accessible.name:panel.sections[section.index]+qsTr(" · 还原")
+                    Accessible.name:qsTr("%1 · 还原").arg(panel.sections[section.index])
                     onClicked:panel.api.resetColourGroup(section.index)
                 }
             ]
@@ -339,23 +339,24 @@ ColumnLayout {
             Text {
                 Layout.fillWidth:true;visible:section.index===1
                 text:qsTr("色温为相对值；采集卡没有拍摄白平衡。")
-                color:Theme.t3;font.pixelSize:11;wrapMode:Text.WordWrap
+                color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:Theme.fsEyebrow;wrapMode:Text.WordWrap
             }
             Loader {
                 Layout.fillWidth:true;active:section.index===2;visible:active
                 sourceComponent:ColumnLayout {
-                VSeg {
-                    objectName:"colour-curve-mode"
-                    options:[{id:"points",label:qsTr("点曲线")},{id:"parametric",label:qsTr("参数曲线")}]
-                    current:panel.curveMode;onPicked:id=>panel.curveMode=id
-                }
-                ColourCurve {
-                    objectName:"colour-curve"
-                    Layout.fillWidth:true;visible:panel.curveMode==="points"
-                    curves:panel.state.curves;samples:panel.state.curveSamples
-                    onEdited:(channel,points)=>panel.api.setColourCurve(channel,points)
-                }
-                ParameterRows {Layout.fillWidth:true;visible:panel.curveMode==="parametric";keys:panel.parametric}
+                    spacing:Theme.s8
+                    VSeg {
+                        objectName:"colour-curve-mode"
+                        options:[{id:"points",label:qsTr("点曲线")},{id:"parametric",label:qsTr("参数曲线")}]
+                        current:panel.curveMode;onPicked:id=>panel.curveMode=id
+                    }
+                    ColourCurve {
+                        objectName:"colour-curve"
+                        Layout.fillWidth:true;visible:panel.curveMode==="points"
+                        curves:panel.state.curves;samples:panel.state.curveSamples
+                        onEdited:(channel,points)=>panel.api.setColourCurve(channel,points)
+                    }
+                    ParameterRows {Layout.fillWidth:true;visible:panel.curveMode==="parametric";keys:panel.parametric}
                 }
             }
             Loader {
@@ -370,25 +371,26 @@ ColumnLayout {
             Loader {
                 Layout.fillWidth:true;active:section.index===4;visible:active
                 sourceComponent:ColumnLayout {
-                GridLayout {
-                    Layout.fillWidth:true;columns:2;columnSpacing:14;rowSpacing:14
-                    Repeater {
-                        model:4
-                        delegate:ColourWheel {
-                            property bool sliderResetEnabled: true
-                            property bool sliderValueFromModel: true
-                            required property int index
-                            objectName:"colour-wheel-"+index
-                            Layout.fillWidth:true
-                            title:[qsTr("阴影"),qsTr("中间调"),qsTr("高光"),qsTr("全局")][index]
-                            hue:panel.state.grading[index].hue
-                            saturation:panel.state.grading[index].saturation
-                            luminance:panel.state.grading[index].luminance
-                            onEdited:(h,s,l)=>panel.api.setColourWheel(index,h,s,l)
+                    spacing:Theme.s8
+                    GridLayout {
+                        Layout.fillWidth:true;columns:panel.width<320?1:2;columnSpacing:14;rowSpacing:14
+                        Repeater {
+                            model:4
+                            delegate:ColourWheel {
+                                property bool sliderResetEnabled: true
+                                property bool sliderValueFromModel: true
+                                required property int index
+                                objectName:"colour-wheel-"+index
+                                Layout.fillWidth:true
+                                title:[qsTr("阴影"),qsTr("中间调"),qsTr("高光"),qsTr("全局")][index]
+                                hue:panel.state.grading[index].hue
+                                saturation:panel.state.grading[index].saturation
+                                luminance:panel.state.grading[index].luminance
+                                onEdited:(h,s,l)=>panel.api.setColourWheel(index,h,s,l)
+                            }
                         }
                     }
-                }
-                ParameterRows {Layout.fillWidth:true;keys:["gradingBlending","gradingBalance"]}
+                    ParameterRows {Layout.fillWidth:true;keys:["gradingBlending","gradingBalance"]}
                 }
             }
             ParameterRows {
@@ -398,35 +400,36 @@ ColumnLayout {
             Loader {
                 Layout.fillWidth:true;active:section.index===6;visible:active
                 sourceComponent:ColumnLayout {
-                VRow {
-                    label:qsTr("LUT 文件")
-                    VSelect {
-                        objectName:"colour-lut-select"
-                        implicitWidth:170
-                        value:panel.state.lutName?panel.state.lutName:qsTr("未使用")
-                        options:[{id:"",label:qsTr("不使用 LUT")}].concat(panel.api.lutLibrary.map(n=>({id:n,label:n})))
-                        onPicked:id=>panel.api.setColourLut(id)
+                    spacing:Theme.s8
+                    VRow {
+                        label:qsTr("LUT 文件")
+                        VSelect {
+                            objectName:"colour-lut-select"
+                            implicitWidth:Math.min(170, Math.max(120, panel.width * 0.45))
+                            value:panel.state.lutName?panel.state.lutName:qsTr("未使用")
+                            options:[{id:"",label:qsTr("不使用 LUT")}].concat(panel.api.lutLibrary.map(n=>({id:n,label:n})))
+                            onPicked:id=>panel.api.setColourLut(id)
+                        }
                     }
-                }
-                RowLayout {
-                    Layout.fillWidth:true
-                    VButton {
-                        objectName:"colour-lut-import"
-                        text:qsTr("导入 .cube…");ghost:true
-                        onClicked:panel.api.importLutDialog()
+                    RowLayout {
+                        Layout.fillWidth:true
+                        VButton {
+                            objectName:"colour-lut-import"
+                            text:qsTr("导入 .cube…");ghost:true
+                            onClicked:panel.api.importLutDialog()
+                        }
+                        Item {Layout.fillWidth:true}
                     }
-                    Item {Layout.fillWidth:true}
-                }
-                ParameterRows {Layout.fillWidth:true;keys:["lutStrength"]}
-                VSeg {
-                    options:[{id:"0",label:"Cineon"},{id:"1",label:"sRGB"},{id:"2",label:"PQ"}]
-                    current:String(panel.state.lutInputSpace)
-                    onPicked:id=>panel.api.setColourOption("lutInputSpace",Number(id))
-                }
-                Text {
-                    Layout.fillWidth:true;text:qsTr("导入的 .cube 保存在程序目录 runtime_local/luts，导出也使用同一份。")
-                    color:Theme.t3;font.pixelSize:11;wrapMode:Text.WordWrap
-                }
+                    ParameterRows {Layout.fillWidth:true;keys:["lutStrength"]}
+                    VSeg {
+                        options:[{id:"0",label:"Cineon"},{id:"1",label:"sRGB"},{id:"2",label:"PQ"}]
+                        current:String(panel.state.lutInputSpace)
+                        onPicked:id=>panel.api.setColourOption("lutInputSpace",Number(id))
+                    }
+                    Text {
+                        Layout.fillWidth:true;text:qsTr("导入的 .cube 保存在程序目录 runtime_local/luts，导出也使用同一份。")
+                        color:Theme.t3;font.family:Theme.fontUi;font.pixelSize:Theme.fsEyebrow;wrapMode:Text.WordWrap
+                    }
                 }
             }
         }

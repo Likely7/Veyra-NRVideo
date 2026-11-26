@@ -20,7 +20,7 @@ ColumnLayout {
         wrapMode: Text.WordWrap
         color: editor.drawShape.length>0?Theme.accent:Theme.t3
         font.family: Theme.fontUi
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsEyebrow
     }
     RowLayout {
         Layout.fillWidth: true
@@ -63,7 +63,7 @@ ColumnLayout {
         wrapMode: Text.WordWrap
         color: Theme.t3
         font.family: Theme.fontUi
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsEyebrow
     }
     Repeater {
         model: editor.regions
@@ -77,7 +77,7 @@ ColumnLayout {
                 label: (regionRow.modelData.ellipse?qsTr("圆形 "):qsTr("矩形 "))+(regionRow.index+1)
                 value: Math.round(regionRow.modelData.left*100)+","+Math.round(regionRow.modelData.top*100)+" → "
                        +Math.round(regionRow.modelData.right*100)+","+Math.round(regionRow.modelData.bottom*100)+" %"
-                Row {
+                RowLayout {
                     spacing: 6
                     VButton {
                         visible: editor.allEffects
@@ -89,6 +89,8 @@ ColumnLayout {
                     VButton {
                         objectName: editor.namePrefix+"-remove-"+regionRow.index
                         icon: true; ghost: true; iconName: "x"
+                        tip: qsTr("移除区域")
+                        Accessible.name: qsTr("移除区域")
                         onClicked: veyra.removeMaskRegion(editor.allEffects,regionRow.modelData.index)
                     }
                 }

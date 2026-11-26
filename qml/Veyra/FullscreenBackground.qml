@@ -115,7 +115,7 @@ Item {
             height: background.height
             visible: background.eligible && background.mode !== "black" && picture.status !== Image.Error
                 && picture.source.toString().length > 0
-            color: "black"
+            color: Theme.videoBlack
             clip: true
             Image {
                 id: picture

@@ -17,10 +17,13 @@ Rectangle {
     // value and clicking 连接 (which takes no focus) or closing the dialog lost it.
     signal typed(string text)
     implicitHeight: 30
-    radius: 9
-    color: Qt.rgba(1, 1, 1, 0.04)
-    border.width: 1
-    border.color: field.activeFocus ? Theme.accent : Theme.stroke
+    radius: Theme.rCtl
+    color: Theme.hoverFill
+    border.width: field.activeFocus ? 2 : 1
+    border.color: field.activeFocus ? Theme.focusRing : Theme.stroke
+    opacity: enabled ? 1.0 : Theme.disabledOpacity
+    Accessible.role: Accessible.EditableText
+    Accessible.name: placeholder
     TextInput {
         id: field
         anchors.fill: parent
@@ -31,6 +34,10 @@ Rectangle {
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsBody
         selectByMouse: true
+        clip: true
+        activeFocusOnTab: parent.enabled
+        Accessible.role: Accessible.EditableText
+        Accessible.name: parent.placeholder
         onEditingFinished: parent.edited(text)
         onTextEdited: parent.typed(text)
     }
