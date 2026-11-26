@@ -59,6 +59,8 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.srActive == b.srActive && a.fgActive == b.fgActive && a.failed == b.failed &&
         a.volume == b.volume && a.muted == b.muted && a.selectedAudioTrack == b.selectedAudioTrack &&
         a.audioTracks.size() == b.audioTracks.size() && a.running == b.running &&
+        a.captureAudio.inputChannels == b.captureAudio.inputChannels &&
+        a.captureAudio.inputBitstream == b.captureAudio.inputBitstream && a.captureAudio.error == b.captureAudio.error &&
         a.sourceWidth == b.sourceWidth && a.sourceHeight == b.sourceHeight &&
         a.sourceDisplayAspect == b.sourceDisplayAspect && a.sourceRotationDegrees == b.sourceRotationDegrees &&
         a.capture == b.capture && a.image == b.image && a.captureRecovering == b.captureRecovering &&

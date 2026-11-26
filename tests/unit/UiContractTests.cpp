@@ -232,6 +232,21 @@ int wmain(int argc,wchar_t** argv){try{
         const auto virtualRestored=store.load();
         require(virtualRestored.audioMode==source::kCaptureAudioVirtualSpeaker&&virtualRestored.audioPath==virtualSpeaker.audioPath,
                 "virtual speaker transport and endpoint survive reopening preferences");
+        auto surround=p;
+        surround.videoPath=L"pci#ven_1461&dev_0054&subsys_57301461";
+        surround.audioMode=source::kCaptureAudioGc573Lpcm;
+        surround.audioPath.clear();
+        require(store.save(surround),"save GC573 HDMI LPCM input");
+        const auto surroundRestored=store.load();
+        require(surroundRestored.audioMode==surround.audioMode&&surroundRestored.videoPath==surround.videoPath&&surroundRestored.audioPath.empty(),
+                "GC573 HDMI LPCM stays selected on the video device after reopening preferences");
+        for (const unsigned channels : {6u,8u}) {
+            surround.audioMode=source::kCaptureAudioFromVideoDevice;
+            surround.audioChannels=channels;
+            require(store.save(surround)&&store.load().audioChannels==channels,"explicit DirectShow PCM layout survives restart");
+        }
+        surround.audioMode=source::kCaptureAudioWasapi;
+        require(!store.save(surround),"shared WASAPI layout follows its Windows mix format");
         for(uint32_t connection:{1u,2u}){
             auto native=p;native.videoPath=source::decklink::inputConnectionPath(L"decklink-native:p:0000000000000123:0",connection);native.formatKey=L"decklink:auto";
             require(store.save(native),"save BMD explicit connection using existing preference format");
@@ -255,7 +270,7 @@ int wmain(int argc,wchar_t** argv){try{
         for(int version:{1,2}){
             std::wstring legacy=L"VEYRA_CAPTURE "+std::to_wstring(version)+L"\n\"video\" \"format\" -1 \"\" 0"+(version==2?L" 1":L"")+L"\n";
             {std::ofstream file(std::filesystem::path(argv[1])/"capture-preferences.v1",std::ios::binary|std::ios::trunc);file.write(reinterpret_cast<const char*>(legacy.data()),std::streamsize(legacy.size()*sizeof(wchar_t)));}
-            const auto old=store.load();require(old.videoPath==L"video"&&old.requestedFps==0&&old.formatHintDismissed==(version==2),"old capture preferences migrate without changing device rate");
+            const auto old=store.load();require(old.videoPath==L"video"&&old.requestedFps==0&&!old.audioChannels&&old.formatHintDismissed==(version==2),"old capture preferences migrate as automatic PCM");
         }
     }
     {

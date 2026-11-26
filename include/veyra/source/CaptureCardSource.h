@@ -16,9 +16,14 @@ constexpr int kCaptureAudioDisabled=-1;
 constexpr int kCaptureAudioFromVideoDevice=-2;
 constexpr int kCaptureAudioWasapi=-3; // capture2 only; requires explicit endpoint ID
 constexpr int kCaptureAudioVirtualSpeaker=-5; // capture2 only; dedicated render endpoint
+constexpr int kCaptureAudioGc573Lpcm=-6; // capture2 only; GC573 HDMI audio pin
 inline bool captureAudioIsWasapi(int mode) {
     return mode == kCaptureAudioWasapi || mode == kCaptureAudioVirtualSpeaker;
 }
+inline bool captureAudioIsEmbedded(int mode) {
+    return mode == kCaptureAudioFromVideoDevice || mode == kCaptureAudioGc573Lpcm;
+}
+bool isGc573CaptureDevice(std::wstring_view path);
 struct CaptureDevice {
     std::wstring name;
     // DirectShow moniker DevicePath/display name. This is stable across a
@@ -29,6 +34,7 @@ struct CaptureDevice {
     bool hasEmbeddedAudio=false;
     bool wasapi=false; // Audio only: path is a Windows endpoint ID.
     bool virtualSpeaker=false;
+    unsigned pcmSurroundLayouts=0; // Bit 6 (5.1) and bit 8 (7.1) from DirectShow audio pins.
     int audioMode() const {
         return virtualSpeaker ? kCaptureAudioVirtualSpeaker : wasapi ? kCaptureAudioWasapi : 0;
     }
@@ -50,10 +56,10 @@ bool isCaptureDisconnect(long code);
 class CaptureCardSource final:public IFrameSource {
 public:
     CaptureCardSource();~CaptureCardSource()override;
-    static std::vector<CaptureDevice> deviceDetails(bool audio=false);
+    static std::vector<CaptureDevice> deviceDetails(bool audio=false, bool includePcmLayouts=false);
     static std::vector<std::wstring> devices(bool audio=false);
     static std::wstring makeCapturePath(unsigned videoIndex,const CaptureDevice& video,
-        int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={});
+        int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={},unsigned audioChannels=0);
     static std::vector<CaptureFormat> formats(unsigned device);
     static std::vector<CaptureFormat> formatsByPath(std::wstring_view devicePath,CaptureFormatQueryInfo* query=nullptr,
         std::wstring_view preferredKey={},std::wstring_view requestedResolution={});

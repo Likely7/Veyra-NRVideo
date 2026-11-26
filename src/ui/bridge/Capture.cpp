@@ -9,7 +9,7 @@
 namespace veyra::ui {
 // --- capture dialog ----------------------------------------------------------
 static std::vector<source::CaptureDevice> captureAudioDeviceDetails() {
-    auto devices = source::CaptureCardSource::deviceDetails(true);
+    auto devices = source::CaptureCardSource::deviceDetails(true, true);
     for (auto& endpoint : source::WasapiAudioInput::devices(true))
         devices.push_back({std::move(endpoint.name), std::move(endpoint.id), false, true, true});
     return devices;
@@ -45,7 +45,7 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     // is the remembered device.
     impl_->captureColor = impl_->capturePrefs.colorForDevice(impl_->captureDevice);
     if(impl_->captureDevice==impl_->capturePrefs.videoPath)impl_->restoreCaptureForm();
-    else {impl_->captureAudioChoice=source::kCaptureAudioDisabled;impl_->captureAudioMissing=false;}
+    else {impl_->captureAudioChoice=source::kCaptureAudioDisabled;impl_->captureAudioChannels=0;impl_->captureAudioMissing=false;}
     if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     if (!impl_->captureDevice.empty()) queryCapture(1, impl_->captureDevice);
     emit captureChanged();
@@ -197,10 +197,13 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
     // Only what the user picks explicitly is ever opened (1.4.4 rule).
     QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不采集音频")}}};
     if(impl_->captureAudioMissing)out<<QVariantMap{{"id",-4},{"label",tr("上次的音频输入未连接")},{"disabled",true}};
-    for (const auto& d : impl_->captureVideo)
-        if (d.path == impl_->captureDevice)
-            out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
-                               {"label", d.hasEmbeddedAudio ? tr("视频设备内置音频（已检测）") : tr("尝试视频设备内置音频")}};
+    for (const auto& d : impl_->captureVideo) {
+        if (d.path != impl_->captureDevice) continue;
+        out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
+                           {"label", d.hasEmbeddedAudio ? tr("视频设备内置音频（已检测）") : tr("尝试视频设备内置音频")}};
+        if (source::isGc573CaptureDevice(d.path))
+            out << QVariantMap{{"id", source::kCaptureAudioGc573Lpcm}, {"label", QStringLiteral("GC573 HDMI LPCM 7.1")}, {"pcmOnly", true}};
+    }
     for (size_t i = 0; i < impl_->captureAudio.size(); ++i) {
         const auto& device = impl_->captureAudio[i];
         const auto label = device.virtualSpeaker ? tr("Veyra 虚拟扬声器 · %1").arg(utf8Of(device.name))
@@ -209,14 +212,57 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
     }
     return out;
 }
+QString QmlPlayerBridge::captureAudioInputStatus() const {
+    const auto& audio = impl_->snapshot.captureAudio;
+    if (!audio.error.empty()) return uiText(audio.error);
+    if (!audio.inputChannels) return {};
+    const auto channels = tr("%1 声道").arg(audio.inputChannels);
+    const auto format = audio.inputBitstream.empty() ? QStringLiteral("PCM") : utf8Of(audio.inputBitstream);
+    return format + QStringLiteral(" · ") + channels;
+}
 int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioMissing?-4:impl_->captureAudioChoice; }
 void QmlPlayerBridge::setCaptureAudioChoice(int choice) {
-    if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
+    if (choice == source::kCaptureAudioGc573Lpcm) {
+        if (!source::isGc573CaptureDevice(impl_->captureDevice)) return;
+    } else if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
+    if (choice != impl_->captureAudioChoice || impl_->captureAudioMissing) impl_->captureAudioChannels = 0;
     impl_->captureAudioChoice = choice;
     impl_->captureAudioMissing=false;
     // Remember the audio choice for this device as soon as it is picked, not only on
     // 连接并开始 (field report 2026-10-01: picked, closed, and it was gone next time).
     if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
+    emit captureChanged();
+}
+QVariantList QmlPlayerBridge::captureAudioLayouts() const {
+    const auto& i = *impl_;
+    if (i.captureAudioMissing) return {};
+    unsigned layouts = 0;
+    if (i.captureAudioChoice == source::kCaptureAudioFromVideoDevice) {
+        for (const auto& d : i.captureVideo)
+            if (d.path == i.captureDevice) { layouts = d.pcmSurroundLayouts; break; }
+    } else if (i.captureAudioChoice >= 0 && size_t(i.captureAudioChoice) < i.captureAudio.size()) {
+        layouts = i.captureAudio[size_t(i.captureAudioChoice)].pcmSurroundLayouts;
+    }
+    if (!layouts && !i.captureAudioChannels) return {};
+    QVariantList options{QVariantMap{{"id", QStringLiteral("0")}, {"label", tr("自动")}}};
+    for (const unsigned channels : {6u, 8u}) {
+        const bool available = (layouts & (1u << channels)) != 0;
+        if (available || channels == i.captureAudioChannels)
+            options << QVariantMap{{"id", QString::number(channels)},
+                                   {"label", channels == 6 ? QStringLiteral("5.1 PCM") : QStringLiteral("7.1 PCM")},
+                                   {"disabled", !available}};
+    }
+    return options;
+}
+int QmlPlayerBridge::captureAudioChannels() const { return int(impl_->captureAudioChannels); }
+void QmlPlayerBridge::setCaptureAudioChannels(int channels) {
+    if (!source::validCaptureAudioChannels(unsigned(channels)) || channels == captureAudioChannels()) return;
+    if (channels && !std::ranges::any_of(captureAudioLayouts(), [channels](const QVariant& value) {
+        const auto option = value.toMap();
+        return option.value("id").toInt() == channels && !option.value("disabled").toBool();
+    })) return;
+    impl_->captureAudioChannels = unsigned(channels);
+    if (!impl_->persistCaptureSelection()) emit notice(tr("采集设置保存失败，请检查配置目录是否可写"), true);
     emit captureChanged();
 }
 int QmlPlayerBridge::captureColorSpace() const { return int(source::captureColorSpace(impl_->captureColor)); }
@@ -354,9 +400,9 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
         const auto initialized=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if(FAILED(initialized)){q.info.code=initialized;q.info.stage=L"COM initialization";return q;}
         try {
-            if (kind == 0) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = captureAudioDeviceDetails(); }
+            if (kind == 0) { q.video = source::CaptureCardSource::deviceDetails(false, true); q.audio = captureAudioDeviceDetails(); }
             else {
-                if (kind == 2) { q.video = source::CaptureCardSource::deviceDetails(); q.audio = captureAudioDeviceDetails(); }
+                if (kind == 2) { q.video = source::CaptureCardSource::deviceDetails(false, true); q.audio = captureAudioDeviceDetails(); }
                 q.formats = source::CaptureCardSource::formatsByPath(device,&q.info,preferred,requested);
             }
         } catch (...) {q.info.code=E_FAIL;q.info.stage=L"Capture capability exception";}
@@ -490,7 +536,7 @@ bool QmlPlayerBridge::startCaptureSession() {
         }
     }
     const auto path = source::CaptureCardSource::makeCapturePath(unsigned(device), i.captureVideo[size_t(device)], format->index, audio,
-                                                                 audioDevice, i.captureColor, i.captureFps, format->key);
+                                                                 audioDevice, i.captureColor, i.captureFps, format->key, i.captureAudioChannels);
     if (path.empty()) { emit notice(tr("无法生成采集连接参数"), true); return false; }
     if(!i.persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     i.facade.noteCaptureSession({i.captureDevice, format->key, i.facade.presets().entries().empty() ? std::wstring{} : wideOf(currentPresetName()),

@@ -474,6 +474,7 @@ struct QmlPlayerBridge::Impl {
     std::wstring captureResolutionChoice, captureRateChoice;
     std::wstring captureRequestedResolution;
     int captureAudioChoice = source::kCaptureAudioDisabled;
+    unsigned captureAudioChannels = 0;
     bool captureVirtualAudioInstalled = false;
     VirtualCaptureAudioSetup* captureVirtualAudioSetup = nullptr;
     bool captureAudioMissing = false;
@@ -689,8 +690,9 @@ struct QmlPlayerBridge::Impl {
         captureFps=capturePrefs.requestedFps;
         captureColor=capturePrefs.colorForDevice(captureDevice);
         captureAudioChoice=source::kCaptureAudioDisabled;
+        captureAudioChannels=capturePrefs.audioChannels;
         captureAudioMissing=false;
-        if(capturePrefs.audioMode==source::kCaptureAudioFromVideoDevice)captureAudioChoice=source::kCaptureAudioFromVideoDevice;
+        if(source::captureAudioIsEmbedded(capturePrefs.audioMode))captureAudioChoice=capturePrefs.audioMode;
         else if(!capturePrefs.audioPath.empty()){
             captureAudioMissing=true;
             for(size_t k=0;k<captureAudio.size();++k)
@@ -720,6 +722,7 @@ struct QmlPlayerBridge::Impl {
             const auto* audio=captureAudioChoice>=0&&size_t(captureAudioChoice)<captureAudio.size()?&captureAudio[size_t(captureAudioChoice)]:nullptr;
             capturePrefs.audioPath=audio?audio->path:std::wstring{};
             capturePrefs.audioMode=audio?audio->audioMode():captureAudioChoice;
+            capturePrefs.audioChannels=captureAudioChannels;
         }
         if(ui::CapturePreferenceStore(dataDir).save(capturePrefs))return true;
         veyra::log::error("capture-ui","capture settings could not be saved");return false;

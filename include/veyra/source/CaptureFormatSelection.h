@@ -217,15 +217,18 @@ inline const CaptureFormat* retargetCaptureFormat(std::span<const CaptureFormat>
     return sameBoth?sameBoth:samePixel;
 }
 
-inline std::wstring capturePathOptions(double fps,std::wstring_view encodedKey){
+constexpr bool validCaptureAudioChannels(unsigned channels) { return channels == 0 || channels == 6 || channels == 8; }
+
+inline std::wstring capturePathOptions(double fps,std::wstring_view encodedKey,unsigned audioChannels=0){
     std::wstring result;
     if(fps>0)result=std::format(L"?fps={:.6f}",fps);
     if(!encodedKey.empty())result+=std::format(L"{}format={}",result.empty()?L"?":L"&",encodedKey);
+    if(audioChannels)result+=std::format(L"{}audioChannels={}",result.empty()?L"?":L"&",audioChannels);
     return result;
 }
 
-inline bool parseCapturePathOptions(std::wstring_view query,double& fps,std::wstring& encodedKey){
-    fps=0;encodedKey.clear();bool haveFps=false,haveKey=false;
+inline bool parseCapturePathOptions(std::wstring_view query,double& fps,std::wstring& encodedKey,unsigned& audioChannels){
+    fps=0;encodedKey.clear();audioChannels=0;bool haveFps=false,haveKey=false;
     if(query.empty())return false;
     while(!query.empty()){
         const auto end=query.find(L'&');const auto option=query.substr(0,end);
@@ -236,6 +239,9 @@ inline bool parseCapturePathOptions(std::wstring_view query,double& fps,std::wst
             const auto key=option.substr(7);
             if(haveKey||key.empty()||key.size()>4096||key.size()%4||key.find_first_not_of(L"0123456789abcdefABCDEF")!=std::wstring_view::npos)return false;
             haveKey=true;encodedKey=key;
+        }else if(option==L"audioChannels=6"||option==L"audioChannels=8"){
+            if(audioChannels)return false;
+            audioChannels=option.back()==L'6'?6:8;
         }else return false;
         if(end==std::wstring_view::npos)break;
         query.remove_prefix(end+1);
