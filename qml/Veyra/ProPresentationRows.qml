@@ -32,7 +32,7 @@ ColumnLayout {
         VSwitch {
             objectName: "presentation-vrr"
             enabled: veyra.vrrState >= 2
-            opacity: enabled ? 1 : 0.5
+            opacity: enabled ? 1 : Theme.disabledOpacity
             checked: veyra.variableRefresh
             onToggled: checked => veyra.variableRefresh = checked
         }
@@ -61,7 +61,7 @@ ColumnLayout {
                 text: veyra.outputCustomFps.toFixed(3)
                 onEdited: text => { const v = Number(text); if (isFinite(v)) veyra.outputCustomFps = v }
             }
-            Text { text: "FPS"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11 }
+            Text { text: "FPS"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow }
         }
     }
 }

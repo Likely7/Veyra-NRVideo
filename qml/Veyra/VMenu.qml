@@ -9,7 +9,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
 
 Popup {
     id: pop
@@ -32,8 +31,44 @@ Popup {
     }
     width: Math.min(menuAvailableWidth, Math.max(220, anchorItem ? anchorItem.width : 0, Math.min(720, measuredWidth)))
     FontMetrics { id: labelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; font.weight: Font.Medium }
-    FontMetrics { id: titleMetrics; font.family: Theme.fontUi; font.pixelSize: 11; font.weight: Font.Medium }
+    FontMetrics { id: titleMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; font.weight: Font.Medium }
     signal picked(int index, var item)
+
+    property int focusedIndex: -1
+    function ensureVisible(index) {
+        const item = itemRepeater.itemAt(index)
+        if (!item) return
+        const top = item.y
+        const bottom = item.y + item.height
+        if (top < menuFlick.contentY) menuFlick.contentY = top
+        else if (bottom > menuFlick.contentY + menuFlick.height) menuFlick.contentY = Math.max(0, bottom - menuFlick.height)
+    }
+    onFocusedIndexChanged: if (focusedIndex >= 0) ensureVisible(focusedIndex)
+    function isSelectable(i) {
+        if (i < 0 || i >= items.length) return false
+        const o = items[i]
+        return o && !o.sep && !o.head && o.disabled !== true
+    }
+    function moveFocus(step) {
+        if (items.length === 0) return
+        let i = focusedIndex
+        for (let n = 0; n < items.length; ++n) {
+            i = (i + step + items.length) % items.length
+            if (isSelectable(i)) { focusedIndex = i; return }
+        }
+    }
+    function focusEdge(fromEnd) {
+        for (let n = 0; n < items.length; ++n) {
+            const i = fromEnd ? items.length - 1 - n : n
+            if (isSelectable(i)) { focusedIndex = i; return }
+        }
+    }
+    function triggerPick(index) {
+        if (!isSelectable(index)) return
+        pop.checks = pop.items.map((o, i) => i === index)
+        pickTimer.index = index
+        pickTimer.restart()
+    }
 
     // The design's local copy of the checked flags, so the tick moves on click
     // before the owner's model catches up.
@@ -113,17 +148,19 @@ Popup {
     // end; GPU drawing still draws the whole spring.
     property bool holdLanding: (typeof vySoftwareUi !== "undefined" && vySoftwareUi)
         || contentItem.GraphicsInfo.api === GraphicsInfo.Software
-    onAboutToShow: { motion.opening = true; motion.landed = false }
-    onAboutToHide: { motion.opening = false; motion.landed = false }
+    onAboutToShow: { motion.opening = true; motion.landed = false; focusedIndex = -1 }
+    onAboutToHide: { motion.opening = false; motion.landed = false; focusedIndex = -1 }
 
     parent: Overlay.overlay
     padding: 0
     modal: false
-    // Takes focus so Esc closes it (CloseOnEscape needs the popup focused).
+    // Takes focus so Esc and arrow keys work.
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-    implicitHeight: Math.min(420, Math.max(1, (parent ? parent.height : 640) - 16), col.implicitHeight + 12)
+    implicitHeight: Math.min(420, Math.max(1, (parent ? parent.height : 640) - Theme.s16), col.implicitHeight + Theme.s12)
     background: null
+    Accessible.role: Accessible.PopupMenu
+    Accessible.name: pop.title
 
     enter: Transition {
         ParallelAnimation {
@@ -155,7 +192,18 @@ Popup {
     contentItem: Item {
         // Cut out of the native video window (main.cpp syncVideoCovers).
         objectName: "videoCover"
-        property real coverRadius: 14
+        property real coverRadius: Theme.rModal
+        focus: true
+        Keys.onPressed: event => {
+            if (event.key === Qt.Key_Down) { pop.moveFocus(1); event.accepted = true }
+            else if (event.key === Qt.Key_Up) { pop.moveFocus(-1); event.accepted = true }
+            else if (event.key === Qt.Key_Home) { pop.focusEdge(false); event.accepted = true }
+            else if (event.key === Qt.Key_End) { pop.focusEdge(true); event.accepted = true }
+            else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) {
+                if (pop.focusedIndex >= 0) { pop.triggerPick(pop.focusedIndex); event.accepted = true }
+            }
+            else if (event.key === Qt.Key_Escape) { pop.close(); event.accepted = true }
+        }
         transform: [
             Scale {
                 origin.x: pop.originX
@@ -165,36 +213,17 @@ Popup {
             },
             Translate { y: motion.held ? 0 : motion.dy }
         ]
-        // box-shadow: 0 24px 50px -12px rgba(0,0,0,.8): the -12px spread insets the
-        // shadow's shape, the offset and blur come from the effect.
-        Rectangle {
-            id: shadowSrc
-            anchors.fill: parent
-            anchors.margins: 12
-            radius: 14
-            color: "black"
-            visible: false
-        }
-        MultiEffect {
-            source: shadowSrc
-            anchors.fill: shadowSrc
-            shadowEnabled: true
-            shadowColor: Qt.rgba(0, 0, 0, 0.8)
-            shadowBlur: 1.0
-            blurMax: 50
-            shadowVerticalOffset: 24
-            autoPaddingEnabled: true
-        }
         Rectangle {
             anchors.fill: parent
-            radius: 14
+            radius: Theme.rModal
             color: Theme.popover
             border.width: 1
-            border.color: Theme.stroke2
+            border.color: Theme.strokeStrong
         }
         Flickable {
+            id: menuFlick
             anchors.fill: parent
-            anchors.margins: 6
+            anchors.margins: Theme.s4 + 2
             clip: true
             contentHeight: col.implicitHeight
             implicitHeight: col.implicitHeight
@@ -210,16 +239,18 @@ Popup {
                     Layout.fillWidth: true
                     Layout.minimumWidth: 0
                     wrapMode: Text.Wrap
-                    Layout.margins: 6
-                    Layout.leftMargin: 10
+                    Layout.margins: Theme.s4 + 2
+                    Layout.leftMargin: Theme.s12
                     text: pop.title
                     color: Theme.t3
                     font.family: Theme.fontUi
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsEyebrow
                     font.weight: Font.Medium
+                    font.variableAxes: Theme.axesMedium
                     font.letterSpacing: 0.44
                 }
                 Repeater {
+                    id: itemRepeater
                     model: pop.items
                     delegate: Loader {
                         id: row
@@ -237,34 +268,41 @@ Popup {
                         Component {
                             id: headC
                             Text {
-                                topPadding: 6; bottomPadding: 6; leftPadding: 10
+                                topPadding: Theme.s4 + 2; bottomPadding: Theme.s4 + 2; leftPadding: Theme.s12
                                 text: row.modelData.head
                                 color: Theme.t3
                                 font.family: Theme.fontUi
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsEyebrow
                                 font.weight: Font.Medium
+                                font.variableAxes: Theme.axesMedium
                                 wrapMode: Text.Wrap
                             }
                         }
                         Component {
                             id: optC
-                            // .opt: padding 8px 10px, radius 9, hover rgba(255,255,255,.06).
                             Rectangle {
-                                implicitHeight: optRow.implicitHeight + 16
-                                radius: 9
-                                opacity: row.modelData.disabled ? 0.4 : 1
-                                color: optHover.hovered && !row.modelData.disabled ? Qt.rgba(1, 1, 1, 0.06) : "transparent"
+                                readonly property bool isFocused: pop.focusedIndex === row.index
+                                implicitHeight: optRow.implicitHeight + Theme.s16
+                                radius: Theme.rCtl
+                                opacity: row.modelData.disabled ? Theme.disabledOpacity : 1
+                                color: optTap.pressed && !row.modelData.disabled ? Theme.pressFill
+                                     : (optHover.hovered || isFocused) && !row.modelData.disabled ? Theme.hoverFill : "transparent"
+                                border.width: isFocused ? 1 : 0
+                                border.color: Theme.focusRing
+                                Accessible.role: Accessible.MenuItem
+                                Accessible.name: row.modelData.label || ""
+                                Accessible.checked: pop.checks[row.index] === true
                                 RowLayout {
                                     id: optRow
                                     anchors.left: parent.left; anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    anchors.leftMargin: 10; anchors.rightMargin: 10
-                                    spacing: 10
+                                    anchors.leftMargin: Theme.s12; anchors.rightMargin: Theme.s12
+                                    spacing: Theme.s8
                                     VIcon { visible: !!row.modelData.icon; name: row.modelData.icon || ""; color: Theme.t1 }
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         Layout.minimumWidth: 0
-                                        spacing: 3
+                                        spacing: Theme.s4
                                         Text {
                                             objectName: "vmenu-option-label"
                                             Layout.fillWidth: true
@@ -275,6 +313,7 @@ Popup {
                                             font.family: Theme.fontUi
                                             font.pixelSize: Theme.fsBody
                                             font.weight: Font.Medium
+                                            font.variableAxes: Theme.axesMedium
                                             wrapMode: Text.Wrap
                                         }
                                         Text {
@@ -283,7 +322,7 @@ Popup {
                                             text: row.modelData.note || ""
                                             color: Theme.t3
                                             font.family: Theme.fontUi
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fsEyebrow
                                             wrapMode: Text.Wrap
                                         }
                                     }
@@ -295,19 +334,16 @@ Popup {
                                         readonly property bool on: pop.checks[row.index] === true
                                         opacity: on ? 1 : 0
                                         scale: on ? 1 : 0.4
-                                        Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
+                                        Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.animFast) } }
                                         Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                                     }
                                 }
                                 HoverHandler { id: optHover; enabled: !row.modelData.disabled; cursorShape: Qt.PointingHandCursor }
                                 TapHandler {
+                                    id: optTap
                                     enabled: !row.modelData.disabled
                                     gesturePolicy: TapHandler.WithinBounds
-                                    onTapped: {
-                                        pop.checks = pop.items.map((o, i) => i === row.index)
-                                        pickTimer.index = row.index
-                                        pickTimer.restart()
-                                    }
+                                    onTapped: pop.triggerPick(row.index)
                                 }
                             }
                         }

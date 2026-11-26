@@ -25,7 +25,7 @@ RowLayout {
         fraction: veyra.gpuUtilization / 100
         value: known ? Math.round(veyra.gpuUtilization) + "%" : "—"
         label: qsTr("GPU 占用")
-        tip: qsTr("Windows GPU 引擎占用率（") + (veyra.gpuMonitorName || qsTr("全部显卡")) + qsTr("，最忙的引擎类型，全系统），每秒采样；在 设置 → 通用与外观 中更换监控的显卡")
+        tip: qsTr("Windows GPU 引擎占用率（") + (veyra.gpuMonitorName || qsTr("全部显卡")) + qsTr("，最忙的引擎类型，全系统），每秒采样；在 设置 → 性能 中更换监控的显卡")
     }
     // How much of one source frame's time the enhancement chain uses (the plan's
     // "负载预算 = 耗时 / 预算"). It used to show output fps / target fps, which

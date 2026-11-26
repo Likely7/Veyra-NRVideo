@@ -31,17 +31,19 @@ DialogLayer {
         wrapMode: Text.Wrap
         color: Theme.t3
         font.family: Theme.fontUi
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsSmall
     }
-    VRow {
-        label: qsTr("直播时移")
-        hint: qsTr("保留最近的直播内容。最多使用 256 MiB 内存，高码率时可回看时间会缩短。")
-        VSeg {
-            objectName: "network-timeshift"
-            options: [{id:"0",label:qsTr("关闭","off")},{id:"60",label:qsTr("1 分钟")},
-                      {id:"120",label:qsTr("2 分钟")},{id:"300",label:qsTr("5 分钟")}]
-            current: String(veyra.preferences.networkTimeshift || 0)
-            onPicked: id => veyra.setPreference("networkTimeshift", Number(id))
+    DialogGroup {
+        VRow {
+            label: qsTr("直播时移")
+            hint: qsTr("保留最近的直播内容。最多使用 256 MiB 内存，高码率时可回看时间会缩短。")
+            VSeg {
+                objectName: "network-timeshift"
+                options: [{id:"0",label:qsTr("关闭","off")},{id:"60",label:qsTr("1 分钟")},
+                          {id:"120",label:qsTr("2 分钟")},{id:"300",label:qsTr("5 分钟")}]
+                current: String(veyra.preferences.networkTimeshift || 0)
+                onPicked: id => veyra.setPreference("networkTimeshift", Number(id))
+            }
         }
     }
 }

@@ -73,7 +73,7 @@ DialogLayer {
                 objectName: "preset-row-" + modelData.index
                 Layout.fillWidth: true
                 implicitHeight: 54
-                radius: 12
+                radius: Theme.rCard
                 color: Theme.card2
                 border.width: 1
                 border.color: Theme.stroke
@@ -98,8 +98,8 @@ DialogLayer {
                     spacing: 8
                     // .pico
                     Rectangle {
-                        implicitWidth: 30; implicitHeight: 30; radius: 9
-                        color: Qt.rgba(1, 1, 1, 0.05)
+                        implicitWidth: 30; implicitHeight: 30; radius: Theme.rCard
+                        color: Theme.hoverFill
                         VIcon { anchors.centerIn: parent; name: modelData.nodeMode ? "nodes" : "layers"; size: 14; color: Theme.t2 }
                     }
                     ColumnLayout {
@@ -115,7 +115,7 @@ DialogLayer {
                                 const trimmed = name.trim()
                                 if (trimmed === modelData.name) return
                                 if (!manageDialog.runAction("rename", modelData.index, trimmed)) {
-                                    presetNameEdit.text = modelData.name
+                                    presetNameEdit.text = Qt.binding(() => presetRow.modelData.name)
                                 }
                             }
                         }
@@ -125,7 +125,7 @@ DialogLayer {
                                   : (modelData.nodeMode ? qsTr("节点预设") : qsTr("列表预设"))
                             color: Theme.t3
                             font.family: Theme.fontUi
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsEyebrow
                             elide: Text.ElideRight
                         }
                     }

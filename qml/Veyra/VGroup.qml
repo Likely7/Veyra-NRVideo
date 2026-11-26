@@ -18,10 +18,11 @@ Rectangle {
     property real motionDy: 0
     transform: Translate { y: group.motionDy }
     Layout.fillWidth: true
-    radius: 12
+    radius: Theme.rCard
     color: Theme.card2
     border.width: 1
     border.color: Theme.stroke
+    clip: true
     // Rows carry their own vertical padding. A note, button or plain layout at
     // either end of the card does not, and sat on its border (导出 音轨 card,
     // field report 2026-10-05), so those ends get the padding a row would have.
@@ -34,16 +35,16 @@ Rectangle {
         }
         return true
     }
-    readonly property int topPad: edgeIsRow(false) ? 3 : 10
-    readonly property int bottomPad: edgeIsRow(true) ? 3 : 10
+    readonly property int topPad: edgeIsRow(false) ? Theme.s4 : Theme.s12
+    readonly property int bottomPad: edgeIsRow(true) ? Theme.s4 : Theme.s12
     implicitHeight: inner2.height + topPad + bottomPad
 
     ColumnLayout {
         id: inner2
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
+        anchors.leftMargin: Theme.s16
+        anchors.rightMargin: Theme.s16
         anchors.top: parent.top
         anchors.topMargin: group.topPad
         spacing: 0

@@ -130,7 +130,7 @@ ColumnLayout {
         hint: editor.amdNr ? qsTr("开启使用 Small 模型；关闭使用原模型。每层独立选择，切换会重建 NR，画面可能有所不同。")
                            : qsTr("开启使用新版模型 B；关闭使用旧版模型 A。切换会重建 NR，画面可能有所不同。")
         enabled: (editor.layerData.runtime === 2 || editor.amdNr) && Support.available(veyra, "nr" + editor.layerData.runtime)
-        opacity: enabled ? 1 : 0.4
+        opacity: enabled ? 1.0 : Theme.disabledOpacity
         VSwitch {
             objectName: "nr-performance"
             checked: editor.layerData.performance ?? true
@@ -140,7 +140,7 @@ ColumnLayout {
     VRow {
         label: qsTr("NR 运动来源")
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
-        opacity: enabled ? 1 : 0.4
+        opacity: enabled ? 1.0 : Theme.disabledOpacity
         hint: qsTr("全链共享；抗闪烁开启时仍需估算光流")
         VSeg {
             objectName: "nr-motion-source"
@@ -152,7 +152,7 @@ ColumnLayout {
     VRow {
         label: qsTr("内部处理分辨率")
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
-        opacity: enabled ? 1 : 0.4
+        opacity: enabled ? 1.0 : Theme.disabledOpacity
         hint: qsTr("内部降采样 · 不改变输出尺寸")
         VSelect {
             objectName: "nr-resolution"
@@ -165,7 +165,7 @@ ColumnLayout {
         objectName: "nr-manual-size-row"
         visible: editor.manualSize
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
-        opacity: enabled ? 1 : 0.4
+        opacity: enabled ? 1.0 : Theme.disabledOpacity
         label: qsTr("处理比例")
         hint: qsTr("松开后应用 · 宽高同比例")
         value: Math.round(percentSlider.displayedValue) + "%"
@@ -186,7 +186,7 @@ ColumnLayout {
         visible: editor.manualSize
         text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。")
                           : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。")
-        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
         wrapMode: Text.WordWrap
     }
     Text {
@@ -194,14 +194,14 @@ ColumnLayout {
         visible: editor.layerData.sizePolicy === 6
         text: qsTr("自动档在预览中按增强耗时调整 100%–40%；预建实例约增加 1.7GB 显存及半秒启动时间。视频导出固定按最高 1440p 处理，输出尺寸不变。") +
               (veyra.nrAutoStatus.length > 0 ? "\n" + veyra.nrAutoStatus : "")
-        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
         wrapMode: Text.WordWrap
     }
     Text {
         Layout.fillWidth: true
         text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
                           : qsTr("预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。")
-        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
         wrapMode: Text.WordWrap
     }
     Text {
@@ -209,26 +209,26 @@ ColumnLayout {
         visible: !editor.amdNr && editor.layerCount > 1 &&
                  (!editor.listControls || (veyra.nrLayers.length > 0 && editor.layerData.index === veyra.nrLayers[0].index))
         text: qsTr("多层 NR 可尝试前层 720p、末层 1080p；三层可尝试 480p / 720p / 1080p。降低前层分辨率会改变画面，视频导出同样按各层所选分辨率处理。")
-        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow
         wrapMode: Text.WordWrap
     }
     NrValueRow {
         spec: ({key:"intensity",label:qsTr("模型强度"),min:0,max:1})
         enabled: Support.available(veyra, "nr" + editor.layerData.runtime)
-        opacity: enabled ? 1 : 0.4
+        opacity: enabled ? 1.0 : Theme.disabledOpacity
         amount: editor.layerData.intensity
         onEdited: amount => editor.edited(editor.layerData.index, "intensity", amount)
     }
     Text {
         Layout.fillWidth: true
         visible: editor.amdNr || !Support.available(veyra, "nr" + editor.layerData.runtime)
-        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：RX 7000 / 9000 使用各自运行组件，需要 HIP 7 驱动。性能模式使用 Small，关闭使用原模型；内部最高 1080p 像素预算，支持百分比尺寸。7000 系风格固定默认，9000 系沿用运行时配置。原生 HDR 保留基底，通过 SDR 代理增强后还原。7000 系仍需实卡验收。")
-        color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
+        text: !Support.available(veyra, "nr" + editor.layerData.runtime) ? Support.reason(veyra, "nr" + editor.layerData.runtime) : qsTr("AMD NR（实验）：RX 7000 / 9000 使用各自运行组件，需要 HIP 7 驱动。性能模式使用 Small，关闭使用原模型；内部最高 1080p 像素预算，支持百分比尺寸。原生 HDR 保留基底，通过 SDR 代理增强后还原。")
+        color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; wrapMode: Text.WordWrap
     }
     VSubGroup {
         objectName: "nr-model-group"
         enabled: !editor.amdNr && Support.available(veyra, "nr" + editor.layerData.runtime)
-        opacity: enabled ? 1 : 0.4
+        opacity: enabled ? 1.0 : Theme.disabledOpacity
         Layout.fillWidth: true
         label: qsTr("模型参数"); count: 6
         Repeater {
@@ -241,7 +241,7 @@ ColumnLayout {
             }
         }
         VRow {
-            label: qsTr("肤质 · 未证实")
+            label: qsTr("肤质")
             VSelect {
                 objectName: "nr-skin-mode"
                 value: editor.layerData.skin < 0 ? qsTr("未指定") : qsTr("自定义")
@@ -256,7 +256,7 @@ ColumnLayout {
             onEdited: amount => editor.edited(editor.layerData.index,"skin",amount)
         }
         VRow {
-            label: qsTr("风格 · 实验")
+            label: qsTr("风格（实验）")
             VSeg {
                 objectName: "nr-style"
                 options: [{id:"0",label:"0"},{id:"1",label:"1"},{id:"2",label:"2"}]
@@ -265,7 +265,7 @@ ColumnLayout {
             }
         }
         VRow {
-            label: qsTr("自动遮罩 · 实验")
+            label: qsTr("自动遮罩（实验）")
             VSwitch {
                 objectName: "nr-autoMask"
                 checked: editor.layerData.autoMask
@@ -273,7 +273,7 @@ ColumnLayout {
             }
         }
         VRow {
-            label: qsTr("UI 修正 · 未证实")
+            label: qsTr("UI 修正")
             VSwitch {
                 objectName: "nr-uiCorrection"
                 checked: editor.layerData.uiCorrection
@@ -386,7 +386,7 @@ ColumnLayout {
             Layout.fillWidth: true
             visible: editor.layerData.correctionEnabled ?? false
             text: qsTr("自动参数分别适配风格 0／1／2。手动可独立保留颜色、亮度和暗部；保护会降低对应变化量。时域稳定复用光流，切换方式保留手动数值。")
-            color: Theme.t3; font.pixelSize: 11; wrapMode: Text.WordWrap
+            color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; wrapMode: Text.WordWrap
         }
     }
     VSubGroup {
@@ -400,6 +400,7 @@ ColumnLayout {
                 objectName: "nr-temporal"
                 checked: editor.layerData.temporal
                 enabled: !(editor.layerData.correctionEnabled ?? false)
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 onToggled: checked => editor.edited(editor.layerData.index,"temporal",checked?1:0)
             }
         }
@@ -413,6 +414,7 @@ ColumnLayout {
             VSelect {
                 objectName: "nr-antiflicker"
                 enabled: !(editor.layerData.correctionEnabled ?? false)
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 options: [
                     {id:"1",label:qsTr("静态累积")},
                     {id:"2",label:qsTr("光流累积 · 默认")},

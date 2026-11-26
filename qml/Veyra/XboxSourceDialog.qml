@@ -61,7 +61,7 @@ DialogLayer {
         Layout.fillWidth: true
         Layout.topMargin: 8
         implicitHeight: codeCol.implicitHeight + 28
-        radius: 11
+        radius: Theme.rCard
         color: Theme.accentSoft
         border.width: 1
         border.color: Theme.accent
@@ -72,7 +72,7 @@ DialogLayer {
             spacing: 8
             Text {
                 Layout.fillWidth: true
-                text: qsTr("在手机或浏览器打开 ") + (xbDialog.st.verificationUri || "https://www.microsoft.com/link") + qsTr("，输入下面的登录码：")
+                text: qsTr("在手机或浏览器打开 %1，输入下面的登录码：").arg(xbDialog.st.verificationUri || "https://www.microsoft.com/link")
                 color: Theme.t2
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSmall
@@ -102,10 +102,16 @@ DialogLayer {
             Layout.fillWidth: true
             Layout.topMargin: 6
             implicitHeight: 54
-            radius: 11
+            radius: Theme.rCard
             color: picked ? Theme.accentSoft : (consoleHover.hovered ? Theme.card3 : Theme.card2)
-            border.width: 1
-            border.color: picked ? Theme.accent : Theme.stroke
+            border.width: activeFocus ? 2 : 1
+            border.color: picked ? Theme.accent : (activeFocus ? Theme.focusRing : Theme.stroke)
+            activeFocusOnTab: true
+            Accessible.role: Accessible.ListItem
+            Accessible.name: consoleRow.modelData.name + " · " + consoleRow.modelData.power
+            Keys.onReturnPressed: event => { event.accepted = true; xbDialog.xb.select(consoleRow.modelData.id); if (!xbDialog.st.busy) xbDialog.xb.connectStream() }
+            Keys.onEnterPressed: event => { event.accepted = true; xbDialog.xb.select(consoleRow.modelData.id); if (!xbDialog.st.busy) xbDialog.xb.connectStream() }
+            Keys.onSpacePressed: event => { event.accepted = true; xbDialog.xb.select(consoleRow.modelData.id) }
             HoverHandler { id: consoleHover; cursorShape: Qt.PointingHandCursor }
             TapHandler {
                 onTapped: xbDialog.xb.select(consoleRow.modelData.id)
@@ -144,5 +150,5 @@ DialogLayer {
             VSwitch { objectName: "xbox-software-decode"; checked: xbDialog.st.softwareDecode === true; onToggled: checked => xbDialog.xb.set("softwareDecode", checked) }
         }
     }
-    DialogNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? qsTr("处理中 · ") : "") + (xbDialog.st.status || "") }
+    DialogNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: xbDialog.st.busy ? qsTr("处理中 · %1").arg(xbDialog.st.status || "") : (xbDialog.st.status || "") }
 }

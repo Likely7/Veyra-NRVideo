@@ -49,90 +49,35 @@ VPage {
         id: homeContent
         parent: homeScroll.contentItem
         anchors.horizontalCenter: parent.horizontalCenter
-        y: Math.max(root.compact ? 8 : 12, Math.round((homeScroll.height - height) / 2))
-        spacing: root.compact ? 8 : 24
+        y: Math.max(root.compact ? Theme.s8 : Theme.s12, Math.round((homeScroll.height - height) / 2))
+        spacing: root.compact ? Theme.s12 : Theme.s24
 
-        // .home .mark: 128px wide, drop-shadow(0 0 20px rgba(255,255,255,.35)) and the
-        // 4.5s "breathe" loop: at 50% the glow is 30px at .55 and the mark scales 1.02.
-        // MultiEffect blur is 0..1 of blurMax (32px): 20px = .625, 30px = .94.
-        // The layer is padded 40px on every side so the glow has room (a layer on the
-        // bare image clips the shadow to the image's own bounds). Negative margins
-        // keep the layout the same as a plain 128px image.
         Item {
             id: mark
             visible: !Theme.dusk
             Layout.alignment: Qt.AlignHCenter
-            Layout.topMargin: -40
-            Layout.bottomMargin: -40
-            implicitWidth: logoImg.implicitWidth + 80
-            implicitHeight: logoImg.implicitHeight + 80
-            property real breath: 0
-            scale: 1 + 0.02 * breath
-            // Only while the home page shows: running behind other pages it redrew the whole
-            // window every vsync during playback (~300 presents/s on a 320 Hz screen), which
-            // cost GPU time and kept OBS game capture on the UI instead of the video.
-            SequentialAnimation on breath {
-                running: !Theme.reduced && mark.visible
-                loops: Animation.Infinite
-                NumberAnimation { to: 1; duration: Theme.d(2250); easing.type: Easing.InOutSine }
-                NumberAnimation { to: 0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
-            }
+            implicitWidth: logoImg.implicitWidth
+            implicitHeight: logoImg.implicitHeight
             Image {
                 id: logoImg
                 anchors.centerIn: parent
                 source: Theme.logoImage
-                sourceSize.width: root.compact ? 42 : 128
+                sourceSize.width: root.compact ? 48 : 112
                 fillMode: Image.PreserveAspectFit
-            }
-            // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
-            // a screen DPI change while it walks the parent's children, and the walk then touched
-            // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
-            MultiEffect {
-                source: logoImg
-                anchors.fill: logoImg
-                shadowEnabled: true
-                // The dusk logo carries its own neon glow; the breath adds a pink one to it.
-                shadowColor: Theme.dusk ? "#F396CE" : "#FFFFFF"
-                shadowHorizontalOffset: 0
-                shadowVerticalOffset: 0
-                blurMax: 64
-                shadowBlur: 0.625 + 0.3125 * mark.breath
-                shadowOpacity: (Theme.dusk ? 0.22 : 0.35) + 0.2 * mark.breath
             }
         }
 
-        // 日落: the user's wordmark (tools/qt_probe/make-wordmark-dusk.py) in place of the gamepad
-        // and the title, a baked glow breathing behind it (the software scene graph draws no
-        // MultiEffect). 0.24 of the page height, 130..210 px, so short windows keep the cards.
         Item {
             id: duskMark
             visible: Theme.dusk
             Layout.alignment: Qt.AlignHCenter
             implicitWidth: wordmark.width
             implicitHeight: wordmark.height
-            property real breath: 0
-            // Only while it shows, as the gamepad's breath (see above).
-            SequentialAnimation on breath {
-                running: !Theme.reduced && duskMark.visible && !root.introHold
-                loops: Animation.Infinite
-                NumberAnimation { to: 1; duration: Theme.d(2250); easing.type: Easing.InOutSine }
-                NumberAnimation { to: 0; duration: Theme.d(2250); easing.type: Easing.InOutSine }
-            }
-            Image {
-                // wordmark-dusk-glow.png is the wordmark's box grown by 186/1164 of its width.
-                readonly property real pad: wordmark.width * 186 / 1164
-                x: -pad
-                y: -pad
-                width: wordmark.width + 2 * pad
-                height: wordmark.height + 2 * pad
-                source: "wordmark-dusk-glow.png"
-                opacity: root.introHold ? 0 : 0.16 + 0.14 * duskMark.breath
-            }
             Image {
                 id: wordmark
                 objectName: "home-wordmark"
-                height: Math.round(root.compact ? Math.min(90, root.height * 0.15)
-                                               : Math.max(130, Math.min(210, root.height * 0.24)))
+                height: Math.round(root.compact ? Math.min(88, root.height * 0.15)
+                                               : Math.max(120, Math.min(180, root.height * 0.22)))
                 width: Math.round(height * 1164 / 969)
                 source: "wordmark-dusk.png"
                 sourceSize: Qt.size(width, height)
@@ -159,10 +104,28 @@ VPage {
                 id: sponsorLine
                 objectName: "home-sponsor"
                 Layout.alignment: Qt.AlignHCenter
-                implicitWidth: sponsorRow.implicitWidth
-                implicitHeight: sponsorRow.implicitHeight
+                implicitWidth: sponsorRow.implicitWidth + Theme.s16
+                implicitHeight: sponsorRow.implicitHeight + Theme.s8
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Link
+                Accessible.name: qsTr("本软件开源免费，请作者喝杯咖啡")
+                Accessible.onPressAction: {
+                    veyra.logUi("ui-sponsor", "home link")
+                    root.requestSponsor()
+                }
+                Keys.onReturnPressed: Accessible.onPressAction()
+                Keys.onEnterPressed: Accessible.onPressAction()
+                Keys.onSpacePressed: Accessible.onPressAction()
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.rCtl
+                    color: sponsorTap.pressed ? Theme.pressFill : sponsorHover.hovered ? Theme.hoverFill : "transparent"
+                    border.width: sponsorLine.activeFocus ? 1.5 : 0
+                    border.color: Theme.focusRing
+                }
                 Row {
                     id: sponsorRow
+                    anchors.centerIn: parent
                     spacing: 5
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
@@ -180,15 +143,17 @@ VPage {
                     Text {
                         anchors.verticalCenter: parent.verticalCenter
                         text: qsTr("请作者喝杯咖啡")
-                        color: Theme.accent
+                        color: sponsorTap.pressed ? Theme.accentPressed : Theme.accent
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
                         font.weight: Font.Medium
-                        font.underline: sponsorHover.hovered
+                        font.variableAxes: Theme.axesMedium
+                        font.underline: sponsorHover.hovered || sponsorLine.activeFocus
                     }
                 }
                 HoverHandler { id: sponsorHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler {
+                    id: sponsorTap
                     onTapped: {
                         veyra.logUi("ui-sponsor", "home link")
                         root.requestSponsor()
@@ -204,29 +169,21 @@ VPage {
             onClicked: veyra.showPlaylist()
         }
 
-        // .srcgrid: 164px cards, gap 12. Six cards since PC and Xbox streaming (1044 wide,
-        // fits a 1280 window); a narrower window wraps them onto a second row.
         Flow {
             id: srcGrid
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: Math.min(1044, root.width - 48)
-            spacing: root.compact ? 8 : 12
-            readonly property int cardWidth: root.compact
-                ? Math.max(1, Math.min(164, Math.floor((Layout.preferredWidth - 5 * spacing) / 6))) : 164
-            readonly property int cardHeight: root.compact ? 80 : 124
-            // Subtitles name what is really there: the device of the last capture
-            // session and the saved PS5 host; generic wording when there is none.
-            // Only the subtitle follows the live state. The cards themselves are a fixed
-            // list: when the whole array was one binding, every Xbox / PC state change
-            // (polling after sign-in) destroyed and rebuilt all six cards, and a click
-            // landing during the rebuild was lost (field report 2026-10-02).
+            Layout.preferredWidth: Math.min(1044, Math.max(320, root.width - Theme.s24 * 2))
+            spacing: root.compact ? Theme.s8 : Theme.s12
+            readonly property int columns: Math.max(2, Math.min(6, Math.floor((Layout.preferredWidth + spacing) / (152 + spacing))))
+            readonly property int cardWidth: Math.max(136, Math.min(176, Math.floor((Layout.preferredWidth - (columns - 1) * spacing) / columns)))
+            readonly property int cardHeight: root.compact ? 92 : 124
             function cardSub(act) {
                 switch (act) {
                 case "file": return qsTr("MP4 · MKV · 图片")
                 case "capture": return veyra.hasCaptureSession ? veyra.captureSessionSummary.split(" · ")[0] : qsTr("HDMI 采集设备")
                 case "ps5": return veyra.remotePlayHost.length > 0 ? qsTr("已保存主机 ") + veyra.remotePlayHost : qsTr("局域网串流")
                 case "moonlight": return veyra.moonlight && veyra.moonlight.state.lastLabel ? veyra.moonlight.state.lastLabel : qsTr("Sunshine 主机")
-                case "xbox": return veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : qsTr("账号登录 · 实验")
+                case "xbox": return veyra.xbox && veyra.xbox.state.lastLabel ? veyra.xbox.state.lastLabel : qsTr("账号登录 · 测试版")
                 default: return qsTr("窗口或显示器")
                 }
             }
@@ -254,29 +211,44 @@ VPage {
                   Rectangle {
                     id: srcCard
                     readonly property var modelData: slot.modelData
-                    // .srccard: 164x124, radius 14, content pinned top and bottom.
+                    function activate() {
+                        veyra.logUi("ui-source", "home card act=" + modelData.act)
+                        switch (modelData.act) {
+                        case "file": veyra.openFileDialog(); break
+                        case "capture": veyra.openCaptureDialog(); break
+                        case "ps5": veyra.openPs5Dialog(); break
+                        case "moonlight": veyra.openMoonlightDialog(); break
+                        case "xbox": veyra.openXboxDialog(); break
+                        case "screen": veyra.openScreenCaptureDialog(); break
+                        }
+                    }
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: modelData.title + " · " + srcGrid.cardSub(modelData.act)
+                    Accessible.onPressAction: activate()
+                    Keys.onReturnPressed: activate()
+                    Keys.onEnterPressed: activate()
+                    Keys.onSpacePressed: activate()
                     width: slot.width
                     height: slot.height
                     radius: Theme.rCard
-                    color: cardHover.hovered ? Theme.card2 : Theme.card
-                    border.width: 1
-                    border.color: cardHover.hovered ? Theme.stroke2 : Theme.stroke
-                    // .srccard:hover { transform: translateY(-4px) }
-                    y: cardHover.hovered ? -4 : 0
-                    Behavior on y { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
+                    color: cardTap.pressed ? Theme.card3 : cardHover.hovered ? Theme.card2 : Theme.card
+                    border.width: activeFocus ? 2 : 1
+                    border.color: activeFocus ? Theme.focusRing : cardHover.hovered ? Theme.stroke2 : Theme.stroke
+                    y: cardHover.hovered ? -3 : 0
+                    Behavior on y { NumberAnimation { duration: Theme.d(Theme.durSlow); easing.bezierCurve: Theme.spring } }
                     scale: cardTap.pressed ? 0.97 : 1.0
-                    Behavior on scale { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
+                    Behavior on scale { NumberAnimation { duration: Theme.d(Theme.durSlow); easing.bezierCurve: Theme.spring } }
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: root.compact ? 8 : 14
+                        anchors.margins: root.compact ? Theme.s8 : Theme.s12
                         spacing: 0
                         Rectangle {
-                            // .srccard .ico: 34x34, radius 10, translucent plate.
                             implicitWidth: 34
                             implicitHeight: 34
-                            radius: 10
-                            color: Qt.rgba(1, 1, 1, 0.06)
+                            radius: Theme.rCard
+                            color: Theme.hoverFill
                             VIcon {
                                 anchors.centerIn: parent
                                 name: modelData.glyph
@@ -295,6 +267,7 @@ VPage {
                                 font.family: Theme.fontUi
                                 font.pixelSize: Theme.fsBody
                                 font.weight: Font.Medium
+                                font.variableAxes: Theme.axesMedium
                             }
                             Text {
                                 Layout.fillWidth: true
@@ -308,12 +281,11 @@ VPage {
                             }
                         }
                     }
-                    // PS5 手柄控制 is switched on for the capture card.
                     VTag {
                         anchors.top: parent.top
                         anchors.right: parent.right
-                        anchors.margins: 12
-                        visible: modelData.act === "capture" && veyra.ps5Control.enabled === true
+                        anchors.margins: root.compact ? Theme.s8 : Theme.s12
+                        visible: modelData.act === "capture" && veyra.ps5Control.enabled === true && !root.compact
                         text: qsTr("PS5 手柄")
                         kind: "acc"
                     }
@@ -322,17 +294,7 @@ VPage {
                     ToolTip.text: sourceTitle.text + " · " + sourceSubtitle.text
                     TapHandler {
                         id: cardTap
-                        onTapped: {
-                            veyra.logUi("ui-source", "home card act=" + modelData.act)
-                            switch (modelData.act) {
-                            case "file": veyra.openFileDialog(); break
-                            case "capture": veyra.openCaptureDialog(); break
-                            case "ps5": veyra.openPs5Dialog(); break
-                            case "moonlight": veyra.openMoonlightDialog(); break
-                            case "xbox": veyra.openXboxDialog(); break
-                            case "screen": veyra.openScreenCaptureDialog(); break
-                            }
-                        }
+                        onTapped: srcCard.activate()
                     }
                   }
                 }
@@ -354,26 +316,22 @@ VPage {
             id: resume
             objectName: "home-resume"
             Layout.alignment: Qt.AlignHCenter
-            // The last source actually used: capture card, PS5 or screen capture.
             readonly property var last: veyra.lastSource
             visible: last.kind !== undefined
             implicitWidth: srcGrid.width
             implicitHeight: 54
-            radius: 14
+            radius: Theme.rCard
+            color: resumeHover.hovered ? Theme.card2 : Theme.card
             border.width: 1
-            border.color: Theme.stroke
-            gradient: Gradient {
-                orientation: Gradient.Horizontal
-                GradientStop { position: 0.0; color: Theme.accentSoft }
-                GradientStop { position: 1.0; color: Qt.rgba(1, 1, 1, 0.03) }
-            }
+            border.color: resumeHover.hovered ? Theme.stroke2 : Theme.stroke
+            HoverHandler { id: resumeHover }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14
-                anchors.rightMargin: 10
-                spacing: 14
+                anchors.leftMargin: Theme.s12
+                anchors.rightMargin: Theme.s12
+                spacing: Theme.s12
                 Rectangle {
-                    implicitWidth: 34; implicitHeight: 34; radius: 10
+                    implicitWidth: 34; implicitHeight: 34; radius: Theme.rCard
                     color: Theme.accentSoft
                     VIcon {
                         anchors.centerIn: parent
@@ -396,7 +354,7 @@ VPage {
                         text: resume.last.summary || ""
                         color: Theme.t2
                         font.family: Theme.fontUi
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsSmall
                         elide: Text.ElideRight
                     }
                 }
@@ -438,7 +396,7 @@ VPage {
                     text: qsTr("最近")
                     color: Theme.t3
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsSmall
                 }
                 Repeater {
                     model: veyra.recentFiles
@@ -446,54 +404,60 @@ VPage {
                         id: chip
                         required property var modelData
                         readonly property bool isImage: /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
-                    width: Math.min(recent.width, chipRow.implicitWidth + 22)
-                    height: 28
-                    radius: 99
-                    opacity: modelData.exists ? 1 : 0.45
-                    color: chipHover.hovered && modelData.exists ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(1, 1, 1, 0.04)
-                    border.width: 1
-                    border.color: Theme.stroke
-                    RowLayout {
-                        id: chipRow
-                        anchors.fill: parent
-                        anchors.leftMargin: 11
-                        anchors.rightMargin: 11
-                        spacing: 7
-                        VIcon {
-                            name: chip.isImage ? "image" : "film"
-                            size: 14
-                            color: chipText.color
+                        activeFocusOnTab: modelData.exists
+                        Accessible.role: Accessible.Button
+                        Accessible.name: modelData.exists ? modelData.label : qsTr("%1（文件已不存在）").arg(modelData.label)
+                        Accessible.onPressAction: if (modelData.exists) veyra.openPath(modelData.path)
+                        Keys.onReturnPressed: if (modelData.exists) veyra.openPath(modelData.path)
+                        Keys.onEnterPressed: if (modelData.exists) veyra.openPath(modelData.path)
+                        Keys.onSpacePressed: if (modelData.exists) veyra.openPath(modelData.path)
+                        width: Math.min(recent.width, chipRow.implicitWidth + 22)
+                        height: 28
+                        radius: height / 2
+                        opacity: modelData.exists ? 1 : Theme.disabledOpacity
+                        color: chipTap.pressed && modelData.exists ? Theme.pressFill
+                             : chipHover.hovered && modelData.exists ? Theme.hoverFill : Theme.card
+                        border.width: activeFocus ? 1.5 : 1
+                        border.color: activeFocus ? Theme.focusRing : Theme.stroke
+                        RowLayout {
+                            id: chipRow
+                            anchors.fill: parent
+                            anchors.leftMargin: 11
+                            anchors.rightMargin: 11
+                            spacing: 7
+                            VIcon {
+                                name: chip.isImage ? "image" : "film"
+                                size: 14
+                                color: chipText.color
+                            }
+                            Text {
+                                id: chipText
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                elide: Text.ElideMiddle
+                                text: modelData.label
+                                color: chipHover.hovered && modelData.exists ? Theme.t1 : Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: Theme.fsSmall
+                            }
                         }
-                        Text {
-                            id: chipText
-                            Layout.fillWidth: true
-                            Layout.minimumWidth: 0
-                            elide: Text.ElideMiddle
-                            text: modelData.label
-                            color: chipHover.hovered && modelData.exists ? Theme.t1 : Theme.t2
-                            font.family: Theme.fontUi
-                            font.pixelSize: 12
-                        }
+                        ToolTip.visible: chipHover.hovered && (!modelData.exists || chipText.truncated)
+                        ToolTip.text: modelData.exists ? modelData.label : qsTr("文件已不存在")
+                        HoverHandler { id: chipHover; cursorShape: modelData.exists ? Qt.PointingHandCursor : Qt.ArrowCursor }
+                        TapHandler { id: chipTap; onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                     }
-                    ToolTip.visible: chipHover.hovered && (!modelData.exists || chipText.truncated)
-                    ToolTip.text: modelData.exists ? modelData.label : qsTr("文件已不存在")
-                    HoverHandler { id: chipHover; cursorShape: modelData.exists ? Qt.PointingHandCursor : Qt.ArrowCursor }
-                    TapHandler { onTapped: if (modelData.exists) veyra.openPath(modelData.path) }
                 }
-            }
             }
             VButton {
                 id: clearRecent
                 objectName: "home-clear-recent"
-                // Same right inset as the resume card's own row (10), so this button's
-                // right edge lands exactly on 开始's.
                 anchors.right: parent.right
-                anchors.rightMargin: 10
+                anchors.rightMargin: Theme.s12
                 anchors.top: parent.top
                 text: qsTr("清空")
                 iconName: "trash"
                 primary: true
-                tip: qsTr("只清空这个列表，不会删除文件。")
+                tip: qsTr("只清空这个列表，不会删除文件")
                 onClicked: clearRecentConfirm.open()
             }
         }
@@ -502,9 +466,12 @@ VPage {
     Row {
         id: guideRow
         anchors.left: parent.left
+        anchors.right: parent.right
         anchors.bottom: parent.bottom
-        anchors.margins: 16
-        spacing: 4
+        anchors.leftMargin: Theme.s16
+        anchors.rightMargin: 64
+        anchors.bottomMargin: Theme.s16
+        spacing: Theme.s4
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: qsTr("第一次使用？")
@@ -524,7 +491,7 @@ VPage {
             Keys.onEnterPressed: clicked()
             Keys.onSpacePressed: clicked()
             border.width: activeFocus ? 2 : 1
-            border.color: activeFocus ? Theme.accent : Theme.stroke2
+            border.color: activeFocus ? Theme.focusRing : Theme.stroke2
             onClicked: {
                 forceActiveFocus()
                 root.requestOnboarding()
@@ -546,7 +513,7 @@ VPage {
         objectName: "home-clear-recent-confirm"
         glyph: "film"
         title: qsTr("清空最近播放记录？")
-        text: qsTr("只清空这个列表，不会删除文件。")
+        text: qsTr("只清空这个列表，不会删除文件")
         acceptText: qsTr("清空")
         rejectText: qsTr("取消")
         onAccepted: veyra.clearRecentFiles()

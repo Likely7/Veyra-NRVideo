@@ -10,8 +10,8 @@ Rectangle {
     property bool expanded: true
     property real maximumHeight: 600
     signal closeRequested()
-    height: Math.min(panel.maximumHeight, body.implicitHeight + 22)
-    radius: 12
+    height: Math.min(panel.maximumHeight, body.implicitHeight + Theme.s24)
+    radius: Theme.rModal
     color: Theme.card
     border.color: Theme.stroke2
 
@@ -19,7 +19,7 @@ Rectangle {
     Flickable {
         id: scroll
         anchors.fill: parent
-        anchors.margins: 11
+        anchors.margins: Theme.s12
         contentWidth: width
         contentHeight: body.implicitHeight
         clip: true
@@ -27,21 +27,32 @@ Rectangle {
         ScrollBar.vertical: VScrollBar { policy: ScrollBar.AsNeeded }
         ColumnLayout {
             id: body
-            width: scroll.width - (scroll.interactive ? 10 : 0)
-            spacing: 5
+            width: scroll.width - (scroll.interactive ? Theme.s12 : 0)
+            spacing: Theme.s4
             RowLayout {
                 Layout.fillWidth: true
+                spacing: Theme.s8
                 VButton {
                     Layout.fillWidth: true
-                    text: qsTr("性能与耗时") + (panel.expanded ? "  ▾" : "  ▸")
+                    iconName: panel.expanded ? "chevDown" : "chevRight"
+                    text: qsTr("性能与耗时")
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("展开或收起性能与耗时")
                     onClicked: panel.expanded = !panel.expanded
                 }
                 VButton {
-                    text: qsTr("%1 关闭").arg("Home")
+                    icon: true
+                    iconName: "x"
+                    ghost: true
+                    tip: qsTr("关闭面板 (Home)")
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("关闭性能与耗时面板")
                     onClicked: panel.closeRequested()
                 }
             }
             Text {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
                 text: veyra.submitFpsLabel + " " + (veyra.submitFpsKnown ? veyra.submitFps.toFixed(1) + " FPS" : "—")
                 color: Theme.t1
                 font.family: Theme.fontMono
@@ -51,9 +62,11 @@ Rectangle {
                 Layout.alignment: Qt.AlignHCenter
                 visible: panel.expanded
                 size: Math.max(32, Math.min(44, (body.width - 40) / 3))
-                spacing: 6
+                spacing: Theme.s8
             }
             Text {
+                Layout.fillWidth: true
+                elide: Text.ElideRight
                 visible: panel.expanded
                 text: veyra.stageBudgetMs > 0 ? qsTr("源帧预算 %1 ms").arg(veyra.stageBudgetMs.toFixed(2)) : qsTr("源帧预算 —")
                 color: Theme.t2

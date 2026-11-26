@@ -6,9 +6,9 @@ import QtQuick.Layouts
 RowLayout {
     property string text: ""
     Layout.fillWidth: true
-    Layout.topMargin: 14
-    Layout.bottomMargin: 4
-    spacing: 8
+    Layout.topMargin: Theme.s8
+    Layout.bottomMargin: Theme.s4
+    spacing: Theme.s8
     VEyebrow { text: parent.text }
     Rectangle {
         Layout.fillWidth: true

@@ -88,7 +88,7 @@ DialogLayer {
         Layout.fillWidth: true
         Layout.topMargin: 4
         implicitHeight: 180 + 34
-        radius: 10
+        radius: Theme.rCard
         color: Theme.videoBlack
         border.width: 1
         border.color: Theme.stroke
@@ -113,7 +113,7 @@ DialogLayer {
                 text: captureDialog.live ? qsTr("画面在主窗口播放") : qsTr("连接后在主窗口显示画面")
                 color: Theme.t3
                 font.family: Theme.fontUi
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsSmall
             }
         }
         RowLayout {
@@ -134,7 +134,7 @@ DialogLayer {
                       : (veyra.captureFormatLabel.length ? veyra.captureFormatLabel : qsTr("选择设备和格式后连接"))
                 color: Theme.t2
                 font.family: Theme.fontMono
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsEyebrow
                 elide: Text.ElideRight
             }
         }
@@ -150,7 +150,7 @@ DialogLayer {
                 spacing: 6
                 VSelect {
                     objectName: "capture-device"
-                    implicitWidth: 220
+                    implicitWidth: Math.min(220, Math.max(140, captureDialog.bodyWidth * 0.45))
                     value: veyra.captureDeviceLabel
                     options: veyra.captureDevices
                     onPicked: id => veyra.captureDeviceId = id
@@ -176,6 +176,7 @@ DialogLayer {
             VButton {
                 objectName: "capture-legacy-open"
                 text: qsTr("打开旧版格式列表")
+                maxTextWidth: Math.max(120, captureDialog.bodyWidth * 0.45)
                 enabled: !veyra.captureQueryBusy && veyra.captureDeviceId.length > 0
                 onClicked: legacyPicker.open()
             }
@@ -187,8 +188,8 @@ DialogLayer {
             VSelect {
                 objectName: "capture-resolution"
                 enabled: !veyra.captureQueryBusy
-                opacity: enabled ? 1 : 0.5
-                implicitWidth: 180
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
+                implicitWidth: Math.min(180, Math.max(140, captureDialog.bodyWidth * 0.4))
                 value: captureDialog.labelOf(veyra.captureResolutionOptions, veyra.captureResolutionId, veyra.captureResolutionOptions.length ? qsTr("请选择分辨率") : "—")
                 options: veyra.captureResolutionOptions
                 onPicked: id => veyra.captureResolutionId = id
@@ -196,23 +197,37 @@ DialogLayer {
         }
         VRow {
             label: qsTr("自定义分辨率")
-            hint: qsTr("仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式")
+            hint: qsTr("仅接受驱动支持范围；连接时核对实际格式")
             RowLayout {
+                implicitWidth: Math.min(260, Math.max(180, captureDialog.bodyWidth * 0.55))
                 spacing: 6
                 enabled: !veyra.captureQueryBusy && veyra.captureDeviceId.length > 0
-                DialogTextField { id: customCaptureResolution; objectName: "capture-custom-resolution"; implicitWidth: 140; text: "1920x1080" }
-                VButton { text: qsTr("检查并选择"); onClicked: veyra.captureResolutionId = customCaptureResolution.text }
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
+                DialogTextField {
+                    id: customCaptureResolution
+                    objectName: "capture-custom-resolution"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 90
+                    implicitWidth: 120
+                    placeholder: "1920x1080"
+                    text: "1920x1080"
+                }
+                VButton {
+                    Layout.minimumWidth: implicitWidth
+                    text: qsTr("检查并选择")
+                    onClicked: veyra.captureResolutionId = customCaptureResolution.text
+                }
             }
         }
         VRow {
             id: captureRateRow
             label: qsTr("帧率")
-            hint: qsTr("列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值")
+            hint: qsTr("列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择")
             VSelect {
                 objectName: "capture-frame-rate"
                 enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0
-                opacity: enabled ? 1 : 0.5
-                implicitWidth: 280
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
+                implicitWidth: Math.min(260, Math.max(140, captureDialog.bodyWidth * 0.5))
                 value: captureDialog.labelOf(veyra.captureFrameRateOptions, veyra.captureFrameRateId, veyra.captureFrameRateOptions.length ? qsTr("请选择帧率") : "—")
                 options: veyra.captureFrameRateOptions
                 onPicked: id => veyra.captureFrameRateId = id
@@ -224,11 +239,11 @@ DialogLayer {
             objectName: "capture-all-rates-row"
             visible: veyra.captureHiddenFrameRates > 0
             label: qsTr("显示全部可用帧率")
-            hint: qsTr("默认只列常用帧率：24、25、30、50、60、100、120、144、165、240（含 59.94 这类非整数帧率）。这张卡另外上报了 %1 个帧率").arg(veyra.captureHiddenFrameRates)
+            hint: qsTr("默认只列常用帧率（含 59.94 等）；此卡另外上报了 %1 个帧率").arg(veyra.captureHiddenFrameRates)
             VSwitch {
                 objectName: "capture-all-rates"
                 enabled: !veyra.captureQueryBusy
-                opacity: enabled ? 1 : 0.35
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 checked: veyra.preferences.captureShowAllFrameRates === true
                 onToggled: checked => veyra.setPreference("captureShowAllFrameRates", checked)
             }
@@ -237,12 +252,12 @@ DialogLayer {
             id: pixelFormatRow
             label: qsTr("像素格式")
             // Never search veyra.captureFormats here: a card can list 15000+ (logs(18)).
-            hint: veyra.captureFormatCostHint ? qsTr("该格式比低延迟格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式")
+            hint: veyra.captureFormatCostHint ? qsTr("该格式多一道处理环节，高分辨率/高帧率下建议优先低延迟格式") : qsTr("只列出当前分辨率和帧率下的像素格式")
             VSelect {
                 objectName: "capture-format"
                 enabled: !veyra.captureQueryBusy && veyra.captureResolutionId.length > 0 && veyra.captureFrameRateId.length > 0
-                opacity: enabled ? 1 : 0.5
-                implicitWidth: 220
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
+                implicitWidth: Math.min(220, Math.max(140, captureDialog.bodyWidth * 0.45))
                 value: captureDialog.labelOf(veyra.capturePixelOptions, veyra.capturePixelId, veyra.captureResolutionId.length ? qsTr("请选择像素格式") : qsTr("请先选择分辨率"))
                 options: veyra.capturePixelOptions
                 onPicked: id => veyra.capturePixelId = id
@@ -278,11 +293,11 @@ DialogLayer {
         VRow {
             objectName: "capture-blackmagic-native-row"
             label: qsTr("Blackmagic 原生采集")
-            hint: qsTr("默认关闭。开启使用 DeckLink 原生接口，关闭使用 DirectShow。需安装 Desktop Video 驱动；切换后重新选择设备和格式并连接，不写入驱动永久配置。")
+            hint: qsTr("开启使用 DeckLink 原生接口（需 Desktop Video 驱动）；切换后重新选设备和格式。")
             VSwitch {
                 objectName: "capture-blackmagic-native"
                 enabled: !veyra.captureQueryBusy && (veyra.captureBlackmagicDevice || veyra.preferences.blackmagicNativeCapture === true)
-                opacity: enabled ? 1 : 0.35
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 checked: veyra.preferences.blackmagicNativeCapture === true
                 onToggled: checked => veyra.setPreference("blackmagicNativeCapture", checked)
             }
@@ -291,13 +306,13 @@ DialogLayer {
             objectName: "capture-magewell-row"
             label: qsTr("美乐威低延迟模式")
             hint: !veyra.captureMagewellDevice
-                  ? qsTr("仅美乐威 Pro Capture（PCIe 内置卡）可用；USB Capture 系列不支持")
+                  ? qsTr("仅美乐威 Pro Capture（PCIe 内置卡）可用")
                   : (veyra.captureMagewellStatus.length > 0 ? veyra.captureMagewellStatus + " · " : "")
-                    + qsTr("画面未收齐即可开始传输。持续丢帧时按原格式切回普通采集。重新连接后生效。")
+                    + qsTr("画面未收齐即可开始传输；持续丢帧时请关闭。重连后生效。")
             VSwitch {
                 objectName: "capture-magewell"
                 enabled: veyra.captureMagewellDevice
-                opacity: enabled ? 1 : 0.35
+                opacity: enabled ? 1.0 : Theme.disabledOpacity
                 checked: veyra.captureMagewellDevice && veyra.preferences.magewellLowLatency === true
                 onToggled: checked => veyra.setPreference("magewellLowLatency", checked)
             }
@@ -327,7 +342,7 @@ DialogLayer {
             hint: qsTr("录制采集卡声音需选择输入；本机监听可独立关闭")
             VSelect {
                 objectName: "capture-audio"
-                implicitWidth: 260
+                implicitWidth: Math.min(240, Math.max(140, captureDialog.bodyWidth * 0.48))
                 value: captureDialog.labelOf(veyra.captureAudioInputs, veyra.captureAudioChoice, qsTr("不采集音频"))
                 options: veyra.captureAudioInputs
                 onPicked: id => veyra.captureAudioChoice = Number(id)
@@ -410,6 +425,7 @@ DialogLayer {
         }
         RowLayout {
             Layout.fillWidth: true
+            spacing: Theme.s8
             VButton {
                 objectName: "capture-virtual-audio-windows-listen"
                 text: qsTr("打开 Windows 录制设置")
@@ -425,6 +441,7 @@ DialogLayer {
         RowLayout {
             visible: virtualAudioGuide.removalBlocked
             Layout.fillWidth: true
+            spacing: Theme.s8
             Text {
                 Layout.fillWidth: true
                 text: qsTr("请先断开采集并等待连接结束")
@@ -480,7 +497,7 @@ DialogLayer {
                 VSelect {
                     objectName: "capture-ps5-host"
                     visible: veyra.ps5Profiles.length > 0
-                    implicitWidth: 170
+                    implicitWidth: Math.min(170, Math.max(120, captureDialog.bodyWidth * 0.35))
                     value: { const p = veyra.ps5Profiles.find(x => x.id === veyra.ps5.profile); return p ? p.label : qsTr("请选择") }
                     options: veyra.ps5Profiles
                     onPicked: id => veyra.ps5SelectProfile(id)
@@ -539,7 +556,7 @@ DialogLayer {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSmall
                 elide: Text.ElideRight
-                width: Math.min(implicitWidth, 260)
+                width: Math.min(implicitWidth, Math.max(120, captureDialog.bodyWidth * 0.45))
             }
         }
     }
@@ -555,7 +572,7 @@ DialogLayer {
             id: inputColorRow
             visible: veyra.captureMjpegSelected !== true
             label: qsTr("输入色彩（SDR / HDR）")
-            hint: qsTr("不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连")
+            hint: qsTr("不确定选「自动」；主机/显卡 HDR10 选「HDR · PQ」；广播 HDR 选「HDR · HLG」；普通画面选「SDR · 709」。变更需重连")
             VSeg {
                 objectName: "capture-color-space"
                 options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: "HDR · PQ" }, { id: "2", label: "HDR · HLG" }, { id: "3", label: "SDR · 709" }]

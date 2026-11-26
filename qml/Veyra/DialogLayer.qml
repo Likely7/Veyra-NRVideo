@@ -9,9 +9,9 @@ Rectangle {
     property string title: ""
     property string sub: ""
     property string glyph: ""
-    property int dialogWidth: 640
-    property real minimumBodyWidth: dialogWidth - 40
-    readonly property real bodyWidth: Math.max(1, width - 40)
+    property int dialogWidth: Theme.dialogWidth
+    property real minimumBodyWidth: dialogWidth - Theme.s20 * 2
+    readonly property real bodyWidth: Math.max(1, width - Theme.s20 * 2)
     property var actions: []
     // dialogs.js `foot`: a quiet note at the left of the button row.
     property string foot: ""
@@ -80,23 +80,39 @@ Rectangle {
     // not the objectName: each dialog below names itself for tests.
     objectName: "videoCover"
     readonly property bool videoCover: true
-    property real coverRadius: 16
+    property real coverRadius: Theme.rModal
 
     // Centred by position, not anchors: the parent is null while closed.
     x: Math.round((dialogHost.width - width) / 2)
     y: Math.round((dialogHost.height - height) / 2)
-    width: Math.max(1, Math.min(dialogWidth, dialogHost.width - 24))
+    width: Math.max(1, Math.min(dialogWidth, dialogHost.width - Theme.s24))
     // Never taller than the window: the body scrolls instead of the panel
     // being cut off at the top and bottom of a small window.
-    // Header and footer each carry 16px margins top and bottom (64 in all); the
-    // old +40 left every body 24px short, so short dialogs hid their last row.
-    implicitHeight: Math.min(720, dialogHost.height - 24,
-                             header.implicitHeight + bodyScroll.contentHeight + footer.implicitHeight + 64)
+    // Header and footer each carry 20px margins top and bottom (80 in all).
+    implicitHeight: Math.min(720, dialogHost.height - Theme.s24,
+                             header.implicitHeight + bodyScroll.contentHeight + footer.implicitHeight + Theme.s20 * 4)
     height: implicitHeight
     // Swallow presses on the panel itself so they never reach the scrim
     // below (a passive tap on a control used to close the whole dialog).
     MouseArea { anchors.fill: parent; acceptedButtons: Qt.AllButtons; z: -1 }
-    radius: 16
+    Shortcut {
+        sequence: "Esc"
+        enabled: dlg.shown
+        onActivated: dialogHost.close()
+    }
+    Keys.onReturnPressed: event => {
+        if (dlg.shown && dlg.primaryAction && dlg.primaryAction.enabled) {
+            event.accepted = true
+            dlg.primaryAction.clicked()
+        }
+    }
+    Keys.onEnterPressed: event => {
+        if (dlg.shown && dlg.primaryAction && dlg.primaryAction.enabled) {
+            event.accepted = true
+            dlg.primaryAction.clicked()
+        }
+    }
+    radius: Theme.rModal
     color: Theme.dialog
     border.width: 1
     border.color: Theme.stroke2
@@ -108,11 +124,11 @@ Rectangle {
         RowLayout {
             id: header
             Layout.fillWidth: true
-            Layout.margins: 16
-            spacing: 12
+            Layout.margins: Theme.s20
+            spacing: Theme.s12
             Rectangle {
-                implicitWidth: 34; implicitHeight: 34; radius: 10
-                color: Qt.rgba(1, 1, 1, 0.06)
+                implicitWidth: 34; implicitHeight: 34; radius: Theme.rCard
+                color: Theme.hoverFill
                 VIcon { anchors.centerIn: parent; name: dlg.glyph }
             }
             ColumnLayout {
@@ -136,23 +152,28 @@ Rectangle {
                     text: dlg.sub
                     color: Theme.t3
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsSmall
                     wrapMode: Text.WordWrap
                 }
             }
-            VButton { icon: true; iconName: "x"; ghost: true; onClicked: dialogHost.close() }
+            VButton {
+                icon: true; iconName: "x"; ghost: true
+                tip: qsTr("关闭")
+                Accessible.name: qsTr("关闭")
+                onClicked: dialogHost.close()
+            }
         }
 
         Flickable {
             id: bodyScroll
             Layout.fillWidth: true
             Layout.fillHeight: true
-            Layout.leftMargin: 20
-            Layout.rightMargin: 20
+            Layout.leftMargin: Theme.s20
+            Layout.rightMargin: Theme.s20
             // Very narrow film windows still need access to fixed-width device
             // address and format controls. Keep the header and actions in view.
-            contentWidth: dlg.width < 520 ? Math.max(dlg.bodyWidth, dlg.minimumBodyWidth) : dlg.bodyWidth
-            contentHeight: bodyCol.implicitHeight + (contentWidth > dlg.bodyWidth ? 12 : 0)
+            contentWidth: dlg.width < dlg.minimumBodyWidth + Theme.s20 * 2 ? Math.max(dlg.bodyWidth, dlg.minimumBodyWidth) : dlg.bodyWidth
+            contentHeight: bodyCol.implicitHeight + (contentWidth > dlg.bodyWidth ? Theme.s12 : 0)
             flickableDirection: Flickable.AutoFlickIfNeeded
             boundsBehavior: Flickable.StopAtBounds
             clip: true
@@ -161,16 +182,16 @@ Rectangle {
             ColumnLayout {
                 id: bodyCol
                 // Keep the groups clear of the overlaid scroll bar.
-                width: Math.max(1, bodyScroll.contentWidth - 12)
-                spacing: 0
+                width: Math.max(1, bodyScroll.contentWidth - Theme.s12)
+                spacing: Theme.s12
             }
         }
 
         RowLayout {
             id: footer
             Layout.fillWidth: true
-            Layout.margins: 16
-            spacing: 8
+            Layout.margins: Theme.s20
+            spacing: Theme.s8
             Text {
                 objectName: "dialog-foot"
                 Layout.fillWidth: true
@@ -179,17 +200,17 @@ Rectangle {
                 text: dlg.foot
                 color: Theme.t3
                 font.family: Theme.fontUi
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsEyebrow
                 elide: Text.ElideRight
             }
-            Item { Layout.fillWidth: true; visible: dlg.foot.length === 0 }
+            Item { Layout.fillWidth: true; Layout.minimumWidth: 0; visible: dlg.foot.length === 0 }
             Repeater {
                 id: actionButtons
                 model: dlg.actions
                 delegate: VButton {
                     required property var modelData
-                    Layout.maximumWidth: Math.max(0, (dlg.width - 32 - Math.max(0, actionButtons.count - 1) * footer.spacing)
-                        / Math.max(1, actionButtons.count))
+                    Layout.minimumWidth: implicitWidth
+                    Layout.preferredWidth: implicitWidth
                     text: modelData.label
                     iconName: modelData.icon || ""
                     primary: modelData.primary === true

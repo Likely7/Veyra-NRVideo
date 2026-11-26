@@ -9,6 +9,8 @@ Item {
     property color color: Theme.accent
     implicitWidth: 4 * 3 + 3 * 2
     implicitHeight: 14
+    Accessible.role: Accessible.Indicator
+    Accessible.name: active ? qsTr("音频活动中") : qsTr("音频空闲")
     // One linear 0..1 clock; each bar reads it with its own phase offset, the
     // cosine giving the design's ease-in-out between 25 % and 100 %.
     property real phase: 0

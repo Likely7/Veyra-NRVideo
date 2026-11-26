@@ -25,8 +25,8 @@ Item {
             radius: backdrop.radius
             Image {
                 anchors.fill: parent
-                visible: Theme.backdropLevel !== 0
-                source: Theme.backdropImage
+                visible: false
+                source: ""
                 smooth: true
             }
             Rectangle {
@@ -64,7 +64,7 @@ Item {
                 strokeWidth: 1
                 strokeColor: backdrop.strokeColor
                 fillColor: Theme.bgOuter
-                fillItem: Theme.backdropLevel === 0 ? null : fill
+                fillItem: null
                 PathRectangle {
                     x: 0.5; y: 0.5
                     width: backdrop.width - 1; height: backdrop.height - 1

@@ -14,9 +14,12 @@ import QtQuick.Layouts
 VPage {
     id: root
     signal requestPage(string page)
+    signal fullscreenScreenPicked(string screenName)
     property Item fullscreenBackground
+    property string fullscreenScreenName: ""
 
     property string section: "look"
+    readonly property bool compactNav: width < 760
     property bool hdrAdvancedExpanded: false
     // The shortcut row waiting for a new key ("" = none).
     property string capturingKey: ""
@@ -54,7 +57,7 @@ VPage {
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
         { id: "about", label: qsTr("关于"), icon: "info" },
         // The one entry with a coloured icon, so it can be found.
-        { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: "#FF6B81" }
+        { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: Theme.err }
     ]
 
     // --- nav ---------------------------------------------------------------
@@ -62,11 +65,14 @@ VPage {
         id: navCard
         anchors.left: parent.left
         anchors.leftMargin: 14
+        anchors.right: root.compactNav ? parent.right : undefined
+        anchors.rightMargin: 14
         anchors.top: parent.top
         anchors.topMargin: 14
-        anchors.bottom: parent.bottom
+        anchors.bottom: root.compactNav ? undefined : parent.bottom
         anchors.bottomMargin: 14
         width: 220
+        height: root.compactNav ? 56 : undefined
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -76,33 +82,50 @@ VPage {
             id: navScroll
             objectName: "settings-navigation"
             anchors.fill: parent
-            anchors.margins: 10
-            contentWidth: width
-            contentHeight: navColumn.implicitHeight
-            flickableDirection: Flickable.VerticalFlick
+            anchors.margins: root.compactNav ? Theme.s8 : 10
+            contentWidth: root.compactNav ? navColumn.implicitWidth : width
+            contentHeight: root.compactNav ? height : navColumn.implicitHeight
+            flickableDirection: root.compactNav ? Flickable.HorizontalFlick : Flickable.VerticalFlick
             boundsBehavior: Flickable.StopAtBounds
             clip: true
-            ScrollBar.vertical: VScrollBar { }
+            ScrollBar.vertical: root.compactNav ? null : navVBar
+            ScrollBar.horizontal: root.compactNav ? navHBar : null
+            VScrollBar { id: navVBar; visible: !root.compactNav && navScroll.contentHeight > navScroll.height }
+            VScrollBar { id: navHBar; visible: root.compactNav && navScroll.contentWidth > navScroll.width }
         }
-        ColumnLayout {
+        GridLayout {
             id: navColumn
             parent: navScroll.contentItem
-            width: navScroll.width - (navScroll.contentHeight > navScroll.height ? 8 : 0)
-            spacing: 2
-            VH2 { text: qsTr("设置"); Layout.margins: 8 }
-            Item { implicitHeight: 6 }
+            columns: root.compactNav ? root.sections.length + 2 : 1
+            width: root.compactNav ? implicitWidth : (navScroll.width - (navScroll.contentHeight > navScroll.height ? 8 : 0))
+            height: root.compactNav ? navScroll.height : implicitHeight
+            rowSpacing: 2
+            columnSpacing: Theme.s4
+            VH2 { text: qsTr("设置"); visible: !root.compactNav; Layout.margins: 8 }
+            Item { implicitHeight: 6; visible: !root.compactNav }
             Repeater {
                 model: root.sections
                 delegate: Rectangle {
+                    id: navItem
                     required property var modelData
-                    Layout.fillWidth: true
+                    Layout.fillWidth: !root.compactNav
+                    implicitWidth: root.compactNav ? navRow.implicitWidth + 16 : 180
                     implicitHeight: 36
-                    radius: 9
+                    radius: Theme.rCtl
                     color: root.section === modelData.id ? Theme.card3
-                         : navHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
+                         : navTap.pressed ? Theme.pressFill
+                         : navHover.hovered ? Theme.hoverFill : "transparent"
+                    border.width: 1
+                    border.color: navItem.activeFocus ? Theme.focusRing : "transparent"
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.PageTab
+                    Accessible.name: modelData.label
+                    Keys.onReturnPressed: root.section = modelData.id
+                    Keys.onSpacePressed: root.section = modelData.id
                     Behavior on color { ColorAnimation { duration: Theme.d(200) } }
                     // .setnav button: icon, 10px, label.
                     RowLayout {
+                        id: navRow
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.leftMargin: 10
@@ -116,21 +139,21 @@ VPage {
                         }
                         Text {
                             id: navLabel
-                            Layout.fillWidth: true
+                            Layout.fillWidth: !root.compactNav
                             Layout.minimumWidth: 0
                             elide: Text.ElideRight
                             text: modelData.label
                             color: root.section === modelData.id ? Theme.t1 : Theme.t2
                             font.family: Theme.fontUi
-                            font.pixelSize: 13
-                            font.weight: Font.Medium
+                            font.pixelSize: Theme.fsBody
+                            font.weight: Font.Medium; font.variableAxes: Theme.axesMedium
                         }
                     }
                     ToolTip.visible: navHover.hovered && navLabel.truncated
                     ToolTip.text: navLabel.text
                     ToolTip.delay: 500
                     HoverHandler { id: navHover; cursorShape: Qt.PointingHandCursor }
-                    TapHandler { onTapped: root.section = modelData.id }
+                    TapHandler { id: navTap; onTapped: root.section = modelData.id }
                 }
             }
         }
@@ -140,11 +163,11 @@ VPage {
     Rectangle {
         id: bodyCard
         anchors.left: parent.left
-        anchors.leftMargin: 14 + 220 + 10
+        anchors.leftMargin: root.compactNav ? 14 : (14 + 220 + 10)
         anchors.right: parent.right
         anchors.rightMargin: 14
         anchors.top: parent.top
-        anchors.topMargin: 14
+        anchors.topMargin: root.compactNav ? (14 + 56 + 10) : 14
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 14
         radius: Theme.rCard
@@ -158,14 +181,14 @@ VPage {
             anchors.fill: parent
             contentHeight: body.implicitHeight + 44
             clip: true
-            ScrollBar.vertical: VScrollBar { }
+            ScrollBar.vertical: VScrollBar { id: settingsBodyBar }
 
             ColumnLayout {
                 id: body
                 x: 26
                 y: 22
                 // .setbody section { max-width: 720px }
-                width: Math.min(parent.width - 52, 720)
+                width: Math.min(parent.width - 52 - (settingsBodyBar.visible ? settingsBodyBar.width : 0), 720)
                 spacing: 12
 
                 // --- 外观 ---
@@ -247,32 +270,29 @@ VPage {
                                 objectName: "set-accent"
                                 spacing: 10
                                 Repeater {
-                                    model: [{ id: "orange", c: "#FF8A3D", tip: qsTr("橙色"), duskTip: qsTr("日落渐变") },
-                                            { id: "white", c: "#F3F3F5", tip: qsTr("白色光晕"), duskTip: qsTr("白色光晕") }]
+                                    model: [{ id: "orange", c: "#2563EB", tip: qsTr("钴蓝") },
+                                            { id: "white", c: "#F4F5F7", tip: qsTr("纯白") }]
                                     delegate: Rectangle {
                                         id: swatch
                                         required property var modelData
                                         readonly property bool on: (veyra.preferences.accent || "orange") === modelData.id
                                         objectName: "set-accent-" + modelData.id
                                         width: 24; height: 24; radius: 12
-                                        // The dusk palette shows what each choice paints: the sunset
-                                        // gradient, or the neon white (the ring stays on top).
-                                        color: Theme.dusk ? "#FFF6FB" : modelData.c
-                                        gradient: Theme.dusk && modelData.id === "orange" ? sunset : undefined
-                                        Gradient {
-                                            id: sunset
-                                            orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: Theme.accentFrom }
-                                            GradientStop { position: 1.0; color: Theme.accentTo }
-                                        }
+                                        color: modelData.c
                                         border.width: 2
-                                        border.color: on ? "#FFFFFF" : "transparent"
-                                        scale: on ? 1.12 : 1
+                                        border.color: swatch.activeFocus ? Theme.focusRing : on ? Theme.t1 : swHover.hovered ? Theme.strokeStrong : "transparent"
+                                        scale: on ? 1.12 : swHover.hovered ? 1.06 : 1
+                                        activeFocusOnTab: true
+                                        Accessible.role: Accessible.RadioButton
+                                        Accessible.name: modelData.tip
+                                        Accessible.checked: on
+                                        Keys.onReturnPressed: veyra.setPreference("accent", modelData.id)
+                                        Keys.onSpacePressed: veyra.setPreference("accent", modelData.id)
                                         Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                                         HoverHandler { id: swHover; cursorShape: Qt.PointingHandCursor }
                                         TapHandler { onTapped: veyra.setPreference("accent", modelData.id) }
                                         ToolTip.visible: swHover.hovered
-                                        ToolTip.text: Theme.dusk ? modelData.duskTip : modelData.tip
+                                        ToolTip.text: modelData.tip
                                     }
                                 }
                             }
@@ -387,6 +407,28 @@ VPage {
                                 options: sizes
                                 value: (sizes.find(o => o.id === (veyra.preferences.windowSize || "1280x800")) || sizes[0]).label
                                 onPicked: id => veyra.setPreference("windowSize", id)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("全屏输出显示器")
+                            hint: qsTr("进入全屏时将画面直接发送到指定显示器或电视；断开时自动切回当前窗口")
+                            VSelect {
+                                objectName: "set-fullscreen-monitor"
+                                readonly property var monitorOptions: {
+                                    const out = [{ id: "", label: qsTr("跟随当前窗口") }]
+                                    const list = Qt.application.screens
+                                    for (let i = 0; i < list.length; ++i) {
+                                        const s = list[i]
+                                        if (s) out.push({ id: s.name, label: s.name + " (" + s.width + "×" + s.height + ")" })
+                                    }
+                                    return out
+                                }
+                                options: monitorOptions
+                                value: {
+                                    const found = monitorOptions.find(o => o.id === root.fullscreenScreenName)
+                                    return found ? found.label : (root.fullscreenScreenName.length > 0 ? root.fullscreenScreenName + qsTr("（未连接）") : monitorOptions[0].label)
+                                }
+                                onPicked: id => root.fullscreenScreenPicked(id)
                             }
                         }
                         VRow {
@@ -513,6 +555,8 @@ VPage {
                             // One-click presets (same ids as the list page).
                             Flow {
                                 Layout.fillWidth: true
+                                Layout.topMargin: Theme.s8
+                                Layout.bottomMargin: Theme.s8
                                 Layout.preferredHeight: implicitHeight
                                 spacing: 6
                                 Repeater {
@@ -661,6 +705,7 @@ VPage {
                                 VButton { objectName: "set-shotdir"; text: qsTr("更改…"); onClicked: veyra.chooseScreenshotDirectory() }
                             }
                         }
+                    }
                     VGroup {
                         objectName: "set-recording"
                         VRow {
@@ -703,7 +748,7 @@ VPage {
                                     validator: IntValidator { bottom: 0; top: 86400 }
                                     onEdited: veyra.setPreference("recordSplitSeconds", Number(text))
                                 }
-                                Text { text: qsTr("秒"); color: Theme.t3; font.pixelSize: Theme.fsSmall }
+                                Text { text: qsTr("秒"); color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                                 DialogHost.VTextField {
                                     objectName: "record-split-mib"
                                     implicitWidth: 88
@@ -711,7 +756,7 @@ VPage {
                                     validator: IntValidator { bottom: 0; top: 1048576 }
                                     onEdited: veyra.setPreference("recordSplitMiB", Number(text))
                                 }
-                                Text { text: "MiB"; color: Theme.t3; font.pixelSize: Theme.fsSmall }
+                                Text { text: "MiB"; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                             }
                         }
                         VRow {
@@ -885,7 +930,6 @@ VPage {
                             }
                         }
                     }
-                    }
                     VGroup {
                         objectName: "set-smooth-motion"
                         VRow {
@@ -907,7 +951,7 @@ VPage {
                                   + qsTr("软件不检测、不拦截两者叠加，也不修改驱动配置；AMD FSR 补帧暂不提供。")
                             color: Theme.t2
                             font.family: Theme.fontUi
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsBody
                             wrapMode: Text.WordWrap
                             lineHeight: 1.3
                         }
@@ -1241,8 +1285,8 @@ VPage {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: psNote.implicitHeight + 20
-                        radius: 9
-                        color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
+                        radius: Theme.rCard
+                        color: Theme.warnGlow
                         Text {
                             id: psNote
                             anchors.fill: parent
@@ -1288,14 +1332,20 @@ VPage {
                                 label: modelData.a
                                 hint: modelData.note || ""
                                 Rectangle {
+                                    id: keyPill
                                     objectName: "key-" + keyRow.modelData.id
                                     readonly property bool capturing: root.capturingKey === keyRow.modelData.id
                                     implicitWidth: Math.max(64, keyText.implicitWidth + 20)
                                     implicitHeight: 26
-                                    radius: 7
-                                    color: capturing ? Theme.accentSoft : Qt.rgba(1, 1, 1, 0.06)
+                                    radius: Theme.rCtl
+                                    color: capturing ? Theme.accentSoft : keyTap.pressed ? Theme.pressFill : keyHover.hovered ? Theme.card3 : Theme.hoverFill
                                     border.width: 1
-                                    border.color: capturing ? Theme.accent : Theme.stroke
+                                    border.color: keyPill.activeFocus ? Theme.focusRing : capturing ? Theme.accent : keyHover.hovered ? Theme.strokeStrong : Theme.stroke
+                                    activeFocusOnTab: true
+                                    Accessible.role: Accessible.Button
+                                    Accessible.name: keyRow.modelData.a
+                                    Keys.onReturnPressed: { root.capturingKey = keyRow.modelData.id; keyCatcher.forceActiveFocus() }
+                                    Keys.onSpacePressed: { root.capturingKey = keyRow.modelData.id; keyCatcher.forceActiveFocus() }
                                     Text {
                                         id: keyText
                                         anchors.centerIn: parent
@@ -1304,8 +1354,8 @@ VPage {
                                         font.family: Theme.fontMono
                                         font.pixelSize: Theme.fsSmall
                                     }
-                                    HoverHandler { cursorShape: Qt.PointingHandCursor }
-                                    TapHandler { onTapped: { root.capturingKey = keyRow.modelData.id; keyCatcher.forceActiveFocus() } }
+                                    HoverHandler { id: keyHover; cursorShape: Qt.PointingHandCursor }
+                                    TapHandler { id: keyTap; onTapped: { root.capturingKey = keyRow.modelData.id; keyCatcher.forceActiveFocus() } }
                                 }
                             }
                         }
@@ -1371,7 +1421,7 @@ VPage {
                     VH1 { text: qsTr("组件与许可") }
                     Text {
                         Layout.fillWidth: true
-                        text: qsTr("运行组件均为实验运行时，非 NVIDIA 官方合作或认证。详细哈希见 release-runtime-manifest.json。")
+                        text: qsTr("运行组件均为实验运行时，非 NVIDIA 官方合作或认证。")
                         color: Theme.t2
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -1520,8 +1570,8 @@ VPage {
                     // The diagnostics the engine actually reports, shown verbatim.
                     Rectangle {
                         Layout.fillWidth: true
-                        implicitHeight: 220
-                        radius: 9
+                        implicitHeight: Math.min(260, Math.max(140, root.height * 0.28))
+                        radius: Theme.rCard
                         color: Theme.card2
                         clip: true
                         Flickable {

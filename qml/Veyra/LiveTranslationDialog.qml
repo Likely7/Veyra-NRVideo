@@ -98,7 +98,8 @@ DialogLayer {
                                      : qsTr("识别系统播放的声音。")
             VSelect {
                 objectName: "live-translation-source"
-                implicitWidth: 248
+                Accessible.name: qsTr("字幕来源")
+                implicitWidth: Math.min(248, Math.max(140, root.bodyWidth * 0.48))
                 options: root.recognitionSources
                 value: root.languageLabel(options, String(root.source))
                 onPicked: id => { root.translation.recognitionSource = Number(id) }
@@ -117,6 +118,7 @@ DialogLayer {
                                      : qsTr("实时翻译需要 Windows 11 22H2 或更新版本"))
             VSwitch {
                 objectName: "live-translation-enabled"
+                Accessible.name: qsTr("在画面上显示实时翻译")
                 enabled: root.supported
                 checked: root.translation ? root.translation.enabled : false
                 onToggled: value => { root.translation.enabled = value }
@@ -142,7 +144,8 @@ DialogLayer {
                 : qsTr("只读取这一部分画面。区域越小，识别越快、越准确。")
             VSelect {
                 objectName: "live-translation-region"
-                implicitWidth: 224
+                Accessible.name: qsTr("识别区域")
+                implicitWidth: Math.min(224, Math.max(140, root.bodyWidth * 0.45))
                 options: root.regions
                 value: root.regions[Math.max(0, Math.min(root.regions.length - 1, root.region))].label
                 onPicked: id => { root.translation.screenRegion = Number(id) }
@@ -160,7 +163,7 @@ DialogLayer {
                 : qsTr("识别区域内暂时没有文字")
             color: reading.length ? Theme.t2 : Theme.t3
             font.family: Theme.fontUi
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsSmall
             wrapMode: Text.Wrap
             maximumLineCount: 3
             elide: Text.ElideRight
@@ -219,7 +222,8 @@ DialogLayer {
                 : qsTr("启用后会把识别出的字幕文本发送给所选服务。")
             VSelect {
                 objectName: "live-translation-provider"
-                implicitWidth: 224
+                Accessible.name: qsTr("翻译引擎")
+                implicitWidth: Math.min(224, Math.max(140, root.bodyWidth * 0.45))
                 options: root.providers
                 value: root.providers[root.provider].label
                 onPicked: id => { root.translation.provider = Number(id) }
@@ -231,6 +235,7 @@ DialogLayer {
             hintBelow: root.screenSource
             hint: root.screenSource ? qsTr("画面文字按此语言识别，“自动识别原文”按英语识别；其他语言需在 Windows 中安装对应语言。") : ""
             VSelect {
+                Accessible.name: qsTr("原文语言")
                 enabled: !root.englishOnly
                 options: root.sourceLanguages
                 value: root.translation ? root.languageLabel(options, root.translation.sourceLanguage) : ""
@@ -242,6 +247,7 @@ DialogLayer {
             label: qsTr("翻译成")
             VSelect {
                 objectName: "live-translation-target"
+                Accessible.name: qsTr("翻译成")
                 options: root.languages
                 value: root.translation ? root.languageLabel(options, root.translation.targetLanguage) : ""
                 onPicked: id => { root.translation.targetLanguage = id }
@@ -251,6 +257,7 @@ DialogLayer {
             visible: root.supported
             label: qsTr("同时显示原文")
             VSwitch {
+                Accessible.name: qsTr("同时显示原文")
                 checked: root.translation ? root.translation.showOriginal : true
                 onToggled: value => { root.translation.showOriginal = value }
             }
@@ -263,7 +270,8 @@ DialogLayer {
             label: qsTr("语音识别模型")
             VSelect {
                 objectName: "live-translation-recognition-model"
-                implicitWidth: 248
+                Accessible.name: qsTr("语音识别模型")
+                implicitWidth: Math.min(248, Math.max(140, root.bodyWidth * 0.48))
                 options: root.recognitionModels
                 value: root.translation ? root.languageLabel(options, String(root.translation.recognitionModel)) : ""
                 enabled: root.translation && !root.translation.recognitionDownloading
@@ -278,6 +286,7 @@ DialogLayer {
                 : qsTr("OpenAI Whisper · MIT · 建议性能较强的 CPU"))
                 + qsTr(" · 首次下载 %1 MB").arg(root.translation ? Math.ceil(root.translation.recognitionBytes / 1000000) : 0)
             RowLayout {
+                spacing: Theme.s8
                 VButton {
                     objectName: "live-translation-recognition-download"
                     text: root.translation && root.translation.recognitionDownloading ? qsTr("取消下载") : qsTr("下载模型")
@@ -299,6 +308,7 @@ DialogLayer {
         ProgressBar {
             objectName: "live-translation-recognition-progress"
             Layout.fillWidth: true
+            Layout.topMargin: Theme.s8
             visible: root.translation !== null && root.translation.recognitionDownloading
             value: root.translation ? root.translation.recognitionProgress : 0
         }
@@ -333,8 +343,9 @@ DialogLayer {
             label: root.translation && root.translation.modelInstalled ? qsTr("本地模型已就绪") : qsTr("本地模型")
             hintBelow: true
             hint: qsTr("Qwen2.5 1.5B Q4 与显卡/CPU 运行库 · 按需下载 %1 GB")
-                .arg(root.translation ? (root.translation.downloadBytes / 1000000000).toFixed(2) : "")
+                .arg(root.translation ? (root.translation.downloadBytes / 1000000000).toFixed(2) : "0.00")
             RowLayout {
+                spacing: Theme.s8
                 VButton {
                     objectName: "live-translation-download"
                     text: root.translation && root.translation.downloading ? qsTr("取消下载")
@@ -361,6 +372,7 @@ DialogLayer {
         ProgressBar {
             objectName: "live-translation-progress"
             Layout.fillWidth: true
+            Layout.topMargin: Theme.s8
             visible: root.translation !== null && root.translation.downloading
             value: root.translation ? root.translation.downloadProgress : 0
         }
@@ -372,7 +384,7 @@ DialogLayer {
             label: qsTr("接口地址")
             DialogTextField {
                 objectName: "live-translation-api-base"
-                implicitWidth: 248
+                implicitWidth: Math.min(248, Math.max(140, root.bodyWidth * 0.48))
                 placeholder: "https://example.com/v1"
                 text: root.translation ? root.translation.apiBase : ""
                 onTyped: value => { root.translation.apiBase = value }
@@ -381,7 +393,8 @@ DialogLayer {
         VRow {
             label: qsTr("接口模型名")
             DialogTextField {
-                implicitWidth: 248
+                implicitWidth: Math.min(248, Math.max(140, root.bodyWidth * 0.48))
+                placeholder: qsTr("例如：gpt-4o-mini")
                 text: root.translation ? root.translation.apiModel : ""
                 onTyped: value => { root.translation.apiModel = value }
             }
@@ -390,7 +403,8 @@ DialogLayer {
             label: "API Key"
             hint: qsTr("仅本次运行有效")
             DialogTextField {
-                implicitWidth: 248
+                implicitWidth: Math.min(248, Math.max(140, root.bodyWidth * 0.48))
+                placeholder: "API Key"
                 echoMode: TextInput.Password
                 onTyped: value => { if (root.translation) root.translation.setApiKey(value) }
             }
@@ -399,6 +413,7 @@ DialogLayer {
     Text {
         objectName: "live-translation-status"
         Layout.fillWidth: true
+        Layout.topMargin: Theme.s8
         visible: text.length > 0
         text: root.translation ? root.translation.status : ""
         color: Theme.t2
@@ -408,6 +423,7 @@ DialogLayer {
     }
     Text {
         Layout.fillWidth: true
+        Layout.topMargin: Theme.s4
         visible: root.translation && root.translation.enabled &&
             (root.translation.recognitionRtf > 0 || root.translation.averageTranslationMs > 0 || root.translation.skippedSentences > 0)
         text: !root.translation ? "" : qsTr("识别实时倍率 %1 · 翻译平均 %2 ms · 跳过 %3 句")
@@ -427,8 +443,8 @@ DialogLayer {
             objectName: "live-subtitle-preview"
             Layout.fillWidth: true
             implicitHeight: Math.max(92, sample.contentHeight + 22)
-            radius: 10
-            color: Theme.videoBlack
+            radius: Theme.rCard
+            color: Theme.card3
             border.width: 1
             border.color: Theme.stroke
             clip: true
@@ -440,15 +456,9 @@ DialogLayer {
                 width: sample.width
                 text: sample.text
                 font: sample.font
-                color: Qt.rgba(0, 0, 0, 0.59)
+                color: Theme.shade(0, 0, 0, 0.59)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
-            }
-            // A lighter sample background makes both the dark shadow and the
-            // foreground colour visible while editing.
-            gradient: Gradient {
-                GradientStop { position: 0; color: "#6c7685" }
-                GradientStop { position: 1; color: "#404b60" }
             }
             Text {
                 id: sample
@@ -457,10 +467,10 @@ DialogLayer {
                 width: parent.width - 32
                 text: qsTr("字幕预览")
                 color: root.subtitleColor
-                font.family: "Microsoft YaHei UI"
+                font.family: Theme.fontUi
                 font.pixelSize: Math.round(root.subtitleSize * 24 / 22)
                 style: (veyra.preferences.subtitleOutline ?? 2) > 0 ? Text.Outline : Text.Normal
-                styleColor: "#c0000000"
+                styleColor: Theme.shade(0, 0, 0, 0.75)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
             }
@@ -470,6 +480,7 @@ DialogLayer {
             value: root.subtitleSize + " px"
             VSlider {
                 objectName: "live-subtitle-size"
+                Accessible.name: qsTr("字号")
                 from: 16; to: 56; stepSize: 1
                 value: root.subtitleSize
                 valueFromModel: true
@@ -479,6 +490,7 @@ DialogLayer {
         VRow {
             label: qsTr("文字颜色")
             RowLayout {
+                spacing: Theme.s8
                 Rectangle {
                     width: 18; height: 18; radius: 4
                     color: root.subtitleColor

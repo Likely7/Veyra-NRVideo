@@ -13,16 +13,17 @@ Rectangle {
     color: Theme.card
     border.width: 1
     border.color: Theme.stroke
-    implicitHeight: inner.height + 28
+    clip: true
+    implicitHeight: inner.height + Theme.s16 * 2
 
     ColumnLayout {
         id: inner
         anchors.left: parent.left
         anchors.right: parent.right
-        anchors.leftMargin: 14
-        anchors.rightMargin: 14
+        anchors.leftMargin: Theme.s16
+        anchors.rightMargin: Theme.s16
         anchors.top: parent.top
-        anchors.topMargin: 14
-        spacing: 6
+        anchors.topMargin: Theme.s16
+        spacing: Theme.s8
     }
 }

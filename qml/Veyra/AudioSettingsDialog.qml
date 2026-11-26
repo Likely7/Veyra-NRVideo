@@ -28,10 +28,17 @@ DialogLayer {
                 required property var modelData
                 Layout.fillWidth: true
                 implicitHeight: 52
-                radius: 12
-                color: Theme.card2
-                border.width: 1
-                border.color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : Theme.stroke
+                radius: Theme.rCard
+                color: trackHover.hovered ? Theme.card3 : Theme.card2
+                border.width: activeFocus ? 2 : 1
+                border.color: veyra.selectedAudioTrack === modelData.index ? Theme.accent : (activeFocus ? Theme.focusRing : Theme.stroke)
+                activeFocusOnTab: true
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: modelData.label
+                Accessible.checked: veyra.selectedAudioTrack === modelData.index
+                Keys.onReturnPressed: event => { event.accepted = true; veyra.selectedAudioTrack = modelData.index }
+                Keys.onEnterPressed: event => { event.accepted = true; veyra.selectedAudioTrack = modelData.index }
+                Keys.onSpacePressed: event => { event.accepted = true; veyra.selectedAudioTrack = modelData.index }
                 RowLayout {
                     anchors.fill: parent
                     anchors.leftMargin: 12
@@ -55,7 +62,7 @@ DialogLayer {
                             text: modelData.channels > 0 ? modelData.channels + qsTr(" 声道") : ""
                             color: Theme.t3
                             font.family: Theme.fontUi
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsEyebrow
                         }
                     }
                     VIcon {
@@ -64,7 +71,7 @@ DialogLayer {
                         color: Theme.accent
                     }
                 }
-                HoverHandler { cursorShape: Qt.PointingHandCursor }
+                HoverHandler { id: trackHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { onTapped: veyra.selectedAudioTrack = modelData.index }
             }
         }
@@ -146,7 +153,7 @@ DialogLayer {
             hint: veyra.audioOutputStatus
             VSelect {
                 objectName: "audio-device"
-                implicitWidth: 240
+                implicitWidth: Math.min(240, Math.max(140, bodyWidth * 0.48))
                 readonly property string chosen: veyra.preferences.audioDevice || ""
                 value: { const d = veyra.audioDevices.find(x => x.id === chosen); return d ? d.label : qsTr("跟随系统默认") }
                 options: veyra.audioDevices

@@ -16,13 +16,15 @@ Rectangle {
     property bool instantExpansion: false
     default property alias content: inner.data
 
-    implicitHeight: header.implicitHeight + (expanded ? inner.implicitHeight + 8 : 0)
-    radius: 9
-    color: Qt.rgba(1, 1, 1, 0.03)
+    implicitHeight: header.implicitHeight + (expanded ? inner.implicitHeight + Theme.s8 : 0)
+    radius: Theme.rCtl
+    color: Theme.card
+    border.width: header.activeFocus ? 2 : 1
+    border.color: header.activeFocus ? Theme.focusRing : Theme.stroke
     clip: true
     Behavior on implicitHeight {
         enabled: !sub.instantExpansion
-        NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.springSoft }
+        NumberAnimation { duration: Theme.d(Theme.animNormal); easing.bezierCurve: Theme.springSoft }
     }
 
     ColumnLayout {
@@ -31,15 +33,23 @@ Rectangle {
         anchors.top: parent.top
         spacing: 0
 
-        Item {
+        Rectangle {
             id: header
             Layout.fillWidth: true
-            implicitHeight: Math.max(30, groupLabel.implicitHeight + 10)
+            implicitHeight: Math.max(32, groupLabel.implicitHeight + Theme.s12)
+            radius: Theme.rCtl
+            color: headerTap.pressed ? Theme.pressFill : headerHover.hovered ? Theme.hoverFill : "transparent"
+            activeFocusOnTab: true
+            Keys.onReturnPressed: event => { event.accepted = true; sub.expanded = !sub.expanded }
+            Keys.onEnterPressed: event => { event.accepted = true; sub.expanded = !sub.expanded }
+            Keys.onSpacePressed: event => { event.accepted = true; sub.expanded = !sub.expanded }
+            Accessible.role: Accessible.Button
+            Accessible.name: sub.label
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: 8
+                anchors.leftMargin: Theme.s12
+                anchors.rightMargin: Theme.s12
+                spacing: Theme.s8
                 Text {
                     Layout.fillWidth: true
                     id: groupLabel
@@ -48,33 +58,33 @@ Rectangle {
                     text: sub.label
                     color: Theme.t2
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsBody
                 }
                 Text {
                     visible: sub.count > 0
                     text: sub.count + qsTr(" 项")
                     color: Theme.t3
                     font.family: Theme.fontUi
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsEyebrow
                 }
                 VIcon {
                     name: "down"
                     color: Theme.t3
                     rotation: sub.expanded ? 180 : 0
-                    Behavior on rotation { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
+                    Behavior on rotation { NumberAnimation { duration: Theme.d(Theme.animNormal); easing.bezierCurve: Theme.spring } }
                 }
             }
-            HoverHandler { cursorShape: Qt.PointingHandCursor }
-            TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: sub.expanded = !sub.expanded }
+            HoverHandler { id: headerHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { id: headerTap; gesturePolicy: TapHandler.WithinBounds; onTapped: sub.expanded = !sub.expanded }
         }
 
         ColumnLayout {
             id: inner
             Layout.fillWidth: true
-            Layout.leftMargin: 10
-            Layout.rightMargin: 10
-            Layout.bottomMargin: 8
-            spacing: 2
+            Layout.leftMargin: Theme.s12
+            Layout.rightMargin: Theme.s12
+            Layout.bottomMargin: Theme.s8
+            spacing: Theme.s4
             visible: sub.expanded
         }
     }

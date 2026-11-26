@@ -10,18 +10,20 @@ Rectangle {
     // the pill's top-left corner.
     default property alias leading: lead.data
     signal clicked()
-    implicitWidth: pillRow.implicitWidth + 21
+    implicitWidth: pillRow.implicitWidth + Theme.s20
     implicitHeight: Theme.ctlHeight
-    radius: 999
-    color: hover.hovered ? Qt.rgba(1, 1, 1, 0.10) : Qt.rgba(1, 1, 1, 0.05)
-    border.width: 1
-    border.color: Theme.stroke2
+    radius: Theme.rCtl
+    opacity: enabled ? 1.0 : Theme.disabledOpacity
+    activeFocusOnTab: enabled
+    color: tap.pressed ? Theme.pressFill : hover.hovered ? Theme.hoverFill : Theme.card2
+    border.width: activeFocus ? 2 : 1
+    border.color: activeFocus ? Theme.focusRing : Theme.strokeStrong
     scale: tap.pressed ? 0.95 : 1.0
-    Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+    Behavior on scale { NumberAnimation { duration: Theme.d(Theme.animFast); easing.bezierCurve: Theme.spring } }
     RowLayout {
         id: pillRow
         anchors.centerIn: parent
-        spacing: 7
+        spacing: Theme.s8
         Row { id: lead; visible: children.length > 0; Layout.alignment: Qt.AlignVCenter }
         Text { visible: pill.key.length > 0; text: pill.key; color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
         Text {
@@ -35,8 +37,26 @@ Rectangle {
             font.weight: Font.Medium
         }
     }
-    HoverHandler { id: hover; cursorShape: Qt.PointingHandCursor }
+    HoverHandler { id: hover; enabled: pill.enabled; cursorShape: Qt.PointingHandCursor }
     ToolTip.visible: hover.hovered && valueLabel.truncated
     ToolTip.text: pill.value
-    TapHandler { id: tap; gesturePolicy: TapHandler.WithinBounds; onTapped: pill.clicked() }
+    TapHandler {
+        id: tap
+        enabled: pill.enabled
+        gesturePolicy: TapHandler.WithinBounds
+        onTapped: {
+            pill.forceActiveFocus()
+            pill.clicked()
+        }
+    }
+    Keys.onSpacePressed: event => { if (enabled) { pill.clicked(); event.accepted = true } }
+    Keys.onReturnPressed: event => { if (enabled) { pill.clicked(); event.accepted = true } }
+    Keys.onEnterPressed: event => { if (enabled) { pill.clicked(); event.accepted = true } }
+
+    Accessible.role: Accessible.Button
+    Accessible.name: pill.key.length > 0 ? (pill.key + " " + pill.value) : pill.value
+    Accessible.focusable: pill.enabled
+    Accessible.focused: pill.activeFocus
+    Accessible.pressed: tap.pressed
+    Accessible.onPressAction: if (pill.enabled) pill.clicked()
 }

@@ -1,12 +1,5 @@
-// The top dock, rebuilt from the design (index.html .dock-zone/.dock/.dock-handle
-// and app.css's .dock* rules).
-//
-// Design facts this follows:
-//   * a 12px hit zone plus a 44x4 grab handle at the very top;
-//   * the dock itself is a black pill, 40px tall buttons with SVG icons and a
-//     tooltip; a separate indicator slides behind the selected button;
-//   * it drops in from above and retracts 450ms after the pointer leaves;
-//   * `dockPinned` keeps it open (the design uses that state for the 16:9 frame).
+// The top dock: 12px hit zone + 44x4 grab handle, black capsule with nav,
+// engine status, optional pill toggle, and window controls.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -20,26 +13,20 @@ Item {
 
     required property string currentPage
     signal requestPage(string page)
-    // Frameless window controls live in the capsule (user decision 2026-09-28).
     property bool maximized: false
     signal requestMinimize()
     signal requestMaximize()
     signal requestClose()
     signal requestMove()
-    // The cinema pill's eye: shown on 极简 and in fullscreen, toggles the pill.
     property bool pillToggleVisible: false
     property bool pillHidden: false
     signal requestTogglePill()
 
     property bool opened: false
-    // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
     property bool pinned: false
-    // Review: holds one button's tooltip shown (--tip).
     property string forcedTip: ""
-    // The pill's top edge, read by the motion probe (G0.5).
     readonly property real barY: bar.y
 
-    // --- page definitions (order and tooltips from core.js) ---------------
     readonly property var items: [
         { id: "min",   icon: "tv", tip: qsTr("极简") },
         { id: "pro",   icon: "sliders", tip: qsTr("专业模式") },
@@ -47,16 +34,43 @@ Item {
         { id: "set",   icon: "settings", tip: qsTr("设置") }
     ]
 
-    // .dock-zone { height:12px } and .dock-handle { 44x4, top:5 }
+    component DockTip: Rectangle {
+        id: dtip
+        property bool shown: false
+        property string text: ""
+        objectName: "videoCover"
+        property real coverRadius: Theme.rCtl
+        x: parent ? (parent.width - width) / 2 : 0
+        y: 38
+        width: dtipText.implicitWidth + Theme.s16
+        height: dtipText.implicitHeight + Theme.s8
+        radius: Theme.rCtl
+        color: Theme.popover
+        border.width: 1
+        border.color: Theme.stroke2
+        opacity: shown ? 1 : 0
+        visible: opacity > 0
+        scale: shown ? 1 : 0.85
+        transformOrigin: Item.Top
+        Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.animFast) } }
+        Behavior on scale { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
+        Text {
+            id: dtipText
+            anchors.centerIn: parent
+            text: dtip.text
+            color: Theme.t1
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsEyebrow
+        }
+    }
+
     Item {
         id: zone
         anchors.top: parent.top
         anchors.left: parent.left
         anchors.right: parent.right
         height: 12
-        // Leaving the zone for anywhere but the dock retracts it (closeDock).
         HoverHandler { onHoveredChanged: if (hovered) dockRoot.open(); else if (!barHover.hovered) retract.restart() }
-        // The top strip is the title bar: drag moves, double click maximizes.
         DragHandler { target: null; onActiveChanged: if (active) dockRoot.requestMove() }
         TapHandler { onDoubleTapped: dockRoot.requestMaximize() }
     }
@@ -68,39 +82,34 @@ Item {
         width: dockRoot.opened ? 18 : 44
         height: 4
         radius: 4
-        color: Qt.rgba(1, 1, 1, 0.28)
-        opacity: dockRoot.opened ? 0 : 1
+        color: Theme.t3
+        opacity: dockRoot.opened ? 0 : 0.7
         Behavior on width { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
-        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+        Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.animNormal) } }
         HoverHandler { onHoveredChanged: if (hovered) dockRoot.open() }
     }
 
     function open() { retract.stop(); if (!locked) opened = true }
-    // Fullscreen lock (Ctrl+L): the pointer no longer brings the dock down.
     property bool locked: false
-    // Retract 450ms after the pointer leaves, exactly like closeDock().
     Timer {
         id: retract
         interval: 450
         onTriggered: if (!dockRoot.pinned) dockRoot.opened = false
     }
 
-    // .dock: black pill, radius 999, 1px hairline, heavy drop shadow.
     Rectangle {
         id: bar
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.top: parent.top
-        anchors.topMargin: dockRoot.opened ? 8 : -56
-        implicitWidth: content.implicitWidth + 20
+        anchors.topMargin: dockRoot.opened ? Theme.s8 : -56
+        implicitWidth: content.implicitWidth + Theme.s20
         height: 44
         radius: height / 2
-        color: Theme.shade(0, 0, 0)
+        color: Theme.bg
         border.width: 1
-        border.color: Qt.rgba(1, 1, 1, 0.1)
-        // Over the picture on the cinema page: cut out of the video window.
+        border.color: Theme.strokeStrong
         objectName: "videoCover"
         property real coverRadius: height / 2
-        // .dock { transform: translate(-50%,-120%); transition: transform .55s spring }
         Behavior on anchors.topMargin {
             NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring }
         }
@@ -109,7 +118,6 @@ Item {
             id: barHover
             onHoveredChanged: if (hovered) dockRoot.open(); else retract.restart()
         }
-        // Dragging the capsule moves the window, as a title bar would.
         DragHandler {
             objectName: "dock-move"
             target: null
@@ -121,18 +129,26 @@ Item {
             anchors.centerIn: parent
             spacing: 2
 
-            // .dock .logo: 40x30, returns to the empty state.
-            // M3: background .2s, :active scale .9 over .4s --spring.
             Item {
+                id: logoBtn
                 implicitWidth: 40
                 implicitHeight: 30
+                activeFocusOnTab: dockRoot.opened
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("首页")
+                Accessible.onPressAction: dockRoot.requestPage("home")
+                Keys.onReturnPressed: dockRoot.requestPage("home")
+                Keys.onEnterPressed: dockRoot.requestPage("home")
+                Keys.onSpacePressed: dockRoot.requestPage("home")
                 scale: logoTap.pressed ? 0.9 : 1
                 Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                 Rectangle {
                     anchors.fill: parent
                     radius: height / 2
-                    color: logoHover.hovered ? Theme.shade(26, 26, 31) : Theme.shade(26, 26, 31, 0)
-                    Behavior on color { ColorAnimation { duration: Theme.d(200) } }
+                    color: logoTap.pressed ? Theme.pressFill : logoHover.hovered ? Theme.hoverFill : "transparent"
+                    border.width: logoBtn.activeFocus ? 1.5 : 0
+                    border.color: Theme.focusRing
+                    Behavior on color { ColorAnimation { duration: Theme.d(Theme.animNormal) } }
                 }
                 Image {
                     anchors.centerIn: parent
@@ -147,10 +163,8 @@ Item {
                 }
             }
 
-            // .dock-sep
-            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Theme.strokeStrong }
 
-            // .dock-items with the sliding .dock-ind behind the active button.
             Item {
                 implicitWidth: itemsRow.implicitWidth
                 implicitHeight: 30
@@ -158,16 +172,16 @@ Item {
                     id: indicator
                     width: 32
                     height: 30
-                    radius: 999
-                    color: Theme.shade(38, 38, 45)
+                    radius: height / 2
+                    color: Theme.card3
                     x: {
-                        let idx = 0
-                        for (let i = 0; i < dockRoot.items.length; ++i)
-                            if (dockRoot.items[i].id === dockRoot.currentPage) idx = i
-                        return idx * 34
+                        for (let i = 0; i < dockRoot.items.length; ++i) {
+                            if (dockRoot.items[i].id === dockRoot.currentPage && itemsRow.children[i])
+                                return itemsRow.children[i].x
+                        }
+                        return 0
                     }
                     visible: dockRoot.currentPage !== "home"
-                    // .dock-ind { transition: transform .55s var(--spring) }
                     Behavior on x { NumberAnimation { duration: Theme.d(550); easing.bezierCurve: Theme.spring } }
                 }
                 Row {
@@ -180,51 +194,35 @@ Item {
                             required property var modelData
                             width: 32
                             height: 30
-                            // M4: .dock-btn:active scale .86 over .45s --spring.
+                            activeFocusOnTab: dockRoot.opened
+                            Accessible.role: Accessible.Button
+                            Accessible.name: btn.modelData.tip
+                            Accessible.onPressAction: dockRoot.requestPage(btn.modelData.id)
+                            Keys.onReturnPressed: dockRoot.requestPage(btn.modelData.id)
+                            Keys.onEnterPressed: dockRoot.requestPage(btn.modelData.id)
+                            Keys.onSpacePressed: dockRoot.requestPage(btn.modelData.id)
                             scale: btnTap.pressed ? 0.86 : 1
                             Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
-                            // .dock-btn: color rgba(255,255,255,.45), hover or selected #fff.
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: height / 2
+                                color: btnTap.pressed ? Theme.pressFill : btnHover.hovered && dockRoot.currentPage !== btn.modelData.id ? Theme.hoverFill : "transparent"
+                                border.width: btn.activeFocus ? 1.5 : 0
+                                border.color: Theme.focusRing
+                            }
                             VIcon {
                                 anchors.centerIn: parent
                                 name: btn.modelData.icon
                                 strokeWidth: 1.7
-                                color: "#FFFFFF"
-                                opacity: dockRoot.currentPage === btn.modelData.id || tip.on ? 1.0 : 0.45
-                                Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+                                color: Theme.t1
+                                opacity: dockRoot.currentPage === btn.modelData.id || tip.shown ? 1.0 : 0.45
+                                Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.animNormal) } }
                             }
-                            // M5: .tip 38px below, opacity .15s, scale .85 -> 1 over .3s
-                            // --spring from its top centre.
-                            Rectangle {
+                            DockTip {
                                 id: tip
-                                readonly property bool on: btnHover.hovered || dockRoot.forcedTip === btn.modelData.id
-                                // Below the dock it sits over the video: cut out of it.
-                                objectName: "videoCover"
-                                property real coverRadius: 7
-                                x: (btn.width - width) / 2
-                                y: 38
-                                width: tipText.implicitWidth + 16 + 2
-                                height: tipText.implicitHeight + 8 + 2
-                                radius: 7
-                                color: Theme.popover
-                                border.width: 1
-                                border.color: Theme.stroke2
-                                opacity: on ? 1 : 0
-                                visible: opacity > 0
-                                scale: on ? 1 : 0.85
-                                transformOrigin: Item.Top
-                                Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
-                                Behavior on scale { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
-                                Text {
-                                    id: tipText
-                                    anchors.centerIn: parent
-                                    text: btn.modelData.tip
-                                    color: "#FFFFFF"
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: 11   // 11.5px; pixelSize is an int (fractional sizes: G3)
-                                }
+                                shown: btnHover.hovered || btn.activeFocus || dockRoot.forcedTip === btn.modelData.id
+                                text: btn.modelData.tip
                             }
-                            // Export badge: a running export marks the export button
-                            // with the design's pulsing .dot.warn; engine state only.
                             VDot {
                                 visible: btn.modelData.id === "exp" && veyra.exportRunning
                                 warn: true
@@ -239,61 +237,53 @@ Item {
                 }
             }
 
-            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Theme.strokeStrong }
 
-            // Show / hide the cinema pill (field request 2026-10-01). Only where the pill lives.
             Item {
+                id: pillToggleBtn
                 objectName: "dock-pill-toggle"
                 visible: dockRoot.pillToggleVisible
                 implicitWidth: visible ? 32 : 0
                 implicitHeight: 30
+                activeFocusOnTab: dockRoot.opened && visible
+                Accessible.role: Accessible.Button
+                Accessible.name: dockRoot.pillHidden ? qsTr("显示播放条") : qsTr("隐藏播放条")
+                Accessible.onPressAction: dockRoot.requestTogglePill()
+                Keys.onReturnPressed: dockRoot.requestTogglePill()
+                Keys.onEnterPressed: dockRoot.requestTogglePill()
+                Keys.onSpacePressed: dockRoot.requestTogglePill()
                 scale: pillTap.pressed ? 0.86 : 1
                 Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: height / 2
+                    color: pillTap.pressed ? Theme.pressFill : pillHover.hovered ? Theme.hoverFill : "transparent"
+                    border.width: pillToggleBtn.activeFocus ? 1.5 : 0
+                    border.color: Theme.focusRing
+                    Behavior on color { ColorAnimation { duration: Theme.d(Theme.animNormal) } }
+                }
                 VIcon {
                     anchors.centerIn: parent
                     name: dockRoot.pillHidden ? "eye" : "eyeoff"
-                    color: "#FFFFFF"
-                    opacity: pillHover.hovered ? 1.0 : 0.45
+                    color: Theme.t1
+                    opacity: pillHover.hovered || pillToggleBtn.activeFocus ? 1.0 : 0.45
                 }
-                Rectangle {
-                    objectName: "videoCover"
-                    property real coverRadius: 7
-                    readonly property bool on: pillHover.hovered
-                    x: (parent.width - width) / 2
-                    y: 38
-                    width: pillTipText.implicitWidth + 18
-                    height: pillTipText.implicitHeight + 10
-                    radius: 7
-                    color: Theme.popover
-                    border.width: 1
-                    border.color: Theme.stroke2
-                    opacity: on ? 1 : 0
-                    visible: opacity > 0
-                    Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
-                    Text {
-                        id: pillTipText
-                        anchors.centerIn: parent
-                        text: dockRoot.pillHidden ? qsTr("显示播放条") : qsTr("隐藏播放条")
-                        color: "#FFFFFF"
-                        font.family: Theme.fontUi
-                        font.pixelSize: 11
-                    }
+                DockTip {
+                    shown: pillHover.hovered || pillToggleBtn.activeFocus
+                    text: dockRoot.pillHidden ? qsTr("显示播放条") : qsTr("隐藏播放条")
                 }
                 HoverHandler { id: pillHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { id: pillTap; onTapped: dockRoot.requestTogglePill() }
             }
 
-            // .dock-live: the engine-running lamp. Lit only when the engine really
-            // reports running; no decorative lamp.
             Item {
                 implicitWidth: 19
                 implicitHeight: 30
                 VDot { anchors.centerIn: parent; off: !veyra.running; warn: veyra.captureRecovering }
             }
 
-            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Qt.rgba(1, 1, 1, 0.14) }
+            Rectangle { implicitWidth: 1; implicitHeight: 16; color: Theme.strokeStrong }
 
-            // Window controls: minimize, maximize/restore, close.
             Repeater {
                 model: [
                     { id: "min", icon: "minus", tip: qsTr("最小化") },
@@ -306,48 +296,40 @@ Item {
                     objectName: "window-" + modelData.id
                     implicitWidth: 30
                     implicitHeight: 30
+                    activeFocusOnTab: dockRoot.opened
+                    Accessible.role: Accessible.Button
+                    Accessible.name: wbtn.modelData.tip
+                    Accessible.onPressAction: {
+                        if (wbtn.modelData.id === "min") dockRoot.requestMinimize()
+                        else if (wbtn.modelData.id === "max") dockRoot.requestMaximize()
+                        else dockRoot.requestClose()
+                    }
+                    Keys.onReturnPressed: Accessible.onPressAction()
+                    Keys.onEnterPressed: Accessible.onPressAction()
+                    Keys.onSpacePressed: Accessible.onPressAction()
                     scale: wtap.pressed ? 0.86 : 1
                     Behavior on scale { NumberAnimation { duration: Theme.d(450); easing.bezierCurve: Theme.spring } }
                     Rectangle {
                         anchors.fill: parent
                         radius: height / 2
-                        color: whover.hovered ? (wbtn.modelData.id === "close" ? Qt.rgba(1, 0.365, 0.365, 0.22) : Theme.shade(26, 26, 31)) : "transparent"
-                        Behavior on color { ColorAnimation { duration: Theme.d(200) } }
+                        color: whover.hovered
+                            ? (wbtn.modelData.id === "close" ? Theme.errGlow : Theme.hoverFill)
+                            : (wtap.pressed ? Theme.pressFill : "transparent")
+                        border.width: wbtn.activeFocus ? 1.5 : 0
+                        border.color: Theme.focusRing
+                        Behavior on color { ColorAnimation { duration: Theme.d(Theme.animNormal) } }
                     }
                     VIcon {
                         anchors.centerIn: parent
                         name: wbtn.modelData.icon
                         size: 13
-                        color: whover.hovered && wbtn.modelData.id === "close" ? "#FF8A8A" : "#FFFFFF"
-                        opacity: whover.hovered ? 1.0 : 0.45
-                        Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
+                        color: whover.hovered && wbtn.modelData.id === "close" ? Theme.err : Theme.t1
+                        opacity: whover.hovered || wbtn.activeFocus ? 1.0 : 0.45
+                        Behavior on opacity { NumberAnimation { duration: Theme.d(Theme.animNormal) } }
                     }
-                    Rectangle {
-                        objectName: "videoCover"
-                        property real coverRadius: 7
-                        readonly property bool on: whover.hovered
-                        x: (wbtn.width - width) / 2
-                        y: 38
-                        width: wtipText.implicitWidth + 18
-                        height: wtipText.implicitHeight + 10
-                        radius: 7
-                        color: Theme.popover
-                        border.width: 1
-                        border.color: Theme.stroke2
-                        opacity: on ? 1 : 0
-                        visible: opacity > 0
-                        scale: on ? 1 : 0.85
-                        transformOrigin: Item.Top
-                        Behavior on opacity { NumberAnimation { duration: Theme.d(150) } }
-                        Behavior on scale { NumberAnimation { duration: Theme.d(300); easing.bezierCurve: Theme.spring } }
-                        Text {
-                            id: wtipText
-                            anchors.centerIn: parent
-                            text: wbtn.modelData.tip
-                            color: "#FFFFFF"
-                            font.family: Theme.fontUi
-                            font.pixelSize: 11
-                        }
+                    DockTip {
+                        shown: whover.hovered || wbtn.activeFocus
+                        text: wbtn.modelData.tip
                     }
                     HoverHandler { id: whover; cursorShape: Qt.PointingHandCursor }
                     TapHandler {

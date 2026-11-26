@@ -6,9 +6,11 @@ import QtQuick
 Item {
     id: spin
     property int size: 14
-    property color color: "#FFFFFF"
+    property color color: Theme.t1
     implicitWidth: size
     implicitHeight: size
+    Accessible.role: Accessible.ProgressBar
+    Accessible.name: qsTr("加载中")
     Canvas {
         id: ring
         anchors.fill: parent
@@ -16,7 +18,7 @@ Item {
             const g = getContext("2d"); g.reset()
             const r = width / 2 - 1.5
             g.lineWidth = 2
-            g.strokeStyle = Qt.rgba(1, 1, 1, 0.2)
+            g.strokeStyle = Theme.strokeStrong
             g.beginPath(); g.arc(width / 2, height / 2, r, 0, Math.PI * 2); g.stroke()
             g.strokeStyle = spin.color
             g.beginPath(); g.arc(width / 2, height / 2, r, -Math.PI / 2, 0); g.stroke()

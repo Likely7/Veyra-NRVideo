@@ -46,14 +46,15 @@ Window {
     flags: Qt.Tool | Qt.FramelessWindowHint
     // Clicking the video or another window must commit, too: the QML input
     // can retain activeFocus inside a window that no longer has OS focus.
+    readonly property bool hasKeyboardFocus: win.activeFocusItem !== null && win.activeFocusItem !== win.contentItem
     onActiveChanged: {
         if (!active && editing) bar.finishEditing()
-        else if (active && !interacting) Qt.callLater(function() {
-            if (win.active && !win.interacting) owner.requestActivate()
+        else if (active && !interacting && !menuOpen && !hasKeyboardFocus) Qt.callLater(function() {
+            if (win.active && !win.interacting && !win.menuOpen && !win.hasKeyboardFocus) owner.requestActivate()
         })
     }
-    onInteractingChanged: if (!interacting && active) Qt.callLater(function() {
-        if (win.active && !win.interacting) owner.requestActivate()
+    onInteractingChanged: if (!interacting && active && !menuOpen && !hasKeyboardFocus) Qt.callLater(function() {
+        if (win.active && !win.interacting && !win.menuOpen && !win.hasKeyboardFocus) owner.requestActivate()
     })
     onShownChanged: {
         if (!shown && editing) bar.finishEditing()
@@ -63,9 +64,9 @@ Window {
 
     // Room for the pill plus the preset menu above it (VMenu is at most 420 tall).
     readonly property int menuRoom: 440
-    // At least 760: the transport needs the middle column. A portrait film's narrow
-    // window lets the pill reach past the picture's sides.
-    readonly property int barWidth: Math.min(860, Math.max(760, owner.width - 48))
+    // Clamp to owner.width - 48 (at least 312px for 360px portrait cinema windows)
+    // so the pill never overflows the main window.
+    readonly property int barWidth: Math.min(860, Math.max(312, owner.width - 48))
     width: barWidth
     height: 92 + menuRoom
     // Centred; fullscreen: 24px above the screen's bottom edge (the design's 24px

@@ -18,7 +18,7 @@ Item {
     readonly property bool hintUnder: hint.length > 0 && (hintBelow
         || (width > 0 && !stacked && textRoom < 160 && hintMetrics.advanceWidth(hint) > textRoom * 2))
     FontMetrics { id: labelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
-    FontMetrics { id: hintMetrics; font.family: Theme.fontUi; font.pixelSize: 11 }
+    FontMetrics { id: hintMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow }
     default property alias control: slot.data
     // The row's slider, when its control is one (typed values beside the number).
     readonly property Item valueSlider: {
@@ -34,8 +34,8 @@ Item {
     // row is only ever placed inside a layout.
     // A hint that wraps (narrow panels) grows the row instead of running into
     // the next one.
-    implicitHeight: Math.max(Theme.rowMinHeight, mainRow.implicitHeight + 8)
-        + (hintUnder ? belowHint.implicitHeight + 6 : 0)
+    implicitHeight: Math.max(Theme.rowMinHeight, mainRow.implicitHeight + Theme.s8)
+        + (hintUnder ? belowHint.implicitHeight + Theme.s8 : 0)
     Layout.preferredHeight: implicitHeight
     Layout.fillWidth: true
     GridLayout {
@@ -44,27 +44,28 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         columns: row.stacked ? 2 : 3
-        columnSpacing: 12
-        rowSpacing: 6
+        columnSpacing: Theme.s12
+        rowSpacing: Theme.s8
         ColumnLayout {
             id: textColumn
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.columnSpan: row.stacked ? 2 : 1
-            spacing: 2
+            spacing: Theme.s4
             // fillWidth here too: without a hint the label is the column's only child,
             // and a layout with no filling child cannot grow, which left the control
             // beside the label instead of at the row's right edge.
             // Grow the row for long labels instead of hiding translated text.
-            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.Wrap }
+            Text { Layout.fillWidth: true; Layout.minimumWidth: 0; text: row.label; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; wrapMode: Text.WordWrap }
             Text {
                 visible: row.hint.length > 0 && !row.hintUnder
                 text: row.hint
                 color: row.hintColor
                 font.family: Theme.fontUi
-                font.pixelSize: 11
-                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fsEyebrow
+                wrapMode: Text.WordWrap
                 Layout.fillWidth: true
+                Layout.minimumWidth: 0
             }
         }
         Item {
@@ -80,6 +81,7 @@ Item {
             }
             implicitHeight: childrenRect.height
             Layout.preferredWidth: visibleControlWidth
+            Layout.maximumWidth: mainRow.width
             Layout.preferredHeight: childrenRect.height
         }
         // A row whose control is a slider: its number can be clicked and typed.
@@ -96,11 +98,11 @@ Item {
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.top: mainRow.bottom
-        anchors.topMargin: 6
+        anchors.topMargin: Theme.s8
         text: row.hint
         color: row.hintColor
         font.family: Theme.fontUi
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsEyebrow
         wrapMode: Text.WordWrap
     }
 }

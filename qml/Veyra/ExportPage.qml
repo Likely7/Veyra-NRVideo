@@ -29,7 +29,7 @@ VPage {
         wrapMode: Text.Wrap
         color: Theme.t3
         font.family: Theme.fontUi
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsEyebrow
     }
     component ExportScrollBar: Basic.ScrollBar {
         id: bar
@@ -52,8 +52,8 @@ VPage {
         implicitWidth: 172
         implicitHeight: Math.max(30, contentItem.implicitHeight + 8)
         onActivated: index => picked(String(options[index].id))
-        background: Rectangle { radius: 8; color: Theme.card2; border.color: Theme.stroke2 }
-        contentItem: Text { leftPadding: 10; rightPadding: 24; verticalAlignment: Text.AlignVCenter; text: choice.currentText; color: Theme.t1; wrapMode: Text.Wrap; font.family: Theme.fontUi; font.pixelSize: 12 }
+        background: Rectangle { radius: Theme.rCtl; color: Theme.card2; border.color: Theme.stroke2 }
+        contentItem: Text { leftPadding: 10; rightPadding: 24; verticalAlignment: Text.AlignVCenter; text: choice.currentText; color: Theme.t1; wrapMode: Text.Wrap; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
         indicator: VIcon { x: choice.width - 22; y: 8; name: "down"; size: 14; color: Theme.t3 }
         popup: Popup {
             id: choicesPopup
@@ -66,11 +66,11 @@ VPage {
                 x = Math.max(8, Math.min(point.x, parent.width - width - 8))
                 y = Math.max(8, Math.min(point.y, parent.height - height - 8))
             }
-            background: Rectangle { radius: 8; color: Theme.card2; border.color: Theme.stroke2 }
+            background: Rectangle { radius: Theme.rCtl; color: Theme.card2; border.color: Theme.stroke2 }
             contentItem: ListView {
                 id: list
                 objectName: "videoCover"
-                property real coverRadius: 8
+                property real coverRadius: Theme.rCtl
                 clip: true
                 model: choice.options
                 currentIndex: choice.currentIndex
@@ -81,8 +81,8 @@ VPage {
                     width: list.width; height: Math.max(32, contentItem.implicitHeight + 8)
                     enabled: modelData.disabled !== true
                     highlighted: index === choice.currentIndex
-                    background: Rectangle { radius: 5; color: parent.highlighted ? Theme.card3 : "transparent" }
-                    contentItem: Text { text: modelData.label; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: 12; verticalAlignment: Text.AlignVCenter; wrapMode: Text.Wrap }
+                    background: Rectangle { radius: Theme.rCtl; color: parent.highlighted ? Theme.card3 : parent.hovered ? Theme.hoverFill : "transparent" }
+                    contentItem: Text { text: modelData.label; color: Theme.t1; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody; verticalAlignment: Text.AlignVCenter; wrapMode: Text.Wrap }
                     onClicked: { choice.picked(String(modelData.id)); choicesPopup.close() }
                 }
             }
@@ -112,8 +112,8 @@ VPage {
         radius: Theme.rCard; color: Theme.card; border.color: Theme.stroke
         RowLayout {
             id: queueHead
-            x: 10; y: 10; width: parent.width - 20; height: 30; spacing: 5
-            Text { text: qsTr("队列 ") + veyra.exportQueueModel.count; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
+            x: Theme.s12; y: Theme.s12; width: parent.width - Theme.s24; height: 30; spacing: 5
+            Text { text: qsTr("队列 ") + veyra.exportQueueModel.count; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
             Item { Layout.fillWidth: true }
             VButton { objectName: "export-add-files"; text: qsTr("添加"); iconName: "plus"; onClicked: veyra.addExportFilesDialog() }
             VButton { objectName: "export-clear-queue"; ghost: true; text: veyra.exportRunning ? qsTr("清空等待") : qsTr("清空"); onClicked: veyra.exportQueueModel.clearWaiting() }
@@ -121,7 +121,7 @@ VPage {
         ListView {
             id: queueList
             objectName: "export-queue-list"
-            anchors { top: queueHead.bottom; topMargin: 8; left: parent.left; right: parent.right; bottom: parent.bottom; margins: 8 }
+            anchors { top: queueHead.bottom; topMargin: Theme.s8; left: parent.left; right: parent.right; bottom: parent.bottom; leftMargin: Theme.s12; rightMargin: Theme.s12; bottomMargin: Theme.s12 }
             clip: true
             spacing: 5
             model: veyra.exportQueueModel
@@ -141,22 +141,29 @@ VPage {
                 required property bool locked
                 required property bool inspecting
                 objectName: "export-queue-row-" + index
-                width: queueList.width; height: 72; radius: 9
+                width: queueList.width; height: 72; radius: Theme.rCard
                 color: current ? Theme.card3 : rowHover.hovered ? Theme.card2 : "transparent"
-                border.color: current ? Theme.accent : "transparent"
+                border.width: 1
+                border.color: row.activeFocus ? Theme.focusRing : current ? Theme.accent : "transparent"
+                activeFocusOnTab: true
+                Accessible.role: Accessible.ListItem
+                Accessible.name: row.name
+                Keys.onReturnPressed: root.preview(row.itemId)
+                Keys.onSpacePressed: root.preview(row.itemId)
                 HoverHandler { id: rowHover }
                 TapHandler { onTapped: root.preview(row.itemId) }
                 ToolTip.visible: rowHover.hovered && note.length > 0
                 ToolTip.text: note + (output.length ? "\n" + output : "")
                 RowLayout {
                     anchors.fill: parent; anchors.margins: 6; spacing: 5
-                    Text {
-                        text: "≡"; color: row.locked ? Theme.t3 : Theme.t2
+                    Item {
                         Layout.preferredWidth: 18; Layout.fillHeight: true
-                        verticalAlignment: Text.AlignVCenter; font.pixelSize: 18
+                        opacity: row.locked ? Theme.disabledOpacity : 1
+                        VIcon { anchors.centerIn: parent; name: "grip"; size: 14; color: dragMouse.containsMouse && !row.locked ? Theme.t1 : Theme.t2 }
                         MouseArea {
+                            id: dragMouse
                             objectName: "export-drag-" + row.index
-                            anchors.fill: parent; enabled: !row.locked; preventStealing: true; cursorShape: Qt.SizeVerCursor
+                            anchors.fill: parent; enabled: !row.locked; hoverEnabled: true; preventStealing: true; cursorShape: row.locked ? Qt.ArrowCursor : Qt.SizeVerCursor
                             onPressed: mouse => { root.draggedId = row.itemId; root.dropIndex = row.index }
                             onPositionChanged: mouse => {
                                 if (!pressed) return
@@ -175,17 +182,17 @@ VPage {
                     Image { source: veyra.fileThumbnailId(row.input, 0); asynchronous: true; fillMode: Image.PreserveAspectFit; Layout.preferredWidth: 44; Layout.preferredHeight: 42 }
                     ColumnLayout {
                         Layout.fillWidth: true; spacing: 3
-                        Text { Layout.fillWidth: true; text: row.name; color: Theme.t1; elide: Text.ElideMiddle; font.family: Theme.fontUi; font.pixelSize: 12 }
-                        Text { Layout.fillWidth: true; text: root.stateText(row.state, row.progress, row.inspecting); color: row.state === "failed" ? Theme.err : Theme.t3; elide: Text.ElideRight; font.family: Theme.fontUi; font.pixelSize: 10 }
-                        Text { Layout.fillWidth: true; text: row.duration > 0 ? veyra.formatTime(row.duration) : ""; color: Theme.t3; font.pixelSize: 10 }
+                        Text { Layout.fillWidth: true; text: row.name; color: Theme.t1; elide: Text.ElideMiddle; font.family: Theme.fontUi; font.pixelSize: Theme.fsBody }
+                        Text { Layout.fillWidth: true; text: root.stateText(row.state, row.progress, row.inspecting); color: row.state === "failed" ? Theme.err : Theme.t3; elide: Text.ElideRight; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow }
+                        Text { Layout.fillWidth: true; text: row.duration > 0 ? veyra.formatTime(row.duration) : ""; color: Theme.t3; font.family: Theme.fontMono; font.pixelSize: Theme.fsEyebrow }
                     }
                     VButton {
                         visible: row.state === "failed"
-                        ghost: true; text: "↻"; onClicked: veyra.exportQueueModel.retryItem(row.itemId)
+                        ghost: true; icon: true; iconName: "reset"; tip: qsTr("重试"); onClicked: veyra.exportQueueModel.retryItem(row.itemId)
                     }
                     VButton {
                         objectName: "export-remove-" + row.index
-                        ghost: true; text: "×"
+                        ghost: true; icon: true; iconName: "x"; tip: qsTr("移除")
                         enabled: !row.locked
                         onClicked: veyra.exportQueueModel.removeItem(row.itemId)
                     }
@@ -240,9 +247,9 @@ VPage {
             ColumnLayout {
                 // Keep a stable gutter: changing width with the bar's visibility
                 // changes wrapped height and can toggle the bar in a polish loop.
-                width: Math.max(1, settingsScroll.availableWidth - settingsBar.width - 2)
+                width: Math.max(1, settingsScroll.availableWidth - (settingsBar.visible ? settingsBar.width + 2 : 0))
                 spacing: 10
-                VH2 { text: qsTr("输出设置"); font.pixelSize: 14 }
+                VH2 { text: qsTr("输出设置"); font.pixelSize: Theme.fsH3 }
                 VRow { label: qsTr("类型"); VSeg { options: [{id: "video", label: qsTr("视频")}, {id: "image", label: qsTr("图片")}]; current: root.exportKind; onPicked: id => root.exportKind = id } }
                 VGroup {
                     visible: root.exportKind === "video"
@@ -267,7 +274,8 @@ VPage {
                             implicitWidth: 100
                             implicitHeight: 28
                             color: Theme.t1
-                            font.pixelSize: 12
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsBody
                             selectByMouse: true
                             validator: IntValidator { bottom: 1; top: 300 }
                             // exportChanged also covers codec, size and track choices. Keep the
@@ -315,12 +323,12 @@ VPage {
                                 text: modelData.label
                                 indicator: Rectangle {
                                     x: trackCheck.leftPadding; y: (trackCheck.height - height) / 2
-                                    implicitWidth: 17; implicitHeight: 17; radius: 4
+                                    implicitWidth: 17; implicitHeight: 17; radius: Theme.rCtl
                                     color: trackCheck.checked ? (trackCheck.enabled ? Theme.accent : Theme.t3) : Theme.card2
                                     border.color: trackCheck.checked ? color : Theme.stroke2
-                                    Text { anchors.centerIn: parent; text: "✓"; visible: trackCheck.checked; color: Theme.card; font.pixelSize: 12 }
+                                    VIcon { anchors.centerIn: parent; name: "check"; size: 11; visible: trackCheck.checked; color: Theme.accentText }
                                 }
-                                contentItem: Text { text: parent.text; leftPadding: parent.indicator.width + 8; color: Theme.t2; font.pixelSize: 11; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
+                                contentItem: Text { text: parent.text; leftPadding: parent.indicator.width + 8; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; elide: Text.ElideRight; verticalAlignment: Text.AlignVCenter }
                                 onClicked: veyra.toggleExportTrack(modelData.audio, modelData.index, checked)
                             }
                             Note { text: modelData.action; color: modelData.compatible ? Theme.t3 : Theme.err }
@@ -349,8 +357,8 @@ VPage {
         width: root.geometry.footer.width; height: root.geometry.footer.height
         radius: Theme.rCard; color: Theme.card; border.color: Theme.stroke
         ColumnLayout {
-            anchors.fill: parent; anchors.margins: root.compact ? 6 : 10; spacing: 5
-            Text { objectName: "export-status"; Layout.fillWidth: true; visible: !root.compact; text: veyra.exportStatus; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 11; elide: Text.ElideRight; ToolTip.text: text; ToolTip.visible: statusHover.hovered; HoverHandler { id: statusHover } }
+            anchors.fill: parent; anchors.margins: root.compact ? Theme.s8 : Theme.s12; spacing: 5
+            Text { objectName: "export-status"; Layout.fillWidth: true; visible: !root.compact; text: veyra.exportStatus; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow; elide: Text.ElideRight; ToolTip.text: text; ToolTip.visible: statusHover.hovered; HoverHandler { id: statusHover } }
             Basic.ProgressBar {
                 id: exportProgressBar
                 objectName: "export-progress"; Layout.fillWidth: true; Layout.preferredHeight: 5; from: 0; to: 1; value: veyra.exportProgress
@@ -359,7 +367,7 @@ VPage {
             }
             RowLayout {
                 Layout.fillWidth: true; spacing: 6
-                Text { visible: root.compact; Layout.fillWidth: true; text: veyra.exportStatus; color: Theme.t2; elide: Text.ElideRight; font.pixelSize: 11 }
+                Text { visible: root.compact; Layout.fillWidth: true; text: veyra.exportStatus; color: Theme.t2; elide: Text.ElideRight; font.family: Theme.fontUi; font.pixelSize: Theme.fsEyebrow }
                 VButton { objectName: "export-start"; Layout.fillWidth: !root.compact; primary: !veyra.exportRunning; text: veyra.exportRunning ? (veyra.exportPaused ? qsTr("继续导出") : qsTr("暂停导出")) : qsTr("开始导出 ") + veyra.exportReadyCount + qsTr(" 项"); enabled: root.exportKind === "video" && (veyra.exportRunning || (veyra.exportReadyCount > 0 && (veyra.exportRateControl === 2 || bitrateEditor.acceptableInput))); onClicked: veyra.exportRunning ? veyra.pauseExport(!veyra.exportPaused) : veyra.startExport() }
                 VButton { objectName: "export-cancel"; visible: veyra.exportRunning; text: qsTr("取消"); onClicked: veyra.cancelExport() }
             }
@@ -470,7 +478,7 @@ VPage {
         Shortcut { sequence: "O"; enabled: trimCard.visible && trimCard.editable && root.visible; onActivated: trimCard.markOut() }
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 8
+            anchors.margins: Theme.s12
             spacing: 4
             Item {
                 id: timeline
@@ -507,7 +515,7 @@ VPage {
                     id: rail
                     anchors.verticalCenter: parent.verticalCenter
                     width: parent.width; height: 6; radius: 3
-                    color: Qt.rgba(1, 1, 1, 0.10)
+                    color: Theme.strokeStrong
                 }
                 // The kept range.
                 Rectangle {
@@ -543,7 +551,7 @@ VPage {
                 Rectangle {
                     objectName: "export-playhead"
                     width: 12; height: 12; radius: 6
-                    color: "#FFFFFF"
+                    color: Theme.t1
                     anchors.verticalCenter: rail.verticalCenter
                     x: timeline.head * timeline.width - width / 2
                     visible: veyra.duration > 0

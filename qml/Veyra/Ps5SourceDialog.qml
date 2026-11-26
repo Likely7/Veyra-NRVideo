@@ -45,7 +45,13 @@ DialogLayer {
             hint: qsTr("PS5 设置 → 网络 → 连接状态；找不到时可手填 IP")
             RowLayout {
                 spacing: 6
-                DialogTextField { objectName: "ps5-host"; implicitWidth: 170; placeholder: "192.168.1.x"; text: veyra.ps5.host || ""; onEdited: text => veyra.ps5Set("host", text) }
+                DialogTextField {
+                    objectName: "ps5-host"
+                    implicitWidth: Math.min(170, Math.max(120, ps5Dialog.bodyWidth * 0.35))
+                    placeholder: "192.168.1.x"
+                    text: veyra.ps5.host || ""
+                    onTyped: text => veyra.ps5Set("host", text)
+                }
                 VSpinner { visible: veyra.ps5.busy === true; Layout.alignment: Qt.AlignVCenter }
                 VButton { text: qsTr("查找"); ghost: true; enabled: !veyra.ps5.busy; onClicked: veyra.ps5Scan() }
                 VButton { text: qsTr("唤醒"); ghost: true; enabled: !veyra.ps5.busy && veyra.ps5.profile.length > 0; onClicked: veyra.ps5Wake() }
@@ -60,7 +66,12 @@ DialogLayer {
             hintBelow: true
             RowLayout {
                 spacing: 6
-                DialogTextField { objectName: "ps5-account-id"; implicitWidth: 240; text: veyra.ps5.account || ""; onEdited: text => veyra.ps5Set("account", text) }
+                DialogTextField {
+                    objectName: "ps5-account-id"
+                    implicitWidth: Math.min(240, Math.max(140, ps5Dialog.bodyWidth * 0.45))
+                    text: veyra.ps5.account || ""
+                    onTyped: text => veyra.ps5Set("account", text)
+                }
                 VButton { objectName: "ps5-account-lookup"; text: qsTr("获取 Account ID"); ghost: true; onClicked: veyra.ps5OpenAccountChecker() }
             }
         }
@@ -158,5 +169,5 @@ DialogLayer {
             }
         }
     }
-    DialogNote { visible: (veyra.ps5.status || "").length > 0; text: (veyra.ps5.busy ? qsTr("处理中 · ") : "") + (veyra.ps5.status || "") }
+    DialogNote { visible: (veyra.ps5.status || "").length > 0; text: veyra.ps5.busy ? qsTr("处理中 · %1").arg(veyra.ps5.status || "") : (veyra.ps5.status || "") }
 }

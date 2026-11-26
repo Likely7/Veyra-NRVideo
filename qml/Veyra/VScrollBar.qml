@@ -14,10 +14,10 @@ Basic.ScrollBar {
     contentItem: Rectangle {
         implicitWidth: 6
         implicitHeight: 6
-        radius: 3
+        radius: Theme.rCtl
         visible: bar.size < 1
-        color: bar.pressed ? Theme.t2 : bar.hovered ? Qt.rgba(1, 1, 1, 0.28) : Theme.stroke2
-        Behavior on color { ColorAnimation { duration: Theme.d(150) } }
+        color: bar.pressed ? Theme.t2 : bar.hovered ? Theme.t3 : Theme.strokeStrong
+        Behavior on color { ColorAnimation { duration: Theme.d(Theme.animFast) } }
     }
     background: Item {}
 }

@@ -14,7 +14,7 @@ ColumnLayout {
         text: qsTr("已开启：%1").arg(veyra.runOptions.join("；"))
         color: Theme.t2
         font.family: Theme.fontUi
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsEyebrow
         wrapMode: Text.Wrap
         maximumLineCount: 3
         elide: Text.ElideRight

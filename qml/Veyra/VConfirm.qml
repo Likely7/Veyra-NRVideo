@@ -5,7 +5,7 @@
 import QtQuick
 import QtQuick.Layouts
 
-Item {
+FocusScope {
     id: box
     anchors.fill: parent
     z: 50
@@ -23,11 +23,13 @@ Item {
     default property alias extra: extraCol.data
     signal accepted()
     signal rejected()
-    function open() { shown = true }
+    function open() { shown = true; box.forceActiveFocus(); rejectBtn.forceActiveFocus() }
     function close() { shown = false }
     visible: scrim.opacity > 0
 
-    Keys.onEscapePressed: { box.close(); box.rejected() }
+    Accessible.role: Accessible.Dialog
+    Accessible.name: box.title
+    Keys.onEscapePressed: event => { event.accepted = true; box.close(); box.rejected() }
 
     Rectangle {
         id: scrim
@@ -42,14 +44,14 @@ Item {
         id: card
         // Cut out of the native video window (main.cpp syncVideoCovers).
         objectName: "videoCover"
-        property real coverRadius: 16
+        property real coverRadius: Theme.rModal
         anchors.centerIn: parent
-        width: Math.min(box.cardWidth, box.width - 32)
-        height: col.implicitHeight + 32
-        radius: 16
+        width: Math.min(box.cardWidth, box.width - Theme.s32)
+        height: col.implicitHeight + Theme.s32
+        radius: Theme.rModal
         color: Theme.dialog
         border.width: 1
-        border.color: Theme.stroke2
+        border.color: Theme.strokeStrong
         opacity: box.shown ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
@@ -69,14 +71,14 @@ Item {
             anchors.left: parent.left
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.margins: 16
-            spacing: 14
+            anchors.margins: Theme.s16
+            spacing: Theme.s12
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 12
+                spacing: Theme.s12
                 Rectangle {
-                    implicitWidth: 34; implicitHeight: 34; radius: 10
-                    color: Qt.rgba(1, 1, 1, 0.06)
+                    implicitWidth: 34; implicitHeight: 34; radius: Theme.rCtl
+                    color: Theme.card2
                     VIcon { anchors.centerIn: parent; name: box.glyph }
                 }
                 Text {
@@ -107,19 +109,25 @@ Item {
             }
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: Theme.s8
                 Item { Layout.fillWidth: true }
                 VButton {
+                    id: rejectBtn
                     objectName: box.objectName + "-reject"
                     text: box.rejectText
+                    KeyNavigation.tab: acceptBtn.enabled ? acceptBtn : rejectBtn
+                    KeyNavigation.backtab: acceptBtn.enabled ? acceptBtn : rejectBtn
                     onClicked: { box.close(); box.rejected() }
                 }
                 VButton {
+                    id: acceptBtn
                     objectName: box.objectName + "-accept"
                     text: box.acceptText
                     enabled: box.acceptEnabled
                     iconName: box.acceptIcon
                     primary: true
+                    KeyNavigation.tab: rejectBtn
+                    KeyNavigation.backtab: rejectBtn
                     onClicked: { box.close(); box.accepted() }
                 }
             }

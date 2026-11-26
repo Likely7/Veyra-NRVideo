@@ -6,14 +6,16 @@ import QtQuick.Layouts
 Rectangle {
     property string text: ""
     Layout.fillWidth: true
-    Layout.topMargin: 8
-    implicitHeight: noteText.implicitHeight + 18
-    radius: 9
-    color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
+    Layout.topMargin: Theme.s4
+    implicitHeight: noteText.implicitHeight + Theme.s24
+    radius: Theme.rCard
+    color: Theme.warnGlow
+    border.width: 1
+    border.color: Theme.stroke
     Text {
         id: noteText
         anchors.fill: parent
-        anchors.margins: 9
+        anchors.margins: Theme.s12
         text: parent.text
         color: Theme.t2
         font.family: Theme.fontUi
