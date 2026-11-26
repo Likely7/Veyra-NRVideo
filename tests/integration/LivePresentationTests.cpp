@@ -406,7 +406,9 @@ int wmain(int argc,wchar_t**argv){
     SetEnvironmentVariableW(L"VEYRA_VERBOSE_FRAME_LOGS",L"1");
     const bool settingsRebuild=argc==4&&wcscmp(argv[3],L"--settings-rebuild")==0;
     const bool captureRelease=argc==4&&wcscmp(argv[3],L"--capture-release")==0;
-    const bool captureNoVideo=captureRelease||(argc==4&&wcscmp(argv[3],L"--capture-no-video")==0);
+    const bool captureDriverExit=argc==4&&wcscmp(argv[3],L"--capture-driver-exit")==0;
+    const bool captureDriverWait=captureDriverExit||(argc==4&&wcscmp(argv[3],L"--capture-driver-wait")==0);
+    const bool captureNoVideo=captureRelease||captureDriverWait||(argc==4&&wcscmp(argv[3],L"--capture-no-video")==0);
     if(!settingsRebuild&&!captureNoVideo&&argc!=3&&!(argc==4&&(wcscmp(argv[3],L"--backend-recovery")==0||wcscmp(argv[3],L"--nr-first")==0||wcscmp(argv[3],L"--seek-stress")==0||wcscmp(argv[3],L"--half-rate")==0||wcscmp(argv[3],L"--overload")==0||wcscmp(argv[3],L"--file-overload")==0||wcscmp(argv[3],L"--source-gap")==0||wcscmp(argv[3],L"--file-endpoint")==0||wcscmp(argv[3],L"--file-continuity")==0||wcscmp(argv[3],L"--file-fg-recovery")==0||wcscmp(argv[3],L"--reset-rollback")==0||std::wstring(argv[3]).rfind(L"--dedup-",0)==0)))return 2;SetProcessDPIAware();CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     std::filesystem::create_directories(argv[2]);Logger::instance().startAsync();Logger::instance().openFile((std::filesystem::path(argv[2])/"engine.log").wstring());Logger::instance().setConsoleEnabled(false);
     HWND window=CreateWindowExW(0,L"STATIC",L"Live scheduler replay",WS_POPUP,0,0,960,540,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
@@ -470,7 +472,44 @@ int wmain(int argc,wchar_t**argv){
     auto until=[&](auto predicate,int seconds=8){auto deadline=std::chrono::steady_clock::now()+std::chrono::seconds(seconds);while(std::chrono::steady_clock::now()<deadline){MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}auto s=engine.snapshot();if(s.failed){std::wcerr<<s.status<<'\n';return false;}if(predicate(s))return true;std::this_thread::sleep_for(5ms);}return false;};
     if(captureNoVideo)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_NO_VIDEO",L"1");
     if(captureRelease)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_RELEASE",L"1");
+    if(captureDriverWait)SetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_CAPTURE_DRIVER_WAIT",L"1");
     engine.open(window,argv[1],options);
+    if(captureDriverWait){
+        check(until([](const auto& s){return s.frames>=120&&s.captureRecovering&&s.captureReconnectAttempts==1;},25),
+              "the capture reconnect attempt starts after the replay stops delivering frames");
+        const auto logPath=std::filesystem::path(argv[2])/"engine.log";
+        const auto entered=[&]{
+            Logger::instance().flush();
+            std::ifstream log(logPath);
+            std::string line;
+            while(std::getline(log,line))
+                if(line.find("driver operation entered an indefinite wait")!=std::string::npos)return true;
+            return false;
+        };
+        check(until([&](const auto&){return entered();},5),"capture worker is blocked on the injected operation");
+        if(captureDriverExit){
+            std::cout<<"exiting with an active blocked capture reconnect"<<std::endl;
+            return failures?1:0; // EngineController must shut down without an explicit Stop.
+        }
+        const auto stopStarted=std::chrono::steady_clock::now();
+        engine.stop();
+        check(until([&](const auto& s){return engine.idle()&&!s.running&&!s.captureRecovering;},2),
+              "stop completes with the driver operation still blocked");
+        std::cout<<"captureStopMs="<<std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now()-stopStarted).count()<<std::endl;
+
+        // A retired capture graph must not hold the playback owner when the
+        // user opens a file. Returning from main also exercises normal exit.
+        options.captureReplayForTest=false;
+        engine.open(window,argv[1],options);
+        check(until([](const auto& s){return !s.capture&&s.frames>=20;},10),
+              "ordinary file playback advances while the old capture driver is blocked");
+        engine.stop();
+        check(until([&](const auto&){return engine.idle();},2),"file playback stops before normal shutdown");
+        DestroyWindow(window);
+        CoUninitialize();
+        return failures?1:0;
+    }
     if(captureNoVideo){
         bool recovering=false, startConfirmed=false;
         auto lastAttempt=0u;

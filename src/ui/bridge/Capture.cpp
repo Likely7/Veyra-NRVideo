@@ -349,7 +349,9 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
     const auto requested=kind==4?i.captureRequestedResolution:
         preferred.empty()&&wideOf(i.prefs.value("captureDraftDevice").toString())==device?
             wideOf(i.prefs.value("captureDraftResolution").toString()):std::wstring{};
-    i.captureQuery = std::async(std::launch::async, [kind, device, preferred, requested] {
+    // A DirectShow enumeration can fail to return. A packaged task owns
+    // only its argument values, and its future does not join on UI teardown.
+    std::packaged_task<Impl::CaptureQuery()> query([kind, device, preferred, requested] {
         Impl::CaptureQuery q; q.kind = kind; q.device = device;q.requestedResolution=requested;
         const auto initialized=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if(FAILED(initialized)){q.info.code=initialized;q.info.stage=L"COM initialization";return q;}
@@ -363,6 +365,14 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
         CoUninitialize();
         return q;
     });
+    i.captureQuery = query.get_future();
+    try {
+        std::thread(std::move(query)).detach();
+    } catch (const std::system_error& error) {
+        i.captureBusy = false;
+        i.captureStatus = tr("无法打开视频，请查看诊断");
+        log::error("capture-query", error.what());
+    }
     emit captureChanged();
 }
 void QmlPlayerBridge::tickCapture() {

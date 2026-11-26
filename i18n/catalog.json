@@ -40173,17 +40173,30 @@
    "ru": "Не удалось запустить звук карты захвата (0x{:08X}). Видео продолжается. Используйте аудиоустройство WASAPI этой карты."
   },
   {
-   "zh": "采集卡驱动响应缓慢（已等待 %1 秒）。若频繁出现，请重新插拔采集卡并检查 USB 连接。",
+   "zh": "采集卡驱动仍在释放上一会话，请稍后手动重试",
+   "src": "src/engine/EngineController.cpp",
+   "zh-TW": "擷取卡驅動程式仍在釋放上一個工作階段，請稍後手動重試",
+   "en": "The capture driver is still closing the previous session. Try again in a moment.",
+   "ja": "ドライバーが前のキャプチャーを終了しています。しばらくしてから再試行してください。",
+   "ko": "캡처 드라이버가 이전 세션을 종료하는 중입니다. 잠시 후 다시 시도하세요.",
+   "es": "El controlador de la capturadora aún está cerrando la sesión anterior. Vuelve a intentarlo en un momento.",
+   "fr": "Le pilote ferme encore la session de capture précédente. Réessayez dans un instant.",
+   "de": "Der Aufnahmetreiber schließt noch die vorherige Sitzung. Versuche es gleich noch einmal.",
+   "pt-BR": "O driver ainda está encerrando a sessão de captura anterior. Tente de novo em instantes.",
+   "ru": "Драйвер ещё завершает предыдущий сеанс захвата. Повторите попытку чуть позже."
+  },
+  {
+   "zh": "采集卡驱动响应缓慢（已等待 %1 秒）。可以停止采集或退出 Veyra。",
    "src": "src/ui/bridge/Playback.cpp",
-   "zh-TW": "擷取卡驅動程式回應緩慢（已等候 %1 秒）。若經常出現，請重新插拔擷取卡並檢查 USB 連線。",
-   "en": "The capture card driver is slow to respond (waiting for %1 s). If this happens often, reconnect the capture card and check the USB connection.",
-   "ja": "キャプチャーカードのドライバーの応答が遅れています（%1 秒経過）。頻繁に発生する場合はカードを挿し直し、USB 接続を確認してください。",
-   "ko": "캡처 카드 드라이버 응답이 느립니다(%1초 대기 중). 자주 발생하면 캡처 카드를 다시 연결하고 USB 연결을 확인하세요.",
-   "es": "El controlador de la capturadora tarda en responder (espera de %1 s). Si ocurre a menudo, vuelve a conectar la capturadora y comprueba la conexión USB.",
-   "fr": "Le pilote de la carte de capture tarde à répondre (%1 s d’attente). Si cela se produit souvent, rebranchez la carte et vérifiez la connexion USB.",
-   "de": "Der Treiber der Aufnahmekarte reagiert langsam (Wartezeit %1 s). Wenn dies häufiger auftritt, verbinde die Karte neu und prüfe die USB-Verbindung.",
-   "pt-BR": "O driver da placa de captura demora a responder (espera de %1 s). Se isso ocorrer com frequência, reconecte a placa e verifique a conexão USB.",
-   "ru": "Драйвер карты захвата отвечает медленно (ожидание %1 с). Если это происходит часто, переподключите карту и проверьте подключение USB."
+   "zh-TW": "擷取卡驅動程式回應緩慢（已等候 %1 秒）。可以停止擷取或結束 Veyra。",
+   "en": "The capture card driver is slow to respond (%1 s). You can stop capture or close Veyra.",
+   "ja": "キャプチャーカードのドライバーの応答が遅れています（%1 秒経過）。キャプチャーを停止するか、Veyra を終了できます。",
+   "ko": "캡처 카드 드라이버 응답이 느립니다(%1초 경과). 캡처를 중지하거나 Veyra를 종료할 수 있습니다.",
+   "es": "El controlador de la capturadora tarda en responder (%1 s). Puedes detener la captura o cerrar Veyra.",
+   "fr": "Le pilote de la carte de capture tarde à répondre (%1 s). Vous pouvez arrêter la capture ou fermer Veyra.",
+   "de": "Der Treiber der Aufnahmekarte reagiert langsam (%1 s). Du kannst die Aufnahme stoppen oder Veyra schließen.",
+   "pt-BR": "O driver da placa de captura demora a responder (%1 s). Você pode parar a captura ou fechar o Veyra.",
+   "ru": "Драйвер карты захвата долго не отвечает (%1 с). Можно остановить захват или закрыть Veyra."
   },
   {
    "zh": "采集失败（{}，0x{:08X}）。{}",

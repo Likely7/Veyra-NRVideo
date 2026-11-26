@@ -518,6 +518,19 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
 struct CaptureCardSource::Impl:ISampleGrabberCB {
     using Clock=std::chrono::steady_clock;
     HANDLE deviceLease = nullptr;
+    const std::atomic<bool>* cancelled = nullptr;
+    std::atomic<bool> deliveryPaused{true};
+    bool acceptingSamples() const {
+        return !deliveryPaused.load(std::memory_order_relaxed)
+            && !(cancelled && cancelled->load(std::memory_order_relaxed));
+    }
+    void pauseDelivery() {
+        deliveryPaused = true;
+        if (audioSession) audioSession->setGain(0);
+        if (wasapi) wasapi->setGain(0);
+        if (vendorDelivering) vendorDelivering->store(false);
+        if (hdmiBitstream) hdmiBitstream->reset();
+    }
     CaptureInterfaceMonitor interfaceMonitor;
     std::atomic<ULONG> refs{1};std::mutex mutex;std::condition_variable wake;
     // One pending frame plus one reader-owned frame, never an IMediaSample
@@ -683,6 +696,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     bool externalTimeAnchored=false;double externalTimeOffset=0;
     int64_t pendingNativePts100ns=0;
     void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity,int64_t duration100ns=0,int64_t nativePts100ns=0){
+        if(!acceptingSamples())return;
         const auto arrival=Clock::now();
         AVFrame* staged=nullptr;bool written=false,commitPicture=false;
         // A new picture's reference copy runs when this call returns, after the publish below.
@@ -867,7 +881,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         }
     }
     HRESULT STDMETHODCALLTYPE SampleCB(double time,IMediaSample* sample)override{
-        if(magewellDelivering.load())return S_OK;
+        if(!acceptingSamples()||magewellDelivering.load())return S_OK;
         // Register the DirectShow delivery thread with MMCSS once; the handle
         // lives for the thread (revert happens when the thread exits).
         static thread_local HANDLE mmcss=[]{DWORD index=0;HANDLE h=AvSetMmThreadCharacteristicsW(L"Pro Audio",&index);if(!h)log::warn("capture","MMCSS unavailable for the capture callback thread");return h;}();(void)mmcss;
@@ -1179,6 +1193,11 @@ void CaptureCardSource::setCpuUnpack(bool enabled){
     p.cpuUnpack=enabled;
     log::warn("capture-unpack",std::format("legacy CPU per-pixel unpack={} (diagnostic; takes effect on the next connect)",enabled?1:0));
 }
+bool CaptureCardSource::driverAudioGainNeeded(float gain) const {
+    const auto& p=*p_;
+    gain=sink::clampAudioGain(gain);
+    return !p.wasapi&&!p.audioSession&&p.graph&&p.audioFilter&&gain<=1.0f&&gain!=p.lastAudioGain;
+}
 bool CaptureCardSource::setAudioGain(float gain){
     gain=sink::clampAudioGain(gain);
     if(p_->wasapi){p_->wasapi->setGain(gain);return p_->wasapi->snapshot().available;}
@@ -1192,6 +1211,7 @@ bool CaptureCardSource::setAudioGain(float gain){
         log::warn("capture-audio","boost requires decoded PCM; legacy attenuation/receiver passthrough cannot amplify");
         return false;
     }
+    DriverCall driver(*this,CaptureDriverStage::Configure);
     ComPtr<IBasicAudio> audio;HRESULT hr=p.graph.As(&audio);
     if(SUCCEEDED(hr)){long attenuation=gain<=0?-10000:long(std::clamp(2000.0*std::log10(double(gain)),-10000.0,0.0));hr=audio->put_Volume(attenuation);}
     p.lastAudioGain=gain;p.audioGainSupported=SUCCEEDED(hr);log::info("capture-audio",std::format("application gain={} hr=0x{:X}",gain,unsigned(hr)));return p.audioGainSupported;
@@ -1268,6 +1288,8 @@ bool CaptureCardSource::configure(const SourceOpenDesc& desc) {
     close();
     clearFailure();
     p_->lastAudioGain = -1;
+    p_->cancelled = desc.cancelled;
+    if(desc.cancelled&&desc.cancelled->load())return false;
     {
         DriverCall driver(*this, CaptureDriverStage::Configure);
         if (configureDevice(desc)) return true;
@@ -1971,7 +1993,8 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
                     if((++format.rejected&(format.rejected-1))==0)log::warn("capture-audio-carrier",std::format("audio session rejected decoded block channels={} rejected={}",block.channels,format.rejected));
                     return false;
                 },p.hdmiTap());
-            hr=createNativeAudioSink(*type,[target,probe,router,decodedFormat,pcm=parsed,clock=CaptureAudioClock{},rate=parsed.wave.nAvgBytesPerSec,warned=false](IMediaSample* sample) mutable {
+            hr=createNativeAudioSink(*type,[&p,target,probe,router,decodedFormat,pcm=parsed,clock=CaptureAudioClock{},rate=parsed.wave.nAvgBytesPerSec,warned=false](IMediaSample* sample) mutable {
+                if(!p.acceptingSamples())return S_OK;
                 BYTE* bytes=nullptr;REFERENCE_TIME begin=0,end=0;
                 const auto pointerHr=sample->GetPointer(&bytes);if(FAILED(pointerHr))return pointerHr;
                 const auto timeHr=sample->GetTime(&begin,&end);const bool timed=SUCCEEDED(timeHr);
@@ -2045,7 +2068,8 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
                     if(passthrough->open(*carrier,rate)){
                         ComPtr<IBaseFilter> candidate;ComPtr<IPin> terminal;
                         auto sink=passthrough;
-                        hr=createBitstreamAudioSink(*type,[sink](IMediaSample* sample){
+                        hr=createBitstreamAudioSink(*type,[&p,sink](IMediaSample* sample){
+                            if(!p.acceptingSamples())return S_OK;
                             BYTE* bytes=nullptr;
                             if(FAILED(sample->GetPointer(&bytes)))return VFW_E_SAMPLE_TIME_NOT_SET;
                             return sink->write(bytes,size_t(sample->GetActualDataLength()))?S_OK:E_FAIL;
@@ -2086,7 +2110,8 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
             }
             auto tap=iec&&p.hdmiBitstream
                 ?std::make_shared<AverMediaAudioCarrier>(AverMediaAudioCarrier::Callback{},p.hdmiTap()):nullptr;
-            hr=createBitstreamAudioSink(*type,[target,decoder,pcmBuffer,started,kindWide,tap,carrierRate,clock=CaptureAudioClock{},warned=false](IMediaSample* sample) mutable {
+            hr=createBitstreamAudioSink(*type,[&p,target,decoder,pcmBuffer,started,kindWide,tap,carrierRate,clock=CaptureAudioClock{},warned=false](IMediaSample* sample) mutable {
+                if(!p.acceptingSamples())return S_OK;
                 BYTE* bytes=nullptr;REFERENCE_TIME begin=0,end=0;
                 const auto pointerHr=sample->GetPointer(&bytes);if(FAILED(pointerHr))return pointerHr;
                 const auto timeHr=sample->GetTime(&begin,&end);const bool timed=SUCCEEDED(timeHr);
@@ -2141,7 +2166,9 @@ if(audioTypes.empty()&&(!allowBitstream||bitstreamTypes.empty())){log::warn("cap
 }
 bool CaptureCardSource::start(){
     auto& p=*p_;if(p.info.opened)return true;if(!p.configured||(!p.control&&!p.decklink))return false;
+    if(p.cancelled&&p.cancelled->load())return false;
     DriverCall driver(*this, CaptureDriverStage::Run);
+    p.deliveryPaused=false;
     if(p.vendorAudio)log::info("capture-audio-vendor","audio session is fed by the AVerMedia graph; no DirectShow audio start");
     else if(p.audioSession&&p.audioSessionDeferred)log::info("capture-audio-bitstream","audio session starts with the first decoded bitstream frame");
     else if(p.audioSession&&!p.audioSession->start())log::warn("capture-audio","audio start failed; retaining video capture");
@@ -2149,7 +2176,7 @@ bool CaptureCardSource::start(){
     if(p.decklink){
         if(p.control){const HRESULT hr=p.control->Run();log::info("decklink-audio",std::format("Run separate audio hr=0x{:08X}",uint32_t(hr)));}
         p.info.opened=p.decklink->start([&p](const decklink::Frame& frame){p.deliverExternal(frame.data,frame.bytes,double(frame.pts100ns)/1e7,false,frame.duration100ns,frame.pts100ns);},
-            [&p](const void* data,size_t bytes,int64_t pts){if(p.audioSession)p.audioSession->push(data,bytes,double(pts)/10000,false);});
+            [&p](const void* data,size_t bytes,int64_t pts){if(p.acceptingSamples()&&p.audioSession)p.audioSession->push(data,bytes,double(pts)/10000,false);});
         if(!p.info.opened){error_=p.decklink->error();return false;}
         p.lastFrame=Impl::Clock::now();
         if(p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
@@ -2238,33 +2265,46 @@ bool CaptureCardSource::start(){
     if(p.info.opened&&p.wasapi&&!p.wasapi->start())p.audioError=L"WASAPI 音频启动失败；视频继续运行";
     veyra::log::info("capture",std::format("Run hr=0x{:08X} actual={}x{} nominalFps={:.3f} mailbox=1 ownedBuffers=2",unsigned(hr),p.info.width,p.info.height,p.info.averageFps));return p.info.opened;
 }
-void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
-    auto& p=*p_;if(!p.info.opened||!p.control||p.wasapi||p.magewellDeferredGraph)return;
-    bool vendorFailed=false;
+bool CaptureCardSource::audioRecoveryNeeded(){
+    auto& p=*p_;
+    if(!p.info.opened||!p.control||p.wasapi||p.magewellDeferredGraph)return false;
+    if(p.vendorAudio)return p.vendorAudio->state().failed; // Its watchdog owns this graph.
+    CaptureSelection selection;
+    if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable
+       ||selection.audio==kCaptureAudioDisabled||captureAudioIsWasapi(selection.audio))return false;
+    // This filter has no embedded audio pin for recovery to reconnect.
+    if(selection.audio==kCaptureAudioFromVideoDevice&&p.embeddedAudioUnavailable){
+        static std::atomic<bool> reported=false;
+        if(!reported.exchange(true))log::warn("capture-audio-reconnect","embedded audio pin is absent on this device; recovery disabled, select a separate audio device");
+        return false;
+    }
+    const auto state=p.audioSession?p.audioSession->snapshot():sink::CaptureAudioState{};
+    return p.audioRecovery.due(state.inputBlocks,GetTickCount64());
+}
+
+void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs,bool due){
+    if(!due&&!audioRecoveryNeeded())return;
+    auto& p=*p_;
+    DriverCall recovery(*this,CaptureDriverStage::Configure);
     if(p.vendorAudio){
-        const auto vendor=p.vendorAudio->state();
-        if(!vendor.failed)return; // Its bounded watchdog owns this graph.
         if(p.vendorDelivering)p.vendorDelivering->store(false);
         p.vendorAudio->stop();p.vendorAudio.reset();p.vendorDelivering.reset();
-        vendorFailed=true;
         p.audioError=L"AVerMedia audio graph failed; trying the original DirectShow audio input";
         log::warn("capture-audio-vendor","vendor recovery exhausted; reconnecting the original DirectShow audio input");
     }
-    CaptureSelection selection;if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable||selection.audio==kCaptureAudioDisabled||captureAudioIsWasapi(selection.audio))return;
-    // A video filter without an audio pin can never recover: in the field log
-    // this retried seven times over twenty seconds with an identical failure.
-    if(selection.audio==kCaptureAudioFromVideoDevice&&p.embeddedAudioUnavailable){
-        static bool reported=false;
-        if(!reported){reported=true;log::warn("capture-audio-reconnect","embedded audio pin is absent on this device; recovery disabled, select a separate audio device");}
-        return;
+    CaptureSelection selection;
+    if(!parseCapturePath(reconnectDesc_.path,selection)||!selection.stable
+       ||selection.audio==kCaptureAudioDisabled||captureAudioIsWasapi(selection.audio)
+       ||(selection.audio==kCaptureAudioFromVideoDevice&&p.embeddedAudioUnavailable))return;
+    // DirectShow audio/video pins share one graph. Retain the video filter.
+    HRESULT stopped;
+    {
+        DriverCall driver(*this,CaptureDriverStage::Stop);
+        stopped=p.control->Stop();
     }
-    const auto state=p.audioSession?p.audioSession->snapshot():sink::CaptureAudioState{};
-    if(!vendorFailed&&!p.audioRecovery.due(state.inputBlocks,GetTickCount64()))return;
-    // DirectShow audio/video pins share one graph. Briefly stop it to mutate
-    // only the audio branch; do not renegotiate or replace the video device.
-    const HRESULT stopped=p.control->Stop();
     log::warn("capture-audio-reconnect",std::format("PCM stalled; Stop hr=0x{:08X} videoFilterRetained=1",uint32_t(stopped)));
     if(FAILED(stopped)){p.audioError=L"音频恢复等待采集驱动停止；稍后重试";return;}
+    if(p.cancelled&&p.cancelled->load())return;
     if(p.hdmiBitstream)p.hdmiBitstream->reset();
     const bool connected=[&]{
         if(p.audioSink){const HRESULT hr=p.graph->RemoveFilter(p.audioSink.Get());log::info("capture-audio-reconnect",std::format("Remove PCM sink hr=0x{:08X}",uint32_t(hr)));if(FAILED(hr))return false;p.audioSink.Reset();}
@@ -2279,8 +2319,14 @@ void CaptureCardSource::recoverAudio(float gain,unsigned syncMode,int offsetMs){
     }();
     {std::lock_guard lock(p.mutex);p.pending=false;p.forceDiscontinuity=true;}
     ++epoch_;p.lastFrame=Impl::Clock::now();
+    if(p.cancelled&&p.cancelled->load())return;
     p.markDriverRun();
-    const HRESULT resumed=p.control->Run();p.info.opened=SUCCEEDED(resumed);
+    HRESULT resumed;
+    {
+        DriverCall driver(*this,CaptureDriverStage::Run);
+        resumed=p.control->Run();
+    }
+    p.info.opened=SUCCEEDED(resumed);
     p.audioError=connected&&p.info.opened?L"":L"采集音频暂不可用，正在重试原音频设备";
     log::info("capture-audio-reconnect",std::format("connected={} Run hr=0x{:08X} epoch={} awaitingActualPCM=1",connected,uint32_t(resumed),epoch_));
 }
@@ -2311,6 +2357,7 @@ bool CaptureCardSource::reconnect(float gain,unsigned syncMode,int offsetMs){
             log::warn("capture-reconnect",std::format("embedded audio delivered {} blocks but no video; next graph clock={}",audioBlocks,embeddedAudioDeviceClock_?"directshow-default":"system"));
         }
     }
+    p_->pauseDelivery();
     // Stop callbacks before carrying counters into the next device session.
     // Never hold the mailbox lock while DirectShow Stop waits for a callback.
     if (p_->decklink || p_->magewell || p_->control) {
@@ -2371,32 +2418,46 @@ CaptureMetrics CaptureCardSource::metrics()const{
     if(p.recentArrivals.size()>1&&Impl::Clock::now()-p.latestArrival<std::chrono::seconds(1)){const double elapsed=std::chrono::duration<double>(p.recentArrivals.back()-p.recentArrivals.front()).count();if(elapsed>0)m.callbackFps=(p.recentArrivals.size()-1)/elapsed;}
     if(p.sequence)m.frameAgeMs=std::chrono::duration<double,std::milli>(Impl::Clock::now()-p.readArrival).count();return m;
 }
-SourceReadStatus CaptureCardSource::read(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,30);}
-SourceReadStatus CaptureCardSource::tryRead(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,0);}
-SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds){auto& p=*p_;*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
+bool CaptureCardSource::videoFallbackNeeded() const {
+    return p_->magewellDelivering.load()&&!p_->magewell->running();
+}
+
+bool CaptureCardSource::resumeDirectShowVideo() {
+    auto& p=*p_;
+    if(p.cancelled&&p.cancelled->load())return false;
+    // The SDK has released its DMA buffers and channel. Preserve the audio
+    // route and mark the first DirectShow frame as a clock boundary.
+    {
+        std::lock_guard lock(p.mutex);
+        if(p.pending){p.pending=false;++p.dropped;}
+        p.recentArrivals.clear();
+        p.driverDiscontinuity.reset();
+        p.forceDiscontinuity=true;
+    }
+    p.magewellDelivering=false;
+    HRESULT hr = S_OK;
+    if(p.magewellDeferredGraph){
+        DriverCall driver(*this,CaptureDriverStage::Run);
+        p.markDriverRun();
+        hr=p.control->Run();
+    }
+    p.lastFrame=Impl::Clock::now();
+    p.magewellDeferredGraph=false;
+    log::warn("magewell",std::format("SDK capture ended; DirectShow video resumed hr=0x{:08X}",uint32_t(hr)));
+    if(FAILED(hr)){setFailure(L"DirectShow Run",hr);return false;}
+    return true;
+}
+
+SourceReadStatus CaptureCardSource::read(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,30,true);}
+SourceReadStatus CaptureCardSource::tryRead(pipeline::FramePacket& packet,const AVFrame** frame){return readWithWait(packet,frame,0,false);}
+SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,const AVFrame** frame,unsigned milliseconds,bool allowDriverFallback){auto& p=*p_;*frame=nullptr;if(!p.info.opened)return SourceReadStatus::Error;
     p.interfaceMonitor.flush();
     if(p.decklink&&p.decklink->needsReopen()){error_=p.decklink->error();log::warn("decklink-reconnect",narrowForLog(error_));return SourceReadStatus::Error;}
-    // running() goes false only after the SDK releases its DMA buffers and channel.
-    // Do not change the audio route. Mark the first DirectShow frame as a clock boundary.
-    if(p.magewellDelivering.load()&&!p.magewell->running()){
-        {
-            std::lock_guard lock(p.mutex);
-            if(p.pending){p.pending=false;++p.dropped;}
-            p.recentArrivals.clear();
-            p.driverDiscontinuity.reset();
-            p.forceDiscontinuity=true;
-        }
-        p.magewellDelivering=false;
-        HRESULT hr = S_OK;
-        if (p.magewellDeferredGraph) {
-            DriverCall driver(*this, CaptureDriverStage::Run);
-            p.markDriverRun();
-            hr = p.control->Run();
-        }
-        p.lastFrame=Impl::Clock::now();
-        p.magewellDeferredGraph=false;
-        log::warn("magewell",std::format("SDK capture ended; DirectShow video resumed hr=0x{:08X}",uint32_t(hr)));
-        if(FAILED(hr)){setFailure(L"DirectShow Run",hr);return SourceReadStatus::Error;}
+    if(videoFallbackNeeded()){
+        // The player sees Waiting and dispatches the fallback to its driver
+        // owner. Synchronous capture probes retain their existing contract.
+        if(!allowDriverFallback)return SourceReadStatus::Waiting;
+        if(!resumeDirectShowVideo())return SourceReadStatus::Error;
     }
     long event = 0;
     LONG_PTR param1 = 0, param2 = 0;
@@ -2489,6 +2550,7 @@ void CaptureCardSource::close()noexcept{closeGraph();}
 
 void CaptureCardSource::closeGraph(bool stopped)noexcept{
     auto& p=*p_;
+    p.pauseDelivery();
     // Native stop detaches and joins callbacks before freeing mailbox/audio.
     if (!stopped && (p.decklink || p.magewell || p.control)) {
         DriverCall driver(*this, CaptureDriverStage::Stop);
@@ -2514,7 +2576,6 @@ void CaptureCardSource::closeGraph(bool stopped)noexcept{
     p.elgatoHdr.reset();
     if(p.vendorDelivering)p.vendorDelivering->store(false);
     if(p.vendorAudio){p.vendorAudio->stop();p.vendorAudio.reset();}p.vendorDelivering.reset();
-    if(p.hdmiBitstream)p.hdmiBitstream->reset();
     p.averMediaSwitch.stop();p.embeddedAudioUnavailable=false;
     if(p.audioSession)p.audioSession->stop();p.audioError.clear();
     if(p.audioPassthrough)p.audioPassthrough->close();

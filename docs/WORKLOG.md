@@ -2108,6 +2108,20 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 
 `tmp/ps5-gta-stable-20261125/build-local.py` 构建通过，日志在 `logs/codex-ps5-input-subtitle-20261125/build-20261125-104151`。同目录下 `stage.py --final`、`verify.py input quick`、`fg-smoke.py`、实时呈现和时钟单元测试及 `scripts/i18n/extract.py --check` 均已核对。Qt Quick 265 项通过。10 秒 NR + VFG 2× + 60→30 回放送出 301 张增强原帧及 300 张生成帧，送显时限过期记录为 0。日志位于 `logs/ps5-gta-stable-20261125`。稳定版已打开映射面板，前版生成的启动器已指向稳定版。
 
+### 2026-11-25 采集驱动阻塞时停止播放和退出
+
+从本地 main `bc59d457` 建立 `codex/capture-reconnect-isolation-20261125`。现场 Elgato 4K Pro 的 P010 无新帧后，原版在播放线程同步调用 DirectShow Stop、重建采集图和写入 HDR 硬件色调映射属性。转储确认设备控制请求等待时间很长。此轮修复等待期间的应用响应，首次断帧的触发条件需实卡核对。
+
+- 采集图的配置、启动、重连、释放和需要停图的音频恢复在同一个 COM 工作线程上执行。播放线程保留原有帧邮箱和 GPU 身份，在操作完成后再读取采集状态。重连继续沿用原设备和格式、退避预算、第一帧确认以及历史重置。
+- 停止时终止当前播放会话，作废未执行操作和迟到结果。工作线程继续持有采集图、设备租约和解码所用的 D3D12 引用，驱动返回后在原线程收尾。旧会话仍在释放时，新采集轮次会给出稍后重试提示。本地文件可继续播放。经典 DirectShow 枚举的异步结果也可在界面析构时放弃。
+- 保留采集线程专用的等待提示和挂起诊断。模拟永久等待时，最终版的 Stop 到引擎空闲为 61 ms，同一进程随后成功播放本地文件。直接关闭运行中的采集恢复也以退出码 0 结束。播放切换用例中 FFmpeg 打印过一次 D3D12 输入像素格式警告，随后确认文件呈现和正常退出。
+
+构建使用 `python -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-capture-reconnect-isolation-20261125 --root E:/项目/Veyra/worktrees/capture-reconnect-isolation-20261125 --build-dir E:/项目/Veyra/build/codex-capture-reconnect-isolation-20261125/app --label 2.2.1-capture-reconnect-test --jobs 2 veyra_qml_ui veyra_live_presentation_tests veyra_scheduling_chain_tests veyra_capture_startup_tests veyra_capture_capability_tests`。首次配置时 pkg-config 把物理路径中的中文转成了损坏的路径。使用指向同一依赖实体的现有 ASCII 兼容入口和任务内独立缓存后，通过完整构建和量产入口增量构建。最终构建目录为 `logs/codex-capture-reconnect-isolation-20261125/build-20261125-191451`。
+
+采集启动和格式能力测试分别通过 31 项和 25 项。无首帧时的五次退避与释放设备后的末次尝试均经过真实引擎回放夹具验证。调度回归首次漏传夹具参数退出 2，补齐无音轨素材、输出目录和 playback 模式后通过播放、暂停、定位、恢复与停止。独立启动入口验证可用，测试运行目录从已核验的 NVIDIA 2.2.1 发行包取得运行组件，108 个着色器与本次构建逐文件核对。九语词库 3326 条，缺失和占位符错误均为 0。
+
+本地入口在 `E:/项目/Veyra/tests/codex-capture-reconnect-isolation-20261125/Veyra-capture-reconnect-test.cmd`。原始构建和测试日志在同名 `logs`，过程回执和二进制指纹在同名 `reports/FINAL.json`。无限等待由测试注入，未连接 Elgato 4K Pro 实卡。物理设备何时释放仍取决于 Windows 驱动，整机硬锁和实际 4K60 P010 长跑需现场验证。
+
 ## 2026-11-26 Veyra 2.2.2 本地测试版 PS5 双键位
 
 从 2.2.1 稳定测试版的「默认」档案提取步行、驾驶、切换键与鼠标参数，作为唯一内置档案。两套布局新增 V→L3 + R3；F6 切换布局，F1 解锁，驾驶 W→R2、S→L2。旧版生成的 GTA V 档案退出，升级读取时仍保留用户另存档案。本机 2.2.2 启动器使用独立配置，其中只保留用户指定的「默认」。源测试档案未改动。

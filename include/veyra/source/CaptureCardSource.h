@@ -68,9 +68,12 @@ public:
     void releaseForRetry();
     bool noVideoAfterRun() const { return noVideoAfterRun_; }
     void setDriverStageObserver(std::function<void(CaptureDriverStage)> observer);
-    // Owner-thread recovery of DirectShow audio pins; same video filter retained.
-    void recoverAudio(float gain,unsigned syncMode,int offsetMs);
-    bool setAudioGain(float); // call on the graph owner thread; never system volume
+    // Polling does not call the driver. Run the due recovery on the graph
+    // owner while the frame consumer is parked.
+    bool audioRecoveryNeeded();
+    void recoverAudio(float gain,unsigned syncMode,int offsetMs,bool due=false);
+    bool driverAudioGainNeeded(float gain) const;
+    bool setAudioGain(float); // application gain, never system volume
     // 0 automatic, 1 PCM only, 2 bitstream preferred. Takes effect on the next
     // connect/reconnect because the audio media type is negotiated there.
     void setAudioIngress(unsigned mode);
@@ -100,6 +103,8 @@ public:
     // The selected media type is compressed (MJPEG, H.264, ...) and decoded by Veyra.
     bool compressedVideo()const;
     SourceReadStatus read(pipeline::FramePacket&,const AVFrame**)override;
+    bool videoFallbackNeeded() const;
+    bool resumeDirectShowVideo();
     SourceReadStatus tryRead(pipeline::FramePacket&,const AVFrame**);
     // Auto-reset event signalled after each delivered sample; lets the graph
     // owner wait on "frame or deadline" instead of a fixed 1 ms timer slice.
@@ -127,7 +132,7 @@ private:
     // AVerMedia capture cards need their installed vendor component to arm
     // non-PCM (Dolby/DTS) passthrough before the audio pin is negotiated.
     bool applyVendorAudioSwitch(const std::wstring& audioName,const std::wstring& audioPath);
-    SourceReadStatus readWithWait(pipeline::FramePacket&,const AVFrame**,unsigned milliseconds);
+    SourceReadStatus readWithWait(pipeline::FramePacket&,const AVFrame**,unsigned milliseconds,bool allowDriverFallback);
     struct Impl;std::unique_ptr<Impl> p_;
     SourceOpenDesc reconnectDesc_;
     std::wstring reconnectFormat_;

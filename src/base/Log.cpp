@@ -1,6 +1,7 @@
 #include "veyra/Log.h"
 #include "veyra/diagnostics/Redaction.h"
 #include <algorithm>
+#include <cstdlib>
 #include <sstream>
 #include <optional>
 #include <regex>
@@ -45,11 +46,23 @@ std::string timestampUtc()
 
 Logger& Logger::instance()
 {
-    static Logger logger;
-    return logger;
+    // A capture driver or watchdog can return after its owner has shut down.
+    // Drain the output at exit, but keep the synchronization and diagnostic
+    // state valid for any last calls from those threads.
+    static Logger* const logger = [] {
+        auto* instance = new Logger;
+        std::atexit([] { Logger::instance().shutdown(); });
+        return instance;
+    }();
+    return *logger;
 }
 
 Logger::~Logger()
+{
+    shutdown();
+}
+
+void Logger::shutdown()
 {
     if(writer_.joinable()){
         flush();
@@ -184,10 +197,10 @@ void Logger::write(LogLevel level, const char* component, const std::string& mes
     // them during warning bursts (sweep 2026-09-22 C1).
     std::optional<diagnostics::DiagnosticEvent> pendingEvent;
     if(level==LogLevel::Warn||level==LogLevel::Error){
-        static const std::regex hrPattern("(?:HRESULT|hr)[=: ]+(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
-        static const std::regex sehPattern("seh[=: ]+(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
-        static const std::regex nvofPattern("(?:status|st)[=: ]+(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
-        static const std::regex ngxPattern("(?:result[=: ]+|failed +)(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
+        static const auto& hrPattern = *new std::regex("(?:HRESULT|hr)[=: ]+(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
+        static const auto& sehPattern = *new std::regex("seh[=: ]+(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
+        static const auto& nvofPattern = *new std::regex("(?:status|st)[=: ]+(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
+        static const auto& ngxPattern = *new std::regex("(?:result[=: ]+|failed +)(0x[0-9a-f]+|[0-9]+)",std::regex::icase|std::regex::optimize);
         auto event=threadDiagnosticContext;event.timestamp=timestampUtc();event.severity=levelTag(level);event.component=component;
         auto extract=[&](const std::regex& pattern)->std::optional<uint64_t>{std::smatch m;if(std::regex_search(message,m,pattern)){try{return std::stoull(m[1].str(),nullptr,m[1].str().starts_with("0x")?16:10);}catch(...){}}return {};};
         if(auto c=extract(hrPattern))event.hresult=c;

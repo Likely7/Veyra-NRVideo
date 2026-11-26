@@ -63,6 +63,7 @@ public:
     std::pair<size_t,uint64_t> frameTraceSize();
 
 private:
+    void shutdown();
     bool rotateLocked(const char* reason);
     void writeSink(LogLevel level, const std::string& line);
     void flushSink();
