@@ -1420,3 +1420,18 @@ Linux OBS filter work is adopted from andreanjoes PR #96 at
 validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
 centres and preserves premultiplied transparency. OBS's public colour-filter
 shader was consulted for the alpha contract; no OBS DLL is bundled here.
+
+Native D3D12 Direct ELF Passthrough AMD RDNA3 NR worker tooling under
+`tools/amd-nr-m11/` is integrated from `mochizuki0323/DLSSNR-AMD` (`v0.0.9m11`,
+https://github.com/mochizuki0323/DLSSNR-AMD ), Copyright (c) 2026 mochizuki0323,
+MIT License (see `licenses/DLSSNR-AMD-MIT-LICENSE.txt`). That upstream project
+builds upon `mauri870/DLSSNR-RDNA3` (MIT License) and Windows RDNA3 / D3D12
+contributions by `TheAutomatic`. Source integration here uses only the MIT-licensed
+`DLSSNR-AMD` codebase and excludes non-MIT / PolyForm / proprietary components.
+
+"NVIDIA" and "DLSS" are trademarks of NVIDIA Corporation. NVIDIA's `nvngx_dlssnr.dll`
+and extracted `CC_*.bin` weight files are NVIDIA proprietary property and are NOT
+redistributed in this repository; users extract them locally from their own copy
+of `nvngx_dlssnr.dll` via `tools/amd-nr-m11/setup-models.bat` / `setup-models.ps1`.
+This independent community integration is not affiliated with or endorsed by
+NVIDIA Corporation or AMD.

@@ -25,6 +25,7 @@ public:
     bool retireSubmitted() override;
     const std::string& error()const override;
     static bool runtimeAvailable(const std::filesystem::path&);
+    static bool nativeD3d12RuntimeAvailable(const std::filesystem::path&);
     static bool hipRuntimeAvailable();
     ID3D12Resource* diagnosticProxyForTest()const;
 private:
