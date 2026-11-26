@@ -136,8 +136,8 @@ def collect():
         for m in CPP_DISAMBIGUATED.finditer(source_text):
             add(unescape(m.group(1)), rel, m.group(2))
         for before, value in cpp_literal_runs(source_text):
-            # Log lines stay in the source language and are not catalogued.
-            if LOG_CALL.search(before):
+            # Logs and inline bilingual startup messages bypass translation.
+            if LOG_CALL.search(before) or before.rstrip().endswith('/* i18n: bilingual */'):
                 continue
             add(value, rel)
     return found

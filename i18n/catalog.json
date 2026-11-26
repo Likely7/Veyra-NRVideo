@@ -1,19 +1,6 @@
 {
  "entries": [
   {
-   "zh": "\n\n日志文件 / Log file:\n",
-   "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
-  },
-  {
    "zh": "\n仅观看：电脑输入已关闭，手柄由 PS5 处理。",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "\n僅觀看：電腦輸入已關閉，手把由 PS5 處理。",
@@ -7708,19 +7695,6 @@
    "de": "Der Dateityp im Programmpfad ist falsch. Repariere Veyra mit dem offiziellen Installationsprogramm.",
    "pt-BR": "O tipo de arquivo no caminho do programa é incorreto. Repare o Veyra com o instalador oficial.",
    "ru": "По пути программы находится файл неподходящего типа. Восстановите Veyra официальным установщиком."
-  },
-  {
-   "zh": "主窗口创建失败，请检查日志并修复安装。",
-   "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
   },
   {
    "zh": "举个例子。游戏原帧是 `ABCDEFG`，采到的可能是 `AABBCCDDEEFFGG`。相同的两张图之间补不出新的运动。在「补帧」里选 **60→30** 或 **自动去除**，让补帧从 `A→B→C` 这样的不同画面开始。锁 30 帧可先试 60→30，帧率经常变化就对照自动去除和实际内容帧率。",
@@ -23715,19 +23689,6 @@
    "ru": "Не удалось запустить локальный переводчик"
   },
   {
-   "zh": "无法启动根目录的 Veyra.exe，可能已被删除或被安全软件拦截。\n请检查 Windows 安全中心的保护历史记录，或使用官方安装包修复。\n\nCould not start Veyra.exe. It may be missing or blocked by security software. Check Protection history or repair with the official installer.\n\n",
-   "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
-  },
-  {
    "zh": "无法启动画面文字识别",
    "src": "src/engine/ScreenTextCapture.cpp",
    "zh-TW": "無法啟動畫面文字辨識",
@@ -30252,19 +30213,6 @@
    "de": "Das Interface greift immer auf die GPU; das RTSS OSD ist nicht in Veyra; NVIDIA's In-Game-Overlay oder GamePP läuft, Veyra Kann einfrieren",
    "pt-BR": "A interface sempre se baseia na GPU; o RTSS OSD não é mostrado no Veyra; com a sobreposição do NVIDIA no jogo ou o GamePP em execução, o Veyra pode congelar",
    "ru": "Интерфейс всегда опирается на GPU; РТСС OSD не показан в Veyra; с NVIDIAвнутриигровая оверлей или работа GamePP, Veyra может замерзнуть"
-  },
-  {
-   "zh": "界面模块加载失败，安装文件可能不完整。请重新解压或使用官方安装包修复。",
-   "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
   },
   {
    "zh": "界面状态写入失败",
@@ -40041,19 +39989,6 @@
    "de": "Das Profil oder Backup hat sich geändert, so dass dieser Vorgang gestoppt wurde. Überprüfen Sie erneut oder verwenden Sie Profile Inspector, um es manuell zu handhaben.",
    "pt-BR": "O perfil ou backup mudou, então esta operação foi interrompida. Verifique novamente, ou use o Inspetor de Perfil para lidar com isso manualmente.",
    "ru": "Изменился профиль или резервная копия, поэтому эта операция была остановлена. Проверьте еще раз или используйте инспектор профиля, чтобы справиться с ним вручную."
-  },
-  {
-   "zh": "配置数据目录初始化失败，请检查安装/数据目录权限。",
-   "src": "apps/veyra-qml/main.cpp",
-   "zh-TW": "",
-   "en": "",
-   "ja": "",
-   "ko": "",
-   "es": "",
-   "fr": "",
-   "de": "",
-   "pt-BR": "",
-   "ru": ""
   },
   {
    "zh": "配置未独立绑定当前程序路径，可能由其他程序共用。请使用 Profile Inspector 单独配置本软件。",

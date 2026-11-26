@@ -435,7 +435,7 @@ void showFatalStartupError(bool quiet, const std::wstring& chinese, const std::w
     if (quiet) return;
     std::wstring message = chinese + L"\n" + english;
     if (!detail.empty()) message += L"\n\n" + QString::fromUtf8(detail.data(), int(detail.size())).toStdWString();
-    if (!logPath.empty()) message += L"\n\n日志文件 / Log file:\n" + logPath.wstring();
+    if (!logPath.empty()) message += /* i18n: bilingual */ L"\n\n日志文件 / Log file:\n" + logPath.wstring();
     MessageBoxW(nullptr, message.c_str(), L"Veyra", MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
 }
 } // namespace
@@ -828,7 +828,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         if (!migration.ok) {
             veyra::log::error("app", "2.0.0 data migration failed: " + migration.error);
             showFatalStartupError(quietStartupFailure,
-                                  L"配置数据目录初始化失败，请检查安装/数据目录权限。",
+                                  /* i18n: bilingual */ L"配置数据目录初始化失败，请检查安装/数据目录权限。",
                                   L"Failed to initialize the Veyra data directory. Check folder permissions.",
                                   logPath, migration.error);
             return 2;
@@ -1049,7 +1049,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     if (engine.rootObjects().isEmpty()) {
         veyra::log::error("qml", "no root object: the QML module failed to load");
         showFatalStartupError(quietStartupFailure,
-                              L"界面模块加载失败，安装文件可能不完整。请重新解压或使用官方安装包修复。",
+                              /* i18n: bilingual */ L"界面模块加载失败，安装文件可能不完整。请重新解压或使用官方安装包修复。",
                               L"Failed to load the Veyra QML interface. Re-extract the package or repair with the official installer.",
                               logPath);
         return 1;
@@ -1059,7 +1059,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     if (!window) {
         veyra::log::error("qml", "root object is not a window");
         showFatalStartupError(quietStartupFailure,
-                              L"主窗口创建失败，请检查日志并修复安装。",
+                              /* i18n: bilingual */ L"主窗口创建失败，请检查日志并修复安装。",
                               L"Failed to create the main Veyra window. Check the log file and repair the installation.",
                               logPath);
         return 1;
@@ -1431,7 +1431,7 @@ int main(int argc, char** argv) {
                 }
                 const auto launcherPath = root / portable::launcherName;
                 if (QProcess::startDetached(QString::fromStdWString(launcherPath.wstring()), args)) return 0;
-                const std::wstring message = L"无法启动根目录的 Veyra.exe，可能已被删除或被安全软件拦截。\n请检查 Windows 安全中心的保护历史记录，或使用官方安装包修复。\n\n"
+                const std::wstring message = /* i18n: bilingual */ L"无法启动根目录的 Veyra.exe，可能已被删除或被安全软件拦截。\n请检查 Windows 安全中心的保护历史记录，或使用官方安装包修复。\n\n"
                     L"Could not start Veyra.exe. It may be missing or blocked by security software. Check Protection history or repair with the official installer.\n\n"
                     + launcherPath.wstring();
                 MessageBoxW(nullptr, message.c_str(), L"Veyra", MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
