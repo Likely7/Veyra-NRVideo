@@ -97,14 +97,13 @@ bool strokeInk(int2 p,int2 normal,int radius,out float3 color) {
     // Test both sides of the mark. A single background edge is insufficient.
     return min(colorError(lo,color),colorError(hi,color))>0.10;
 }
-uint centredMark(float4 box) {
-    const int2 center=int2((box.xy+box.zw)*0.5);
+bool crossedArms(int2 center,int first) {
     const int step=clamp(int(round(float(frameSize.y)/1080.0)),1,4);
     const int side=clamp(int(round(float(frameSize.y)/540.0)),2,8);
     uint pairedHorizontal=0,pairedVertical=0;
     uint singleHorizontal=0,singleVertical=0;
     const int2 horizontal=int2(1,0),vertical=int2(0,1);
-    [loop] for(int i=3;i<=18;++i) {
+    [loop] for(int i=first;i<=18;++i) {
         const int d=i*step;
         const int2 l=center-horizontal*d,r=center+horizontal*d;
         const int2 t=center-vertical*d,b=center+vertical*d;
@@ -116,8 +115,51 @@ uint centredMark(float4 box) {
         singleHorizontal+=uint(left)+uint(right);
         singleVertical+=uint(top)+uint(bottom);
         if((pairedHorizontal>=2&&pairedVertical>=2)||
-           (pairedHorizontal>=4&&singleVertical>=4)||(pairedVertical>=4&&singleHorizontal>=4))return HudFreshMark;
+           (pairedHorizontal>=4&&singleVertical>=4)||(pairedVertical>=4&&singleHorizontal>=4))return true;
     }
+    return false;
+}
+uint compactDot(float4 box,uint prior) {
+    const int2 center=int2(hudCenter(box));
+    const float3 dotColor=colorAt(currentTex,center);
+    const float high=max(dotColor.r,max(dotColor.g,dotColor.b));
+    const float low=min(dotColor.r,min(dotColor.g,dotColor.b));
+    // A fresh spatial match is limited to a bright, largely neutral dot.
+    // Coloured artwork and reticles use the pairwise stroke evidence.
+    if(high<0.58||high-low>0.27)return 0;
+    const int radius=hudDotProbeRadius();
+    if(!frameContains(center-radius)||!frameContains(center+radius))return 0;
+    const int2 directions[8]={int2(1,0),int2(-1,0),int2(0,1),int2(0,-1),
+                              int2(1,1),int2(-1,1),int2(1,-1),int2(-1,-1)};
+    uint horizontal=0,vertical=0,diagonals=0,interior=0;
+    [unroll] for(int i=0;i<8;++i) {
+        const float3 edge=colorAt(currentTex,center+radius*directions[i]);
+        const bool separated=colorError(dotColor,edge)>0.17;
+        horizontal+=uint(i<2&&separated);
+        vertical+=uint(i>=2&&i<4&&separated);
+        diagonals+=uint(i>=4&&separated);
+        if(i>=4)interior+=uint(colorError(dotColor,colorAt(currentTex,center+directions[i]))<0.14);
+    }
+    if(interior<3||horizontal==0||vertical==0)return 0;
+    const uint age=prior&HudMarkAgeMask;
+    const bool dated=(prior&HudCompactDot)!=0&&age>1;
+    const bool strong=horizontal+vertical>=3&&diagonals==4;
+    if(!strong&&!dated)return 0;
+    // A separate ring/arm can share the same centre dot. Let the
+    // stroke tracker handle it instead of declaring the mark complete.
+    const int step=clamp(int(round(float(frameSize.y)/1080.0)),1,4);
+    if(crossedArms(center,max(3,radius/step+2)))return 0;
+    if(strong)return HudMarkLifetime|HudFreshMark|HudDotMark|HudCompactDot;
+    // Preserve a recent round outline briefly as a highlight passes behind
+    // it. Two orthogonal edges and a coherent core must still be present.
+    return colorError(dotColor,colorAt(previousTex,center))<=0.34?
+        (age-1)|HudDotMark|HudCompactDot:0;
+}
+uint centredMark(float4 box) {
+    const int2 center=int2((box.xy+box.zw)*0.5);
+    if(crossedArms(center,3))return HudFreshMark;
+    const int side=clamp(int(round(float(frameSize.y)/540.0)),2,8);
+    const int2 horizontal=int2(1,0),vertical=int2(0,1);
 
     // A small isolated centre dot also works without opposing arms. Use
     // several directions to distinguish it from an ordinary textured edge.
@@ -152,13 +194,16 @@ void main(uint3 group : SV_GroupID,uint lane : SV_GroupIndex) {
     if(lane<HudCounterCount&&lane!=HudTrusted&&lane!=HudCentredMark)counts[hudCounter(region,lane)]=0;
     if(lane==0) {
         uint shape=0;
-        if(!resetHistory&&region==0&&all(box.zw>box.xy)) {
-            const uint last=previousCounts.Load(int3(hudCounter(region,HudCentredMark),0));
-            // Preserve a learned outline over a brief occlusion or drop in
-            // contrast. Appearance must still match before a pixel is used.
-            const uint age=last&HudMarkAgeMask;
-            const uint fresh=centredMark(box);
-            shape=fresh?(HudMarkLifetime|fresh):(age>1?((age-1)|(last&HudDotMark)):0);
+        if(all(box.zw>box.xy)&&(region==0||tightRegion(region))) {
+            const uint last=resetHistory?0:previousCounts.Load(int3(hudCounter(region,HudCentredMark),0));
+            shape=compactDot(box,last);
+            if(!shape&&!resetHistory&&region==0) {
+                // Preserve a learned outline over a brief occlusion or drop in
+                // contrast. Appearance must still match before a pixel is used.
+                const uint age=last&HudMarkAgeMask;
+                const uint fresh=centredMark(box);
+                shape=fresh?(HudMarkLifetime|fresh):(age>1?((age-1)|(last&HudDotMark)):0);
+            }
         }
         counts[hudCounter(region,HudCentredMark)]=shape;
     }

@@ -162,6 +162,8 @@ changed (renamed, wired into Veyra's settings, engine and interface):
 
 - Live HUD Lock: `include/veyra/pipeline/HudLock.h`, `src/pipeline/HudLock.cpp`,
   `shaders/HudLockUpdate.hlsl`, `shaders/HudLockCompose.hlsl` (from `PushHudLock*`, a0b76239).
+  Veyra extracted the existing static-pixel weighting into `shaders/HudLockWeight.hlsli`
+  so both frame generation and original-picture HUD restoration use the same detector.
 - Frame pacing repair: `include/veyra/engine/FramePacingRepair.h` and its unit test
   (from `PushPacingRepair`, a0b76239 and ebbde37d).
 - Adaptive multiplier: `include/veyra/engine/AdaptiveFgMultiplier.h` and its unit test
@@ -1420,3 +1422,13 @@ Linux OBS filter work is adopted from andreanjoes PR #96 at
 validates malformed cube LUTs, clears failed LUT selections, samples LUT texel
 centres and preserves premultiplied transparency. OBS's public colour-filter
 shader was consulted for the alpha contract; no OBS DLL is bundled here.
+
+## PS5 mouse-to-stick speed-dependent gain
+
+The slow/fast gain interpolation in `include/veyra/remoteplay/MouseStick.h`
+adapts the approach in XY-CtoPS5's `ps5kbm/mapping.py` at commit
+`6c816d5356abdc7a7577f980a7c1186fe853c44d`, GPL-3.0-or-later.
+Veyra uses its own time-weighted motion reports, radial deadzones, eased
+interpolation and C++ session integration. [Source](https://github.com/SWTiCC/XY-CtoPS5/blob/6c816d5356abdc7a7577f980a7c1186fe853c44d/ps5kbm/mapping.py) · [License](https://github.com/SWTiCC/XY-CtoPS5/blob/6c816d5356abdc7a7577f980a7c1186fe853c44d/LICENSE)
+
+Subtitle Hold is adapted from DosukaSOL/PushFPS at commit 731589e2 (original implementation 2de9d233), GPL-3.0-or-later. Source: https://github.com/DosukaSOL/PushFPS/tree/731589e2 . Veyra uses its SubtitleHoldRule, three PushOverlay shaders and the adapted SubtitleHold GPU pass. The pass shares cleaned input with reticle protection, reads the original frame for all-effects detection, and keeps masks on the GPU.

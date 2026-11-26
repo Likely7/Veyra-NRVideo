@@ -1,5 +1,36 @@
 # 当前工作日志
 
+## 2026-11-24 PS5 鼠标瞄准和快速转身
+
+- 复核用户测试配置为横纵 6×、曲线 2.5、死区补偿 0。旧版以 32,000 counts/s 为速度基准，并将整段轴输出做 2.5 次幂。1,000 counts/s 实际只推 1.52% 右杆。以 XY-CtoPS5 的分速增益为参考，在现有报告时间采样上加入慢移和快转两个区域。瞄准曲线只调整前 30% 偏转，快段回到线性。输入过滤阈值和输出死区补偿分别可调。
+- 新增快速转身倍率、输入死区和仅重置鼠标手感入口。版本 1 旧配置仍可读取，已有键位和用户显式参数沿用。新配置或手感重置采用 1× 横纵、3.6× 快转倍率、15% 死区补偿和 0% 输入过滤。重置保留已选的控制方式和鼠标控右杆开关。 [参考实现及许可证](<../THIRD_PARTY_NOTICES.md>)
+- 从 Git 取旧版 MouseStick 与新版并行回放 6 档恒速相对输入。原测配置在 125 / 1,000 counts/s 的轴输出从 0.01% / 1.52% 变为 10.15% / 100%。新默认在 125 / 1,000 / 1,500 counts/s 分别为 17.12% / 71.15% / 100%。XY-CtoPS5 GTA6 预设对照为按源码计算的恒速目标。PS5 实际游戏转向未测。 [回放数值](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/turn-response-ab.csv>)
+- 复用同名构建及单一测试目录，用 `build-recording-handoff.py --task codex-ps5-keyboard-mouse-20261124 --label 2.2.1-ps5-input-test --jobs 2` 构建播放器及相关测试共 5 个目标。PS5 边界回归在 1,000 counts/s 下对比 125 和 1,000 Hz，共 243 次采样，未饱和且一致。另测快转倍率、输入死区边界、对角限幅和 27 组曲线单调性。Qt Quick 262 项、Moonlight 协议 135 项通过，9 种语言无缺译和占位符错误。保留旧测试入口，新构建和运行目录 SHA-256 一致。 [构建](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/build-20261124-190507/receipt.json>) · [PS5 边界](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/turn-boundary.txt>) · [界面回归](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/turn-quick.txt>)
+- Windows 英文窗口实拖快转倍率和输入死区至 5.4× / 3.5%。重启至中文窗口读回，再点击手感重置，原 Ctrl+J 和关闭鼠标控右杆的状态均保留。验证用 `tmp/codex-ps5-keyboard-mouse-20261124/turn-native-en-profile` 夹具，原测试配置哈希保持一致。 [原测试入口](<E:/项目/Veyra/tests/codex-ps5-keyboard-mouse-20261124/Open PS5 keyboard test.cmd>)
+
+## 2026-11-24 PS5 改键弹窗与鼠标顿挫
+
+- 在现有键鼠试用分支复现点叉键时弹窗关闭。遮罩改为只接收面板外的点击，手柄按键使用与现有按钮一致的按下和释放判定。用新版 Windows 窗口实点叉键和「改键」，录入 Ctrl+J、鼠标右键，验证 Esc 取消录键、输入预览进入与退出、面板外点击关闭。重启后在实际界面读到两个绑定。测试使用任务私有配置。
+- 鼠标以相对运动报告时间估算右摇杆速度，由 PS5 串流和仅手柄控制的现有发送端采样。采样跨过正常报告间隔并渐回中。保留用户原有灵敏度、死区、曲线和绑定。失焦立即释放手柄，界面心跳超过 100 ms 时同样回到中立输入。实体手柄与 Moonlight 走原来的输入方式。
+- 在同一恒速 125 Hz 输入、7/11 ms 界面心跳以及 40 ms 心跳暂停的模拟中，243 次提交侧采样的横轴范围从 7826–13649 收敛为恒定 9881。实际 PS5 队列测试中，125 Hz 与 1000 Hz 的 243 次采样全部一致。覆盖松手回中、再移动、键盘覆盖右摇杆、失焦和批次合并。PS5 真机游戏手感未测。 [旧新对比](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/followup-mouse-ab.txt>) · [PS5 边界](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/followup-boundary.txt>)
+- 复用原来的构建目录和测试程序，使用 `build-recording-handoff.py --task codex-ps5-keyboard-mouse-20261124 --label 2.2.1-ps5-input-test --jobs 2` 构建 5 个目标，耗时 87.7 秒。Qt Quick 262 项通过，Moonlight 协议 135 项通过，9 种语言无缺译和占位符错误。已核对测试启动器的原映射配置 SHA-256 不变。测试配置及比较夹具在同名 E 盘 tmp 目录。 [构建](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/build-20261124-092754/receipt.json>) · [界面回归](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/followup-quick.txt>) · [启动测试](<E:/项目/Veyra/tests/codex-ps5-keyboard-mouse-20261124/Open PS5 keyboard test.cmd>)
+
+## 2026-11-24 PS5 键鼠映射试用版
+
+- 从本地 main bc59d457 开 codex/ps5-keyboard-mouse-20261124。在 PS5 串流和采集卡的 PS5 手柄控制页接入可点击的 DualSense 手柄图。26 个位置可绑定键盘、修饰键组合、鼠标键及滚轮。支持自动保存、恢复默认和离线输入预览，默认仍用实体手柄。触摸板提供按下动作。
+- 用现有 PS5 手柄状态队列发送数字和摇杆输入。实体手柄和键鼠由用户切换，画面点击开始锁定，Esc 或失焦释放。键鼠和 Moonlight 共用 Windows Raw Input 入口，保留 Moonlight 原有协议和快捷键。鼠标映射到右摇杆，支持横纵增益、死区补偿、曲线、平滑和纵向反转。 [Steam Input](https://partner.steamgames.com/doc/features/steam_controller/input_source_modes?language=english) · [reWASD](https://www.help.rewasd.com/basic-functions/advanced-mouse-settings.html) · [Better xCloud](https://better-xcloud.github.io/mouse-and-keyboard/)
+- 用 build-recording-handoff.py --task codex-ps5-keyboard-mouse-20261124 --label 2.2.1-ps5-input-test --jobs 2 构建播放器、Qt Quick、PS5 边界、Moonlight 协议和 i18n 测试。第一次配置遇到 pkg-config 的中文依赖路径，重试时链接器响应文件也遇到路径编码问题。使用现有 C:/veyra-deps 兼容入口给相关依赖传入 ASCII 路径后构建通过，耗时 151.8 秒。保留 E 盘依赖实体及现有入口。 [构建回执](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/build-20261124-053437/receipt.json>)
+- Qt Quick 的 453 px 夹具重现了手柄图超出弹窗宽度，解除弹窗预设最小宽后修复。全量 261 项通过，1 项已有的独立栅格截图对照未运行。PS5 离线边界回归覆盖快按快放、组合键松手、焦点释放和鼠标批次差异，Moonlight 协议 135 项通过，9 种语言缺译和占位符错误均为 0。 [Qt Quick](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/quick-all.txt>) · [PS5 边界](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/remoteplay-boundary.log>) · [Moonlight](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/moonlight-protocol.txt>)
+- 单一测试运行目录派生自已校验的 2.2.1 NVIDIA 便携运行时，程序、QML、着色器与翻译来自本轮。构建和验证使用任务自己的临时目录及配置。实际程序打开编辑器并截图。为避开正式版占用的桌面，保存和重启测试使用实际 Qt Bridge 与 SDK 中匹配版本的 offscreen 插件。确认清除映射、启用键鼠、横向 2.4 倍和反转完成保存，重启读回参数，并读出夹具写入的 Ctrl+J 键位。系统前台物理录键和 PS5 真机手感未测。本轮仅在试用分支提交。 [保存](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/persistence-save.log>) · [重启](<E:/项目/Veyra/logs/codex-ps5-keyboard-mouse-20261124/persistence-restore.log>) · [界面](<E:/项目/Veyra/reports/codex-ps5-keyboard-mouse-20261124/PS5-mapping-zh-CN-1120x760.png>) · [启动](<E:/项目/Veyra/tests/codex-ps5-keyboard-mouse-20261124/Open PS5 keyboard test.cmd>)
+## 2026-11-24 准星重影与框内补帧保护
+
+- 以本地 main bc59d457 为基线。列表和节点的「准心/HUD 保护」选择「框内 · 手绘区域」后就地显示绘图、红框、移动与羽化。全效果剔除从画质页和新增节点菜单撤下，加载旧链时把几何移到补帧节点，重接旧节点的前后连线。NR 局部保护仍使用独立数据。矩形和椭圆沿用既有预设字段。
+- 首帧对亮圆点做空间识别，生成前清理两个原帧里的主体和抗锯齿边缘。短时间内允许稳定圆点经过亮背景，两条轴向轮廓仍需匹配。1440p 自动中心的笔画搜索半径从 40 增至 45 像素，圆点探针从 4 增至 5 像素。强光时用小圆形边缘混合稳定圆点，手选区域用同一套识别与合成，回贴沿已确认的笔画。绘图区域的背景继续补帧，真实帧和画质增强保持其原链路。
+- 本机 VFG 使用用户 2560×1440、160 张源帧的原录屏，对照与 2.2.1 正式包一致的 5 个准星着色器。2× 中、高档各 159 个有效生成帧，按圆点模板筛查额外准星分别从 1、2 张降到 0、0。首张输入清理 32 个核心像素，160 张输入都有已清理的准星核心。高档 4× 验证 477 个有效生成帧。中心背景环带的大面积锁帧为 0。去除准星的诊断对照 160 张均无错误确认。 [圆点对照](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/current-reticle-template-comparison.png>) · [逐帧模板](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/current-reticle-template-screening.json>) · [背景](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/current-background-metrics.json>)
+- 在同一动态背景上加入偏心折线准星。初轮手绘窗口已保住主体，亮背景上仍有淡边复制，随后把已识别的变化笔画和窄羽化边也从补帧输入清掉。过滤到框外的大明显色组件由 13/159 张降至 0/159 张，其中两个及以上组件由 10 张降至 0。最差一帧的主体着色保留率从 0% 到 84.7%，统计排除起始 4 张。VFG、DLSS 的快速十字线各 119 张主体均完整，极端合成运动仍有少数残留像素。 [异形对照](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/manual-chevron-comparison.png>) · [形状检测](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/shape-coverage.json>) · [偏移标记](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/manual-artifacts.json>)
+- 构建使用 build-recording-handoff.py --task codex-reticle-fg-20261124 --label 2.2.1-reticle-test --jobs 2。首次构建 425.3 秒，最终增量 15.6 秒，单一试用目录核对全部 108 个着色器。效果链、预设库和翻译检查通过，九语缺译与占位符错误为 0。Qt Quick 在补齐测试目录后 257 通过，0 失败，0 跳过。首次离屏窗口 16×16，达不到绘图最小像素阈值。改用 Windows 原生窗口复测，矩形、椭圆、拖动、补帧页原位、切换自动和重启恢复通过。实播和 2× 两档实际导出均走 VFG，各导出解码 320 张。 [构建](<E:/项目/Veyra/logs/codex-reticle-fg-20261124/build-20261124-090518/receipt.json>) · [Qt Quick](<E:/项目/Veyra/logs/codex-reticle-fg-20261124/qml-all.txt>) · [原生编辑](<E:/项目/Veyra/logs/codex-reticle-fg-20261124/native-ui-draw-engine.log>) · [重启](<E:/项目/Veyra/logs/codex-reticle-fg-20261124/native-ui-restore-engine.log>) · [导出](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/export-verified.json>)
+- 使用本机显卡、SDR 文件与测试夹具，现场采集和其他游戏布局待核验。已回收本轮生成的 33 个 RGBA 对照中间文件，合计 5.21 GiB 文件数据，保留录屏原件、测试程序、日志和对照图。 [启动试用版](<E:/项目/Veyra/tests/codex-reticle-fg-20261124/Open reticle test.cmd>) · [清理回执](<E:/项目/Veyra/reports/codex-reticle-fg-20261124/scratch-cleanup.json>)
+
 ## 2026-11-23 2.2.1 正式发布
 
 - 应用和对应源码标签指向 `b9cc86aa`。正式包继续使用 `b111dec5` 已验收的产品构建。包与版本标签之间只有文档差异。核对从旧 GitHub main 新增的 2,216 个可达对象，未发现新增的运行库、模型、私有媒体或配置文件。
@@ -2022,3 +2053,57 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 - T900 实卡使用设备提供的 4K60 MJPEG。实际应用送显约 60 FPS，NR 与 FSR 均运行，NVOF 从 1920×1080 转回 3840×2160。462 次 FSR 评估，0 次派发失败和采集丢帧。RGB 夹具也通过 4K 至 1080p 光流的几何验证。实卡 4K60 NV12 尚未验证。
 - WGC 320 Hz 跟随默认 NR 实测约 125.8 个原始帧、12.5 个生成帧每秒。在本次 HDR 测试场景每秒均有生成帧，数量波动 5 至 29。50% NR 内部尺寸时生成约 95.5 帧每秒。WGC 本轮保持既有节拍策略。冷启动从 WGC 打开到首轮送显，DLSS SR 24.34 秒、RTX Video SR 15.67 秒、Video Effects SR 14.71 秒，模型加载期的原画预览仍待实现。
 - 确认可用管理员权限启动 PresentMon。2.6.0 和 2.5.1 分别只输出 6 条和 2 条记录，无法验收稳定的屏幕显示间隔。完整命令、日志及产物路径见 `E:/项目/Veyra/reports/codex-magpie-perf-20261122/RESULTS.md`。
+
+## 2026-11-25　HUD 全效果保护、实时译文样式与启动音乐
+
+从中心准星修复版 `7316a468` 创建本地分支 `codex/hud-captions-20261125`。源码工作树为 `E:/项目/Veyra/worktrees/hud-captions-20261125`。
+
+- 把 HUD 设置收进一个默认折叠组。列表模式在补帧页独立显示，节点模式放在始终存在的输出节点。新增“剔除所有效果”，原有保护范围仍为默认。用户单独开启新范围时，若没有选中任何识别方式，一并开启静态文字识别。已选的中心准星、手绘 HUD 和动态识别保持各自选择。全效果模式复用源帧保留和末端 GPU 合成，在未经增强的原画上识别、在输出尺寸按遮罩还原。生成帧中的动态 HUD 按子帧位置从相邻原画中选择。未命中像素保留增强。
+- 首次以真实 NGX NR 加曝光跑静态笔画，原来基于增强结果的识别在第 61 帧出现约 11.26/255 的偏差。改为原画识别后，同一用例的采样误差为 0。中心准星和固定边框内变化的状态条也在关闭补帧时对照原画，另以 VFG 3× 验证生成帧。手绘矩形、椭圆的旧范围继续通过对照。RTX 5070 的 13 个 D3D12 图形用例均通过，调试层错误数为 0。HDR 静态文字采样误差为 0；640×360 到 1280×720 的 SR + NR 用例，保护区采样与原画双线性放大的最大窗口平均误差为 0.25/255，区外为 0。素材为合成图形，未做当事人游戏内或 XeSS 送显端到端验收。
+- 实时翻译的“字幕样式”支持视频可见区域内的横纵百分比位置，原文、译文和临时字幕作为一个组布局。色块、RGB 和实时预览取代原生选色窗口。原生字幕窗口像素测试覆盖双语顺序、两个对角和裁切边界。默认启动音乐关闭，用户明确设置为开启时保留。
+- 移除会话自动选择倍率的定时器、参数和控件，手动倍率与已保存的预设继续可读。v25 导入测试实际将旧自动倍率标志置 1 并检验其余字段完整保留。按帧自适应倍率保持独立。严格节奏在文件音频时钟调度里有单独作用，默认关闭，界面仅在文件来源显示。
+- 构建使用 `python -X utf8 E:/项目/Veyra/tmp/hud-captions-20261125/build-local.py <源码工作树> veyra_realtime_preview_tests veyra_subtitle_overlay_tests veyra_repair_fg_tests veyra_preset_library_tests veyra_qml_ui veyra_qml_quick_tests veyra_ui_i18n_tests`，编译输出在 `E:/项目/Veyra/build/codex-hud-captions-20261125`。
+- 同一目录下的 `stage.py --final` 准备隔离的 NVIDIA 本地测试版，`verify.py cpu`、`verify.py gpu` 、`exercise_ui.py` 和 `restart-ui.py` 检查预设、文件调度、字幕栅格、Qt Quick 控件、像素与真实播放器偏好。Qt Quick 共 257 项通过。启动程序实测 RGB (31,151,250) 写为 `#1f97fa`，字幕位置 (72%,18%) 保存，音乐默认静音、可手动开启。重启后实测 HUD 范围、字幕位置、颜色与静音设置全部保留。另运行 `python -B -X utf8 scripts/i18n/extract.py --check` 检查九种翻译。日志目录为 `E:/项目/Veyra/logs/codex-hud-captions-20261125`，试用目录为 `E:/项目/Veyra/tests/codex-hud-captions-20261125`。
+- 最终构建用时 150.7 秒。私有测试 EXE 的 SHA-256 为 `4A4A32AAE4706269968D13A59C066AA0BBAD19BEC6A15D41C301C0C4F8004801`，与构建目录一致。真实应用控件验证结束后，已核对试用目录中 Main.qml 与源码哈希一致。
+
+## 2026-11-25 PS5 键鼠映射与游戏字幕防拖影联测
+
+本地分支 `codex/ps5-input-subtitle-20261125` 从 `af3c59ac` 带入前轮准星与 HUD/译文改动。新增 PushFPS 4.5.3 的游戏字幕识别、补帧前修复与生成帧恢复（`8665f77e`），以及 PS5 微秒鼠标采样、250 Hz 发送目标、动作映射（`d315dd89`）、多档案、界面与输入锁定（`4dc25b55`）。来源及改动记录于 THIRD_PARTY_NOTICES。
+
+构建调用 `python -B -X utf8 E:/项目/Veyra/tmp/codex-ps5-input-subtitle-20261125/build-local.py <工作树> veyra_qml_ui veyra_repair_fg_tests veyra_qml_quick_tests veyra_remoteplay_boundary_tests veyra_moonlight_protocol_tests veyra_ui_i18n_tests`。同一目录的 `stage.py --final` 准备 NVIDIA 手测版；`verify-new.py input quick gpu`、`verify-new.py providers`、`verify-new.py anr-local`、`response.cmd`、`native.py`、`native-cancel.py`、`fullscreen.py cinema|fullscreen`、`persist.py`、`paint.py` 和仓库的 `scripts/i18n/extract.py --check` 执行验收。修正了仅补帧的贴字误差及原生鼠标点击取消改键被吃掉的问题。ANR 首次独立配置缺少可选组件，校验本地已有 19 个文件后重测通过。
+
+构建目录 `E:/项目/Veyra/build/codex-ps5-input-subtitle-20261125`。11 个 D3D12 用例调试层错误为 0，输入边界、135 个 Moonlight 协议检查和 262 个 Qt Quick 检查通过。A/B 为 288 行。中文布局的真实窗口检查了按键与滚轮、光标释放、影院和全屏；真实 PS5 游戏、物理端到端延迟和当事人游戏中的字幕效果待用户手测。播放器已使用独立配置启动并打开键鼠面板。[完整验收、截图、日志和 A/B 表](<E:/项目/Veyra/reports/codex-ps5-input-subtitle-20261125/RESULTS.md>)。
+
+## 2026-11-25 PS5 双布局和鼠标慢移
+
+在 `codex/ps5-input-subtitle-20261125` 的上一版 `b63368db` 后检查手测日志及「继续排查 Claude 线索」的 XY-CtoPS5 调研。行为参考是独立步行／驾驶布局以及精细瞄准与满杆速度分开调节，实现在 Veyra 内完成。步行键位按原档案加载。驾驶默认 W→R2、S→R1，A/D 保持左杆方向并在 80 ms 内渐推满。F6 默认切换且可重绑。切换清除旧动作、积压滚轮和旧鼠标位移，按住的键要松开再触发。各档案持久化两套独立键位。
+
+26 段旧手测的 Windows Raw Input 最大排队记录为 16 ms ×22、31 ms ×3、0 ms ×1，陈旧报告丢弃为零。PS5 鼠标采集移到单独的消息线程。慢移根据非零报告的间隔延长保持期，普通速度仍快速回中。鼠标硬件 DPI 用于归一化，灵敏度单独调整，新增 800 DPI 参考下的满杆速度。336 行回放覆盖 125/500/1000/4000 Hz 和 800/1600/3200 DPI。125 Hz、35 counts/s 的 240 个稳态采样中，归零 12 次变为 0 次。1000 Hz、1000 counts/s 的默认输出从 31.0% 提高到 46.3%，回放末尾归零均为 6 ms。这里的时间由模拟输出读数得到，未测 PS5 实机屏幕端到端延迟。
+
+`tmp/ps5-drive-aim-20261125/build-local.py` 在现有构建目录 `build/codex-ps5-input-subtitle-20261125` 增量构建，日志为 `logs/codex-ps5-input-subtitle-20261125/build-20261125-094539`。`compare.cmd`、`verify.py input quick`、`stage.py --final` 和 `scripts/i18n/extract.py --check` 分别复算回放、运行回归、生成独立本地测试版及核对翻译。远程游玩边界、135 项 Moonlight 协议和 263 项 Qt Quick 检查通过，九种目标语言缺译与占位符错误均为零。测试版沿用用户上次手调配置的本地副本，路径 `tests/ps5-drive-aim-20261125`。真实窗口探针收到鼠标报告，并观察到步行 W、切换时归零、驾驶 W/R2、S/R1 和 D 渐推。重复探针期间前台被切换，完整的真实窗口流程以手测为准。本轮采用手动切换，真机驾驶手感和实际画面延迟仍未验。测试窗口已打开并停在映射面板。
+
+## 2026-11-25 PS5 驾驶刹车与点选录键
+
+用户确认驾驶的刹车／倒车为 L2。驾驶默认 W→R2、S→L2，L2 随 S 释放，并且不触发默认的开镜倍率。读取前版档案时，匹配旧 W/R2、S/R1 且 L2 仍和步行键位相同的驾驶配置才迁移到 L2。其它已保存的驾驶改键继续读回。
+
+手柄图和列表点中按键时立即录入，同一次点击保留粉色高亮，点另一按键改录该按键。原生鼠标事件允许这些界面控件正常接收左键，其他可录制位置仍支持绑定鼠标左键。已去掉第二次点击「改键」，保留取消与清除。
+
+`tmp/ps5-brake-rebind-20261125/build-local.py` 使用原构建目录增量编译，构建日志在 `logs/codex-ps5-input-subtitle-20261125/build-20261125-101239`。输入边界覆盖 S 按住和松开、步行 L2 的切换设定，以及换档时释放输入。实际播放器读入上一版布局，确认 L2 为 S、R1 恢复 R、用户的自定义驾驶叉键 K 保留。Windows 原生点击探针因前台归其它窗口而没有发送点击。界面回归单独验证手柄图、键位列表和取消。九种翻译缺失和占位符错误为 0。运行目录为 `tests/ps5-brake-rebind-20261125`，日志目录为 `logs/ps5-brake-rebind-20261125`。修正版已用独立档案对着映射页启动。
+
+## 2026-11-25 PS5 镜头响应与 GTA V 键位
+
+用户反馈鼠标先动、画面镜头后动。复查 `E:/项目/Veyra/logs/ps5-drive-aim-20261125/manual-player.log`，该轮走采集卡画面加 PS5 仅控制，协商约 60 FPS。仅选采集回调帧率至少 58 的日志窗口。revision 2 保留输入帧率且关闭补帧，11 个窗口的回调到 Present 返回的 P95 中位数为 6.04 ms。revision 4 保留原始帧率并开启补帧，10 个窗口为 17.13 ms。revision 10 启用 60→30 兼容和补帧，256 个窗口为 24.26 ms，其中调度等待 P95 的中位数为 19.23 ms。日志范围从软件收到采集帧起算，未包含主机输入处理、HDMI/采集卡内部、显示器扫描和最终像素发光。
+
+键鼠面板添加「跟手优先」。它保留图及内容帧率选项，给 PS5 串流启用以观测 GPU 就绪为基准的补帧相位。在自动显示同步的采集与 PS5 串流中，最初单独把原帧提前最多 4 ms 的尝试使 1% 低帧落到 47.8。最终改为根据 GPU 就绪分位数提前整组，保持组内间隔。已经拒绝或过期的组可立即送出增强原帧。显示端补帧提供器、固定垂直同步和自定义输出限速沿用既有呈现。GTA V 独立档案复用既有用户鼠标参数，按 Rockstar PC/PlayStation 控制文档映射常用步行和车辆键。F 上下车，F6 独立切换布局，ESC 送游戏菜单，F1 解锁软件。驾驶为 W/R2、S/L2、A/D 和空格/R1。已存在的用户档案保留，首次添加 GTA V 后可以继续改键。参考 [Rockstar PC 操作说明](https://www.rockstargames.com/newswire/article/51974aa3a724o2/rockstar-game-tips-tailoring-your-settings-and-controls-in) 和 [PS5 镜头切换说明](https://support.rockstargames.com/articles/4SLMPiZCrVUVcuL71dBD29/changing-camera-perspective-to-1st-person-in-gtav)。
+
+构建使用 `tmp/ps5-gta-response-20261125/build-local.py`，主程序、实时呈现探针及调度测试的最终构建日志为 `logs/codex-ps5-input-subtitle-20261125/build-20261125-103447`。`fg-ab.py` 以 RTX 5070、1080p60 合成源模拟采集卡，用相同 NR、VFG 2×、60→30 和自动显示同步比较。取稳定后同长 8 秒窗口，两组各 240 张增强原帧，实际送出 240／239 张生成帧。输入帧抵达后到 Present 返回的增强原帧 P95 从 29.334 降至 26.543 ms，生成帧从 12.860 降至 10.310 ms，送帧间隔 P95 为 17.270／17.286 ms，输出 1% 低帧为 56.61／55.94。原始数据在 `reports/ps5-gta-response-20261125/fg-ab.csv`，两次逐帧日志分别在同任务 logs 的 normal 与 responsive。测试值未包含真实鼠标到屏幕的完整链路。
+
+`verify.py input quick`、现有实时调度与时钟单元测试以及九语言提取通过。Qt Quick 265 项通过，输入回归核对 GTA V 两套布局和 135 项 Moonlight 检查。测试版在 `tests/ps5-gta-response-20261125`，使用独立档案。完整 PS5 串流与采集实卡手感待用户验证。
+
+## 2026-11-25 撤回 PS5 跟手优先实验
+
+用户选择稳定性。移除实验开关、偏好读取、提前相位、过期组提前呈现和对应的实验测试分支。送显引擎、桥接和调度回归源码与加入实验之前的 `3810018c` 逐文件一致。GTA V 档案、步行／驾驶切换、L2 刹车／倒车与点击开始改键包含在稳定测试版中。前一节的 A/B 结果仅供追溯。
+
+通过过去的 GTA V 测试档案复制配置到独立的 `E:/项目/Veyra/tests/ps5-gta-stable-20261125/manual-profile`，去除实验偏好。原档案及正在运行的测试进程由用户继续掌控。稳定版沿用原应用的画面处理设置。
+
+`tmp/ps5-gta-stable-20261125/build-local.py` 构建通过，日志在 `logs/codex-ps5-input-subtitle-20261125/build-20261125-104151`。同目录下 `stage.py --final`、`verify.py input quick`、`fg-smoke.py`、实时呈现和时钟单元测试及 `scripts/i18n/extract.py --check` 均已核对。Qt Quick 265 项通过。10 秒 NR + VFG 2× + 60→30 回放送出 301 张增强原帧及 300 张生成帧，送显时限过期记录为 0。日志位于 `logs/ps5-gta-stable-20261125`。稳定版已打开映射面板，前版生成的启动器已指向稳定版。

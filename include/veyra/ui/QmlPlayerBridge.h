@@ -52,8 +52,6 @@ class QmlPlayerBridge : public QObject {
     // is the submit rate below (with its 1% low).
     // Automatic FG and Dolby Vision: automatic frame-generation multiplier and
     // the Dolby Vision follow / P7 composite switches.
-    Q_PROPERTY(bool fgAutoMultiplierEnabled READ fgAutoMultiplier WRITE setFgAutoMultiplier NOTIFY settingsChanged)
-    Q_PROPERTY(bool fgAutoMultiplierAvailable READ fgAutoMultiplierAvailable NOTIFY settingsChanged)
     Q_PROPERTY(bool doviFollow READ doviFollow WRITE setDoviFollow NOTIFY settingsChanged)
     Q_PROPERTY(bool doviP7Compose READ doviP7Compose WRITE setDoviP7Compose NOTIFY settingsChanged)
     Q_PROPERTY(bool doviFollowAverage READ doviFollowAverage WRITE setDoviFollowAverage NOTIFY settingsChanged)
@@ -216,6 +214,7 @@ class QmlPlayerBridge : public QObject {
     // Xbox home streaming (unofficial): sign-in, consoles and stream state; null without Xbox support.
     Q_PROPERTY(QObject* xbox READ xboxModel CONSTANT)
     Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
+    Q_PROPERTY(QObject* ps5Input READ ps5Input CONSTANT)
     Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
 
     // Shell preferences that are not enhancement settings: screenshot folder,
@@ -476,8 +475,10 @@ class QmlPlayerBridge : public QObject {
     // fgAdaptive, pacingRepair and hudLock, global controls kept in shell preferences.
     Q_PROPERTY(bool fgAdaptive READ fgAdaptive WRITE setFgAdaptive NOTIFY settingsChanged)
     Q_PROPERTY(bool pacingRepair READ pacingRepair WRITE setPacingRepair NOTIFY settingsChanged)
+    Q_PROPERTY(bool hudAllEffects READ hudAllEffects WRITE setHudAllEffects NOTIFY settingsChanged)
     Q_PROPERTY(bool hudLock READ hudLock WRITE setHudLock NOTIFY settingsChanged)
     Q_PROPERTY(int hudProtect READ hudProtect WRITE setHudProtect NOTIFY settingsChanged)
+    Q_PROPERTY(bool subtitleHold READ subtitleHold WRITE setSubtitleHold NOTIFY settingsChanged)
     Q_PROPERTY(bool dynamicHud READ dynamicHud WRITE setDynamicHud NOTIFY settingsChanged)
     Q_PROPERTY(bool dlssgLiteAvailable READ dlssgLiteAvailable CONSTANT)
     Q_PROPERTY(QString dlssgLiteHint READ dlssgLiteHint NOTIFY snapshotChanged)
@@ -842,6 +843,9 @@ public:
     QVariantMap ps5Control() const;
     QObject* moonlightModel() const;
     bool moonlightCaptured() const;
+    QObject* ps5Input() const;
+    Q_INVOKABLE bool ps5CaptureKeyboard();
+    uint64_t ps5InputTarget() const;
     bool moonlightStatsVisible() const;
     void setMoonlightStatsVisible(bool visible);
     Q_INVOKABLE void openMoonlightDialog();
@@ -1136,12 +1140,10 @@ public:
     Q_INVOKABLE bool beginExclusionMove(double x,double y);
     Q_INVOKABLE void updateExclusionMove(double x,double y);
     Q_INVOKABLE bool endExclusionMove(bool commit);
-    Q_INVOKABLE bool beginMaskDraw(bool allEffects,const QString& shape);
-    Q_INVOKABLE bool setMaskEnabled(bool allEffects,bool enabled);
-    Q_INVOKABLE bool setMaskFeather(bool allEffects,double pixels);
-    Q_INVOKABLE bool removeMaskRegion(bool allEffects,int index);
-    Q_INVOKABLE bool clearMaskRegions(bool allEffects);
-    Q_INVOKABLE bool setExclusionRegionMode(int index,int mode);
+    Q_INVOKABLE bool beginMaskDraw(bool hud,const QString& shape);
+    Q_INVOKABLE bool setMaskFeather(bool hud,double pixels);
+    Q_INVOKABLE bool removeMaskRegion(bool hud,int index);
+    Q_INVOKABLE bool clearMaskRegions(bool hud);
     Q_INVOKABLE bool setStabilizerParameter(int index,const QString& key,double value);
     Q_INVOKABLE bool setProtectionRegion(double left, double top, double right, double bottom, double feather);
     bool colorEnabled() const;
@@ -1185,10 +1187,14 @@ public:
     void setFgAdaptive(bool value);
     bool pacingRepair() const;
     void setPacingRepair(bool value);
+    bool hudAllEffects() const;
+    void setHudAllEffects(bool value);
     bool hudLock() const;
     void setHudLock(bool value);
     int hudProtect() const;
     void setHudProtect(int value);
+    bool subtitleHold() const;
+    void setSubtitleHold(bool value);
     bool dynamicHud() const;
     void setDynamicHud(bool value);
     bool dlssgLiteAvailable() const;
@@ -1510,13 +1516,6 @@ public:
 
     void showFormatBadge(const engine::PlayerSnapshot& snapshot);
 
-    void maybeApplyFgAutoMultiplier();
-
-    void setFgAutoMultiplier(bool value);
-    bool fgAutoMultiplierAvailable() const;
-    bool fgAutoMultiplier() const;
-
-    void applyFgMultiplier(int multiplier);
 
     bool doviFollow() const;
     void setDoviFollow(bool on);
@@ -1620,8 +1619,8 @@ private:
     void rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
     void updateMaskOverlay();
-    QVariantMap maskState(bool allEffects) const;
-    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool allEffects=false);
+    QVariantMap maskState(bool hud) const;
+    bool editProtection(const std::function<bool(engine::ChainNode&)>& edit,bool hud=false);
     engine::ColorSettings selectedColourSettings() const;
     bool commitColour(const engine::ColorSettings& colour);
     // Reads the export job's snapshot and emits exportChanged.

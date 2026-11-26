@@ -3056,8 +3056,21 @@
    "ru": "HDR (10-битный) экспорт требует NVIDIA NVENC; этот GPU имеет только 8-битный системный кодер. Выключить HDR или экспортировать NVIDIA GPU"
   },
   {
+   "zh": "HUD 保护",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "HUD 保護",
+   "en": "HUD protection",
+   "ja": "HUD 保護",
+   "ko": "HUD 보호",
+   "es": "Protección del HUD",
+   "fr": "Protection du HUD",
+   "de": "HUD-Schutz",
+   "pt-BR": "Proteção do HUD",
+   "ru": "Защита HUD"
+  },
+  {
    "zh": "HUD 自动锁定",
-   "src": "qml/NodePage.qml",
+   "src": "qml/HudProtectControl.qml",
    "zh-TW": "HUD 自動鎖定",
    "en": "Auto HUD lock",
    "ja": "HUD 自動ロック",
@@ -4328,6 +4341,19 @@
    "de": "PS5 Verbindung fehlgeschlagen; siehe Diagnose",
    "pt-BR": "PS5 conexão falhou; veja diagnósticos",
    "ru": "PS5 связь не удалось; см. Диагностика"
+  },
+  {
+   "zh": "PS5 键鼠映射",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "PS5 鍵鼠映射",
+   "en": "PS5 keyboard & mouse mapping",
+   "ja": "PS5 キーボードとマウスの割り当て",
+   "ko": "PS5 키보드·마우스 매핑",
+   "es": "Asignación de teclado y ratón de PS5",
+   "fr": "Mappage clavier et souris PS5",
+   "de": "PS5-Tastatur- und Mausbelegung",
+   "pt-BR": "Mapeamento de teclado e mouse do PS5",
+   "ru": "Раскладка клавиатуры и мыши PS5"
   },
   {
    "zh": "PSN 账号",
@@ -5994,19 +6020,6 @@
    "ru": "Под пунктом «Формат пикселей» показаны варианты, доступные для выбранного разрешения и частоты кадров. У распространённых форматов есть следующие различия."
   },
   {
-   "zh": "「全部效果」显示未处理原画。开启 RTX Video HDR 后，框内可能比周围暗。",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "「全部效果」顯示未處理的原始畫面。啟用 RTX Video HDR 後，框內可能比周圍暗。",
-   "en": "All effects shows the unprocessed image. With RTX Video HDR on, the region may look darker than its surroundings.",
-   "ja": "「すべての効果」は元の映像を表示します。RTX Video HDR を有効にすると、枠内が周囲より暗く見える場合があります。",
-   "ko": "‘모든 효과’는 처리하지 않은 원본을 표시합니다. RTX Video HDR을 켜면 영역이 주변보다 어두워 보일 수 있습니다.",
-   "es": "«Todos los efectos» muestra la imagen original. Con RTX Video HDR activado, la zona puede verse más oscura que el resto.",
-   "fr": "« Tous les effets » affiche l’image d’origine. Avec RTX Video HDR, la zone peut paraître plus sombre que ses alentours.",
-   "de": "„Alle Effekte“ zeigt das unbearbeitete Bild. Bei aktivem RTX Video HDR kann der Bereich dunkler als die Umgebung erscheinen.",
-   "pt-BR": "«Todos os efeitos» exibe a imagem original. Com RTX Video HDR ligado, a área pode ficar mais escura do que o entorno.",
-   "ru": "«Все эффекты» показывает исходное изображение. При включении RTX Video HDR область может выглядеть темнее окружающей картинки."
-  },
-  {
    "zh": "一键推荐",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "一鍵推薦",
@@ -6722,6 +6735,19 @@
    "ru": "Связь с хозяином была потеряна."
   },
   {
+   "zh": "与鼠标驱动的档位填同一个值。想调快慢，请调灵敏度。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "填寫與滑鼠驅動程式相同的 DPI。要調整快慢，請調整靈敏度。",
+   "en": "Match the DPI set in your mouse driver. Use sensitivity to change aim speed.",
+   "ja": "マウスドライバーと同じ DPI を入力します。照準速度は感度で調整します。",
+   "ko": "마우스 드라이버와 동일한 DPI를 입력하세요. 조준 속도는 감도로 조절합니다.",
+   "es": "Usa el mismo DPI que en el controlador del ratón. Ajusta la sensibilidad para cambiar la velocidad de apuntado.",
+   "fr": "Saisissez le même DPI que dans le pilote de la souris. Réglez la sensibilité pour changer la vitesse de visée.",
+   "de": "DPI wie im Maustreiber einstellen. Das Zieltempo lässt sich über die Empfindlichkeit anpassen.",
+   "pt-BR": "Use o mesmo DPI do driver do mouse. Ajuste a sensibilidade para mudar a velocidade da mira.",
+   "ru": "Укажите DPI из драйвера мыши. Скорость прицеливания меняется чувствительностью."
+  },
+  {
    "zh": "专业模式",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "專業模式",
@@ -6798,19 +6824,6 @@
    "de": "Die beiden Modi halten ihre Einstellungen und Voreinstellungen völlig getrennt; Umschalten zurück zur Liste stellt die Liste eigenen Einstellungen.",
    "pt-BR": "Os dois modos mantêm suas configurações e predefinições completamente separadas; voltar para a lista restaura as próprias configurações da lista.",
    "ru": "Оба режима сохраняют свои настройки и предустановки полностью отдельными; переключение обратно в список восстанавливает собственные настройки списка."
-  },
-  {
-   "zh": "严格补帧节奏",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "嚴格補幀節奏",
-   "en": "Strict frame generation pacing",
-   "ja": "厳密なフレーム生成ペーシング",
-   "ko": "프레임 생성 간격 고정",
-   "es": "Ritmo estricto de generación de fotogramas",
-   "fr": "Cadence stricte de génération d'images",
-   "de": "Strikte Taktung der Frame-Generierung",
-   "pt-BR": "Ritmo rigoroso da geração de quadros",
-   "ru": "Строгий ритм генерации кадров"
   },
   {
    "zh": "中",
@@ -7944,6 +7957,19 @@
    "ru": "Только лица"
   },
   {
+   "zh": "仅开镜",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "僅開鏡",
+   "en": "While aiming",
+   "ja": "照準時のみ",
+   "ko": "조준 중에만",
+   "es": "Solo al apuntar",
+   "fr": "En visée",
+   "de": "Beim Zielen",
+   "pt-BR": "Somente ao mirar",
+   "ru": "При прицеливании"
+  },
+  {
    "zh": "仅接受驱动尺寸范围与步进支持的值；连接时核对实际格式",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "僅接受驅動尺寸範圍與步進支援的值；連線時核對實際格式",
@@ -8033,19 +8059,6 @@
    "de": "Magewell Pro Capture (PCIe) nur; die USB Capture-Serie wird nicht unterstützt",
    "pt-BR": "Magewell Apenas Pro Capture (PCIe); a série USB Capture não é suportada",
    "ru": "Magewell Захват (PCIe) только; USB Захват серии не поддерживается"
-  },
-  {
-   "zh": "仅补帧",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "僅補幀",
-   "en": "Frame generation only",
-   "ja": "フレーム生成のみ",
-   "ko": "프레임 생성만",
-   "es": "Solo generación de fotogramas",
-   "fr": "Génération d’images seule",
-   "de": "Nur Frame-Generierung",
-   "pt-BR": "Somente geração de quadros",
-   "ru": "Только генерация кадров"
   },
   {
    "zh": "仅观看",
@@ -8319,6 +8332,19 @@
    "de": "Ordnung mit niedriger Latenz, nur Vorschau, alle Schichten synchron",
    "pt-BR": "Ordem de baixa latência, somente visualização, todas as camadas sincronizadas",
    "ru": "Порядок низкой задержки, только предварительный просмотр, все слои синхронизированы"
+  },
+  {
+   "zh": "低死区 FPS",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "低死區 FPS",
+   "en": "Low-deadzone FPS",
+   "ja": "FPS・低デッドゾーン",
+   "ko": "낮은 데드존 FPS",
+   "es": "FPS con zona muerta baja",
+   "fr": "FPS à faible zone morte",
+   "de": "FPS mit kleiner Totzone",
+   "pt-BR": "FPS com zona morta baixa",
+   "ru": "FPS с малой мёртвой зоной"
   },
   {
    "zh": "低频时域重建",
@@ -8958,19 +8984,6 @@
    "ru": "Разрешить разрывы кадра"
   },
   {
-   "zh": "先从补帧输入去掉准心，再贴回增强后的准心。动态准心或第三人称游戏可在剔除面板画紧一点的框。",
-   "src": "qml/HudProtectControl.qml",
-   "zh-TW": "先從補幀輸入移除準心，再貼回增強後的準心。動態準心或第三人稱遊戲可在排除面板畫緊一點的框。",
-   "en": "Removes the crosshair before frame generation and restores the enhanced crosshair afterward. For dynamic crosshairs or third-person games, draw a tight box in the exclusion panel.",
-   "ja": "フレーム生成の入力から照準を除き、生成後に補正済みの照準を戻します。動く照準や三人称視点では、除外パネルで照準を小さく囲みます。",
-   "ko": "프레임 생성 전에 조준점을 제거하고 생성 후 보정된 조준점을 복원합니다. 움직이는 조준점이나 3인칭 게임에서는 제외 패널에서 조준점을 좁게 둘러싸세요.",
-   "es": "Quita la mira antes de generar fotogramas y restaura la mira mejorada al final. Para miras dinámicas o juegos en tercera persona, dibuja un recuadro ajustado en el panel de exclusión.",
-   "fr": "Retire le viseur avant la génération d’images et rétablit le viseur amélioré ensuite. Pour un viseur dynamique ou un jeu à la troisième personne, tracez un cadre serré dans le panneau d’exclusion.",
-   "de": "Entfernt das Fadenkreuz vor der Frame-Generierung und setzt danach das verbesserte Fadenkreuz wieder ein. Ziehe bei einem dynamischen Fadenkreuz oder Spielen in der dritten Person einen engen Rahmen im Ausschlussbereich.",
-   "pt-BR": "Remove a mira antes de gerar quadros e restaura a mira aprimorada ao final. Para miras dinâmicas ou jogos em terceira pessoa, desenhe uma caixa justa no painel de exclusão.",
-   "ru": "Убирает прицел перед генерацией кадров и возвращает улучшенный прицел после неё. Для динамического прицела или игр от третьего лица обведите прицел плотной рамкой в панели исключений."
-  },
-  {
    "zh": "先在 Windows 中关闭采集卡的“侦听此设备”，或把目标改回原设备。确认后打开 VB-Audio 安装器，选择 Remove Driver 并按提示重启。其他使用 VB-CABLE 的软件也会失去这条音频通路。",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "先在 Windows 中關閉擷取卡的“偵聽此裝置”，或把目標改回原裝置。確認後開啟 VB-Audio 安裝器，選擇 Remove Driver 並按提示重啟。其他使用 VB-CABLE 的軟體也會失去這條音訊通路。",
@@ -9271,7 +9284,7 @@
   },
   {
    "zh": "全效果剔除",
-   "src": "qml/ProPage.qml",
+   "src": "src/engine/EffectChain.cpp",
    "zh-TW": "全效果剔除",
    "en": "Exclude all effects",
    "ja": "すべての効果を除外",
@@ -9294,19 +9307,6 @@
    "de": "Platzieren Sie den Effektausschluss nach Bildeffekten und vor der Bilderzeugung.",
    "pt-BR": "Exclusão do efeito de lugar após efeitos de imagem e antes da geração de quadros.",
    "ru": "Исключение эффекта места после эффектов изображения и до генерации кадра."
-  },
-  {
-   "zh": "全部效果",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "全部效果",
-   "en": "All effects",
-   "ja": "すべての効果",
-   "ko": "모든 효과",
-   "es": "Todos los efectos",
-   "fr": "Tous les effets",
-   "de": "Alle Effekte",
-   "pt-BR": "Todos os efeitos",
-   "ru": "Все эффекты"
   },
   {
    "zh": "全部显卡",
@@ -9542,19 +9542,6 @@
    "de": "Wenn aus, Erweiterung, Frame-Generierung und Export verwenden Sie die leistungsstärkste GPU",
    "pt-BR": "Quando desligado, aprimoramento, geração de quadros e exportação usar o mais poderoso GPU",
    "ru": "При выключении, улучшении, генерации кадров и экспорте используют самые мощные GPU"
-  },
-  {
-   "zh": "关闭时按手动选的倍率 · 默认关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "關閉時按手動選的倍率 · 默認關閉",
-   "en": "Off uses the manually selected multiplier. Off by default",
-   "ja": "オフの場合は手動で選んだ倍率を使います。既定はオフ",
-   "ko": "끄면 직접 선택한 배율을 사용합니다. 기본값 꺼짐",
-   "es": "Off utiliza el multiplicador seleccionado manualmente.",
-   "fr": "Off utilise le multiplicateur sélectionné manuellement. Off par défaut",
-   "de": "Off verwendet den manuell ausgewählten Multiplikator. Off standardmäßig",
-   "pt-BR": "Desligado usa o multiplicador selecionado manualmente. Desligado por padrão",
-   "ru": "Off использует вручную выбранный множитель. Off по умолчанию"
   },
   {
    "zh": "关闭时这条链路不存在，零开销",
@@ -10051,19 +10038,6 @@
    "ru": "Написать дополнительный трек"
   },
   {
-   "zh": "准心/HUD",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "準心/HUD",
-   "en": "Crosshair and HUD",
-   "ja": "照準・HUD",
-   "ko": "조준점 및 HUD",
-   "es": "Mira y HUD",
-   "fr": "Viseur et HUD",
-   "de": "Fadenkreuz und HUD",
-   "pt-BR": "Mira e HUD",
-   "ru": "Прицел и HUD"
-  },
-  {
    "zh": "准心/HUD 保护",
    "src": "qml/HudProtectControl.qml",
    "zh-TW": "準心/HUD 保護",
@@ -10454,6 +10428,32 @@
    "ru": "Переключить Минимальный / Pro"
   },
   {
+   "zh": "切换模式",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "切換模式",
+   "en": "Toggle on press",
+   "ja": "押すたびに切替",
+   "ko": "누를 때 전환",
+   "es": "Alternar al pulsar",
+   "fr": "Basculer à chaque pression",
+   "de": "Bei Tastendruck umschalten",
+   "pt-BR": "Alternar ao pressionar",
+   "ru": "Переключать нажатием"
+  },
+  {
+   "zh": "切换步行／驾驶",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "切換步行／駕駛",
+   "en": "Switch on-foot / driving",
+   "ja": "徒歩・運転を切り替え",
+   "ko": "도보·운전 전환",
+   "es": "Alternar entre a pie y conducción",
+   "fr": "Basculer entre marche et conduite",
+   "de": "Zwischen Laufen und Fahren wechseln",
+   "pt-BR": "Alternar entre a pé e direção",
+   "ru": "Переключить ходьбу и вождение"
+  },
+  {
    "zh": "列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "列出離散影格率及驅動範圍內的候選；裝置影格率填 0 時沿用此選擇，連線時驗證實際值",
@@ -10582,6 +10582,19 @@
    "de": "Ausgangsspur erstellen",
    "pt-BR": "Criar uma faixa de saída",
    "ru": "Создать выходной трек"
+  },
+  {
+   "zh": "创建键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "建立鍵",
+   "en": "Create button",
+   "ja": "クリエイトボタン",
+   "ko": "만들기 버튼",
+   "es": "Botón Crear",
+   "fr": "Touche Créer",
+   "de": "Create-Taste",
+   "pt-BR": "Botão Criar",
+   "ru": "Кнопка Create"
   },
   {
    "zh": "初始化失败；详细原因见诊断日志",
@@ -10818,17 +10831,17 @@
    "ru": "Открыть страницу"
   },
   {
-   "zh": "剔除内容",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "排除內容",
-   "en": "Exclude",
-   "ja": "除外する処理",
-   "ko": "제외할 항목",
-   "es": "Excluir",
-   "fr": "Exclure",
-   "de": "Ausschließen",
-   "pt-BR": "Excluir",
-   "ru": "Исключить"
+   "zh": "剔除所有效果",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "排除所有效果",
+   "en": "Exclude from all effects",
+   "ja": "すべての効果から除外",
+   "ko": "모든 효과에서 제외",
+   "es": "Excluir de todos los efectos",
+   "fr": "Exclure de tous les effets",
+   "de": "Von allen Effekten ausnehmen",
+   "pt-BR": "Excluir de todos os efeitos",
+   "ru": "Исключить из всех эффектов"
   },
   {
    "zh": "剪辑入点已超过源视频时长",
@@ -11050,19 +11063,6 @@
    "de": "Oberer Rand des Bereichs",
    "pt-BR": "Borda superior da área",
    "ru": "Верхний край области"
-  },
-  {
-   "zh": "区域内恢复原始画面与帧率",
-   "src": "qml/ProPage.qml",
-   "zh-TW": "區域內恢復原始畫面與幀率",
-   "en": "Restore source picture and frame cadence inside the regions",
-   "ja": "領域内を元の映像とフレーム周期に戻す",
-   "ko": "선택 영역을 원본 화면과 원본 프레임 간격으로 되돌립니다.",
-   "es": "Restaurar foto fuente y cadencia de fotograma dentro de las regiones",
-   "fr": "Restaurer l'image source et cadrer la cadence à l'intérieur des régions",
-   "de": "Wiederherstellen von Quellbild und Frame-Kadenz innerhalb der Regionen",
-   "pt-BR": "Restaurar cadência de imagens e quadros de origem dentro das regiões",
-   "ru": "Восстановление исходного изображения и каденции кадров внутри регионов"
   },
   {
    "zh": "区域内排除 NR 处理。最多 4 个区域。",
@@ -11910,6 +11910,19 @@
    "ru": "Не используется при включении двойного SR; он возвращается, когда двойной SR выключен."
   },
   {
+   "zh": "反转纵向",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "反轉縱向",
+   "en": "Invert vertical axis",
+   "ja": "上下反転",
+   "ko": "상하 반전",
+   "es": "Invertir eje vertical",
+   "fr": "Inverser l’axe vertical",
+   "de": "Vertikale Achse umkehren",
+   "pt-BR": "Inverter eixo vertical",
+   "ru": "Инвертировать вертикаль"
+  },
+  {
    "zh": "反馈时请附上以下转储文件。",
    "src": "apps/veyra-qml/main.cpp",
    "zh-TW": "回報時請附上以下傾印檔案。",
@@ -12508,6 +12521,19 @@
    "ru": "Доступно"
   },
   {
+   "zh": "可自动识别中心准星，也可在指定区域内识别。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "可自動辨識中央準星，也可在指定區域內辨識。",
+   "en": "Detect the center crosshair automatically or look inside selected regions.",
+   "ja": "中央の照準を自動検出するか、指定した領域内で検出します。",
+   "ko": "중앙 조준점을 자동으로 찾거나 지정한 영역에서 찾습니다.",
+   "es": "Detecta la mira central o busca en las regiones seleccionadas.",
+   "fr": "Détecte le réticule central ou cherche dans les zones sélectionnées.",
+   "de": "Erkennt das mittlere Fadenkreuz oder sucht in ausgewählten Bereichen.",
+   "pt-BR": "Detecta a mira central ou busca nas regiões selecionadas.",
+   "ru": "Находит прицел в центре или в выбранных областях."
+  },
+  {
    "zh": "可视化裁剪",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "視覺化裁剪",
@@ -12558,6 +12584,58 @@
    "de": "Unten rechts",
    "pt-BR": "Inferior direito",
    "ru": "Справа внизу"
+  },
+  {
+   "zh": "右摇杆 上",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "右搖桿 上",
+   "en": "Right stick up",
+   "ja": "右スティック 上",
+   "ko": "오른쪽 스틱 위",
+   "es": "Stick derecho arriba",
+   "fr": "Stick droit haut",
+   "de": "Rechter Stick hoch",
+   "pt-BR": "Analógico direito para cima",
+   "ru": "Правый стик вверх"
+  },
+  {
+   "zh": "右摇杆 下",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "右搖桿 下",
+   "en": "Right stick down",
+   "ja": "右スティック 下",
+   "ko": "오른쪽 스틱 아래",
+   "es": "Stick derecho abajo",
+   "fr": "Stick droit bas",
+   "de": "Rechter Stick runter",
+   "pt-BR": "Analógico direito para baixo",
+   "ru": "Правый стик вниз"
+  },
+  {
+   "zh": "右摇杆 右",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "右搖桿 右",
+   "en": "Right stick right",
+   "ja": "右スティック 右",
+   "ko": "오른쪽 스틱 오른쪽",
+   "es": "Stick derecho derecha",
+   "fr": "Stick droit droite",
+   "de": "Rechter Stick rechts",
+   "pt-BR": "Analógico direito para a direita",
+   "ru": "Правый стик вправо"
+  },
+  {
+   "zh": "右摇杆 左",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "右搖桿 左",
+   "en": "Right stick left",
+   "ja": "右スティック 左",
+   "ko": "오른쪽 스틱 왼쪽",
+   "es": "Stick derecho izquierda",
+   "fr": "Stick droit gauche",
+   "de": "Rechter Stick links",
+   "pt-BR": "Analógico direito para a esquerda",
+   "ru": "Правый стик влево"
   },
   {
    "zh": "右键空白添加 · 拖到连线上插入 · 拖远（上下超过一截）或按住 Alt 松手即断开 · 端口拖拽/点击连线 · 中键平移 · 滚轮缩放",
@@ -13756,6 +13834,19 @@
    "ru": "Сбалансированный"
   },
   {
+   "zh": "垂直位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "垂直位置",
+   "en": "Vertical position",
+   "ja": "垂直位置",
+   "ko": "세로 위치",
+   "es": "Posición vertical",
+   "fr": "Position verticale",
+   "de": "Vertikale Position",
+   "pt-BR": "Posição vertical",
+   "ru": "Положение по вертикали"
+  },
+  {
    "zh": "垂直同步",
    "src": "qml/NodePage.qml",
    "zh-TW": "垂直同步",
@@ -13793,6 +13884,19 @@
    "de": "VSync: Anzeige-Warteschlangensteuerung nicht verfügbar",
    "pt-BR": "VSync: não está disponível o controle da fila de exibição",
    "ru": "VSync: управление очередями дисплея недоступно"
+  },
+  {
+   "zh": "基础",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "基礎",
+   "en": "Basic",
+   "ja": "基本",
+   "ko": "기본",
+   "es": "Básico",
+   "fr": "Base",
+   "de": "Einfach",
+   "pt-BR": "Básico",
+   "ru": "Основные"
   },
   {
    "zh": "基础设置",
@@ -14744,6 +14848,19 @@
    "ru": "Всегда после каждого фотоэффекта"
   },
   {
+   "zh": "始终开启",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "始終開啟",
+   "en": "Always on",
+   "ja": "常に有効",
+   "ko": "항상 켬",
+   "es": "Siempre activo",
+   "fr": "Toujours actif",
+   "de": "Immer ein",
+   "pt-BR": "Sempre ativo",
+   "ru": "Всегда включено"
+  },
+  {
    "zh": "始终显示",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "始終顯示",
@@ -14846,6 +14963,19 @@
    "de": "Untertitel %1",
    "pt-BR": "Legendas %1",
    "ru": "Субтитры %1"
+  },
+  {
+   "zh": "字幕保护设置未生效",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "字幕保護設定未生效",
+   "en": "Subtitle protection could not be applied",
+   "ja": "字幕保護を適用できませんでした",
+   "ko": "자막 보호를 적용하지 못했습니다",
+   "es": "No se pudo aplicar la protección de subtítulos",
+   "fr": "Impossible d’appliquer la protection des sous-titres",
+   "de": "Untertitelschutz konnte nicht angewendet werden",
+   "pt-BR": "Não foi possível aplicar a proteção de legendas",
+   "ru": "Не удалось применить защиту субтитров"
   },
   {
    "zh": "字幕原字体",
@@ -15314,6 +15444,19 @@
    "de": "Aktuelle Datei zeigen",
    "pt-BR": "Mostrar arquivo atual",
    "ru": "Показать текущий файл"
+  },
+  {
+   "zh": "实体手柄",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "實體手把",
+   "en": "Physical controller",
+   "ja": "物理コントローラー",
+   "ko": "실물 컨트롤러",
+   "es": "Mando físico",
+   "fr": "Manette physique",
+   "de": "Physischer Controller",
+   "pt-BR": "Controle físico",
+   "ru": "Физический геймпад"
   },
   {
    "zh": "实时",
@@ -16772,6 +16915,58 @@
    "ru": "Слева внизу"
   },
   {
+   "zh": "左摇杆 上",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "左搖桿 上",
+   "en": "Left stick up",
+   "ja": "左スティック 上",
+   "ko": "왼쪽 스틱 위",
+   "es": "Stick izquierdo arriba",
+   "fr": "Stick gauche haut",
+   "de": "Linker Stick hoch",
+   "pt-BR": "Analógico esquerdo para cima",
+   "ru": "Левый стик вверх"
+  },
+  {
+   "zh": "左摇杆 下",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "左搖桿 下",
+   "en": "Left stick down",
+   "ja": "左スティック 下",
+   "ko": "왼쪽 스틱 아래",
+   "es": "Stick izquierdo abajo",
+   "fr": "Stick gauche bas",
+   "de": "Linker Stick runter",
+   "pt-BR": "Analógico esquerdo para baixo",
+   "ru": "Левый стик вниз"
+  },
+  {
+   "zh": "左摇杆 右",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "左搖桿 右",
+   "en": "Left stick right",
+   "ja": "左スティック 右",
+   "ko": "왼쪽 스틱 오른쪽",
+   "es": "Stick izquierdo derecha",
+   "fr": "Stick gauche droite",
+   "de": "Linker Stick rechts",
+   "pt-BR": "Analógico esquerdo para a direita",
+   "ru": "Левый стик вправо"
+  },
+  {
+   "zh": "左摇杆 左",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "左搖桿 左",
+   "en": "Left stick left",
+   "ja": "左スティック 左",
+   "ko": "왼쪽 스틱 왼쪽",
+   "es": "Stick izquierdo izquierda",
+   "fr": "Stick gauche gauche",
+   "de": "Linker Stick links",
+   "pt-BR": "Analógico esquerdo para a esquerda",
+   "ru": "Левый стик влево"
+  },
+  {
    "zh": "已从上次位置 %1 继续",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已從上次位置 %1 繼續",
@@ -17461,6 +17656,19 @@
    "ru": "Цветовой пресет экспортирован"
   },
   {
+   "zh": "已将 %1 从原按键移到此处。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "已將 %1 從原按鍵移到這裡。",
+   "en": "Moved %1 from its previous binding.",
+   "ja": "%1 の割り当てをこのボタンに移動しました。",
+   "ko": "기존에 지정된 %1 키를 이 버튼으로 옮겼습니다.",
+   "es": "Se movió %1 de su asignación anterior.",
+   "fr": "%1 a été déplacé depuis son affectation précédente.",
+   "de": "%1 wurde von seiner bisherigen Belegung hierher verschoben.",
+   "pt-BR": "%1 foi movido da atribuição anterior.",
+   "ru": "Прежняя привязка %1 перенесена сюда."
+  },
+  {
    "zh": "已开启",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "已開啟",
@@ -18111,19 +18319,6 @@
    "ru": "Рамки: обработанные %1, сгенерированный %2"
   },
   {
-   "zh": "帧同步 · 默认关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "幀同步 · 預設關閉",
-   "en": "Frame sync · off by default",
-   "ja": "フレーム同期 · 既定はオフ",
-   "ko": "프레임 동기화 · 기본 꺼짐",
-   "es": "Sincronización de fotogramas · desactivada por defecto",
-   "fr": "Synchro d'images · désactivée par défaut",
-   "de": "Frame-Synchronisation · standardmäßig aus",
-   "pt-BR": "Sincronização de quadros · desligada por padrão",
-   "ru": "Синхронизация кадров · по умолчанию выкл."
-  },
-  {
    "zh": "帧率",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "幀率",
@@ -18278,6 +18473,19 @@
    "de": "Normal versteckt; fällt nach unten, wenn der Zeiger die Oberseite des Fensters berührt",
    "pt-BR": "Oculto normalmente; cai quando o ponteiro toca no topo da janela",
    "ru": "Скрытый обычно; падает вниз, когда указатель касается верхней части окна"
+  },
+  {
+   "zh": "平滑时间",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "平滑時間",
+   "en": "Smoothing time",
+   "ja": "平滑化時間",
+   "ko": "보정 시간",
+   "es": "Tiempo de suavizado",
+   "fr": "Durée de lissage",
+   "de": "Glättungszeit",
+   "pt-BR": "Tempo de suavização",
+   "ru": "Время сглаживания"
   },
   {
    "zh": "平衡",
@@ -18642,6 +18850,45 @@
    "de": "Einschalten",
    "pt-BR": "Energia ligada",
    "ru": "Включи питание"
+  },
+  {
+   "zh": "开镜延时",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "開鏡延遲",
+   "en": "Aim delay",
+   "ja": "照準遅延",
+   "ko": "조준 지연",
+   "es": "Retardo al apuntar",
+   "fr": "Délai de visée",
+   "de": "Zielverzögerung",
+   "pt-BR": "Atraso ao mirar",
+   "ru": "Задержка прицеливания"
+  },
+  {
+   "zh": "开镜灵敏度",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "開鏡靈敏度",
+   "en": "Aim sensitivity",
+   "ja": "照準感度",
+   "ko": "조준 감도",
+   "es": "Sensibilidad al apuntar",
+   "fr": "Sensibilité en visée",
+   "de": "Zie­lempfindlichkeit",
+   "pt-BR": "Sensibilidade ao mirar",
+   "ru": "Чувствительность прицела"
+  },
+  {
+   "zh": "开镜触发键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "開鏡觸發鍵",
+   "en": "Aim trigger",
+   "ja": "照準ボタン",
+   "ko": "조준 버튼",
+   "es": "Botón de apuntado",
+   "fr": "Touche de visée",
+   "de": "Zieltaste",
+   "pt-BR": "Botão de mira",
+   "ru": "Кнопка прицеливания"
   },
   {
    "zh": "引擎异常，请查看诊断",
@@ -19084,6 +19331,19 @@
    "de": "Registriert für den aktuellen Benutzer. OBS und andere Streaming-Apps laufen als Administrator und benötigen Systemkomponenten.",
    "pt-BR": "Registrado para o usuário atual. OBS e outros aplicativos de streaming são executados como componentes do sistema de administrador.",
    "ru": "OBS и другие потоковые приложения работают так, как администратору нужны системные компоненты."
+  },
+  {
+   "zh": "当前使用实体手柄。切到键鼠映射后，点击画面即可接管。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "目前使用實體手把。切換到鍵鼠映射後，點選畫面即可接管。",
+   "en": "Physical controller active. Switch to keyboard and mouse, then click the picture to take control.",
+   "ja": "現在はコントローラーを使用中です。キーボードとマウスに切り替え、画面をクリックして操作できます。",
+   "ko": "현재 컨트롤러 사용 중입니다. 키보드·마우스로 전환한 뒤 화면을 클릭하세요.",
+   "es": "Mando físico activo. Cambia a teclado y ratón y haz clic en la imagen para controlar.",
+   "fr": "Manette active. Passez au clavier et à la souris puis cliquez sur l’image pour prendre le contrôle.",
+   "de": "Controller aktiv. Auf Tastatur und Maus umstellen und ins Bild klicken, um zu übernehmen.",
+   "pt-BR": "Controle físico ativo. Mude para teclado e mouse e clique na imagem para assumir.",
+   "ru": "Активен геймпад. Выберите клавиатуру и мышь, затем щёлкните по изображению."
   },
   {
    "zh": "当前修改尚未保存：",
@@ -19970,6 +20230,32 @@
    "ru": "Не удалось сохранить сочетание клавиш"
   },
   {
+   "zh": "快速转身倍率",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "快速轉身倍率",
+   "en": "Fast turn multiplier",
+   "ja": "高速旋回倍率",
+   "ko": "빠른 회전 배율",
+   "es": "Multiplicador de giro rápido",
+   "fr": "Multiplicateur de rotation rapide",
+   "de": "Multiplikator für schnelle Drehung",
+   "pt-BR": "Multiplicador de giro rápido",
+   "ru": "Множитель быстрого поворота"
+  },
+  {
+   "zh": "快速转身补偿",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "快速轉身補償",
+   "en": "Carry excess turn",
+   "ja": "高速旋回の余剰を繰り越す",
+   "ko": "빠른 회전 잔여량 보정",
+   "es": "Compensar el exceso de giro",
+   "fr": "Reporter l’excédent de rotation",
+   "de": "Überschüssige Drehung nachholen",
+   "pt-BR": "Compensar giro excedente",
+   "ru": "Компенсация быстрого поворота"
+  },
+  {
    "zh": "性能",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "性能",
@@ -20124,6 +20410,19 @@
    "de": "Für 4K60 HDR kämen zum Beispiel diese Karten infrage",
    "pt-BR": "Para 4K60 HDR, veja estes modelos",
    "ru": "Для 4K60 HDR можно посмотреть на эти карты"
+  },
+  {
+   "zh": "慢走",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "慢走",
+   "en": "Walk slowly",
+   "ja": "ゆっくり歩く",
+   "ko": "천천히 걷기",
+   "es": "Caminar despacio",
+   "fr": "Marche lente",
+   "de": "Langsam gehen",
+   "pt-BR": "Andar devagar",
+   "ru": "Медленная ходьба"
   },
   {
    "zh": "我主要看 1440p60、4K30 的 SDR 档位。原帖举例",
@@ -20542,6 +20841,19 @@
    "ru": "Свой порядок"
   },
   {
+   "zh": "手感模板",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "手感範本",
+   "en": "Response preset",
+   "ja": "操作感プリセット",
+   "ko": "조작 프리셋",
+   "es": "Preajuste de respuesta",
+   "fr": "Préréglage de réponse",
+   "de": "Steuerungsvorlage",
+   "pt-BR": "Predefinição de resposta",
+   "ru": "Шаблон отклика"
+  },
+  {
    "zh": "手柄",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "手把",
@@ -20553,6 +20865,19 @@
    "de": "Regler",
    "pt-BR": "Controle",
    "ru": "Контроллер"
+  },
+  {
+   "zh": "手柄图示",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "手把圖示",
+   "en": "Controller diagram",
+   "ja": "コントローラー図",
+   "ko": "컨트롤러 그림",
+   "es": "Diagrama del mando",
+   "fr": "Schéma de manette",
+   "de": "Controlleransicht",
+   "pt-BR": "Diagrama do controle",
+   "ru": "Схема геймпада"
   },
   {
    "zh": "手柄支持陀螺仪",
@@ -21270,6 +21595,19 @@
    "ru": "Нажмите новую клавишу…"
   },
   {
+   "zh": "按下键盘或鼠标键。点击另一键位可直接切换。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "按下鍵盤或滑鼠按鍵。點選另一個鍵位即可切換。",
+   "en": "Press a key or mouse button. Click another control to rebind it instead.",
+   "ja": "キーかマウスボタンを押します。別のボタンをクリックすると割り当て先が切り替わります。",
+   "ko": "키나 마우스 버튼을 누르세요. 다른 버튼을 클릭하면 지정 대상이 바뀝니다.",
+   "es": "Pulsa una tecla o un botón del ratón. Haz clic en otro control para cambiar de destino.",
+   "fr": "Appuyez sur une touche ou un bouton de souris. Cliquez sur une autre commande pour changer de cible.",
+   "de": "Eine Taste oder Maustaste drücken. Durch Anklicken einer anderen Belegung das Ziel wechseln.",
+   "pt-BR": "Pressione uma tecla ou botão do mouse. Clique em outro controle para mudar o alvo.",
+   "ru": "Нажмите клавишу или кнопку мыши. Щёлкните другой элемент, чтобы сменить назначение."
+  },
+  {
    "zh": "按住 V 查看原画",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "按住 V 查看原畫",
@@ -21346,19 +21684,6 @@
    "de": "Pro Anzeige merken",
    "pt-BR": "Lembrar por tela",
    "ru": "Запоминать для каждого экрана"
-  },
-  {
-   "zh": "按源帧率和输出上限自动选档；源帧率超过上限时关闭补帧",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "按源幀率和輸出上限自動選檔；源幀率超過上限時關閉補幀",
-   "en": "Choose a multiplier from source FPS and the output limit; disable frame generation when source FPS exceeds the limit",
-   "ja": "ソース FPS と出力上限から倍率を選び、ソース FPS が上限を超える場合はフレーム生成を無効にします",
-   "ko": "소스 FPS와 출력 상한에 따라 배율을 선택합니다. 소스 FPS가 상한을 초과하면 프레임 생성을 끕니다",
-   "es": "Elija un multiplicador de la fuente FPS y el límite de salida; la generación de fotogramas deshabilitado cuando la fuente FPS excede el límite",
-   "fr": "Choisissez un multiplicateur à partir de la source FPS et de la limite de sortie; désactiver la génération d'images lorsque la source FPS dépasse la limite",
-   "de": "Wählen Sie einen Multiplikator aus Source FPS und dem Outputlimit; Deaktivieren Sie die Frame-Generierung, wenn Source FPS den Limit überschreitet",
-   "pt-BR": "Escolha um multiplicador do FPS de origem e o limite de saída; desactiva a geração de quadros quando o FPS de origem exceder o limite",
-   "ru": "Выберите множитель из источника FPS и предела выхода; отключите генерацию кадров, когда источник FPS превышает предел."
   },
   {
    "zh": "按片源自动选档",
@@ -21476,6 +21801,19 @@
    "de": "API-Modellname",
    "pt-BR": "Nome do modelo da API",
    "ru": "Имя модели API"
+  },
+  {
+   "zh": "控制方式",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "控制方式",
+   "en": "Input mode",
+   "ja": "操作方式",
+   "ko": "입력 방식",
+   "es": "Modo de entrada",
+   "fr": "Mode de commande",
+   "de": "Eingabemodus",
+   "pt-BR": "Modo de entrada",
+   "ru": "Режим ввода"
   },
   {
    "zh": "描边",
@@ -22246,6 +22584,19 @@
    "ru": "Более высокие значения дают более мягкий переход"
   },
   {
+   "zh": "数值越小，越容易快速推满右摇杆。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "數值越小，越容易快速推滿右搖桿。",
+   "en": "Lower values reach full right-stick deflection sooner.",
+   "ja": "値が小さいほど右スティックが最大入力に達しやすくなります。",
+   "ko": "값이 작을수록 오른쪽 스틱 최대 입력에 더 빨리 도달합니다.",
+   "es": "Un valor menor alcanza antes la inclinación máxima del stick derecho.",
+   "fr": "Une valeur basse permet d’atteindre plus vite la déflexion maximale du stick droit.",
+   "de": "Niedrigere Werte führen schneller zum Vollausschlag des rechten Sticks.",
+   "pt-BR": "Valores menores atingem mais rápido o limite do analógico direito.",
+   "ru": "Чем ниже значение, тем быстрее правый стик достигает полного отклонения."
+  },
+  {
    "zh": "整个画面",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "整個畫面",
@@ -22532,6 +22883,19 @@
    "ru": "Дефолты для воспроизведения файлов, субтитры и скриншоты."
   },
   {
+   "zh": "文件播放：严格补帧节奏",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "檔案播放：嚴格補幀節奏",
+   "en": "Strict frame pacing for files",
+   "ja": "ファイル再生時の厳密なフレームペーシング",
+   "ko": "파일 재생 시 엄격한 프레임 페이싱",
+   "es": "Cadencia estricta al reproducir archivos",
+   "fr": "Cadence stricte pour les fichiers",
+   "de": "Striktes Frame-Pacing für Dateien",
+   "pt-BR": "Ritmo estrito de quadros em arquivos",
+   "ru": "Строгий ритм кадров при воспроизведении файлов"
+  },
+  {
    "zh": "文件格式不支持、数据损坏或没有字幕内容",
    "src": "src/engine/Subtitles.cpp",
    "zh-TW": "檔案格式不支援、資料損壞或沒有字幕內容",
@@ -22623,6 +22987,32 @@
    "ru": "Автопереподключение"
   },
   {
+   "zh": "新建",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "新增",
+   "en": "Create",
+   "ja": "作成",
+   "ko": "만들기",
+   "es": "Crear",
+   "fr": "Créer",
+   "de": "Erstellen",
+   "pt-BR": "Criar",
+   "ru": "Создать"
+  },
+  {
+   "zh": "新建档案",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "新增檔案",
+   "en": "New profile",
+   "ja": "新規プロファイル",
+   "ko": "새 프로필",
+   "es": "Nuevo perfil",
+   "fr": "Nouveau profil",
+   "de": "Neues Profil",
+   "pt-BR": "Novo perfil",
+   "ru": "Новый профиль"
+  },
+  {
    "zh": "新预设名称",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "新預設名稱",
@@ -22636,6 +23026,58 @@
    "ru": "Имя нового пресета"
   },
   {
+   "zh": "方向键 上",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "方向鍵 上",
+   "en": "D-pad up",
+   "ja": "方向キー 上",
+   "ko": "방향 패드 위",
+   "es": "Cruceta arriba",
+   "fr": "Croix directionnelle haut",
+   "de": "Steuerkreuz hoch",
+   "pt-BR": "Direcional para cima",
+   "ru": "Крестовина вверх"
+  },
+  {
+   "zh": "方向键 下",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "方向鍵 下",
+   "en": "D-pad down",
+   "ja": "方向キー 下",
+   "ko": "방향 패드 아래",
+   "es": "Cruceta abajo",
+   "fr": "Croix directionnelle bas",
+   "de": "Steuerkreuz runter",
+   "pt-BR": "Direcional para baixo",
+   "ru": "Крестовина вниз"
+  },
+  {
+   "zh": "方向键 右",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "方向鍵 右",
+   "en": "D-pad right",
+   "ja": "方向キー 右",
+   "ko": "방향 패드 오른쪽",
+   "es": "Cruceta derecha",
+   "fr": "Croix directionnelle droite",
+   "de": "Steuerkreuz rechts",
+   "pt-BR": "Direcional para a direita",
+   "ru": "Крестовина вправо"
+  },
+  {
+   "zh": "方向键 左",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "方向鍵 左",
+   "en": "D-pad left",
+   "ja": "方向キー 左",
+   "ko": "방향 패드 왼쪽",
+   "es": "Cruceta izquierda",
+   "fr": "Croix directionnelle gauche",
+   "de": "Steuerkreuz links",
+   "pt-BR": "Direcional para a esquerda",
+   "ru": "Крестовина влево"
+  },
+  {
    "zh": "方式",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "方式",
@@ -22647,6 +23089,19 @@
    "de": "Methode",
    "pt-BR": "Método",
    "ru": "Способ"
+  },
+  {
+   "zh": "方形死区比例",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "方形死區比例",
+   "en": "Square deadzone mix",
+   "ja": "矩形デッドゾーンの比率",
+   "ko": "사각 데드존 비율",
+   "es": "Proporción de zona muerta cuadrada",
+   "fr": "Part de zone morte carrée",
+   "de": "Anteil quadratischer Totzone",
+   "pt-BR": "Proporção de zona morta quadrada",
+   "ru": "Доля квадратной мёртвой зоны"
   },
   {
    "zh": "旋转显示器请使用 Windows 采集方式",
@@ -22777,6 +23232,19 @@
    "de": "Konnte den decodierten Frame nicht behalten; die Wiedergabe wurde gestoppt",
    "pt-BR": "Não foi possível manter o quadro descodificado; a reprodução parou",
    "ru": "Не удалось сохранить расшифрованный кадр; воспроизведение прекратилось"
+  },
+  {
+   "zh": "无法保存键鼠映射。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "無法儲存鍵鼠映射。",
+   "en": "Could not save the keyboard and mouse mapping.",
+   "ja": "キーボードとマウスの割り当てを保存できませんでした。",
+   "ko": "키보드·마우스 매핑을 저장할 수 없습니다.",
+   "es": "No se pudo guardar la asignación de teclado y ratón.",
+   "fr": "Le mappage clavier et souris n’a pas pu être enregistré.",
+   "de": "Die Tastatur- und Mausbelegung konnte nicht gespeichert werden.",
+   "pt-BR": "Não foi possível salvar o mapeamento de teclado e mouse.",
+   "ru": "Не удалось сохранить раскладку клавиатуры и мыши."
   },
   {
    "zh": "无法写入内容亮度元数据（MaxCLL/MaxFALL）",
@@ -23271,6 +23739,19 @@
    "de": "Einige Modelldateien konnten nicht gelöscht werden",
    "pt-BR": "Não foi possível excluir todos os arquivos do modelo",
    "ru": "Не удалось удалить все файлы модели"
+  },
+  {
+   "zh": "无法应用 HUD 全效果剔除",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "無法套用 HUD 全效果排除",
+   "en": "Could not exclude the HUD from all effects.",
+   "ja": "HUD をすべての効果から除外できませんでした。",
+   "ko": "모든 효과에서 HUD를 제외하지 못했습니다.",
+   "es": "No se pudo excluir el HUD de todos los efectos.",
+   "fr": "Impossible d’exclure le HUD de tous les effets.",
+   "de": "Das HUD konnte nicht von allen Effekten ausgenommen werden.",
+   "pt-BR": "Não foi possível excluir o HUD de todos os efeitos.",
+   "ru": "Не удалось исключить HUD из всех эффектов."
   },
   {
    "zh": "无法建立串流连接（错误码 {}）。",
@@ -24703,6 +25184,19 @@
    "ru": "Кривая, показания и подсказки"
   },
   {
+   "zh": "曲线小于 1 提高低速响应；等于 1 为线性；大于 1 便于微调。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "曲線小於 1 可提高低速反應；等於 1 為線性；大於 1 方便微調。",
+   "en": "Below 1 increases low-speed response. At 1 the curve is linear. Above 1 allows finer adjustments.",
+   "ja": "1 未満で低速応答が上がり、1 で線形、1 超で微調整しやすくなります。",
+   "ko": "1 미만은 저속 반응 강화, 1은 선형, 1 초과는 미세 조정에 적합합니다.",
+   "es": "Menos de 1 aumenta la respuesta lenta. 1 es lineal y más de 1 permite ajustes finos.",
+   "fr": "Sous 1 la réponse à basse vitesse augmente. 1 est linéaire. Au-dessus de 1 le réglage est plus fin.",
+   "de": "Unter 1 steigt die Reaktion bei niedriger Geschwindigkeit. 1 ist linear. Über 1 wird die Feinsteuerung präziser.",
+   "pt-BR": "Abaixo de 1 aumenta a resposta lenta. Em 1 é linear. Acima de 1 favorece ajustes finos.",
+   "ru": "Ниже 1 усиливается отклик на медленное движение. 1 — линейно. Выше 1 проще вносить мелкие поправки."
+  },
+  {
    "zh": "曲线当前是关闭的，跟随暂时不会改变画面。",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "曲線目前是關閉的，跟隨暫時不會改變畫面。",
@@ -24844,19 +25338,6 @@
    "de": "Höchstens 4 geschützte Bereiche; löschen Sie einen zuerst",
    "pt-BR": "No máximo 4 áreas protegidas; eliminar uma primeira",
    "ru": "не более 4 охраняемых территорий; сначала удалить"
-  },
-  {
-   "zh": "最多 4 个区域。只想减少准心拖影时，推荐选「准心/HUD」。",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "最多 4 個區域。只想減少準心殘影時，建議選擇「準心/HUD」。",
-   "en": "Up to 4 regions. To reduce crosshair ghosting, choose Crosshair and HUD.",
-   "ja": "最大 4 領域。照準の残像を抑えるには「照準・HUD」を選びます。",
-   "ko": "최대 4개 영역. 조준점 잔상이 문제라면 ‘조준점 및 HUD’를 선택하세요.",
-   "es": "Hasta 4 zonas. Para reducir las estelas de la mira, elige «Mira y HUD».",
-   "fr": "Jusqu’à 4 zones. Pour réduire la rémanence du viseur, choisissez « Viseur et HUD ».",
-   "de": "Bis zu 4 Bereiche. Wähle „Fadenkreuz und HUD“, um Geisterbilder am Fadenkreuz zu reduzieren.",
-   "pt-BR": "Até 4 áreas. Para reduzir rastros da mira, escolha «Mira e HUD».",
-   "ru": "До 4 областей. Чтобы уменьшить шлейф прицела, выберите «Прицел и HUD»."
   },
   {
    "zh": "最多人脸",
@@ -25743,6 +26224,19 @@
    "ru": "Локальное распознавание речи остановлено. Включите его снова."
   },
   {
+   "zh": "本地输入预览",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "本機輸入預覽",
+   "en": "Preview input locally",
+   "ja": "入力をプレビュー",
+   "ko": "로컬 입력 미리 보기",
+   "es": "Vista previa local",
+   "fr": "Aperçu local des commandes",
+   "de": "Eingabe lokal testen",
+   "pt-BR": "Prévia local da entrada",
+   "ru": "Локальная проверка ввода"
+  },
+  {
    "zh": "本地运行库校验失败，请重新下载",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "本機執行庫驗證失敗，請重新下載",
@@ -26081,43 +26575,30 @@
    "ru": "Формат и изображение"
   },
   {
-   "zh": "框内 · 使用剔除区域",
+   "zh": "框住准心或 HUD，最多 4 个区域。背景继续补帧，画质增强保留。",
+   "src": "qml/MaskEditor.qml",
+   "zh-TW": "框住準心或 HUD，最多 4 個區域。背景繼續補幀，畫質增強保留。",
+   "en": "Outline the crosshair or HUD in up to 4 regions. Background frame generation and video enhancements stay active.",
+   "ja": "照準や HUD を最大 4 個の範囲で囲みます。背景のフレーム生成と画質強化は継続します。",
+   "ko": "조준점이나 HUD를 최대 4개 영역으로 지정합니다. 배경 프레임 생성과 화질 향상은 유지됩니다.",
+   "es": "Delimita la mira o el HUD en hasta 4 regiones. Se mantienen la generación de fotogramas del fondo y las mejoras de imagen.",
+   "fr": "Encadrez le réticule ou le HUD dans 4 zones maximum. La génération d’images du fond et les améliorations vidéo restent actives.",
+   "de": "Umrahme das Fadenkreuz oder HUD in bis zu 4 Bereichen. Frame-Generierung im Hintergrund und Bildverbesserungen bleiben aktiv.",
+   "pt-BR": "Contorne a mira ou o HUD em até 4 regiões. A geração de quadros do fundo e as melhorias de vídeo continuam ativas.",
+   "ru": "Обведите прицел или HUD. Доступно до 4 областей. Генерация кадров фона и улучшение изображения продолжают работать."
+  },
+  {
+   "zh": "框内 · 手绘区域",
    "src": "qml/HudProtectControl.qml",
-   "zh-TW": "框內 · 使用排除區域",
-   "en": "Inside exclusion regions",
-   "ja": "除外領域内",
-   "ko": "제외 영역 안",
-   "es": "Dentro de las zonas de exclusión",
-   "fr": "Dans les zones d’exclusion",
-   "de": "In Ausschlussbereichen",
-   "pt-BR": "Dentro das áreas de exclusão",
-   "ru": "Внутри областей исключения"
-  },
-  {
-   "zh": "框内按真实帧刷新并显示原始画面",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "框內按真實影格更新並顯示原始畫面",
-   "en": "Shows the original picture at the source frame rate inside the region",
-   "ja": "枠内は元の映像を元のフレームレートで表示します",
-   "ko": "영역에 원본 화면을 원본 프레임 속도로 표시합니다",
-   "es": "Muestra la imagen original de la zona a la frecuencia de la fuente",
-   "fr": "Affiche l’image d’origine à la cadence de la source dans la zone",
-   "de": "Zeigt im Bereich das Originalbild mit der Quellbildrate an",
-   "pt-BR": "Exibe a imagem original na área à taxa de quadros da fonte",
-   "ru": "Показывает исходное изображение в области с частотой исходных кадров"
-  },
-  {
-   "zh": "框内按真实帧刷新，保留超分、NR 和 HDR",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "框內按真實影格更新，保留超解析度、NR 和 HDR",
-   "en": "Updates the region at the source frame rate and keeps super resolution, NR, and HDR",
-   "ja": "枠内は元のフレームレートで更新し、超解像、NR、HDR は維持します",
-   "ko": "영역은 원본 프레임 속도로 갱신하며 초해상도, NR, HDR을 유지합니다",
-   "es": "Actualiza la zona al ritmo de la fuente y conserva superresolución, NR y HDR",
-   "fr": "Actualise la zone à la cadence de la source et conserve la super résolution, le NR et le HDR",
-   "de": "Aktualisiert den Bereich mit der Quellbildrate und behält Super Resolution, NR und HDR bei",
-   "pt-BR": "Atualiza a área à taxa de quadros da fonte e mantém super-resolução, NR e HDR",
-   "ru": "Обновляет область с частотой исходных кадров и сохраняет суперразрешение, NR и HDR"
+   "zh-TW": "框內 · 手繪區域",
+   "en": "Manual regions",
+   "ja": "手動 · 描画範囲",
+   "ko": "수동 · 그린 영역",
+   "es": "Regiones manuales",
+   "fr": "Zones manuelles",
+   "de": "Manuelle Bereiche",
+   "pt-BR": "Regiões manuais",
+   "ru": "Ручные области"
   },
   {
    "zh": "桌面 %1",
@@ -26588,6 +27069,19 @@
    "ru": "Недействительная конфигурация режима; не переключается"
   },
   {
+   "zh": "横向灵敏度",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "橫向靈敏度",
+   "en": "Horizontal sensitivity",
+   "ja": "水平感度",
+   "ko": "가로 감도",
+   "es": "Sensibilidad horizontal",
+   "fr": "Sensibilité horizontale",
+   "de": "Horizontale Empfindlichkeit",
+   "pt-BR": "Sensibilidade horizontal",
+   "ru": "Горизонтальная чувствительность"
+  },
+  {
    "zh": "橙色",
    "src": "qml/ColourMixer.qml",
    "zh-TW": "橙色",
@@ -27015,6 +27509,19 @@
    "de": "Bildschirmaufnahme wird gestartet…",
    "pt-BR": "Iniciando captura de tela…",
    "ru": "Запуск захвата экрана…"
+  },
+  {
+   "zh": "正在录键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "正在錄鍵",
+   "en": "Listening for a binding",
+   "ja": "キー入力待ち",
+   "ko": "키 입력 대기 중",
+   "es": "Esperando una tecla",
+   "fr": "En attente d’une touche",
+   "de": "Warte auf Eingabe",
+   "pt-BR": "Aguardando tecla",
+   "ru": "Ожидание клавиши"
   },
   {
    "zh": "正在恢复",
@@ -27719,6 +28226,58 @@
    "ru": "Эта карта захвата не предлагает этот формат. Выберите поддерживаемое разрешение, частоту кадров и формат пикселей."
   },
   {
+   "zh": "此键已被另一套键位或布局切换占用。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "此鍵已被另一套配置或配置切換占用。",
+   "en": "This input is already used by another layout or the layout shortcut.",
+   "ja": "この入力は別の配置または配置切替に使用されています。",
+   "ko": "이 입력은 다른 배치나 배치 전환에 이미 사용 중입니다.",
+   "es": "Esta entrada ya se usa en otra distribución o para cambiarla.",
+   "fr": "Cette entrée est utilisée par une autre configuration ou son raccourci.",
+   "de": "Diese Eingabe wird bereits in einem anderen Layout oder zum Umschalten verwendet.",
+   "pt-BR": "Esta entrada já é usada por outro layout ou pelo atalho de alternância.",
+   "ru": "Этот ввод уже используется в другой раскладке или для переключения."
+  },
+  {
+   "zh": "此键用于系统或 Veyra 快捷键，请换一个键。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "此鍵用於系統或 Veyra 快捷鍵，請換用其他按鍵。",
+   "en": "This key is reserved by the system or Veyra. Choose another key.",
+   "ja": "このキーはシステムまたは Veyra に予約されています。別のキーを選んでください。",
+   "ko": "시스템 또는 Veyra에서 사용하는 키입니다. 다른 키를 선택하세요.",
+   "es": "Esta tecla está reservada por el sistema o Veyra. Elige otra.",
+   "fr": "Cette touche est réservée par le système ou Veyra. Choisissez-en une autre.",
+   "de": "Diese Taste ist für das System oder Veyra reserviert. Wähle eine andere.",
+   "pt-BR": "Esta tecla é reservada pelo sistema ou pelo Veyra. Escolha outra.",
+   "ru": "Эта клавиша зарезервирована системой или Veyra. Выберите другую."
+  },
+  {
+   "zh": "步行",
+   "src": "qml/Main.qml",
+   "zh-TW": "步行",
+   "en": "On foot",
+   "ja": "徒歩",
+   "ko": "도보",
+   "es": "A pie",
+   "fr": "À pied",
+   "de": "Zu Fuß",
+   "pt-BR": "A pé",
+   "ru": "Пешком"
+  },
+  {
+   "zh": "死区补偿",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "死區補償",
+   "en": "Deadzone compensation",
+   "ja": "デッドゾーン補正",
+   "ko": "데드존 보정",
+   "es": "Compensación de zona muerta",
+   "fr": "Compensation de la zone morte",
+   "de": "Totzonenkompensation",
+   "pt-BR": "Compensação da zona morta",
+   "ru": "Компенсация мёртвой зоны"
+  },
+  {
    "zh": "残差",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "殘差",
@@ -27847,6 +28406,19 @@
    "de": "Vergleicht die Quelle mit dem vorherigen Frame: Pixel ohne klare Änderung verwenden die vorherige Ausgabe wieder; klar veränderte Bereiche nehmen das neue Ergebnis direkt auf.",
    "pt-BR": "Compara a fonte com o quadro anterior: pixels sem uma mudança clara reutilizam a saída anterior; áreas claramente alteradas tomam o novo resultado diretamente.",
    "ru": "Сравнивает источник с предыдущим кадром: пиксели без четкого изменения повторно используют предыдущий вывод; четко измененные области принимают новый результат напрямую."
+  },
+  {
+   "zh": "水平位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "水平位置",
+   "en": "Horizontal position",
+   "ja": "水平位置",
+   "ko": "가로 위치",
+   "es": "Posición horizontal",
+   "fr": "Position horizontale",
+   "de": "Horizontale Position",
+   "pt-BR": "Posição horizontal",
+   "ru": "Положение по горизонтали"
   },
   {
    "zh": "没有匹配的格式",
@@ -28447,6 +29019,32 @@
    "ru": "Игровой автомат"
   },
   {
+   "zh": "游戏字幕防拖影",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "遊戲字幕防殘影",
+   "en": "Game subtitle ghosting protection",
+   "ja": "ゲーム字幕の残像防止",
+   "ko": "게임 자막 잔상 방지",
+   "es": "Protección contra estelas en subtítulos",
+   "fr": "Protection des sous-titres contre les traînées",
+   "de": "Schutz vor Schlieren bei Spieluntertiteln",
+   "pt-BR": "Proteção contra rastros nas legendas",
+   "ru": "Защита игровых субтитров от шлейфов"
+  },
+  {
+   "zh": "游戏档案",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "遊戲設定檔",
+   "en": "Game profile",
+   "ja": "ゲームプロファイル",
+   "ko": "게임 프로필",
+   "es": "Perfil de juego",
+   "fr": "Profil de jeu",
+   "de": "Spielprofil",
+   "pt-BR": "Perfil de jogo",
+   "ru": "Игровой профиль"
+  },
+  {
    "zh": "源 %1 fps",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "源 %1 fps",
@@ -28590,6 +29188,58 @@
    "ru": "Шаг клавиатуры для ползунков"
   },
   {
+   "zh": "滚轮向上",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "滾輪向上",
+   "en": "Wheel up",
+   "ja": "ホイール 上",
+   "ko": "휠 위",
+   "es": "Rueda arriba",
+   "fr": "Molette haut",
+   "de": "Mausrad hoch",
+   "pt-BR": "Roda para cima",
+   "ru": "Колесо вверх"
+  },
+  {
+   "zh": "滚轮向下",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "滾輪向下",
+   "en": "Wheel down",
+   "ja": "ホイール 下",
+   "ko": "휠 아래",
+   "es": "Rueda abajo",
+   "fr": "Molette bas",
+   "de": "Mausrad runter",
+   "pt-BR": "Roda para baixo",
+   "ru": "Колесо вниз"
+  },
+  {
+   "zh": "滚轮向右",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "滾輪向右",
+   "en": "Wheel right",
+   "ja": "ホイール 右",
+   "ko": "휠 오른쪽",
+   "es": "Rueda derecha",
+   "fr": "Molette droite",
+   "de": "Mausrad rechts",
+   "pt-BR": "Roda para a direita",
+   "ru": "Колесо вправо"
+  },
+  {
+   "zh": "滚轮向左",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "滾輪向左",
+   "en": "Wheel left",
+   "ja": "ホイール 左",
+   "ko": "휠 왼쪽",
+   "es": "Rueda izquierda",
+   "fr": "Molette gauche",
+   "de": "Mausrad links",
+   "pt-BR": "Roda para a esquerda",
+   "ru": "Колесо влево"
+  },
+  {
    "zh": "滚降强度 (%)",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "滾降強度 (%)",
@@ -28601,6 +29251,19 @@
    "de": "Abrollfestigkeit (%)",
    "pt-BR": "Resistência ao rolamento (%)",
    "ru": "Сила отката (%)"
+  },
+  {
+   "zh": "满杆速度（800 DPI）",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滿桿速度（800 DPI）",
+   "en": "Full stick speed (800 DPI)",
+   "ja": "最大入力に達する速度 (800 DPI)",
+   "ko": "스틱 최대 입력 속도(800 DPI)",
+   "es": "Velocidad para inclinación máxima (800 DPI)",
+   "fr": "Vitesse de déflexion maximale (800 DPI)",
+   "de": "Geschwindigkeit für Vollausschlag (800 DPI)",
+   "pt-BR": "Velocidade de inclinação máxima (800 DPI)",
+   "ru": "Скорость полного отклонения (800 DPI)"
   },
   {
    "zh": "点一下滑块后用 ← → 调整，每次的幅度；Esc 或单击画面交还方向键给快进快退",
@@ -28627,6 +29290,19 @@
    "de": "Von Apex Compute herunterladen und aktivieren (ca. 3,2 MB)",
    "pt-BR": "Baixar da Apex Compute e ativar (cerca de 3,2 MB)",
    "ru": "Скачать с Apex Compute и включить (около 3,2 МБ)"
+  },
+  {
+   "zh": "点击任意手柄按键开始改键。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "點選任一手把按鍵開始改鍵。",
+   "en": "Click a controller button to rebind it.",
+   "ja": "コントローラーのボタンをクリックして割り当てを変更します。",
+   "ko": "컨트롤러 버튼을 클릭하여 다시 지정하세요.",
+   "es": "Haz clic en un botón del mando para reasignarlo.",
+   "fr": "Cliquez sur un bouton de la manette pour le réattribuer.",
+   "de": "Zum Neubelegen eine Controller-Taste anklicken.",
+   "pt-BR": "Clique em um botão do controle para remapeá-lo.",
+   "ru": "Нажмите кнопку геймпада, чтобы переназначить её."
   },
   {
    "zh": "点击右侧按键，再按下新的组合键即可重新绑定；Esc 取消。",
@@ -28679,6 +29355,19 @@
    "de": "Klicken Sie auf das Bild, um eine Quelle auszuwählen",
    "pt-BR": "Clique na imagem para escolher uma fonte",
    "ru": "Нажмите на картинку, чтобы выбрать источник"
+  },
+  {
+   "zh": "点击画面锁定键鼠",
+   "src": "qml/Main.qml",
+   "zh-TW": "點擊畫面鎖定鍵鼠",
+   "en": "Click the picture to capture input",
+   "ja": "映像をクリックして入力をキャプチャ",
+   "ko": "화면을 클릭해 키보드와 마우스 잠금",
+   "es": "Haz clic en la imagen para capturar la entrada",
+   "fr": "Cliquez sur l’image pour capturer les commandes",
+   "de": "Ins Bild klicken, um die Eingabe zu erfassen",
+   "pt-BR": "Clique na imagem para capturar a entrada",
+   "ru": "Щёлкните по изображению для захвата ввода"
   },
   {
    "zh": "点左侧文件可重新预览（会和导出抢显卡）",
@@ -29994,6 +30683,19 @@
    "ru": "Сон (можно разбудить)"
   },
   {
+   "zh": "瞄准曲线",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "瞄準曲線",
+   "en": "Aim curve",
+   "ja": "照準カーブ",
+   "ko": "조준 곡선",
+   "es": "Curva de apuntado",
+   "fr": "Courbe de visée",
+   "de": "Zielkurve",
+   "pt-BR": "Curva de mira",
+   "ru": "Кривая прицеливания"
+  },
+  {
    "zh": "矩形 ",
    "src": "qml/MaskEditor.qml",
    "zh-TW": "矩形 ",
@@ -30109,6 +30811,19 @@
    "de": "Installation bestätigen",
    "pt-BR": "Confirmar instalação",
    "ru": "Подтвердить установку"
+  },
+  {
+   "zh": "确认重置键位",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "確認重設按鍵",
+   "en": "Confirm binding reset",
+   "ja": "キー割当をリセットする",
+   "ko": "키 초기화 확인",
+   "es": "Confirmar restablecimiento",
+   "fr": "Confirmer la réinitialisation",
+   "de": "Belegung zurücksetzen bestätigen",
+   "pt-BR": "Confirmar redefinição das teclas",
+   "ru": "Подтвердить сброс клавиш"
   },
   {
    "zh": "磁盘写入跟不上录制，已停止录制（请换更快的磁盘或降低码率）",
@@ -30473,6 +31188,19 @@
    "de": "Zum ersten Mal hier?",
    "pt-BR": "Primeira vez aqui?",
    "ru": "Вы здесь впервые?"
+  },
+  {
+   "zh": "第三人称",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "第三人稱",
+   "en": "Third-person",
+   "ja": "三人称",
+   "ko": "3인칭",
+   "es": "Tercera persona",
+   "fr": "Troisième personne",
+   "de": "Third-Person",
+   "pt-BR": "Terceira pessoa",
+   "ru": "От третьего лица"
   },
   {
    "zh": "第二次 %1",
@@ -31112,6 +31840,19 @@
    "ru": "%1 (видео) %2 Mbps × %3, аудио дополнительно"
   },
   {
+   "zh": "纵向灵敏度",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "縱向靈敏度",
+   "en": "Vertical sensitivity",
+   "ja": "垂直感度",
+   "ko": "세로 감도",
+   "es": "Sensibilidad vertical",
+   "fr": "Sensibilité verticale",
+   "de": "Vertikale Empfindlichkeit",
+   "pt-BR": "Sensibilidade vertical",
+   "ru": "Вертикальная чувствительность"
+  },
+  {
    "zh": "纹理",
    "src": "src/ui/bridge/Colour.cpp",
    "zh-TW": "紋理",
@@ -31136,6 +31877,19 @@
    "de": "Textur erhalten",
    "pt-BR": "Textura mantida",
    "ru": "Текстура сохранена"
+  },
+  {
+   "zh": "线性",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "線性",
+   "en": "Linear",
+   "ja": "リニア",
+   "ko": "선형",
+   "es": "Lineal",
+   "fr": "Linéaire",
+   "de": "Linear",
+   "pt-BR": "Linear",
+   "ru": "Линейная"
   },
   {
    "zh": "组件与许可",
@@ -32152,19 +32906,6 @@
    "ru": "Автоматическая оценка: применяется к карте захвата в реальном времени / PS5"
   },
   {
-   "zh": "自动倍率只支持 DLSS 帧生成和 NVIDIA VFG",
-   "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "自動倍率只支持 DLSS 幀生成和 NVIDIA VFG",
-   "en": "Automatic multiplier supports DLSS Frame Generation and NVIDIA VFG only",
-   "ja": "自動倍率は DLSS フレーム生成と NVIDIA VFG のみ対応します",
-   "ko": "자동 배율은 DLSS 프레임 생성과 NVIDIA VFG만 지원합니다",
-   "es": "Multiplicador automático soporta la generación de fotogramas DLSS y NVIDIA VFG sólo",
-   "fr": "Le multiplicateur automatique prend en charge la génération d’images DLSS et NVIDIA VFG uniquement",
-   "de": "Automatischer Multiplikator unterstützt nur DLSS Frame Generation und NVIDIA VFG",
-   "pt-BR": "Multiplicador automático suporta geração de quadros DLSS e NVIDIA VFG apenas",
-   "ru": "Автоматический множитель поддерживает только DLSS Frame Generation и NVIDIA VFG"
-  },
-  {
    "zh": "自动去除",
    "src": "qml/DedupModeRow.qml",
    "zh-TW": "自動去除",
@@ -32241,19 +32982,6 @@
    "de": "Autojustage: %1 (Z/X zur Feinabstimmung)",
    "pt-BR": "Alinhar automaticamente: %1 (Z/X para ajuste fino)",
    "ru": "Автоматический: %1 (Z/X для точной настройки)"
-  },
-  {
-   "zh": "自动找出持续静止且有边缘的像素（文字、准星、血条、小地图），生成帧直接用真实帧的这些像素，减少 HUD 拖影和抖动，不需要画框 · 默认关闭",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動找出持續靜止且有邊緣的像素（文字、準星、血條、小地圖），生成幀直接用真實幀的這些像素，減少 HUD 拖影和抖動，不需要畫框 · 預設關閉",
-   "en": "Finds pixels that stay still and have an edge (text, crosshairs, health bars, minimaps) and takes them from the real frame in generated frames, so the HUD smears and wobbles less; no boxes needed · off by default",
-   "ja": "静止し続けていて輪郭のあるピクセル（文字、照準、体力バー、ミニマップ）を自動で見つけ、生成フレームでは実フレームのピクセルをそのまま使います。HUD のにじみや揺れが減り、枠を描く必要はありません · 既定はオフ",
-   "ko": "계속 정지해 있고 윤곽이 있는 픽셀(글자, 조준점, 체력 바, 미니맵)을 자동으로 찾아 생성 프레임에서 실제 프레임의 픽셀을 그대로 씁니다. HUD 번짐과 흔들림이 줄고 상자를 그릴 필요가 없습니다 · 기본값 끔",
-   "es": "Encuentra píxeles que permanecen quietos y tienen un borde (texto, miradores, barras de salud, minimaps) y los toma del fotograma real en marcos generados, por lo que el HUD smears and wobbles less; no cajas necesarias · off by default",
-   "fr": "Trouvez les pixels qui restent immobiles et ont un bord (texte, crosshairs, barres de santé, minimaps) et les retire de l’image réel dans les images générés, de sorte que le HUD frotte et agite moins; pas de cases nécessaires · off par défaut",
-   "de": "Findet Pixel, die still bleiben und eine Kante haben (Text, Fadenkreuz, Gesundheitsbalken, Minimaps) und nimmt sie aus dem realen Frame in generierten Frames, so dass das HUD weniger schmiert und wackelt; keine Boxen erforderlich · standardmäßig deaktiviert",
-   "pt-BR": "Encontra pixels que ficam parados e têm uma borda (texto, mira, barras de saúde, minimapas) e tira-os do quadro real em quadros gerados, então o HUD borra e oscila menos; nenhuma caixa precisa · fora por padrão",
-   "ru": "Находите пиксели, которые остаются неподвижными и имеют край (текст, перекрестные прицелы, панели здоровья, мини-карты) и извлекаете их из реального кадра в сгенерированных кадрах, поэтому HUD мазает и колеблется меньше; никаких ящиков по умолчанию не требуется."
   },
   {
    "zh": "自动按画面尺寸和帧率选择；数字为 Mbps，越高越清晰、文件也越大",
@@ -32347,6 +33075,19 @@
    "ru": "Определить исходный язык"
   },
   {
+   "zh": "自动识别画面中持续静止的文字和边缘。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "自動辨識畫面中持續靜止的文字和邊緣。",
+   "en": "Detect text and edges that stay still on screen.",
+   "ja": "画面上で静止している文字と輪郭を検出します。",
+   "ko": "화면에 고정된 글자와 윤곽선을 찾습니다.",
+   "es": "Detecta texto y bordes que permanecen fijos en pantalla.",
+   "fr": "Détecte le texte et les contours fixes à l’écran.",
+   "de": "Erkennt Text und Kanten, die im Bild stillstehen.",
+   "pt-BR": "Detecta textos e contornos que ficam parados na tela.",
+   "ru": "Находит неподвижные надписи и контуры."
+  },
+  {
    "zh": "自动调控力度",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "自動調控力度",
@@ -32358,19 +33099,6 @@
    "de": "Automatische Regelmenge",
    "pt-BR": "Quantidade de controle automático",
    "ru": "Величина автоматической регулировки"
-  },
-  {
-   "zh": "自动选择倍率",
-   "src": "qml/NodePage.qml",
-   "zh-TW": "自動選擇倍率",
-   "en": "Automatic multiplier",
-   "ja": "倍率を自動選択",
-   "ko": "자동 배율 선택",
-   "es": "Multiplicador automático",
-   "fr": "Multiplicateur automatique",
-   "de": "Automatischer Multiplikator",
-   "pt-BR": "Multiplicador automático",
-   "ru": "Автоматический множитель"
   },
   {
    "zh": "自动选择像素格式",
@@ -32605,6 +33333,19 @@
    "de": "Eigene Grenze (FPS)",
    "pt-BR": "Limite personalizado (FPS)",
    "ru": "Свой предел (FPS)"
+  },
+  {
+   "zh": "自定义位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "自訂位置",
+   "en": "Custom position",
+   "ja": "位置を指定",
+   "ko": "사용자 지정 위치",
+   "es": "Posición personalizada",
+   "fr": "Position personnalisée",
+   "de": "Eigene Position",
+   "pt-BR": "Posição personalizada",
+   "ru": "Задать положение"
   },
   {
    "zh": "自定义分辨率",
@@ -33502,6 +34243,19 @@
    "de": "Konto-ID abrufen",
    "pt-BR": "Obter ID da conta",
    "ru": "Получить ID учётной записи"
+  },
+  {
+   "zh": "菜单摇杆",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "選單搖桿",
+   "en": "Menu stick",
+   "ja": "メニュー用スティック",
+   "ko": "메뉴 스틱",
+   "es": "Palanca de menú",
+   "fr": "Stick de menu",
+   "de": "Menü-Stick",
+   "pt-BR": "Analógico do menu",
+   "ru": "Стик меню"
   },
   {
    "zh": "蓝",
@@ -34427,6 +35181,19 @@
    "ru": "Декодировать субтитры"
   },
   {
+   "zh": "解锁快捷键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "解鎖快速鍵",
+   "en": "Release shortcut",
+   "ja": "ロック解除キー",
+   "ko": "잠금 해제 단축키",
+   "es": "Atajo de liberación",
+   "fr": "Raccourci de libération",
+   "de": "Freigabetaste",
+   "pt-BR": "Atalho para liberar",
+   "ru": "Клавиша освобождения"
+  },
+  {
    "zh": "触及硬上限 %1% · 高光压缩区 %2% · 暗部提升区 %3%",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "觸及硬上限 %1% · 高光壓縮區 %2% · 暗部提升區 %3%",
@@ -34440,6 +35207,32 @@
    "ru": "Жесткая крышка %1% · выделение сжатия %2% · поднятие тени %3%"
   },
   {
+   "zh": "触摸板上滑",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "觸控板上滑",
+   "en": "Swipe up",
+   "ja": "上にスワイプ",
+   "ko": "위로 스와이프",
+   "es": "Deslizar arriba",
+   "fr": "Balayer vers le haut",
+   "de": "Nach oben wischen",
+   "pt-BR": "Deslizar para cima",
+   "ru": "Смахнуть вверх"
+  },
+  {
+   "zh": "触摸板下滑",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "觸控板下滑",
+   "en": "Swipe down",
+   "ja": "下にスワイプ",
+   "ko": "아래로 스와이프",
+   "es": "Deslizar abajo",
+   "fr": "Balayer vers le bas",
+   "de": "Nach unten wischen",
+   "pt-BR": "Deslizar para baixo",
+   "ru": "Смахнуть вниз"
+  },
+  {
    "zh": "触摸板仅转发按压",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "觸控板只轉發按壓",
@@ -34451,6 +35244,45 @@
    "de": "Nur Touchpad-Klicks",
    "pt-BR": "Apenas cliques do touchpad",
    "ru": "Только нажатия сенсорной панели"
+  },
+  {
+   "zh": "触摸板右滑",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "觸控板右滑",
+   "en": "Swipe right",
+   "ja": "右にスワイプ",
+   "ko": "오른쪽 스와이프",
+   "es": "Deslizar a la derecha",
+   "fr": "Balayer à droite",
+   "de": "Nach rechts wischen",
+   "pt-BR": "Deslizar à direita",
+   "ru": "Смахнуть вправо"
+  },
+  {
+   "zh": "触摸板左滑",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "觸控板左滑",
+   "en": "Swipe left",
+   "ja": "左にスワイプ",
+   "ko": "왼쪽 스와이프",
+   "es": "Deslizar a la izquierda",
+   "fr": "Balayer à gauche",
+   "de": "Nach links wischen",
+   "pt-BR": "Deslizar à esquerda",
+   "ru": "Смахнуть влево"
+  },
+  {
+   "zh": "触摸板按下",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "觸控板按下",
+   "en": "Touchpad click",
+   "ja": "タッチパッド押し込み",
+   "ko": "터치패드 누르기",
+   "es": "Clic del panel táctil",
+   "fr": "Clic du pavé tactile",
+   "de": "Touchpad-Klick",
+   "pt-BR": "Clique no touchpad",
+   "ru": "Нажатие тачпада"
   },
   {
    "zh": "让主机切换到串流分辨率",
@@ -34843,6 +35675,19 @@
    "ru": "Доступ запрещён. Разрешите классическим приложениям доступ к камере и микрофону в параметрах конфиденциальности Windows."
   },
   {
+   "zh": "识别到的 HUD 显示原画，保留文字和准星的清晰度。只开画质增强时也可使用。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "辨識到的 HUD 會顯示原始畫面，保留文字和準星的清晰度。單獨使用畫質增強時也有效。",
+   "en": "Use original pixels for detected HUD elements to keep text and crosshairs sharp, even with frame generation off.",
+   "ja": "検出した HUD に元の画素を使い、文字や照準の鮮明さを保ちます。フレーム生成をオフにしても使えます。",
+   "ko": "감지된 HUD에 원본 픽셀을 사용해 글자와 조준점을 선명하게 유지합니다. 프레임 생성이 꺼져 있어도 적용됩니다.",
+   "es": "Usa los píxeles originales del HUD detectado para mantener nítidos el texto y la mira, incluso sin generación de fotogramas.",
+   "fr": "Utilise les pixels d’origine du HUD détecté pour préserver la netteté du texte et du réticule, même sans génération d’images.",
+   "de": "Verwendet die Originalpixel für erkannte HUD-Elemente. Text und Fadenkreuz bleiben auch ohne Framegenerierung scharf.",
+   "pt-BR": "Usa os pixels originais do HUD detectado para manter o texto e a mira nítidos, mesmo sem geração de quadros.",
+   "ru": "Сохраняет исходные пиксели распознанного HUD, чтобы текст и прицел оставались чёткими даже без генерации кадров."
+  },
+  {
    "zh": "识别区域",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "辨識區域",
@@ -34869,6 +35714,19 @@
    "ru": "Сейчас в области нет текста"
   },
   {
+   "zh": "识别固定边框内变化的数字和状态条 · 实验 · 默认关闭",
+   "src": "qml/DynamicHudRow.qml",
+   "zh-TW": "辨識固定邊框內變動的數字與狀態列 · 實驗性 · 預設關閉",
+   "en": "Detects changing numbers and status bars inside fixed borders · Experimental · Off by default",
+   "ja": "固定枠内で変化する数字やゲージを検出します · 実験的 · デフォルトはオフ",
+   "ko": "고정된 테두리 안에서 변하는 숫자와 상태 표시줄을 감지합니다 · 실험 기능 · 기본값 꺼짐",
+   "es": "Detecta números y barras de estado que cambian dentro de bordes fijos · Experimental · Desactivado de forma predeterminada",
+   "fr": "Détecte les chiffres et les barres d’état qui changent dans un cadre fixe · Expérimental · Désactivé par défaut",
+   "de": "Erkennt wechselnde Zahlen und Statusleisten in festen Rahmen · Experimentell · Standardmäßig aus",
+   "pt-BR": "Detecta números e barras de status que mudam dentro de bordas fixas · Experimental · Desativado por padrão",
+   "ru": "Распознаёт меняющиеся числа и шкалы внутри неподвижных рамок · Экспериментальная функция · По умолчанию выключена"
+  },
+  {
    "zh": "识别实时倍率 %1 · 翻译平均 %2 ms · 跳过 %3 句",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "辨識即時倍率 %1 · 翻譯平均 %2 ms · 略過 %3 句",
@@ -34882,19 +35740,6 @@
    "ru": "Коэффициент реального времени %1 · Среднее время перевода %2 мс · Пропущено фраз %3"
   },
   {
-   "zh": "识别并保护准心，框内背景继续补帧",
-   "src": "qml/MaskEditor.qml",
-   "zh-TW": "辨識並保護準心，框內背景繼續補幀",
-   "en": "Detects and protects the crosshair while frame generation continues for the background",
-   "ja": "照準を検出して保護し、枠内の背景にはフレーム生成を続けます",
-   "ko": "조준점을 감지해 보호하며 영역 안 배경의 프레임 생성은 계속됩니다",
-   "es": "Detecta y protege la mira y sigue generando fotogramas para el fondo",
-   "fr": "Détecte et protège le viseur et maintient la génération d’images dans l’arrière-plan",
-   "de": "Erkennt und schützt das Fadenkreuz, während die Frame-Generierung für den Hintergrund weiterläuft",
-   "pt-BR": "Detecta e protege a mira e continua gerando quadros para o fundo",
-   "ru": "Обнаруживает и защищает прицел, сохраняя генерацию кадров для фона"
-  },
-  {
    "zh": "识别播放中的声音，翻译后的字幕显示在 Veyra 预览画面内。",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "辨識播放中的聲音，翻譯後的字幕會顯示在 Veyra 預覽畫面中。",
@@ -34906,19 +35751,6 @@
    "de": "Erkennt Sprache während der Wiedergabe und zeigt die Übersetzung in der Veyra-Vorschau an.",
    "pt-BR": "Reconhece a fala durante a reprodução e mostra as legendas traduzidas na prévia do Veyra.",
    "ru": "Распознаёт речь при воспроизведении и показывает перевод в окне просмотра Veyra."
-  },
-  {
-   "zh": "识别有固定边框的数字和状态条，补帧时保留真实画面中的内容 · 实验 · 默认关闭",
-   "src": "qml/DynamicHudRow.qml",
-   "zh-TW": "辨識具有固定邊框的數字和狀態條，補幀時保留原始畫面中的內容 · 實驗 · 預設關閉",
-   "en": "Detects counters and status bars within stable borders and preserves their original content during frame generation · Experimental · Off by default",
-   "ja": "固定枠のある数値やゲージを検出し、フレーム生成時に元の表示を維持します · 実験的 · デフォルトはオフ",
-   "ko": "고정 테두리 안의 숫자와 상태 표시줄을 감지하고 프레임 생성 중 원본 표시를 유지합니다 · 실험 기능 · 기본값 끔",
-   "es": "Detecta contadores y barras de estado con bordes fijos y conserva su contenido original durante la interpolación · Experimental · Desactivada por defecto",
-   "fr": "Détecte les compteurs et les jauges avec des bordures fixes et préserve leur contenu original pendant l’interpolation · Expérimental · Désactivé par défaut",
-   "de": "Erkennt Zähler und Statusleisten mit festen Rahmen und erhält ihren Originalinhalt bei der Zwischenbildberechnung · Experimentell · Standardmäßig aus",
-   "pt-BR": "Detecta contadores e barras de status com bordas fixas e preserva o conteúdo original durante a geração de quadros · Experimental · Desativada por padrão",
-   "ru": "Распознаёт счётчики и индикаторы с неподвижными рамками и сохраняет исходное содержимое при генерации кадров · Экспериментально · По умолчанию выключено"
   },
   {
    "zh": "识别档位",
@@ -34971,6 +35803,19 @@
    "de": "Sprachmodell herunterladen",
    "pt-BR": "Baixar modelo de fala",
    "ru": "Загрузка модели распознавания"
+  },
+  {
+   "zh": "识别画面下方的内嵌字幕，补帧前清除字形，生成后贴回。",
+   "src": "qml/HudProtectControl.qml",
+   "zh-TW": "辨識畫面下方的內嵌字幕，補幀前清除字形，生成後貼回。",
+   "en": "Detects text burned into the lower picture, removes it before interpolation, and restores it on generated frames.",
+   "ja": "画面下部に焼き付いた字幕を検出し、補間前に除去して生成フレームに戻します。",
+   "ko": "화면 하단에 삽입된 자막을 감지해 보간 전에 지우고 생성 프레임에 복원합니다.",
+   "es": "Detecta subtítulos incrustados en la parte inferior, los retira antes de interpolar y los restaura después.",
+   "fr": "Détecte les sous-titres incrustés en bas de l’image, les retire avant interpolation et les remet sur les images générées.",
+   "de": "Erkennt eingebrannte Untertitel im unteren Bildbereich, entfernt sie vor der Interpolation und setzt sie danach wieder ein.",
+   "pt-BR": "Detecta legendas embutidas na parte inferior, remove antes da interpolação e restaura nos quadros gerados.",
+   "ru": "Находит встроенные субтитры внизу изображения, удаляет их до интерполяции и возвращает на созданные кадры."
   },
   {
    "zh": "识别系统播放的声音。",
@@ -35049,6 +35894,19 @@
    "de": "Diagnoseprotokoll",
    "pt-BR": "Log de diagnóstico",
    "ru": "Журнал диагностики"
+  },
+  {
+   "zh": "译文显示位置",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "譯文顯示位置",
+   "en": "Translation position",
+   "ja": "翻訳字幕の表示位置",
+   "ko": "번역 자막 위치",
+   "es": "Posición de la traducción",
+   "fr": "Position de la traduction",
+   "de": "Position der Übersetzung",
+   "pt-BR": "Posição da tradução",
+   "ru": "Положение перевода"
   },
   {
    "zh": "译文行数上限",
@@ -37144,6 +38002,19 @@
    "ru": "Ввод временной шкалы нерегулярный"
   },
   {
+   "zh": "输入死区",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "輸入死區",
+   "en": "Input deadzone",
+   "ja": "入力デッドゾーン",
+   "ko": "입력 데드존",
+   "es": "Zona muerta de entrada",
+   "fr": "Zone morte d’entrée",
+   "de": "Eingabe-Totzone",
+   "pt-BR": "Zona morta de entrada",
+   "ru": "Мёртвая зона ввода"
+  },
+  {
    "zh": "输入空间不匹配",
    "src": "src/pipeline/EnhanceGraph.cpp",
    "zh-TW": "輸入空間不匹配",
@@ -37742,6 +38613,19 @@
    "ru": "Запуск Node Order отсутствует в настройках экземпляра"
   },
   {
+   "zh": "返回",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "返回",
+   "en": "Back",
+   "ja": "戻る",
+   "ko": "뒤로",
+   "es": "Volver",
+   "fr": "Retour",
+   "de": "Zurück",
+   "pt-BR": "Voltar",
+   "ru": "Назад"
+  },
+  {
    "zh": "返回列表",
    "src": "qml/NodePage.qml",
    "zh-TW": "返回列表",
@@ -38158,6 +39042,19 @@
    "ru": "Ожидает вывода в процессе"
   },
   {
+   "zh": "进阶",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "進階",
+   "en": "Advanced",
+   "ja": "詳細",
+   "ko": "고급",
+   "es": "Avanzado",
+   "fr": "Avancé",
+   "de": "Erweitert",
+   "pt-BR": "Avançado",
+   "ru": "Расширенные"
+  },
+  {
    "zh": "连不上 Xbox 服务，请检查网络。（",
    "src": "src/source/XboxSessionSource.cpp",
    "zh-TW": "連不上 Xbox 服務，請檢查網路。（",
@@ -38496,6 +39393,19 @@
    "ru": "Выбрав устройство и формат, подключите источник здесь. Проверьте, что в предпросмотре есть изображение, а частота захвата соответствует ожиданиям. Затем откройте настройки улучшения в профессиональном режиме."
   },
   {
+   "zh": "选择",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "選擇",
+   "en": "Select",
+   "ja": "選択",
+   "ko": "선택",
+   "es": "Seleccionar",
+   "fr": "Sélectionner",
+   "de": "Auswählen",
+   "pt-BR": "Selecionar",
+   "ru": "Выбрать"
+  },
+  {
    "zh": "选择…",
    "src": "qml/BeautyEditor.qml",
    "zh-TW": "選擇…",
@@ -38533,19 +39443,6 @@
    "de": "Speicherordner wählen…",
    "pt-BR": "Escolha uma pasta para salvar…",
    "ru": "Выберите папку для сохранения…"
-  },
-  {
-   "zh": "选择字幕颜色",
-   "src": "qml/LiveTranslationDialog.qml",
-   "zh-TW": "選擇字幕顏色",
-   "en": "Choose subtitle colour",
-   "ja": "字幕の色を選択",
-   "ko": "자막 색상 선택",
-   "es": "Elegir color de subtítulos",
-   "fr": "Choisir la couleur des sous-titres",
-   "de": "Untertitelfarbe auswählen",
-   "pt-BR": "Escolher cor da legenda",
-   "ru": "Выбрать цвет субтитров"
   },
   {
    "zh": "选择导出目录",
@@ -38676,6 +39573,19 @@
    "de": "Optionen",
    "pt-BR": "Opções",
    "ru": "Параметры"
+  },
+  {
+   "zh": "选项键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "選項鍵",
+   "en": "Options button",
+   "ja": "オプションボタン",
+   "ko": "옵션 버튼",
+   "es": "Botón Opciones",
+   "fr": "Touche Options",
+   "de": "Options-Taste",
+   "pt-BR": "Botão Opções",
+   "ru": "Кнопка Options"
   },
   {
    "zh": "逐行",
@@ -39692,6 +40602,32 @@
    "ru": "Сбросить узел"
   },
   {
+   "zh": "重置键位",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "重設按鍵",
+   "en": "Reset bindings",
+   "ja": "キー割当をリセット",
+   "ko": "키 설정 초기화",
+   "es": "Restablecer teclas",
+   "fr": "Réinitialiser les touches",
+   "de": "Belegung zurücksetzen",
+   "pt-BR": "Redefinir teclas",
+   "ru": "Сбросить привязки"
+  },
+  {
+   "zh": "重置鼠标手感",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "重設滑鼠手感",
+   "en": "Reset mouse tuning",
+   "ja": "マウス調整をリセット",
+   "ko": "마우스 조정 초기화",
+   "es": "Restablecer ajustes del ratón",
+   "fr": "Réinitialiser les réglages souris",
+   "de": "Mauseinstellungen zurücksetzen",
+   "pt-BR": "Redefinir ajustes do mouse",
+   "ru": "Сбросить настройки мыши"
+  },
+  {
    "zh": "重连",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "重連",
@@ -39783,6 +40719,19 @@
    "ru": "Закрепить панель управления в полноэкранном режиме"
   },
   {
+   "zh": "锁定键鼠后即可切换。默认 W（R2）加速、S（L2）刹车／倒车，A/D 转向。",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "鎖定鍵鼠後即可切換。預設 W（R2）加速、S（L2）煞車／倒車，A/D 轉向。",
+   "en": "Switch while input is captured. W (R2) accelerates, S (L2) brakes or reverses, and A/D steer by default.",
+   "ja": "入力のロック中に切り替えます。既定では W（R2）で加速、S（L2）でブレーキ・後退、A/D で操舵します。",
+   "ko": "입력을 잠근 상태에서 전환하세요. 기본값은 W(R2) 가속, S(L2) 제동·후진, A/D 조향입니다.",
+   "es": "Cambia mientras la entrada esté capturada. Por defecto, W (R2) acelera, S (L2) frena o da marcha atrás y A/D giran.",
+   "fr": "Basculez pendant la capture de la saisie. Par défaut, W (R2) accélère, S (L2) freine ou recule et A/D dirigent.",
+   "de": "Bei erfasster Eingabe umschalten. Standardmäßig beschleunigt W (R2), S (L2) bremst oder fährt rückwärts und A/D lenken.",
+   "pt-BR": "Alterne com a entrada capturada. Por padrão, W (R2) acelera, S (L2) freia ou dá ré e A/D esterçam.",
+   "ru": "Переключайте при захвате ввода. По умолчанию W (R2) — газ, S (L2) — тормоз или задний ход, A/D — поворот."
+  },
+  {
    "zh": "错误",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "錯誤",
@@ -39809,6 +40758,32 @@
    "ru": "Ошибка 112"
   },
   {
+   "zh": "键位列表",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "按鍵列表",
+   "en": "Bindings list",
+   "ja": "割り当て一覧",
+   "ko": "키 목록",
+   "es": "Lista de teclas",
+   "fr": "Liste des touches",
+   "de": "Tastenliste",
+   "pt-BR": "Lista de teclas",
+   "ru": "Список привязок"
+  },
+  {
+   "zh": "键位布局",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "鍵位配置",
+   "en": "Control layout",
+   "ja": "キー配置",
+   "ko": "키 배치",
+   "es": "Distribución de controles",
+   "fr": "Configuration des touches",
+   "de": "Tastenlayout",
+   "pt-BR": "Layout de controles",
+   "ru": "Раскладка управления"
+  },
+  {
    "zh": "键盘鼠标已交给主机 · Ctrl+Alt+Shift+Z 释放 · +Q 断开",
    "src": "qml/StreamHud.qml",
    "zh-TW": "鍵盤滑鼠已交給主機 · Ctrl+Alt+Shift+Z 釋放 · +Q 斷開",
@@ -39833,6 +40808,45 @@
    "de": "Tastatur und Maus nicht erfasst · Klicken Sie auf das Bild",
    "pt-BR": "Teclado e mouse não capturado · clique na imagem para capturar",
    "ru": "Клавиатура и мышь не захвачены · щелкните картинку для захвата"
+  },
+  {
+   "zh": "键鼠映射",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "鍵鼠映射",
+   "en": "Keyboard & mouse mapping",
+   "ja": "キーボードとマウスの割り当て",
+   "ko": "키보드·마우스 매핑",
+   "es": "Asignación de teclado y ratón",
+   "fr": "Mappage clavier et souris",
+   "de": "Tastatur- und Mausbelegung",
+   "pt-BR": "Mapeamento de teclado e mouse",
+   "ru": "Раскладка клавиатуры и мыши"
+  },
+  {
+   "zh": "键鼠设置",
+   "src": "qml/Main.qml",
+   "zh-TW": "鍵鼠設定",
+   "en": "Keyboard and mouse settings",
+   "ja": "キーボードとマウスの設定",
+   "ko": "키보드 및 마우스 설정",
+   "es": "Ajustes de teclado y ratón",
+   "fr": "Réglages clavier et souris",
+   "de": "Tastatur- und Mauseinstellungen",
+   "pt-BR": "Ajustes de teclado e mouse",
+   "ru": "Настройки клавиатуры и мыши"
+  },
+  {
+   "zh": "键鼠需在前台锁定画面；此项仅影响实体手柄。",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "鍵鼠需在前景鎖定畫面；此項僅影響實體手把。",
+   "en": "Keyboard and mouse require a foreground capture. This option applies to physical controllers.",
+   "ja": "キーボードとマウスは前面で画面にロックしてください。この項目は実機コントローラー用です。",
+   "ko": "키보드와 마우스는 화면을 전경에 잠가야 합니다. 이 옵션은 실제 컨트롤러에 적용됩니다.",
+   "es": "Teclado y ratón requieren captura en primer plano. Esta opción se aplica al mando físico.",
+   "fr": "Le clavier et la souris nécessitent la capture au premier plan. Cette option concerne la manette physique.",
+   "de": "Tastatur und Maus erfordern die Erfassung im Vordergrund. Diese Option betrifft den Controller.",
+   "pt-BR": "Teclado e mouse exigem captura em primeiro plano. Esta opção vale para o controle físico.",
+   "ru": "Клавиатуру и мышь нужно захватить в активном окне. Параметр относится к физическому геймпаду."
   },
   {
    "zh": "镜像失败时自动改用 GitHub 直连。",
@@ -42084,6 +43098,19 @@
    "ru": "Насыщенность мин."
   },
   {
+   "zh": "首张生成帧赶不上显示时间时跳过本组，减少晚帧，可能降低输出帧率。",
+   "src": "qml/NodePage.qml",
+   "zh-TW": "第一張生成幀趕不上顯示時間時跳過整組，減少延遲幀，但可能降低輸出幀率。",
+   "en": "Skip a group if its first generated frame would arrive late. This can reduce output FPS.",
+   "ja": "最初の生成フレームが表示に間に合わない場合はグループをスキップします。出力 FPS が下がることがあります。",
+   "ko": "첫 생성 프레임이 늦어지면 그룹을 건너뜁니다. 출력 FPS가 낮아질 수 있습니다.",
+   "es": "Omite el grupo si su primer fotograma generado llegaría tarde. Puede reducir los FPS de salida.",
+   "fr": "Ignore le groupe si sa première image générée devait arriver en retard. Le débit de sortie peut diminuer.",
+   "de": "Überspringt eine Gruppe, wenn ihr erstes generiertes Bild zu spät käme. Die Ausgabe-FPS können sinken.",
+   "pt-BR": "Pula o grupo se o primeiro quadro gerado for chegar atrasado. Isso pode reduzir os FPS de saída.",
+   "ru": "Пропускать группу, если первый сгенерированный кадр опоздает. Частота кадров на выходе может снизиться."
+  },
+  {
    "zh": "首次使用请在 Windows 下载语音包，并保持实时字幕窗口打开。",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "首次使用請在 Windows 下載語音套件，並保持即時字幕視窗開啟。",
@@ -42329,6 +43356,19 @@
    "de": "Fahrereinstellung (kein Override)",
    "pt-BR": "Padrão do controlador (sem sobreposição)",
    "ru": "Водитель по умолчанию (без переопределения)"
+  },
+  {
+   "zh": "驾驶",
+   "src": "qml/Main.qml",
+   "zh-TW": "駕駛",
+   "en": "Driving",
+   "ja": "運転",
+   "ko": "운전",
+   "es": "Conducción",
+   "fr": "Conduite",
+   "de": "Fahren",
+   "pt-BR": "Direção",
+   "ru": "Вождение"
   },
   {
    "zh": "验证运行库",
@@ -42862,6 +43902,110 @@
    "de": "Der voreingestellte Bearbeitungsmodus ist ungültig",
    "pt-BR": "O modo de edição predefinido é inválido",
    "ru": "Режим редактирования по умолчанию является недействительным"
+  },
+  {
+   "zh": "鼠标中键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠中鍵",
+   "en": "Middle mouse",
+   "ja": "マウス中ボタン",
+   "ko": "마우스 가운데 버튼",
+   "es": "Botón central del ratón",
+   "fr": "Bouton central de la souris",
+   "de": "Mittlere Maustaste",
+   "pt-BR": "Botão do meio do mouse",
+   "ru": "Средняя кнопка мыши"
+  },
+  {
+   "zh": "鼠标侧键 1",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "滑鼠側鍵 1",
+   "en": "Mouse side button 1",
+   "ja": "マウス側面ボタン 1",
+   "ko": "마우스 측면 버튼 1",
+   "es": "Botón lateral 1 del ratón",
+   "fr": "Bouton latéral 1 de la souris",
+   "de": "Maustaste seitlich 1",
+   "pt-BR": "Botão lateral 1 do mouse",
+   "ru": "Боковая кнопка мыши 1"
+  },
+  {
+   "zh": "鼠标侧键 2",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "滑鼠側鍵 2",
+   "en": "Mouse side button 2",
+   "ja": "マウス側面ボタン 2",
+   "ko": "마우스 측면 버튼 2",
+   "es": "Botón lateral 2 del ratón",
+   "fr": "Bouton latéral 2 de la souris",
+   "de": "Maustaste seitlich 2",
+   "pt-BR": "Botão lateral 2 do mouse",
+   "ru": "Боковая кнопка мыши 2"
+  },
+  {
+   "zh": "鼠标右键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠右鍵",
+   "en": "Right mouse",
+   "ja": "マウス右ボタン",
+   "ko": "마우스 오른쪽 버튼",
+   "es": "Botón derecho del ratón",
+   "fr": "Bouton droit de la souris",
+   "de": "Rechte Maustaste",
+   "pt-BR": "Botão direito do mouse",
+   "ru": "Правая кнопка мыши"
+  },
+  {
+   "zh": "鼠标实际 DPI",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠實際 DPI",
+   "en": "Mouse hardware DPI",
+   "ja": "マウス本体の DPI",
+   "ko": "마우스 실제 DPI",
+   "es": "DPI real del ratón",
+   "fr": "DPI matériel de la souris",
+   "de": "Tatsächliche Maus-DPI",
+   "pt-BR": "DPI real do mouse",
+   "ru": "Фактический DPI мыши"
+  },
+  {
+   "zh": "鼠标左键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠左鍵",
+   "en": "Left mouse",
+   "ja": "マウス左ボタン",
+   "ko": "마우스 왼쪽 버튼",
+   "es": "Botón izquierdo del ratón",
+   "fr": "Bouton gauche de la souris",
+   "de": "Linke Maustaste",
+   "pt-BR": "Botão esquerdo do mouse",
+   "ru": "Левая кнопка мыши"
+  },
+  {
+   "zh": "鼠标控右摇杆",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠控制右搖桿",
+   "en": "Mouse controls right stick",
+   "ja": "マウスで右スティックを操作",
+   "ko": "마우스로 오른쪽 스틱 조작",
+   "es": "El ratón controla el stick derecho",
+   "fr": "La souris contrôle le stick droit",
+   "de": "Maus steuert den rechten Stick",
+   "pt-BR": "Mouse controla o analógico direito",
+   "ru": "Мышь управляет правым стиком"
+  },
+  {
+   "zh": "鼠标陀螺仪",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "滑鼠陀螺儀",
+   "en": "Mouse to gyro",
+   "ja": "マウスでジャイロ操作",
+   "ko": "마우스 자이로",
+   "es": "Ratón a giroscopio",
+   "fr": "Souris vers gyroscope",
+   "de": "Maus als Gyroskop",
+   "pt-BR": "Mouse como giroscópio",
+   "ru": "Мышь как гироскоп"
   },
   {
    "zh": "（MP4，录下处理后的画面和正在播放的声音）",

@@ -517,9 +517,19 @@ DialogLayer {
             }
         }
         VRow {
+            visible: !!veyra.ps5Input
+            label: qsTr("控制方式")
+            VButton {
+                objectName: "open-ps5-mapping"
+                text: (veyra.ps5Input?.keyboardEnabled ? qsTr("键鼠映射") : qsTr("实体手柄")) + " · " + (veyra.ps5Input?.profile || "Default")
+                onClicked: dialogHost.openPs5Mapping()
+            }
+        }
+        VRow {
             visible: captureDialog.pcOn
             label: qsTr("后台也转发手柄")
-            hint: qsTr("再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 PS5")
+            enabled: !veyra.ps5Input?.ps5Captured
+            hint: veyra.ps5Input?.keyboardEnabled ? qsTr("键鼠需在前台锁定画面；此项仅影响实体手柄。") : qsTr("再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 PS5")
             VSwitch {
                 objectName: "capture-ps5-background"
                 checked: captureDialog.pc.background === true

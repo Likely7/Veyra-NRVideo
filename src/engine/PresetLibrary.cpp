@@ -845,11 +845,6 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     const bool dlaa=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
         return dlaaChain(e.chain)||(e.nodeConfiguration&&(dlaaChain(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&dlaaChain(e.nodeConfiguration->editor->nodes))));});
-    // v22: 「自动」倍率标记（本地）；上游 v21 是 output-controls。
-    const auto autoFgChain=[](const EffectChain& chain){return chain.fgAutoMultiplier;};
-    const bool autoFg=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){
-        return autoFgChain(e.chain)||(e.nodeConfiguration&&(autoFgChain(e.nodeConfiguration->chain)||
-            (e.nodeConfiguration->editor&&autoFgChain(e.nodeConfiguration->editor->nodes))));});
     const bool outputControls=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
         return hasOutputControls(e.chain)||(e.nodeConfiguration&&(hasOutputControls(e.nodeConfiguration->chain)||
             (e.nodeConfiguration->editor&&hasOutputControls(e.nodeConfiguration->editor->nodes))));
@@ -872,7 +867,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.chain.firstOf(EffectType::VideoDenoise) ||
             (e.nodeConfiguration && hasVideoDenoise(*e.nodeConfiguration));
     });
-    const int version=std::max(minimumVersion, denoise?26:(individualModes||originalHalfRate||rife)?25:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const int version=std::max(minimumVersion, denoise?26:(individualModes||originalHalfRate||rife)?25:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -880,7 +875,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
           << e.fg.multiplier << ' ' << int(e.fg.backend) << ' ' << int(e.audioSync) << ' ' << e.audioOffsetMs << ' '
           << e.chain.nodeCount << ' ' << int(e.chain.mode) << ' ' << e.chain.fgMultiplier << ' '
           << (e.chain.fgStrictAdmission ? 1 : 0) << ' ';
-        if(version>=22)o<<(e.chain.fgAutoMultiplier ? 1 : 0)<<' ';
+        if(version>=22)o<<0 /* retired automatic multiplier slot */<<' ';
         if(version>=7)o<<e.fg.vfgQuality<<' ';
         for (uint32_t i = 0; i < e.chain.nodeCount; ++i) {
             const auto& n = e.chain.nodes[i];
@@ -971,7 +966,6 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
         if(version>=22){
             int autoFg=0;
             if(!(in>>autoFg)||autoFg<0||autoFg>1){error=L"预设库自动倍率字段损坏";return false;}
-            e.chain.fgAutoMultiplier=autoFg!=0;
         }
         if(version>=7&&!(in>>e.fg.vfgQuality)){error=L"预设库 VFG 质量字段损坏";return false;}
         if(fgBackend<0||fgBackend>(version>=25?7:version>=7?6:3)){error=L"预设库补帧后端无效";return false;}
@@ -1158,9 +1152,6 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             return n.type==EffectType::AntiAliasing&&n.aa.method==AntiAliasMethod::Dlaa;});};
     const bool dlaa=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
         return dlaaChain(c.chain)||(c.editor&&dlaaChain(c.editor->nodes));});
-    // v17: 「自动」倍率标记（本地；上游 v16 是 output-controls）。
-    const bool autoFg=std::any_of(session.configurations.begin(),session.configurations.end(),[&](const auto& c){
-        return c.chain.fgAutoMultiplier||(c.editor&&c.editor->nodes.fgAutoMultiplier);});
     const bool outputControls=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return hasOutputControls(c.chain)||(c.editor&&hasOutputControls(c.editor->nodes));
     });
@@ -1172,7 +1163,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         return usesRife(c)||(c.editor&&c.editor->globals&&usesRife(*c.editor->globals));
     });
     const bool denoise=std::any_of(session.configurations.begin(),session.configurations.end(),hasVideoDenoise);
-    const int version = denoise?21:(individualModes||session.originalHalfRate||rife)?20:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const int version = denoise?21:(individualModes||session.originalHalfRate||rife)?20:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);
     if(version>=20)out<<' '<<session.originalHalfRate;

@@ -226,10 +226,15 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
                 saved, globals.dualSrQuality, globals.dualSrEnabled));
         }
     };
+    engine::moveLegacyExclusionToFrameGeneration(configuration.chain, nullptr,
+        configuration.editor ? nullptr : &configuration.selectedNr,
+        configuration.editor ? nullptr : &configuration.selectedColour);
     sanitize(configuration.chain, configuration);
     if (configuration.editor) {
         auto editor = std::make_shared<engine::NodeEditorDocument>(*configuration.editor);
         auto globals = editor->globals.value_or(static_cast<const engine::ChainGlobalSettings&>(configuration));
+        engine::moveLegacyExclusionToFrameGeneration(editor->nodes, &editor->layout,
+            &configuration.selectedNr, &configuration.selectedColour);
         sanitize(editor->nodes, globals);
         editor->globals = globals;
         configuration.editor = std::move(editor);

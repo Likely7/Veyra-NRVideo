@@ -741,12 +741,75 @@ Window {
             veyra.moonlightCapture(true)
         }
     }
+    readonly property bool ps5InputLocked: !!veyra.ps5Input && (veyra.ps5Input.ps5Captured || veyra.ps5Input.previewing)
+    readonly property bool ps5KeyboardReady: !!veyra.ps5Input && veyra.ps5Input.keyboardEnabled &&
+        ((veyra.ps5.active === true && veyra.ps5.viewOnly !== true) ||
+         (veyra.ps5Control.state === "connected" && veyra.isCapture))
+    TapHandler {
+        enabled: root.ps5KeyboardReady && !veyra.ps5Input.ps5Captured && dialogs.dialog === ""
+        onTapped: eventPoint => {
+            if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
+            if (root.overVideoCover(eventPoint.scenePosition) || !root.pictureContains(eventPoint.scenePosition)) return
+            if (veyra.protectionDrawShape.length > 0 || veyra.exclusionOverlayVisible || screenCrop.editing) return
+            veyra.ps5CaptureKeyboard()
+        }
+    }
+    Rectangle {
+        objectName: "ps5-input-hint"
+        property bool capturedNow: root.ps5InputLocked
+        onCapturedNowChanged: { if(capturedNow)hintTimer.restart();else hintTimer.stop() }
+        Timer {id: hintTimer;interval:1800}
+        Connections {
+            target: veyra.ps5Input
+            function onDrivingChanged() { if (root.ps5InputLocked) hintTimer.restart() }
+        }
+        readonly property bool videoCover: true
+        readonly property real coverRadius: radius
+        visible: (root.ps5KeyboardReady || capturedNow) && (!capturedNow || hintTimer.running) && dialogs.dialog === "" && veyra.hasSource
+                 && (root.page === "min" || root.page === "pro" || root.page === "node")
+        anchors.top: parent.top
+        anchors.topMargin: 55
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: Math.min(parent.width - 16, ps5InputHint.implicitWidth + 24)
+        height: 28
+        radius: 8
+        color: Theme.dialog
+        border.color: Theme.stroke2
+        z: 62
+        Text {
+            id: ps5InputHint
+            TapHandler {enabled: !veyra.ps5Input?.ps5Captured; onTapped: dialogs.openPs5Mapping()}
+            anchors.centerIn: parent
+            text: parent.capturedNow
+                ? ((veyra.ps5Input.driving ? qsTr("驾驶") : qsTr("步行")) + " · " + veyra.ps5Input.driveKeyLabel + " · " + veyra.ps5Input.unlockLabel) : (qsTr("点击画面锁定键鼠")+"  ·  "+qsTr("键鼠设置"))
+            color: Theme.t1
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSmall
+        }
+    }
+
     // Stream statistics on and off. While a PC stream has the keyboard, the capture filter sees the keys
     // first and toggles the same switch.
     Shortcut {
         sequence: "Ctrl+Alt+Shift+S"
         enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
         onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
+    }
+    Shortcut {
+        sequence: "Ctrl+Alt+F1"
+        enabled: !!veyra.ps5Input && !veyra.ps5Input.ps5Captured && !veyra.moonlightCaptured
+        onActivated: dialogs.openPs5Mapping()
+    }
+    VButton {
+        objectName: "ps5-quick-mapping"
+        readonly property bool videoCover: true
+        visible: root.quickPanelShown && !!veyra.ps5Input && !veyra.ps5Input.ps5Captured
+                 && (veyra.sourceKind==="ps5" || veyra.sourceKind==="capture") && dialogs.dialog===""
+        anchors.right: parent.right; anchors.bottom: parent.bottom
+        anchors.margins: 16
+        z: 91
+        text: qsTr("键鼠设置")
+        onClicked: dialogs.openPs5Mapping()
     }
     StreamHud {
         id: streamHud
@@ -770,7 +833,7 @@ Window {
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen
         pillTop: (root.maximized ? root.height : root.pictureHeight) - 46
-        shown: !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
+        shown: !root.ps5InputLocked && !veyra.moonlightCaptured && !root.onboardingActive && veyra.hasSource && !screenCrop.editing && !root.pillHidden && (root.fullscreen ? root.fullControls && !root.fullLocked
                                                    : root.cinema && root.shownPage === "min"
                                                      && root.leavingPage === "" && dialogs.dialog === ""
                                                      && root.visibility !== Window.Minimized)
@@ -1117,7 +1180,7 @@ Window {
 
     // Startup music plays once, continuing after the intro or without it. Media-open
     // intent or the shared setting/button permanently stops it for this launch.
-    readonly property bool musicOn: typeof vyMusic !== "undefined" && veyra.preferences.introMusic !== false
+    readonly property bool musicOn: typeof vyMusic !== "undefined" && veyra.preferences.introMusic === true
     readonly property bool musicSounding: typeof vyMusic !== "undefined" && (vyMusic.state === "loading" || vyMusic.state === "playing")
     function stopStartupMusicForSession() {
         if (typeof vyMusic === "undefined") return

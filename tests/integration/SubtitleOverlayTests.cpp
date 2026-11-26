@@ -119,6 +119,30 @@ int wmain(int argc,wchar_t** argv){
             check(imageWidth==960&&imageHeight==540&&(pixel(84,459)>>24)==255&&(pixel(684,84)>>24)==255,"resize/fullscreen aspect maps both authored rectangles");
         }
     }
+    SetWindowPos(overlay,nullptr,0,0,640,480,SWP_NOACTIVATE|SWP_NOZORDER);
+    view=SubtitleView{};
+    red.liveCaption=green.liveCaption=true;
+    red.style.alignment=green.style.alignment=2;
+    red.style.primary=0xffff0000;green.style.primary=0xff00ff00;
+    const auto captionBounds=[&](bool wantRed){
+        RECT result{imageWidth,imageHeight,0,0};
+        for(int y=0;y<imageHeight;++y)for(int x=0;x<imageWidth;++x){
+            const auto pixel=pixels[size_t(y)*imageWidth+x];
+            int r=(pixel>>16)&255,g=(pixel>>8)&255;
+            if(wantRed?(r>40&&r>2*g):(g>40&&g>2*r)){
+                result.left=std::min<LONG>(result.left,x);result.right=std::max<LONG>(result.right,x);
+                result.top=std::min<LONG>(result.top,y);result.bottom=std::max<LONG>(result.bottom,y);
+            }
+        }
+        return result;
+    };
+    for(double position:{0.,1.}){
+        view.liveX=view.liveY=position;
+        updateSubtitleOverlay(overlay,{red,green},view);
+        auto first=captionBounds(true),second=captionBounds(false);
+        check(first.bottom>first.top&&second.bottom>second.top&&first.bottom<second.top,"custom bilingual captions stay visible in order");
+        check(position==0?(first.left<40&&first.top<40):(second.right>600&&second.bottom>440),"both custom coordinates reach the selected screen corner");
+    }
     DestroyWindow(overlay);DestroyWindow(parent);Gdiplus::GdiplusShutdown(token);
     return failures?1:0;
 }

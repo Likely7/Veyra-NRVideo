@@ -44,10 +44,9 @@ static int hudFilmCases(int argc,wchar_t** argv) {
     if(has(L"-high"))desc.vfgQuality=2;
     if(protect&&tagged){
         desc.hudProtect=engine::HudProtectMode::Regions;
-        desc.exclusion.enabled=true;
         const float radius=float(height)/72.f;
         desc.exclusion.regions[0]={.5f-radius/width,.5f-radius/height,.5f+radius/width,.5f+radius/height,
-                                   true,engine::ExclusionContent::Hud};
+                                   true};
     }else if(protect)desc.hudProtect=engine::HudProtectMode::Center;
 
     pipeline::EnhanceGraph graph(ctx,ring);

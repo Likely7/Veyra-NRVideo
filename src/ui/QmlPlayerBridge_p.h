@@ -92,8 +92,10 @@
 #ifdef VEYRA_ENABLE_XBOX
 #include "veyra/ui/XboxModel.h"
 #endif
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+#include "veyra/ui/StreamInputCapture.h"
+#endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
-#include "veyra/ui/MoonlightInputCapture.h"
 #include "veyra/ui/MoonlightModel.h"
 #endif
 #include <future>
@@ -536,7 +538,7 @@ struct QmlPlayerBridge::Impl {
     int audioPollTicks = 0;
     // --- protection drawing (#8) ---
     QString protDraw;                         // "" | rect | ellipse
-    bool protExclusion=false;
+    bool protHud=false;
     HWND protOverlay = nullptr;
     int exclusionSelected = -1;
     bool exclusionDragging = false;
@@ -991,7 +993,6 @@ struct QmlPlayerBridge::Impl {
     QTimer* moonlightTimer = nullptr;
     bool moonlightWantCapture = false, moonlightStatsVisible = false, moonlightWasActive = false;
     int moonlightStatsTicks = 0;
-    std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
     std::unique_ptr<ui::MoonlightModel> moonlight;
 #endif
 #ifdef VEYRA_ENABLE_XBOX
@@ -1000,12 +1001,14 @@ struct QmlPlayerBridge::Impl {
     int xboxStatsTicks = 0;
     std::unique_ptr<ui::XboxModel> xbox;   // last: joins its worker first
 #endif
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+    std::unique_ptr<ui::StreamInputCapture> streamInput;
+#endif
 
     // Last published snapshot and the revision it came from. Polling compares
     // revisions, so an unchanged snapshot costs one comparison per tick.
 
     // The chain the UI edits, kept in step with the facade's pending settings.
-    uint64_t fgAutoSession = 0;       // 已为哪个会话决定过档位
 };
 
 

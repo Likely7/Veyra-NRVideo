@@ -23,7 +23,7 @@ std::string HudLock::describe() const {
 }
 
 bool HudLock::initialize(ID3D12Device* device, uint32_t width, uint32_t height, DXGI_FORMAT format,
-                         unsigned outputMode, bool staticLock, bool dynamicProtection) {
+                         unsigned outputMode, bool staticLock, bool dynamicProtection, bool composeGenerated) {
     if (!device || !width || !height || format == DXGI_FORMAT_UNKNOWN) return false;
     width_ = width; height_ = height; format_ = format; outputMode_ = outputMode;
     staticLock_ = staticLock;
@@ -48,11 +48,13 @@ bool HudLock::initialize(ID3D12Device* device, uint32_t width, uint32_t height, 
     }
     if (!staticLock_ && !dynamicActive()) return false;
     state_ = makeTexture(device, width_, height_, kStateFormat, true);
-    scratch_ = makeTexture(device, width_, height_, format_, true);
-    if (!state_ || !scratch_) return false;
+    if (!state_) return false;
     if (!update_.loadShader("HudLockUpdate.dxil", cs) || !update_.create(device, cs, 2 * kUpdateStride, 2, 1, kConstants)) return false;
-    if (!compose_.loadShader("HudLockCompose.dxil", cs) ||
-        !compose_.create(device, cs, kMaxGenerated * 2 * kComposeStride, 5, 1, kConstants)) return false;
+    if (composeGenerated) {
+        scratch_ = makeTexture(device, width_, height_, format_, true);
+        if (!scratch_ || !compose_.loadShader("HudLockCompose.dxil", cs) ||
+            !compose_.create(device, cs, kMaxGenerated * 2 * kComposeStride, 5, 1, kConstants)) return false;
+    }
     veyra::log::info("hud-lock", std::format("created {}", describe()));
     return true;
 }
@@ -60,7 +62,7 @@ bool HudLock::initialize(ID3D12Device* device, uint32_t width, uint32_t height, 
 void HudLock::createViews(ID3D12Device* device, DescriptorStager& stager, ID3D12Resource* const real[2],
                               ID3D12Resource* const* generated, unsigned generatedCount) {
     real_[0] = real[0]; real_[1] = real[1];
-    generatedCount_ = std::min<unsigned>(generatedCount, kMaxGenerated);
+    generatedCount_ = scratch_ ? std::min<unsigned>(generatedCount, kMaxGenerated) : 0u;
     for (unsigned i = 0; i < generatedCount_; ++i) generated_[i] = generated[i];
     D3D12_SHADER_RESOURCE_VIEW_DESC maskSrv{};
     maskSrv.Format = kMaskFormat;

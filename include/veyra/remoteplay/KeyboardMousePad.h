@@ -1,0 +1,229 @@
+// SPDX-License-Identifier: GPL-3.0-only
+#pragma once
+
+#include "veyra/remoteplay/MouseStick.h"
+#include "veyra/remoteplay/Types.h"
+
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <bit>
+#include <chrono>
+#include <cstdint>
+
+namespace veyra::remoteplay {
+
+// Primary keys are Win32 virtual keys (left/right modifiers are distinct).
+// The upper bits optionally hold Shift, Ctrl and Alt. Mouse keys follow VKs.
+class KeyboardMousePad {
+public:
+    enum Action {
+        Cross, Circle, Square, Triangle, Left, Right, Up, Down,
+        L1, R1, L3, R3, Options, Share, Touchpad, PS, L2, R2,
+        LeftUp, LeftDown, LeftLeft, LeftRight, RightUp, RightDown, RightLeft, RightRight,
+        LeftSlow, MenuStick, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, ActionCount
+    };
+    static constexpr int MouseLeft = 257, MouseMiddle = 258, MouseRight = 259;
+    static constexpr int MouseBack = 260, MouseForward = 261;
+    static constexpr int WheelUp = 262, WheelDown = 263, WheelLeft = 264, WheelRight = 265;
+    static constexpr int Shift = 1, Ctrl = 2, Alt = 4;
+    static constexpr int KeyMask = 511;
+    static constexpr std::array<int, ActionCount> Defaults = {
+        0x20, 'C', 'E', 'F', 0x25, 0x27, 0x26, 0x28, 'Q', 'R', 0xA0, MouseMiddle,
+        0x0D, 0x08, 'T', 'P', MouseRight, MouseLeft, 'W', 'S', 'A', 'D', 0, 0, 0, 0
+    };
+
+    // GTA V's common keyboard actions mapped to the standard PS controller.
+    // F6 changes layout separately from F, so a failed entry cannot latch the layout.
+    static constexpr std::array<int, ActionCount> GtaVWalking = {
+        0xA0, 'R', 0x20, 'F', 0x25, 'E', 0x26, 0x28, 0x09, 'Q', 0xA2, 'C',
+        0x1B, 0x08, 'V', 'P', MouseRight, MouseLeft, 'W', 'S', 'A', 'D'
+    };
+    static constexpr std::array<int, ActionCount> GtaVDriving = {
+        0x0D, 'R', 'X', 'F', 0x25, 'H', 0x26, 0x28, MouseLeft, 0x20, 'E', 'C',
+        0x1B, 0x08, 'V', 'P', 'S', 'W', 0, 0, 'A', 'D'
+    };
+
+    using Tuning = MouseStick::Tuning;
+
+    static int modifier(int key) {
+        if (key == 0xA0 || key == 0xA1) return Shift;
+        if (key == 0xA2 || key == 0xA3) return Ctrl;
+        if (key == 0xA4 || key == 0xA5) return Alt;
+        return 0;
+    }
+    static bool validBinding(int binding, bool allowEscape=false) {
+        if (!binding) return true;
+        const int key = binding & KeyMask;
+        return binding >= 0 && (binding >> 9) <= 7 &&
+            ((key >= 1 && key <= 254 && (key != 0x1B || allowEscape) && key != 0xe5 && key != 0x5B && key != 0x5C &&
+                (key < 0x76 || key > 0x79)) || (key >= MouseLeft && key <= WheelRight));
+    }
+    static int encode(int key, int modifiers) { return key | ((modifiers & ~modifier(key) & 7) << 9); }
+
+    const auto& bindings(bool driving = false) const { return driving ? drivingBindings_ : bindings_; }
+    bool driving() const { return driving_; }
+    int driveKey() const { return driveKey_; }
+    void selectDriving(bool driving) {
+        if (driving_ == driving) return;
+        driving_ = driving;
+        // A held key belongs to the old layout until physically released.
+        clearActions();
+    }
+    bool setDriveKey(int binding) {
+        if (!validBinding(binding, tuning_.unlock != 0)) return false;
+        for (const auto& layout : {&bindings_, &drivingBindings_})
+            if (binding && std::find(layout->begin(), layout->end(), binding) != layout->end()) return false;
+        driveKey_ = binding;
+        return true;
+    }
+    void resetDrivingBindings() {
+        drivingBindings_ = bindings_;
+        for (auto& key : drivingBindings_) if (key == 'W' || key == 'S') key = 0;
+        drivingBindings_[LeftUp] = drivingBindings_[LeftDown] = 0;
+        drivingBindings_[R2] = 'W';
+        drivingBindings_[L2] = 'S';
+        reset();
+    }
+    const Tuning& tuning() const { return tuning_; }
+    bool setBinding(int action, int binding, bool driving = false) {
+        if (action < 0 || action >= ActionCount || !validBinding(binding,tuning_.unlock!=0)) return false;
+        if (binding && binding == driveKey_) return false;
+        auto& layout = driving ? drivingBindings_ : bindings_;
+        for (int i = 0; binding && i < ActionCount; ++i)
+            if (i != action && layout[i] == binding) layout[i] = 0;
+        layout[action] = binding;
+        reset();
+        return true;
+    }
+    void resetBindings() { bindings_ = Defaults; reset(); }
+    void resetGtaVBindings(bool driving) {
+        if (driving) drivingBindings_ = GtaVDriving;
+        else bindings_ = GtaVWalking;
+        reset();
+    }
+    void setTuning(Tuning t) { tuning_ = t; }
+
+    int modifiers() const {
+        int mask = 0;
+        for (int k = 0xA0; k <= 0xA5; ++k)
+            if (held_[k]) mask |= modifier(k);
+        return mask;
+    }
+
+    // A primary key selects its action on press; release never changes it to
+    // a different action, even if a shortcut modifier has already been lifted.
+    bool digital(int key, bool down) {
+        if (key < 1 || key > WheelRight || held_[key] == down) return false;
+        held_[key] = down;
+        const int currentModifiers = modifiers();
+        const auto& layout = bindings(driving_);
+        if (down) {
+            int best=-1;
+            const int chord = encode(key, currentModifiers);
+            if (driveKey_ && chord == driveKey_) {
+                selectDriving(!driving_);
+                return true;
+            }
+            for (int action = 0; action < ActionCount; ++action) {
+                const int binding = layout[action];
+                const int mods=binding>>9;
+                if((binding&KeyMask)!=key || (mods&(chord>>9))!=mods)continue;
+                const int rank=std::popcount(unsigned(mods));
+                if(rank>best){best=rank;active_[key]=action;}
+            }
+            const auto a=active_[key];
+            if(a>=0 && (activeToggles()&(uint64_t{1}<<a)))toggled_^=uint64_t{1}<<a;
+            if(a>=SwipeUp&&a<=SwipeRight){swipeAction_=a;swipeStart_=clockUs();touchId_=(touchId_+1)%127;}
+            return active_[key] >= 0;
+        }
+        bool changed = active_[key] >= 0;
+        active_[key] = -1;
+        if (modifier(key)) {
+            for (int& action : active_) {
+                if (action >= 0 && ((layout[action] >> 9) & currentModifiers) != (layout[action] >> 9)) {
+                    action = -1;
+                    changed = true;
+                }
+            }
+        }
+        return changed;
+    }
+
+    static int64_t clockUs(){return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
+    uint64_t toggleMask() const{return toggleMask_;}
+    uint64_t activeToggles() const {
+        // L2 is a held brake in the driving layout.
+        return driving_ ? toggleMask_ & ~(uint64_t{1} << L2) : toggleMask_;
+    }
+    void setToggleMask(uint64_t mask){toggleMask_=mask;reset();}
+    bool menuActive()const{return (toggleMask_&(uint64_t{1}<<MenuStick))?(toggled_&(uint64_t{1}<<MenuStick))!=0:std::find(active_.begin(),active_.end(),MenuStick)!=active_.end();}
+    ControllerState state(bool* mouseControlsRightStick = nullptr, int64_t now = clockUs()) const {
+        std::array<bool, ActionCount> on{};
+        for (const int a : active_) if (a >= 0) on[a] = true;
+        const auto toggles = activeToggles();
+        for(int a=0;a<ActionCount;++a)if(toggles&(uint64_t{1}<<a))on[a]=(toggled_&(uint64_t{1}<<a))!=0;
+        ControllerState pad;
+        pad.inputActive = true;
+        for (int i = 0; i < 16; ++i) if (on[i]) pad.buttons |= uint32_t(1) << i;
+        pad.l2 = on[L2] ? 255 : 0;
+        pad.r2 = on[R2] ? 255 : 0;
+        setStick(pad.leftX, pad.leftY, int(on[LeftRight]) - int(on[LeftLeft]),
+                  int(on[LeftDown]) - int(on[LeftUp]));
+        if (driving_) {
+            const double dt = steerAt_ ? std::clamp(double(now - steerAt_) / 80000., 0., 1.) : 0;
+            steerAt_ = now;
+            const double target = pad.leftX / 32767.;
+            if ((target < 0 && steer_ > 0) || (target > 0 && steer_ < 0)) steer_ = 0;
+            steer_ += std::clamp(target - steer_, -dt, dt);
+            pad.leftX = int16_t(std::lround(steer_ * 32767.));
+        }
+        if(on[LeftSlow]){pad.leftX=int16_t(std::lround(pad.leftX*tuning_.walkScale));pad.leftY=int16_t(std::lround(pad.leftY*tuning_.walkScale));}
+        if(swipeAction_>=SwipeUp){
+            const double t=double(clockUs()-swipeStart_)/90000.;
+            if(t>=0 && t<1.){const double d=(std::min(1.,t*1.25)-.5)*.75;
+                pad.touches[0]={int8_t(touchId_),uint16_t(960+1920*d*(int(swipeAction_==SwipeRight)-int(swipeAction_==SwipeLeft))),
+                    uint16_t(464+928*d*(int(swipeAction_==SwipeDown)-int(swipeAction_==SwipeUp)))};
+            }
+        }
+        const int rightX = int(on[RightRight]) - int(on[RightLeft]);
+        const int rightY = int(on[RightDown]) - int(on[RightUp]);
+        const bool rightKeys = on[RightRight] || on[RightLeft] || on[RightUp] || on[RightDown];
+        setStick(pad.rightX, pad.rightY, rightX, rightY);
+        if (mouseControlsRightStick) *mouseControlsRightStick = tuning_.mouseLook && !rightKeys;
+        return pad;
+    }
+
+    void reset() {
+        held_.fill(false);
+        clearActions();
+    }
+    KeyboardMousePad() { resetDrivingBindings(); }
+
+private:
+    void clearActions() {
+        active_.fill(-1);
+        toggled_ = 0;
+        swipeAction_ = -1;
+        steer_ = 0;
+        steerAt_ = 0;
+    }
+    static void setStick(int16_t& xAxis, int16_t& yAxis, double x, double y) {
+        const double scale = 32767.0 / std::max(1.0, std::hypot(x, y));
+        xAxis = int16_t(std::lround(x * scale));
+        yAxis = int16_t(std::lround(y * scale));
+    }
+    std::array<int, ActionCount> bindings_ = Defaults;
+    std::array<int, ActionCount> drivingBindings_{};
+    int driveKey_ = 0x75; // F6
+    bool driving_ = false;
+    mutable double steer_ = 0;
+    mutable int64_t steerAt_ = 0;
+    std::array<bool, WheelRight + 1> held_{};
+    std::array<int, WheelRight + 1> active_{};
+    uint64_t toggleMask_=0,toggled_=0;
+    int swipeAction_=-1,touchId_=0;int64_t swipeStart_=0;
+    Tuning tuning_{};
+};
+
+} // namespace veyra::remoteplay

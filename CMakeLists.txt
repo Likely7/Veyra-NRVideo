@@ -394,6 +394,9 @@ add_subdirectory(tests/hdmi-bitstream)
 add_subdirectory(tests/screenshot-alpha)
 veyra_add_compute_shader(veyra_shader_effect_exclusion EffectExclusion)
 # Live HUD Lock (ported from PushFPS, GPL-3.0-or-later): per-pixel HUD mask and compose.
+veyra_add_compute_shader(veyra_shader_subtitle_hold PushOverlay)
+veyra_add_compute_shader(veyra_shader_subtitle_hold_fill PushOverlayFill)
+veyra_add_compute_shader(veyra_shader_subtitle_hold_compose PushOverlayCompose)
 veyra_add_compute_shader(veyra_shader_hud_lock_update HudLockUpdate)
 veyra_add_compute_shader(veyra_shader_hud_lock_dynamic HudLockDynamic)
 veyra_add_compute_shader(veyra_shader_hud_lock_fill HudLockFill)
@@ -694,7 +697,7 @@ endif()
 # EnhanceGraph (the real GPU chain) needs the NGX + NVOF backends; wire it
 # into veyra_pipeline only when both exist so bare contract builds still work.
 if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
-  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NisScaler.cpp src/pipeline/HudLock.cpp src/pipeline/HudProtect.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
+  target_sources(veyra_pipeline PRIVATE src/pipeline/EnhanceGraph.cpp src/pipeline/NisScaler.cpp src/pipeline/HudLock.cpp src/pipeline/SubtitleHold.cpp src/pipeline/HudProtect.cpp src/pipeline/NrTemporalPass.cpp src/pipeline/NrHoldPass.cpp src/pipeline/NrReusePass.cpp src/core/SceneCadenceAnalyzer.cpp)
   target_include_directories(veyra_pipeline PRIVATE ${FFMPEG_INCLUDE_DIRS})
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
@@ -813,7 +816,7 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
 
   # veyra_sources: product input sources (Playbook R3/R7). MediaFileSource
   # composes veyra_media; no second decode implementation exists.
-  add_dependencies(veyra_pipeline veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_dynamic veyra_shader_hud_lock_fill veyra_shader_hud_lock_compose veyra_shader_hud_protect_motion veyra_shader_hud_protect_detect veyra_shader_hud_protect_repair veyra_shader_hud_protect_flow veyra_shader_hud_protect_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change veyra_shader_rife_pack veyra_shader_rife_unpack veyra_shader_rife_shot_change)
+  add_dependencies(veyra_pipeline veyra_shader_subtitle_hold veyra_shader_subtitle_hold_fill veyra_shader_subtitle_hold_compose veyra_shader_effect_exclusion veyra_shader_hud_lock_update veyra_shader_hud_lock_dynamic veyra_shader_hud_lock_fill veyra_shader_hud_lock_compose veyra_shader_hud_protect_motion veyra_shader_hud_protect_detect veyra_shader_hud_protect_repair veyra_shader_hud_protect_flow veyra_shader_hud_protect_compose veyra_shader_sr_resolve veyra_shader_nr_downsample veyra_shader_nr_residual veyra_shader_nr_temporal veyra_shader_nr_hold veyra_shader_nr_reuse_compose veyra_shader_nr_reuse_warp veyra_shader_flow_adapt veyra_shader_flow_refine veyra_shader_flow_fill veyra_shader_flow_claim veyra_shader_vfg_shot_change veyra_shader_rife_pack veyra_shader_rife_unpack veyra_shader_rife_shot_change)
   add_library(veyra_sources STATIC
     src/source/NativeCaptureSink.cpp
     src/source/MediaFileSource.cpp
@@ -1472,8 +1475,10 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_options(veyra_ui_i18n_tests PRIVATE /utf-8)
   target_link_libraries(veyra_ui_i18n_tests PRIVATE veyra_ui_i18n)
   qt_add_resources(veyra_ui_i18n_tests "veyra_i18n_tests" PREFIX "/i18n" BASE "${CMAKE_CURRENT_SOURCE_DIR}/i18n" FILES i18n/catalog.json)
+  if(VEYRA_ENABLE_MOONLIGHT OR VEYRA_ENABLE_REMOTEPLAY)
+    target_sources(veyra_qml_bridge PRIVATE src/ui/StreamInputCapture.cpp include/veyra/ui/StreamInputCapture.h)
+  endif()
   if(VEYRA_ENABLE_MOONLIGHT)
-    target_sources(veyra_qml_bridge PRIVATE src/ui/MoonlightInputCapture.cpp include/veyra/ui/MoonlightInputCapture.h)
     # The PC streaming model (hosts, pairing, apps, settings) is its own small library so it can be
     # tested against the mock host without the whole player.
     add_library(veyra_moonlight_model STATIC src/ui/MoonlightModel.cpp include/veyra/ui/MoonlightModel.h)

@@ -86,6 +86,12 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+    impl_->streamInput = std::make_unique<ui::StreamInputCapture>(engine,
+        QString::fromStdWString((impl_->dataDir / L"ps5-keyboard-map.v1.json").wstring()),
+        [this] { return ps5InputTarget(); });
+    connect(this, &QmlPlayerBridge::mediaOpenRequested, this, [this] { impl_->streamInput->releasePs5(); });
+#endif
     impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // Keep main's established key; also read the PR's key for users of its build.
     // Missing/invalid settings stay at unity, never an automatic boost.
@@ -293,6 +299,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             const bool on = p.value(QStringLiteral("pacingRepair")).toBool();
             if (s.pacingRepair != on) { s.pacingRepair = on; changed = true; }
         }
+        if (p.contains(QStringLiteral("hudAllEffects"))) {
+            const bool on = p.value(QStringLiteral("hudAllEffects")).toBool();
+            if (s.hudAllEffects != on) { s.hudAllEffects = on; changed = true; }
+        }
         if (p.contains(QStringLiteral("hudLock"))) {
             const bool on = p.value(QStringLiteral("hudLock")).toBool();
             if (s.hudLock != on) { s.hudLock = on; changed = true; }
@@ -303,6 +313,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                 s.hudProtect=engine::HudProtectMode(mode);
                 changed=true;
             }
+        }
+        if (p.contains(QStringLiteral("subtitleHold"))) {
+            const bool on=p.value(QStringLiteral("subtitleHold")).toBool();
+            if(s.subtitleHold!=on){s.subtitleHold=on;changed=true;}
         }
         if (p.contains(QStringLiteral("dynamicHud"))) {
             const bool on = p.value(QStringLiteral("dynamicHud")).toBool();
@@ -591,8 +605,6 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
                     impl_->netLossNoticeAt = now;
                 }
             }
-            // 「自动」倍率：每个会话进入播放后决定一次（见 applyFgAutoMultiplier）。
-            maybeApplyFgAutoMultiplier();
             emit snapshotChanged();
         }
         // The reconnect waits for the failed session's teardown (the GPU reset can hold it for
@@ -738,6 +750,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
 QObject* QmlPlayerBridge::liveTranslation() const { return liveTranslation_; }
 
 QmlPlayerBridge::~QmlPlayerBridge() {
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+    impl_->streamInput->releasePs5();
+    impl_->streamInput->capture(false);
+#endif
     // Before anything is torn down: this reads the playback position.
     // The overlay is a child window: it has to go before the video window does.
     flushHdrMemory();

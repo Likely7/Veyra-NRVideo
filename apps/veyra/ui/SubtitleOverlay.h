@@ -25,11 +25,13 @@ struct SubtitleLine {
     // rendered at assTimeMs inside the video area; `text` is only diagnostics.
     std::shared_ptr<const engine::SubtitleAssData> ass;
     double assTimeMs=0;
+    bool liveCaption=false;
     int maximumLines=0;                // Live captions may ellipsize to this many lines.
     std::optional<double> scaleOverride;
     std::optional<double> shadowOffset; // logical pixels. 0 explicitly disables the shadow.
 };
 struct SubtitleView {
+    double liveX=-1,liveY=-1;          // Normalized position of the entire live-caption block.
     double scale=1.0;                  // viewer size multiplier
     std::wstring fontOverride;         // empty = keep the style font
     bool outline=true;

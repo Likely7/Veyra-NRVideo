@@ -914,6 +914,8 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         auto document = std::make_unique<engine::NodeEditorDocument>();
         document->nodes = candidate; document->layout = nextLayout; document->globals = oldGlobals;
         validation = engine::PresetLibrary::applyToEditor(entry, *document, settings);
+        if (validation.accepted)
+            engine::moveLegacyExclusionToFrameGeneration(document->nodes, &document->layout);
         candidate = document->nodes; nextLayout = document->layout;
         nextGlobals = document->globals.value_or(engine::ChainGlobalSettings::capture(settings));
         // Keep the facade on accepted values until revalidate projects the new
@@ -925,7 +927,11 @@ bool QmlPlayerBridge::applyPresetIndex(int index) {
         const auto keepMetadata = settings.hdrMetadata;
         engine::ChainGlobalSettings::capture(previous).apply(settings);
         settings.hdrCurve = keepCurve; settings.hdrMetadata = keepMetadata;
-    } else validation = engine::PresetLibrary::applyToChain(entry, candidate, settings);
+    } else {
+        validation = engine::PresetLibrary::applyToChain(entry, candidate, settings);
+        if (validation.accepted && engine::moveLegacyExclusionToFrameGeneration(candidate))
+            engine::fromChain(candidate, settings);
+    }
     if (!validation.accepted) { emit notice(uiText(validation.message), true); return false; }
     if (const auto error = settings.validate(); !error.empty()) {
         veyra::log::error("qml-preset", error);

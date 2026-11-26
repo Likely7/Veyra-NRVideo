@@ -11,10 +11,12 @@ Item {
     z: 100
 
     property string dialog: ""
+    property string ps5MappingReturn: "ps5"
     property bool onboardingActive: false
     readonly property alias captureSettings: captureDialog
     readonly property bool captureGuideOpen: captureGuide.visible
     onDialogChanged: {
+        if (dialog !== "" && veyra.ps5Input) veyra.ps5Input.releasePs5()
         if (dialog !== "capture") {
             legacyCapturePicker.close()
             captureGuide.close()
@@ -31,6 +33,10 @@ Item {
         host.dialog = key
     }
     function close() { host.dialog = "" }
+    function openPs5Mapping() {
+        ps5MappingReturn = dialog
+        open("ps5-mapping")
+    }
 
     signal startPs5()
     signal startMoonlight()
@@ -60,7 +66,11 @@ Item {
         opacity: host.dialog !== "" && !host.onboardingActive ? 1 : 0
         visible: opacity > 0
         Behavior on opacity { NumberAnimation { duration: Theme.d(200) } }
-        TapHandler { onTapped: host.close() }
+        MouseArea {
+            anchors.fill: parent
+            enabled: host.dialog !== "" && !host.onboardingActive
+            onClicked: host.close()
+        }
     }
     // For the motion probe: the open dialog's scale.
     property real motionScale: 1
@@ -91,6 +101,8 @@ Item {
     Ps5SourceDialog {
         id: ps5Dialog
         dialogHost: host    }
+
+    Ps5MappingDialog { dialogHost: host }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
     // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once

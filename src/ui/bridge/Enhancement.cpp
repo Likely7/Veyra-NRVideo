@@ -1164,7 +1164,12 @@ void QmlPlayerBridge::setColorEnabled(bool enabled){
 }
 
 bool QmlPlayerBridge::protectionEnabled() const {return maskState(false).value("enabled").toBool();}
-void QmlPlayerBridge::setProtectionEnabled(bool enabled) {setMaskEnabled(false,enabled);}
+void QmlPlayerBridge::setProtectionEnabled(bool enabled) {
+    editProtection([&](engine::ChainNode& node){
+        node.enabled=node.protection.enabled=enabled;
+        return true;
+    });
+}
 QVariantMap QmlPlayerBridge::protectionState() const {return maskState(false);}
 
 bool QmlPlayerBridge::setProtectionRegion(double left,double top,double right,double bottom,double feather) {

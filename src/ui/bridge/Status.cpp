@@ -457,12 +457,12 @@ void QmlPlayerBridge::updateRunStatus() {
         if(s.pacingFrames>0)options<<tr("帧节奏修复 · 已重排 %1%").arg(qRound(100.0*double(s.pacingRepaired)/double(s.pacingFrames)));
         else options<<tr("帧节奏修复 · 等待去重测出帧率");
     }
-    if(s.running&&!s.image&&s.applied.multiplier>1&&s.applied.hudLock){
+    if(s.running&&!s.image&&(s.applied.multiplier>1||s.applied.hudAllEffects)&&s.applied.hudLock){
         if(s.hudLockState==1)options<<tr("HUD 自动锁定");
         else if(s.hudLockState==2)options<<tr("HUD 自动锁定 · 无法启用");
         else if(s.hudLockState==3)options<<tr("HUD 自动锁定 · 当前补帧方式不支持");
     }
-    if (s.running && !s.image && s.applied.multiplier > 1 && s.applied.dynamicHud) {
+    if (s.running && !s.image && (s.applied.multiplier > 1 || s.applied.hudAllEffects) && s.applied.dynamicHud) {
         if (s.dynamicHudState == 1) options << tr("动态 HUD 保护");
         else if (s.dynamicHudState == 2) options << tr("动态 HUD 保护 · 无法启用");
         else if (s.dynamicHudState == 3) options << tr("动态 HUD 保护 · 当前补帧方式不支持");
