@@ -14,11 +14,17 @@ DialogLayer {
     actions: [{ label: qsTr("返回") }]
     property var input: typeof veyra !== "undefined" ? (veyra.ps5Input || null) : null
     property int selected: -1
+    property int selectedSlot: 0
+    readonly property bool learningSelected: selected >= 0
+        && input?.learning === selected && input?.learningSlot === selectedSlot
     property bool showList: panel.bodyWidth>0 && panel.bodyWidth<500
     property bool confirmReset: false
     property bool advanced: false
     property bool editDriving: false
-    onEditDrivingChanged: { if (panel.input) panel.input.cancelLearning(); panel.confirmReset = false }
+    onEditDrivingChanged: {
+        panel.input?.cancelLearning()
+        panel.confirmReset = false
+    }
     onShownChanged: if (shown) editDriving = input?.driving === true
     Connections {
         target: panel.input
@@ -32,7 +38,8 @@ DialogLayer {
         "×", "○", "□", "△", qsTr("方向键 左"), qsTr("方向键 右"), qsTr("方向键 上"), qsTr("方向键 下"),
         "L1", "R1", "L3", "R3", qsTr("选项键"), qsTr("创建键"), qsTr("触摸板按下"), "PS", "L2", "R2",
         qsTr("左摇杆 上"), qsTr("左摇杆 下"), qsTr("左摇杆 左"), qsTr("左摇杆 右"),
-        qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"), qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"), qsTr("触摸板左滑"), qsTr("触摸板右滑")
+        qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"), qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"), qsTr("触摸板左滑"), qsTr("触摸板右滑"),
+        "L3 + R3"
     ]
 
     onActionTriggered: dialogHost.ps5MappingReturn ? dialogHost.open(dialogHost.ps5MappingReturn) : dialogHost.close()
@@ -41,12 +48,15 @@ DialogLayer {
         function onShownChanged() { if (!panel.shown && panel.input) panel.input.releasePs5() }
     }
 
-    function binding(id) {
-        const keys = editDriving ? input?.drivingBindings : input?.bindings
+    function binding(id, slot = 0) {
+        const keys = slot === 0
+            ? (editDriving ? input?.drivingBindings : input?.bindings)
+            : (editDriving ? input?.drivingAlternateBindings : input?.alternateBindings)
         return keys?.[id] ?? "—"
     }
     function shortBinding(id) {
-        const value=binding(id)
+        const primary = binding(id)
+        const value = primary === "—" ? binding(id, 1) : primary
         if(value===qsTr("鼠标左键"))return "M1"
         if(value===qsTr("鼠标右键"))return "M2"
         if(value===qsTr("鼠标中键"))return "M3"
@@ -55,12 +65,14 @@ DialogLayer {
         if(value==="Space")return "␣"
         return value
     }
-    function choose(id) {
+    function choose(id, slot = 0) {
         if (!input || input.previewing) return
         selected = id
-        if (input.learning !== id) input.learn(id, panel, panel.editDriving)
+        selectedSlot = slot
+        if (!learningSelected) input.learn(id, panel, panel.editDriving, slot)
     }
     function active(id) {
+        if (id === 32) return active(10) && active(11)
         if(id>=26)return false
         if (id < 16) return (Number(pad.buttons || 0) & (1 << id)) !== 0
         if (id === 16 || id === 17) return Number(id === 16 ? pad.l2 : pad.r2) > 0
@@ -80,27 +92,42 @@ DialogLayer {
     }
 
     VSubGroup {
+        objectName: "ps5-profile-group"
         Layout.fillWidth: true
-        label: qsTr("游戏档案") + " · " + (panel.input?.profile || "Default")
-        VRow { label: qsTr("游戏档案")
-            RowLayout {
-                VSelect { title: qsTr("游戏档案"); value: panel.input?.profile || "Default"
-                    options: (panel.input?.profiles || []).map(n => ({id:n,label:n}))
-                    onPicked: id => panel.input.selectProfile(id,false)
-                }
-                VButton {
-                    objectName: "ps5-gta-v-profile"
-                    text: "GTA V"
-                    enabled: panel.input !== null && panel.input.profile !== "GTA V"
-                    onClicked: panel.input.useGtaVProfile()
-                }
+        label: qsTr("游戏档案") + (panel.input?.profile ? " · " + panel.input.profile : "")
+        VRow {
+            label: qsTr("游戏档案")
+            VSelect {
+                title: qsTr("游戏档案")
+                value: panel.input?.profile ?? ""
+                options: (panel.input?.profiles || []).map(n => ({id:n,label:n}))
+                onPicked: id => panel.input.selectProfile(id, false)
             }
         }
-        VRow { label: qsTr("新建档案")
+        VRow {
+            label: qsTr("新建档案")
             RowLayout {
-                TextField { id: profileName; Layout.preferredWidth: 100; maximumLength: 40; selectByMouse: true }
-                VButton { text: qsTr("新建"); enabled: profileName.text.trim().length>0
-                    onClicked: {panel.input.selectProfile(profileName.text,true);profileName.clear()} }
+                DialogTextField {
+                    id: profileName
+                    objectName: "ps5-profile-name"
+                    readonly property bool ps5LearningControl: true
+                    implicitWidth: 150
+                    enabled: panel.input !== null
+                    TapHandler {
+                        onPressedChanged: if (pressed) panel.input?.cancelLearning()
+                    }
+                }
+                VButton {
+                    objectName: "ps5-create-profile"
+                    text: qsTr("新建")
+                    enabled: panel.input !== null
+                        && profileName.text.trim().length > 0 && profileName.text.trim().length <= 40
+                    onClicked: {
+                        const name = profileName.text.trim()
+                        panel.input.selectProfile(name, true)
+                        if (panel.input.profile === name) profileName.text = ""
+                    }
+                }
             }
         }
         VRow { label: qsTr("手感模板")
@@ -177,14 +204,78 @@ DialogLayer {
                     panel.showList = id === "list"
                 }
             }
-            GridLayout {
-                visible: panel.showList; Layout.fillWidth: true; columns: panel.bodyWidth<340?1:2
-                Repeater { model: panel.names
-                    VButton {
-                        required property int index; required property string modelData
-                        objectName: "ps5-list-bind-" + index
-                        text: modelData+" · "+panel.binding(index); Layout.fillWidth: true
-                        primary: panel.selected===index; onClicked: panel.choose(index) }
+            ColumnLayout {
+                objectName: "ps5-binding-list"
+                visible: panel.showList
+                Layout.fillWidth: true
+                spacing: 5
+
+                GridLayout {
+                    columns: 3
+                    uniformCellWidths: true
+                    columnSpacing: 6
+                    Layout.fillWidth: true
+
+                    Repeater {
+                        model: [qsTr("原始按键"), qsTr("映射到 1"), qsTr("映射到 2")]
+                        Text {
+                            required property int index
+                            required property string modelData
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            horizontalAlignment: index === 0 ? Text.AlignLeft : Text.AlignHCenter
+                            text: modelData
+                            wrapMode: Text.Wrap
+                            color: Theme.t2
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsSmall
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                }
+
+                Repeater {
+                    model: panel.names
+                    GridLayout {
+                        id: bindingRow
+                        required property int index
+                        required property string modelData
+                        objectName: "ps5-bind-row-" + index
+                        columns: 3
+                        uniformCellWidths: true
+                        columnSpacing: 6
+                        Layout.fillWidth: true
+
+                        Text {
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            text: bindingRow.modelData
+                            wrapMode: Text.Wrap
+                            color: panel.active(bindingRow.index) ? Theme.accent : Theme.t1
+                            font.family: Theme.fontUi
+                            font.pixelSize: Theme.fsBody
+                        }
+                        Repeater {
+                            model: 2
+                            VButton {
+                                id: bindingButton
+                                required property int index
+                                objectName: "ps5-list-bind-" + bindingRow.index + "-" + index
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                text: panel.binding(bindingRow.index, index)
+                                primary: panel.selected === bindingRow.index && panel.selectedSlot === index
+                                enabled: panel.input !== null && !panel.input.previewing
+                                activeFocusOnTab: true
+                                Accessible.role: Accessible.Button
+                                Accessible.name: bindingRow.modelData + " · " + text
+                                Accessible.onPressAction: bindingButton.clicked()
+                                Keys.onReturnPressed: bindingButton.clicked()
+                                Keys.onSpacePressed: bindingButton.clicked()
+                                onClicked: panel.choose(bindingRow.index, index)
+                            }
+                        }
+                    }
                 }
             }
             Rectangle {
@@ -303,7 +394,11 @@ DialogLayer {
                         border.width: marked || activeFocus ? 2 : 1
                         activeFocusOnTab: true
                         Accessible.role: Accessible.Button
-                        Accessible.name: panel.names[padKey] + " " + panel.binding(padKey)
+                        Accessible.name: {
+                            const alternate = panel.binding(padKey, 1)
+                            return panel.names[padKey] + " " + panel.binding(padKey)
+                                + (alternate === "—" ? "" : " / " + alternate)
+                        }
                         Accessible.onPressAction: panel.choose(padKey)
                         Keys.onReturnPressed: panel.choose(padKey)
                         Keys.onSpacePressed: panel.choose(padKey)
@@ -339,16 +434,16 @@ DialogLayer {
                     onToggled: on => panel.input.setToggleAction(panel.selected,on) }
             }
             VRow {
-                label: panel.selected < 0 ? "" : ((panel.input?.learning === panel.selected)
-                    ? qsTr("正在录键") + " · " + panel.names[panel.selected] : panel.names[panel.selected])
-                hint: panel.input?.feedback || (panel.input?.learning === panel.selected && panel.selected >= 0
+                label: panel.selected < 0 ? "" : ((panel.learningSelected ? qsTr("正在录键") + " · " : "")
+                    + panel.names[panel.selected])
+                hint: panel.input?.feedback || (panel.learningSelected
                     ? qsTr("按下键盘或鼠标键。点击另一键位可直接切换。")
                     : qsTr("点击任意手柄按键开始改键。"))
                 hintBelow: true
                 RowLayout {
                     Text {
                         visible: panel.selected >= 0
-                        text: panel.binding(panel.selected)
+                        text: panel.binding(panel.selected, panel.selectedSlot)
                         color: Theme.t1
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsBody
@@ -357,7 +452,7 @@ DialogLayer {
                     }
                     VButton {
                         objectName: "ps5-cancel-binding"
-                        visible: panel.selected >= 0 && panel.input?.learning === panel.selected
+                        visible: panel.learningSelected
                         text: qsTr("取消")
                         onClicked: panel.input.cancelLearning()
                     }
@@ -367,7 +462,7 @@ DialogLayer {
                         text: qsTr("清除")
                         ghost: true
                         enabled: panel.input !== null
-                        onClicked: panel.input.clearBinding(panel.selected, panel.editDriving)
+                        onClicked: panel.input.clearBinding(panel.selected, panel.editDriving, panel.selectedSlot)
                     }
                 }
             }

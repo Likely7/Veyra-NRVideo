@@ -512,16 +512,15 @@ void StreamInputCapture::emitPad() {
     }
 }
 
-QVariantList StreamInputCapture::bindings() const {
+QVariantList StreamInputCapture::bindingLabels(bool driving, int slot) const {
     QVariantList list;
-    for (const int binding : mapper_.bindings()) list.push_back(bindingLabel(binding));
+    for (const int binding : mapper_.bindings(driving, slot)) list.push_back(bindingLabel(binding));
     return list;
 }
-QVariantList StreamInputCapture::drivingBindings() const {
-    QVariantList list;
-    for (const int binding : mapper_.bindings(true)) list.push_back(bindingLabel(binding));
-    return list;
-}
+QVariantList StreamInputCapture::bindings() const { return bindingLabels(false, 0); }
+QVariantList StreamInputCapture::drivingBindings() const { return bindingLabels(true, 0); }
+QVariantList StreamInputCapture::alternateBindings() const { return bindingLabels(false, 1); }
+QVariantList StreamInputCapture::drivingAlternateBindings() const { return bindingLabels(true, 1); }
 QString StreamInputCapture::driveKeyLabel() const { return bindingLabel(mapper_.driveKey()); }
 void StreamInputCapture::selectDriving(bool on) {
     if (driving() == on) return;
@@ -550,8 +549,8 @@ void StreamInputCapture::setKeyboardEnabled(bool enabled) {
     save();
     emit mappingChanged();
 }
-void StreamInputCapture::learn(int action, QObject* learningControls, bool drivingLayout) {
-    if (action < 0 || action > Mapper::ActionCount) return;
+void StreamInputCapture::learn(int action, QObject* learningControls, bool drivingLayout, int slot) {
+    if (action < 0 || action > Mapper::ActionCount || slot < 0 || slot >= Mapper::SlotCount) return;
     end();
     cancelLearning();
     // The editor can be opened from Home before any video HWND exists.
@@ -564,6 +563,7 @@ void StreamInputCapture::learn(int action, QObject* learningControls, bool drivi
     suspendIme();
     learningControls_ = learningControls;
     learningDriving_ = drivingLayout;
+    learningSlot_ = slot;
     learning_ = action;
     learningModifier_ = 0;
     feedback_.clear();
@@ -576,12 +576,11 @@ void StreamInputCapture::bind(int key, int modifiers) {
         emit mappingChanged();
         return;
     }
-    const auto& all = mapper_.bindings(learningDriving_);
-    const auto used = std::find(all.begin(), all.end(), encoded);
-    const bool moved = used != all.end() && int(used - all.begin()) != learning_;
     const bool isDriveKey = learning_ == Mapper::ActionCount;
+    const bool moved = !isDriveKey && mapper_.hasBinding(encoded, learningDriving_) &&
+        mapper_.bindings(learningDriving_, learningSlot_)[learning_] != encoded;
     const bool assigned = isDriveKey ? mapper_.setDriveKey(encoded)
-                                     : mapper_.setBinding(learning_, encoded, learningDriving_);
+        : mapper_.setBinding(learning_, encoded, learningDriving_, learningSlot_);
     if (!assigned) {
         feedback_ = tr("此键已被另一套键位或布局切换占用。");
         emit mappingChanged();
@@ -594,9 +593,9 @@ void StreamInputCapture::bind(int key, int modifiers) {
     save();
     emit mappingChanged();
 }
-void StreamInputCapture::clearBinding(int action, bool drivingLayout) {
+void StreamInputCapture::clearBinding(int action, bool drivingLayout, int slot) {
     releasePs5();
-    if (mapper_.setBinding(action, 0, drivingLayout)) { save(); emit mappingChanged(); }
+    if (mapper_.setBinding(action, 0, drivingLayout, slot)) { save(); emit mappingChanged(); }
 }
 void StreamInputCapture::cancelLearning() {
     if (learning_ < 0) return;
@@ -608,20 +607,8 @@ void StreamInputCapture::cancelLearning() {
 }
 void StreamInputCapture::applyDefaults(bool drivingLayout) {
     releasePs5();
-    if (drivingLayout) {
-        if (gtaVProfile_) {
-            mapper_.resetGtaVBindings(true);
-            if (mapper_.tuning().unlock == 0) mapper_.setBinding(Mapper::Options, 0, true);
-        }
-        else mapper_.resetDrivingBindings();
-    } else {
-        if (gtaVProfile_) {
-            mapper_.resetGtaVBindings(false);
-            if (mapper_.tuning().unlock == 0) mapper_.setBinding(Mapper::Options, 0);
-        }
-        else mapper_.resetBindings();
-        mapper_.setToggleMask(0);
-    }
+    mapper_.resetBindings(drivingLayout);
+    if (!drivingLayout) mapper_.setToggleMask(0);
     const auto toggle = mapper_.driveKey();
     if (!mapper_.setDriveKey(toggle)) mapper_.setDriveKey(0);
     feedback_.clear();
@@ -629,7 +616,7 @@ void StreamInputCapture::applyDefaults(bool drivingLayout) {
     emit mappingChanged();
 }
 void StreamInputCapture::resetMouseTuning() {
-    Mapper::Tuning defaults;
+    auto defaults = Mapper::defaultTuning();
     defaults.mouseLook = mapper_.tuning().mouseLook;
     applyMouseTuning(defaults);
 }
@@ -664,11 +651,21 @@ void StreamInputCapture::load() {
     if (!file.open(QIODevice::ReadOnly) || file.size() > 64 * 1024) return;
     const auto json = QJsonDocument::fromJson(file.readAll()).object();
     if (json.value(QStringLiteral("version")).toInt() != 1) return;
-    profiles_=json.value("profiles").toObject();
-    profile_=json.value("profile").toString(QStringLiteral("Default"));
-    keyboardEnabled_=json.value("enabled").toBool();
+    profiles_ = json.value("profiles").toObject();
+    const auto selected = json.value("profile").toString(profile_);
+    keyboardEnabled_ = json.value("enabled").toBool();
+    const auto gta = QStringLiteral("GTA V");
+    if (profiles_.value(gta).toObject().value("gtaVProfile").toBool() ||
+        (selected == gta && json.value("gtaVProfile").toBool())) {
+        profiles_.remove(gta);
+        if (selected == gta) {
+            // The retired built-in preset is replaced by the new default.
+            if (profiles_.contains(profile_)) readProfile(profiles_.value(profile_).toObject());
+            return;
+        }
+    }
+    profile_ = selected;
     readProfile(json);
-    profiles_[profile_]=activeProfile();
 }
 void StreamInputCapture::suspendIme(){
     if(!imeWindow_&&window_){
@@ -694,38 +691,49 @@ QString StreamInputCapture::unlockLabel()const{
 }
 void StreamInputCapture::readProfile(const QJsonObject& json){
     mapper_.setTuning(readTuning(json.value("tuning").toObject().toVariantMap()));
-    gtaVProfile_ = json.value("gtaVProfile").toBool();
     mapper_.setDriveKey(0);
     mapper_.resetBindings();
-    const auto readBindings = [this](const QJsonArray& bindings, bool driving) {
+    mapper_.resetBindings(true);
+    const auto readBindings = [this](const QJsonArray& bindings, bool driving, int slot) {
         if (bindings.size() < 26 || bindings.size() > Mapper::ActionCount) return;
-        for (int i = 0; i < bindings.size(); ++i) mapper_.setBinding(i, 0, driving);
+        for (int i = 0; i < Mapper::ActionCount; ++i) mapper_.setBinding(i, 0, driving, slot);
         for (int i = 0; i < bindings.size(); ++i)
-            mapper_.setBinding(i, bindings[i].toInt(), driving);
+            mapper_.setBinding(i, bindings[i].toInt(), driving, slot);
     };
-    readBindings(json.value("bindings").toArray(), false);
-    mapper_.resetDrivingBindings();
+    const auto walking = json.value("bindings").toArray();
     const auto driving = json.value("drivingBindings").toArray();
-    readBindings(driving, true);
+    readBindings(walking, false, 0);
+    if (driving.size() < 26) mapper_.resetLegacyDrivingBindings();
+    readBindings(driving, true, 0);
+    readBindings(json.value("alternateBindings").toArray(), false, 1);
+    readBindings(json.value("drivingAlternateBindings").toArray(), true, 1);
     const auto& vehicle = mapper_.bindings(true);
-    const auto& walking = mapper_.bindings();
     if (json.value("drivingLayoutVersion").toInt() < 2 && driving.size() >= 26 &&
-        vehicle[Mapper::R1] == 'S' && vehicle[Mapper::R2] == 'W' && vehicle[Mapper::L2] == walking[Mapper::L2]) {
+        vehicle[Mapper::R1] == 'S' && vehicle[Mapper::R2] == 'W' && vehicle[Mapper::L2] == mapper_.bindings()[Mapper::L2]) {
         // Repair the old generated defaults, preserving unrelated driving keys.
         mapper_.setBinding(Mapper::L2, 'S', true);
-        const int oldShoulder = walking[Mapper::R1];
+        const int oldShoulder = mapper_.bindings()[Mapper::R1];
         mapper_.setBinding(Mapper::R1,
             std::find(vehicle.begin(), vehicle.end(), oldShoulder) == vehicle.end() ? oldShoulder : 0, true);
     }
-    mapper_.setDriveKey(json.value("driveKey").toInt(0x75));
+    mapper_.setDriveKey(json.value("driveKey").toInt(Mapper::DefaultDriveKey));
+    if (profile_ == QStringLiteral("默认")) {
+        if (walking.size() < Mapper::ActionCount && !mapper_.hasBinding('V', false))
+            mapper_.setBinding(Mapper::StickClickBoth, 'V');
+        if (driving.size() < Mapper::ActionCount && !mapper_.hasBinding('V', true))
+            mapper_.setBinding(Mapper::StickClickBoth, 'V', true);
+    }
     mapper_.setToggleMask(uint64_t(json.value("toggles").toInteger()));
 }
 QJsonObject StreamInputCapture::activeProfile()const{
-    QJsonArray walking, driving;
-    for (const int key : mapper_.bindings()) walking.append(key);
-    for (const int key : mapper_.bindings(true)) driving.append(key);
-    return {{"bindings",walking},{"drivingBindings",driving},{"drivingLayoutVersion",2},{"driveKey",mapper_.driveKey()},
-            {"gtaVProfile",gtaVProfile_},
+    const auto keys = [this](bool driving, int slot) {
+        QJsonArray list;
+        for (const int key : mapper_.bindings(driving, slot)) list.append(key);
+        return list;
+    };
+    return {{"bindings", keys(false, 0)}, {"drivingBindings", keys(true, 0)},
+            {"alternateBindings", keys(false, 1)}, {"drivingAlternateBindings", keys(true, 1)},
+            {"drivingLayoutVersion", 2}, {"driveKey", mapper_.driveKey()},
             {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}
@@ -741,29 +749,6 @@ void StreamInputCapture::selectProfile(const QString& value,bool create){
     if(!create)readProfile(profiles_.value(name).toObject());
     selectDriving(false);
     save();emit mappingChanged();
-}
-void StreamInputCapture::useGtaVProfile() {
-    const auto name = QStringLiteral("GTA V");
-    if (profiles_.contains(name)) {
-        selectProfile(name, false);
-        return;
-    }
-    if (profiles_.size() >= 16) return;
-    releasePs5();
-    profiles_[profile_] = activeProfile();
-    profile_ = name;
-    gtaVProfile_ = true;
-    auto tuning = mapper_.tuning();
-    tuning.unlock = 3; // F1 leaves Escape available for the game's pause menu.
-    mapper_.setTuning(tuning);
-    mapper_.setDriveKey(0);
-    mapper_.resetGtaVBindings(false);
-    mapper_.resetGtaVBindings(true);
-    mapper_.setToggleMask(0);
-    mapper_.setDriveKey(VK_F6);
-    selectDriving(false);
-    save();
-    emit mappingChanged();
 }
 void StreamInputCapture::useTemplate(int index){
     if(index<0||index>2)return;

@@ -35,7 +35,7 @@ static bool keyboardMouseMapping() {
     pad.digital('J', true);
     if (pad.state().buttons != State::Circle) return false;
     pad.setBinding(Pad::Square, 'J');
-    if (pad.bindings()[Pad::Circle] || pad.setBinding(Pad::PS, 0x1b) || pad.setBinding(Pad::PS, 0x77))
+    if (pad.bindings()[Pad::Circle] || pad.setBinding(Pad::PS, 0x77))
         return false;
     pad.digital('J', true);
     if (pad.state().buttons != State::Square) return false;
@@ -48,7 +48,7 @@ static bool keyboardMouseMapping() {
     pad.setTuning(tuning);
     pad.state(&useMouse);
     if (useMouse) return false;
-    pad.setTuning({});
+    pad.setTuning(Pad::defaultTuning());
     pad.setBinding(Pad::RightLeft, 'H');
     pad.digital('H', true);
     if (pad.state(&useMouse).rightX != -32767 || useMouse) return false;
@@ -68,8 +68,15 @@ static bool keyboardMouseMapping() {
     const auto now = remoteplay::monotonic100ns();
     if (source.takeControllerLocked(now).buttons != State::Cross) return false;
     if (source.takeControllerLocked(now).buttons != 0) return false;
+    pad.digital('V', true);
+    source.controller(pad.state());
+    pad.digital('V', false);
+    source.controller(pad.state());
+    const auto comboNow = remoteplay::monotonic100ns();
+    if (source.takeControllerLocked(comboNow).buttons != (State::L3 | State::R3)) return false;
+    if (source.takeControllerLocked(comboNow).buttons != 0) return false;
     source.controller({});
-    return source.takeControllerLocked(now) == State{};
+    return source.takeControllerLocked(comboNow) == State{};
 }
 static bool mouseStickPacing() {
     using Stick = remoteplay::MouseStick;
@@ -247,8 +254,8 @@ static bool calibratedMouse(){
     if (steering < 15000 || steering > 18000) return false;
     driving.digital(toggle, false); driving.digital(toggle, true);
     if (driving.driving() || driving.state().r2 || driving.state().leftX || driving.state().buttons) return false;
-    if (driving.setDriveKey('A') || !driving.setDriveKey('V')) return false;
-    if (!driving.setBinding(Pad::R1, 'K', true) || driving.bindings()[Pad::R1] != 'R') return false;
+    if (driving.setDriveKey('A') || driving.setDriveKey('V') || !driving.setDriveKey('K')) return false;
+    if (!driving.setBinding(Pad::R1, 'N', true) || driving.bindings()[Pad::R1] != 'Q') return false;
 
     t={};
     Stick fine(t); int16_t minAxis=32767,maxAxis=0;
@@ -268,23 +275,51 @@ static bool calibratedMouse(){
     for(int i=0;i<10;++i){dpi800.move(1,0,origin+i*1000);dpi1600.move(1,0,origin+i*1000);}
     const auto a800=dpi800.sample(origin+9000).first,a1600=dpi1600.sample(origin+9000).first;
     if(a1600<=0||std::abs(a800-2*a1600)>2)return false;
-    Pad gta;
-    auto gtaTuning=gta.tuning();
-    gtaTuning.unlock=3;
-    gta.setTuning(gtaTuning);
-    gta.resetGtaVBindings(false);
-    gta.resetGtaVBindings(true);
-    if(gta.bindings()[Pad::Triangle]!='F' || gta.bindings()[Pad::Square]!=32 ||
-       gta.bindings()[Pad::L1]!=9 || gta.bindings()[Pad::Touchpad]!='V' ||
-       gta.bindings()[Pad::Options]!=27 || gta.bindings()[Pad::Cross]!=0xA0 || gta.bindings()[Pad::Right]!='E') return false;
-    gta.digital('F',true);
-    if(!(gta.state().buttons&remoteplay::ControllerState::Triangle) || gta.driving()) return false;
-    gta.digital(0x75,true);
-    gta.digital('W',true);gta.digital('S',true);gta.digital(32,true);gta.digital('E',true);
-    const auto vehicle=gta.state();
-    if(vehicle.r2!=255 || vehicle.l2!=255 || !(vehicle.buttons&remoteplay::ControllerState::R1) ||
-       !(vehicle.buttons&remoteplay::ControllerState::L3) || (vehicle.buttons&remoteplay::ControllerState::Triangle)) return false;
-    std::cout<<"PS5_GTA_V on-foot and driving layout pass\n";
+    using State = remoteplay::ControllerState;
+    Pad defaults;
+    if (defaults.bindings()[Pad::Cross] != 32 || defaults.bindings()[Pad::Circle] != 0xA2 ||
+        defaults.bindings()[Pad::Square] != 'R' || defaults.bindings()[Pad::Touchpad] != 'M' ||
+        defaults.bindings()[Pad::Options] != 27 || defaults.tuning().unlock != 3 ||
+        defaults.tuning().dpi != 2449) return false;
+
+    constexpr auto stickClicks = State::L3 | State::R3;
+    for (const bool vehicle : {false, true}) {
+        defaults.selectDriving(vehicle);
+        if (defaults.bindings(vehicle)[Pad::StickClickBoth] != 'V' ||
+            !defaults.setBinding(Pad::StickClickBoth, Pad::encode('J', Pad::Alt), vehicle, 1)) return false;
+        defaults.digital('V', true);
+        defaults.digital(0xA4, true);
+        defaults.digital('J', true);
+        if (defaults.state().buttons != stickClicks) return false;
+        defaults.digital('V', false);
+        if (defaults.state().buttons != stickClicks) return false;
+        defaults.digital(0xA4, false);
+        if (defaults.state().buttons != 0) return false;
+        defaults.digital('J', false);
+        if (!defaults.setBinding(Pad::StickClickBoth, 0, vehicle, 1) ||
+            defaults.bindings(vehicle)[Pad::StickClickBoth] != 'V') return false;
+    }
+    defaults.digital(0xA0, true); // Independent L3 holds during the combo.
+    defaults.digital('V', true);
+    if (defaults.state().buttons != stickClicks) return false;
+    defaults.digital('V', false);
+    if (defaults.state().buttons != State::L3) return false;
+    defaults.selectDriving(false);
+    if (!defaults.setBinding(Pad::Circle, 'J', false, 1) || defaults.setDriveKey('J')) return false;
+    defaults.setBinding(Pad::Cross, 'J');
+    if (defaults.bindings(false, 1)[Pad::Circle] || defaults.bindings()[Pad::Cross] != 'J') return false;
+    defaults.setBinding(Pad::Circle, 'J', false, 1);
+    if (defaults.bindings()[Pad::Cross] || defaults.bindings(false, 1)[Pad::Circle] != 'J') return false;
+
+    defaults.setToggleMask(uint64_t{1} << Pad::Circle);
+    defaults.digital(0xA2, true);
+    defaults.digital('J', true);
+    if (defaults.state().buttons != State::Circle) return false;
+    defaults.digital(0xA2, false);
+    defaults.digital('J', false);
+    defaults.digital('J', true);
+    if (defaults.state().buttons != 0) return false;
+    std::cout<<"PS5_DEFAULT_KEYS L3+R3, two slots, chords, conflicts and held aliases pass\n";
     std::cout<<"PS5_DRIVING_LAYOUT independent, W/R2 S/L2, steering ramp, held keys neutral, 100 counts/s min/max="
              <<minAxis<<'/'<<maxAxis<<" DPI raw equal axes="<<a800<<'/'<<a1600<<"\n";
     std::cout<<"PS5_GESTURES ADS delay, smoothed reversal, toggle, four swipe origins, Escape, gyro, menu and bounded carry pass\n";

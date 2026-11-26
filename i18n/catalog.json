@@ -11442,6 +11442,19 @@
    "ru": "Исходные пиксели"
   },
   {
+   "zh": "原始按键",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "原始按鍵",
+   "en": "Controller input",
+   "ja": "コントローラー入力",
+   "ko": "컨트롤러 입력",
+   "es": "Control original",
+   "fr": "Commande d’origine",
+   "de": "Controller-Eingabe",
+   "pt-BR": "Controle original",
+   "ru": "Кнопка контроллера"
+  },
+  {
    "zh": "原帖里记录的大致量级，具体会随设备和采集档位变化。",
    "src": "qml/CaptureGuideDialog.qml",
    "zh-TW": "這是原文記錄的大致數值，實際數字會隨裝置和擷取模式變化。",
@@ -24428,6 +24441,32 @@
    "de": "Helligkeitsänderung",
    "pt-BR": "Mudança de luminosidade",
    "ru": "Изменение светлоты"
+  },
+  {
+   "zh": "映射到 1",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "映射到 1",
+   "en": "Binding 1",
+   "ja": "割り当て 1",
+   "ko": "할당 1",
+   "es": "Asignación 1",
+   "fr": "Affectation 1",
+   "de": "Belegung 1",
+   "pt-BR": "Atalho 1",
+   "ru": "Назначение 1"
+  },
+  {
+   "zh": "映射到 2",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "映射到 2",
+   "en": "Binding 2",
+   "ja": "割り当て 2",
+   "ko": "할당 2",
+   "es": "Asignación 2",
+   "fr": "Affectation 2",
+   "de": "Belegung 2",
+   "pt-BR": "Atalho 2",
+   "ru": "Назначение 2"
   },
   {
    "zh": "是",

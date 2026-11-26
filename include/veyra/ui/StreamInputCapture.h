@@ -27,6 +27,8 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(bool keyboardEnabled READ keyboardEnabled WRITE setKeyboardEnabled NOTIFY mappingChanged)
     Q_PROPERTY(QVariantList bindings READ bindings NOTIFY mappingChanged)
     Q_PROPERTY(QVariantList drivingBindings READ drivingBindings NOTIFY mappingChanged)
+    Q_PROPERTY(QVariantList alternateBindings READ alternateBindings NOTIFY mappingChanged)
+    Q_PROPERTY(QVariantList drivingAlternateBindings READ drivingAlternateBindings NOTIFY mappingChanged)
     Q_PROPERTY(QString driveKeyLabel READ driveKeyLabel NOTIFY mappingChanged)
     Q_PROPERTY(bool driving READ driving NOTIFY drivingChanged)
     Q_PROPERTY(QStringList profiles READ profiles NOTIFY mappingChanged)
@@ -34,6 +36,7 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(QString unlockLabel READ unlockLabel NOTIFY mappingChanged)
     Q_PROPERTY(QVariantMap tuning READ tuning NOTIFY mappingChanged)
     Q_PROPERTY(int learning READ learning NOTIFY mappingChanged)
+    Q_PROPERTY(int learningSlot READ learningSlot NOTIFY mappingChanged)
     Q_PROPERTY(QString feedback READ feedback NOTIFY mappingChanged)
     Q_PROPERTY(bool ps5Captured READ ps5Captured NOTIFY stateChanged)
     Q_PROPERTY(bool previewing READ previewing NOTIFY stateChanged)
@@ -53,6 +56,8 @@ public:
     void setKeyboardEnabled(bool enabled);
     QVariantList bindings() const;
     QVariantList drivingBindings() const;
+    QVariantList alternateBindings() const;
+    QVariantList drivingAlternateBindings() const;
     QString driveKeyLabel() const;
     bool driving() const { return mapper_.driving(); }
     Q_INVOKABLE void selectDriving(bool on);
@@ -63,16 +68,16 @@ public:
     QString unlockLabel() const;
     Q_INVOKABLE void selectProfile(const QString& name,bool create=false);
     Q_INVOKABLE void useTemplate(int index);
-    Q_INVOKABLE void useGtaVProfile();
     Q_INVOKABLE bool toggleAction(int action) const;
     Q_INVOKABLE void setToggleAction(int action,bool on);
     int learning() const { return learning_; }
+    int learningSlot() const { return learningSlot_; }
     QString feedback() const { return feedback_; }
     bool ps5Captured() const { return route_ == Route::Ps5; }
     bool previewing() const { return route_ == Route::Preview; }
     QVariantMap padState() const;
-    Q_INVOKABLE void learn(int action, QObject* learningControls = nullptr, bool drivingLayout = false);
-    Q_INVOKABLE void clearBinding(int action, bool drivingLayout = false);
+    Q_INVOKABLE void learn(int action, QObject* learningControls = nullptr, bool drivingLayout = false, int slot = 0);
+    Q_INVOKABLE void clearBinding(int action, bool drivingLayout = false, int slot = 0);
     Q_INVOKABLE void cancelLearning();
     Q_INVOKABLE void applyDefaults(bool drivingLayout = false);
     Q_INVOKABLE void resetMouseTuning();
@@ -110,6 +115,7 @@ private:
     void applyMouseTuning(const Mapper::Tuning& tuning);
     void suspendIme();
     void restoreIme();
+    QVariantList bindingLabels(bool driving, int slot) const;
     void readProfile(const QJsonObject& json);
     QJsonObject activeProfile() const;
     void save();
@@ -128,7 +134,7 @@ private:
     struct Ps5MouseInput;
     std::unique_ptr<Ps5MouseInput> ps5MouseInput_;
     QJsonObject profiles_;
-    QString profile_=QStringLiteral("Default");
+    QString profile_=QStringLiteral("默认");
     double previewSpeed_=0;
     Route route_ = Route::None;
     Mapper mapper_;
@@ -137,9 +143,9 @@ private:
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
-    bool gtaVProfile_ = false;
     QPointer<QObject> learningControls_;
     int learning_ = -1;
+    int learningSlot_ = 0;
     int learningModifier_ = 0;
     bool learningDriving_ = false;
     int wheelKey_ = 0;
