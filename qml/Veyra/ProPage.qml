@@ -1582,6 +1582,39 @@ VPage {
                                     onPicked: id => veyra.dlssSrModel = Number(id)
                                 }
                             }
+                            VRow {
+                                label: qsTr("FSR 版本")
+                                hint: veyra.fsrSrProviderText
+                                // Also the provider of an FSR SR second pass under double SR.
+                                visible: veyra.videoSrQuality === 5 || (veyra.dualSrEnabled && veyra.dualSrQuality === 5)
+                                enabled: Support.available(veyra, "sr5")
+                                VSelect {
+                                    objectName: "list-fsr-sr-version"
+                                    options: veyra.fsrSrVersionChoices || []
+                                    value: options.find(o => o.id === String(veyra.fsrSrVersion))?.label || ""
+                                    onPicked: id => veyra.fsrSrVersion = Number(id)
+                                }
+                            }
+                            VRow {
+                                label: qsTr("FSR 锐化")
+                                hint: qsTr("FSR 内置 RCAS 锐化，0 为关闭。")
+                                visible: veyra.videoSrQuality === 5 || (veyra.dualSrEnabled && veyra.dualSrQuality === 5)
+                                enabled: Support.available(veyra, "sr5")
+                                value: Math.round(veyra.fsrSrSharpness * 100) + "%"
+                                VSlider {
+                                    objectName: "list-fsr-sr-sharpness"
+                                    implicitWidth: 110
+                                    from: 0
+                                    to: 1
+                                    stepSize: 0.01
+                                    inputScale: 100
+                                    value: veyra.fsrSrSharpness
+                                    valueFromModel: true
+                                    resettable: true
+                                    defaultValue: 0
+                                    onMoved: amount => veyra.fsrSrSharpness = Math.round(amount * 100) / 100
+                                }
+                            }
                             SrStageEditor { Layout.fillWidth: true; namePrefix: "list" }
 
 

@@ -1086,6 +1086,26 @@ void testPerLayerAntiFlickerSnapshot(){
                          "stacked snapshot retains independent second layer anti-flicker tier");
     }
 }
+void testFsrSrVersionGlobals(){
+    EnhancementSettings s;s.sr=true;s.videoSrQuality=kVideoSrFsr;
+    s.fsrSrVersion=FsrSrVersion::Fsr4;s.fsrSrSharpness=0.5f;
+    const auto g=ChainGlobalSettings::capture(s);
+    check(g.fsrSrVersion==FsrSrVersion::Fsr4&&g.fsrSrSharpness==0.5f,
+          "chain globals carry the FSR SR provider version and the RCAS sharpening");
+    EnhancementSettings restored;g.apply(restored);
+    check(restored.fsrSrVersion==FsrSrVersion::Fsr4&&restored.fsrSrSharpness==0.5f,
+          "applying chain globals restores the FSR SR provider and sharpening");
+    ChainConfiguration a{};a.fsrSrVersion=FsrSrVersion::Fsr4;a.fsrSrSharpness=0.5f;
+    auto b=a;check(a==b,"equal FSR SR globals compare equal");
+    b=a;b.fsrSrVersion=FsrSrVersion::Fsr31;check(!(a==b),"a different FSR SR provider compares unequal");
+    b=a;b.fsrSrSharpness=0.25f;check(!(a==b),"a different FSR SR sharpening compares unequal");
+    auto sharpOnly=s;sharpOnly.fsrSrSharpness=0.9f;
+    check(!requiresGraphRebuild(s,sharpOnly),"FSR SR sharpening is a dispatch uniform and never rebuilds the SR feature");
+    auto otherProvider=s;otherProvider.fsrSrVersion=FsrSrVersion::Fsr31;
+    check(requiresGraphRebuild(s,otherProvider),"a different FSR SR provider generation rebuilds the SR feature");
+    auto autoProvider=s;autoProvider.fsrSrVersion=FsrSrVersion::Auto;
+    check(requiresGraphRebuild(s,autoProvider),"returning the FSR SR provider to automatic rebuilds as well");
+}
 __declspec(noinline) void testInactiveEffectEdits(){
     auto off=populated();off.nr=off.sr=off.color.enabled=off.videoHdr.enabled=off.protection.enabled=false;off.multiplier=1;
     off.nrLayerCount=2;off.nrLayers={};off.additionalColorCount=2;
@@ -1790,6 +1810,7 @@ int main() {
     testWideChains();
     testThreeStepSr();
     testSupersampleSr();
+    testFsrSrVersionGlobals();
     {
         using namespace veyra;using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;
         EnhancementSettings s;s.sr=true;s.nr=false;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;

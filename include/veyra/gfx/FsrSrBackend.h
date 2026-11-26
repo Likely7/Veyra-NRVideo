@@ -13,6 +13,8 @@
 // Local evidence for this path: tools/fsr_upscale_probe ->
 // logs/fsr/upscale-probe.log, and docs/FSR_UPSCALING_PLAN_2026-09-16.md.
 
+#include "veyra/gfx/FfxVersionSelect.h"
+
 #include <d3d12.h>
 
 #include <cstdint>
@@ -30,15 +32,21 @@ public:
 
     // maxRender* is the largest render (source) extent, maxUpscale* the largest
     // output extent. hdr selects the high-dynamic-range input contract.
+    // versionMode picks the provider generation from the loader's inventory:
+    // Auto takes the newest installed one, Fsr31/Fsr4 never fall back.
     bool initialize(ID3D12Device* device, uint32_t maxRenderWidth, uint32_t maxRenderHeight,
-                    uint32_t maxUpscaleWidth, uint32_t maxUpscaleHeight, bool hdr);
+                    uint32_t maxUpscaleWidth, uint32_t maxUpscaleHeight, bool hdr,
+                    FsrSrVersionMode versionMode = FsrSrVersionMode::Auto);
 
     // Records the upscale on the caller's command list. Resources must be in
     // the state declared here (color/motion/depth readable by compute, output
     // as UAV); `motion` is render-extent pixel motion, `depth` render extent.
+    // sharpness is the provider's own RCAS strength, 0 = off, 1 = maximum
+    // (ffx_upscale.h: the dispatch takes it as a live uniform, no rebuild).
     bool evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* color, ID3D12Resource* motion,
                   ID3D12Resource* depth, ID3D12Resource* output, uint32_t renderWidth, uint32_t renderHeight,
-                  uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs);
+                  uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs,
+                  float sharpness = 0.0f);
 
     void release();
     bool created() const;

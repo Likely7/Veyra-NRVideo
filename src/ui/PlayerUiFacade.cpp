@@ -147,9 +147,10 @@ bool PlayerUiFacade::applySettings(const veyra::engine::EnhancementSettings& sav
     uint64_t acceptedRevision=0;
     if (!engine_.requestSettings(settings, order,&acceptedRevision)) return false;
     veyra::log::info("ui-settings-request", std::format(
-        "accepted srTarget={} quality={} fgBackend={} flowBackend={} srPrescale={} srOutput={}",
+        "accepted srTarget={} quality={} fgBackend={} flowBackend={} srPrescale={} srOutput={} fsrSrVersion={} fsrSrSharpness={:.2f}",
         int(settings.srTarget), settings.videoSrQuality, int(settings.frameGenerationBackend), int(settings.opticalFlowBackend),
-        uint32_t(settings.srPrescale), uint32_t(settings.srOutput)));
+        uint32_t(settings.srPrescale), uint32_t(settings.srOutput),
+        uint32_t(settings.fsrSrVersion), double(settings.fsrSrSharpness)));
     pending_ = settings;
     pendingFgRevision_=acceptedRevision;
     pendingNrRevision_=acceptedRevision;requestedNrRuntime_=settings.nrRuntime;

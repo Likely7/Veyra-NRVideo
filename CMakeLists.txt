@@ -1872,6 +1872,13 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
   target_compile_features(veyra_effect_availability_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_effect_availability_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+  # FSR SR provider version parsing/match/ranking: header-only and pure std, so it
+  # needs neither FFX nor the engine.
+  add_executable(veyra_ffx_version_select_tests tests/unit/FfxVersionSelectTests.cpp)
+  target_compile_features(veyra_ffx_version_select_tests PRIVATE cxx_std_20)
+  target_include_directories(veyra_ffx_version_select_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  add_test(NAME veyra_ffx_version_select_tests COMMAND veyra_ffx_version_select_tests)
+
   add_executable(veyra_effect_chain_tests tests/unit/EffectChainTests.cpp src/engine/EffectChain.cpp)
   target_compile_features(veyra_effect_chain_tests PRIVATE cxx_std_20)
   target_include_directories(veyra_effect_chain_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

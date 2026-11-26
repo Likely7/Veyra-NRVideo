@@ -94,6 +94,8 @@ struct EnhanceGraphDesc {
     uint32_t workHeight = 2160;
     uint32_t videoSrQuality=0;
     uint32_t dlssSrModel=0;      // engine::EnhancementSettings::dlssSrModel (DLSS SR only)
+    engine::FsrSrVersion fsrSrVersion=engine::FsrSrVersion::Auto; // FSR SR provider generation
+    float fsrSrSharpness=0.0f;   // FSR SR built-in RCAS strength, 0 off .. 1 max
     bool enableSr = false;       // upscale source -> work extent (1:1 bypass otherwise)
     bool enableNr = true;
     bool nrBeforeSr = false;
@@ -806,6 +808,9 @@ public:
     bool rifeEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Rife; }
     bool rifeActive() const;
     const char* fsrProviderVersion() const;
+    // Version name of the FSR SR provider that actually created a context (""
+    // when no FSR SR pass runs), e.g. "3.1.4" or "4.1.1".
+    const char* fsrSrProviderVersion() const;
     // XeSS generates in the present sink; FSR and DLSSG generate in the graph.
     // All backends consume the same guidance motion texture.
     bool presentSinkFg() const { return xessEnabled(); }
@@ -1175,6 +1180,7 @@ private:
     bool preSrColorExecutionLogged_=false;
     bool interNrColorExecutionLogged_=false;
     bool sourcePostExecutionLogged_=false;
+    bool dualSrSharpnessLogged_=false; // FSR SR sharpness is final-pass only under double SR
     ID3D12Resource* tailColorOutput_=nullptr; // borrowed from nodeColorOutputs_
     ID3D12Resource* preNrColorOutput_=nullptr;
     ID3D12Resource* preSrColorOutput_=nullptr;

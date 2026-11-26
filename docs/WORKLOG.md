@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-25 FSR 超分提供方版本与 RCAS 锐化
+
+- 本地分支 `feat/fsr-sr-version-rcas`（基点 `bc59d457`），未提交、未合 main、未推送。给 FSR 超分加了显式提供方版本（自动/FSR 3.1/FSR 4.x）和 FSR 自带 RCAS 锐化（0 到 1，两位小数，0 为关闭）。播放中把实际创建的提供方版本回读显示在“FSR 版本”行提示里，文字取自引擎快照而不是界面推测。 [说明](FSR_SR_VERSION_RCAS_2026-11-25.md)
+- 版本选择走加载器清单排序：`ffxQueryDescGetVersions` 报出可用提供方，按主次补丁降序排名，选中的版本用 `ffxOverrideVersion` 指定、`ffxQueryGetProviderVersion` 读回核对。明确选择的版本没有匹配项就不创建，不回退到别的代；只有自动模式才允许不带版本覆盖重试。创建失败的半成品上下文照旧释放。列表与节点两处都加了控件（`list-fsr-sr-version` / `node-fsr-sr-version` 等），可见性限 FSR 超分，可用性走 `sr5` 能力键。
+- 持久化：预设库 v27、`PresetStore` v40、会话 v22，需要写新字段时落到 `.fsr-sr` 旁文件，旧文件字节不变；自动版本加关闭锐化这种默认组合仍写旧版本。删除超分节点或节点图无超分时，两项随其它超分字段一起回默认。导出使用开始导出的冻结设置，不替换提供方、不降锐化。
+- 顺手清掉 `PresetLibrary::save()` 与 `ChainSessionStore::save()` 里永远不可达的 `else if(upgradeFsrSr)` 分支（条件与上面的 `fsrSrSidecar` 判断完全重复），旁文件守卫仍用 `upgradeFsrSr`。
+- 离线验证：`FfxVersionSelectTests` 54 项 0 失败，`PresetLibraryTests`（含 v27/session 22 旁文件用例）687 PASS 0 FAIL，九种语言缺译 0、占位符问题 0，条目 3332。**未验证**：MSVC/Qt 构建、`qmllint`，以及 RX 9070 XT 上的 FSR 4.x 实际提供方、回读文字与 RCAS 画质差异。
+
 ## 2026-11-23 2.2.1 正式发布
 
 - 应用和对应源码标签指向 `b9cc86aa`。正式包继续使用 `b111dec5` 已验收的产品构建。包与版本标签之间只有文档差异。核对从旧 GitHub main 新增的 2,216 个可达对象，未发现新增的运行库、模型、私有媒体或配置文件。

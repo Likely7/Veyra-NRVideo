@@ -1058,6 +1058,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         backendRecoveryWarning+=L"FSR 4 ML 提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志";
                         veyra::log::warn("fsr-fg","FSR 4 ML unavailable on this adapter/driver; switching to FSR 3.1 at 2X");
                     }
+                    else if(selected.settings.fsrSrVersion==FsrSrVersion::Fsr4&&reduced.fsrSrVersion==FsrSrVersion::Fsr31&&failure==FailedBackend::Sr)
+                    {
+                        backendRecoveryWarning+=L"FSR 4 ML 超分提供方不可用（需要支持的 RX 9000 和驱动），已改用 FSR 3.1；原因见日志";
+                        veyra::log::warn("fsr-sr","FSR 4 ML SR unavailable on this adapter/driver; switching to FSR 3.1");
+                    }
                     else if((ngxResult&0xFFF00000u)==0xBAD00000u)
                         backendRecoveryWarning+=std::wstring(backendFailureName(failure))+L"："+ngxFailureHint(ngxResult)+std::format(L"（NGX 0x{:08X}，驱动 {}），已关闭依赖效果",ngxResult,ctx.adapter().driverVersion);
                     else if(!clampedOverCapability)
@@ -1090,6 +1095,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 fsrMaxGeneratedFramesCap_=graph->fsrEnabled()&&graph->fsrActive()?int((graph->fsrActive()?1u:0u)):0;
                 snapshot_.fsrMaxGeneratedFrames=fsrMaxGeneratedFramesCap_;
                 snapshot_.fsrProviderVersion=graph->fsrProviderVersion();
+                snapshot_.fsrSrProviderVersion=graph->fsrSrProviderVersion();
                 snapshot_.hudLockState=graph->hudLockState();
                 snapshot_.dynamicHudState=graph->dynamicHudState();
                 if(fgMultiFrameMaxCap_>0)veyra::log::info("settings",std::format("frame-generation capability: maxGeneratedFrames={} maxMultiplier={}",fgMultiFrameMaxCap_,fgMultiFrameMaxCap_+1));
@@ -2367,7 +2373,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     else {
                         finishReset(diagnostics::ResetOutcome::RolledBack);
                         std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"设置应用失败，已恢复上一套参数";snapshot_.backendWarning=requested.nrRuntime!=previous.nrRuntime?L"NR运行版本切换失败，已恢复上一套参数":requested.frameGenerationBackend==FrameGenerationBackend::XeSS?L"XeSS 未能启用，已恢复上一套参数":requested.frameGenerationBackend==FrameGenerationBackend::AmdFrc?L"AMD FRC 未能启用（需要 AMD 显卡和驱动自带的 AMF 运行库），已恢复上一套参数":
-                            requested.frameGenerationBackend==FrameGenerationBackend::Fsr4?L"FSR 4 ML 未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数":fsrFrameGeneration(requested.frameGenerationBackend)?L"FSR 3.1 帧生成未能启用，已恢复上一套参数":L"后端切换失败，已恢复上一套参数";}
+                            requested.frameGenerationBackend==FrameGenerationBackend::Fsr4?L"FSR 4 ML 未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数":requested.fsrSrVersion==FsrSrVersion::Fsr4&&requested.usesFsrSr()?L"FSR 4 ML 超分未能启用（需要支持的 RX 9000 和驱动），已恢复上一套参数":fsrFrameGeneration(requested.frameGenerationBackend)?L"FSR 3.1 帧生成未能启用，已恢复上一套参数":L"后端切换失败，已恢复上一套参数";}
                 }
                 // Live uniform update. The revision identifies the graph *shape*
                 // (NR/SR/FG/resolution and the colour master switch); colour

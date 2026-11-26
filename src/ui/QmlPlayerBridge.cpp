@@ -107,6 +107,15 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             ceiling=nextCeiling;text=nextText;emit fgChoicesChanged();
         });
     connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fgChoicesChanged);
+    // The provider version is the one snapshot field this text reads. Push it only on
+    // change, and re-evaluate on live language switches through settingsChanged.
+    connect(this,&QmlPlayerBridge::snapshotChanged,this,
+        [this,text=fsrSrProviderText()]() mutable {
+            const auto nextText=fsrSrProviderText();
+            if(nextText==text)return;
+            text=nextText;emit fsrSrProviderChanged();
+        });
+    connect(this,&QmlPlayerBridge::settingsChanged,this,&QmlPlayerBridge::fsrSrProviderChanged);
     auto* capabilityTimer=new QTimer(this);
     connect(capabilityTimer,&QTimer::timeout,this,[this,reported=currentEffectCapabilities(),priorityRevision=uint64_t(-1)]() mutable {
         if(gfx::gpuPriorityStatus().state==gfx::GpuPriorityState::Pending)gfx::applyRequestedGpuPriority();

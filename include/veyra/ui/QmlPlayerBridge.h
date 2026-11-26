@@ -426,6 +426,12 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
     Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
+    // FSR SR only. The version selects the provider generation (Auto keeps the newest
+    // available); sharpness is FSR's built-in RCAS pass, 0 = off.
+    Q_PROPERTY(int fsrSrVersion READ fsrSrVersion WRITE setFsrSrVersion NOTIFY settingsChanged)
+    Q_PROPERTY(QVariantList fsrSrVersionChoices READ fsrSrVersionChoices NOTIFY settingsChanged)
+    Q_PROPERTY(double fsrSrSharpness READ fsrSrSharpness WRITE setFsrSrSharpness NOTIFY settingsChanged)
+    Q_PROPERTY(QString fsrSrProviderText READ fsrSrProviderText NOTIFY fsrSrProviderChanged)
     // Three-step SR (RTX Video SR). srPrescale: 0 off, 1..4 720p/900p/1080p/1440p,
     // 150..190 a manual 50..90 %. srOutput: 0 keep the SR result, 1 source size, 2..6 2K/4K/5K/6K/7K.
     Q_PROPERTY(int srPrescale READ srPrescale WRITE setSrPrescale NOTIFY settingsChanged)
@@ -1115,6 +1121,12 @@ public:
     int dlssSrModel() const;
     void setDlssSrModel(int value);
     QVariantList dlssSrModelChoices() const;
+    int fsrSrVersion() const;
+    void setFsrSrVersion(int value);
+    QVariantList fsrSrVersionChoices() const;
+    double fsrSrSharpness() const;
+    void setFsrSrSharpness(double value);
+    QString fsrSrProviderText() const;
     int srPrescale() const;
     bool dualSrEnabled() const;
     void setDualSrEnabled(bool enabled);
@@ -1556,6 +1568,7 @@ signals:
     void thumbnailSourceChanged(const QString& path);
     void settingsChanged();
     void fgChoicesChanged();
+    void fsrSrProviderChanged();
     void effectCapabilitiesChanged();
     void chainChanged();
     // A slider edits one group's values without touching the chain's structure,

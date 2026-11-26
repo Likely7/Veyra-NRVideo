@@ -629,6 +629,8 @@ bool QmlPlayerBridge::resetNode(uint id) {
         impl_->draftGlobals.srTarget = defaults.srTarget;
         impl_->draftGlobals.videoSrQuality = defaults.videoSrQuality;
         impl_->draftGlobals.dlssSrModel = defaults.dlssSrModel;
+        impl_->draftGlobals.fsrSrVersion = defaults.fsrSrVersion;
+        impl_->draftGlobals.fsrSrSharpness = defaults.fsrSrSharpness;
         impl_->draftGlobals.srPrescale = defaults.srPrescale;
         impl_->draftGlobals.srOutput = defaults.srOutput;
         impl_->draftGlobals.dualSrEnabled=false;impl_->draftGlobals.dualSrTarget=defaults.dualSrTarget;impl_->draftGlobals.dualSrQuality=defaults.dualSrQuality;

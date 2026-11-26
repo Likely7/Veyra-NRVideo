@@ -6,6 +6,7 @@
 // Since 2026-11-08 double SR also takes DLSS SR and FSR in either pass; a DLSS SR /
 // FSR second pass gets its own version again (v36, library v19 / session v14 in
 // a .dual-sr-any sidecar).
+#include "veyra/engine/BackendRecovery.h"
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/engine/PresetStore.h"
 #include "veyra/engine/PresetLibrary.h"
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <map>
 #include <memory>
 using namespace veyra::engine;
@@ -324,6 +326,89 @@ int wmain(int argc,wchar_t** argv){
         PresetLibrary restored(libraryPath);restored.setIncludeBuiltins(false);
         check(restored.load()&&restored.entries().size()==1&&restored.entries()[0].chain==entry->chain,
               "preset library restores both exclusion modes and both shapes");
+    }
+
+    // FSR SR provider generation and its built-in RCAS strength.
+    {
+        const EnhancementSettings fresh;
+        check(fresh.fsrSrVersion==FsrSrVersion::Auto&&fresh.fsrSrSharpness==0.0f,"FSR SR defaults to the automatic provider with sharpening off");
+        check(!fresh.usesFsrSr(),"FSR SR is not in use by default");
+        EnhancementSettings base;base.sr=true;base.videoSrQuality=kVideoSrFsr;
+        check(base.usesFsrSr(),"an FSR base pass uses FSR SR");
+        EnhancementSettings second;second.sr=true;second.videoSrQuality=4;second.dualSrEnabled=true;second.dualSrQuality=kVideoSrFsr;
+        check(second.usesFsrSr(),"an FSR second pass uses FSR SR");
+        auto noSr=base;noSr.sr=false;check(!noSr.usesFsrSr(),"without SR there is no FSR SR pass");
+        EnhancementSettings other;other.sr=true;other.videoSrQuality=19;check(!other.usesFsrSr(),"a Video Effects pass is not FSR SR");
+        auto notDual=second;notDual.dualSrEnabled=false;check(!notDual.usesFsrSr(),"an FSR second pass only counts when double SR is enabled");
+        // Validation: the enum, the [0, 1] range and finiteness.
+        auto bad=base;bad.fsrSrVersion=FsrSrVersion(kFsrSrVersionCount);check(!bad.validate().empty(),"an unknown FSR SR version is rejected");
+        bad=base;bad.fsrSrVersion=FsrSrVersion(7);check(!bad.validate().empty(),"a value past the enum is rejected");
+        bad=base;bad.fsrSrSharpness=-0.01f;check(!bad.validate().empty(),"negative sharpening is rejected");
+        bad=base;bad.fsrSrSharpness=1.01f;check(!bad.validate().empty(),"sharpening above 1 is rejected");
+        bad=base;bad.fsrSrSharpness=std::numeric_limits<float>::quiet_NaN();check(!bad.validate().empty(),"NaN sharpening is rejected");
+        bad=base;bad.fsrSrSharpness=std::numeric_limits<float>::infinity();check(!bad.validate().empty(),"infinite sharpening is rejected");
+        for(auto mode:{FsrSrVersion::Auto,FsrSrVersion::Fsr31,FsrSrVersion::Fsr4}){
+            for(float sharp:{0.0f,0.25f,1.0f}){auto good=base;good.fsrSrVersion=mode;good.fsrSrSharpness=sharp;
+                check(good.validate().empty(),"every version and sharpening in range is valid");}
+        }
+        // Inactive values fall back to the defaults instead of travelling onward.
+        auto idle=other;idle.fsrSrVersion=FsrSrVersion::Fsr4;idle.fsrSrSharpness=0.75f;
+        const auto idleActive=idle.activeVideoSettings();
+        check(idleActive.fsrSrVersion==FsrSrVersion::Auto&&idleActive.fsrSrSharpness==0.0f,"without an FSR SR pass the values are inactive");
+        auto live=base;live.fsrSrVersion=FsrSrVersion::Fsr4;live.fsrSrSharpness=0.6f;
+        const auto liveActive=live.activeVideoSettings();
+        check(liveActive.fsrSrVersion==FsrSrVersion::Fsr4&&liveActive.fsrSrSharpness==0.6f,"with an FSR SR pass the values stay active");
+        // Sharpening is a live uniform; the provider version decides the context.
+        auto sharper=base;sharper.fsrSrVersion=FsrSrVersion::Fsr4;sharper.fsrSrSharpness=0.25f;
+        auto sharper2=sharper;sharper2.fsrSrSharpness=0.9f;
+        check(sharper.sameVideoConfiguration(sharper2),"a sharpening-only change keeps the graph configuration");
+        check(!sharper.sameActiveVideoParameters(sharper2),"a sharpening-only change still reaches the running graph");
+        auto newer=sharper;newer.fsrSrVersion=FsrSrVersion::Fsr31;
+        check(!sharper.sameVideoConfiguration(newer),"a provider version change rebuilds the graph");
+        check(!sharper.sameActiveVideoParameters(newer),"a provider version change reaches the running graph");
+        // A failed FSR 4 keeps upscaling on FSR 3.1 instead of turning SR off.
+        auto failed=base;failed.fsrSrVersion=FsrSrVersion::Fsr4;
+        check(disableFailedBackend(failed,FailedBackend::Sr)&&failed.sr&&failed.fsrSrVersion==FsrSrVersion::Fsr31,
+              "a failed FSR 4 downgrades to FSR 3.1 and keeps SR running");
+        auto failed31=base;failed31.fsrSrVersion=FsrSrVersion::Fsr31;
+        check(disableFailedBackend(failed31,FailedBackend::Sr)&&!failed31.sr,"a failed FSR 3.1 disables SR");
+        auto failedAuto=base;
+        check(disableFailedBackend(failedAuto,FailedBackend::Sr)&&!failedAuto.sr,"a failed automatic FSR SR disables SR");
+        auto failedOther=other;failedOther.fsrSrVersion=FsrSrVersion::Fsr4;
+        check(disableFailedBackend(failedOther,FailedBackend::Sr)&&!failedOther.sr,
+              "without an FSR SR pass a failed SR is not downgraded to FSR 3.1");
+    }
+
+    // Settings presets: FSR SR version and sharpening write v40; RIFE-only stays v39.
+    {
+        auto fsrVersion=fsrSecond;fsrVersion.fsrSrVersion=FsrSrVersion::Fsr4;fsrVersion.fsrSrSharpness=0.5f;
+        PresetStore plain(root/L"fsr-plain.txt");
+        check(plain.load()&&plain.put(L"plain",EnhancementSettings{}),"settings preset without FSR SR values");
+        const auto plainBytes=bytes(root/L"fsr-plain.txt");
+        check(!plainBytes.starts_with("VEYRA_PRESETS 40"),"default FSR SR values do not bump the version");
+        EnhancementSettings rife;rife.multiplier=2;rife.frameGenerationBackend=FrameGenerationBackend::Rife;
+        PresetStore rifeStore(root/L"fsr-rife.txt");
+        check(rifeStore.load()&&rifeStore.put(L"rife",rife),"RIFE settings preset");
+        check(bytes(root/L"fsr-rife.txt").starts_with("VEYRA_PRESETS 39"),"RIFE alone keeps v39, not v40");
+        PresetStore store(root/L"fsr-sr.txt");
+        check(store.load()&&store.put(L"fsr",fsrVersion),"settings preset with an FSR SR provider");
+        check(bytes(root/L"fsr-sr.txt").starts_with("VEYRA_PRESETS 40"),"an FSR SR value writes v40");
+        PresetStore reader(root/L"fsr-sr.txt");
+        check(reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings.fsrSrVersion==FsrSrVersion::Fsr4&&
+              reader.entries()[0].settings.fsrSrSharpness==0.5f,"v40 restores the provider and the sharpening");
+        // The two appended values are read back after the v38 block, so a bad
+        // enum or an out-of-range strength makes the whole file unreadable.
+        const auto valid=bytes(root/L"fsr-sr.txt");
+        const std::string tail=" 2 0.5";
+        check(valid.find(tail)!=std::string::npos,"v40 appends the provider and the sharpening");
+        auto tampered=valid;tampered.replace(tampered.rfind(tail),tail.size()," 3 0.5");
+        {std::ofstream out(root/L"fsr-bad-version.txt",std::ios::binary);out<<tampered;}
+        PresetStore badVersion(root/L"fsr-bad-version.txt");
+        check(!badVersion.load(),"an FSR SR version past the enum is rejected on load");
+        tampered=valid;tampered.replace(tampered.rfind(tail),tail.size()," 2 1.5");
+        {std::ofstream out(root/L"fsr-bad-sharp.txt",std::ios::binary);out<<tampered;}
+        PresetStore badSharp(root/L"fsr-bad-sharp.txt");
+        check(!badSharp.load(),"sharpening outside [0, 1] is rejected on load");
     }
 
     std::cout<<"Video AI settings "<<checks<<" checks, "<<failures<<" failures\n";return failures?1:0;

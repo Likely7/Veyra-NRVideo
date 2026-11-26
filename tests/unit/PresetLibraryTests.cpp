@@ -1611,6 +1611,109 @@ __declspec(noinline) void testVideoDenoiseStorage() {
     check(reader.load(*loaded)&&*loaded==*session,"video denoise: editor graph and detached settings restore");
 }
 
+// FSR SR provider generation + RCAS strength (2026-11-25): library v27 /
+// session v22 live in .fsr-sr sidecars so a build without the choice keeps
+// loading the file it wrote.
+__declspec(noinline) void testFsrSrProviderStorage() {
+    EnhancementSettings source;source.nr=false;source.sr=true;source.videoSrQuality=kVideoSrFsr;
+    source.fsrSrVersion=FsrSrVersion::Fsr4;source.fsrSrSharpness=0.5f;
+    const auto path=scratch(L"fsr-sr-library.v1");
+    PresetLibrary library(path);library.setIncludeBuiltins(false);
+    PresetEntry plain;plain.name=L"No SR choice";plain.kind=ChainMode::List;
+    plain.contents=presetContentMask(PresetContent::Chain);plain.chain=toChain(EnhancementSettings{});
+    check(library.load()&&library.put(plain),"FSR SR presets: write a preset without the provider choice");
+    const auto oldBytes=readBytes(path);
+    check(!std::filesystem::exists(std::filesystem::path(path).concat(L".fsr-sr")),
+          "FSR SR presets: automatic provider and neutral sharpening never need a v27 sidecar");
+    auto entry=plain;entry.name=L"FSR SR";entry.chain=toChain(source);
+    entry.globals=ChainGlobalSettings::capture(source);
+    const auto fsrSrPath=std::filesystem::path(path).concat(L".fsr-sr");
+    check(library.put(entry),"FSR SR presets: store a provider generation and strength");
+    check(readBytes(fsrSrPath).starts_with("VEYRA_PRESET_LIBRARY 27\n")&&readBytes(path)==oldBytes,
+          "FSR SR presets: v27 upgrades into its own file and leaves the old library intact");
+    PresetLibrary reader(path);reader.setIncludeBuiltins(false);
+    check(reader.load()&&reader.entries().size()==2&&
+          reader.entries()[1].globals&&reader.entries()[1].globals->fsrSrVersion==FsrSrVersion::Fsr4&&
+          reader.entries()[1].globals->fsrSrSharpness==0.5f,
+          "FSR SR presets: a fresh reader finds the v27 sidecar");
+    auto applied=EnhancementSettings{};PresetLibrary::apply(reader.entries()[1],applied);
+    check(applied.fsrSrVersion==FsrSrVersion::Fsr4&&applied.fsrSrSharpness==0.5f,
+          "FSR SR presets: applying the chain restores the provider and the sharpening");
+    const auto colourOnly=[&]{auto copy=reader.entries()[1];copy.contents=presetContentMask(PresetContent::Color);return copy;}();
+    applied.fsrSrVersion=FsrSrVersion::Auto;applied.fsrSrSharpness=0.0f;
+    PresetLibrary::apply(colourOnly,applied);
+    check(applied.fsrSrVersion==FsrSrVersion::Auto&&applied.fsrSrSharpness==0.0f,
+          "FSR SR presets: a preset without the rendering part leaves the live choice alone");
+    const auto exported=scratch(L"fsr-sr-export.vpreset");
+    check(reader.exportEntry(1,exported)&&readBytes(exported).starts_with("VEYRA_PRESET_LIBRARY 27\n"),
+          "FSR SR presets: a single .vpreset carries v27");
+    PresetLibrary imported(scratch(L"fsr-sr-import.v1"));imported.setIncludeBuiltins(false);std::wstring importedName;
+    check(imported.load()&&imported.importFile(exported,importedName)&&imported.entries().size()==1&&
+          imported.entries().front().globals->fsrSrVersion==FsrSrVersion::Fsr4&&
+          imported.entries().front().globals->fsrSrSharpness==0.5f,
+          "FSR SR presets: importing the .vpreset keeps the provider and the sharpening");
+    // A version past the enum must be refused atomically: save() re-parses the
+    // encoded bytes before it replaces anything.
+    auto bad=entry;bad.name=L"Bad FSR";bad.globals->fsrSrVersion=FsrSrVersion(kFsrSrVersionCount);
+    check(!library.put(bad)&&readBytes(fsrSrPath).starts_with("VEYRA_PRESET_LIBRARY 27\n")&&readBytes(path)==oldBytes,
+          "FSR SR presets: a version past the enum is rejected without touching either file");
+    // A v27 file that sits at the plain path is upgraded, not replaced.
+    const auto upgradePath=scratch(L"fsr-sr-upgrade.v1");
+    check(library.exportEntry(1,upgradePath),"FSR SR presets: seed a v27 file at the plain path");
+    const auto upgradeBytes=readBytes(upgradePath);
+    PresetLibrary upgrading(upgradePath);upgrading.setIncludeBuiltins(false);
+    check(upgrading.load()&&upgrading.put(plain),"FSR SR presets: an existing v27 library still saves");
+    check(readBytes(std::filesystem::path(upgradePath).concat(L".fsr-sr")).starts_with("VEYRA_PRESET_LIBRARY 27\n"),
+          "FSR SR presets: a v27 file at the plain path moves into its own sidecar");
+
+    // The v26 video-denoise sidecar must survive an FSR SR preset untouched.
+    const auto denoisePath=scratch(L"fsr-sr-denoise.v1");
+    PresetLibrary denoiseLibrary(denoisePath);denoiseLibrary.setIncludeBuiltins(false);
+    auto denoiseSettings=EnhancementSettings{};denoiseSettings.videoDenoiseEnabled=true;denoiseSettings.videoDenoise={.3f,.7f};
+    auto denoiseEntry=plain;denoiseEntry.name=L"Denoise only";denoiseEntry.chain=toChain(denoiseSettings);
+    const auto denoiseSidecar=std::filesystem::path(denoisePath).concat(L".video-denoise");
+    check(denoiseLibrary.load()&&denoiseLibrary.put(plain)&&denoiseLibrary.put(denoiseEntry)&&
+          readBytes(denoiseSidecar).starts_with("VEYRA_PRESET_LIBRARY 26\n")&&
+          !std::filesystem::exists(std::filesystem::path(denoisePath).concat(L".fsr-sr")),
+          "FSR SR presets: plain video denoise stays library v26 without an FSR SR payload");
+    const auto denoiseBytes=readBytes(denoiseSidecar);
+    check(denoiseLibrary.put(entry),"FSR SR presets: add the provider choice beside the denoise sidecar");
+    const auto upgradedSr=std::filesystem::path(denoiseSidecar).concat(L".fsr-sr");
+    check(readBytes(denoiseSidecar)==denoiseBytes&&readBytes(upgradedSr).starts_with("VEYRA_PRESET_LIBRARY 27\n"),
+          "FSR SR presets: the FSR SR payload never overwrites the v26 denoise file");
+    PresetLibrary denoiseReader(denoisePath);denoiseReader.setIncludeBuiltins(false);
+    check(denoiseReader.load()&&denoiseReader.entries().size()==3&&
+          denoiseReader.entries().back().globals&&
+          denoiseReader.entries().back().globals->fsrSrVersion==FsrSrVersion::Fsr4,
+          "FSR SR presets: the newest sidecar wins over a leftover .video-denoise");
+
+    const auto sessionPath=scratch(L"fsr-sr-session.v1");
+    auto session=std::make_unique<ChainSession>(ChainSession::initial(EnhancementSettings{}));
+    ChainSessionStore sessions(sessionPath);
+    check(sessions.save(*session),"FSR SR session: save the rollback session");
+    const auto sessionRollback=readBytes(sessionPath);
+    session->configurations[0].fsrSrVersion=FsrSrVersion::Fsr31;session->configurations[0].fsrSrSharpness=0.25f;
+    check(sessions.save(*session)&&readBytes(sessionPath)==sessionRollback&&
+          readBytes(std::filesystem::path(sessionPath).concat(L".fsr-sr")).starts_with("VEYRA_CHAIN_SESSION 22\n"),
+          "FSR SR session: v22 saves beside the older session and leaves it byte-identical");
+    check(session->select(ChainMode::Node),"FSR SR session: initialize the node configuration");
+    auto document=std::make_shared<NodeEditorDocument>();document->nodes=session->configurations[1].chain;
+    check(document->layout.initialize(document->nodes).accepted,"FSR SR session: create a node editor document");
+    document->globals=static_cast<const ChainGlobalSettings&>(session->configurations[1]);
+    document->globals->fsrSrVersion=FsrSrVersion::Fsr4;document->globals->fsrSrSharpness=0.75f;
+    session->configurations[1].editor=document;
+    check(sessions.save(*session),"FSR SR session: save the independent editor draft");
+    auto restored=std::make_unique<ChainSession>();ChainSessionStore reopened(sessionPath);
+    check(reopened.load(*restored)&&*restored==*session,
+          "FSR SR session: both modes and the editor draft round-trip");
+    session->configurations[0].fsrSrVersion=FsrSrVersion::Auto;session->configurations[0].fsrSrSharpness=0.0f;
+    document->globals->fsrSrVersion=FsrSrVersion::Auto;document->globals->fsrSrSharpness=0.0f;
+    check(sessions.save(*session),"FSR SR session: returning to automatic keeps saving");
+    ChainSessionStore finalReader(sessionPath);
+    check(finalReader.load(*restored)&&*restored==*session,
+          "FSR SR session: the saved automatic choice wins over the older provider");
+}
+
 int main(int argc,char** argv) {
     testVideoDenoiseStorage();
     testDisabledFrameGenerationMatch();
@@ -1625,6 +1728,7 @@ int main(int argc,char** argv) {
     testDlaaStorage();
     testBeautyNodeStorage();
     testDlssSrModels();
+    testFsrSrProviderStorage();
     testSrStageStorage();
     testDualSrStorage();
     testFlowStorage();

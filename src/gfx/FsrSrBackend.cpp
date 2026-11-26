@@ -3,8 +3,13 @@
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
+#include <format>
+#include <optional>
 #include <string>
+#include <vector>
 
 #ifdef VEYRA_HAS_FSR
 #include <ffx_api_loader.h>
@@ -64,6 +69,14 @@ const char* returnName(ffxReturnCode_t code) {
     }
 }
 
+const char* versionModeName(FsrSrVersionMode mode) {
+    switch (mode) {
+    case FsrSrVersionMode::Fsr31: return "FSR 3.1";
+    case FsrSrVersionMode::Fsr4: return "FSR 4.x";
+    default: return "auto";
+    }
+}
+
 void fsrMessage(uint32_t type, const wchar_t* message) {
     if (message == nullptr) return;
     const int length = WideCharToMultiByte(CP_UTF8, 0, message, -1, nullptr, 0, nullptr, nullptr);
@@ -99,6 +112,7 @@ struct FsrSrBackend::Impl {
     HMODULE provider = nullptr;
     ffxFunctions functions{};
     ffxContext context = nullptr;
+    FsrSrVersionMode versionMode = FsrSrVersionMode::Auto;
     uint32_t maxRenderWidth = 0, maxRenderHeight = 0;
     uint32_t maxUpscaleWidth = 0, maxUpscaleHeight = 0;
 #endif
@@ -109,10 +123,19 @@ FsrSrBackend::FsrSrBackend() : p_(std::make_unique<Impl>()) {}
 FsrSrBackend::~FsrSrBackend() { release(); }
 
 bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uint32_t maxRenderHeight,
-                              uint32_t maxUpscaleWidth, uint32_t maxUpscaleHeight, bool hdr) {
+                              uint32_t maxUpscaleWidth, uint32_t maxUpscaleHeight, bool hdr,
+                              FsrSrVersionMode versionMode) {
 #ifdef VEYRA_HAS_FSR
     auto& p = *p_;
-    if (p.available) return true;
+    if (p.available) {
+        if (p.versionMode != versionMode)
+            log::warn("fsr-sr", std::format("already initialized as {}; keeping the existing context instead of {}",
+                                            versionModeName(p.versionMode), versionModeName(versionMode)));
+        return true;
+    }
+    // A previous attempt may have left the loader or provider loaded; release it
+    // instead of overwriting the handles.
+    if (p.loader != nullptr || p.provider != nullptr || p.context != nullptr) release();
     const auto root = runtime::localDataDirectory() / "amd" / "fidelityfx";
     const auto loaderPath = std::filesystem::absolute(root / "amd_fidelityfx_loader_dx12.dll");
     const auto providerPath = std::filesystem::absolute(root / "amd_fidelityfx_upscaler_dx12.dll");
@@ -138,6 +161,11 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
         log::error("fsr-sr", "loader is missing the FidelityFX API entry points");
         return false;
     }
+    // Provider inventory: every installed provider reports its version name here
+    // (ffx_api.h:97). The name pointers are only valid during the call, so they
+    // are copied out immediately; the ranking then decides the try order.
+    struct Candidate { uint64_t id = 0; std::string name; };
+    std::vector<Candidate> candidates;
     {
         ffxQueryDescGetVersions versions{};
         versions.header.type = FFX_API_QUERY_DESC_TYPE_GET_VERSIONS;
@@ -145,20 +173,47 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
         versions.device = device;
         uint64_t count = 0;
         versions.outputCount = &count;
-        const auto countResult = p.functions.Query(nullptr, &versions.header);
-        uint64_t ids[8]{};
-        const char* names[8]{};
-        uint64_t capacity = 8;
-        versions.outputCount = &capacity;
-        versions.versionIds = ids;
-        versions.versionNames = names;
-        const auto listResult = countResult == FFX_API_RETURN_OK
-            ? p.functions.Query(nullptr, &versions.header) : countResult;
-        if (listResult == FFX_API_RETURN_OK && capacity > 0 && names[0] != nullptr) {
-            p.providerVersion = names[0];
+        auto result = p.functions.Query(nullptr, &versions.header);
+        if (result != FFX_API_RETURN_OK || count == 0 || count > 64) {
+            if (versionMode != FsrSrVersionMode::Auto) {
+                log::error("fsr-sr", std::format("provider inventory failed result={} count={} requested={}",
+                                                 returnName(result), count, versionModeName(versionMode)));
+                return false;
+            }
+            log::warn("fsr-sr", std::format("provider inventory failed result={} count={}; creating without a version override",
+                                            returnName(result), count));
+        } else {
+            std::vector<uint64_t> ids(size_t(count), 0);
+            std::vector<const char*> rawNames(size_t(count), nullptr);
+            // outputCount is in/out: capacity in, returned count out.
+            versions.outputCount = &count;
+            versions.versionIds = ids.data();
+            versions.versionNames = rawNames.data();
+            result = p.functions.Query(nullptr, &versions.header);
+            if (result != FFX_API_RETURN_OK || count > ids.size()) {
+                if (versionMode != FsrSrVersionMode::Auto) {
+                    log::error("fsr-sr", std::format("provider inventory read failed result={} count={} capacity={} requested={}",
+                                                     returnName(result), count, ids.size(), versionModeName(versionMode)));
+                    return false;
+                }
+                log::warn("fsr-sr", std::format("provider inventory read failed result={} count={} capacity={}; creating without a version override",
+                                                returnName(result), count, ids.size()));
+            } else {
+                std::vector<std::string> names;
+                names.reserve(size_t(count));
+                for (size_t i = 0; i < size_t(count); ++i) names.emplace_back(rawNames[i] ? rawNames[i] : "");
+                const auto order = rankedFfxProviderIndices(names, versionMode);
+                for (size_t i = 0; i < size_t(count); ++i)
+                    log::info("fsr-sr", std::format("inventory id=0x{:X} name={} requested={}", ids[i],
+                                                    names[i].empty() ? "unknown" : names[i], versionModeName(versionMode)));
+                if (order.empty() && versionMode != FsrSrVersionMode::Auto) {
+                    log::error("fsr-sr", std::format("requested FSR {} provider unavailable in inventory; no version fallback",
+                                                     versionModeName(versionMode)));
+                    return false;
+                }
+                for (const auto index : order) candidates.push_back({ids[index], names[index]});
+            }
         }
-        log::info("fsr-sr", std::format("providers count={} selected={}", capacity,
-                                        p.providerVersion.empty() ? "none" : p.providerVersion));
     }
 
     ffxCreateBackendDX12Desc backendDesc{};
@@ -169,40 +224,111 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
     versionDesc.version = FFX_UPSCALER_VERSION;
     ffxCreateContextDescUpscale upscaleDesc{};
     upscaleDesc.header.type = FFX_API_CREATE_CONTEXT_DESC_TYPE_UPSCALE;
-    upscaleDesc.header.pNext = &backendDesc.header;
-    backendDesc.header.pNext = &versionDesc.header;
     upscaleDesc.flags = hdr ? FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE : 0u;
     upscaleDesc.maxRenderSize = {maxRenderWidth, maxRenderHeight};
     upscaleDesc.maxUpscaleSize = {maxUpscaleWidth, maxUpscaleHeight};
     upscaleDesc.fpMessage = fsrMessage;
-    auto result = p.functions.CreateContext(&p.context, &upscaleDesc.header, nullptr);
-    if (result != FFX_API_RETURN_OK || p.context == nullptr) {
-        log::warn("fsr-sr", std::format("context with version desc failed result={}; retrying without it",
-                                        returnName(result)));
-        if(p.context){
-            const auto cleanup=p.functions.DestroyContext(&p.context,nullptr);
-            if(cleanup!=FFX_API_RETURN_OK){log::error("fsr-sr","cannot release partial context");return false;}
-            p.context=nullptr;
+    // The provider reports the version it actually created, so the request is
+    // verified against the context and not just against the inventory.
+    std::string reported;
+    const auto tryCreate = [&](std::optional<uint64_t> overrideId, std::string_view expectedName) -> bool {
+        const bool overrideUsed = overrideId.has_value();
+        const auto overrideNote = [&] { return overrideUsed ? std::format(" override=0x{:X}", *overrideId) : std::string(); };
+        ffxOverrideVersion overrideVersion{};
+        overrideVersion.header.type = FFX_API_DESC_TYPE_OVERRIDE_VERSION;
+        overrideVersion.versionId = overrideId.value_or(0);
+        upscaleDesc.header.pNext = &backendDesc.header;
+        backendDesc.header.pNext = &versionDesc.header;
+        versionDesc.header.pNext = overrideUsed ? &overrideVersion.header : nullptr;
+        auto result = p.functions.CreateContext(&p.context, &upscaleDesc.header, nullptr);
+        if (result != FFX_API_RETURN_OK || p.context == nullptr) {
+            log::warn("fsr-sr", std::format("context with version desc failed result={}{}; retrying without it",
+                                            returnName(result), overrideNote()));
+            if (p.context != nullptr) {
+                const auto cleanup = p.functions.DestroyContext(&p.context, nullptr);
+                p.context = nullptr;
+                if (cleanup != FFX_API_RETURN_OK) { log::error("fsr-sr", "cannot release partial context"); return false; }
+                p.context = nullptr;
+            }
+            // The version override is the selection and stays in the chain; only
+            // the API-version descriptor (a build-compatibility note) is dropped.
+            versionDesc.header.pNext = nullptr;
+            backendDesc.header.pNext = overrideUsed ? &overrideVersion.header : nullptr;
+            result = p.functions.CreateContext(&p.context, &upscaleDesc.header, nullptr);
         }
-        backendDesc.header.pNext = nullptr;
-        result = p.functions.CreateContext(&p.context, &upscaleDesc.header, nullptr);
+        if (result != FFX_API_RETURN_OK || p.context == nullptr) {
+            log::warn("fsr-sr", std::format("context creation failed result={} (0x{:X}){}", returnName(result),
+                                            unsigned(result), overrideNote()));
+            // A non-OK create can still hand back a partial context; release it
+            // before dropping the handle, otherwise the provider state leaks.
+            if (p.context != nullptr) {
+                if (p.functions.DestroyContext(&p.context, nullptr) != FFX_API_RETURN_OK)
+                    log::error("fsr-sr", "cannot release partial context");
+                p.context = nullptr;
+            }
+            return false;
+        }
+        ffxQueryGetProviderVersion providerVersion{};
+        providerVersion.header.type = FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION;
+        providerVersion.versionId = 0;
+        providerVersion.versionName = nullptr;
+        const bool queried = p.functions.Query(&p.context, &providerVersion.header) == FFX_API_RETURN_OK &&
+                             providerVersion.versionName != nullptr && *providerVersion.versionName != '\0';
+        reported = queried ? std::string(providerVersion.versionName) : std::string();
+        const auto destroy = [&](const char* why) {
+            log::warn("fsr-sr", why);
+            if (p.functions.DestroyContext(&p.context, nullptr) != FFX_API_RETURN_OK)
+                log::error("fsr-sr", "cannot release rejected context");
+            p.context = nullptr;
+            reported.clear();
+            return false;
+        };
+        const auto reportedVersion = parseFfxSemver(reported);
+        if (reportedVersion.valid) {
+            if (matchesFsrSrVersion(reported, versionMode)) return true;
+            // Auto accepts any named provider; an explicit request does not.
+            if (versionMode != FsrSrVersionMode::Auto)
+                return destroy("provider readback does not match the requested version; rejecting the context");
+        }
+        // No usable version metadata: the inventory already proved this target, so
+        // a metadata gap is not an SR failure.
+        if (!overrideUsed || versionMode == FsrSrVersionMode::Auto)
+            log::warn("fsr-sr", std::format("provider version query {}; using {} from the inventory",
+                                            queried ? "returned no version" : "failed",
+                                            expectedName.empty() ? "an unknown name" : expectedName));
+        else
+            log::warn("fsr-sr", std::format("provider version query unavailable; keeping the inventory target {}", expectedName));
+        reported = std::string(expectedName);
+        return true;
+    };
+    bool contextReady = false;
+    for (const auto& candidate : candidates) {
+        if (tryCreate(candidate.id, candidate.name)) { contextReady = true; break; }
     }
-    if (result != FFX_API_RETURN_OK || p.context == nullptr) {
-        log::error("fsr-sr", std::format("context creation failed result={} (0x{:X})", returnName(result),
-                                         unsigned(result)));
+    // An explicit request never falls back; Auto may still take whatever the
+    // loader installs by default.
+    if (!contextReady && versionMode == FsrSrVersionMode::Auto) contextReady = tryCreate(std::nullopt, {});
+    if (!contextReady) {
+        p.context = nullptr;
+        p.providerVersion.clear();
+        p.available = false;
+        log::error("fsr-sr", std::format("AMD FSR upscaling unavailable requested={}", versionModeName(versionMode)));
         return false;
     }
+    p.providerVersion = reported;
     p.maxRenderWidth = maxRenderWidth;
     p.maxRenderHeight = maxRenderHeight;
     p.maxUpscaleWidth = maxUpscaleWidth;
     p.maxUpscaleHeight = maxUpscaleHeight;
     p.available = true;
-    log::info("fsr-sr", std::format("provider={} maxRender={}x{} maxUpscale={}x{} hdr={}",
-                                    p.providerVersion.empty() ? "unknown" : p.providerVersion,
+    p.versionMode = versionMode;
+    log::info("fsr-sr", std::format("context ready requested={} provider={} maxRender={}x{} maxUpscale={}x{} hdr={}",
+                                    versionModeName(versionMode), p.providerVersion.empty() ? "unknown" : p.providerVersion,
                                     maxRenderWidth, maxRenderHeight, maxUpscaleWidth, maxUpscaleHeight, hdr));
     return true;
 #else
     (void)device; (void)maxRenderWidth; (void)maxRenderHeight; (void)maxUpscaleWidth; (void)maxUpscaleHeight; (void)hdr;
+    (void)versionMode;
     log::error("fsr-sr", "AMD FidelityFX SDK headers were unavailable at build time");
     return false;
 #endif
@@ -210,7 +336,8 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
 
 bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* color, ID3D12Resource* motion,
                             ID3D12Resource* depth, ID3D12Resource* output, uint32_t renderWidth, uint32_t renderHeight,
-                            uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs) {
+                            uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs,
+                            float sharpness) {
 #ifdef VEYRA_HAS_FSR
     auto& p = *p_;
     if (!p.available || !list) return false;
@@ -259,8 +386,11 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
     dispatch.motionVectorScale = {1.0f, 1.0f};
     dispatch.renderSize = {renderWidth, renderHeight};
     dispatch.upscaleSize = {upscaleWidth, upscaleHeight};
-    dispatch.enableSharpening = false;
-    dispatch.sharpness = 0.0f;
+    // The provider's own RCAS pass: 0 = none, 1 = maximum (ffx_upscale.h). The
+    // dispatch value is a live uniform, so the whole range needs no rebuild.
+    const float clampedSharpness = (std::isfinite(sharpness) && sharpness > 0.0f) ? std::min(sharpness, 1.0f) : 0.0f;
+    dispatch.enableSharpening = clampedSharpness > 0.0f;
+    dispatch.sharpness = clampedSharpness;
     dispatch.frameTimeDelta = frameTimeMs > 0.0f ? frameTimeMs : 16.6f;
     dispatch.preExposure = 1.0f;
     dispatch.reset = reset;
@@ -280,7 +410,7 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
     return true;
 #else
     (void)list; (void)color; (void)motion; (void)depth; (void)output; (void)renderWidth; (void)renderHeight;
-    (void)upscaleWidth; (void)upscaleHeight; (void)reset; (void)frameTimeMs;
+    (void)upscaleWidth; (void)upscaleHeight; (void)reset; (void)frameTimeMs; (void)sharpness;
     return false;
 #endif
 }
