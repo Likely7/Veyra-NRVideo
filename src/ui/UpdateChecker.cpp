@@ -1,4 +1,5 @@
 #include "veyra/ui/UpdateChecker.h"
+#include "veyra/base/PortableInstallPolicy.h"
 #include "veyra/base/PortableLayout.h"
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -28,8 +29,9 @@ bool rateLimited(const QNetworkReply* reply, int status, const QByteArray& body)
     return body.toLower().contains("rate limit");
 }
 
-// Asset names are the published file name only. A digest, when GitHub sends one,
-// must already be a lowercase sha256. Anything else rejects the whole document.
+// A name that is not a single published file name is ignored. A legal name whose
+// digest is present and not a lowercase sha256 still rejects the whole document.
+// The signed manifest, not this list, is what allows a zip to be installed.
 bool readAssets(const QJsonObject& release, bool& enumerated, QHash<QString, QByteArray>& digests) {
     enumerated = release.contains(QStringLiteral("assets"));
     digests.clear();
@@ -38,13 +40,13 @@ bool readAssets(const QJsonObject& release, bool& enumerated, QHash<QString, QBy
     if (!assets.isArray()) return false;
     const auto rows = assets.toArray();
     if (rows.size() > maxAssets) return false;
-    static const QRegularExpression name(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,179}$"));
     static const QRegularExpression digest(QStringLiteral("^sha256:[0-9a-f]{64}$"));
     for (const auto& row : rows) {
         if (!row.isObject()) return false;
         const auto item = row.toObject();
         const auto assetName = item.value(QStringLiteral("name")).toString();
-        if (!name.match(assetName).hasMatch() || digests.contains(assetName)) return false;
+        if (!veyra::portable::acceptableGitHubAssetName(assetName.toStdString())) continue;
+        if (digests.contains(assetName)) return false;
         QByteArray hash;
         if (item.contains(QStringLiteral("digest")) && !item.value(QStringLiteral("digest")).isNull()) {
             const auto text = item.value(QStringLiteral("digest")).toString();
@@ -91,18 +93,20 @@ void UpdateChecker::check(bool manual) {
     manual_ = manual;
     outcome_.clear();
     statusText_.clear();
-    request(endpoint_ == veyra::portable::releaseApiUrl() ? veyra::portable::releaseApiUrl(route_) : endpoint_);
+    request(endpoint_ == veyra::portable::releaseApiUrl() ? veyra::portable::releaseApiUrl(route_) : endpoint_, route_);
     emit checkingChanged();
     emit statusChanged();
 }
-void UpdateChecker::request(const QUrl& url) {
+void UpdateChecker::request(const QUrl& url, veyra::portable::DownloadRoute redirectRoute) {
     usingMirror_ = url != endpoint_;
+    redirectRoute_ = redirectRoute;
     body_.clear(); failure_.clear();
     QNetworkRequest request(url);
     request.setRawHeader("Accept", "application/vnd.github+json");
     request.setRawHeader("User-Agent", "Veyra-Update-Check");
     request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
-    // Redirects are followed only after allowedApiRedirect accepts the host.
+    // Redirects stay on the official API unless the user selected a mirror.
+    // A mirror fallback request passes the GitHub route and cannot leave it.
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::UserVerifiedRedirectPolicy);
     request.setMaximumRedirectsAllowed(3);
     request.setTransferTimeout(timeoutMs_);
@@ -110,7 +114,7 @@ void UpdateChecker::request(const QUrl& url) {
     qInfo().noquote() << "[update-check-start]" << (manual_ ? "manual" : "automatic") << url.host();
     reply_->setReadBufferSize(maxBody + 1);
     connect(reply_, &QNetworkReply::redirected, this, [this](const QUrl& target) {
-        if (veyra::portable::allowedApiRedirect(target)) reply_->redirectAllowed();
+        if (veyra::portable::allowedApiRedirect(target, redirectRoute_)) reply_->redirectAllowed();
         else { failure_ = QStringLiteral("redirect-rejected"); reply_->abort(); }
     });
     connect(reply_, &QIODevice::readyRead, this, [this] {
@@ -199,7 +203,7 @@ void UpdateChecker::finish() {
     }
     if (!failure_.isEmpty() && usingMirror_) {
         qInfo().noquote() << "[update-check] mirror fallback" << failure_;
-        request(endpoint_);
+        request(endpoint_, veyra::portable::DownloadRoute::GitHub);
         return;
     }
     QString message = tr("检查更新失败，请检查网络后重试");

@@ -47,7 +47,7 @@ signals:
     // Terminal diagnostic result (also used by deterministic/real HTTP tests).
     void completed(const QString& result);
 private:
-    void request(const QUrl& url);
+    void request(const QUrl& url, veyra::portable::DownloadRoute redirectRoute);
     void finish();
     void publish(const QString& result, const QString& status, bool errorNotice);
     QNetworkAccessManager network_;
@@ -61,6 +61,7 @@ private:
     bool automaticScheduled_ = false, manual_ = false;
     bool usingMirror_ = false;
     veyra::portable::DownloadRoute route_ = veyra::portable::DownloadRoute::GitHub;
+    veyra::portable::DownloadRoute redirectRoute_ = veyra::portable::DownloadRoute::GitHub;
     PortableUpdate portable_;
 };
 }

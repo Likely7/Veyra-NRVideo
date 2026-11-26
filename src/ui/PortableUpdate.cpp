@@ -1,18 +1,83 @@
 #include "veyra/ui/PortableUpdate.h"
 #include "veyra/base/PortableFiles.h"
 #include "veyra/base/PortableLayout.h"
+#include "veyra/base/PortablePrivileged.h"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QLocale>
 #include <QNetworkReply>
 #include <QStorageInfo>
+#include <condition_variable>
+#include <deque>
+#include <mutex>
+#include <thread>
 #include <knownfolders.h>
 #include <shellapi.h>
 #include <shlobj.h>
 
 namespace veyra::ui {
 using namespace veyra::portable;
+
+struct PortableArchiveHasher {
+    void add(QByteArray chunk) {
+        if (chunk.isEmpty()) return;
+        {
+            std::unique_lock lock(mutex_);
+            space_.wait(lock, [&] { return queue_.size() < 8 || stop_; });
+            if (stop_) return;
+            queue_.push_back(std::move(chunk));
+        }
+        data_.notify_one();
+    }
+    QByteArray result() {
+        {
+            std::lock_guard lock(mutex_);
+            if (joined_) return hash_.result();
+            stop_ = true;
+        }
+        data_.notify_one();
+        space_.notify_all();
+        if (worker_.joinable()) worker_.join();
+        joined_ = true;
+        return hash_.result();
+    }
+    void reset() {
+        result();
+        hash_.reset();
+        {
+            std::lock_guard lock(mutex_);
+            queue_.clear();
+            stop_ = false;
+            joined_ = false;
+        }
+        worker_ = std::thread([this] { run(); });
+    }
+    ~PortableArchiveHasher() { result(); }
+private:
+    void run() {
+        for (;;) {
+            QByteArray chunk;
+            {
+                std::unique_lock lock(mutex_);
+                data_.wait(lock, [&] { return stop_ || !queue_.empty(); });
+                if (queue_.empty()) return;
+                chunk = std::move(queue_.front());
+                queue_.pop_front();
+            }
+            space_.notify_one();
+            hash_.addData(chunk);
+        }
+    }
+    std::thread worker_;
+    std::mutex mutex_;
+    std::condition_variable data_, space_;
+    std::deque<QByteArray> queue_;
+    QCryptographicHash hash_{QCryptographicHash::Sha256};
+    bool stop_ = false, joined_ = false;
+};
+
 namespace {
 QString pathString(const std::filesystem::path& path) { return QString::fromStdWString(path.native()); }
 
@@ -63,12 +128,26 @@ bool directoryAcceptsFiles(const std::filesystem::path& dir) {
 }
 
 std::filesystem::path userStaging(const std::filesystem::path& root) {
-    wchar_t local[32768]{};
-    const DWORD length = GetEnvironmentVariableW(L"LOCALAPPDATA", local, static_cast<DWORD>(sizeof(local) / sizeof(local[0])));
-    if (!length || length >= std::size(local)) return {};
+    const auto base = localUpdateStagingBase();
+    if (base.empty()) return {};
     const auto id = QCryptographicHash::hash(QString::fromStdWString(root.wstring()).toUtf8(),
                                              QCryptographicHash::Sha256).toHex().left(16);
-    return std::filesystem::path(local) / L"Veyra" / L"update-staging" / id.toStdWString();
+    return base / QString::fromLatin1(id).toStdWString();
+}
+
+bool stagedPackage(const std::filesystem::path& directory, const QByteArray& key, const QString& flavor,
+                   const QString& installed, QByteArray& manifest, std::optional<UpdatePackage>& package) {
+    const auto pending = directory / L"pending.json";
+    const auto archive = directory / L"download.zip";
+    if (!pathChainIsPlain(directory) || !plainPath(directory, true) || !plainPath(pending, false) || !plainPath(archive, false))
+        return false;
+    manifest = QByteArray::fromStdString(readSmallFile(pending, maxManifestBytes));
+    package = readUpdateManifest(manifest, flavor, installed, {}, key);
+    if (!package) return false;
+    std::error_code error;
+    const bool sized = std::filesystem::file_size(archive, error) == static_cast<uintmax_t>(package->archiveBytes) && !error;
+    if (!sized) package.reset();
+    return sized;
 }
 }
 
@@ -104,28 +183,33 @@ PortableUpdate::PortableUpdate(const QString& version, QObject* parent)
     manifestDeadline_.setSingleShot(true);
     connect(&manifestDeadline_, &QTimer::timeout, this, [this] { if (reply_) reply_->abort(); });
 
-    if (!plainPath(updates_, true)) return;
-    const auto status = updates_ / L"result.txt";
-    if (plainPath(status, false)) {
+    const auto reportResult = [this](const std::filesystem::path& directory) {
+        const auto status = directory / L"result.txt";
+        if (!plainPath(status, false)) return false;
         const auto result = readSmallFile(status);
         DeleteFileW(status.c_str());
-        if (!result.empty()) QTimer::singleShot(0, this, [this, result] {
+        if (result.empty()) return false;
+        QTimer::singleShot(0, this, [this, result] {
             qInfo().noquote() << "[portable-update-result]" << QString::fromStdString(result).trimmed();
             if (result == "installed\n") emit notice(tr("Veyra 已更新"), false);
             else if (result == "windows-blocked\n") emit notice(tr("Windows 已阻止本次更新，请查看保护历史"), true);
+            else if (result == "install-in-progress\n") emit notice(tr("更新未完成，当前版本未改变"), true);
             else emit notice(tr("更新未完成，已打开可用版本"), true);
         });
+        return true;
+    };
+    const bool reported = plainPath(updates_, true) && reportResult(updates_);
+    if (stagedPackage(updates_, key_, flavor_, installed_, manifest_, package_)) {
+        scheduled_ = true;
+        return;
     }
-
-    const auto pending = updates_ / L"pending.json";
-    if (!plainPath(pending, false) || !plainPath(updates_ / L"download.zip", false)) return;
-    manifest_ = QByteArray::fromStdString(readSmallFile(pending, maxManifestBytes));
-    package_ = readUpdateManifest(manifest_, flavor_, installed_, {}, key_);
-    if (!package_) return;
-    std::error_code error;
-    scheduled_ = std::filesystem::file_size(updates_ / L"download.zip", error)
-        == static_cast<uintmax_t>(package_->archiveBytes) && !error;
-    if (!scheduled_) package_.reset();
+    const auto staging = userStaging(root_);
+    if (staging.empty() || !stagingDirectoryId(staging.parent_path(), staging)) return;
+    if (!reported) reportResult(staging);
+    if (!stagedPackage(staging, key_, flavor_, installed_, manifest_, package_)) return;
+    updates_ = staging;
+    elevate_ = true;
+    scheduled_ = true;
 }
 
 PortableUpdate::~PortableUpdate() {
@@ -219,19 +303,20 @@ void PortableUpdate::request(const QUrl& url, int buffer, int idleMs) {
 
 bool PortableUpdate::prepareDownloadDirectory() {
     const auto installUpdates = root_.empty() ? std::filesystem::path{} : root_ / updateFolder;
-    if (!elevate_ && !installUpdates.empty() && directoryAcceptsFiles(installUpdates)) {
+    if (!elevate_ && !installUpdates.empty() && directoryAcceptsFiles(installUpdates) && pathChainIsPlain(installUpdates)) {
         updates_ = installUpdates;
         return true;
     }
-    if (elevate_ && directoryAcceptsFiles(updates_) && stagingDirectoryId(updates_.parent_path(), updates_)) return true;
-    if (root_.empty() || !underProgramFiles(root_)) return false;
+    if (elevate_ && directoryAcceptsFiles(updates_) && pathChainIsPlain(updates_)
+        && stagingDirectoryId(updates_.parent_path(), updates_)) return true;
+    if (root_.empty() || !underProgramFiles(root_) || !pathChainIsPlain(root_)) return false;
     const auto staging = userStaging(root_);
     if (staging.empty()) return false;
     const auto base = staging.parent_path();
-    if (!plainPath(base.parent_path().parent_path(), true)) return false;
+    if (!pathChainIsPlain(base.parent_path().parent_path())) return false;
     if (!directoryAcceptsFiles(base.parent_path()) || !directoryAcceptsFiles(base) || !directoryAcceptsFiles(staging))
         return false;
-    if (!stagingDirectoryId(base, staging)) return false;
+    if (!pathChainIsPlain(staging) || !stagingDirectoryId(base, staging)) return false;
     updates_ = staging;
     elevate_ = true;
     qInfo().noquote() << "[portable-update] staging outside the install directory";
@@ -267,7 +352,8 @@ bool PortableUpdate::requestArchive(DownloadRoute route) {
     auto file = std::make_unique<QSaveFile>(pathString(updates_ / L"download.zip"));
     if (!file->open(QIODevice::WriteOnly)) return false;
     download_ = std::move(file);
-    hash_.reset();
+    if (!hasher_) hasher_ = std::make_unique<PortableArchiveHasher>();
+    hasher_->reset();
     received_ = 0;
     requestRoute_ = route;
     request(assetUrl(package_->version, package_->asset, route), 512 * 1024, 30000);
@@ -290,7 +376,7 @@ bool PortableUpdate::consume() {
     const auto chunk = reply_->readAll();
     if (chunk.size() > package_->archiveBytes - received_ || download_->write(chunk) != chunk.size()) return false;
     received_ += chunk.size();
-    hash_.addData(chunk);
+    if (hasher_) hasher_->add(chunk);
     if (progress() != oldProgress) emit changed();
     return true;
 }
@@ -317,7 +403,8 @@ void PortableUpdate::finish() {
         return;
     }
 
-    const bool verified = ok && received_ == package_->archiveBytes && hash_.result() == package_->digest;
+    const auto digest = hasher_ ? hasher_->result() : QByteArray();
+    const bool verified = ok && received_ == package_->archiveBytes && digest == package_->digest;
     if (!verified && !cancelled_ && requestRoute_ != DownloadRoute::GitHub) {
         download_->cancelWriting();
         download_.reset();
@@ -335,7 +422,7 @@ void PortableUpdate::finish() {
     download_.reset();
     if (scheduled_) {
         qInfo().noquote() << "[portable-update]" << package_->version << (elevate_ ? "staged" : "scheduled");
-        emit notice(tr("更新已校验，重启后安装"), false);
+        emit notice(elevate_ ? tr("更新已校验，授权后才会安装") : tr("更新已校验，点击后才会安装"), false);
     } else {
         discardDownload();
         if (!cancelled_) emit notice(tr("更新下载或校验失败，请重试"), true);
@@ -352,7 +439,7 @@ void PortableUpdate::discardDownload() {
 }
 
 void PortableUpdate::cancel() {
-    if (installing_) return;
+    if (installing_ || authorizing_) return;
     if (reply_) {
         cancelled_ = true;
         reply_->abort();
@@ -369,31 +456,61 @@ void PortableUpdate::cancel() {
     }
 }
 
+void PortableUpdate::waitForElevatedInstall() {
+    authorizing_ = false;
+    const HANDLE process = elevateWait_.handle();
+    if (!process) {
+        installing_ = false;
+        return;
+    }
+    elevateWait_.setEnabled(false);
+    WaitForSingleObject(process, INFINITE);
+    DWORD code = 1;
+    const bool read = GetExitCodeProcess(process, &code) != 0;
+    elevateWait_.setHandle(nullptr);
+    CloseHandle(process);
+    installing_ = false;
+    scheduled_ = false;
+    qInfo().noquote() << "[portable-update-elevated]" << (read ? int(code) : -1);
+}
+
 void PortableUpdate::beginElevatedInstall() {
-    if (!scheduled_ || installing_ || !elevate_ || worker_.empty() || root_.empty()) return;
-    if (!plainPath(worker_, false) || !plainPath(updates_, true) || !stagingDirectoryId(updates_.parent_path(), updates_)) {
+    if (!elevatedInstallMayStart(scheduled_, installing_, authorizing_, elevate_) || worker_.empty() || root_.empty()) return;
+    if (!plainPath(worker_, false) || !pathChainIsPlain(worker_) || !pathChainIsPlain(root_)
+        || !plainPath(updates_, true) || !pathChainIsPlain(updates_)
+        || !stagingDirectoryId(updates_.parent_path(), updates_)) {
         emit notice(tr("无法写入更新目录"), true);
         return;
     }
-    const auto file = worker_.native();
-    const auto parameters = quote(root_.native()) + L" " + quote(updates_.native());
-    SHELLEXECUTEINFOW request{};
-    request.cbSize = sizeof(request);
-    request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
-    request.lpVerb = L"runas";
-    request.lpFile = file.c_str();
-    request.lpParameters = parameters.c_str();
-    request.nShow = SW_SHOWNORMAL;
-    if (!ShellExecuteExW(&request) || !request.hProcess) {
-        const DWORD error = GetLastError();
-        qInfo().noquote() << "[portable-update-elevated] start" << int(error);
-        emit notice(error == ERROR_CANCELLED ? tr("已取消管理员授权") : tr("更新未完成，当前版本未改变"), true);
-        return;
-    }
-    installing_ = true;
-    elevateWait_.setHandle(request.hProcess);
-    elevateWait_.setEnabled(true);
+    authorizing_ = true;
     emit changed();
+    // Return to the event loop first so the UI can show the UAC wait. ShellExecuteEx
+    // itself blocks this thread until Windows closes the prompt.
+    QTimer::singleShot(0, this, [this] {
+        if (!authorizing_ || installing_ || !scheduled_) return;
+        const auto file = worker_.native();
+        const auto parameters = quote(root_.native()) + L" " + quote(updates_.native());
+        SHELLEXECUTEINFOW request{};
+        request.cbSize = sizeof(request);
+        request.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI;
+        request.lpVerb = L"runas";
+        request.lpFile = file.c_str();
+        request.lpParameters = parameters.c_str();
+        request.nShow = SW_SHOWNORMAL;
+        if (!ShellExecuteExW(&request) || !request.hProcess) {
+            authorizing_ = false;
+            const DWORD error = GetLastError();
+            qInfo().noquote() << "[portable-update-elevated] start" << int(error);
+            emit notice(error == ERROR_CANCELLED ? tr("已取消管理员授权") : tr("更新未完成，当前版本未改变"), true);
+            emit changed();
+            return;
+        }
+        authorizing_ = false;
+        installing_ = true;
+        elevateWait_.setHandle(request.hProcess);
+        elevateWait_.setEnabled(true);
+        emit changed();
+    });
 }
 
 } // namespace veyra::ui

@@ -24859,17 +24859,30 @@
    "ru": "Обновление установлено. Откройте Veyra снова после завершения экспорта."
   },
   {
-   "zh": "更新已校验，重启后安装",
+   "zh": "更新已校验，授权后才会安装",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "更新已驗證，重新啟動後安裝",
-   "en": "The update is verified. It installs when Veyra restarts.",
-   "ja": "更新の検証が完了しました。再起動時にインストールします。",
-   "ko": "업데이트를 검증했습니다. 다시 시작하면 설치됩니다.",
-   "es": "La actualización está verificada. Se instala al reiniciar Veyra.",
-   "fr": "La mise à jour est vérifiée. Elle s’installe au redémarrage de Veyra.",
-   "de": "Das Update ist geprüft. Es wird beim Neustart von Veyra installiert.",
-   "pt-BR": "A atualização foi verificada. Ela é instalada quando o Veyra reinicia.",
-   "ru": "Обновление проверено. Оно установится при перезапуске Veyra."
+   "zh-TW": "更新已驗證，授權後才會安裝",
+   "en": "The update is verified. It installs only after you approve the Windows prompt.",
+   "ja": "更新の検証が完了しました。Windows の確認を許可した後にだけインストールします。",
+   "ko": "업데이트를 검증했습니다. Windows 권한을 허용한 뒤에만 설치됩니다.",
+   "es": "La actualización está verificada. Se instala solo después de aprobar el aviso de Windows.",
+   "fr": "La mise à jour est vérifiée. Elle ne s’installe qu’après l’autorisation Windows.",
+   "de": "Das Update ist geprüft. Es wird erst nach der Windows-Bestätigung installiert.",
+   "pt-BR": "A atualização foi verificada. Ela só é instalada depois que você aprova o aviso do Windows.",
+   "ru": "Обновление проверено. Оно установится только после подтверждения запроса Windows."
+  },
+  {
+   "zh": "更新已校验，点击后才会安装",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "更新已驗證，點擊後才會安裝",
+   "en": "The update is verified. It installs only after you click install.",
+   "ja": "更新の検証が完了しました。インストールをクリックした後にだけインストールします。",
+   "ko": "업데이트를 검증했습니다. 설치를 클릭한 뒤에만 설치됩니다.",
+   "es": "La actualización está verificada. Se instala solo después de pulsar instalar.",
+   "fr": "La mise à jour est vérifiée. Elle ne s’installe qu’après un clic sur installer.",
+   "de": "Das Update ist geprüft. Es wird erst nach einem Klick auf Installieren installiert.",
+   "pt-BR": "A atualização foi verificada. Ela só é instalada depois que você clica em instalar.",
+   "ru": "Обновление проверено. Оно установится только после нажатия кнопки установки."
   },
   {
    "zh": "更新未完成，已打开可用版本",
@@ -27054,6 +27067,19 @@
    "de": "Das Setup der Kamerakomponenten läuft bereits.",
    "pt-BR": "A configuração do componente da câmara já está em execução. Espere por favor.",
    "ru": "Настройка компонентов камеры уже запущена."
+  },
+  {
+   "zh": "正在安装更新",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "正在安裝更新",
+   "en": "Installing the update",
+   "ja": "更新をインストールしています",
+   "ko": "업데이트를 설치하는 중",
+   "es": "Instalando la actualización",
+   "fr": "Installation de la mise à jour",
+   "de": "Update wird installiert",
+   "pt-BR": "Instalando a atualização",
+   "ru": "Установка обновления"
   },
   {
    "zh": "正在导出：{}张源帧 / {}张编码帧（{}）",

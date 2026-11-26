@@ -1,4 +1,5 @@
 #include "veyra/base/PortableUpdateManifest.h"
+#include "veyra/base/PortableInstallPolicy.h"
 #include "veyra/base/PortableLayout.h"
 
 #include <QJsonArray>
@@ -52,8 +53,12 @@ QUrl routedUrl(const QString& official, DownloadRoute route) {
 QByteArray updatePublicKey() { return QByteArray::fromHex(QByteArrayLiteral(VEYRA_UPDATE_PUBLIC_KEY)); }
 
 QString releaseVersion(const QString& displayVersion) {
-    const auto version = displayVersion.section(u'-', 0, 0);
-    return parseVersion(version.toStdString()) ? version : QString{};
+    // Same local rules as the update comparison: drop one resource ".0" or a
+    // hyphenated build label, then keep the canonical major.minor.patch text.
+    const auto numbers = releaseNumbers(displayVersion.toStdString(), true);
+    if (!numbers) return {};
+    return QString::number((*numbers)[0]) + QLatin1Char('.') + QString::number((*numbers)[1])
+        + QLatin1Char('.') + QString::number((*numbers)[2]);
 }
 
 std::optional<DownloadRoute> parseDownloadRoute(const QString& name) {
@@ -90,18 +95,23 @@ bool allowedRedirect(const QUrl& url) {
 #endif
 }
 
-bool allowedApiRedirect(const QUrl& url) {
-    if (!url.isValid() || !url.userInfo().isEmpty() || url.hasFragment()) return false;
+bool allowedApiRedirect(const QUrl& url, DownloadRoute route) {
+    if (!url.isValid() || !url.userInfo().isEmpty() || url.hasFragment() || url.hasQuery()) return false;
 #ifdef VEYRA_UPDATE_TEST_PORT
+    Q_UNUSED(route);
     return url.scheme() == QStringLiteral("http") && url.host() == QStringLiteral("127.0.0.1")
         && url.port() == VEYRA_UPDATE_TEST_PORT;
 #else
-    if (url.scheme() != QStringLiteral("https") || url.port(-1) != -1) return false;
-    const auto host = url.host();
-    // The version document is only accepted from GitHub's API or a mirror the
-    // user explicitly selected. Asset hosts are not API hosts.
-    return host == QStringLiteral("api.github.com") || host == QStringLiteral("gh-proxy.com")
-        || host == QStringLiteral("ghfast.top");
+    const auto scheme = url.scheme().toStdString();
+    const auto host = url.host().toStdString();
+    const auto path = url.path().toStdString();
+    const auto user = url.userInfo().toStdString();
+    const auto query = url.query(QUrl::FullyEncoded).toStdString();
+    const auto fragment = url.fragment(QUrl::FullyEncoded).toStdString();
+    const ApiRedirectView view{scheme, host, path, user, query, fragment, url.port(-1)};
+    const auto id = route == DownloadRoute::GhProxy ? DownloadRouteId::GhProxy
+        : route == DownloadRoute::GhFast ? DownloadRouteId::GhFast : DownloadRouteId::GitHub;
+    return allowedApiRedirectView(view, id);
 #endif
 }
 

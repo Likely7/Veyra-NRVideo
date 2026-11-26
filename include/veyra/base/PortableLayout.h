@@ -32,8 +32,27 @@ inline bool startupShouldRollback(bool launchFailed, unsigned long exitCode, uns
     return elapsedMs < 15000;
 }
 
+// Windows still opens CON, NUL, COM1, LPT1 and the same names with an extension
+// as devices. Compare the segment before the first dot, case-insensitively.
+inline bool reservedDeviceName(std::string_view part) {
+    const auto dot = part.find('.');
+    if (dot != std::string_view::npos) part = part.substr(0, dot);
+    if (part.empty() || part.size() > 7) return false;
+    char folded[8];
+    for (std::size_t i = 0; i < part.size(); ++i) {
+        const auto c = static_cast<unsigned char>(part[i]);
+        folded[i] = (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : static_cast<char>(c);
+    }
+    const std::string_view name(folded, part.size());
+    if (name == "con" || name == "prn" || name == "aux" || name == "nul"
+        || name == "conin$" || name == "conout$") return true;
+    return (name.starts_with("com") || name.starts_with("lpt")) && name.size() == 4
+        && name[3] >= '0' && name[3] <= '9';
+}
+
 // Zip members are relative, bounded path segments. Absolute paths, drive
-// prefixes, alternate streams and parent segments are rejected before extract.
+// prefixes, alternate streams, device names and parent segments are rejected
+// before extract.
 inline bool safeArchiveEntry(std::string_view name) {
     if (name.empty() || name.size() > 240 || name.find('\0') != std::string_view::npos) return false;
     if (name.back() == '/' || name.back() == '\\') name.remove_suffix(1);
@@ -43,7 +62,7 @@ inline bool safeArchiveEntry(std::string_view name) {
     while (begin < name.size()) {
         const auto end = name.find_first_of("/\\", begin);
         const auto part = name.substr(begin, end == std::string_view::npos ? std::string_view::npos : end - begin);
-        if (part.empty() || part == "." || part == ".." || part.size() > 120) return false;
+        if (part.empty() || part == "." || part == ".." || part.size() > 120 || reservedDeviceName(part)) return false;
         if (part.back() == ' ' || part.back() == '.') return false;
         for (const char raw : part) {
             const auto c = static_cast<unsigned char>(raw);
@@ -55,19 +74,40 @@ inline bool safeArchiveEntry(std::string_view name) {
     return true;
 }
 
-// The elevated worker may only read a directory we created under LocalAppData.
-inline bool stagingDirectoryId(const std::filesystem::path& base, const std::filesystem::path& staging) {
-    const auto relative = staging.lexically_normal().lexically_relative(base.lexically_normal());
-    if (relative.empty() || relative.is_absolute() || relative.has_parent_path()) return false;
-    const auto name = relative.wstring();
-    if (name.size() != 16) return false;
-    for (const wchar_t c : name)
-        if (!((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f'))) return false;
+inline bool equalWindowsPath(const std::filesystem::path& left, const std::filesystem::path& right) {
+    const auto a = left.wstring();
+    const auto b = right.wstring();
+    if (a.size() != b.size()) return false;
+    for (size_t i = 0; i < a.size(); ++i) {
+        wchar_t x = a[i], y = b[i];
+        if (x == L'/') x = L'\\';
+        if (y == L'/') y = L'\\';
+        if (x >= L'A' && x <= L'Z') x = static_cast<wchar_t>(x - L'A' + L'a');
+        if (y >= L'A' && y <= L'Z') y = static_cast<wchar_t>(y - L'A' + L'a');
+        if (x != y) return false;
+    }
     return true;
 }
 
-// WinVerifyTrust: a missing Authenticode signature is allowed because current
-// public builds are unsigned. A present but invalid signature is not.
+// The elevated worker may only read one directory we created under LocalAppData.
+// The parent comparison ignores case and slash direction because Windows paths do.
+inline bool stagingDirectoryId(const std::filesystem::path& base, const std::filesystem::path& staging) {
+    const auto child = staging.lexically_normal();
+    const auto root = base.lexically_normal();
+    const auto name = child.filename().wstring();
+    if (name.size() != 16) return false;
+    for (const wchar_t c : name)
+        if (!((c >= L'0' && c <= L'9') || (c >= L'a' && c <= L'f'))) return false;
+    if (equalWindowsPath(child.parent_path(), root)) return true;
+    const auto relative = child.lexically_relative(root);
+    return !relative.empty() && !relative.is_absolute() && !relative.has_parent_path()
+        && equalWindowsPath(relative, child.filename());
+}
+
+// WinVerifyTrust status helper. A missing Authenticode signature returns true
+// because current public builds are unsigned. That result is not authentication:
+// the elevated worker may run a file only after PortableInstallPolicy::elevatedFileMayRun
+// accepts it. A present but invalid signature is rejected, including TRUST_E_BAD_DIGEST.
 inline bool acceptAuthenticode(long status, unsigned long lastError) {
     constexpr long success = 0;
     constexpr long noSignature = static_cast<long>(0x800B0100L);

@@ -1476,7 +1476,7 @@ VPage {
                                 VButton {
                                     objectName: "check-for-updates"
                                     text: veyra.updates.checking ? qsTr("检查中…") : qsTr("检查")
-                                    enabled: !veyra.updates.checking && !root.portableUpdate.downloading && !root.portableUpdate.installing
+                                    enabled: !veyra.updates.checking && !root.portableUpdate.downloading && !root.portableUpdate.installing && !root.portableUpdate.authorizing
                                     onClicked: veyra.updates.check(true)
                                 }
                                 VButton {
@@ -1488,8 +1488,10 @@ VPage {
                         }
                         VRow {
                             visible: root.portableUpdate.available || root.portableUpdate.downloading || root.portableUpdate.scheduled || root.portableUpdate.installing
-                            label: root.portableUpdate.installing ? qsTr("正在等待系统授权")
-                                  : root.portableUpdate.scheduled ? qsTr("更新已校验，重启后安装")
+                            label: root.portableUpdate.authorizing ? qsTr("正在等待系统授权")
+                                  : root.portableUpdate.installing ? qsTr("正在安装更新")
+                                  : root.portableUpdate.scheduled
+                                      ? (root.portableUpdate.needsElevation ? qsTr("更新已校验，授权后才会安装") : qsTr("更新已校验，点击后才会安装"))
                                   : root.portableUpdate.downloading ? qsTr("正在下载更新 %1%").arg(root.portableUpdate.progress)
                                   : qsTr("便携版更新 · %1").arg(root.portableUpdate.sizeText)
                             hint: root.portableUpdate.releaseNotes.length > 0 ? root.portableUpdate.releaseNotes : veyra.updates.notesSummary
@@ -1498,7 +1500,7 @@ VPage {
                                 spacing: 6
                                 VButton {
                                     objectName: "portable-download"
-                                    enabled: !root.portableUpdate.installing
+                                    enabled: !root.portableUpdate.installing && !root.portableUpdate.authorizing
                                     text: root.portableUpdate.available ? qsTr("立即更新") : qsTr("取消更新")
                                     visible: !root.portableUpdate.scheduled || root.portableUpdate.downloading
                                     onClicked: {
@@ -1509,12 +1511,12 @@ VPage {
                                 VButton {
                                     objectName: "portable-install"
                                     visible: root.portableUpdate.scheduled && !root.portableUpdate.downloading
-                                    enabled: !root.portableUpdate.installing
+                                    enabled: !root.portableUpdate.installing && !root.portableUpdate.authorizing
                                     text: root.portableUpdate.needsElevation ? qsTr("允许系统授权并安装") : qsTr("重启并安装")
                                     onClicked: veyra.applyPreparedUpdate()
                                 }
                                 VButton {
-                                    visible: root.portableUpdate.scheduled && !root.portableUpdate.downloading && !root.portableUpdate.installing
+                                    visible: root.portableUpdate.scheduled && !root.portableUpdate.downloading && !root.portableUpdate.installing && !root.portableUpdate.authorizing
                                     text: qsTr("取消更新")
                                     onClicked: root.portableUpdate.cancel()
                                 }

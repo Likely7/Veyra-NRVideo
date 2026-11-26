@@ -29,7 +29,7 @@ std::optional<DownloadRoute> parseDownloadRoute(const QString& name);
 QUrl releaseApiUrl(DownloadRoute route = DownloadRoute::GitHub);
 QUrl assetUrl(const QString& version, const QString& asset, DownloadRoute route = DownloadRoute::GitHub);
 bool allowedRedirect(const QUrl& url);
-bool allowedApiRedirect(const QUrl& url);
+bool allowedApiRedirect(const QUrl& url, DownloadRoute route);
 QString packageAssetName(const QString& version, const QString& flavor);
 QString sanitizeReleaseNotes(const QString& body);
 // A GitHub asset digest is optional. When the release lists assets, an unlisted

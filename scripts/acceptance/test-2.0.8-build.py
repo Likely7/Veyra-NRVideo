@@ -58,7 +58,7 @@ targets=['veyra_qml_ui','veyra_xess_motion_contract_tests','veyra_xess_motion_qu
     'veyra_capture_color_tests','veyra_vfg_gpu_tests','veyra_fsr_dispatch_tests','veyra_qml_quick_tests',
     'veyra_playlist_tests','veyra_qml_data_tests','veyra_bitmap_subtitle_tests','veyra_subtitle_format_tests','veyra_capture_tests',
     # Added or changed by the branches merged for 2.0.8.
-    'veyra_update_checker_tests','veyra_realtime_preview_tests','veyra_screen_capture_tests','veyra_preview_geometry_tests',
+    'veyra_update_checker_tests','veyra_portable_update_rules_tests','veyra_portable_update_security_tests','veyra_realtime_preview_tests','veyra_screen_capture_tests','veyra_preview_geometry_tests',
     'veyra_experimental_backend_tests','veyra_remoteplay_boundary_tests','veyra_ui_i18n_tests','veyra_fg_presentation_tests']
 assert all(re.fullmatch(r'veyra_[a-z0-9_]+',target) for target in args.extra_target)
 targets=list(dict.fromkeys(targets+args.extra_target))

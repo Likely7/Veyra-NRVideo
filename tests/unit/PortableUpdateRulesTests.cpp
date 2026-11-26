@@ -1,3 +1,4 @@
+#include "veyra/base/PortableInstallPolicy.h"
 #include "veyra/base/PortableLayout.h"
 #include "veyra/base/PortableUpdateManifest.h"
 
@@ -100,6 +101,17 @@ private slots:
         QVERIFY(!safeArchiveEntry("foo:stream"));
         QVERIFY(!safeArchiveEntry("foo/./bar"));
         QVERIFY(!safeArchiveEntry(std::string(241, 'a')));
+        QVERIFY(!safeArchiveEntry("CON"));
+        QVERIFY(!safeArchiveEntry("versions/NUL.txt"));
+        QVERIFY(!safeArchiveEntry("foo/aux/bar.dll"));
+        QVERIFY(!safeArchiveEntry("LPT1"));
+        QVERIFY(safeArchiveEntry("versions/console.log"));
+        QVERIFY(safeArchiveEntry("versions/COM10.dll"));
+        QCOMPARE(releaseVersion(QStringLiteral("2.2.1")), QStringLiteral("2.2.1"));
+        QCOMPARE(releaseVersion(QStringLiteral("2.2.1.0")), QStringLiteral("2.2.1"));
+        QCOMPARE(releaseVersion(QStringLiteral("2.2.1-test-r2")), QStringLiteral("2.2.1"));
+        QVERIFY(releaseVersion(QStringLiteral("dev")).isEmpty());
+        QVERIFY(releaseVersion(QStringLiteral("2.2")).isEmpty());
         const std::filesystem::path base("C:/Users/a/AppData/Local/Veyra/update-staging");
         QVERIFY(stagingDirectoryId(base, base / "0123456789abcdef"));
         QVERIFY(!stagingDirectoryId(base, base / "0123456789ABCDEF"));
@@ -118,12 +130,45 @@ private slots:
         QVERIFY(!allowedRedirect(QUrl(QStringLiteral("https://objects.githubusercontent.com/a#frag"))));
         QVERIFY(!allowedRedirect(QUrl(QStringLiteral("https://objects.githubusercontent.com:443/a"))));
         QVERIFY(!allowedRedirect(QUrl(QStringLiteral("https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest"))));
-        QVERIFY(allowedApiRedirect(QUrl(QStringLiteral("https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest"))));
-        QVERIFY(allowedApiRedirect(QUrl(QStringLiteral("https://gh-proxy.com/https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest"))));
-        QVERIFY(allowedApiRedirect(QUrl(QStringLiteral("https://ghfast.top/https://api.github.com/x"))));
-        QVERIFY(!allowedApiRedirect(asset));
-        QVERIFY(!allowedApiRedirect(QUrl(QStringLiteral("https://evil.example/latest"))));
-        QVERIFY(!allowedApiRedirect(QUrl(QStringLiteral("http://api.github.com/repos/x"))));
+        const auto latest = QUrl(QStringLiteral("https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest"));
+        const auto proxy = QUrl(QStringLiteral("https://gh-proxy.com/https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest"));
+        const auto ghfast = QUrl(QStringLiteral("https://ghfast.top/https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest"));
+        QVERIFY(allowedApiRedirect(latest, DownloadRoute::GitHub));
+        QVERIFY(!allowedApiRedirect(proxy, DownloadRoute::GitHub));
+        QVERIFY(!allowedApiRedirect(ghfast, DownloadRoute::GitHub));
+        QVERIFY(!allowedApiRedirect(QUrl(QStringLiteral("https://ghfast.top/https://api.github.com/x")), DownloadRoute::GhFast));
+        QVERIFY(allowedApiRedirect(proxy, DownloadRoute::GhProxy));
+        QVERIFY(allowedApiRedirect(latest, DownloadRoute::GhProxy));
+        QVERIFY(!allowedApiRedirect(proxy, DownloadRoute::GhFast));
+        QVERIFY(allowedApiRedirect(ghfast, DownloadRoute::GhFast));
+        QVERIFY(allowedApiRedirect(latest, DownloadRoute::GhFast));
+        QVERIFY(!allowedApiRedirect(QUrl(QStringLiteral("https://gh-proxy.com/https://evil.example/releases/latest")), DownloadRoute::GhProxy));
+        QVERIFY(!allowedApiRedirect(QUrl(latest.toString() + QStringLiteral("?x=1")), DownloadRoute::GitHub));
+        QVERIFY(!allowedApiRedirect(asset, DownloadRoute::GitHub));
+        QVERIFY(!allowedApiRedirect(QUrl(QStringLiteral("https://evil.example/latest")), DownloadRoute::GitHub));
+        QVERIFY(!allowedApiRedirect(QUrl(QStringLiteral("http://api.github.com/repos/x")), DownloadRoute::GitHub));
+        QVERIFY(acceptableGitHubAssetName("Veyra-2.0.8-NVIDIA-win64-portable.zip"));
+        QVERIFY(!acceptableGitHubAssetName("../evil.zip"));
+        QVERIFY(!acceptableGitHubAssetName("Release Notes.txt"));
+        QVERIFY(elevatedFileMayRun(AuthenticodeClass::Absent, true, true));
+        QVERIFY(elevatedFileMayRun(AuthenticodeClass::Valid, true, true));
+        QVERIFY(!elevatedFileMayRun(AuthenticodeClass::Absent, false, true));
+        QVERIFY(!elevatedFileMayRun(AuthenticodeClass::Valid, true, false));
+        QVERIFY(!elevatedFileMayRun(AuthenticodeClass::Rejected, true, true));
+        const PlayerExitState quitElevated{0, true, false, true, true};
+        const PlayerExitState quitStaged{0, true, false, true, false};
+        const PlayerExitState quitWritable{0, true, false, false, false};
+        const PlayerExitState button{applyRestartExitCode, true, false, false, false};
+        const PlayerExitState buttonBusy{applyRestartExitCode, true, true, false, false};
+        QVERIFY(!launcherStartsWorker(launcherExitCode(quitElevated)));
+        QVERIFY(!launcherStartsWorker(launcherExitCode(quitStaged)));
+        QVERIFY(!launcherStartsWorker(launcherExitCode(quitWritable)));
+        QCOMPARE(launcherExitCode(button), applyRestartExitCode);
+        QVERIFY(!launcherStartsWorker(launcherExitCode(buttonBusy)));
+        QVERIFY(elevatedInstallMayStart(true, false, false, true));
+        QVERIFY(!elevatedInstallMayStart(true, true, false, true));
+        QVERIFY(!elevatedInstallMayStart(true, false, true, true));
+        QVERIFY(!elevatedInstallMayStart(true, false, false, false));
         const QByteArray hash(32, 'a');
         QVERIFY(publishedDigestAgrees(false, false, {}, hash));
         QVERIFY(!publishedDigestAgrees(true, false, {}, hash));

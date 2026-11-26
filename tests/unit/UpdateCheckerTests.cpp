@@ -73,11 +73,19 @@ private slots:
         QTest::newRow("overflow") << QStringLiteral("2.0.7") << release("v2.0.2147483648") << 200 << QStringLiteral("invalid-release");
         QTest::newRow("leading-zero") << QStringLiteral("2.0.7") << release("v2.0.01") << 200 << QStringLiteral("invalid-release");
         QTest::newRow("above-65535") << QStringLiteral("2.0.7") << release("v2.0.65536") << 200 << QStringLiteral("invalid-release");
+        // A name that cannot be a published file is ignored. It must not hide a
+        // real release, and it is not an installable asset name.
         QTest::newRow("asset-traversal") << QStringLiteral("2.0.7")
             << QByteArray("{\"tag_name\":\"v2.0.8\",\"draft\":false,\"prerelease\":false,"
                           "\"html_url\":\"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8\","
                           "\"assets\":[{\"name\":\"../evil.zip\"}]}")
-            << 200 << QStringLiteral("invalid-release");
+            << 200 << QStringLiteral("available");
+        QTest::newRow("odd-name-beside-real-asset") << QStringLiteral("2.0.7")
+            << QByteArray("{\"tag_name\":\"v2.0.8\",\"draft\":false,\"prerelease\":false,"
+                          "\"html_url\":\"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8\","
+                          "\"assets\":[{\"name\":\"Release Notes.txt\"},{\"name\":\"Veyra-portable-update-v1.json\","
+                          "\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]}")
+            << 200 << QStringLiteral("available");
         QTest::newRow("bad-digest") << QStringLiteral("2.0.7")
             << QByteArray("{\"tag_name\":\"v2.0.8\",\"draft\":false,\"prerelease\":false,"
                           "\"html_url\":\"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8\","

@@ -74,6 +74,7 @@
 #include "veyra/ui/ThumbnailProvider.h"
 #include "veyra/ui/UiLanguage.h"
 #include "veyra/ui/UpdateChecker.h"
+#include "veyra/base/PortableInstallPolicy.h"
 #include "veyra/base/PortableLayout.h"
 #include "ProfileInstance.h"
 
@@ -1178,7 +1179,13 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                 attempted = true;
                 updater->downloadAndSchedule();
             } else if (updater->scheduled()) {
-                QTimer::singleShot(200, window, &QWindow::close);
+                // The product installs only from the install button. This harness
+                // sends that request explicitly. applyExitCode installs without
+                // relaunching; a normal window close must not install.
+                QTimer::singleShot(200, window, [updater] {
+                    if (updater->needsElevation()) updater->beginElevatedInstall();
+                    else QCoreApplication::exit(portable::applyExitCode);
+                });
             }
         });
         QTimer::singleShot(100000, window, &QWindow::close);
@@ -1385,13 +1392,20 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             else if (QFileInfo::exists(target) || media::networkMediaInput(target.toStdWString())) bridge.openPath(target);
         });
     });
-    const int rc = app.exec();
+    int rc = app.exec();
     profileInstance.stopListening();
     if (updateProbe) veyra::log::info("portable-update-probe", "QML startup completed");
-    if (rc == portable::applyRestartExitCode && !(updater->scheduled() && !bridge.exportRunning())) rc = 0;
-    if ((rc == 0 || rc == portable::applyRestartExitCode) && updater->scheduled() && !bridge.exportRunning()) {
+    // Captured before the wait: a finished elevated worker clears installing_.
+    // NeedsElevation stays set for a package that is only in the user staging
+    // directory, so a normal quit must not start the launcher's root worker.
+    const portable::PlayerExitState exitState{
+        rc, updater->scheduled(), bridge.exportRunning(), updater->needsElevation(),
+        updater->installing() || updater->authorizing()};
+    if (updater->installing() || updater->authorizing()) updater->waitForElevatedInstall();
+    rc = portable::launcherExitCode(exitState);
+    if (rc == portable::applyExitCode || rc == portable::applyRestartExitCode) {
         if (g_video) { DestroyWindow(g_video); g_video = nullptr; }
-        return rc == portable::applyRestartExitCode ? portable::applyRestartExitCode : portable::applyExitCode;
+        return rc;
     }
     if (rc == 42) {
         if (args.contains(QStringLiteral("--managed-portable"))) {
