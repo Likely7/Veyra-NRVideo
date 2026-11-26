@@ -52,6 +52,40 @@ ColumnLayout {
                 onPicked: id => veyra.aspectMode = Number(id)
             }
         }
+
+        VRow {
+            visible: veyra.aspectMode === 7
+            label: "Center preservation"
+            value: veyra.adaptivePreservation + "%"
+            VSlider {
+                objectName: "adaptive-preservation"
+                implicitWidth: 120
+                valueFromModel: true
+                resettable: true
+                defaultValue: 87
+                from: 0
+                to: 100
+                value: veyra.adaptivePreservation
+                onMoved: value => veyra.adaptivePreservation = Math.round(value)
+            }
+        }
+
+        VRow {
+            visible: veyra.aspectMode === 7
+            label: "Adaptive zoom"
+            value: veyra.adaptiveZoom + "%"
+            VSlider {
+                objectName: "adaptive-zoom"
+                implicitWidth: 120
+                valueFromModel: true
+                resettable: true
+                defaultValue: 0
+                from: 0
+                to: 15
+                value: veyra.adaptiveZoom
+                onMoved: value => veyra.adaptiveZoom = Math.round(value)
+            }
+        }
         VRow {
             label: qsTr("强制 SDR 预览")
             hint: qsTr("HDR 片源也按 SDR 显示；与采集卡的“转为 SDR 显示”是同一设置")

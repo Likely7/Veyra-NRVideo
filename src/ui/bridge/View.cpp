@@ -340,6 +340,44 @@ void QmlPlayerBridge::setAspectMode(int value) {
     applyAspect(true);
     emit compareChanged();
 }
+int QmlPlayerBridge::adaptivePreservation() const {
+    return impl_->adaptivePreservation;
+}
+
+void QmlPlayerBridge::setAdaptivePreservation(int value) {
+    value = std::clamp(value, 0, 100);
+    if (impl_->adaptivePreservation == value) return;
+
+    impl_->adaptivePreservation = value;
+    impl_->prefs[QStringLiteral("adaptivePreservation")] = value;
+
+    auto view = impl_->engine.previewView();
+    view.adaptivePreservation = value;
+    impl_->engine.previewView(view);
+
+    impl_->savePrefs();
+    emit compareChanged();
+}
+
+int QmlPlayerBridge::adaptiveZoom() const {
+    return impl_->adaptiveZoom;
+}
+
+void QmlPlayerBridge::setAdaptiveZoom(int value) {
+    value = std::clamp(value, 0, 15);
+    if (impl_->adaptiveZoom == value) return;
+
+    impl_->adaptiveZoom = value;
+    impl_->prefs[QStringLiteral("adaptiveZoom")] = value;
+
+    auto view = impl_->engine.previewView();
+    view.adaptiveZoom = value;
+    impl_->engine.previewView(view);
+
+    impl_->savePrefs();
+    emit compareChanged();
+}
+
 void QmlPlayerBridge::applyAspect(bool force) {
     auto& i = *impl_;
     const int mode = i.screenCropPreview ? 0 : i.screenFillActive ? 2 : i.aspectMode;
@@ -352,6 +390,8 @@ void QmlPlayerBridge::applyAspect(bool force) {
     i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode; i.screenFitAspect = dar;
     auto view=force||i.screenCropPreview?engine::PreviewView{}:i.engine.previewView();
     view.mode=mode;
+    view.adaptivePreservation=i.adaptivePreservation;
+    view.adaptiveZoom=i.adaptiveZoom;
     view.displayAspect=dar>0&&image.height()>0&&std::abs(dar-double(image.width())/image.height())>.001?dar:0;
     i.engine.previewView(view);
     veyra::log::info("ui-aspect", std::format("mode={} zoom={:.3f} dar={:.4f} client={}x{} image={}x{}",mode,view.zoom,dar,

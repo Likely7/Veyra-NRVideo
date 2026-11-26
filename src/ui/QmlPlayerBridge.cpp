@@ -355,6 +355,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         }
         if (pr.valid()) impl_->engine.requestPresentation(pr);
         impl_->aspectMode = std::clamp(impl_->prefs.value(QStringLiteral("aspect")).toInt(), 0, 7);
+        impl_->adaptivePreservation = std::clamp(impl_->prefs.value(QStringLiteral("adaptivePreservation"), 87).toInt(), 0, 100);
+        impl_->adaptiveZoom = std::clamp(impl_->prefs.value(QStringLiteral("adaptiveZoom"), 0).toInt(), 0, 15);
     }
     impl_->sessionSaveTimer = new QTimer(this);
     impl_->sessionSaveTimer->setSingleShot(true);

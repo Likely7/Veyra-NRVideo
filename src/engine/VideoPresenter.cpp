@@ -467,7 +467,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         const float stretch = targetAspect / sourceAspect;
 
         if(stretch > 1.0f){
-            dims[14] = 0.87f * (1.0f - 1.0f / stretch);
+            dims[14] = (float(std::clamp(view.adaptivePreservation,0,100))/100.0f) * (1.0f - 1.0f / stretch);
             dims[15] = 1.0f;
         }
     }
