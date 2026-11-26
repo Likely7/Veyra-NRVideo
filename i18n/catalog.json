@@ -8958,6 +8958,19 @@
    "ru": "Разрешить разрывы кадра"
   },
   {
+   "zh": "允许浏览器扩展通过本机端口 18765 把网页视频交给 Veyra 播放；关闭时扩展改用 veyra:// 链接打开",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "允許瀏覽器擴充功能透過本機連接埠 18765 把網頁影片交給 Veyra 播放；關閉時擴充功能改用 veyra:// 連結開啟",
+   "en": "Lets the browser extension hand web videos to Veyra through local port 18765; when off, the extension opens a veyra:// link instead",
+   "ja": "ブラウザー拡張機能がローカルポート 18765 経由で Web 動画を Veyra に渡せるようにします。オフのときは veyra:// リンクで開きます",
+   "ko": "브라우저 확장이 로컬 포트 18765를 통해 웹 동영상을 Veyra로 보내도록 허용합니다. 끄면 확장이 veyra:// 링크로 엽니다",
+   "es": "Permite que la extensión del navegador envíe vídeos web a Veyra por el puerto local 18765; si está desactivado, la extensión abre un enlace veyra://",
+   "fr": "Permet à l'extension du navigateur d'envoyer les vidéos web à Veyra via le port local 18765 ; désactivé, l'extension ouvre un lien veyra://",
+   "de": "Erlaubt der Browsererweiterung, Webvideos über den lokalen Port 18765 an Veyra zu übergeben; ausgeschaltet öffnet die Erweiterung stattdessen einen veyra://-Link",
+   "pt-BR": "Permite que a extensão do navegador envie vídeos da web ao Veyra pela porta local 18765; desligado, a extensão abre um link veyra://",
+   "ru": "Позволяет расширению браузера передавать веб-видео в Veyra через локальный порт 18765; если выключено, расширение открывает ссылку veyra://"
+  },
+  {
    "zh": "先从补帧输入去掉准心，再贴回增强后的准心。动态准心或第三人称游戏可在剔除面板画紧一点的框。",
    "src": "qml/HudProtectControl.qml",
    "zh-TW": "先從補幀輸入移除準心，再貼回增強後的準心。動態準心或第三人稱遊戲可在排除面板畫緊一點的框。",
@@ -28172,6 +28185,19 @@
    "de": "Hellgrün",
    "pt-BR": "Verde-claro",
    "ru": "Светло-зелёный"
+  },
+  {
+   "zh": "浏览器扩展连接",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "瀏覽器擴充功能連線",
+   "en": "Browser extension bridge",
+   "ja": "ブラウザー拡張機能との連携",
+   "ko": "브라우저 확장 연결",
+   "es": "Conexión con la extensión del navegador",
+   "fr": "Connexion à l'extension du navigateur",
+   "de": "Browsererweiterung verbinden",
+   "pt-BR": "Conexão com a extensão do navegador",
+   "ru": "Связь с расширением браузера"
   },
   {
    "zh": "深黑底上的极轻渐变与抖动（防色带）",

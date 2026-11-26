@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "veyra/pipeline/LmxxfNrBackend.h"
+#include "veyra/RuntimePaths.h"
 #include "veyra/Log.h"
 #include "veyra/gfx/GpuSchedulingPriority.h"
 #include "veyra/pipeline/AmdHipPreflight.h"
@@ -26,7 +27,7 @@ bool LmxxfNrBackend::open(const std::filesystem::path& directory, ID3D12Device* 
     }
     const auto path = directory / (performance ? L"LmxxfNrRuntime.dll" : L"LmxxfNrRuntime-Original.dll");
     module_ = LoadLibraryExW(path.c_str(), nullptr, LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (!module_) { error_ = std::format("{} load failed win32={}", path.filename().string(), GetLastError()); log::error("amd-nr", error_); return false; }
+    if (!module_) { error_ = std::format("{} load failed win32={}", veyra::runtime::pathUtf8(path.filename()), GetLastError()); log::error("amd-nr", error_); return false; }
     const auto modelMode = reinterpret_cast<uint32_t (*)()>(GetProcAddress(module_, "VeyraLmxxfModelMode"));
     const auto assetsReady = reinterpret_cast<uint32_t (*)(const wchar_t*)>(GetProcAddress(module_, "VeyraLmxxfModelAssetsReady"));
     const auto controlsCompatible = reinterpret_cast<uint32_t (*)()>(GetProcAddress(module_, "VeyraLmxxfControlsCompatible"));

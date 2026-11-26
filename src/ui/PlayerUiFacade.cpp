@@ -64,6 +64,7 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.capture == b.capture && a.image == b.image && a.captureRecovering == b.captureRecovering &&
         a.captureReconnectAttempts == b.captureReconnectAttempts && a.captureDriverWaitMs == b.captureDriverWaitMs &&
         a.playbackRate == b.playbackRate && a.vramRunawayMiB == b.vramRunawayMiB && a.vramFullscreenUnsafe == b.vramFullscreenUnsafe &&
+        a.hudLockState == b.hudLockState && a.dynamicHudState == b.dynamicHudState && a.dlssgLiteState == b.dlssgLiteState &&
         a.metrics.resolution.base.width == b.metrics.resolution.base.width &&
         a.metrics.resolution.base.height == b.metrics.resolution.base.height &&
         a.metrics.resolution.nr.width == b.metrics.resolution.nr.width &&

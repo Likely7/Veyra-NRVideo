@@ -342,7 +342,7 @@ void ScreenTextCapture::State::run(){
         std::error_code ec;
         debugDir=runtime::logsDirectory()/L"screen-text";
         std::filesystem::create_directories(debugDir,ec);
-        log::info("screen-text",std::format("diagnostics on: words of every read and area images in {}",debugDir.string()));
+        log::info("screen-text",std::format("diagnostics on: words of every read and area images in {}",veyra::runtime::pathUtf8(debugDir)));
     }
     while(!shutdown.load()){
         HANDLE events[2]={wake,gpuDone};

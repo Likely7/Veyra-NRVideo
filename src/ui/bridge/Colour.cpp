@@ -506,6 +506,10 @@ bool QmlPlayerBridge::doviFollowAverage()const{return settings().doviFollowAvera
 
 void QmlPlayerBridge::setDoviFollowAverage(bool on){
     auto s=settings();if(s.doviFollowAverage==on)return;s.doviFollowAverage=on;
+    // A viewing preference beside the follow flag: kept across restarts the same way.
+    auto& i=*impl_;
+    i.prefs[QStringLiteral("doviFollowAverage")]=on;
+    if(!i.savePrefs())veyra::log::warn("ui-prefs","dolby vision follow-average flag not saved");
     commitHdrTuning(std::move(s));}
 // Danmaku rides the same per-frame tick as the subtitle overlay: it reads the
 // engine's own position, so pause, seek and speed changes need no extra wiring.

@@ -1537,7 +1537,8 @@ VPage {
                         objectName: "node-hold-tolerance"
                         implicitWidth: 110
                         valueFromModel: true
-                        from: 0; to: 1; inputScale: 100
+                        // Same range as the list page (ProPage list-hold-tolerance).
+                        from: 0.005; to: 0.10; inputScale: 100
                         value: veyra.nrStabilizerState.tolerance
                         onMoved: value=>veyra.setStabilizerParameter(card.node.index,"tolerance",value)
                     }

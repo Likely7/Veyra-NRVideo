@@ -61,6 +61,11 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
         // Source-normalized regions are mapped to this padded tile. Halo exceeds
         // the maximum feather, so clipping at tile edges cannot alter core pixels.
         engine::EnhancementSettings tileSettings;tileSettings.nr=desc.enableNr;tileSettings.model=desc.model;tileSettings.residual=desc.residual;tileSettings.protection=desc.protection;tileSettings.exclusion=desc.exclusion;
+        // Everything the graph was built with must come back unchanged, or
+        // applySettings refuses the tile (an NR runtime other than the default,
+        // NR stabilisation, a non-default HDR output mode).
+        tileSettings.nrRuntime=desc.nrRuntime;tileSettings.nrTemporal=desc.nrTemporal;tileSettings.nrAntiFlicker=desc.nrAntiFlicker;
+        tileSettings.nrMotion=desc.nrMotion;tileSettings.hdrOutputMode=desc.hdrOutputMode;
         // Protection is tile-local; grading remains the same ordered chain as
         // the full image. Default colour settings would reject an enabled grade
         // (or a nonempty additional chain) before the first tile is processed.

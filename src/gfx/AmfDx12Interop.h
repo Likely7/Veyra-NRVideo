@@ -2,6 +2,7 @@
 #pragma once
 
 #include "veyra/Log.h"
+#include "veyra/RuntimePaths.h"
 
 #include <windows.h>
 #include <d3d12.h>
@@ -40,7 +41,7 @@ inline const Runtime& runtime() {
         r.systemCompiler = compiler && std::filesystem::equivalent(std::filesystem::path(compilerPath).parent_path(), systemPath, ec);
         if (!r.systemCompiler)
             log::warn("amf", "d3dcompiler_47.dll is not the system copy; AMF kernels may fail to load: " +
-                      std::filesystem::path(compilerPath).string());
+                      veyra::runtime::pathUtf8(std::filesystem::path(compilerPath)));
         // Only the driver's copy in System32, never one next to the program.
         HMODULE module = LoadLibraryExW(AMF_DLL_NAME, nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!module) { log::warn("amf", std::format("AMF runtime not loaded err={}", GetLastError())); return; }

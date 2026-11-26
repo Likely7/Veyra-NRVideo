@@ -77,13 +77,21 @@ void fsrMessage(uint32_t type, const wchar_t* message) {
 // so the provider DLL is pre-loaded by absolute path and the legacy DLL
 // directory is pointed at the same folder for the duration of the calls.
 struct DirectoryGuard {
-    wchar_t previous[MAX_PATH]{};
-    DWORD previousLength = 0;
+    // Sized from the API, not MAX_PATH: a longer previous directory would
+    // otherwise be restored from an unfilled buffer.
+    std::wstring previous;
+    bool hadPrevious = false;
     DirectoryGuard(const std::filesystem::path& directory) {
-        previousLength = GetDllDirectoryW(MAX_PATH, previous);
+        const DWORD needed = GetDllDirectoryW(0, nullptr);
+        if (needed > 1) {
+            previous.resize(needed);
+            const DWORD length = GetDllDirectoryW(needed, previous.data());
+            hadPrevious = length > 0 && length < needed;
+            previous.resize(hadPrevious ? length : 0);
+        }
         SetDllDirectoryW(directory.c_str());
     }
-    ~DirectoryGuard() { SetDllDirectoryW(previousLength > 0 ? previous : nullptr); }
+    ~DirectoryGuard() { SetDllDirectoryW(hadPrevious ? previous.c_str() : nullptr); }
 };
 
 } // namespace
@@ -117,7 +125,7 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
     const auto loaderPath = std::filesystem::absolute(root / "amd_fidelityfx_loader_dx12.dll");
     const auto providerPath = std::filesystem::absolute(root / "amd_fidelityfx_upscaler_dx12.dll");
     if (!std::filesystem::exists(loaderPath)) {
-        log::warn("fsr-sr", std::format("loader missing at {}", loaderPath.string()));
+        log::warn("fsr-sr", std::format("loader missing at {}", veyra::runtime::pathUtf8(loaderPath)));
         return false;
     }
     DirectoryGuard guard(root);

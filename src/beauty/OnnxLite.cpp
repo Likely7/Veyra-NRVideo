@@ -1,4 +1,5 @@
 #include "veyra/beauty/OnnxLite.h"
+#include "veyra/RuntimePaths.h"
 
 #include <cstring>
 #include <fstream>
@@ -259,7 +260,7 @@ bool parseOnnx(const std::vector<uint8_t>& bytes, OnnxModel& model, std::string&
 bool readFileBytes(const std::filesystem::path& path, std::vector<uint8_t>& bytes, std::string& error)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file) { error = "cannot open " + path.string(); return false; }
+    if (!file) { error = "cannot open " + veyra::runtime::pathUtf8(path); return false; }
     const std::streamsize size = file.tellg();
     if (size <= 0 || size > (256ll << 20)) { error = "unexpected model size"; return false; }
     bytes.resize(size_t(size));

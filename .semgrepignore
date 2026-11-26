@@ -1,0 +1,24 @@
+# Opengrep / Semgrep: paths that never ship in the application.
+# A .semgrepignore replaces the tool's built-in list, so that list is repeated here.
+:include .gitignore
+node_modules/
+build/
+dist/
+vendor/
+.env/
+.venv/
+.tox/
+*.min.js
+.npm/
+.yarn/
+test/
+tests/
+*_test.go
+.semgrep
+.semgrep_logs/
+
+# prototypes/ is the archived HTML design board. It is kept because
+# tools/qt_probe/make-icons.py generates qml/Veyra/IconData.js from its icons.js
+# (see THIRD_PARTY_NOTICES.md); its innerHTML use never runs inside Veyra.
+prototypes/
+graphify-out/

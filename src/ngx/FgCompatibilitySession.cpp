@@ -3,6 +3,7 @@
 // 33b41835dc39c5d8ab1ef93efb2449be31139c09. Veyra directly owns the
 // D3D12 buffers and NGX calls; no wrapper hooks or Streamline are used.
 #include "veyra/ngx/FgCompatibilitySession.h"
+#include "veyra/RuntimePaths.h"
 #include "veyra/ngx/AdaMfgUnlock.h"
 #include "veyra/ngx/AmpereMfgUnlock.h"
 #include "veyra/ngx/DlssgTransfusion.h"
@@ -117,7 +118,7 @@ bool FgCompatibilitySession::open(ID3D12Device* device,uint32_t vendor,uint32_t 
     FileIdentity identity;IdentityError error;
     computeFileIdentity(path.wstring(),identity,error);
     log::info("fg-compat",std::format("provider path={} sha256={} bytes={} generation={} LUID={:08X}:{:08X} adapter=0x{:04X}",
-        path.string(),identity.sha256Upper,identity.sizeBytes,s.serial,uint32_t(device->GetAdapterLuid().HighPart),device->GetAdapterLuid().LowPart,deviceId));
+        veyra::runtime::pathUtf8(path),identity.sha256Upper,identity.sizeBytes,s.serial,uint32_t(device->GetAdapterLuid().HighPart),device->GetAdapterLuid().LowPart,deviceId));
     s.transfusion=DlssgTransfusion::moduleIsKnown(identity.sizeBytes,identity.sha256Upper);
     if(identity.sha256Upper!=AdaMfgUnlock::kKnownModuleSha256&&!s.transfusion)return false;
     s.provider=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
@@ -205,7 +206,7 @@ bool FgCompatibilitySession::prepareDriver(const std::wstring& directory,const c
         const auto m=compat::FindPattern(image,ampere_patterns::kAmpereNgxMetadataPattern.data(),ampere_patterns::kAmpereNgxMetadataPatternMask.data(),ampere_patterns::kAmpereNgxMetadataPattern.size(),ampere_patterns::kAmpereNgxMetadataBranchOffset);
         const auto v=compat::FindCreateValidation(image,uintptr_t(create));
         wchar_t path[32768]{};GetModuleFileNameW(module,path,32768);
-        log::info("fg-compat",std::format("driver discovery path={} base=0x{:X} metadataRva=0x{:X} validationRva=0x{:X}",std::filesystem::path(path).string(),image.base,m?m-image.base:0,v?v-image.base:0));
+        log::info("fg-compat",std::format("driver discovery path={} base=0x{:X} metadataRva=0x{:X} validationRva=0x{:X}",veyra::runtime::pathUtf8(std::filesystem::path(path)),image.base,m?m-image.base:0,v?v-image.base:0));
         if(!m||!v)continue;
         if(s.driver)return false;
         if(!GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,reinterpret_cast<LPCWSTR>(module),&s.driver)||s.driver!=module)return false;

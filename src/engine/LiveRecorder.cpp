@@ -472,6 +472,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     };
     std::array<Slot,kSlots> slots;
     int pending=-1;
+    D3D12_RESOURCE_STATES pendingY=D3D12_RESOURCE_STATE_COMMON,pendingUV=D3D12_RESOURCE_STATE_COMMON;
     std::atomic<int64_t> t0Us{0};               // recording clock of the first frame
     int64_t lastPtsUs=-1;
     std::atomic<uint64_t> frames{0},dropped{0};
@@ -618,6 +619,8 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         D3D12_SHADER_RESOURCE_VIEW_DESC view{};view.Format=frame.format;view.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         view.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;view.Texture2D.MipLevels=1;
         stager.stageSrv(frame.texture,&view,convert.heap.Get(),UINT(index));
+        // Restored by discardPending(): a list that is never submitted leaves y/uv as they were.
+        pendingY=states.get(y.Get());pendingUV=states.get(uv.Get());
         D3D12_RESOURCE_BARRIER source{};source.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;source.Transition.pResource=frame.texture;
         source.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         source.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;source.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
@@ -672,6 +675,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     }
     void discardPending(){
         if(pending<0)return;
+        states.set(y.Get(),pendingY);states.set(uv.Get(),pendingUV);
         slots[size_t(pending)].state=0;pending=-1;
         if(closing.load())closeJobs();
     }

@@ -221,7 +221,9 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
                                    "subtitleSecondLanguage", "audioForceStereo", "captureAudioMonitor", "captureHdmiPassthrough", "holdCompare",
                                    "magewellLowLatency", "blackmagicNativeCapture", "captureShowAllFrameRates", "cinePillHidden", "exportStopsPlayback", "obsGameCapture", "autoResume", "fullscreenMemoryProtection", "prewarmEnhancement", "hdrFgCompatibility", "computeOnMonitorGpu", "deinterlace", "networkAutoReconnect",
                                    // 设置 → 外观 → 启动动画 / 启动音乐 / 剔除遮罩（2.1.9）
-                                   "introAnimation", "introMusic", "exclusionOverlay", "fullscreenFrameStats"};
+                                   "introAnimation", "introMusic", "exclusionOverlay", "fullscreenFrameStats",
+                                   // 浏览器扩展连接：本机 127.0.0.1:18765，默认关闭（2026-11-24 审计 A3）
+                                   "browserExtensionBridge"};
     QVariant stored;
     if (ranges.contains(key)) {
         bool ok = false; const int n = value.toInt(&ok);

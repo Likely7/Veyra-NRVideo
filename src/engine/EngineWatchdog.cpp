@@ -1,4 +1,5 @@
 #include "veyra/engine/EngineWatchdog.h"
+#include "veyra/RuntimePaths.h"
 
 #include <windows.h>
 #include <vector>
@@ -55,7 +56,10 @@ __declspec(noinline) void unwindSuspended(CONTEXT* context, StackSample* out) {
         while (out->count < kMaxFrames && context->Rip) {
             out->pc[out->count++] = context->Rip;
             DWORD64 imageBase = 0;
-            const PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(context->Rip, &imageBase, nullptr);
+            // Past the first frame Rip is a return address, which can already lie in the
+            // next function when a call ends its caller: look up the call instruction.
+            const DWORD64 lookup = out->count > 1 ? context->Rip - 1 : context->Rip;
+            const PRUNTIME_FUNCTION function = RtlLookupFunctionEntry(lookup, &imageBase, nullptr);
             if (function) {
                 PVOID handlerData = nullptr; DWORD64 establisherFrame = 0;
                 RtlVirtualUnwind(UNW_FLAG_NHANDLER, imageBase, context->Rip, function, context, &handlerData, &establisherFrame, nullptr);
@@ -120,7 +124,7 @@ std::string describe(uintptr_t pc) {
     wchar_t path[MAX_PATH]{};
     GetModuleFileNameW(module, path, MAX_PATH);
     const uintptr_t rva = pc - reinterpret_cast<uintptr_t>(module);
-    std::string text = std::format("module={} rva=0x{:X}", std::filesystem::path(path).filename().string(), rva);
+    std::string text = std::format("module={} rva=0x{:X}", veyra::runtime::pathUtf8(std::filesystem::path(path).filename()), rva);
     char name[128]{}; uintptr_t offset = 0;
     if (nearestExport(reinterpret_cast<const uint8_t*>(module), rva, name, sizeof(name), &offset))
         text += std::format(" near={}+0x{:X}", name, offset);
@@ -160,7 +164,7 @@ bool writeDump(const char* category, bool captureDriver) {
     LARGE_INTEGER bytes{};
     GetFileSizeEx(file, &bytes);
     CloseHandle(file);
-    log::error(category, std::format("minidump written={} file={} bytes={}", ok != FALSE, path.filename().string(), bytes.QuadPart));
+    log::error(category, std::format("minidump written={} file={} bytes={}", ok != FALSE, veyra::runtime::pathUtf8(path.filename()), bytes.QuadPart));
     if (!ok) DeleteFileW(path.c_str());
     return ok != FALSE;
 }

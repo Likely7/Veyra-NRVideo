@@ -73,7 +73,7 @@ bool loadDxil(const char* name, std::vector<uint8_t>& bytes)
     const auto path = runtime::shaderDirectory() / name;
     FILE* f = nullptr;
     if (_wfopen_s(&f, path.c_str(), L"rb") != 0 || !f) {
-        log::error("beauty-detect", std::format("shader missing: {}", path.string()));
+        log::error("beauty-detect", std::format("shader missing: {}", veyra::runtime::pathUtf8(path)));
         return false;
     }
     fseek(f, 0, SEEK_END);

@@ -436,7 +436,12 @@ bool OutputPin::AllocateBuffers(IPin *target, bool connecting)
 	int cy = vih->bmiHeader.biHeight;
 
 	WORD bits = VFormatBits(curVFormat);
-	bufSize = cx * cy * bits / 8;
+	/* Veyra 2026-11-24: the consumer chooses cx/cy; size them in 64 bits and
+	   refuse what a sample buffer (long) cannot hold. */
+	const long long bytes = (long long)cx * cy * bits / 8;
+	if (cx <= 0 || cy <= 0 || bytes <= 0 || bytes > 0x7fffffffLL)
+		return false;
+	bufSize = (size_t)bytes;
 
 	ALLOCATOR_PROPERTIES props;
 
@@ -454,7 +459,7 @@ bool OutputPin::AllocateBuffers(IPin *target, bool connecting)
 
 	ALLOCATOR_PROPERTIES actual;
 	hr = allocator->SetProperties(&props, &actual);
-	if (FAILED(hr))
+	if (FAILED(hr) || actual.cbBuffer < (long)bufSize)
 		return false;
 
 	if (!connecting && FAILED(allocator->Commit())) {
@@ -540,6 +545,9 @@ bool OutputPin::LockSampleData(unsigned char **ptr)
 
 	hr = allocator->GetBuffer(&sample, nullptr, nullptr, 0);
 	if (FAILED(hr))
+		return false;
+	/* Veyra: the frame is written at the full format size. */
+	if (sample->GetSize() < (long)bufSize)
 		return false;
 
 	if (FAILED(sample->SetActualDataLength((long)bufSize)))

@@ -9,26 +9,35 @@ on:
     - cron: "0 0 * * 0"
   workflow_dispatch:
 
-permissions:
-  contents: write
+# Nothing by default; only the one job that commits the chart may write.
+permissions: {}
 
 jobs:
   star-history:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v7
+      # Actions pinned to full commit SHAs (tag in the comment) so a moved tag
+      # cannot run new code with this job's write token.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
 
       - name: Generate Star History
-        uses: kitswas/generate-star-history@v1
+        uses: kitswas/generate-star-history@491df1a1231698cadab852bf8198cedce67c5f75 # v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           output-path: "assets/star-history.svg"
           theme: "auto"
 
       - name: Commit chart
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add assets/star-history.svg
-          git diff --staged --quiet || git commit -m "chore: update star history chart [skip ci]"
-          git push
+          if git diff --staged --quiet; then exit 0; fi
+          git commit -m "chore: update star history chart [skip ci]"
+          git push "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:${GITHUB_REF_NAME}"

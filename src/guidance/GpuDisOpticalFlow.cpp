@@ -29,7 +29,7 @@ GpuDisOpticalFlow::~GpuDisOpticalFlow()=default;
 bool GpuDisOpticalFlow::initialize(ID3D12Device* device,uint32_t w,uint32_t h){
     auto& p=*p_;p.device=device;p.w=w;p.h=h;
     if(!device||w<32||h<32||w>4096||h>4096){log::error("gpu-dis","unsupported flow extent (32..4096 each axis)");return false;}
-    p.provider=xess_gpu::make_strict_dis_provider((runtime::shaderDirectory()/"dis").string(),xess_gpu::StrictDisPreset::Fast);
+    p.provider=xess_gpu::make_strict_dis_provider(runtime::pathUtf8(runtime::shaderDirectory()/"dis"),xess_gpu::StrictDisPreset::Fast);
     xess_gpu::ProviderConfig config;config.source={w,h};config.slots=2;config.bidirectional=true;
     std::string error;
     if(!p.provider->initialize(device,config,error)){log::error("gpu-dis",error);return false;}

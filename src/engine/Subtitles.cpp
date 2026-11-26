@@ -1,4 +1,5 @@
 #include "veyra/engine/Subtitles.h"
+#include "veyra/RuntimePaths.h"
 #include "veyra/engine/SubtitleCacheBudget.h"
 #include "veyra/media/NetworkInput.h"
 #include <cstdlib>
@@ -1050,7 +1051,7 @@ SubtitleAlignResult alignSubtitleToAudio(const std::wstring& mediaPath,const Sub
     result.score=bestScore;
     result.detail=result.ok?std::format(L"相关性 {:.2f}，建议偏移 {} ms",bestScore,result.offsetMs)
                           :std::format(L"相关性只有 {:.2f}，未找到可靠偏移（字幕可能与视频不匹配）",bestScore);
-    log::info("subtitle",std::format("auto align media={} cues={} shift={}ms score={:.3f} ok={}",std::filesystem::path(mediaPath).filename().string(),track.cues.size(),result.offsetMs,result.score,result.ok));
+    log::info("subtitle",std::format("auto align media={} cues={} shift={}ms score={:.3f} ok={}",veyra::runtime::pathUtf8(std::filesystem::path(mediaPath).filename()),track.cues.size(),result.offsetMs,result.score,result.ok));
     return result;
 }
 } // namespace veyra::engine

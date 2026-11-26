@@ -114,6 +114,47 @@ static void crash(const wchar_t* exe){
     video_queue_close(reader);CloseHandle(process.hThread);CloseHandle(process.hProcess);CloseHandle(ready);CloseHandle(opened);
     auto* next=video_queue_create(640,480,166667);CHECK(next);video_queue_close(next);
 }
+// Another process maps the header writable (consumer slots): it must not be able
+// to resize what an already-open reader or the producer copies.
+static void hostile(const std::wstring& token){
+    constexpr unsigned w=1280,h=720;
+    auto* writer=video_queue_create(w,h,166667);CHECK(writer);
+    auto* reader=video_queue_open();CHECK(reader);
+    const std::wstring name=L"Local\\VeyraVirtualCameraVideoV2-"+token;
+    HANDLE mapping=OpenFileMappingW(FILE_MAP_READ|FILE_MAP_WRITE,FALSE,name.c_str());CHECK(mapping);
+    auto* raw=static_cast<uint8_t*>(MapViewOfFile(mapping,FILE_MAP_READ|FILE_MAP_WRITE,0,0,0));CHECK(raw);
+    auto* cx=reinterpret_cast<volatile uint32_t*>(raw+40);auto* cy=reinterpret_cast<volatile uint32_t*>(raw+44);
+    CHECK(*cx==w&&*cy==h);
+    std::vector<uint8_t> pixels(size_t(w)*h*3/2,77);uint8_t* data[]={pixels.data(),pixels.data()+size_t(w)*h};uint32_t pitch[]={w,w};
+    constexpr size_t guard=256;
+    const std::pair<uint32_t,uint32_t> forgedSizes[]={{640,480},{65536,4096},{0xffffffffu,0xffffffffu}};
+    for(const auto& bad:forgedSizes){
+        *cx=bad.first;*cy=bad.second;
+        uint32_t qw=0,qh=0;uint64_t interval=0;video_queue_get_info(reader,&qw,&qh,&interval);
+        CHECK(qw==w&&qh==h&&interval==166667);
+        CHECK(video_queue_write(writer,data,pitch,7)); // the producer copies its own extent
+        // A consumer that followed the forged header is refused; its small buffer stays intact.
+        std::vector<uint8_t> small(size_t(640)*480*3/2+guard,0xab);nv12_scale_t forged;nv12_scale_init(&forged,TARGET_FORMAT_NV12,640,480,640,480);
+        uint64_t ts=0;CHECK(!video_queue_read(reader,&forged,small.data(),&ts));
+        CHECK(std::all_of(small.begin(),small.end(),[](uint8_t b){return b==0xab;}));
+        // The real extent still reads exactly its own bytes and nothing past them.
+        std::vector<uint8_t> full(pixels.size()+guard,0xab);nv12_scale_t scale;nv12_scale_init(&scale,TARGET_FORMAT_NV12,w,h,w,h);
+        CHECK(video_queue_read(reader,&scale,full.data(),&ts));CHECK(ts==7);
+        CHECK(std::equal(pixels.begin(),pixels.end(),full.begin()));
+        CHECK(std::all_of(full.begin()+pixels.size(),full.end(),[](uint8_t b){return b==0xab;}));
+        // Scaling to a smaller target keeps to the target's size.
+        std::vector<uint8_t> scaled(size_t(640)*480*3/2+guard,0xab);nv12_scale_t down;nv12_scale_init(&down,TARGET_FORMAT_NV12,640,480,w,h);
+        CHECK(video_queue_read(reader,&down,scaled.data(),&ts));
+        CHECK(std::all_of(scaled.end()-guard,scaled.end(),[](uint8_t b){return b==0xab;}));
+        // A new reader validates what it finds: out-of-range sizes do not open.
+        auto* late=video_queue_open();
+        if(bad.first>8192){CHECK(!late);}else{
+            CHECK(late);uint32_t lw=0,lh=0;video_queue_get_info(late,&lw,&lh,&interval);CHECK(lw==bad.first&&lh==bad.second);video_queue_close(late);}
+    }
+    *cx=w;*cy=h;UnmapViewOfFile(raw);CloseHandle(mapping);
+    video_queue_close(reader);video_queue_close(writer);
+    std::printf("hostile header resize refused\n");
+}
 int wmain(int argc,wchar_t** argv){
     if(argc==4&&std::wstring(argv[1])==L"--crash"){
         auto* writer=video_queue_create(640,480,166667);if(!writer)return 2;
@@ -127,5 +168,5 @@ int wmain(int argc,wchar_t** argv){
     SetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_NAMESPACE",token.c_str());
     CHECK(!video_queue_create(0,0,166667));CHECK(!video_queue_create(3,4,166667));
     CHECK(!video_queue_create(0xffffffff,0xffffffff,166667));CHECK(!video_queue_create(8192,8192,166667));
-    padded();readers();ordered();crash(argv[0]);std::printf("PASS checks=%u bits=%zu\n",checks,sizeof(void*)*8);return 0;
+    padded();readers();ordered();hostile(token);crash(argv[0]);std::printf("PASS checks=%u bits=%zu\n",checks,sizeof(void*)*8);return 0;
 }

@@ -104,7 +104,7 @@ bool FaceTracker::initialize(ID3D12Device* device, const std::filesystem::path& 
     meshReady_ = meshReady_ && shapesClear_;
     if (!meshReady_) log::warn("beauty-mesh", "face mesh unavailable (" + meshError + "); faces keep the oval from their box");
     log::info("beauty-detect", std::format("face tracker ready: {}; model {}; slots {}", detector_.modelDescription(),
-                                           model.filename().string(), ringSlots));
+                                           veyra::runtime::pathUtf8(model.filename()), ringSlots));
     return true;
 }
 
