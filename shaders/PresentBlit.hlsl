@@ -254,6 +254,26 @@ float4 psMain(VSOut input) : SV_Target
         outside=any(uv<0)||any(uv>1);
     }
     uint flags=uint(srcDims.z+0.5);
+    // Adaptive Ultrawide: invert a monotonic cubic mapping.
+    // Preserve the center and distribute stretch toward the edges.
+    if(curve1.w > 0.5 && curve1.z > 0.0){
+        const float k = saturate(curve1.z);
+        const float a = 1.0 - k;
+        const float b = 4.0 * k;
+
+        const float target = uv.x - 0.5;
+        float x = target;
+
+        [unroll]
+        for(int i=0; i<5; ++i){
+            const float f = a*x + b*x*x*x - target;
+            const float df = a + 3.0*b*x*x;
+            x -= f / max(df, 0.0001);
+        }
+
+        uv.x = x + 0.5;
+    }
+
     uv=PresentationSourceUv(uv,(flags>>6)&3);
     // Texel position and its screen derivatives, taken before the letterbox exit
     // so every pixel of a quad still has them (derivatives in divergent flow are

@@ -39,7 +39,7 @@ struct PreviewView {
         if(cw<=0||ch<=0||iw<=0||ih<=0)return {0,0};
         const float orientedH=(quarterTurns()&1)?iw:ih;
         if(mode==1)return {(quarterTurns()&1?ih:iw)*zoom,orientedH*zoom};
-        if(mode==3)return {cw*zoom,ch*zoom};
+        if(mode==3||mode==7)return {cw*zoom,ch*zoom};
         const float virtualW=float(aspect(iw,ih))*orientedH;
         const float scale=(mode==2?std::max(cw/virtualW,ch/orientedH):std::min(cw/virtualW,ch/orientedH))*zoom;
         return {virtualW*scale,orientedH*scale};

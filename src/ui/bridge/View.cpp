@@ -332,7 +332,7 @@ void QmlPlayerBridge::setCompareSplitAt(double fx) {
 }
 int QmlPlayerBridge::aspectMode() const { return impl_->screenFillActive ? 2 : impl_->aspectMode; }
 void QmlPlayerBridge::setAspectMode(int value) {
-    if (value < 0 || value > 6 || (impl_->aspectMode == value && !impl_->screenFillActive)) return;
+    if (value < 0 || value > 7 || (impl_->aspectMode == value && !impl_->screenFillActive)) return;
     impl_->aspectMode = value;
     impl_->screenFillActive = false;
     impl_->prefs[QStringLiteral("aspect")] = value;
