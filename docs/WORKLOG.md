@@ -2022,3 +2022,17 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 - T900 实卡使用设备提供的 4K60 MJPEG。实际应用送显约 60 FPS，NR 与 FSR 均运行，NVOF 从 1920×1080 转回 3840×2160。462 次 FSR 评估，0 次派发失败和采集丢帧。RGB 夹具也通过 4K 至 1080p 光流的几何验证。实卡 4K60 NV12 尚未验证。
 - WGC 320 Hz 跟随默认 NR 实测约 125.8 个原始帧、12.5 个生成帧每秒。在本次 HDR 测试场景每秒均有生成帧，数量波动 5 至 29。50% NR 内部尺寸时生成约 95.5 帧每秒。WGC 本轮保持既有节拍策略。冷启动从 WGC 打开到首轮送显，DLSS SR 24.34 秒、RTX Video SR 15.67 秒、Video Effects SR 14.71 秒，模型加载期的原画预览仍待实现。
 - 确认可用管理员权限启动 PresentMon。2.6.0 和 2.5.1 分别只输出 6 条和 2 条记录，无法验收稳定的屏幕显示间隔。完整命令、日志及产物路径见 `E:/项目/Veyra/reports/codex-magpie-perf-20261122/RESULTS.md`。
+
+### 2026-11-25 采集驱动阻塞时停止播放和退出
+
+从本地 main `bc59d457` 建立 `codex/capture-reconnect-isolation-20261125`。现场 Elgato 4K Pro 的 P010 无新帧后，原版在播放线程同步调用 DirectShow Stop、重建采集图和写入 HDR 硬件色调映射属性。转储确认设备控制请求等待时间很长。此轮修复等待期间的应用响应，首次断帧的触发条件需实卡核对。
+
+- 采集图的配置、启动、重连、释放和需要停图的音频恢复在同一个 COM 工作线程上执行。播放线程保留原有帧邮箱和 GPU 身份，在操作完成后再读取采集状态。重连继续沿用原设备和格式、退避预算、第一帧确认以及历史重置。
+- 停止时终止当前播放会话，作废未执行操作和迟到结果。工作线程继续持有采集图、设备租约和解码所用的 D3D12 引用，驱动返回后在原线程收尾。旧会话仍在释放时，新采集轮次会给出稍后重试提示。本地文件可继续播放。经典 DirectShow 枚举的异步结果也可在界面析构时放弃。
+- 保留采集线程专用的等待提示和挂起诊断。模拟永久等待时，最终版的 Stop 到引擎空闲为 61 ms，同一进程随后成功播放本地文件。直接关闭运行中的采集恢复也以退出码 0 结束。播放切换用例中 FFmpeg 打印过一次 D3D12 输入像素格式警告，随后确认文件呈现和正常退出。
+
+构建使用 `python -X utf8 -B -I scripts/acceptance/build-recording-handoff.py --task codex-capture-reconnect-isolation-20261125 --root E:/项目/Veyra/worktrees/capture-reconnect-isolation-20261125 --build-dir E:/项目/Veyra/build/codex-capture-reconnect-isolation-20261125/app --label 2.2.1-capture-reconnect-test --jobs 2 veyra_qml_ui veyra_live_presentation_tests veyra_scheduling_chain_tests veyra_capture_startup_tests veyra_capture_capability_tests`。首次配置时 pkg-config 把物理路径中的中文转成了损坏的路径。使用指向同一依赖实体的现有 ASCII 兼容入口和任务内独立缓存后，通过完整构建和量产入口增量构建。最终构建目录为 `logs/codex-capture-reconnect-isolation-20261125/build-20261125-191451`。
+
+采集启动和格式能力测试分别通过 31 项和 25 项。无首帧时的五次退避与释放设备后的末次尝试均经过真实引擎回放夹具验证。调度回归首次漏传夹具参数退出 2，补齐无音轨素材、输出目录和 playback 模式后通过播放、暂停、定位、恢复与停止。独立启动入口验证可用，测试运行目录从已核验的 NVIDIA 2.2.1 发行包取得运行组件，108 个着色器与本次构建逐文件核对。九语词库 3326 条，缺失和占位符错误均为 0。
+
+本地入口在 `E:/项目/Veyra/tests/codex-capture-reconnect-isolation-20261125/Veyra-capture-reconnect-test.cmd`。原始构建和测试日志在同名 `logs`，过程回执和二进制指纹在同名 `reports/FINAL.json`。无限等待由测试注入，未连接 Elgato 4K Pro 实卡。物理设备何时释放仍取决于 Windows 驱动，整机硬锁和实际 4K60 P010 长跑需现场验证。

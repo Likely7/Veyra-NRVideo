@@ -384,6 +384,7 @@ private:
     std::condition_variable wake_;std::function<void()> pending_;bool shutdown_=false,busy_=false;
     // Owner-thread stall detection (field logs(15)); created before worker_ starts.
     std::unique_ptr<EngineWatchdog> watchdog_;
+    std::unique_ptr<class CaptureDriverWorker> captureDriver_;  // playback-owner only
     std::condition_variable dispatchDone_;bool dispatchExited_=false; // mutex_
     std::wstring hangPreviousStatus_; // mutex_
     EnhancementSettings desired_;uint64_t nextRevision_=1;

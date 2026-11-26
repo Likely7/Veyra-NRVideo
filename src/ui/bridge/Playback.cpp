@@ -10,7 +10,7 @@ namespace veyra::ui {
 QString QmlPlayerBridge::statusText() const {
     const auto& snapshot = impl_->snapshot;
     if (snapshot.captureDriverWaitMs) {
-        return tr("采集卡驱动响应缓慢（已等待 %1 秒）。若频繁出现，请重新插拔采集卡并检查 USB 连接。")
+        return tr("采集卡驱动响应缓慢（已等待 %1 秒）。可以停止采集或退出 Veyra。")
             .arg(snapshot.captureDriverWaitMs / 1000);
     }
     return uiText(snapshot.status);
