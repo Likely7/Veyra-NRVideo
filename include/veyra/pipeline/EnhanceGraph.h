@@ -58,6 +58,8 @@ namespace veyra::gfx {
 class D3D12DeviceContext;
 class CommandSlotRing;
 class FsrSrBackend;
+class XessSrBackend;
+class Fsr4SrBackend;
 class AmfVideoSrBackend;
 class FsrFgPresenter;
 class AmfFrcBackend;
@@ -816,6 +818,15 @@ public:
         (desc_.finalSrQuality()==engine::kVideoSrFsr || desc_.firstSrRuns(engine::kVideoSrFsr)); }
     // Out of line: the backend type is only forward declared here.
     bool fsrSrEnabled() const;
+    // Intel XeSS upscaling: cross-vendor (DP4a) / XMX on Arc; temporal like FSR.
+    bool xessSrRequested() const { return desc_.enableSr && !desc_.stillImage &&
+        (desc_.finalSrQuality()==engine::kVideoSrXess || desc_.firstSrRuns(engine::kVideoSrXess)); }
+    bool xessSrEnabled() const;
+    // AMD FSR4 ML upscaling via the driver DLL: Intel Arc only, user-supplied
+    // runtime; temporal, same harness as FSR/XeSS.
+    bool fsr4SrRequested() const { return desc_.enableSr && !desc_.stillImage &&
+        (desc_.finalSrQuality()==engine::kVideoSrFsr4 || desc_.firstSrRuns(engine::kVideoSrFsr4)); }
+    bool fsr4SrEnabled() const;
     // Requested output multiplier (2 = one generated frame). Consumed by the
     // present sink so the XeSS provider knows how many frames to generate.
     uint32_t fgMultiplier() const { return desc_.fgMultiplier; }
@@ -923,6 +934,8 @@ private:
     Extent firstSrMotionExtent() const;
     bool initNgxFeatures();
     bool initFsrSr();
+    bool initXessSr();
+    bool initFsr4Sr();
     bool initSpatialSr();
     bool initFsrFg();
     bool initVfg();
@@ -1234,9 +1247,13 @@ private:
     void composeHudProtect(ID3D12GraphicsCommandList*,unsigned slot,unsigned parity,unsigned subframe,unsigned multiplier);
     void composeHudLock(ID3D12GraphicsCommandList* list,unsigned generatedSlot,unsigned heldParity,bool useNewerHud);
     std::unique_ptr<gfx::FsrSrBackend> fsrSrBackend_;
+    std::unique_ptr<gfx::XessSrBackend> xessSrBackend_;
+    std::unique_ptr<gfx::Fsr4SrBackend> fsr4SrBackend_;
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
     std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
     std::unique_ptr<gfx::FsrSrBackend> firstFsrSrBackend_;
+    std::unique_ptr<gfx::XessSrBackend> firstXessSrBackend_;
+    std::unique_ptr<gfx::Fsr4SrBackend> firstFsr4SrBackend_;
     // Index 0 is the optional first pass, index 1 is the final or only pass.
     std::array<std::unique_ptr<NisScaler>, 2> nisSr_;
     std::array<std::unique_ptr<gfx::AmfVideoSrBackend>, 2> amfSr_;

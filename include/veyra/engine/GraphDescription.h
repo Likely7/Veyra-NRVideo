@@ -72,7 +72,7 @@ struct StageRequest {
 inline bool dualSrRuns(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false,bool amdAdapter=false){
     return s.dualSrEnabled&&videoSrRunsOn(s.videoSrQuality,nvidiaAdapter,amdAdapter)&&
         videoSrRunsOn(s.dualSrQuality,nvidiaAdapter,amdAdapter)&&
-        !(stillImage&&(s.videoSrQuality==kVideoSrFsr||s.dualSrQuality==kVideoSrFsr));
+        !(stillImage&&(s.videoSrQuality==kVideoSrFsr||s.dualSrQuality==kVideoSrFsr||s.videoSrQuality==kVideoSrXess||s.dualSrQuality==kVideoSrXess||s.videoSrQuality==kVideoSrFsr4||s.dualSrQuality==kVideoSrFsr4));
 }
 inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false,bool amdAdapter=false){
     return dualSrRuns(s,nvidiaAdapter,stillImage,amdAdapter)?s.srPrescale:pipeline::SrPrescale::Off;

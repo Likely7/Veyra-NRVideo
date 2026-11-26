@@ -170,6 +170,8 @@ add_library(veyra_gfx STATIC
   src/gfx/RifeDmlBackend.cpp
   src/gfx/AmfVideoSrBackend.cpp
   src/gfx/FsrSrBackend.cpp
+  src/gfx/XessSrBackend.cpp
+  src/gfx/Fsr4SrBackend.cpp
 )
 veyra_apply_warnings(veyra_gfx)
 target_compile_features(veyra_gfx PUBLIC cxx_std_20)
@@ -184,6 +186,9 @@ veyra_apply_warnings(veyra_vrr_profile_tests)
 if(EXISTS "${VEYRA_XESS_ROOT}/inc/xess_fg/xefg_swapchain_d3d12.h")
   target_include_directories(veyra_gfx PRIVATE "${VEYRA_XESS_ROOT}/inc")
   target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_XESS=1)
+endif()
+if(EXISTS "${VEYRA_XESS_ROOT}/inc/xess/xess_d3d12.h")
+  target_include_directories(veyra_gfx PRIVATE "${VEYRA_XESS_ROOT}/inc")
 endif()
 # AMD AMF SDK headers (MIT) for AMD FRC; the runtime comes with the AMD driver.
 set(VEYRA_AMF_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party_local/amd/AMF-SDK-1.5.3" CACHE PATH "AMD AMF SDK (include/core, include/components)")
@@ -1032,6 +1037,9 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   add_executable(veyra_fsr_dispatch_tests tests/integration/FsrFgDispatchTests.cpp)
   target_compile_features(veyra_fsr_dispatch_tests PRIVATE cxx_std_20)
   target_link_libraries(veyra_fsr_dispatch_tests PRIVATE veyra_gfx d3d12 dxgi dxguid)
+  add_executable(veyra_fsr4_vendor_gate_tests tests/integration/Fsr4VendorGateTests.cpp)
+  target_compile_features(veyra_fsr4_vendor_gate_tests PRIVATE cxx_std_20)
+  target_link_libraries(veyra_fsr4_vendor_gate_tests PRIVATE veyra_gfx d3d12 dxgi dxguid)
 # Everything that touches media headers (NetworkInput, Dovi, the audio tests) needs these.
 # Upstream relies on its own build environment exporting them; we add them globally.
 include_directories(${FFMPEG_INCLUDE_DIRS})

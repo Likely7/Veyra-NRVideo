@@ -43226,6 +43226,26 @@
    "de": "Hoch standardmäßig. Wenn ein Spiel oder ein anderes schweres Programm, das nebenbei läuft, langsamer wird, wählen Sie Normal",
    "pt-BR": "; Alta por padrão. Se um jogo ou outro programa pesado em execução ao lado desacelera, escolha Normal",
    "ru": "; высокий по умолчанию. Если игра или другая тяжелая программа, работающая рядом, замедляется, выберите Normal."
+  },
+  {
+   "zh": "FSR 4.1 超分 · ML · Intel Arc 实验",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "FSR 4.1 超分 · ML · Intel Arc 实验",
+   "en": "FSR 4.1 SR - ML - Intel Arc experimental",
+   "ja": "FSR 4.1 SR - ML - Intel Arc experimental",
+   "ko": "FSR 4.1 SR - ML - Intel Arc experimental",
+   "es": "FSR 4.1 SR - ML - Intel Arc experimental",
+   "fr": "FSR 4.1 SR - ML - Intel Arc experimental"
+  },
+  {
+   "zh": "需要 Intel Arc 显卡，并将 amdxcffx64.dll 放入 runtime_local/amd/fidelityfx",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "需要 Intel Arc 显卡，并将 amdxcffx64.dll 放入 runtime_local/amd/fidelityfx",
+   "en": "Requires an Intel Arc GPU and amdxcffx64.dll placed in runtime_local/amd/fidelityfx",
+   "ja": "Requires an Intel Arc GPU and amdxcffx64.dll placed in runtime_local/amd/fidelityfx",
+   "ko": "Requires an Intel Arc GPU and amdxcffx64.dll placed in runtime_local/amd/fidelityfx",
+   "es": "Requires an Intel Arc GPU and amdxcffx64.dll placed in runtime_local/amd/fidelityfx",
+   "fr": "Requires an Intel Arc GPU and amdxcffx64.dll placed in runtime_local/amd/fidelityfx"
   }
  ]
 }

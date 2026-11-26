@@ -984,6 +984,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // (missing local runtime, unsupported layout) degrades
                         // to the plain scale path with a visible warning.
                         if(opened&&graph->fsrSrRequested()&&!graph->fsrSrEnabled()){opened=false;failure=FailedBackend::Sr;}
+                        if(opened&&graph->xessSrRequested()&&!graph->xessSrEnabled()){opened=false;failure=FailedBackend::Sr;}
+                        if(opened&&graph->fsr4SrRequested()&&!graph->fsr4SrEnabled()){opened=false;failure=FailedBackend::Sr;}
                     }
                 if(stop_)return false;
                 if(opened){

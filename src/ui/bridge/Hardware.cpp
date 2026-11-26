@@ -7,6 +7,7 @@
 #include "veyra/gfx/AmfFrcBackend.h"
 #include "veyra/gfx/RifeDmlBackend.h"
 #include "veyra/gfx/AmfVideoSrBackend.h"
+#include "veyra/gfx/Fsr4SrBackend.h"
 
 namespace veyra::ui {
 
@@ -83,7 +84,9 @@ static QVariantMap scanEffectCapabilities() {
     QVariantMap out;
     auto add = [&](const QString& id, H hardware, bool files, const QString& requirement) {
         const bool supported = ui::hardwareSupports(hardware, gpu);
-        out[id] = QVariantMap{{"available", supported && files}, {"reason", !supported ? requirement : !files ? QObject::tr("当前包缺少此功能的运行组件") : QString{}}};
+        // "supported" is the hardware gate alone: choices/catalogs hide entries
+        // this GPU can never run, while "available" still needs the runtime files.
+        out[id] = QVariantMap{{"available", supported && files}, {"supported", supported}, {"reason", !supported ? requirement : !files ? QObject::tr("当前包缺少此功能的运行组件") : QString{}}};
     };
     add("nr2", H::NvidiaNrSf, exists(nr / "nr-ampere/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     out["nr0"]=out["nr2"]; // Retired preset ID; no retired runtime is loaded.
@@ -108,6 +111,11 @@ static QVariantMap scanEffectCapabilities() {
     for (int q : {16, 17, 18, 19}) add("sr" + QString::number(q), H::Nvidia, vfxSr, QObject::tr("需要 NVIDIA RTX 显卡"));
     for (int q : {21, 23}) add("sr" + QString::number(q), H::NvidiaAmpere, vfxSr, QObject::tr("需要 NVIDIA RTX 30 及更新显卡"));
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
+    add("sr6", H::CrossVendor, exists(data / "intel/experimental/libxess.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡（Intel 走 XMX）"));
+    // FSR4 ML upscaling via the driver DLL: Intel Arc only, user-supplied
+    // amdxcffx64.dll beside the signed FFX SDK loader (never redistributed).
+    add("sr7", H::CrossVendor, gpu.vendor == 0x8086 && gfx::Fsr4SrBackend::runtimeAvailable(),
+        QObject::tr("需要 Intel Arc 显卡，并将 amdxcffx64.dll 放入 runtime_local/amd/fidelityfx"));
     const auto srId = [](uint32_t id) { return "sr" + QString::number(id); };
     const auto shaders = runtime::shaderDirectory();
     add(srId(engine::kVideoSrNis), H::CrossVendor, exists(shaders / "NisSdr.dxil") && exists(shaders / "NisHdr.dxil"),
@@ -266,6 +274,8 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
     for (const auto& entry : std::initializer_list<Entry>{{"0", 0, "DLSS SR"}, {"rtx", 4, tr("RTX 视频超分 · 标准")},
             {"rtx-hb", 16, tr("RTX 视频超分 · 高码率")}, {"rtx-st", 21, tr("RTX 视频超分 · 流媒体")},
             {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")},
+            {"6", 6, tr("XeSS 超分 · Intel XMX / 跨厂商")},
+            {"7", 7, tr("FSR 4.1 超分 · ML · Intel Arc 实验")},
             {QString::number(engine::kVideoSrNis), engine::kVideoSrNis, "NVIDIA NIS"},
             {QString::number(engine::kVideoSrAmf10), engine::kVideoSrAmf10, "AMD VideoSR 1.0"}}) {
         const auto cap = caps.value("sr" + QString::number(entry.capability)).toMap();

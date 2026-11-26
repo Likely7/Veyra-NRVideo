@@ -232,7 +232,7 @@ bool PresentSink::initialize(ID3D12Device* device, ID3D12CommandQueue* queue,
         const bool prepared=bool(preparedXess);
         xess_=prepared?std::move(preparedXess):std::make_unique<XessPresenter>();
         const bool opened=prepared?xess_->bindSwapChain(queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf()):
-            xess_->initialize(device,queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf(),desc.fgMultiplier,desc.xessLowLatencySleep);
+            xess_->initialize(device,queue,factory_.Get(),hwnd_,scd,swapChain_.GetAddressOf(),desc.fgMultiplier,desc.xessLowLatencySleep,desc.adapterVendorId);
         if(!opened){
             // XeSS is an optional experimental presenter. A missing or
             // incompatible local runtime must not prevent basic playback.

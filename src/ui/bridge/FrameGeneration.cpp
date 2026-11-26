@@ -29,16 +29,20 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         QVariantMap{{"id","vfg"},{"label",tr("NVIDIA VFG 👑（顶级补帧质量） · RTX 30（实验）/ 40 / 50")},{"gold",true}}
     };
     const auto caps = effectCapabilities();
+    QVariantList offered;
     for (auto& choice : choices) {
         auto row = choice.toMap();
         const auto cap = caps.value(row.value("id").toString()).toMap();
+        // Hide backends this GPU can never run; a supported-but-missing runtime
+        // stays listed (disabled) so the component page can explain it.
+        if (!cap.value("supported").toBool()) continue;
         const bool downloadable = cap.value("downloadable").toBool();
         row["download"] = downloadable;
         row["disabled"] = !cap.value("available").toBool() && !downloadable;
         row["note"] = downloadable ? tr("点击从 Apex Compute 下载并启用（约 3.2 MB）") : cap.value("reason");
-        choice = row;
+        offered << row;
     }
-    return choices;
+    return offered;
 }
 QString QmlPlayerBridge::fgProviderText() const {
     if(fgBackendName()==QLatin1String("anr"))return tr("Apex Neural Rendering · 2X～6X · 视频估算输入，效果与速度以实际运行结果为准");
@@ -56,16 +60,20 @@ QString QmlPlayerBridge::fgProviderText() const {
     if(fgBackendName()==QLatin1String("fsr4"))return tr("FSR 4 ML 需要支持的 RX 9000 和驱动，不可用时自动改用 FSR 3.1；尚未在 RX 9000 实卡上验证");
     if(fgBackendName()==QLatin1String("fsr3"))return tr("FSR 3.1 跨厂商补帧 · 最高 2X");
     if(fgBackendName()==QLatin1String("xess"))
-        return fgMaxMultiplier()<4?tr("当前 XeSS 模块未匹配 3X / 4X 解锁版本；2X 可用，请在组件页核对版本"):
+        return effectGpu().vendor==0x8086?tr("Intel 原生多帧补帧（2X～4X，驱动调度）；倍率以运行时实际上限为准"):
+            fgMaxMultiplier()<4?tr("当前 XeSS 模块未匹配 3X / 4X 解锁版本；2X 可用，请在组件页核对版本"):
             tr("2X 为原生路径，3X / 4X 为实验解锁；失败原因见诊断");
     return tr("NVIDIA RTX 补帧；倍率以运行库实际能力为准");
 }
 // XeSS ceiling (SettingsWindow): 4X with the audited unlock provider, else 2X,
 // or a running session's reported interpolation count above 2X.
 int xessCeiling(const engine::PlayerSnapshot& s) {
+    // Intel Arc natively supports up to 4X (driver-paced); no audited unlock
+    // needed. Non-Intel relies on the audited unlock provider for >2X.
+    const bool intel = effectGpu().vendor==0x8086;
     static const bool audited = gfx::XessMfgUnlock::providerIsAudited(
         (runtime::localDataDirectory() / L"intel" / L"experimental" / L"libxess_fg.dll").wstring());
-    int cap = audited ? 4 : 2;
+    int cap = intel ? 4 : (audited ? 4 : 2);
     // A running context reports the count it was CREATED with (3X -> 2), not
     // what the provider allows: it may raise the ceiling, never lower it.
     // Lowering it made 4X vanish after picking 3X until the backend was reset.

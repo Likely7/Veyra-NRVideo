@@ -101,10 +101,10 @@ struct XessPresenter::Impl {
 };
 XessPresenter::XessPresenter():p_(std::make_unique<Impl>()){}
 XessPresenter::~XessPresenter()=default;
-bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,IDXGIFactory2* factory,HWND window,const DXGI_SWAP_CHAIN_DESC1& desc,IDXGISwapChain3** swapchain,uint32_t fgMultiplier,bool lowLatencySleep){
-    return prepare(device,fgMultiplier,lowLatencySleep,false)&&bindSwapChain(queue,factory,window,desc,swapchain);
+bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,IDXGIFactory2* factory,HWND window,const DXGI_SWAP_CHAIN_DESC1& desc,IDXGISwapChain3** swapchain,uint32_t fgMultiplier,bool lowLatencySleep,uint32_t adapterVendorId){
+    return prepare(device,fgMultiplier,lowLatencySleep,false,adapterVendorId)&&bindSwapChain(queue,factory,window,desc,swapchain);
 }
-bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowLatencySleep,bool buildPipelines){
+bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowLatencySleep,bool buildPipelines,uint32_t adapterVendorId){
     if(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_INIT_FAILURE",nullptr,0)){
         log::warn("xess-fg","test-only initialization rejection; runtime not loaded");return false;
     }
@@ -136,13 +136,14 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
     LOAD(llDll,xellSleep)
     LOAD(llDll,xellAddMarkerData)
 #undef LOAD
-    // Multi-frame generation needs the audited OptiScaler unlock before the
-    // first XeFG context exists; 2X deliberately leaves the provider untouched.
+    // Multi-frame generation: Intel Arc natively supports 3X/4X (SDK 3.0.0+,
+    // driver 32.0.101.8509) and the graphics driver owns pacing there, so the
+    // audited OptiScaler unlock + present-thunk pacing hook are skipped on
+    // Intel. Non-Intel is capped at one generated frame by the provider and
+    // needs the unlock for >2X. 2X leaves the provider untouched everywhere.
+    const bool intelAdapter=adapterVendorId==0x8086;
     p.requestedGenerated=fgMultiplier>1?fgMultiplier-1:0;
-    // 2X is the provider's stock behaviour: no unlock, no pacing, and the
-    // presenter must not treat "nothing to unlock" as a failure (that used to
-    // drop the whole XeSS session back to native presentation).
-    if(p.requestedGenerated>1){
+    if(p.requestedGenerated>1&&!intelAdapter){
         const auto unlock=XessMfgUnlock::apply(p.fgDll,p.requestedGenerated);
         p.maxInterpolations=unlock.maxInterpolations;
         veyra::log::info("xess-mfg",std::format("unlock requestedGenerated={} applied={} identityVerified={} recognisedBuild={}",
@@ -162,6 +163,8 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
         }else{
             log::warn("xess-pacing","disabled by VEYRA_DISABLE_XESS_PACING (diagnostic only)");
         }
+    }else if(p.requestedGenerated>1){
+        log::info("xess-mfg",std::format("Intel adapter: native {}X multi-frame generation; driver pacing, no unlock",p.requestedGenerated+1));
     }
     if(!p.check(p.xellD3D12CreateContextFn(device,&p.ll),"XeLL create",true)||!p.check(p.xefgSwapChainD3D12CreateContextFn(device,&p.fg),"Create",true))return false;
     if(!p.check(p.xefgSwapChainSetLatencyReductionFn(p.fg,p.ll),"Attach XeLL",true))return false;
@@ -177,8 +180,10 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
             XessMfgUnlock::reportRuntimeCeiling(p.maxInterpolations);
         }
         if(p.requestedGenerated>0&&p.maxInterpolations<p.requestedGenerated){
-            log::error("xess-mfg",std::format("requested {}X but the runtime reports maxInterpolatedFrames={}",p.requestedGenerated+1,p.maxInterpolations));
-            return false;
+            // Clamp to the runtime ceiling instead of dropping the whole XeSS
+            // session; the UI ladder is corrected from maxInterpolatedFrames().
+            log::warn("xess-mfg",std::format("requested {}X clamped to runtime ceiling {}X",p.requestedGenerated+1,p.maxInterpolations+1));
+            p.requestedGenerated=p.maxInterpolations;
         }
     }
     if(buildPipelines){
@@ -198,7 +203,7 @@ bool XessPresenter::bindSwapChain(ID3D12CommandQueue* queue,IDXGIFactory2* facto
 #ifdef VEYRA_HAS_XESS
     auto& p=*p_;
     if(!p.fg||!p.ll)return false;
-    xefg_swapchain_d3d12_init_params_t init{};init.maxInterpolatedFrames=p.requestedGenerated>0?p.requestedGenerated:1;init.uiMode=XEFG_SWAPCHAIN_UI_MODE_AUTO;
+    xefg_swapchain_d3d12_init_params_t init{};init.maxInterpolatedFrames=XEFG_SWAPCHAIN_USE_MAX_SUPPORTED_INTERPOLATED_FRAMES;init.uiMode=XEFG_SWAPCHAIN_UI_MODE_AUTO;
     xefg_swapchain_properties_t properties{};
     // The API can wrap a caller-owned native swapchain if one is supplied.
     // Veyra's sink supplies an empty pointer after releasing the old backend;
