@@ -1,8 +1,14 @@
 # 当前项目状态
 
-更新于 2026-11-23。[Veyra 2.2.1 发布页](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)提供 NVIDIA 和 AMD 安装器及便携版。[完整更新](RELEASE_NOTES_2.2.1.md) · [构建与对应源码](BUILD_2.2.1.md)。
+更新于 2026-11-26。公开发行仍为 2.2.1。[Veyra 2.2.1 发布页](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)提供 NVIDIA 和 AMD 安装器及便携版。[完整更新](RELEASE_NOTES_2.2.1.md) · [构建与对应源码](BUILD_2.2.1.md)。
 
 [2.2.0 历史发行](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.0) · [2.2.0 对应源码与构建](BUILD_2.2.0.md)。
+
+## 2.2.2 本地主线
+
+合入 PS5 双键位与「默认」档案、准星和字幕防拖影、全效果 HUD 保护、实时译文位置与色板、采集驱动阻塞隔离、软件内更新进度与稍后重启。Antigravity 的启动诊断和便携打包修复已在本地 main，整合时保留便携更新与回退。Claude 已收录的光流、回放、录音、低延迟和显示修复沿用现有主线历史。
+
+整合版的构建、回归与实机边界见[工作日志](WORKLOG.md)。已收录的旧分支、未提交工作树及暂停的研究单独保留。
 
 ## 2.2.0
 
