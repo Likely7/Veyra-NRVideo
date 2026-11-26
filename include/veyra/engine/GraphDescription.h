@@ -130,9 +130,9 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // The NR budget controls NR. AMD optical flow keeps its source extent
     // and applies its own optional half-resolution setting in the graph.
     auto plan=pipeline::ResolutionPlan::make({request.width,request.height},request.sr,
-        boundedAmd?pipeline::NrSizePolicy::Realtime:policy,
+        boundedAmd?pipeline::NrSizePolicy::P1440:policy,
         (request.stillImage||request.exportJob)&&!boundedAmd,settings.revision,settings.srTarget,lowLatency,
-        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
+        request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1440u:0u,srPrescale,srOutput,
         dualSrRuns(settings,request.nvidiaAdapter,request.stillImage,request.amdAdapter),settings.dualSrTarget);
     if(request.exportJob&&!request.stillImage)
         plan.nr=exportNrProcessingExtent(plan.base,settings.nrRuntime,policy);
@@ -232,7 +232,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
             exportNrProcessingExtent(plan.base,settings.nrRuntime,size):
             pipeline::ResolutionPlan::make({request.width,request.height},request.sr,size,request.stillImage,
             settings.revision,settings.srTarget,lowLatency,
-                request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1080u:0u,srPrescale,srOutput,
+                request.amdNr&&currentNrRuntime(settings.nrRuntime)==NrRuntime::LmxxfAmd?1440u:0u,srPrescale,srOutput,
                 desc.dualSr,settings.dualSrTarget).nr);
     }
     desc.fixedExecutionPlan=execution;

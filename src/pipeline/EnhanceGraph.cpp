@@ -2415,8 +2415,12 @@ std::string EnhanceGraph::nrReuseIneligibility() const
     if(!desc_.nrReusePreview)return "not a realtime preview graph";
     if(desc_.stillImage)return "still image";
     if(!nrEnabled_||!nrCreated())return "NR not created";
-    if(lmxxfNr_||!context_.adapter().isNvidia)return "NVIDIA NGX NR only";
-    for(const auto& layer:nrInstances_)if(layer->amd||layer->handle()==nullptr)return "NVIDIA NGX NR only";
+    if(lmxxfNr_){
+        for(const auto& layer:nrInstances_)if(!layer->amd||!layer->amd->ready())return "AMD NR backend not ready";
+    }else{
+        if(!context_.adapter().isNvidia)return "NVIDIA NGX NR or AMD NR only";
+        for(const auto& layer:nrInstances_)if(layer->amd||layer->handle()==nullptr)return "NVIDIA NGX NR or AMD NR only";
+    }
     if(desc_.hdrWorking())return "SDR only";
     if(!desc_.nrUsesFlow()||!nvofStandalone_)return "NR motion must use optical flow";
     if(desc_.splitNrAcrossSr())return "NR split across SR";
@@ -3169,6 +3173,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             if(!ring_->drainQueue()){failedBackend_=engine::FailedBackend::Infrastructure;return false;}
             nrPreparing_=false;
             setNrEnabled(pendingNrEnabled_);
+            if(!createNrHoldPass()||!createNrReusePass())return false;
             reset=true;
         }
     }

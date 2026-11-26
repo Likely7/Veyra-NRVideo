@@ -609,7 +609,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
                 exportNrProcessingExtent(cursor,node.nr.runtime,node.nr.sizePolicy):
                 pipeline::ResolutionPlan::make(cursor, false, node.nr.sizePolicy,
                 request.stillImage, 0, request.srTarget,false,
-                currentNrRuntime(node.nr.runtime)==NrRuntime::LmxxfAmd?1080u:0u).nr;
+                currentNrRuntime(node.nr.runtime)==NrRuntime::LmxxfAmd?1440u:0u).nr;
         }
         plan.steps[plan.stepCount++] = step;
         cursor = step.output;

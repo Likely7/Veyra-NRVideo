@@ -8,7 +8,7 @@ namespace veyra::engine {
 // its residual into the original working-resolution image, so an 8K export
 // does not feed the NR model a native 8K frame. Auto timing is preview-only:
 // an export snapshot fixes it at 1440p. The AMD model's admission limit
-// belongs to its INPUT: presets above 1080p stay bounded at 1080p.
+// belongs to its INPUT: presets above 1440p stay bounded at 1440p.
 constexpr pipeline::NrSizePolicy exportNrSizePolicy(NrRuntime runtime,pipeline::NrSizePolicy preset) {
     // Invalid settings must reach validation unchanged. Manual percentages
     // retain their encoded value; the extent calculation applies AMD's input
@@ -17,13 +17,13 @@ constexpr pipeline::NrSizePolicy exportNrSizePolicy(NrRuntime runtime,pipeline::
     if(preset==pipeline::NrSizePolicy::Auto)preset=pipeline::NrSizePolicy::P1440;
     if(currentNrRuntime(runtime)==NrRuntime::LmxxfAmd){
         const auto limit=pipeline::nrHeightLimit(preset);
-        if(limit==0||limit>1080)return pipeline::NrSizePolicy::Realtime;
+        if(limit==0||limit>1440)return pipeline::NrSizePolicy::P1440;
     }
     return preset;
 }
 inline pipeline::Extent exportNrProcessingExtent(pipeline::Extent input,NrRuntime runtime,pipeline::NrSizePolicy preset){
     return pipeline::ResolutionPlan::make(input,false,exportNrSizePolicy(runtime,preset),false,0,
-        pipeline::SrTarget::Uhd4K,false,currentNrRuntime(runtime)==NrRuntime::LmxxfAmd?1080u:0u).nr;
+        pipeline::SrTarget::Uhd4K,false,currentNrRuntime(runtime)==NrRuntime::LmxxfAmd?1440u:0u).nr;
 }
 inline EnhancementSettings freezeExportSettings(EnhancementSettings settings) {
     // Preserve invalid counts for the caller's validation; normalization must

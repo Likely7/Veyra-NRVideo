@@ -1772,7 +1772,7 @@ VPage {
                                 Text {
                                     Layout.fillWidth: true
                                     text: qsTr("只在实时预览生效：被复用的帧不跑 NR 推理，改用上一帧的 NR 变化按光流对齐后叠加，下一帧一定重新推理；对不齐的地方显示原画面。") +
-                                          qsTr("导出、暂停单帧和图片照常逐帧完整推理。目前支持英伟达 NR、SDR 和列表模式。")
+                                          qsTr("导出、暂停单帧和图片照常逐帧完整推理。支持英伟达 NR 与 AMD NR、SDR 和列表模式。")
                                     wrapMode: Text.WordWrap
                                     color: Theme.t3
                                     font.family: Theme.fontUi; font.pixelSize: 11

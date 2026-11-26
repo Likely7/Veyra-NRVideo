@@ -122,9 +122,9 @@ int wmain(int argc,wchar_t** argv){
         preview.sr=false;preview.width=3840;preview.height=2160;preview.amdNr=true;preview.nvidiaAdapter=false;mr.nrRuntime=NrRuntime::LmxxfAmd;
         for(auto& n:mr.nrLayers)n.runtime=NrRuntime::LmxxfAmd;
         describeStages(preview,mr,md);
-        check(md.nrLayersExtent==std::vector<Extent>{{960,540},{1440,810}}&&md.validateFixedExecutionPlan().empty(),"AMD manual preview percentages stay within its existing model budget");
+        check(md.nrLayersExtent==std::vector<Extent>{{1280,720},{1920,1080}}&&md.validateFixedExecutionPlan().empty(),"AMD manual preview percentages stay within its 1440p model budget");
         preview.exportJob=true;describeStages(preview,mr,md);
-        check(md.nrLayersExtent==std::vector<Extent>{{960,540},{1440,810}}&&md.workWidth==3840,"AMD video export retains both manual percentages within the model budget");
+        check(md.nrLayersExtent==std::vector<Extent>{{1280,720},{1920,1080}}&&md.workWidth==3840,"AMD video export retains both manual percentages within the 1440p model budget");
         mr.nrRuntime=NrRuntime::Ampere;for(auto& n:mr.nrLayers)n.runtime=mr.nrRuntime;preview.amdNr=false;preview.nvidiaAdapter=true;describeStages(preview,mr,md);
         check(md.nrLayersExtent==std::vector<Extent>{{1920,1080},{2880,1620}}&&md.flowWidth==3840&&md.flowHeight==2160,"NVIDIA video export honors per-layer manual percentages and keeps offline guidance");
         bool manualExports=true;
@@ -138,8 +138,8 @@ int wmain(int argc,wchar_t** argv){
             manualExports&=md.nrLayersExtent==std::vector<Extent>{expected}&&md.workWidth==7680&&md.workHeight==4320&&md.flowWidth==7680&&md.flowHeight==4320&&md.validateFixedExecutionPlan().empty();
             settings.nrRuntime=NrRuntime::LmxxfAmd;settings.nrLayers[0].runtime=NrRuntime::LmxxfAmd;
             job.nvidiaAdapter=false;job.amdNr=true;describeStages(job,settings,md);
-            const Extent bounded{uint32_t(1920*percent/100)&~1u,uint32_t(1080*percent/100)&~1u};
-            manualExports&=md.nrLayersExtent==std::vector<Extent>{bounded}&&md.flowWidth==1920&&md.flowHeight==1080&&md.workWidth==7680&&md.validateFixedExecutionPlan().empty();
+            const Extent bounded{uint32_t(2560*percent/100)&~1u,uint32_t(1440*percent/100)&~1u};
+            manualExports&=md.nrLayersExtent==std::vector<Extent>{bounded}&&md.flowWidth==2560&&md.flowHeight==1440&&md.workWidth==7680&&md.validateFixedExecutionPlan().empty();
         }
         check(manualExports,"all 76 percentages survive export freeze and size real per-layer plans at 8K, with AMD input budget retained");
         auto invalidManual=manual;invalidManual.nrLayers[0].runtime=NrRuntime::LmxxfAmd;invalidManual.nrLayers[0].sizePolicy=NrSizePolicy(124);
