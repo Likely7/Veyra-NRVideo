@@ -188,16 +188,23 @@ Invoke-Robocopy $qmlTestSource (Join-Path $appPath 'qml-tests')
 # leave veyra_qml_quick_tests un-runnable in a fresh staging directory.
  $stageTemp = Join-Path $artifactRoot ('tmp\ui-migration-stage\' + [IO.Path]::GetFileName($appPath))
  New-Item -ItemType Directory -Path $stageTemp -Force | Out-Null
- $previousTemp = $env:TEMP; $previousTmp = $env:TMP
+ $previousTemp = $env:TEMP; $previousTmp = $env:TMP; $previousPath = $env:PATH
  try {
  $env:TEMP = $stageTemp; $env:TMP = $stageTemp
+ # Isolate windeployqt PATH from host user apps so stray dxcompiler.dll etc. are never copied.
+ $env:PATH = (Join-Path $qtRoot 'bin') + ';' + (Join-Path $env:SystemRoot 'System32') + ';' + $env:SystemRoot
  foreach ($name in @('veyra_qml_ui.exe', 'veyra_qml_easing_tests.exe', 'veyra_qml_quick_tests.exe')) {
   # QtTest is imported by the test sources, not by the application QML.
   $scanSource = if ($name -eq 'veyra_qml_quick_tests.exe') { $qmlTestSource } else { $qmlSource }
   & $windeployqt '--release' '--no-translations' '--qmldir' $scanSource '--qmlimport' $qmlSource '--dir' $appPath (Join-Path $appPath $name) | Out-Null
   if ($LASTEXITCODE -ne 0) { throw "windeployqt failed for $name with exit $LASTEXITCODE" }
 }
- } finally { $env:TEMP = $previousTemp; $env:TMP = $previousTmp }
+ } finally { $env:TEMP = $previousTemp; $env:TMP = $previousTmp; $env:PATH = $previousPath }
+ foreach ($forbidden in @('dxcompiler.dll', 'dxil.dll')) {
+  if (Test-Path -LiteralPath (Join-Path $appPath $forbidden)) {
+    throw "forbidden third-party/compiler DLL deployed into stage: $forbidden"
+  }
+ }
 
 # windeployqt deploys qwindows by default, but both QML tests run offscreen.
 $offscreenSource = Join-Path $qtRoot 'plugins\platforms\qoffscreen.dll'

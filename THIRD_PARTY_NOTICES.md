@@ -616,7 +616,7 @@ Veyra calls the pinned Chiaki orientation tracker API (AGPL-3.0-only with OpenSS
 
 ### PSN browser authorization adapter (2026-09-12)
 
-Historical attribution: this adapter was removed on 2026-11-11. Current Veyra opens its own Account ID guide (docs/PSN_ACCOUNT_ID.md), which points to Sony's own sign-in through psn-account-id or chiaki-ng, for manual Account ID lookup; it does not implement the old OAuth/token flow. Existing Chiaki protocol and dependency notices below still apply.
+Historical attribution: this adapter was removed on 2026-11-11. Current Veyra opens its own Account ID guide (docs/PSN_ACCOUNT_ID.md), which points to Sony's own sign-in through chiaki-ng, for manual Account ID lookup; it does not implement the old OAuth/token flow. Existing Chiaki protocol and dependency notices below still apply.
 
 `src/remoteplay/PsnAuth.cpp` adapts the OAuth request contract and public client identifiers from chiaki-ng, commit `0e16950165f06e5c3291537c2eeba6e852be7120`, `gui/src/psnaccountid.cpp`, `gui/include/psnaccountid.h`, and `gui/src/psntoken.cpp`. Upstream credits the Account ID script to grill2010. License: AGPL-3.0-only with the upstream OpenSSL exception. The Windows HTTP, protected storage and UI integration are Veyra code. This is an unofficial client, not Sony endorsement. json-c remains an existing Chiaki dependency; its license/notice must remain in binary distributions.
 

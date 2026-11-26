@@ -44,7 +44,6 @@
 #include <shobjidl.h>
 #include <dbghelp.h>
 #include <d3d12.h>
-#include <restartmanager.h>
 
 #include <chrono>
 #include <cerrno>
@@ -424,64 +423,20 @@ QString protocolTarget(const QString& argument) {
     return QUrlQuery(QUrl(argument).query()).queryItemValue(QStringLiteral("url"), QUrl::FullyDecoded);
 }
 
-bool reportLogHolders(const std::filesystem::path& path, int openErrno) {
-    std::error_code pathError;
-    const auto resource = std::filesystem::absolute(path, pathError).lexically_normal();
-    if (pathError) {
-        log::warn("app", std::format("primary log unavailable errno={} path error={}", openErrno, pathError.value()));
-        return false;
-    }
-    DWORD session = 0;
-    wchar_t key[CCH_RM_SESSION_KEY + 1]{};
-    DWORD result = RmStartSession(&session, 0, key);
-    if (result != ERROR_SUCCESS) {
-        log::warn("app", std::format("primary log unavailable errno={} restart manager start error={}", openErrno, result));
-        return false;
-    }
-    struct Session {
-        DWORD id;
-        ~Session() { RmEndSession(id); }
-    } scopedSession{session};
+void logStartupStage(const std::chrono::steady_clock::time_point& origin, const char* stage) {
+    const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - origin).count();
+    veyra::log::info("startup", std::format("stage={} elapsedMs={:.1f}", stage, ms));
+    veyra::Logger::instance().flush();
+}
 
-    PCWSTR file = resource.c_str();
-    result = RmRegisterResources(session, 1, &file, 0, nullptr, 0, nullptr);
-    UINT needed = 0, count = 0;
-    DWORD reboot = 0;
-    std::vector<RM_PROCESS_INFO> processes;
-    if (result == ERROR_SUCCESS) result = RmGetList(session, &needed, &count, nullptr, &reboot);
-    for (int attempt = 0; result == ERROR_MORE_DATA && attempt < 3; ++attempt) {
-        processes.resize(needed);
-        count = needed;
-        result = RmGetList(session, &needed, &count, processes.data(), &reboot);
-    }
-    log::warn("app", std::format("primary log unavailable errno={} restart manager result={} holders={}",
-                                openErrno, result, result == ERROR_SUCCESS ? count : 0));
-    if (result != ERROR_SUCCESS) return false;
-
-    bool anotherVeyra = false;
-    for (UINT i = 0; i < count; ++i) {
-        const auto& holder = processes.at(i).Process;
-        const DWORD pid = holder.dwProcessId;
-        bool veyraProcess = false;
-        if (pid != GetCurrentProcessId()) {
-            const HANDLE process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
-            if (process) {
-                FILETIME started{}, ended{}, kernel{}, user{};
-                std::wstring image(32768, L'\0');
-                DWORD size = DWORD(image.size());
-                if (GetProcessTimes(process, &started, &ended, &kernel, &user)
-                    && CompareFileTime(&started, &holder.ProcessStartTime) == 0
-                    && QueryFullProcessImageNameW(process, 0, image.data(), &size)) {
-                    const auto name = std::filesystem::path(std::wstring_view(image.data(), size)).filename();
-                    veyraProcess = _wcsicmp(name.c_str(), L"veyra_qml_ui.exe") == 0;
-                }
-                CloseHandle(process);
-            }
-        }
-        anotherVeyra |= veyraProcess;
-        log::info("app", std::format("primary log holder pid={} veyra={}", pid, veyraProcess));
-    }
-    return anotherVeyra;
+void showFatalStartupError(bool quiet, const std::wstring& chinese, const std::wstring& english,
+                           const std::filesystem::path& logPath, const std::string& detail = {}) {
+    veyra::Logger::instance().flush();
+    if (quiet) return;
+    std::wstring message = chinese + L"\n" + english;
+    if (!detail.empty()) message += L"\n\n" + QString::fromUtf8(detail.data(), int(detail.size())).toStdWString();
+    if (!logPath.empty()) message += L"\n\n日志文件 / Log file:\n" + logPath.wstring();
+    MessageBoxW(nullptr, message.c_str(), L"Veyra", MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
 }
 } // namespace
 
@@ -564,6 +519,7 @@ LONG WINAPI crashFilter(EXCEPTION_POINTERS* info) {
 } // namespace
 
 static int runApplication(int argc, char** argv, QString& restartProgram, QStringList& restartArgs) {
+    const auto startupOrigin = std::chrono::steady_clock::now();
     const bool updateProbe = argc > 2 && std::strcmp(argv[1], "--portable-update-probe") == 0;
     // ExportJobManager relaunches the owning executable with an inherited mapping.
     // Dispatch before Qt or the video HWND exists, as the Win32 shell does.
@@ -588,7 +544,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     }
     auto legacyDirectory = veyra::runtime::userDataDirectory();
     auto dataDirectory = legacyDirectory / L"user-data-2.0.0";
-    bool explicitDataDirectory = false, obsGameCaptureArg = false, overlayCompatRestart = false;
+    bool explicitDataDirectory = false, obsGameCaptureArg = false, overlayCompatRestart = false, hasExitAfter = false;
     for (size_t i = 0; i < launchArgs.size(); ++i) {
         const auto& arg = launchArgs.at(i);
         if (arg == L"--data-dir" && i + 1 < launchArgs.size()) {
@@ -600,8 +556,12 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             obsGameCaptureArg = true;
         } else if (arg == L"--overlay-compat-restart") {
             overlayCompatRestart = true;
+        } else if (arg == L"--exit-after" && i + 1 < launchArgs.size()) {
+            hasExitAfter = true;
+            ++i;
         }
     }
+    const bool quietStartupFailure = updateProbe || hasExitAfter;
     QFile prefFile(QString::fromStdWString((dataDirectory / L"qml-preferences.v1.json").wstring()));
     QJsonObject saved;
     if (prefFile.open(QIODevice::ReadOnly)) {
@@ -642,8 +602,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                        + QStringLiteral("\n") + QString::fromStdWString(dump.wstring());
         }
         ui::i18n::apply(QStringLiteral("zh-CN"));
-        const UINT flags = notice == instance::Notice::ConfirmEnd
-            ? MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING : MB_OK | MB_ICONINFORMATION;
+        const UINT flags = (notice == instance::Notice::ConfirmEnd
+            ? MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING : MB_OK | MB_ICONINFORMATION)
+            | MB_SETFOREGROUND | MB_TOPMOST;
         return MessageBoxW(nullptr, reinterpret_cast<LPCWSTR>(message.utf16()), L"Veyra", flags) == IDYES;
     };
     wchar_t logOverride[32768]{};
@@ -675,16 +636,18 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     bool anotherVeyraLogHolder = false;
     if (!veyra::Logger::instance().openFile(logPath.wstring(), true)) {
         const int openErrno = errno;
-        const auto mainLog = logPath;
         logPath = logPath.parent_path() / (L"veyra-qml-" + std::to_wstring(GetCurrentProcessId()) + L".log");
         (void)veyra::Logger::instance().openFile(logPath.wstring(), true);
-        anotherVeyraLogHolder = reportLogHolders(mainLog, openErrno);
+        anotherVeyraLogHolder = (openErrno == EACCES);
+        veyra::log::warn("app", std::format("primary log unavailable errno={} fallback={} skipAutoResume={}",
+            openErrno, QString::fromStdWString(logPath.filename().wstring()).toStdString(), anotherVeyraLogHolder));
     }
     if (const DWORD error = profileInstance.lockError(); error != ERROR_SUCCESS)
         log::warn("app-instance", std::format("profile mutex unavailable; startup continuing error={}", error));
     g_crashDumpDirectory = logPath.parent_path().wstring();
     veyra::engine::EngineWatchdog::setDumpDirectory(g_crashDumpDirectory);
     SetUnhandledExceptionFilter(crashFilter);
+    logStartupStage(startupOrigin, "log-ready");
 
     // Interface scale (设置 → 界面缩放) has to be fixed before Qt starts, so the
     // preference file is read here, from the same data directory the bridge uses.
@@ -781,6 +744,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         GetEnvironmentVariableW(L"CUDA_CACHE_MAXSIZE", value, 32);
         veyra::log::info("app", std::format("CUDA compute cache maxSize={} (compiled VFG kernels are kept between sessions)", std::string(value, value + wcslen(value))));
     }
+    logStartupStage(startupOrigin, "qapplication-start");
     QApplication app(argc, argv);
     // Qt does not automatically use the executable's Win32 icon for its windows.
     // Load the same embedded multi-size resource for the taskbar and Alt+Tab.
@@ -846,6 +810,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     app.setApplicationName(QStringLiteral("Veyra"));
     app.setOrganizationName(QStringLiteral("Veyra"));
     veyra::log::info("app", "Veyra QML session started");
+    logStartupStage(startupOrigin, "qapplication-ready");
 
     engine::EngineController controller;
 
@@ -862,6 +827,10 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         const auto migration = ui::prepareQmlDataDirectory(legacyDirectory, dataDirectory);
         if (!migration.ok) {
             veyra::log::error("app", "2.0.0 data migration failed: " + migration.error);
+            showFatalStartupError(quietStartupFailure,
+                                  L"配置数据目录初始化失败，请检查安装/数据目录权限。",
+                                  L"Failed to initialize the Veyra data directory. Check folder permissions.",
+                                  logPath, migration.error);
             return 2;
         }
         veyra::log::info("app", std::format("2.0.0 data directory ready; copied {} legacy files",
@@ -875,7 +844,9 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         protocolUrl = protocolTarget(a);
         if (!protocolUrl.isEmpty()) break;
     }
+    logStartupStage(startupOrigin, "bridge-start");
     ui::QmlPlayerBridge bridge(controller, dataDirectory);
+    logStartupStage(startupOrigin, "bridge-ready");
     if (updateProbe && portable::releaseVersion(bridge.version()) != QString::fromLatin1(argv[2])) return 2;
     bridge.attachVideoWindow(reinterpret_cast<qulonglong>(g_video));
     auto* updater = qobject_cast<ui::UpdateChecker*>(bridge.updates())->portableUpdate();
@@ -1098,18 +1069,28 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
                                             testSize.width(), testSize.height()));
     veyra::log::info("qml-window", std::format("probe mode={}", videoProbeName()));
     engine.rootContext()->setContextProperty(QStringLiteral("vyTest"), testOptions);
+    logStartupStage(startupOrigin, "qml-load-start");
     engine.loadFromModule("Veyra", "Main");
 
     if (engine.rootObjects().isEmpty()) {
         veyra::log::error("qml", "no root object: the QML module failed to load");
+        showFatalStartupError(quietStartupFailure,
+                              L"界面模块加载失败，安装文件可能不完整。请重新解压或使用官方安装包修复。",
+                              L"Failed to load the Veyra QML interface. Re-extract the package or repair with the official installer.",
+                              logPath);
         return 1;
     }
 
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().first());
     if (!window) {
         veyra::log::error("qml", "root object is not a window");
+        showFatalStartupError(quietStartupFailure,
+                              L"主窗口创建失败，请检查日志并修复安装。",
+                              L"Failed to create the main Veyra window. Check the log file and repair the installation.",
+                              logPath);
         return 1;
     }
+    logStartupStage(startupOrigin, "qml-window-ready");
     if (testSize.isValid()) window->resize(testSize);
 
     // Fullscreen must own the whole monitor. Without telling the shell, the taskbar
@@ -1452,8 +1433,13 @@ int main(int argc, char** argv) {
                     for (int i = 1; i < count; ++i) args << QString::fromWCharArray(wide[i]);
                     LocalFree(wide);
                 }
-                return QProcess::startDetached(QString::fromStdWString((root / portable::launcherName).wstring()), args)
-                    ? 0 : 1;
+                const auto launcherPath = root / portable::launcherName;
+                if (QProcess::startDetached(QString::fromStdWString(launcherPath.wstring()), args)) return 0;
+                const std::wstring message = L"无法启动根目录的 Veyra.exe，可能已被删除或被安全软件拦截。\n请检查 Windows 安全中心的保护历史记录，或使用官方安装包修复。\n\n"
+                    L"Could not start Veyra.exe. It may be missing or blocked by security software. Check Protection history or repair with the official installer.\n\n"
+                    + launcherPath.wstring();
+                MessageBoxW(nullptr, message.c_str(), L"Veyra", MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
+                return 1;
             }
         }
     }
@@ -1464,6 +1450,6 @@ int main(int argc, char** argv) {
     // Player, QML engine and QApplication have all been destroyed.
     if (QProcess::startDetached(program, arguments)) return 0;
     MessageBoxW(nullptr, L"设置已保存，但自动重启失败。请重新打开软件。\nSettings saved. Automatic restart failed; please reopen Veyra.",
-                L"Veyra", MB_OK | MB_ICONERROR);
+                L"Veyra", MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
     return 1;
 }

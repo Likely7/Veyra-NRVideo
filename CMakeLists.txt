@@ -112,6 +112,7 @@ add_library(veyra_base STATIC
   src/base/PrivateFrameTrace.cpp
   src/base/NgxResult.cpp
   src/base/FileIdentity.cpp
+  src/base/LauncherInstance.cpp
   src/base/InstanceWindow.cpp
   src/base/RuntimePaths.cpp
   src/base/ThunkHook.cpp
@@ -1394,12 +1395,12 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_include_directories(veyra_portable_manifest PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
   target_link_libraries(veyra_portable_manifest PUBLIC Qt6::Core PRIVATE OpenSSL::Crypto ws2_32 crypt32)
 
-  add_executable(veyra_portable_launcher WIN32 apps/veyra-portable/Launcher.cpp)
+  add_executable(veyra_portable_launcher WIN32 apps/veyra-portable/Launcher.cpp src/base/LauncherInstance.cpp)
   target_compile_features(veyra_portable_launcher PRIVATE cxx_std_20)
   target_compile_options(veyra_portable_launcher PRIVATE /utf-8)
   target_compile_definitions(veyra_portable_launcher PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_portable_launcher PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-  target_link_libraries(veyra_portable_launcher PRIVATE veyra_base shell32 user32)
+  target_link_libraries(veyra_portable_launcher PRIVATE shell32 user32)
   add_executable(veyra_update_worker apps/veyra-portable/UpdateWorker.cpp)
   target_compile_definitions(veyra_update_worker PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_link_libraries(veyra_update_worker PRIVATE veyra_portable_manifest ole32 uuid)
@@ -1609,7 +1610,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   # Reserve only: pages are committed as they are touched.
   target_link_options(veyra_qml_ui PRIVATE /STACK:8388608)
   # Qt6::CorePrivate only for QUnifiedTimer's slow mode behind --slow-animations.
-  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine veyra_startup_music Qt6::CorePrivate dbghelp ole32 rstrtmgr)
+  target_link_libraries(veyra_qml_ui PRIVATE veyra_qml_bridge veyra_engine veyra_startup_music Qt6::CorePrivate dbghelp ole32)
 
   add_executable(veyra_qml_data_tests tests/unit/QmlDataDirectoryTests.cpp src/ui/QmlDataDirectory.cpp)
   add_executable(veyra_capture_capability_tests tests/unit/CaptureCapabilityTests.cpp)
@@ -2132,12 +2133,18 @@ endif()
 
 # Layered child subtitle windows require a modern-Windows compatibility manifest.
 if(TARGET veyra_qml_ui)
+  set(VEYRA_RESOURCE_DESCRIPTION "Veyra Video Player")
+  set(VEYRA_RESOURCE_INTERNAL_NAME "veyra_qml_ui")
   set(VEYRA_RESOURCE_FILENAME "veyra_qml_ui.exe")
   configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc @ONLY)
   target_sources(veyra_qml_ui PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc)
+  set(VEYRA_RESOURCE_DESCRIPTION "Veyra Launcher")
+  set(VEYRA_RESOURCE_INTERNAL_NAME "Veyra")
   set(VEYRA_RESOURCE_FILENAME "Veyra.exe")
   configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-portable-version.rc @ONLY)
   target_sources(veyra_portable_launcher PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-portable-version.rc)
+  set(VEYRA_RESOURCE_DESCRIPTION "Veyra Update Worker")
+  set(VEYRA_RESOURCE_INTERNAL_NAME "veyra_update_worker")
   set(VEYRA_RESOURCE_FILENAME "veyra_update_worker.exe")
   configure_file(apps/veyra/version.rc.in ${CMAKE_CURRENT_BINARY_DIR}/veyra-updater-version.rc @ONLY)
   target_sources(veyra_update_worker PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/veyra-updater-version.rc)
@@ -2145,7 +2152,11 @@ endif()
 configure_file(apps/veyra/resource.h ${CMAKE_CURRENT_BINARY_DIR}/veyra-resource.h COPYONLY)
 configure_file(assets/veyra.ico ${CMAKE_CURRENT_BINARY_DIR}/veyra.ico COPYONLY)
 if(TARGET veyra_qml_ui)
-  set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc PROPERTIES
+  set_source_files_properties(
+    ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml-version.rc
+    ${CMAKE_CURRENT_BINARY_DIR}/veyra-portable-version.rc
+    ${CMAKE_CURRENT_BINARY_DIR}/veyra-updater-version.rc
+    PROPERTIES
     OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/assets/veyra.ico;${CMAKE_CURRENT_SOURCE_DIR}/apps/veyra/resource.h")
 endif()
 # P4-c: the QML front end hosts the same layered child subtitle window.
@@ -2153,5 +2164,7 @@ if(TARGET veyra_qml_ui)
   # Copied next to the link step and named relatively: a short link line keeps
   # link.exe off the (ANSI-decoded) response file.
   configure_file(apps/veyra/veyra.manifest ${CMAKE_CURRENT_BINARY_DIR}/veyra-qml.manifest COPYONLY)
-  target_link_options(veyra_qml_ui PRIVATE "/MANIFESTINPUT:veyra-qml.manifest")
+  target_link_options(veyra_qml_ui PRIVATE "/MANIFESTUAC:NO" "/MANIFESTINPUT:veyra-qml.manifest")
+  target_link_options(veyra_portable_launcher PRIVATE "/MANIFESTUAC:NO" "/MANIFESTINPUT:veyra-qml.manifest")
+  target_link_options(veyra_update_worker PRIVATE "/MANIFESTUAC:NO" "/MANIFESTINPUT:veyra-qml.manifest")
 endif()

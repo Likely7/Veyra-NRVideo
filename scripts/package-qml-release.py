@@ -20,6 +20,46 @@ ROOT = Path(__file__).resolve().parents[1]
 ARTIFACTS = Path('E:/项目/Veyra')
 FORBIDDEN = {'.pdb', '.lib', '.obj', '.h', '.hpp', '.cpp', '.c', '.zip', '.7z',
              '.pth', '.onnx', '.log', '.dmp', '.mp4', '.mkv', '.partial', '.addon64'}
+# Optional shader compilers on a build host's PATH (for example Chromium/Dawn
+# apps) must never leak into release stages; Veyra ships precompiled .dxil.
+FORBIDDEN_FILES = {'dxcompiler.dll', 'dxil.dll'}
+# Approved Authenticode subject prefixes for signed third-party binaries.
+APPROVED_SIGNERS = (
+    'CN=The Qt Company',
+    'CN=Microsoft',
+    'CN=NVIDIA Corporation',
+    'CN=Advanced Micro Devices',
+    'CN=Intel Corporation',
+)
+# Unsigned binaries explicitly produced or audited for Veyra packages.
+ALLOWED_UNSIGNED_FILES = {
+    'Veyra.exe',
+    'veyra_qml_ui.exe',
+    'veyra_update_worker.exe',
+    'virtualcam/veyra-camera-setup.exe',
+    'virtualcam/veyra-virtualcam32.dll',
+    'virtualcam/veyra-virtualcam64.dll',
+    'runtime/amd-nr-rdna3/veyra_amd_nr_worker.exe',
+    'runtime/amd-nr-rdna3/zluda/nvapi64.dll',
+    'runtime/amd-nr-rdna3/zluda/nvcuda.dll',
+    'runtime/amd-nr-rdna3/zluda/nvngx.dll',
+    'runtime/amd-nr-rdna3/zluda/zluda_nvapi.dll',
+    'runtime/amd-nr-rdna3/zluda/zluda_real.dll',
+    'avcodec-63.dll',
+    'avfilter-12.dll',
+    'avformat-63.dll',
+    'avutil-61.dll',
+    'swresample-7.dll',
+    'swscale-10.dll',
+    'dav1d.dll',
+    'dolby_vision.dll',
+    'dovi.dll',
+    'libdovi.dll',
+    'runtime/magewell/LibMWCapture.dll',
+    'runtime/experimental/nr-ampere/nvngx_dlssnr.dll',
+    'runtime/amd-nr/LmxxfNrRuntime.dll',
+    'runtime/amd-nr/LmxxfNrRuntime-Original.dll',
+}
 # The beauty node's models (2.1.0): the one ONNX file a package may carry is the
 # YuNet face detector (OpenCV Zoo 47534e27, MIT), beside MediaPipe's face landmark
 # model (v0.8.9, Apache-2.0); see THIRD_PARTY_NOTICES.md. Exact path and content.
@@ -56,6 +96,8 @@ def relative(name):
 def validate_payload(name):
     p = relative(name)
     parts = {part.lower() for part in p.parts}
+    if p.name.casefold() in FORBIDDEN_FILES:
+        raise ValueError('Forbidden third-party or compiler DLL in candidate: ' + name)
     if 'frame_analyzer' in parts or p.stem.casefold() in {'veyra_frame_analyzer', 'test_frame_analyzer'}:
         raise ValueError('Developer frame analyzer in candidate: ' + name)
     if (p.suffix.lower() in FORBIDDEN and name not in MODELS) or parts & {'logs', 'captures', 'qml-tests', '.git', 'third_party_local'}:
@@ -228,6 +270,15 @@ def main():
     env = os.environ.copy()
     tmp = Path(tempfile.mkdtemp(prefix='package-' + args.label + '-', dir=ARTIFACTS / 'tmp'))
     env.update(TEMP=str(tmp), TMP=str(tmp))
+    system_root = os.environ.get('SystemRoot', r'C:\Windows')
+    # Isolate windeployqt PATH from host user apps (prevents third-party
+    # dxcompiler.dll or stale DLLs from leaking into the release stage).
+    deploy_env = env.copy()
+    deploy_env['PATH'] = os.pathsep.join([
+        str(args.qt / 'bin'),
+        str(Path(system_root) / 'System32'),
+        system_root,
+    ])
     env['PATH'] = str(args.qt / 'bin') + os.pathsep + env['PATH']
 
     def copy(source, name):
@@ -274,7 +325,7 @@ def main():
         subprocess.run([str(args.qt / 'bin/windeployqt.exe'), '--release', '--qmldir', str(ROOT / 'qml'),
                         '--no-compiler-runtime', '--no-translations', '--no-patchqt', '--no-opengl-sw',
                         '--skip-plugin-types', 'qmltooling,generic', str(stage / 'veyra_qml_ui.exe')],
-                       env=env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=290)
+                       env=deploy_env, stdout=log, stderr=subprocess.STDOUT, check=True, timeout=290)
     (stage / 'qt.conf').write_text('[Paths]\nPrefix=.\nPlugins=.\nQmlImports=qml\nTranslations=translations\n', encoding='utf8')
 
     cache = (args.build / 'CMakeCache.txt').read_text(encoding='utf8')
@@ -371,6 +422,36 @@ foreach($f in $lock.files) {
             copy(ROOT / 'docs' / name, 'docs/' + name)
 
     tree(ROOT / 'docs/images/2.0.0', 'docs/images/2.0.0')
+    stage_audit_env = {k: v for k, v in env.items() if k.upper() != 'PSMODULEPATH'}
+    stage_audit_env['VEYRA_STAGE_ROOT'] = str(stage)
+    stage_sig_script = r"""$ErrorActionPreference='Stop';
+$root=$env:VEYRA_STAGE_ROOT;
+$rows=Get-ChildItem -LiteralPath $root -Recurse -File | Where-Object { $_.Extension -in '.exe','.dll' } | ForEach-Object {
+  $s=Get-AuthenticodeSignature -LiteralPath $_.FullName;
+  [pscustomobject]@{
+    rel=$_.FullName.Substring($root.Length+1).Replace('\','/');
+    status=[string]$s.Status;
+    signer=if($s.SignerCertificate){$s.SignerCertificate.Subject}else{''}
+  }
+};
+@($rows) | ConvertTo-Json -Depth 4"""
+    sig_rows = json.loads(subprocess.check_output(
+        ['powershell.exe', '-NoProfile', '-NonInteractive', '-Command', stage_sig_script],
+        env=stage_audit_env, timeout=290).decode('utf-8-sig'))
+    if isinstance(sig_rows, dict):
+        sig_rows = [sig_rows]
+    for row in sig_rows:
+        rel = row['rel']
+        status_val = row['status']
+        signer = row['signer']
+        if status_val == 'Valid':
+            if not any(signer.startswith(prefix) for prefix in APPROVED_SIGNERS):
+                raise ValueError(f'Unapproved binary signer in stage: {rel} ({signer})')
+        elif status_val == 'NotSigned':
+            if rel.lower() not in {p.lower() for p in ALLOWED_UNSIGNED_FILES}:
+                raise ValueError(f'Unexpected unsigned binary in stage: {rel}')
+        else:
+            raise ValueError(f'Invalid Authenticode signature in stage: {rel} ({status_val})')
     records = []
     for f in sorted(stage.rglob('*')):
         if f.lstat().st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:

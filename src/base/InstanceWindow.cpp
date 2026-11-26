@@ -1,6 +1,5 @@
 #include "veyra/base/InstanceWindow.h"
 
-#include "veyra/FileIdentity.h"
 #include "veyra/base/PortableFiles.h"
 #include <tlhelp32.h>
 #include <cstdint>
@@ -15,7 +14,6 @@ using ProcessHandle = std::unique_ptr<void, decltype(&CloseHandle)>;
 using Path = std::filesystem::path;
 constexpr auto ownerName = L".veyra-instance.v1";
 constexpr auto endingName = L".veyra-exit-request.v1";
-constexpr DWORD shortProbeMs = 1200;
 
 uint64_t fileTime(const FILETIME& value) {
     return (uint64_t(value.dwHighDateTime) << 32) | value.dwLowDateTime;
@@ -35,10 +33,6 @@ std::string utf8Path(const Path& path) {
     return {reinterpret_cast<const char*>(text.data()), text.size()};
 }
 
-Path pathFromUtf8(std::string_view text) {
-    return Path(std::u8string_view(reinterpret_cast<const char8_t*>(text.data()), text.size()));
-}
-
 std::optional<DWORD> threadCount(DWORD pid) {
     const HANDLE raw = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
     if (raw == INVALID_HANDLE_VALUE) return {};
@@ -49,44 +43,6 @@ std::optional<DWORD> threadCount(DWORD pid) {
         if (entry.th32ProcessID == pid) return entry.cntThreads;
     }
     return {};
-}
-
-Path newestHangDump(const Path& directory, DWORD pid, uint64_t created) {
-    if (directory.empty() || !created) return {};
-    WIN32_FIND_DATAW entry{};
-    const auto pattern = directory / (L"veyra-hang-*-" + std::to_wstring(pid) + L".dmp");
-    const HANDLE scan = FindFirstFileW(pattern.c_str(), &entry);
-    if (scan == INVALID_HANDLE_VALUE) return {};
-    Path newest;
-    uint64_t latest = created;
-    do {
-        const auto written = fileTime(entry.ftLastWriteTime);
-        if ((entry.dwFileAttributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT))
-            || (!entry.nFileSizeHigh && !entry.nFileSizeLow) || written < latest) continue;
-        newest = directory / entry.cFileName;
-        latest = written;
-    } while (FindNextFileW(scan, &entry));
-    FindClose(scan);
-    return newest;
-}
-
-bool forwardLaunch(HWND window, DWORD pid, const std::wstring& target) {
-    if (target.size() > maxTargetChars) return false;
-    AllowSetForegroundWindow(pid);
-    COPYDATASTRUCT data{launchMessage, DWORD(target.size() * sizeof(wchar_t)), const_cast<wchar_t*>(target.data())};
-    DWORD_PTR reply = 0;
-    return SendMessageTimeoutW(window, WM_COPYDATA, 0, reinterpret_cast<LPARAM>(&data),
-                               SMTO_BLOCK | SMTO_ABORTIFHUNG | SMTO_ERRORONEXIT,
-                               3000, &reply) && reply == launchMessage;
-}
-
-bool timedOut(HWND window, DWORD timeout = shortProbeMs) {
-    // A protocol mismatch, destroyed window, or elevation barrier must never
-    // be treated as an unresponsive message pump.
-    DWORD_PTR reply = 0;
-    SetLastError(ERROR_SUCCESS);
-    return !SendMessageTimeoutW(window, WM_NULL, 0, 0, SMTO_BLOCK | SMTO_ERRORONEXIT,
-                                timeout, &reply) && GetLastError() == ERROR_TIMEOUT;
 }
 
 bool runningExecutable(HANDLE process, const std::filesystem::path& expected) {
@@ -109,27 +65,13 @@ struct Owner {
 std::optional<Owner> liveOwner(const Path& directory) {
     // The stamp survives the UI thread and the mutex. A reused PID cannot
     // carry ownership into a new process.
-    const auto file = directory / ownerName;
-    if (!portable::plainPath(file, false)) return {};
-    const auto text = portable::readSmallFile(file, maxTargetChars * 4 + 64);
-    const auto space = text.find(' ');
-    const auto first = text.find('\n');
-    const auto second = first == std::string::npos ? first : text.find('\n', first + 1);
-    if (space == std::string::npos || first == std::string::npos || space >= first
-        || second == std::string::npos || second - first != 2
-        || (text[first + 1] != '0' && text[first + 1] != '1')) return {};
+    const auto stamp = readOwnerStamp(directory);
+    if (!stamp) return {};
     Owner owner;
-    const auto pid = std::from_chars(text.data(), text.data() + space, owner.pid);
-    const auto start = std::from_chars(text.data() + space + 1, text.data() + first, owner.created);
-    if (pid.ec != std::errc{} || pid.ptr != text.data() + space || !owner.pid
-        || owner.pid == GetCurrentProcessId() || start.ec != std::errc{}
-        || start.ptr != text.data() + first || !owner.created) return {};
-    try {
-        owner.logs = pathFromUtf8(std::string_view(text).substr(second + 1));
-    } catch (const std::filesystem::filesystem_error&) {
-        return {};
-    }
-    owner.windowReady = text[first + 1] == '1';
+    owner.pid = stamp->pid;
+    owner.created = stamp->created;
+    owner.windowReady = stamp->windowReady;
+    owner.logs = stamp->logs;
     owner.process.reset(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE, FALSE, owner.pid));
     if (!owner.process || processStart(owner.process.get()) != owner.created
         || WaitForSingleObject(owner.process.get(), 0) != WAIT_TIMEOUT) return {};
@@ -143,57 +85,6 @@ bool alreadyEnding(const Path& directory, DWORD pid, uint64_t created) {
 }
 
 } // namespace
-
-std::wstring profileKey(const std::filesystem::path& profile) {
-    std::error_code ec;
-    auto absolute = std::filesystem::absolute(profile, ec);
-    if (ec) return {};
-    auto canonical = std::filesystem::weakly_canonical(absolute, ec);
-    auto normalized = (ec ? absolute.lexically_normal() : canonical).make_preferred();
-    if (normalized.filename().empty() && normalized != normalized.root_path()) normalized = normalized.parent_path();
-    auto path = normalized.wstring();
-    CharLowerBuffW(path.data(), DWORD(path.size()));
-    const auto hash = sha256Hex(reinterpret_cast<const uint8_t*>(path.data()), path.size() * sizeof(wchar_t));
-    return hash.empty() ? std::wstring{} : L"Local\\Veyra.Qml.Profile." + std::wstring(hash.begin(), hash.end());
-}
-
-std::wstring launchTarget(std::span<const std::wstring> arguments) {
-    std::wstring target;
-    for (size_t i = 0; i < arguments.size(); ++i) {
-        const auto& option = arguments[i];
-        if (option == L"--managed-portable") continue;
-        if (option == L"--data-dir" || option == L"--import-1.4.4-data") {
-            ++i;
-            continue;
-        }
-        // Other switches belong to a fresh launch or an isolated test run.
-        if (option.starts_with(L'-')) return {};
-        target = option;
-    }
-    const auto colon = target.find(L':');
-    // Leave URL schemes for the player's existing URL validation. A colon at
-    // character one belongs to a Windows drive.
-    if (target.empty() || (colon != std::wstring::npos && colon > 1 && target.find_first_of(L"\\/") > colon))
-        return target;
-    std::error_code ec;
-    const auto absolute = std::filesystem::absolute(std::filesystem::path(target), ec);
-    return ec ? std::wstring{} : absolute.lexically_normal().wstring();
-}
-
-HWND findWindow(const std::wstring& key) {
-    if (key.empty()) return nullptr;
-    struct Search {
-        const std::wstring& key;
-        HWND window = nullptr;
-    } search{key};
-    EnumWindows([](HWND window, LPARAM arg) -> BOOL {
-        auto& search = *reinterpret_cast<Search*>(arg);
-        if (!GetPropW(window, search.key.c_str())) return TRUE;
-        search.window = window;
-        return FALSE;
-    }, reinterpret_cast<LPARAM>(&search));
-    return search.window;
-}
 
 ProcessExit waitForExit(HANDLE process, bool endRequested) {
     const DWORD result = WaitForSingleObject(process, endRequested ? 5000 : 0);
@@ -216,6 +107,10 @@ bool Profile::rememberOwner(bool windowReady) const {
     return portable::writeSmallFile(directory_ / ownerName,
         identityText(GetCurrentProcessId(), created) + (windowReady ? "\n1\n" : "\n0\n")
         + (ec ? std::string{} : utf8Path(logs)));
+}
+
+void Profile::clearOwner() const {
+    clearOwnerStamp(directory_);
 }
 
 bool Profile::ownerAlive() const {

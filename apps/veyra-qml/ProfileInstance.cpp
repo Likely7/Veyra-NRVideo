@@ -8,7 +8,10 @@
 namespace veyra::ui {
 
 ProfileInstance::~ProfileInstance() {
-    if (owns_) ReleaseMutex(mutex_);
+    if (owns_) {
+        profile_.clearOwner();
+        ReleaseMutex(mutex_);
+    }
     if (mutex_) CloseHandle(mutex_);
 }
 

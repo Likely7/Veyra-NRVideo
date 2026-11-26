@@ -97,9 +97,17 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     veyra::log::info("ui-prefs",std::format("volume restored={:.3f} muted={}",gain,mute));
     logShortcuts();
     syncReplay();
-    impl_->enumerateGpuAdapters();
-    impl_->resolveGpuMonitor();
-    impl_->applyComputeGpu();
+    {
+        const auto gpuStart = std::chrono::steady_clock::now();
+        veyra::log::info("startup", "stage=gpu-enum-start");
+        veyra::Logger::instance().flush();
+        impl_->enumerateGpuAdapters();
+        impl_->resolveGpuMonitor();
+        impl_->applyComputeGpu();
+        const double gpuMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - gpuStart).count();
+        veyra::log::info("startup", std::format("stage=gpu-enum-ready adapters={} elapsedMs={:.1f}", impl_->gpuAdapters.size(), gpuMs));
+        veyra::Logger::instance().flush();
+    }
     connect(this,&QmlPlayerBridge::snapshotChanged,this,
         [this,ceiling=fgMaxMultiplier(),text=fgProviderText()]() mutable {
             const auto nextCeiling=fgMaxMultiplier();const auto nextText=fgProviderText();

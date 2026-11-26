@@ -1,5 +1,8 @@
 #include "veyra/base/InstanceWindow.h"
+#include "veyra/FileIdentity.h"
+#include "veyra/base/PortableFiles.h"
 #include <cstdio>
+#include <filesystem>
 #include <string_view>
 #include <thread>
 
@@ -69,5 +72,84 @@ int wmain(int argc, wchar_t** argv) {
     CloseHandle(exited);
     if (result != ProcessExit::Exited) return 1;
     std::puts("PASS signaled handle confirms exit even if the request raced");
+
+    // Pure-C++ SHA-256 profileKey must match BCrypt sha256Hex byte-for-byte
+    // so Veyra.exe stays compatible across in-app updates and rollbacks.
+    {
+        for (const std::wstring_view sample : {
+                std::wstring_view(L"C:\\Veyra\\user-data-2.0.0"),
+                std::wstring_view(L"C:\\Users\\Test\\AppData\\Local\\Veyra\\a-longer-profile-path-spanning-multiple-sha256-blocks\\user-data-2.0.0"),
+                std::wstring_view(L"E:\\Veyra\\55bytes-boundary-check\\1234567890")}) {
+            std::error_code ec;
+            auto abs = std::filesystem::absolute(std::filesystem::path(sample), ec);
+            auto can = std::filesystem::weakly_canonical(abs, ec);
+            auto norm = (ec ? abs.lexically_normal() : can).make_preferred();
+            if (norm.filename().empty() && norm != norm.root_path()) norm = norm.parent_path();
+            auto lower = norm.wstring();
+            CharLowerBuffW(lower.data(), DWORD(lower.size()));
+            const auto expectedHash = veyra::sha256Hex(
+                reinterpret_cast<const uint8_t*>(lower.data()), lower.size() * sizeof(wchar_t));
+            const auto expected = L"Local\\Veyra.Qml.Profile." + std::wstring(expectedHash.begin(), expectedHash.end());
+            const auto actual = profileKey(std::filesystem::path(sample));
+            if (actual != expected || actual.empty()) {
+                std::puts("FAIL profileKey SHA-256 mismatch with BCrypt");
+                return 1;
+            }
+        }
+        std::puts("PASS pure-C++ profileKey matches BCrypt SHA-256 across paths");
+    }
+
+    // Stalled-owner stamp check and cleanup (no OpenProcess/Toolhelp32 needed in launcher).
+    {
+        wchar_t tempBuf[MAX_PATH]{};
+        const DWORD tempLen = GetTempPathW(MAX_PATH, tempBuf);
+        if (!tempLen || tempLen >= MAX_PATH) return 2;
+        const auto root = std::filesystem::path(tempBuf)
+            / (L"veyra-instance-test-" + std::to_wstring(GetCurrentProcessId()));
+        const auto logs = root / L"logs";
+        std::error_code ec;
+        std::filesystem::remove_all(root, ec);
+        std::filesystem::create_directories(logs, ec);
+        const DWORD fakePid = GetCurrentProcessId() + 1000;
+        const auto dumpPath = logs / (L"veyra-hang-20261126-000000-" + std::to_wstring(fakePid) + L".dmp");
+        if (!veyra::portable::writeSmallFile(dumpPath, "dump")) return 2;
+        const auto logsU8 = logs.u8string();
+        const std::string logsStr(reinterpret_cast<const char*>(logsU8.data()), logsU8.size());
+        // windowReady=0 must NOT trigger EndPending.
+        if (!veyra::portable::writeSmallFile(root / L".veyra-instance.v1",
+                std::to_string(fakePid) + " 1\n0\n" + logsStr)) return 2;
+        bool called = false;
+        if (reportStalledOwnerFromStamp(root, logs, [&](Notice, DWORD, const std::filesystem::path&) {
+                called = true; return false;
+            }) || called) {
+            std::puts("FAIL windowReady=0 unexpectedly reported stalled owner");
+            std::filesystem::remove_all(root, ec);
+            return 1;
+        }
+        // windowReady=1 must report EndPending with matching PID and hang dump.
+        Notice seenNotice = Notice::AlreadyOpen;
+        DWORD seenPid = 0;
+        std::filesystem::path seenDump;
+        if (!veyra::portable::writeSmallFile(root / L".veyra-instance.v1",
+                std::to_string(fakePid) + " 1\n1\n" + logsStr)) return 2;
+        const bool reported = reportStalledOwnerFromStamp(root, logs,
+            [&](Notice n, DWORD pid, const std::filesystem::path& dump) {
+                seenNotice = n; seenPid = pid; seenDump = dump; return false;
+            });
+        if (!reported || seenNotice != Notice::EndPending || seenPid != fakePid || seenDump != dumpPath) {
+            std::puts("FAIL windowReady=1 did not report expected EndPending PID/dump");
+            std::filesystem::remove_all(root, ec);
+            return 1;
+        }
+        // clearOwnerStamp must remove the stamp so stale runs don't report EndPending.
+        clearOwnerStamp(root);
+        if (reportStalledOwnerFromStamp(root, logs, [](Notice, DWORD, const std::filesystem::path&) { return false; })) {
+            std::puts("FAIL clearOwnerStamp did not clear owner stamp");
+            std::filesystem::remove_all(root, ec);
+            return 1;
+        }
+        std::filesystem::remove_all(root, ec);
+        std::puts("PASS launcher stamp detection and stale-stamp cleanup");
+    }
     return 0;
 }

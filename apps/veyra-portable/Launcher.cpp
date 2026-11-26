@@ -3,6 +3,7 @@
 #include "veyra/base/InstanceWindow.h"
 
 #include <shellapi.h>
+#include <algorithm>
 #include <format>
 #include <vector>
 
@@ -34,7 +35,7 @@ std::wstring quote(std::wstring_view argument) {
     return result;
 }
 
-enum class FailureKind { Missing, Reparse, WrongType, Inspect, Start, Wait, ExitCode, Loader, Lock };
+enum class FailureKind { Missing, Reparse, WrongType, Inspect, Start, Wait, ExitCode, Loader, Crash, Lock };
 
 struct Failure {
     FailureKind kind;
@@ -61,6 +62,7 @@ FailureText failureText(FailureKind kind) {
     case FailureKind::Wait: return {L"wait", wait, L"Windows could not wait for the program to exit."};
     case FailureKind::ExitCode: return {L"exit-code", exitCode, L"Windows could not read the program's exit code."};
     case FailureKind::Loader: return {L"loader", start, L"Windows could not load the program."};
+    case FailureKind::Crash: return {L"crash", L"主程序在启动阶段意外退出。", L"The main program exited unexpectedly during startup."};
     case FailureKind::Lock: return {L"lock", lock, L"Windows could not acquire the installation lock. Check access to the Veyra folder."};
     case FailureKind::Start: return {L"start", start, L"Windows could not start the program."};
     }
@@ -83,7 +85,7 @@ std::optional<Failure> checkPath(const fs::path& path, bool directory) {
     return {};
 }
 
-RunResult run(const fs::path& program, const std::vector<std::wstring>& args) {
+RunResult run(const fs::path& program, const std::vector<std::wstring>& args, bool hideConsole = false) {
     const auto directory = program.parent_path();
     if (auto failure = checkPath(directory.parent_path(), true)) return {0, std::move(failure)};
     if (auto failure = checkPath(directory, true)) return {0, std::move(failure)};
@@ -93,8 +95,9 @@ RunResult run(const fs::path& program, const std::vector<std::wstring>& args) {
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION child{};
+    const DWORD creationFlags = hideConsole ? CREATE_NO_WINDOW : 0;
     if (!CreateProcessW(program.c_str(), command.data(), nullptr, nullptr, FALSE,
-                        CREATE_NO_WINDOW, nullptr, directory.c_str(), &startup, &child)) {
+                        creationFlags, nullptr, directory.c_str(), &startup, &child)) {
         const DWORD code = GetLastError();
         return {0, Failure{missingPath(code) ? FailureKind::Missing : FailureKind::Start, code, program}};
     }
@@ -112,7 +115,7 @@ RunResult run(const fs::path& program, const std::vector<std::wstring>& args) {
 }
 
 int showError(const wchar_t* message) {
-    MessageBoxW(nullptr, message, L"Veyra", MB_OK | MB_ICONERROR);
+    MessageBoxW(nullptr, message, L"Veyra", MB_OK | MB_ICONERROR | MB_SETFOREGROUND | MB_TOPMOST);
     return 1;
 }
 
@@ -122,8 +125,8 @@ constexpr DWORD kDllNotFound = 0xC0000135;
 
 std::wstring systemMessage(const Failure& failure) {
     // An attribute check can fail even when Windows read the attributes
-    // successfully. Loader exit codes are NTSTATUS.
-    if (!failure.code || failure.kind == FailureKind::Loader) return {};
+    // successfully. Loader and early crash exit codes are NTSTATUS / SEH codes.
+    if (!failure.code || failure.kind == FailureKind::Loader || failure.kind == FailureKind::Crash) return {};
     wchar_t* buffer = nullptr;
     const DWORD length = FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                                         nullptr, failure.code, 0, reinterpret_cast<LPWSTR>(&buffer), 0, nullptr);
@@ -178,7 +181,7 @@ void showFailure(const fs::path& program, const Failure& failure, const fs::path
     const auto wording = failureText(failure.kind);
     std::wstring message = std::wstring(wording.chinese) + L"\n" + wording.english;
     const auto system = systemMessage(failure);
-    if (failure.kind == FailureKind::Loader) {
+    if (failure.kind == FailureKind::Loader || failure.kind == FailureKind::Crash) {
         message += std::format(L"\nNTSTATUS 0x{:08X}", failure.code);
     } else if (failure.code) {
         message += L"\n" + std::format(launcherText::windowsError, failure.code)
@@ -218,25 +221,16 @@ void showFailure(const fs::path& program, const Failure& failure, const fs::path
 
 bool instanceNotice(instance::Notice notice, DWORD pid, const fs::path& dump) {
     const auto identifier = L"Veyra (PID " + std::to_wstring(pid) + L")";
-    if (notice == instance::Notice::ConfirmEnd) {
-        const auto question = identifier
-            + L" 未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？\n\n"
-            + identifier + L" is not responding. Ending it may lose an ongoing recording. End it and reopen Veyra?";
-        return MessageBoxW(nullptr, question.c_str(), L"Veyra", MB_YESNO | MB_DEFBUTTON2 | MB_ICONWARNING) == IDYES;
-    }
     std::wstring message;
     if (notice == instance::Notice::EndPending) {
         message = identifier
-            + L" 仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开。问题仍在时请重启电脑。\n\n"
+            + L" 仍未退出，Windows 可能还在等待设备操作结束。如果使用 USB 采集卡，请重新插拔后再打开；必要时请在任务管理器中检查并结束该进程，问题仍在时请重启电脑。\n\n"
             + identifier + L" has not exited. Windows may still be waiting for a device operation. "
-              L"If you use a USB capture card, reconnect it and open Veyra again. Restart Windows if the problem persists.";
-    } else if (notice == instance::Notice::EndFailed) {
-        message = L"Windows 无法确认 " + identifier + L" 已退出。请在任务管理器中查看此进程。\n\n"
-            + L"Windows could not confirm that " + identifier + L" exited. Check the process in Task Manager.";
+              L"If you use a USB capture card, reconnect it and open Veyra again; otherwise check and end this process in Task Manager, or restart Windows if the problem persists.";
     } else if (notice == instance::Notice::Hung) {
         message = identifier
-            + L" 未响应。请在任务管理器中检查此进程。\n"
-            + identifier + L" is not responding. Check the process in Task Manager.";
+            + L" 未响应。请在任务管理器中检查并结束该进程，然后重新打开 Veyra。\n\n"
+            + identifier + L" is not responding. Check and end this process in Task Manager, then open Veyra again.";
     } else if (notice == instance::Notice::StartingOrClosing) {
         message = L"Veyra 正在打开或退出。请稍候再试。\nVeyra is starting or closing. Wait a moment and try again.";
     } else {
@@ -245,6 +239,17 @@ bool instanceNotice(instance::Notice notice, DWORD pid, const fs::path& dump) {
     if (!dump.empty()) message += L"\n\n反馈时请附上以下转储文件。\nAttach this dump when reporting the issue.\n" + dump.wstring();
     showError(message.c_str());
     return false;
+}
+
+fs::path resolveProfile(const fs::path& root, const fs::path& versions, const std::vector<std::wstring>& args) {
+    auto profile = root / L"runtime_local" / L"user-data-2.0.0";
+    for (size_t i = 0; i + 1 < args.size(); ++i) {
+        if (args[i] == L"--data-dir") {
+            const auto current = installedVersions(root).current;
+            profile = current.empty() ? fs::path(args[++i]) : versions / current / args[++i];
+        }
+    }
+    return profile;
 }
 
 HANDLE openRunLock(const fs::path& root) {
@@ -271,34 +276,27 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     }
     const bool manualRollback = initialArgs.size() == 1 && initialArgs.front() == L"--rollback";
     if (manualRollback) initialArgs.clear();
+    const auto profile = resolveProfile(root, versions, initialArgs);
 
     Handle lock{openRunLock(root)};
     DWORD lockError = lock.value == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
     if (lockError == ERROR_SHARING_VIOLATION && !manualRollback) {
         // The lock still serializes starts, installs and updates. While it is
         // held, only contact a window that already advertises this profile.
-        auto profile = root / L"runtime_local" / L"user-data-2.0.0";
-        for (size_t i = 0; i + 1 < initialArgs.size(); ++i) {
-            if (initialArgs[i] == L"--data-dir") {
-                profile = versions / installedVersions(root).current / initialArgs[++i];
-            }
-        }
-        const instance::Profile owner(std::move(profile), root / L"logs");
+        const auto key = instance::profileKey(profile);
         const auto target = instance::launchTarget(initialArgs);
+        const auto logs = root / L"logs";
         auto deadline = GetTickCount64() + 3000;
         do {
-            if (const HWND existing = instance::findWindow(owner.key())) {
-                const auto state = installedVersions(root);
-                const auto player = state.current.empty() ? fs::path{} : versions / state.current / playerName;
-                const auto result = owner.handoff(existing, target, player, instanceNotice);
+            if (const HWND existing = instance::findWindow(key)) {
+                const auto result = instance::handoffWindowOnly(profile, logs, key, existing, target, instanceNotice);
                 if (result == instance::Handoff::Done) return 0;
-                if (result == instance::Handoff::Released) deadline = GetTickCount64() + 3000;
             }
             Sleep(60);
             lock.value = openRunLock(root);
             lockError = lock.value == INVALID_HANDLE_VALUE ? GetLastError() : ERROR_SUCCESS;
         } while (lockError == ERROR_SHARING_VIOLATION && GetTickCount64() < deadline);
-        if (lockError == ERROR_SHARING_VIOLATION && owner.reportStalledOwner(instanceNotice)) return 0;
+        if (lockError == ERROR_SHARING_VIOLATION && instance::reportStalledOwnerFromStamp(profile, logs, instanceNotice)) return 0;
     }
     if (lockError == ERROR_SHARING_VIOLATION)
         return showError(L"这份 Veyra 正在运行或更新。\nThis copy of Veyra is running or updating.");
@@ -332,6 +330,8 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
     for (;;) {
         auto playerArgs = args;
         playerArgs.insert(playerArgs.begin(), L"--managed-portable");
+        const auto currentProfile = resolveProfile(root, versions, playerArgs);
+        instance::clearOwnerStamp(currentProfile);
         const auto started = GetTickCount64();
         const auto program = versions / state.current / playerName;
         auto result = run(program, playerArgs);
@@ -348,11 +348,18 @@ int WINAPI wWinMain(HINSTANCE, HINSTANCE, PWSTR, int) {
         if (result.exitCode != 0 && result.exitCode != 42 && result.exitCode != applyExitCode
             && result.exitCode != overlayRestartExitCode && GetTickCount64() - started < 15000) {
             if (rollback()) continue;
+            const bool updateProbe = std::find(playerArgs.begin(), playerArgs.end(), L"--portable-update-probe") != playerArgs.end();
+            if (result.exitCode >= 0x80000000u && !updateProbe) {
+                const Failure crash{FailureKind::Crash, result.exitCode, program};
+                const auto logPath = recordFailure(root, program, crash);
+                showFailure(program, crash, logPath);
+            }
             return static_cast<int>(result.exitCode);
         }
         if (result.exitCode == applyExitCode) {
+            instance::clearOwnerStamp(currentProfile);
             const auto worker = versions / state.current / workerName;
-            const auto applied = run(worker, {root.native()});
+            const auto applied = run(worker, {root.native()}, true);
             if (applied.failure) recordFailure(root, worker, *applied.failure);
             const auto updates = root / updateFolder;
             if ((applied.failure || applied.exitCode != 0) && plainPath(updates, true)) {

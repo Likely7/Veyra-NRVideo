@@ -174,9 +174,20 @@ jobs:
           }
           Copy-Item C:\v\installed\x64-windows\bin\*.dll $stage
           Copy-Item C:\dovi\bin\*.dll $stage
-          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --qmldir qml --no-translations `
-            --skip-plugin-types qmltooling,generic "$stage\veyra_qml_ui.exe"
-          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          $savedPath = $env:PATH
+          try {
+            $env:PATH = "$env:QT_ROOT_DIR\bin;$env:SystemRoot\System32;$env:SystemRoot"
+            & "$env:QT_ROOT_DIR\bin\windeployqt.exe" --release --qmldir qml --no-translations `
+              --skip-plugin-types qmltooling,generic "$stage\veyra_qml_ui.exe"
+            if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+          } finally {
+            $env:PATH = $savedPath
+          }
+          foreach ($forbidden in 'dxcompiler.dll', 'dxil.dll') {
+            if (Test-Path -LiteralPath (Join-Path $stage $forbidden)) {
+              throw "Forbidden third-party/compiler DLL deployed into CI stage: $forbidden"
+            }
+          }
           $qmlModules = 'qml/QtCore/qmldir', 'qml/QtCore/qtqmlcoreplugin.dll',
                         'qml/QtQuick/Dialogs/qmldir', 'qml/QtQuick/Dialogs/qtquickdialogsplugin.dll'
           foreach ($file in $qmlModules) {

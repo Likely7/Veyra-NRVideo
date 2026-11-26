@@ -137,7 +137,7 @@ I've received creator fees from a community-created Veyra token. These contribut
 | 来源 | 操作要点 |
 |---|---|
 | 采集卡 | 选设备、分辨率、帧率，再选支持的像素格式和音频输入；关闭其他程序占用。PQ/HLG/709、Limited/Full 匹配实际信号。美乐威 Pro Capture 有专用低延迟选项。 |
-| PS5 | 主机启用远程游玩，搜索或手填 IP；点击“获取 Account ID”打开 [Account ID 指南](docs/PSN_ACCOUNT_ID.md)（通过 [psn-account-id](https://github.com/metalito/psn-account-id) 或 [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng) 使用索尼官方登录；切勿在第三方网站粘贴 NPSSO cookie），将数字 ID 或 Base64 ID 填入软件，再输入主机八位配对码。已保存主机可直接重连。 |
+| PS5 | 主机启用远程游玩，搜索或手填 IP；点击“获取 Account ID”打开 [Account ID 指南](docs/PSN_ACCOUNT_ID.md)（通过 [chiaki-ng](https://github.com/chiaki-ng/chiaki-ng) 使用索尼官方登录；切勿在第三方网站粘贴 NPSSO cookie），将数字 ID 或 Base64 ID 填入软件，再输入主机八位配对码。已保存主机可直接重连。 |
 | PC | 主机自行安装配置 Sunshine；Veyra 发现/添加主机、PIN 配对、选应用或桌面连接。Sunshine 不随包安装。 |
 | Xbox | 按设备码流程登录，选开启远程功能的主机。非官方实验功能，服务、账号与主机限制可能影响连接。 |
 | 屏幕 | 选窗口/显示器，避免捕获 Veyra 自身形成递归。 |

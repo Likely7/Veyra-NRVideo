@@ -10,7 +10,6 @@ Pairing Veyra with a PS5 needs the **Account ID** of a PSN user who has signed i
 Enter your password only on Sony's sign-in page (`my.account.sony.com`).
 
 1. **chiaki-ng** is the open-source Remote Play client Veyra's PS5 streaming is built on. In its console registration dialog, sign in to PlayStation and copy the Account ID. [chiaki-ng repository](https://github.com/chiaki-ng/chiaki-ng)
-2. **psn-account-id** is an independent, recently launched open-source project. Review its PowerShell or Python source before running it locally. The tool asks for the redirect URL after Sony sign-in and prints the ID in Base64. Keep the redirect URL private. [psn-account-id repository](https://github.com/metalito/psn-account-id)
 
 Then paste the ID into Veyra's **PSN Account ID** field and enter the 8-digit code.
 
@@ -25,7 +24,6 @@ Veyra 与 PS5 配对需要在该主机上登录过的 PSN 用户的 **Account ID
 请仅在索尼登录页（`my.account.sony.com`）输入密码。
 
 1. **chiaki-ng** 是 Veyra 的 PS5 串流所基于的开源客户端。在它的主机注册窗口登录 PlayStation，再复制自动填好的 Account ID。[chiaki-ng 项目页](https://github.com/chiaki-ng/chiaki-ng)
-2. **psn-account-id** 是近期发布的第三方开源项目。可以先查看其 PowerShell 或 Python 源码，再在本机运行。它读取索尼登录后跳转的完整地址并输出 Base64 ID。请妥善保管跳转地址。[psn-account-id 项目页](https://github.com/metalito/psn-account-id)
 
 然后把 ID 粘贴到 Veyra 的 **PSN Account ID** 栏，再输入 8 位配对码。
 

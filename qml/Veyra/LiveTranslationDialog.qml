@@ -52,11 +52,34 @@ DialogLayer {
         ? veyra.preferences.liveSubtitleShadow : ((veyra.preferences.subtitleOutline ?? 2) > 0 ? 1.8 : 0)
     readonly property int subtitleLines: Math.min(3, Math.max(1,
         veyra.preferences.liveSubtitleLines || (veyra.preferences.subtitleLines ?? 2)))
-    NativeDialogs.ColorDialog {
-        id: captionColor
-        title: qsTr("选择字幕颜色")
-        onAccepted: veyra.setPreference("liveSubtitleColor",
-            Qt.rgba(selectedColor.r, selectedColor.g, selectedColor.b, 1).toString())
+    Loader {
+        id: captionColorLoader
+        active: false
+        property bool openWhenReady: false
+        property color pendingColor: "#ffffff"
+        sourceComponent: Component {
+            NativeDialogs.ColorDialog {
+                title: qsTr("选择字幕颜色")
+                onAccepted: veyra.setPreference("liveSubtitleColor",
+                    Qt.rgba(selectedColor.r, selectedColor.g, selectedColor.b, 1).toString())
+            }
+        }
+        onLoaded: {
+            if (!openWhenReady || !item) return
+            openWhenReady = false
+            item.selectedColor = pendingColor
+            item.open()
+        }
+    }
+    function chooseCaptionColor() {
+        captionColorLoader.pendingColor = root.subtitleColor
+        if (captionColorLoader.item) {
+            captionColorLoader.item.selectedColor = root.subtitleColor
+            captionColorLoader.item.open()
+            return
+        }
+        captionColorLoader.openWhenReady = true
+        captionColorLoader.active = true
     }
     readonly property var regions: [
         {id: "0", label: qsTr("底部字幕")},
@@ -488,10 +511,7 @@ DialogLayer {
                 VButton {
                     objectName: "live-subtitle-color"
                     text: root.subtitleColor.toString().toUpperCase()
-                    onClicked: {
-                        captionColor.selectedColor = root.subtitleColor
-                        captionColor.open()
-                    }
+                    onClicked: root.chooseCaptionColor()
                 }
             }
         }

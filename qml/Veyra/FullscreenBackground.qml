@@ -54,7 +54,12 @@ Item {
     }
     function chooseCustom(left) {
         pickingLeft = left
-        picker.open()
+        if (pickerLoader.item) {
+            pickerLoader.item.open()
+        } else {
+            pickerLoader.openWhenReady = true
+            pickerLoader.active = true
+        }
     }
     function nextPair() {
         // With three or more images, each side changes and the pair is distinct.
@@ -92,13 +97,27 @@ Item {
         property url customRight: ""
     }
 
-    FileDialog {
-        id: picker
-        title: background.pickingLeft ? background.words.left : background.words.right
-        nameFilters: [background.words.images + " (*.png *.jpg *.jpeg *.bmp)"]
-        onAccepted: {
-            if (background.pickingLeft) preferences.customLeft = selectedFile
-            else preferences.customRight = selectedFile
+    // Lazy-load the native FileDialog so cold startup never initializes the
+    // platform dialog backend until the user picks a custom background image.
+    Loader {
+        id: pickerLoader
+        active: false
+        property bool openWhenReady: false
+        onLoaded: {
+            if (openWhenReady) {
+                openWhenReady = false
+                item.open()
+            }
+        }
+        sourceComponent: Component {
+            FileDialog {
+                title: background.pickingLeft ? background.words.left : background.words.right
+                nameFilters: [background.words.images + " (*.png *.jpg *.jpeg *.bmp)"]
+                onAccepted: {
+                    if (background.pickingLeft) preferences.customLeft = selectedFile
+                    else preferences.customRight = selectedFile
+                }
+            }
         }
     }
 

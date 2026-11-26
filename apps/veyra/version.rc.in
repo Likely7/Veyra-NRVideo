@@ -13,8 +13,10 @@ BEGIN
  BEGIN
   BLOCK "040904B0"
   BEGIN
-   VALUE "FileDescription", "Veyra Video Player"
+   VALUE "CompanyName", "Veyra"
+   VALUE "FileDescription", "@VEYRA_RESOURCE_DESCRIPTION@"
    VALUE "FileVersion", "@VEYRA_DISPLAY_VERSION@"
+   VALUE "InternalName", "@VEYRA_RESOURCE_INTERNAL_NAME@"
    VALUE "ProductName", "Veyra"
    VALUE "ProductVersion", "@VEYRA_DISPLAY_VERSION@"
    VALUE "OriginalFilename", "@VEYRA_RESOURCE_FILENAME@"
