@@ -11,6 +11,7 @@
 #include <QUrl>
 #include <algorithm>
 #include <format>
+#include <iterator>
 #include <memory>
 
 namespace veyra::ui {
@@ -30,6 +31,9 @@ PlaybackServer::PlaybackServer(PlayHandler handler,QObject* parent)
     connect(&server_,&QTcpServer::newConnection,this,&PlaybackServer::onNewConnection);
 }
 PlaybackServer::~PlaybackServer(){server_.close();}
+void PlaybackServer::setControlHandlers(ControlHandler control,StateHandler state){
+    control_=std::move(control);state_=std::move(state);
+}
 bool PlaybackServer::listen(quint16 port){
     if(!server_.listen(QHostAddress::LocalHost,port)){
         log::warn("playback-server",std::format("loopback listen failed: {}",server_.errorString().toStdString()));return false;
@@ -72,6 +76,7 @@ void PlaybackServer::handleRequest(QTcpSocket* socket,const QByteArray& request)
         respond(socket,400,R"({"ok":false,"error":"invalid request framing"})",origin);return;
     }
     const auto& method=start[0];const auto& path=start[1];
+    if(path.startsWith("/control/")){handleControl(socket,method,path,origin,request.mid(end+4));return;}
     if(method=="OPTIONS"&&(path=="/play"||path=="/ping")){respond(socket,200,"{}",origin);return;}
     if(method=="GET"&&path=="/ping"){respond(socket,200,R"({"ok":true,"app":"veyra"})",origin);return;}
     if(method!="POST"||path!="/play"){respond(socket,404,R"({"ok":false,"error":"not found"})",origin);return;}
@@ -93,6 +98,38 @@ void PlaybackServer::handleRequest(QTcpSocket* socket,const QByteArray& request)
     QMetaObject::invokeMethod(this,[handler=handler_,url]{if(handler)handler(url);},Qt::QueuedConnection);
     log::info("playback-server",std::format("play requested: host={}",parsed.host().toStdString()));
     respond(socket,200,R"({"ok":true})",origin);
+}
+// Capture control for native local clients. A browser always names its Origin on
+// a cross-origin POST, so refusing every Origin (the extension's too) keeps web
+// pages and extensions out; nothing here answers a preflight or sends CORS headers.
+void PlaybackServer::handleControl(QTcpSocket* socket,const QByteArray& method,const QByteArray& path,
+                                   const QByteArray& origin,const QByteArray& body){
+    if(!control_||!state_){respond(socket,404,R"({"ok":false,"error":"not found"})");return;}
+    if(!origin.isEmpty()){respond(socket,403,R"({"ok":false,"error":"control requests must not carry an origin"})");return;}
+    if(method=="GET"&&path=="/control/state"){
+        auto state=state_();state.insert("ok",true);
+        respond(socket,200,QJsonDocument(state).toJson(QJsonDocument::Compact));return;
+    }
+    struct Route{const char* path;ControlAction action;const char* name;};
+    static constexpr Route routes[]={
+        {"/control/screenshot",ControlAction::Screenshot,"screenshot"},
+        {"/control/replay/save",ControlAction::ReplaySave,"replay-save"},
+        {"/control/record/start",ControlAction::RecordStart,"record-start"},
+        {"/control/record/stop",ControlAction::RecordStop,"record-stop"},
+        {"/control/record/toggle",ControlAction::RecordToggle,"record-toggle"},
+    };
+    const auto route=std::find_if(std::begin(routes),std::end(routes),[&](const Route& r){return path==r.path;});
+    if(method!="POST"||route==std::end(routes)){respond(socket,404,R"({"ok":false,"error":"not found"})");return;}
+    if(!body.trimmed().isEmpty()){
+        QJsonParseError error;
+        const auto doc=QJsonDocument::fromJson(body,&error);
+        if(error.error!=QJsonParseError::NoError||!doc.isObject()){
+            respond(socket,400,R"({"ok":false,"error":"invalid control request"})");return;
+        }
+    }
+    QMetaObject::invokeMethod(this,[handler=control_,action=route->action]{if(handler)handler(action);},Qt::QueuedConnection);
+    log::info("playback-server",std::format("control requested: action={}",route->name));
+    respond(socket,200,R"({"ok":true})");
 }
 void PlaybackServer::onNewConnection(){
     while(auto* socket=server_.nextPendingConnection()){

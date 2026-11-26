@@ -886,6 +886,27 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     ui::PlaybackServer playbackServer([&bridge](const QString& url){
         bridge.bringToFront();bridge.openNetworkAddress(url);
     });
+    // Capture control for local tools (a Stream Deck plugin, a script): the same
+    // bridge calls as the screenshot, record and replay shortcuts, named "http" in
+    // the log, plus the state those tools show on a key.
+    playbackServer.setControlHandlers([&bridge](ui::PlaybackServer::ControlAction action){
+        using Action = ui::PlaybackServer::ControlAction;
+        const QString source = QStringLiteral("http");
+        switch (action) {
+        case Action::Screenshot: bridge.takeScreenshot(); break;
+        case Action::ReplaySave: bridge.saveReplay(source); break;
+        case Action::RecordStart: bridge.startRecording(source); break;
+        case Action::RecordStop: bridge.stopRecording(source); break;
+        case Action::RecordToggle: bridge.toggleRecording(source); break;
+        }
+    }, [&bridge]{
+        return QJsonObject{
+            {"recording", QJsonObject::fromVariantMap(bridge.recordingState())},
+            {"replayEnabled", bridge.replayEnabled()},
+            {"replay", QJsonObject::fromVariantMap(bridge.replayState())},
+            {"lastScreenshot", bridge.lastScreenshot()},
+        };
+    });
     if (!updateProbe) playbackServer.listen(18765);
 
     // Qt reports QML failures through its own message handler. Routing them to
