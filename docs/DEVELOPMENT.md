@@ -43,6 +43,25 @@ Qt 主程序是 `veyra_qml_ui.exe`。默认开发构建可通过 `Veyra.cmd` 启
 
 本地 main 源码版本为 2.2.0。最近一次手测构建来自整合前的 `74e9bf3b`。便携版验签复用已有 Chiaki 依赖中的 OpenSSL Crypto，美乐威 SDK 路径为 `E:/项目/Veyra/deps/magewell/3.3.1.1596`。GitHub 的公开版本为 2.1.9。用户配置、运行组件与BGM分发边界按AGENTS及实际manifest执行。
 
+## 应用内更新
+
+设置 → 关于 → 检查更新只查询一个地址：`https://api.github.com/repos/Likely7/Veyra-NRVideo/releases/latest`。程序固定 `User-Agent`，限制响应大小和超时，并且只跟随重定向到 `api.github.com`，或用户在「下载线路」里选中的 `gh-proxy.com` / `ghfast.top`。这个接口返回单个正式版。正文如果是 release 列表，不把第一项当成最新版，也不跟随 `Link` 分页。不使用环境变量里的 GitHub token。
+
+版本必须是 `vX.Y.Z`（`v` 可省略）。多出来的预发布后缀、前导零、超过 65535 的段和其它畸形标签都判为无效，不会被当成更新。启动时检查默认关闭；用户打开后，启动只查询版本，不会下载或安装。
+
+可安装的资产只有签名清单 `Veyra-portable-update-v1.json` 点名的 `Veyra-<版本>-NVIDIA-win64-portable.zip` 或同名 AMD 包。清单用编译进正式构建的 Ed25519 公钥校验，ZIP 用清单里的 SHA-256。若 GitHub 资产带有 `digest`，它必须是 `sha256:` 加 64 位小写十六进制，并且和清单一致，否则拒绝安装。没有这份已签名校验和时不安装。下载只走 HTTPS，重定向只允许 `release-assets.githubusercontent.com` 和 `objects.githubusercontent.com`。解压前拒绝绝对路径、盘符、`..` 和非常规 tar 成员。
+
+当前公开发行包还没有 Authenticode 发布者签名。更新器因此把 Ed25519 清单加 SHA-256 当作完整性根；签名缺失时允许继续，签名存在但 `WinVerifyTrust` 判定无效时拒绝启动新文件。安装过程不做在线证书吊销查询。可写的安装目录把包放在该目录的 `.veyra-update`。安装在 Program Files 且目录不可写时，包改存 `%LOCALAPPDATA%\Veyra\update-staging\<16位十六进制>`，只有用户点击后才用 `ShellExecuteEx` 的 `runas` 交给 `veyra_update_worker.exe`。Windows 自己显示 UAC，程序不自动同意，也不改系统授权策略。校验通过后可以「重启并安装」；普通退出且没有正在进行的导出时仍会安装，但不会因此自己再打开。安装失败不改 `current-version.txt`。新版本在启动后短时间内失败时，启动器退回上一版。
+
+发布时仍用同一构建执行：
+
+```powershell
+py -3.11 -X utf8 -B -I scripts/package-portable-update.py wrap --version <version> --stage <vendor-stage> --build <build> --output <artifacts>
+py -3.11 -X utf8 -B -I scripts/package-portable-update.py sign --version <version> --nvidia <nvidia-zip> --amd <amd-zip> --openssl <openssl-exe> --key <offline-ed25519-key> --notes <summary> --output <artifacts>
+```
+
+把两份 ZIP 和 `Veyra-portable-update-v1.json` 放进同一个非草稿、非预发布、标签为 `vX.Y.Z` 的 GitHub Release。资产名必须和清单里的 `asset` 完全一致。私钥不得进入仓库、日志或程序。更完整的包布局见[便携 ZIP 更新](PORTABLE_UPDATE_PLAN_2026-11-19.md)。
+
 ## 新增外部依赖（#136 / #133）
 
 完整 Windows 构建默认启用 libdovi，必须提供 `VEYRA_LIBDOVI_ROOT`（include/libdovi、lib、bin、MIT LICENSE）；不得把贡献 PR 的 DLL/LIB 合进源码。固定来源 quietvoid/dovi_tool `d1abe0e27ff2c7ab3339614d06db9f8a058af6b2`，libdovi 3.4.0，Rust 1.88+；用其 cbindgen.toml 生成匹配头，`cargo rustc --manifest-path dolby_vision/Cargo.toml --lib --release --locked --features capi --crate-type cdylib -- -Cpanic=abort`。DLL 与 MIT LICENSE 跟随用户包，SDK/导入库不打包。仅精简开发构建可显式关闭 VEYRA_ENABLE_LIBDOVI，不能把关闭版当完整交付。
