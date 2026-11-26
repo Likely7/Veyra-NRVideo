@@ -12,6 +12,8 @@ extern "C" {
 }
 #if defined(VEYRA_ENABLE_DEINTERLACE)
 #define VEYRA_HAS_AVFILTER_HEADERS 1
+#include <d3d12video.h>
+#include <wrl/client.h>
 extern "C" {
 #include <libavfilter/avfilter.h>
 #include <libavfilter/buffersrc.h>
@@ -54,6 +56,39 @@ struct FilterApi {
     }
 };
 FilterApi& api(){static FilterApi value;return value;}
+
+bool supportsEdgeExtension(const AVFrame& frame, const HardwareSurfaceView& surface, int fpsNum, int fpsDen)
+{
+    if (!surface.texture || !surface.edgeExtendedHeight ||
+        (frame.colorspace != AVCOL_SPC_BT709 && frame.colorspace != AVCOL_SPC_UNSPECIFIED) ||
+        frame.color_range == AVCOL_RANGE_JPEG) {
+        return false;
+    }
+    Microsoft::WRL::ComPtr<ID3D12VideoDevice> device;
+    if (FAILED(surface.texture->GetDevice(IID_PPV_ARGS(&device)))) return false;
+
+    // Match the FFmpeg filter's NV12 Rec.709 feature query at field rate.
+    // Require its preferred method at both sizes so the extension preserves it.
+    D3D12_FEATURE_DATA_VIDEO_PROCESS_SUPPORT support{};
+    const D3D12_VIDEO_FORMAT format{DXGI_FORMAT_NV12, DXGI_COLOR_SPACE_YCBCR_STUDIO_G22_LEFT_P709};
+    support.InputSample = {UINT(frame.width), UINT(frame.height), format};
+    support.InputFieldType = (frame.flags & AV_FRAME_FLAG_TOP_FIELD_FIRST)
+        ? D3D12_VIDEO_FIELD_TYPE_INTERLACED_TOP_FIELD_FIRST : D3D12_VIDEO_FIELD_TYPE_INTERLACED_BOTTOM_FIELD_FIRST;
+    support.InputFrameRate = {UINT(std::max(1, fpsNum)), UINT(std::max(1, fpsDen))};
+    support.OutputFormat = format;
+    support.OutputFrameRate = {support.InputFrameRate.Numerator * 2, support.InputFrameRate.Denominator};
+    for (const UINT height : {UINT(frame.height), surface.edgeExtendedHeight}) {
+        support.InputSample.Height = height;
+        support.SupportFlags = D3D12_VIDEO_PROCESS_SUPPORT_FLAG_NONE;
+        support.DeinterlaceSupport = D3D12_VIDEO_PROCESS_DEINTERLACE_FLAG_NONE;
+        if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_VIDEO_PROCESS_SUPPORT, &support, sizeof(support))) ||
+            !(support.SupportFlags & D3D12_VIDEO_PROCESS_SUPPORT_FLAG_SUPPORTED) ||
+            !(support.DeinterlaceSupport & D3D12_VIDEO_PROCESS_DEINTERLACE_FLAG_CUSTOM)) {
+            return false;
+        }
+    }
+    return true;
+}
 }
 #endif
 struct FFmpegDeinterlacer::Impl {
@@ -67,12 +102,14 @@ struct FFmpegDeinterlacer::Impl {
     AVRational inputTimeBase{},inputRate{};
     int64_t previousPicturePts=AV_NOPTS_VALUE;
     int64_t observedPictureTicks=0;
+    int visibleHeight=0, extendedHeight=0;
     AVFrame* input(const AVFrame* frame,const HardwareSurfaceView* surface){
         if(!frame)return nullptr;
         auto* copy=av_frame_clone(frame);
         if(copy&&copy->pts==AV_NOPTS_VALUE)copy->pts=copy->best_effort_timestamp!=AV_NOPTS_VALUE?copy->best_effort_timestamp:copy->pkt_dts;
         if(!copy||frame->format!=AV_PIX_FMT_D3D11)return copy;
         if(!surface||!surface->texture||!surface->waitFence){av_frame_free(&copy);return nullptr;}
+        if (extendedHeight) copy->height=extendedHeight;
         if(!bridgeFrames){
             auto* device=av_hwdevice_ctx_alloc(AV_HWDEVICE_TYPE_D3D12VA);
             if(!device){av_frame_free(&copy);return nullptr;}
@@ -122,6 +159,10 @@ bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* su
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
     auto& a=api();auto& i=*impl_;
     if(!a.ready||!frame||num<=0||den<=0)return false;
+    if (frame->format==AV_PIX_FMT_D3D11 && surface && supportsEdgeExtension(*frame,*surface,fpsNum,fpsDen)) {
+        i.visibleHeight=frame->height;
+        i.extendedHeight=int(surface->edgeExtendedHeight);
+    }
     auto* input=i.input(frame,surface);if(!input)return false;
     i.graph=a.avfilter_graph_alloc();
     if(!i.graph){av_frame_free(&input);return false;}
@@ -154,6 +195,10 @@ bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* su
     i.output=av_frame_alloc();if(!i.output){close();return false;}
     const auto tb=a.av_buffersink_get_time_base(i.sink);i.num=tb.num;i.den=tb.den;i.path=hardware?"d3d12-video-processor":"bwdif-software";
     i.inputTimeBase={num,den};i.inputRate={fpsNum,fpsDen};
+    if (i.extendedHeight) {
+        log::info("deinterlace",std::format("replicating bottom edge for NVIDIA NV12 video processing: {} to {} rows",
+            i.visibleHeight,i.extendedHeight));
+    }
     log::info("deinterlace",std::format("method={} fieldRate=true inputFps={}/{} outputTimeBase={}/{} gpuPixelReadbacks=0",i.path,fpsNum,fpsDen,i.num,i.den));
     return true;
 #else
@@ -163,6 +208,9 @@ bool FFmpegDeinterlacer::open(const AVFrame* frame,const HardwareSurfaceView* su
 int FFmpegDeinterlacer::push(const AVFrame* frame,const HardwareSurfaceView* surface){
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
     auto& i=*impl_;if(!i.source)return AVERROR(EINVAL);
+    if (frame && i.extendedHeight && (!surface || surface->edgeExtendedHeight!=uint32_t(i.extendedHeight))) {
+        return AVERROR_INVALIDDATA;
+    }
     auto* input=i.input(frame,surface);if(frame&&!input)return AVERROR(ENOMEM);
     if(input&&i.clocks.size()>=32){av_frame_free(&input);return AVERROR(ENOBUFS);}
     Impl::Clock clock{};
@@ -185,6 +233,8 @@ int FFmpegDeinterlacer::receive(const AVFrame** frame){
     av_frame_unref(i.output);const int result=api().av_buffersink_get_frame(i.sink,i.output);
     if(result>=0){
         if(i.clocks.empty())return AVERROR_INVALIDDATA;
+        // Preserve the original display extent for both filtered and pass-through pictures.
+        if (i.visibleHeight) i.output->height=i.visibleHeight;
         auto& clock=i.clocks.front();const AVRational outputBase{i.num,i.den};
         if(clock.field==0&&clock.pts!=AV_NOPTS_VALUE){
             // A container can label each interlaced picture with one field's
@@ -235,6 +285,13 @@ bool FFmpegDeinterlacer::active()const{
     return false;
 #endif
 }
+bool FFmpegDeinterlacer::usesExtendedEdge() const {
+#ifdef VEYRA_HAS_AVFILTER_HEADERS
+    return impl_->extendedHeight != 0;
+#else
+    return false;
+#endif
+}
 const std::string& FFmpegDeinterlacer::path()const{return impl_->path;}
 void FFmpegDeinterlacer::close(){
 #ifdef VEYRA_HAS_AVFILTER_HEADERS
@@ -243,6 +300,7 @@ void FFmpegDeinterlacer::close(){
     av_buffer_unref(&i.bridgeFrames);i.source=i.sink=nullptr;
     i.clocks.clear();i.inputTimeBase={};i.inputRate={};
     i.previousPicturePts=AV_NOPTS_VALUE;i.observedPictureTicks=0;
+    i.visibleHeight=i.extendedHeight=0;
 #endif
     impl_->path.clear();impl_->num=impl_->den=0;
 }
