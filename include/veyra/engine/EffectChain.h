@@ -68,6 +68,9 @@ struct ChainNrParams {
     // pre-tier behaviour, so an existing chain keeps doing exactly what it did.
     NrAntiFlicker antiFlicker = NrAntiFlicker::Flow;
     pipeline::NrSizePolicy sizePolicy = pipeline::NrSizePolicy::Realtime;
+    bool residualStack = false;
+    float stackStrength = 1;
+    NrStackControls stackControls{};
     bool operator==(const ChainNrParams&) const = default;
 };
 
@@ -202,6 +205,7 @@ struct ChainExecutionStep {
     uint32_t parameterIndex = 0; // ordinal among ALL nodes of this type
     uint32_t resourceIndex = 0;  // ordinal among executing nodes of this type
     pipeline::Extent input{}, processing{}, output{};
+    uint32_t nrStackBase = 0;
     bool operator==(const ChainExecutionStep&) const = default;
 };
 struct ChainExecutionPlan {

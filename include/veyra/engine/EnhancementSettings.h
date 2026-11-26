@@ -282,6 +282,14 @@ struct ResidualSettings {
     bool operator==(const ResidualSettings&) const = default;
     bool extendedSchema() const {return total>2||correction!=NrCorrectionSettings{};}
 };
+struct NrStackControls {
+    float color=1,brighten=1,darken=1,limit=0,detail=0;
+    bool operator==(const NrStackControls&) const = default;
+    bool valid() const {
+        return color>=0&&color<=2&&brighten>=0&&brighten<=2&&darken>=0&&darken<=2&&
+            limit>=0&&limit<=1&&detail>=0&&detail<=1;
+    }
+};
 // Fixed storage: settings also cross the export worker's shared-memory POD.
 // Runtime and NR/SR order are shared by active instances, not separate adapters.
 struct NrLayerSettings {
@@ -294,8 +302,11 @@ struct NrLayerSettings {
     // keeps meaning exactly what it meant (Flow).
     NrAntiFlicker antiFlicker=NrAntiFlicker::Flow;
     pipeline::NrSizePolicy sizePolicy=pipeline::NrSizePolicy::Realtime;
+    bool residualStack=false;
+    float stackStrength=1;
+    NrStackControls stackControls{};
     bool operator==(const NrLayerSettings&) const = default;
-    bool usesTemporal() const {return residual.correction.enabled?residual.correction.usesHistory():temporal;}
+    bool usesTemporal() const {return !residualStack&&(residual.correction.enabled?residual.correction.usesHistory():temporal);}
 };
 enum class ExclusionContent : uint8_t { All, FrameGeneration, Hud };
 enum class HudProtectMode : uint8_t { Off, Center, Regions };
@@ -387,7 +398,7 @@ struct EnhancementSettings {
         if(!nrLayerCount)return nrPolicy==pipeline::NrSizePolicy::Auto?1:0;
         uint32_t count=0;
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i)
-            count+=nrLayers[i].enabled&&nrLayers[i].sizePolicy==pipeline::NrSizePolicy::Auto;
+            count+=nrLayers[i].enabled&&!nrLayers[i].residualStack&&nrLayers[i].sizePolicy==pipeline::NrSizePolicy::Auto;
         return count;
     }
     bool sameNrTopology(const EnhancementSettings& other) const {
@@ -396,6 +407,8 @@ struct EnhancementSettings {
         if(residual.correction.enabled!=other.residual.correction.enabled||usesNrTemporal()!=other.usesNrTemporal())return false;
         for(uint32_t i=0;i<nrLayerCount&&i<nrLayers.size();++i){
             const auto& a=nrLayers[i]; const auto& b=other.nrLayers[i];
+            if(a.residualStack!=b.residualStack)return false;
+            if(a.residualStack&&b.residualStack){if(a.enabled!=b.enabled)return false;continue;}
             if(a.enabled!=b.enabled||a.temporal!=b.temporal||a.usesTemporal()!=b.usesTemporal()||
                a.residual.correction.enabled!=b.residual.correction.enabled||a.runtime!=b.runtime||
                a.lowLatencyPairing!=b.lowLatencyPairing||a.sizePolicy!=b.sizePolicy||
@@ -737,6 +750,7 @@ struct EnhancementSettings {
         if(nrLayerCount>nrLayers.size())return "too many NR instances";
         for(uint32_t i=0;i<nrLayerCount;++i){
             const auto& n=nrLayers[i];
+            if(!range(n.stackStrength,1)||!n.stackControls.valid())return "NR stack parameters out of range";
             if(!pipeline::validNrSizePolicy(n.sizePolicy))return "invalid NR layer size policy";
             if(!range(n.model.intensity,1)||!range(n.model.tone,1)||!range(n.model.structure,1)||
                (n.model.skin!=-1&&!range(n.model.skin,2)))return "NR layer model parameter out of range";
@@ -747,7 +761,7 @@ struct EnhancementSettings {
                 if(!range(v,2))return "NR layer residual parameter out of range";
             if(!validNrRuntime(n.runtime))
                 return "invalid NR layer runtime";
-            if(n.enabled&&(n.runtime!=nrRuntime||n.lowLatencyPairing!=lowLatency))
+            if(n.enabled&&!n.residualStack&&(n.runtime!=nrRuntime||n.lowLatencyPairing!=lowLatency))
                 return "active NR layers must share runtime and NR/SR order";
         }
         if(nr&&nrLayerCount&&!activeNrLayerCount())return "enabled NR stack has no active layer";

@@ -40,6 +40,7 @@ public:
                 ID3D12Resource* zeroMotion, ID3D12Resource* zeroDepth,
                 ID3D12Resource* borrowedInput = nullptr, ID3D12Resource* borrowedMotion = nullptr);
     void close();
+    bool createStack(ID3D12Device* device,uint32_t width,uint32_t height);
     bool createAmdHdrProxy(ID3D12Device* device);
 
     bool created() const { return proxy_ != nullptr; }

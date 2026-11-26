@@ -234,6 +234,21 @@ uint32_t removeLegacyNodeProtection(EffectChain& chain, int* selectedNr, int* se
     return removed;
 }
 
+static std::array<int,kMaxChainNodes> nrStackBases(const EffectChain& chain) {
+    std::array<int,kMaxChainNodes> bases;
+    bases.fill(-1);
+    int base=-1;
+    for(uint32_t i=0;i<chain.nodeCount;++i){
+        const auto& node=chain.nodes[i];
+        if(!node.enabled)continue;
+        if(node.type==EffectType::NrEnhance){
+            if(node.nr.residualStack)bases[i]=base;
+            else if(base<0)base=int(i);
+        }else if(chain.mode==ChainMode::Node)base=-1;
+    }
+    return bases;
+}
+
 ChainValidation validateChain(const EffectChain& chain) {
     if (chain.nodeCount > kMaxChainNodes || chain.overflow) return {false, "链路节点过多"};
     std::array<uint32_t, effectTypeCount> seen{};
@@ -306,6 +321,10 @@ ChainValidation validateChain(const EffectChain& chain) {
     for(uint32_t i=0;i<chain.nodeCount;++i){
         const auto& node=chain.nodes[i];
         if(node.type!=EffectType::NrEnhance||!node.enabled)continue;
+        if(node.nr.residualStack){
+            if(chain.mode==ChainMode::List&&!firstNr)return {false,"请先启用上方的原 NR 层"};
+            continue;
+        }
         if(firstNr&&(node.nr.runtime!=firstNr->runtime||node.nr.lowLatencyPairing!=firstNr->lowLatencyPairing))
             return {false, "启用的 NR 层必须使用同一运行时和 NR/SR 顺序"};
         firstNr=&node.nr;
@@ -358,6 +377,9 @@ EffectChain toChain(const EnhancementSettings& settings) {
         nr.nr.antiFlicker = layer.antiFlicker;
         nr.nr.lowLatencyPairing = layer.lowLatencyPairing;
         nr.nr.sizePolicy = layer.sizePolicy;
+        nr.nr.residualStack = layer.residualStack;
+        nr.nr.stackStrength = layer.stackStrength;
+        nr.nr.stackControls = layer.stackControls;
     }
     append(EffectType::Protection, settings.protection.enabled).protection = settings.protection;
     if(settings.nrHoldStrength>0){
@@ -499,8 +521,8 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
             if(settings.nrLayerCount>=kMaxNrInstances)break;
             settings.nrLayers[settings.nrLayerCount]={node.nr.model,node.nr.residual,
                 node.nr.runtime,node.nr.temporal,node.nr.lowLatencyPairing,node.enabled,
-                node.nr.antiFlicker,node.nr.sizePolicy};
-            if (settings.nrLayerCount==0||(!settings.nr&&node.enabled)) {
+                node.nr.antiFlicker,node.nr.sizePolicy,node.nr.residualStack,node.nr.stackStrength,node.nr.stackControls};
+            if (!node.nr.residualStack&&(settings.nrLayerCount==0||(!settings.nr&&node.enabled))) {
                 settings.model = node.nr.model;
                 settings.residual = node.nr.residual;
                 settings.nrRuntime = node.nr.runtime;
@@ -509,7 +531,7 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
                 settings.lowLatency = node.nr.lowLatencyPairing;
                 settings.nrPolicy = node.nr.sizePolicy;
             }
-            settings.nr = settings.nr || node.enabled;
+            settings.nr = settings.nr || (node.enabled&&!node.nr.residualStack);
             ++settings.nrLayerCount;
             break;
         case EffectType::Protection:
@@ -561,7 +583,7 @@ void fromChain(const EffectChain& chain, EnhancementSettings& settings) {
             break;
         }
     }
-    if(settings.nrLayerCount<=1){settings.nrLayers={};settings.nrLayerCount=0;}
+    if(settings.nrLayerCount<=1&&!settings.nrLayers[0].residualStack){settings.nrLayers={};settings.nrLayerCount=0;}
 }
 
 ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainExecutionRequest& request,
@@ -580,11 +602,13 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     // Color or applies the wrong NR model after bypassing the first instance.
     std::array<uint32_t, kMaxChainNodes> parameterIndices{};
     std::array<uint32_t, effectTypeCount> parameters{};
+    const auto stackBases=nrStackBases(chain);
+    std::array<uint32_t,kMaxChainNodes> nrResources{};
     bool nrFirst = false;
     for (uint32_t i = 0; i < chain.nodeCount; ++i) {
         const auto& node = chain.nodes[i];
         parameterIndices[i] = parameters[size_t(node.type)]++;
-        if (node.enabled && node.type == EffectType::NrEnhance) nrFirst = node.nr.lowLatencyPairing;
+        if (node.enabled && node.type == EffectType::NrEnhance && !node.nr.residualStack) nrFirst = node.nr.lowLatencyPairing;
     }
     nrFirst = nrFirst && !request.stillImage && !request.exportJob;
     // SR processing is its evaluated size; a supersample shrink makes the step
@@ -597,6 +621,8 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     const auto append = [&](uint32_t index) {
         const auto& node = chain.nodes[index];
         if (!node.enabled) return;
+        if(node.type==EffectType::NrEnhance&&node.nr.residualStack&&
+           !plan.resourceCounts[size_t(EffectType::NrEnhance)])return;
         if (node.type == EffectType::SuperResolution && !srStage.enlarges() && cursor == srStage.output) return;
         ChainExecutionStep step;
         step.type = node.type; step.nodeIndex = index;
@@ -604,7 +630,12 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         step.resourceIndex = plan.resourceCounts[size_t(node.type)]++;
         step.input = step.processing = step.output = cursor;
         if (node.type == EffectType::SuperResolution) { step.processing = srStage.evaluated; step.output = srStage.output; }
-        if (node.type == EffectType::NrEnhance) {
+        if(node.type==EffectType::NrEnhance)nrResources[index]=step.resourceIndex;
+        if(node.type==EffectType::NrEnhance&&node.nr.residualStack){
+            // 跨段时保留旁路槽位，让调色、超分和保护区域仍在原来的位置运行。
+            step.nrStackBase=stackBases[index]<0?step.resourceIndex:nrResources[size_t(stackBases[index])];
+        }
+        else if (node.type == EffectType::NrEnhance) {
             step.processing = request.exportJob&&!request.stillImage?
                 exportNrProcessingExtent(cursor,node.nr.runtime,node.nr.sizePolicy):
                 pipeline::ResolutionPlan::make(cursor, false, node.nr.sizePolicy,

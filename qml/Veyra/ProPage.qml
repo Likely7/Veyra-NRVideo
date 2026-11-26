@@ -179,7 +179,7 @@ VPage {
         glyph: "wand"; hue: Theme.accent
         compactHeader: true
         popIn: layerNumber === root.popLayer
-        title: qsTr("NR 层 ") + layerNumber
+        title: layerData.residualStack ? qsTr("性能 NR 层 %1").arg(layerNumber) : qsTr("NR 层 ") + layerNumber
         // .lnum: the layer number where a stage card has its icon.
         headerLeadingActions: Rectangle {
             implicitWidth: 22; implicitHeight: 22; radius: 7
@@ -199,12 +199,12 @@ VPage {
             tip: qsTr("复制 · 恢复默认 · 删除")
             onClicked: { nrLayerMenu.layer = card; nrLayerMenu.openAt(this, "down") }
         }
-        // This layer's own GPU time (list mode keys a node by its index + 2).
-        readonly property var timing: veyra.nodeTimings[String(layerData.index + 2)] || ({})
+        readonly property var timing: veyra.nodeTimings[String(layerData.id)] || ({})
         readonly property string timingText: timing.state === "measured" ? timing.ms.toFixed(2) + " ms"
                                            : timing.state === "pending" ? qsTr("等待样本")
                                            : timing.state === "failed" ? qsTr("启用失败") : ""
-        summary: nrEditor.sizeLabel + qsTr(" · 强度 ") + layerData.intensity.toFixed(2)
+        summary: (layerData.residualStack ? qsTr("叠加强度") + " " + layerData.stackStrength.toFixed(2)
+                                         : nrEditor.sizeLabel + qsTr(" · 强度 ") + layerData.intensity.toFixed(2))
                  + (layerData.enabled ? (timingText.length > 0 ? " · " + timingText : "") : qsTr(" · 已旁路"))
         on: layerData.enabled
         onToggled: on => enabledEdited(layerData.index, on)
@@ -1021,6 +1021,7 @@ VPage {
         Rectangle {
             id: meter2
             objectName: "pro-meter-stages"
+            readonly property var stageRows: veyra.stageTimings
             // Too narrow for label, bar and value side by side in two columns: the
             // bars and the budget note go, the values stay.
             readonly property bool narrow: width < 380
@@ -1056,7 +1057,7 @@ VPage {
                     FontMetrics { id: stageLabelMetrics; font.family: Theme.fontUi; font.pixelSize: Theme.fsSmall }
                     readonly property real stageLabelWidth: {
                         let w = 52
-                        for (const r of veyra.stageTimings) w = Math.max(w, Math.ceil(stageLabelMetrics.advanceWidth(r.label || "")) + 6)
+                        for (const r of meter2.stageRows) w = Math.max(w, Math.ceil(stageLabelMetrics.advanceWidth(r.label || "")) + 6)
                         return w
                     }
                     // The value column fits "000.0 ms" and the unmeasured word in the interface
@@ -1068,16 +1069,16 @@ VPage {
                     columnSpacing: 16
                     rowSpacing: 6
                     flow: GridLayout.TopToBottom
-                    rows: Math.max(1, Math.ceil(veyra.stageTimings.length / columns))
+                    rows: Math.max(1, Math.ceil(meter2.stageRows.length / columns))
                 // The model is the row count, not the list: the list is a new array on
                 // every snapshot, and a list model rebuilt the rows each time, so every
                 // bar restarted from 0 (the 0 / 5.8 / 0 / 5.8 flicker in the field).
                 Repeater {
-                    model: veyra.stageTimings.length
+                    model: meter2.stageRows.length
                     delegate: RowLayout {
                         id: stageRow
                         required property int index
-                        readonly property var modelData: veyra.stageTimings[index] || ({ label: "", ms: 0, fraction: 0, measured: false, color: "transparent" })
+                        readonly property var modelData: meter2.stageRows[index] || ({ label: "", ms: 0, fraction: 0, measured: false, color: "transparent" })
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
                         spacing: 8
@@ -1125,7 +1126,7 @@ VPage {
                             text: modelData.measured ? modelData.ms.toFixed(1) + " ms" : qsTr("未测量")
                             HoverHandler { id: stageValueHover }
                             ToolTip.visible: stageValueHover.hovered && modelData.measured
-                            ToolTip.text: qsTr("平均 ") + modelData.ms.toFixed(2) + " ms · P95 " + (modelData.p95 || 0).toFixed(2) + qsTr(" ms（最近一秒）")
+                            ToolTip.text: modelData.label + " · " + qsTr("平均 ") + modelData.ms.toFixed(2) + " ms · P95 " + (modelData.p95 || 0).toFixed(2) + qsTr(" ms（最近一秒）")
                             color: modelData.measured ? Theme.t1 : Theme.t3
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -1635,7 +1636,7 @@ VPage {
 
                         // .stage: one NR card, its layers inside (pages-pro.js nrStage):
                         // "N 层依次处理 · 每层参数独立", a bar per layer lit when it
-                        // runs, the add button at the bottom of the stage.
+                            // runs.
                         VAccordion {
                             id: nrStage
                             objectName: "list-nr-stage"
@@ -1683,7 +1684,10 @@ VPage {
                                     onEdited: (nodeIndex,key,amount) => veyra.setNrLayerParameter(nodeIndex,key,amount)
                                     onEnabledEdited: (nodeIndex,enabled) => veyra.setEffectEnabled(nodeIndex,enabled)
                                     onDuplicateRequested: nodeIndex => { root.markPop(layerNumber + 1); root.selectedEffect = veyra.duplicateNrLayer(nodeIndex) }
-                                    onRemoveRequested: nodeIndex => layerCard.bye(() => veyra.removeEffect(nodeIndex))
+                                    onRemoveRequested: nodeIndex => {
+                                        if (layerCard.layerData.stackRequired) veyra.removeEffect(nodeIndex)
+                                        else layerCard.bye(() => veyra.removeEffect(nodeIndex))
+                                    }
                                     onOrderEdited: enabled => veyra.lowLatency = enabled
                                 }
                             }
@@ -1696,6 +1700,16 @@ VPage {
                                 label: qsTr("+  添加 NR 层")
                                 note: full ? qsTr("（最多 4 层）") : qsTr("（加在 NR ") + veyra.nrLayers.length + qsTr(" 之后 · 最多 4 层）")
                                 onAdd: { root.markPop(veyra.nrLayers.length + 1); root.selectedEffect = veyra.addEffect("nr") }
+                            }
+                            AddLayerButton {
+                                objectName: "list-nr-stack-add"
+                                readonly property bool hasBase: veyra.nrLayers.some(layer => layer.enabled && !layer.residualStack)
+                                full: veyra.nrLayers.length >= 4 || !hasBase
+                                label: qsTr("+  添加性能 NR 层")
+                                note: veyra.nrLayers.length >= 4 ? qsTr("（最多 4 层）")
+                                      : !hasBase ? "（" + qsTr("请先启用上方的原 NR 层") + "）"
+                                      : qsTr("（加在 NR ") + veyra.nrLayers.length + qsTr(" 之后 · 最多 4 层）")
+                                onAdd: { root.markPop(veyra.nrLayers.length + 1); root.selectedEffect = veyra.addEffect("nr", true) }
                             }
 
                             // Global NR options sit inside the NR stage, beside its layers
@@ -2243,16 +2257,16 @@ VPage {
         }
     }
 
-    // pages-pro.js layer "更多": copy as a new layer, back to defaults, remove.
+    // NR 层的更多菜单沿用现有操作，并在这里切换叠层方式。
     VMenu {
         id: nrLayerMenu
         objectName: "nr-layer-menu"
         property Item layer: null
-        title: layer ? qsTr("NR 层 ") + layer.layerNumber : ""
+        title: layer ? layer.title : ""
         items: layer ? [
             { label: qsTr("复制为新层"), icon: "dup", act: "dup", disabled: veyra.nrLayers.length >= 4 },
             { label: qsTr("恢复默认"), icon: "reset", act: "reset" },
-            { label: qsTr("删除这一层"), icon: "trash", act: "del", disabled: veyra.nrLayers.length <= 1 }
+            { label: qsTr("删除这一层"), icon: "trash", act: "del", disabled: veyra.nrLayers.length <= 1 || layer.layerData.stackRequired }
         ] : []
         onPicked: (i, o) => {
             const card = layer

@@ -1519,6 +1519,40 @@ __declspec(noinline) void testHalfRateVariants() {
     ChainSessionStore switched(sessionPath);
     check(switched.load(*restored)&&*restored==*session,"half-rate variants: restart after leaving original mode");
 }
+__declspec(noinline) void testNrStackStorage() {
+    EnhancementSettings settings;settings.nr=true;settings.nrLayerCount=2;
+    settings.fgAutoMultiplier=true;
+    settings.nrLayers[0].enabled=settings.nrLayers[1].enabled=true;
+    settings.nrLayers[1].residualStack=true;settings.nrLayers[1].stackStrength=.375f;
+    const auto path=scratch(L"nr-stack-library.v1");
+    PresetLibrary writer(path);writer.setIncludeBuiltins(false);
+    PresetEntry entry;entry.name=L"NR stack";entry.chain=toChain(settings);
+    check(writer.load()&&writer.put(entry),"NR stack: save the library sidecar");
+    PresetLibrary reader(path);reader.setIncludeBuiltins(false);
+    check(reader.load()&&reader.entries().size()==1&&reader.entries()[0].chain==entry.chain,
+        "NR stack: library round-trips layer type and strength");
+    const auto sessionPath=scratch(L"nr-stack-session.v1");
+    auto session=std::make_unique<ChainSession>(ChainSession::initial(settings));
+    auto restored=std::make_unique<ChainSession>();
+    ChainSessionStore save(sessionPath),reload(sessionPath);
+    check(save.save(*session)&&reload.load(*restored)&&session->configurations[0].chain==restored->configurations[0].chain,
+        "NR stack: session restores layer type and strength");
+    const auto combinedLibrary=std::filesystem::path(path).concat(L".nr-residual-stack");
+    const auto combinedSession=std::filesystem::path(sessionPath).concat(L".nr-residual-stack");
+    check(readBytes(combinedLibrary).starts_with("VEYRA_PRESET_LIBRARY 27")&&
+        readBytes(combinedSession).starts_with("VEYRA_CHAIN_SESSION 22")&&restored->configurations[0].chain.fgAutoMultiplier,
+        "NR stack: combined formats retain the 2.2 automatic multiplier");
+    settings.nrLayers[1].stackControls={.25f,1.75f,.5f,.375f,.875f};
+    entry.chain=toChain(settings);
+    *session=ChainSession::initial(settings);
+    check(writer.put(entry,true)&&save.save(*session),
+        "NR stack: combined sidecars accept later tuning");
+    PresetLibrary tuned(path);tuned.setIncludeBuiltins(false);
+    ChainSessionStore tunedSession(sessionPath);
+    check(tuned.load()&&tuned.entries().size()==1&&tuned.entries()[0].chain==entry.chain&&
+        tunedSession.load(*restored)&&session->configurations[0].chain==restored->configurations[0].chain,
+        "NR stack: all tuned controls round-trip from the preferred sidecars");
+}
 __declspec(noinline) void testAutomaticMultiplierCompatibility() {
     auto session = std::make_unique<ChainSession>(ChainSession::initial(sample()));
     check(session->select(ChainMode::Node), "auto FG: initialize editor mode");
@@ -1631,6 +1665,7 @@ int main(int argc,char** argv) {
     testFlowApplication();
     testNrCorrectionStorage();
     testNrVariants();
+    testNrStackStorage();
     testRenderingChoices();
     std::setvbuf(stdout, nullptr, _IONBF, 0);
     testLegacyProtectionMigration();

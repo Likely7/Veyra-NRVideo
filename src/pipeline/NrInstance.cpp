@@ -1,6 +1,12 @@
 #include "veyra/pipeline/NrInstance.h"
 
 namespace veyra::pipeline {
+bool NrInstance::createStack(ID3D12Device* device,uint32_t width,uint32_t height) {
+    fullWidth_=width;fullHeight_=height;
+    outputFull_=makeTexture(device,width,height,DXGI_FORMAT_R16G16B16A16_FLOAT,true);
+    return bool(outputFull_);
+}
+
 bool NrInstance::create(ID3D12Device* device, uint32_t width, uint32_t height,
                         uint32_t fullWidth, uint32_t fullHeight,
                         ID3D12Resource* zeroMotion, ID3D12Resource* zeroDepth,

@@ -497,6 +497,7 @@ bool QmlPlayerBridge::resetNrLayer(int index) {
     if (c.mode != engine::ChainMode::List || index < 0 || index >= int(c.nodeCount) ||
         c.nodes[size_t(index)].type != engine::EffectType::NrEnhance) return false;
     auto& node = c.nodes[size_t(index)];
+    if(node.nr.residualStack)return setNrLayerParameter(index,"resetStack",1);
     const auto before = node;
     const engine::NrLayerSettings defaults;
     // The model and residual parameters, the size and the temporal option go

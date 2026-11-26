@@ -15,21 +15,35 @@ inline void describeNrLayers(const EnhancementSettings& settings,pipeline::Enhan
     desc.nrHoldStrength=settings.nrHoldStrength;desc.nrHoldTolerance=settings.nrHoldTolerance;
     desc.nrReuse=settings.nr?settings.nrReuse:NrReuseMode::Off;
     desc.nrLayersModel.clear();desc.nrLayersResidual.clear();
+    desc.nrStackStrengths.clear();
+    desc.nrStackControls.clear();
     desc.nrLayersTemporal.clear();desc.nrLayersAntiFlicker.clear();desc.nrLayersProtection.clear();
     desc.nrLayersSizePolicy={settings.nrPolicy};
     if(!settings.nrLayerCount||!settings.nr)return;
     const bool corrected=std::any_of(settings.nrLayers.begin(),settings.nrLayers.begin()+settings.nrLayerCount,
-        [](const auto& n){return n.enabled&&n.residual.correction.enabled;});
+        [](const auto& n){return n.enabled&&!n.residualStack&&n.residual.correction.enabled;});
     desc.nrLayersSizePolicy.clear();
     for(uint32_t i=0;i<settings.nrLayerCount&&i<kMaxNrInstances;++i){
         const auto& n=settings.nrLayers[i];
         if(!n.enabled)continue;
+        float stackStrength=n.residualStack?n.stackStrength:-1.f;
+        if(n.residualStack&&desc.fixedExecutionPlan){
+            const auto& plan=*desc.fixedExecutionPlan;
+            const auto end=plan.steps.begin()+plan.stepCount;
+            const auto step=std::find_if(plan.steps.begin(),end,[i](const auto& x){
+                return x.type==EffectType::NrEnhance&&x.parameterIndex==i;
+            });
+            if(step==end)continue;
+            if(step->nrStackBase==step->resourceIndex)stackStrength=0.f;
+        }
         desc.nrLayersModel.push_back(n.model);desc.nrLayersResidual.push_back(n.residual);
+        desc.nrStackStrengths.push_back(stackStrength);
+        desc.nrStackControls.push_back(n.stackControls);
         desc.nrLayersTemporal.push_back(n.usesTemporal());
         // Untouched stacks retain the previous global-tier contract exactly.
         // Controlled layers use Flow independently of the saved legacy tier.
         if(corrected)desc.nrLayersAntiFlicker.push_back(n.residual.correction.enabled?NrAntiFlicker::Flow:n.antiFlicker);
-        desc.nrLayersSizePolicy.push_back(n.sizePolicy);
+        desc.nrLayersSizePolicy.push_back(n.residualStack?pipeline::NrSizePolicy::Native:n.sizePolicy);
         desc.nrLayersProtection.push_back(ProtectionSettings{});
     }
     // Protection is a single list stage after the complete NR stack.
@@ -107,7 +121,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         uint32_t nr=chain.nodeCount,sr=chain.nodeCount;
         for(uint32_t i=0;i<chain.nodeCount;++i){
             if(!chain.nodes[i].enabled)continue;
-            if(chain.nodes[i].type==EffectType::NrEnhance&&nr==chain.nodeCount)nr=i;
+            if(chain.nodes[i].type==EffectType::NrEnhance&&!chain.nodes[i].nr.residualStack&&nr==chain.nodeCount)nr=i;
             if(chain.nodes[i].type==EffectType::SuperResolution)sr=i;
         }
         lowLatency=request.nr&&nr<sr&&sr<chain.nodeCount;
@@ -165,7 +179,6 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.fgMultiplier=request.fgMultiplier;
     desc.videoSrQuality=currentVideoSrQuality(settings.videoSrQuality);
     desc.dlssSrModel=settings.dlssSrModel;
-    describeNrLayers(settings,desc);
     desc.frameGenerationBackend=settings.frameGenerationBackend;
     desc.vfgQuality=settings.vfgQuality;
     desc.color=settings.color;
@@ -213,6 +226,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
         request.stillImage,request.exportJob,boundedAmd,desc.dualSr?srPrescale:pipeline::SrPrescale::Off,
         desc.dualSr?pipeline::SrOutput::Target:srOutput,desc.dualSr,settings.dualSrTarget},execution);
     if(!validation.accepted){desc.fixedExecutionPlanError=validation.message;return plan;}
+    if(desc.enableNr)desc.fixedExecutionPlan=execution;
+    describeNrLayers(settings,desc);
     if(request.nodeOrder){
         // Node order owns the first NR stage, even for an ordinary resize or
         // same-size SR bypass. Each NR resource keeps its own compiled input.
