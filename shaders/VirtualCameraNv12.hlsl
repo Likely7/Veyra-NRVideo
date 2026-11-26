@@ -37,12 +37,19 @@ float3 convert(float3 c){
     float y=dot(c,float3(.2126,.7152,.0722));
     return float3((16+219*y)/255.0,(128+224*(c.b-y)/1.8556)/255.0,(128+224*(c.r-y)/1.5748)/255.0);
 }
+// Cooperative 16x16 workgroup tile eliminates 4x redundant 16-tap cubic filters in 2x2 UV threads.
+groupshared float3 tile[16][16];
 [numthreads(16,16,1)]
-void main(uint3 id:SV_DispatchThreadID){
+void main(uint3 id:SV_DispatchThreadID, uint3 gtid:SV_GroupThreadID){
+    // Guard odd widths/heights so the odd+1 neighbor slot in a 2x2 UV pair still holds inputColor(id.xy).
+    const bool load = (id.x <= width && id.y <= height);
+    const float3 col = load ? inputColor(id.xy) : float3(0,0,0);
+    tile[gtid.y][gtid.x] = col;
+    GroupMemoryBarrierWithGroupSync();
     if(id.x>=width||id.y>=height)return;
-    yPlane[id.xy]=convert(inputColor(id.xy)).x;
-    if((id.x&1)==0&&(id.y&1)==0){
-        float3 c=(inputColor(id.xy)+inputColor(id.xy+uint2(1,0))+inputColor(id.xy+uint2(0,1))+inputColor(id.xy+uint2(1,1)))*.25;
-        uvPlane[id.xy/2]=convert(c).yz;
+    yPlane[id.xy]=convert(col).x;
+    if((gtid.x&1u)==0u&&(gtid.y&1u)==0u){
+        float3 c=(col+tile[gtid.y][gtid.x+1]+tile[gtid.y+1][gtid.x]+tile[gtid.y+1][gtid.x+1])*.25;
+        uvPlane[id.xy>>1]=convert(c).yz;
     }
 }
