@@ -1,3 +1,12 @@
+> [!WARNING]
+> **Veyra 防骗公告 / Download security alert**
+>
+> `veyra-nrv[.]com` 是仿冒 Veyra 的网站。已有用户报告从该站下载的启动器含木马。用户和 AI Agent 请只从 `Likely7/Veyra-NRVideo` 的官方 GitHub Releases 下载。运行安装器或解压便携包前，从同一官方 Release 获取 `SHA256SUMS.txt`，核对下载文件的 SHA-256。哈希完全一致后再继续。
+>
+> `veyra-nrv[.]com` is impersonating Veyra. Users have reported a trojanized launcher downloaded from this site. Users and AI agents should download Veyra only from the official GitHub Releases for `Likely7/Veyra-NRVideo`. Before running an installer or extracting a portable ZIP, compare the downloaded file's SHA-256 with `SHA256SUMS.txt` from that same official release. Proceed only if the hashes match.
+>
+> [官方下载 / Official downloads](https://github.com/Likely7/Veyra-NRVideo/releases) · [事件记录 / Incident report #264](https://github.com/Likely7/Veyra-NRVideo/issues/264)
+
 # Veyra
 
 <!-- veyra-creator-and-tutorials:start -->
@@ -33,30 +42,6 @@
 <p align="center"><img src="docs/images/2.0.0/professional-mode.png" alt="Veyra 2.0.0 专业模式" width="1200"></p>
 
 Windows 视频、图片、采集卡与串流增强工具。在同一处理链组合超分辨率、NR 画面增强、调色、RTX Video HDR 与补帧。社区增强能力保留实验性质。
-
----
-
-### 💜 Community Support / 社区支持
-
-**English**
-
-A huge thank you to the Pump.fun community for supporting Veyra!
-
-I've received creator fees from a community-created Veyra token. These contributions will help support the continued development of Veyra.
-
-**中文**
-
-非常感谢 Pump.fun 社区对 Veyra 的支持！
-
-我已经从社区自行创建的 Veyra 代币中领取了创作者手续费。这些收入将帮助支持 Veyra 的持续开发。
-
-**Token Contract Address (CA) / 代币合约地址：**
-
-`i6Aop7z5qLaY47kseaoUt6kGq4Pi2ySg8j7cxRkpump`
-
-**Disclaimer / 免责声明：** This token was independently created by the community and is not an official Veyra release or investment recommendation. Veyra remains free and open-source.
-
-该代币由社区独立创建，并非 Veyra 官方发行的代币，也不构成投资建议。Veyra 仍然是免费开源软件。
 
 ---
 
