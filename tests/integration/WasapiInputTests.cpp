@@ -43,11 +43,21 @@ int wmain(int argc,wchar_t** argv){
         auto b=clock.stamp(480,10100000,480,false,false,3000);check(b.ptsMs==1060&&!b.discontinuity,"arrival delay does not change sample PTS");
         auto c=clock.stamp(960,0,480,false,true,4000);check(c.ptsMs==1070&&c.estimated&&!c.discontinuity,"bad timestamp continues frame timeline");
         auto d=clock.stamp(1920,10400000,480,false,false,5000);check(d.discontinuity,"missing device frames reset epoch");
-        check(clock.stamp(2400,10500000,480,true,false,5000).discontinuity,"explicit device discontinuity retained");
-        check(clock.stamp(2880,10000000,480,false,false,5000).discontinuity,"backwards timestamp resets");
+        // USB UAC shared-mode drivers (e.g., HDMI capture cards) can flag spurious
+        // DATA_DISCONTINUITY and emit sawtooth backwards QPC steps even while device
+        // sample position stays strictly contiguous (zero dropped samples).
+        auto sp=clock.stamp(2400,10500000,480,true,false,5000);check(!sp.discontinuity&&sp.ptsMs==1100,"spurious device discontinuity with contiguous position does not reset");
+        auto bw=clock.stamp(2880,10000000,480,false,false,5000);check(!bw.discontinuity&&bw.ptsMs==1110,"sawtooth backwards QPC jitter with contiguous position stays monotonic");
+        auto fj=clock.stamp(3360,12500000,480,true,false,5000);check(fj.discontinuity&&fj.ptsMs==1300,"explicit discontinuity with >100ms forward QPC jump still resets");
         clock.reset(48000,0);clock.stamp(0,10000000,480,false,false,1000);
         auto bad=clock.stamp(999999,0,480,false,true,3000);check(!bad.discontinuity&&bad.ptsMs==1010,"unreliable device position does not fabricate a gap");
         check(!clock.stamp(960,10200000,480,false,false,3000).discontinuity,"valid timestamp resumes after estimated packet");
+        clock.reset(48000,0);clock.stamp(0,10000000,480,false,false,1000);
+        for(int i=1;i<=16;++i){
+            const int64_t sawtoothMs=-(i%8)*16;
+            const auto st=clock.stamp(uint64_t(i)*480,uint64_t((1000+i*10+sawtoothMs)*10000),480,(i%4)==0,false,1000.0+i*10);
+            check(!st.discontinuity&&st.ptsMs==1000.0+i*10,"USB UAC -16..-112ms QPC sawtooth + flags keep zero resets");
+        }
         clock.reset(44100,0);auto e=clock.stamp(0,0,441,false,true,1000);check(e.ptsMs==990&&e.estimated&&e.discontinuity,"first invalid timestamp estimated from packet duration");
         CaptureDevice video{L"Video",L"video:path"},audio{L"Audio",L"endpoint:id",false,true};
         auto path=CaptureCardSource::makeCapturePath(0,video,0,0,&audio);check(path.starts_with(L"capture2:")&&path.find(L":-3:")!=std::wstring::npos,"WASAPI provider encoded with explicit stable ID");

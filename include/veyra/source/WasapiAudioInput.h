@@ -20,10 +20,21 @@ public:
     struct Stamp {double ptsMs;bool discontinuity,estimated;};
     void reset(unsigned rate,double qpcToHostMs){rate_=rate;offset_=qpcToHostMs;have_=false;}
     Stamp stamp(uint64_t position,uint64_t qpc100ns,unsigned frames,bool discontinuity,bool timestampError,double nowMs){
+        static constexpr double kMaxForwardReanchorMs=100.0;
         const bool gap=have_&&!timestampError&&position!=nextPosition_;
-        const double pts=timestampError?(have_?nextPts_:nowMs-1000.0*frames/rate_):double(qpc100ns)/10000.0+offset_;
-        const bool reset=!have_||discontinuity||gap||(have_&&pts<lastPts_);
-        lastPts_=pts;nextPts_=pts+1000.0*frames/rate_;nextPosition_=(timestampError&&have_?nextPosition_:position)+frames;have_=true;
+        const double durationMs=1000.0*frames/rate_;
+        const double qpcPts=double(qpc100ns)/10000.0+offset_;
+        // Some USB UAC drivers emit spurious DATA_DISCONTINUITY flags and
+        // sawtooth-quantized QPC jumps (-16..-126 ms) while device sample
+        // position advances contiguously without dropped frames. Trust the
+        // sample timeline unless samples are missing or an explicit discontinuity
+        // also jumps forward past the bounded jitter window.
+        const bool forwardJump=have_&&!gap&&!timestampError&&discontinuity&&(qpcPts-nextPts_)>kMaxForwardReanchorMs;
+        const double pts=(!have_||gap||forwardJump)
+            ?(timestampError?nowMs-durationMs:qpcPts)
+            :nextPts_;
+        const bool reset=!have_||gap||forwardJump||pts<lastPts_;
+        lastPts_=pts;nextPts_=pts+durationMs;nextPosition_=(timestampError&&have_?nextPosition_:position)+frames;have_=true;
         return {pts,reset,timestampError};
     }
 private:
