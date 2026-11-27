@@ -7,6 +7,7 @@
 #include <memory>
 #include <mutex>
 #include <thread>
+#include <windows.h>
 
 namespace veyra::remoteplay { class MouseStick; }
 
@@ -15,6 +16,7 @@ namespace veyra::source {
 // busy. Only already-decoded presentation opportunities use the latest slot.
 class RemotePlaySessionSource final : public IFrameSource {
 public:
+    explicit RemotePlaySessionSource(bool wakeOnFrame = false);
     ~RemotePlaySessionSource() override { close(); }
     bool connect(RemotePlayConnectDesc desc);
     // True while the owner loop, including its reconnect retries, still runs.
@@ -23,6 +25,7 @@ public:
     bool open(const SourceOpenDesc&) override { return false; }
     const SourceInfo& info() const override { return info_; }
     SourceReadStatus read(pipeline::FramePacket&, const AVFrame**) override;
+    HANDLE frameEvent() const { return frameEvent_.get(); }
     bool seek(const pipeline::Rational&) override { return false; }
     void close() noexcept override;
     void controller(remoteplay::ControllerState state, std::weak_ptr<remoteplay::MouseStick> mouse = {});
@@ -52,6 +55,7 @@ private:
     };
     mutable std::mutex mutex_;
     std::condition_variable ready_;
+    std::unique_ptr<void, decltype(&CloseHandle)> frameEvent_{nullptr, &CloseHandle};
     std::jthread owner_;
     std::atomic<bool> alive_{false};
     bool initialized_=false, started_=false, failed_=false;

@@ -635,7 +635,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // present, otherwise the new colour tables never reach the GPU.
     bool refreshPausedFrame_=false;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    auto remote=remoteRequest?std::make_shared<source::RemotePlaySessionSource>():nullptr;
+    auto remote=remoteRequest?std::make_shared<source::RemotePlaySessionSource>(true):nullptr;
     const bool isRemote=bool(remote);
     {std::lock_guard lock(mutex_);activeRemote_=remote;}
 #else
@@ -1785,11 +1785,23 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             const bool checkpointPresentation=GetEnvironmentVariableW(L"VEYRA_TEST_NO_PROCESS_PRESENT",nullptr,0)==0;
             const bool capturePresentAfterReady=GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_PRESENT_AFTER_READY",nullptr,0)>0;
             bool processingGraph=false;
-            auto waitLive=[&]{
+            auto waitLive=[&](bool waitingForSource = false){
                 const auto due=liveScheduler?liveScheduler->wakeAt():0;
-                const auto arrivalEvent=physicalCapture?captureSource.frameEvent():nullptr;
+                auto arrivalEvent=physicalCapture?captureSource.frameEvent():nullptr;
+                bool remoteIdle=false;
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+                // A pending decoded frame cannot clear a full GPU/presentation queue.
+                if (waitingForSource && remote) {
+                    arrivalEvent=remote->frameEvent();
+                    // A precise wait with no deadline returns immediately. Use a
+                    // bounded wait on the decoder event instead of busy polling.
+                    remoteIdle=due<=0;
+                }
+#else
+                (void)waitingForSource;
+#endif
                 const auto readyEvent=physicalCapture?gpuReadyEvent.handle:nullptr;
-                if(preciseDeadlines&&liveScheduler&&liveScheduler->preciseWake()){
+                if(!remoteIdle&&preciseDeadlines&&liveScheduler&&liveScheduler->preciseWake()){
                     deadlineWait.until(due,arrivalEvent,readyEvent,[&]{return stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0;});
                 }else deadlineWait.slice(due>host100ns()?std::min(1.0,double(due-host100ns())/10000):1.0,arrivalEvent,readyEvent);
             };
@@ -2768,10 +2780,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     while(transaction&&isCapture&&rs==source::SourceReadStatus::Waiting&&!stop_){
                         if(physicalCapture&&captureSource.videoFallbackNeeded())break;
                         if(paused_&&cachedFrame){frame=cachedFrame;pkt=cachedPacket;rs=source::SourceReadStatus::Frame;break;}
-                        advanceLive();publishWaitingProgress();waitLive();rs=readSource(pkt,&frame);
+                        advanceLive();publishWaitingProgress();waitLive(true);rs=readSource(pkt,&frame);
                     }
                     if(stop_)break;
-                    if(rs==source::SourceReadStatus::Waiting){if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}advanceLive();publishWaitingProgress();waitLive();continue;}
+                    if(rs==source::SourceReadStatus::Waiting){if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}advanceLive();publishWaitingProgress();waitLive(true);continue;}
                     if(rs==source::SourceReadStatus::Eos){
                         fileInputEnded=true;
                         while(liveScheduler&&liveScheduler->occupancy()&&!stop_&&(!paused_||seekPreviewPending)&&!liveScheduler->failed()){advanceLive();if(liveScheduler->occupancy())waitLive();}

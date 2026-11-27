@@ -424,7 +424,9 @@ static bool slowConsumer(){
     return neutral==0&&lagged==0&&fresh&&stale&&focus&&ordered&&triggerEdges&&bounded;
 }
 static void mailbox(){
-    RemotePlaySessionSource s;s.started_=true;
+    RemotePlaySessionSource s(true);s.started_=true;
+    const auto event=s.frameEvent();
+    if(!event||WaitForSingleObject(event,0)!=WAIT_TIMEOUT)throw std::runtime_error("empty mailbox event");
     const auto now=remoteplay::monotonic100ns();
     auto inbox=std::make_shared<remoteplay::SessionInbox>();auto token=inbox->begin(now-20000000);token.connected();
     inbox->decodeStarted(now-15000000,now-15050000);inbox->decodeFinished(now-14900000);inbox->frameDecoded(now-14900000);
@@ -446,16 +448,26 @@ static void mailbox(){
     pipeline::FramePacket packet;SourceInfo info;info.width=16;info.height=16;
     packet.sequence=1;packet.flags=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Open);s.publishDecoded(raw,packet,info);
     packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);av_frame_free(&raw);
+    if(WaitForSingleObject(event,0)!=WAIT_OBJECT_0||WaitForSingleObject(event,0)!=WAIT_OBJECT_0)
+        throw std::runtime_error("mailbox signal cleared while a frame is pending");
     const AVFrame* frame=nullptr;pipeline::FramePacket out;
     if(s.read(out,&frame)!=SourceReadStatus::Frame||!frame||out.sequence!=2||s.skipped()!=1||!pipeline::breaksHistory(out.flags))throw std::runtime_error("latest decoded mailbox");
     if(!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Drop)||pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("decoded overwrite must be a soft Drop, not a clock discontinuity");
     if(s.read(out,&frame)!=SourceReadStatus::Waiting)throw std::runtime_error("mailbox replay");
+    if(WaitForSingleObject(event,0)!=WAIT_TIMEOUT)throw std::runtime_error("consumed mailbox event");
     raw=av_frame_alloc();raw->width=16;raw->height=16;raw->format=AV_PIX_FMT_YUV420P;
     if(av_frame_get_buffer(raw,32)<0)throw std::bad_alloc();
     packet.sequence=1;packet.sourceEpoch=uint64_t(1)<<32;
     packet.flags=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity);
-    s.publishDecoded(raw,packet,info);packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);av_frame_free(&raw);
+    DWORD wakeResult=WAIT_FAILED;
+    std::jthread reader([&]{wakeResult=WaitForSingleObject(event,1000);});
+    s.publishDecoded(raw,packet,info);packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);
+    reader.join();
+    if(wakeResult!=WAIT_OBJECT_0)throw std::runtime_error("real mailbox waiter did not wake on republish");
     if(s.read(out,&frame)!=SourceReadStatus::Frame||out.sequence!=4||out.sourceEpoch!=(uint64_t(1)<<32)||!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("reconnect keeps application sequence and pending clock reset across mailbox overwrite");
+    s.publishDecoded(raw,packet,info);av_frame_free(&raw);
+    s.close();
+    if(WaitForSingleObject(event,0)!=WAIT_TIMEOUT)throw std::runtime_error("closed mailbox event");
 }
 // PS5 手柄控制 (from PR #7): the same local validation boundary as a stream, an
 // owner loop that is over once the connect failed, and the shared pad queue.
@@ -471,6 +483,7 @@ static void controlOnlyBoundary(){
         if(s.alive())throw std::runtime_error("closed controller-only session must not be alive");
     }
     RemotePlaySessionSource s;s.started_=true;
+    if(s.frameEvent())throw std::runtime_error("controller-only session has no frame event");
     const auto now=remoteplay::monotonic100ns();
     remoteplay::ControllerState down;down.inputActive=true;down.buttons=remoteplay::ControllerState::Cross;
     s.controller(down);
