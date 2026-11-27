@@ -54,7 +54,7 @@ QByteArray envelope(const Key& key, const QByteArray& payload, QByteArray signat
     return QJsonDocument(object).toJson(QJsonDocument::Compact);
 }
 
-QJsonObject packageRow(const QString& version, const QString& flavor, const QString& asset, qint64 size = 100,
+QJsonObject packageRow(const QString& /*version*/, const QString& flavor, const QString& asset, qint64 size = 100,
                        qint64 expanded = 200) {
     return {{"flavor", flavor}, {"asset", asset}, {"sha256", QString(64, QLatin1Char('a'))},
             {"size", size}, {"expandedSize", expanded}};
