@@ -146,8 +146,9 @@ int wmain(int argc, wchar_t** argv) {
         }
         const unsigned minGenerated=(c.multiplier-1)*25;
         ok=ok&&generated>=minGenerated&&nonblack>=2;
-        const auto srEvaluations=graph.metrics().srEvaluateCount;
-        if(srLifetime)ok=ok&&(c.sr?srEvaluations==40:srEvaluations==0);
+        const bool srActive=graph.fsrSrEnabled();
+        const auto srEvaluations=srActive?graph.metrics().srEvaluateCount:0;
+        if(srLifetime)ok=ok&&srActive==c.sr&&(!srActive||srEvaluations==40);
         totalGenerated+=generated;
         std::cout<<"SWITCH_CASE cycle="<<cycles<<" pid="<<GetCurrentProcessId()<<" hwnd="<<window
             <<" backend="<<engine::frameGenerationBackendName(c.backend)<<" multiplier="<<c.multiplier
