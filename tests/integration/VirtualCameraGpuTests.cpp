@@ -13,6 +13,8 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <stdexcept>
 #include <string_view>
 #include <thread>
@@ -24,17 +26,46 @@ static void require(bool ok,const char* why){++checks;if(!ok)throw std::runtime_
 static double pq(double x){const auto p=std::pow(x*.008,2610./16384);return std::pow((3424./4096+(2413./128)*p)/(1+(2392./128)*p),2523./32);}
 static double proxy(double x){const auto c=std::max(x*80/203,0.);const auto v=c<=.75?c:.75+.25*(1-std::exp(-5.778*(c-.75)));return v<=.0031308?12.92*v:1.055*std::pow(v,1/2.4)-.055;}
 static std::array<double,3> yuv(std::array<double,3> c){const auto y=c[0]*.2126+c[1]*.7152+c[2]*.0722;return {16+219*y,128+224*(c[2]-y)/1.8556,128+224*(c[0]-y)/1.5748};}
-static void run(){
-    const auto suffix=L"gpu-"+std::to_wstring(GetCurrentProcessId());SetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_NAMESPACE",suffix.c_str());
+static bool startCamera(engine::VirtualCamera& camera,unsigned fps,std::wstring& error){
+    // Use the ordinary producer with a private volatile registration root.
+    // A DirectShow test consumer binds the module by path and needs no registry edits.
+    struct Registry {
+        std::wstring keyName=L"VeyraCameraTest-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64());
+        HKEY key=nullptr;
+        bool isNew=false,redirected=false;
+        ~Registry(){
+            if(redirected)RegOverridePredefKey(HKEY_CURRENT_USER,nullptr);
+            if(key)RegCloseKey(key);
+            if(isNew)RegDeleteTreeW(HKEY_CURRENT_USER,keyName.c_str());
+        }
+    } registry;
+    DWORD disposition=0;
+    const auto hr=RegCreateKeyExW(HKEY_CURRENT_USER,registry.keyName.c_str(),0,nullptr,REG_OPTION_VOLATILE,
+                                KEY_ALL_ACCESS,nullptr,&registry.key,&disposition);
+    registry.isNew=hr==ERROR_SUCCESS&&disposition==REG_CREATED_NEW_KEY;
+    require(registry.isNew,"private camera registration root");
+    registry.redirected=RegOverridePredefKey(HKEY_CURRENT_USER,registry.key)==ERROR_SUCCESS;
+    require(registry.redirected,"private camera registration redirect");
+    return camera.start(fps,error);
+}
+struct PullSpec {unsigned width,height,internalWidth,internalHeight,hdr,seconds;bool fine;};
+static void run(const std::filesystem::path& fixtureDir={},const PullSpec* pull=nullptr){
+    if(!GetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_NAMESPACE",nullptr,0)){
+        const auto suffix=L"gpu-"+std::to_wstring(GetCurrentProcessId());
+        SetEnvironmentVariableW(L"VEYRA_TEST_VIRTUALCAM_NAMESPACE",suffix.c_str());
+    }
+    if(!fixtureDir.empty())std::filesystem::create_directories(fixtureDir);
     gfx::D3D12DeviceContext ctx;Status status{};gfx::DeviceContextDesc desc;desc.enableDebugLayer=true;
     require(ctx.initialize(desc,status),"D3D12 initialize");
     gfx::CommandSlotRing ring;require(ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status),"ring initialize");
     ComPtr<ID3D12InfoQueue> debug;ctx.device()->QueryInterface(IID_PPV_ARGS(&debug));if(debug)debug->ClearStoredMessages();
     {
         engine::VirtualCamera camera;std::wstring error;require(!camera.status().active,"default off");
-        require(camera.start(120,error),"camera start with packaged modules");
-        for(unsigned mode=0;mode<3;++mode)for(unsigned scaled=0;scaled<3;++scaled){
-            const unsigned w=scaled?32:647,h=scaled?18:363,nativeW=scaled?64:w,nativeH=scaled?36:h,outW=(nativeW+1)&~1u,outH=(nativeH+1)&~1u;
+        if(!pull)require(startCamera(camera,120,error),"camera start with packaged modules");
+        if(!pull)for(unsigned mode=0;mode<3;++mode)for(unsigned scaled=0;scaled<4;++scaled){
+            const unsigned w=scaled?32:647,h=scaled?18:363;
+            const unsigned nativeW=scaled==3?65:scaled?64:w,nativeH=scaled==3?37:scaled?36:h;
+            const unsigned outW=(nativeW+1)&~1u,outH=(nativeH+1)&~1u;
             camera.sessionEnded();
             std::vector<float> pixels(size_t(w)*h*4);
             const std::array<std::array<double,3>,6> sdr{{{1,0,0},{0,1,0},{0,0,1},{.375,.375,.375},{0,0,0},{1,1,1}}};
@@ -50,7 +81,7 @@ static void run(){
             D3D12_RESOURCE_BARRIER barrier{};barrier.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;barrier.Transition={texture.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_DEST};list->ResourceBarrier(1,&barrier);
             D3D12_TEXTURE_COPY_LOCATION from{},to{};from.pResource=upload.Get();from.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;from.PlacedFootprint.Footprint={DXGI_FORMAT_R32G32B32A32_FLOAT,w,h,1,pitch};to.pResource=texture.Get();to.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;list->CopyTextureRegion(&to,0,0,0,&from,nullptr);std::swap(barrier.Transition.StateBefore,barrier.Transition.StateAfter);list->ResourceBarrier(1,&barrier);
             require(ring.submitAndSignal(slot),"upload submit");
-            engine::PresentCapture::Frame frame{texture.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,w,h,mode,0,false,nativeW,nativeH,scaled==2};
+            engine::PresentCapture::Frame frame{texture.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,w,h,mode,0,false,nativeW,nativeH,scaled>=2};
             // Exercise discarded command lists as well as the normal path.
             if(mode==0&&scaled==0){list=ring.acquireNext(slot,status);require(camera.record(list,frame),"discard record");camera.discarded();require(ring.discardRecording(),"discard list");Sleep(12);}
             list=ring.acquireNext(slot,status);require(camera.record(list,frame),"camera GPU record");require(ring.submitAndSignal(slot),"camera submit");camera.submitted(ctx.fence(),ring.lastSignaledValue());
@@ -58,6 +89,12 @@ static void run(){
             require(queue,"GPU output became ready");uint32_t qw=0,qh=0;uint64_t interval=0;video_queue_get_info(queue,&qw,&qh,&interval);require(qw==outW&&qh==outH,"output size and odd padding");
             std::vector<uint8_t> output(size_t(qw)*qh*3/2);nv12_scale_t scale{};nv12_scale_init(&scale,TARGET_FORMAT_NV12,qw,qh,qw,qh);uint64_t timestamp=0;bool read=false;
             for(unsigned i=0;i<50&&!read;++i){read=video_queue_read(queue,&scale,output.data(),&timestamp);if(!read)Sleep(2);}require(read&&timestamp>0,"actual GPU NV12 read");
+            if(!fixtureDir.empty()){
+                const auto name=std::format("mode-{}-scale-{}.nv12",mode,scaled);
+                std::ofstream file(fixtureDir/name,std::ios::binary);
+                file.write(reinterpret_cast<const char*>(output.data()),std::streamsize(output.size()));
+                require(bool(file),"write NV12 comparison fixture");
+            }
             double worst=0;
             for(unsigned stripe=0;stripe<6;++stripe){const unsigned x=std::min(qw-2,unsigned((stripe+.5)*nativeW/6))&~1u,y=(qh/2)&~1u;auto c=mode?std::array<double,3>{proxy(hdr[stripe]),proxy(hdr[stripe]),proxy(hdr[stripe])}:sdr[stripe];const auto expected=yuv(c);const size_t at=size_t(y)*qw+x,uv=size_t(qw)*qh+size_t(y/2)*qw+x;
                 for(unsigned k=0;k<3;++k){const auto actual=output[k==0?at:uv+k-1];worst=std::max(worst,std::abs(actual-expected[k]));}}
@@ -66,25 +103,55 @@ static void run(){
             require(camera.status().processingWidth==w&&camera.status().width==outW,"processing and output extents distinguished");
             camera.stop();require(video_queue_state(queue)==SHARED_QUEUE_STATE_STOPPING||!camera.status().active,"camera stop");video_queue_close(queue);
             for(unsigned i=0;i<100&&camera.status().width;++i)Sleep(5);
-            require(camera.start(120,error),"restart");require(ring.waitIdle(),"fixture complete");
+            require(startCamera(camera,120,error),"restart");require(ring.waitIdle(),"fixture complete");
             std::printf("PASS mode=%u scaled=%u output=%ux%u maxError=%.4f\n",mode,scaled,outW,outH,worst);
             Sleep(12);
         }
         // A 59.94 Hz capture source and a 60 FPS camera have slightly different
         // clocks. Sub-ms arrival jitter must not discard fresh capture frames.
         camera.stop();require(ring.waitIdle(),"cadence setup idle");
-        require(camera.start(60,error),"60 FPS cadence start");Sleep(35);
+        require(startCamera(camera,60,error),"60 FPS cadence start");Sleep(35);
         D3D12_HEAP_PROPERTIES heap{};heap.Type=D3D12_HEAP_TYPE_DEFAULT;
-        D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=640;td.Height=360;td.DepthOrArraySize=1;td.MipLevels=1;td.Format=DXGI_FORMAT_R32G32B32A32_FLOAT;td.SampleDesc.Count=1;td.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+        const unsigned width=pull?pull->internalWidth:640,height=pull?pull->internalHeight:360;
+        const unsigned frames=pull?60*pull->seconds:120;
+        D3D12_RESOURCE_DESC td{};td.Dimension=D3D12_RESOURCE_DIMENSION_TEXTURE2D;td.Width=width;td.Height=height;td.DepthOrArraySize=1;td.MipLevels=1;td.Format=DXGI_FORMAT_R16G16B16A16_FLOAT;td.SampleDesc.Count=1;td.Flags=D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
         ComPtr<ID3D12Resource> moving;require(SUCCEEDED(ctx.device()->CreateCommittedResource(&heap,D3D12_HEAP_FLAG_NONE,&td,D3D12_RESOURCE_STATE_COMMON,nullptr,IID_PPV_ARGS(&moving))),"dynamic fixture texture");
         D3D12_DESCRIPTOR_HEAP_DESC hd{};hd.Type=D3D12_DESCRIPTOR_HEAP_TYPE_RTV;hd.NumDescriptors=1;
         ComPtr<ID3D12DescriptorHeap> rtvs;require(SUCCEEDED(ctx.device()->CreateDescriptorHeap(&hd,IID_PPV_ARGS(&rtvs))),"dynamic fixture RTV");
         const auto rtv=rtvs->GetCPUDescriptorHandleForHeapStart();ctx.device()->CreateRenderTargetView(moving.Get(),nullptr,rtv);
-        engine::PresentCapture::Frame movingFrame{moving.Get(),td.Format,640,360,0,0,false,640,360,false};
+        engine::PresentCapture::Frame movingFrame{moving.Get(),td.Format,width,height,pull?pull->hdr:0,0,false,pull?pull->width:width,pull?pull->height:height,pull&&pull->fine};
+        ComPtr<ID3D12QueryHeap> queries;
+        ComPtr<ID3D12Resource> timing;
+        std::vector<unsigned> timed;
+        if(pull){
+            const D3D12_QUERY_HEAP_DESC queryDesc{D3D12_QUERY_HEAP_TYPE_TIMESTAMP,2*(frames+1),0};
+            require(SUCCEEDED(ctx.device()->CreateQueryHeap(&queryDesc,IID_PPV_ARGS(&queries))),"camera timing query heap");
+            D3D12_HEAP_PROPERTIES readback{};readback.Type=D3D12_HEAP_TYPE_READBACK;
+            D3D12_RESOURCE_DESC buffer{};buffer.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER;
+            buffer.Width=queryDesc.Count*sizeof(UINT64);buffer.Height=1;buffer.DepthOrArraySize=1;
+            buffer.MipLevels=1;buffer.SampleDesc.Count=1;buffer.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+            require(SUCCEEDED(ctx.device()->CreateCommittedResource(&readback,D3D12_HEAP_FLAG_NONE,&buffer,
+                D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&timing))),"camera timing readback");
+        }
         const auto emit=[&](unsigned id){unsigned slot=0;auto* list=ring.acquireNext(slot,status);require(list,"dynamic command list");
             D3D12_RESOURCE_BARRIER b{};b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;b.Transition={moving.Get(),D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_RENDER_TARGET};list->ResourceBarrier(1,&b);
-            const float gray=float(24+id)/219.f,clear[]{gray,gray,gray,1};list->ClearRenderTargetView(rtv,clear,0,nullptr);std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
-            const bool accepted=camera.record(list,movingFrame);require(ring.submitAndSignal(slot),"dynamic submit");if(accepted)camera.submitted(ctx.fence(),ring.lastSignaledValue());return accepted;};
+            const float gray=float(24+id%192)/219.f,code=pull&&pull->hdr==2?float(pq(gray)):gray;
+            const float clear[]{code,code,code,1};list->ClearRenderTargetView(rtv,clear,0,nullptr);
+            if(pull){
+                const LONG x=LONG((id*13)%(width/2));
+                const D3D12_RECT rect{x,0,x+LONG(width/4),LONG(height)};
+                const float mark[]{code*.5f,code*.75f,code,1};
+                list->ClearRenderTargetView(rtv,mark,1,&rect);
+            }
+            std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
+            if(queries)list->EndQuery(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,2*id);
+            const bool accepted=camera.record(list,movingFrame);
+            if(queries&&accepted){
+                list->EndQuery(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,2*id+1);
+                list->ResolveQueryData(queries.Get(),D3D12_QUERY_TYPE_TIMESTAMP,2*id,2,timing.Get(),2*id*sizeof(UINT64));
+                if(id>60)timed.push_back(id);
+            }
+            require(ring.submitAndSignal(slot),"dynamic submit");if(accepted)camera.submitted(ctx.fence(),ring.lastSignaledValue());return accepted;};
         require(emit(0),"dynamic first frame");
         video_queue_t* movingQueue=nullptr;for(unsigned i=0;i<500;++i){movingQueue=video_queue_open();if(movingQueue&&video_queue_state(movingQueue)==SHARED_QUEUE_STATE_READY)break;video_queue_close(movingQueue);movingQueue=nullptr;Sleep(2);}require(movingQueue,"dynamic queue ready");
         // Sleep(1)/sleep_until alone can have 15.6 ms granularity on Windows,
@@ -92,17 +159,32 @@ static void run(){
         HANDLE pacing=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS),reading=CreateWaitableTimerExW(nullptr,nullptr,CREATE_WAITABLE_TIMER_HIGH_RESOLUTION,TIMER_ALL_ACCESS);
         require(pacing&&reading,"high-resolution fixture timers");LARGE_INTEGER firstTick{};firstTick.QuadPart=-10000;require(SetWaitableTimer(reading,&firstTick,1,nullptr,nullptr,FALSE),"consumer fixture timer");
         std::atomic<unsigned> uniqueFrames=0;
-        std::jthread reader([&](std::stop_token stop){std::vector<uint8_t> bytes(640*360*3/2);nv12_scale_t scale{};nv12_scale_init(&scale,TARGET_FORMAT_NV12,640,360,640,360);uint64_t ts=0;int previous=-1;
+        std::jthread reader;
+        if(pull){
+            std::puts("PULL_READY");std::fflush(stdout);
+            for(unsigned i=0;i<500&&!camera.status().consumerFps;++i)Sleep(10);
+            require(camera.status().consumerFps==60,"DirectShow consumer negotiated 60 FPS");
+        }else reader=std::jthread([&](std::stop_token stop){std::vector<uint8_t> bytes(640*360*3/2);nv12_scale_t scale{};nv12_scale_init(&scale,TARGET_FORMAT_NV12,640,360,640,360);uint64_t ts=0;int previous=-1;
             while(!stop.stop_requested()){if(video_queue_read(movingQueue,&scale,bytes.data(),&ts)&&bytes[0]!=previous){previous=bytes[0];++uniqueFrames;}WaitForSingleObject(reading,10);}});
         const auto origin=std::chrono::steady_clock::now()+std::chrono::milliseconds(40);unsigned accepted=0;
         const auto before=camera.status().frames;
-        for(unsigned i=1;i<=120;++i){const auto due=origin+std::chrono::nanoseconds(int64_t(i)*1001000000/60+(i%2?750000:-750000));
+        for(unsigned i=1;i<=frames;++i){const auto due=origin+std::chrono::nanoseconds(int64_t(i)*1001000000/60+(i%2?750000:-750000));
             const auto left=std::chrono::duration_cast<std::chrono::nanoseconds>(due-std::chrono::steady_clock::now()).count();if(left>300000){LARGE_INTEGER wait{};wait.QuadPart=-(left-300000)/100;require(SetWaitableTimer(pacing,&wait,0,nullptr,nullptr,FALSE),"source fixture timer");WaitForSingleObject(pacing,100);}while(std::chrono::steady_clock::now()<due)YieldProcessor();accepted+=emit(i);}
         require(ring.waitIdle(),"dynamic GPU complete");for(unsigned i=0;i<100&&camera.status().frames-before<accepted;++i)Sleep(2);Sleep(8);
-        reader.request_stop();reader.join();CloseHandle(pacing);CloseHandle(reading);video_queue_close(movingQueue);
+        if(reader.joinable()){reader.request_stop();reader.join();}CloseHandle(pacing);CloseHandle(reading);video_queue_close(movingQueue);
         const auto published=camera.status().frames-before;
-        std::printf("CADENCE source=60000/1001 camera=60 jitter=+/-0.75ms input=120 accepted=%u published=%llu uniqueIncludingInitial=%u dropped=%llu\n",accepted,static_cast<unsigned long long>(published),uniqueFrames.load(),static_cast<unsigned long long>(camera.status().dropped));
-        require(accepted>=117,"60 Hz jitter preserves fresh frames");require(published==accepted,"accepted dynamic frames published");require(uniqueFrames>=accepted,"dynamic NV12 frames actually change");
+        std::printf("CADENCE source=60000/1001 camera=60 jitter=+/-0.75ms input=%u accepted=%u published=%llu uniqueIncludingInitial=%u dropped=%llu\n",frames,accepted,static_cast<unsigned long long>(published),uniqueFrames.load(),static_cast<unsigned long long>(camera.status().dropped));
+        if(pull){
+            UINT64 rate=0;require(SUCCEEDED(ctx.directQueue()->GetTimestampFrequency(&rate))&&rate,"GPU timestamp frequency");
+            UINT64* ticks=nullptr;require(SUCCEEDED(timing->Map(0,nullptr,reinterpret_cast<void**>(&ticks)))&&!timed.empty(),"camera timing samples");
+            std::vector<double> costs;
+            for(const auto id:timed)costs.push_back(double(ticks[2*id+1]-ticks[2*id])*1000.0/double(rate));
+            timing->Unmap(0,nullptr);
+            std::sort(costs.begin(),costs.end());
+            std::printf("PULL_GPU samples=%zu p50Ms=%.5f p95Ms=%.5f\n",costs.size(),costs[(costs.size()-1)*50/100],costs[(costs.size()-1)*95/100]);
+        }else{
+            require(accepted>=117,"60 Hz jitter preserves fresh frames");require(published==accepted,"accepted dynamic frames published");require(uniqueFrames>=accepted,"dynamic NV12 frames actually change");
+        }
         camera.stop();require(ring.drainQueue(),"final GPU drain");
     }
     unsigned errors=0;if(debug)for(UINT64 i=0;i<debug->GetNumStoredMessagesAllowedByRetrievalFilter();++i){SIZE_T n=0;debug->GetMessage(i,nullptr,&n);std::vector<uint8_t> bytes(n);auto* m=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());debug->GetMessage(i,m,&n);if(m->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){++errors;std::printf("D3D12 ERROR %s\n",m->pDescription);}}
@@ -134,10 +216,18 @@ static void setupReentry(){
     require(mock.status().setupError.empty()&&launched==2,"retry clears previous setup error");
     std::printf("PASS setup reentry checks=%u\n",checks);
 }
-int main(int argc,char** argv){
+int wmain(int argc,wchar_t** argv){
     try{
-        if(argc==2&&std::string_view(argv[1])=="--setup-reentry")setupReentry();
-        else run();
+        if(argc==2&&std::wstring_view(argv[1])==L"--setup-reentry")setupReentry();
+        else if(argc==3&&std::wstring_view(argv[1])==L"--pixel-fixtures")run(argv[2]);
+        else if(argc==9&&std::wstring_view(argv[1])==L"--directshow-pull"){
+            const auto num=[&](int i){return unsigned(std::stoul(argv[i]));};
+            const PullSpec spec{num(2),num(3),num(4),num(5),num(6),num(8),num(7)!=0};
+            require(spec.width>=spec.internalWidth&&spec.height>=spec.internalHeight&&spec.internalWidth>=16&&spec.internalHeight>=16&&
+                spec.width<=4096&&spec.height<=2160&&spec.hdr<=2&&spec.seconds>=2&&spec.seconds<=30,"camera benchmark dimensions");
+            run({},&spec);
+        }else if(argc==1)run();
+        else return 2;
         return 0;
     }catch(const std::exception& e){
         std::fprintf(stderr,"FAIL %s after %u checks\n",e.what(),checks);
