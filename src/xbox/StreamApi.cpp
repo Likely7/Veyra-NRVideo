@@ -61,6 +61,7 @@ HttpsResponse StreamApi::call(const std::string& method, const std::string& path
     r.method = method;
     r.host = host_;
     r.path = path;
+    if (method == "DELETE") r.timeoutMs = 3500;
     r.headers["Content-Type"] = "application/json";
     r.headers["Authorization"] = "Bearer " + token_;
     for (const auto& [k, v] : extraHeaders) r.headers[k] = v;
@@ -95,7 +96,7 @@ std::vector<Console> StreamApi::consoles() {
     }
 }
 
-std::string StreamApi::play(const std::string& serverId, const std::string& locale) {
+std::string StreamApi::play(const std::string& serverId, const std::string& locale, bool controlOnly) {
     const json body = {
         {"titleId", ""}, {"systemUpdateGroup", ""}, {"clientSessionId", ""},
         {"settings", {{"nanoVersion", "V3;WebrtcTransport.dll"}, {"enableTextToSpeech", false}, {"highContrast", 0},
@@ -103,7 +104,14 @@ std::string StreamApi::play(const std::string& serverId, const std::string& loca
                       {"sdkType", "web"}, {"osName", "windows"}}},
         {"serverId", serverId}, {"fallbackRegionNames", json::array()},
     };
-    const json j = parse(call("POST", "/v5/sessions/home/play", body.dump(), {{"X-MS-Device-Info", kDeviceInfo}}), "play");
+    std::string deviceInfo = kDeviceInfo;
+    if (controlOnly) {
+        // Greenlight 58e832a1 requests the 720p profile with this OS name.
+        auto device = json::parse(deviceInfo);
+        device["dev"]["os"]["name"] = "android";
+        deviceInfo = device.dump();
+    }
+    const json j = parse(call("POST", "/v5/sessions/home/play", body.dump(), {{"X-MS-Device-Info", deviceInfo}}), "play");
     const std::string path = j.value("sessionPath", "");
     // "v5/sessions/home/<id>"
     const auto slash = path.find_last_of('/');

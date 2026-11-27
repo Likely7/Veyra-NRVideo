@@ -171,16 +171,17 @@ std::wstring describeXboxError(const std::string& responseBody) {
 Account::Account(std::shared_ptr<HttpsTransport> transport, std::filesystem::path tokenFile)
     : http_(std::move(transport)), file_(std::move(tokenFile)), clock_(systemNow) {
     tokens_ = loadTokens(file_);
+    signedIn_ = tokens_.has_value();
 }
 
 bool Account::signedIn() const {
-    std::lock_guard lock(mutex_);
-    return tokens_.has_value();
+    return signedIn_.load();
 }
 
 void Account::signOut() {
     std::lock_guard lock(mutex_);
     tokens_.reset();
+    signedIn_ = false;
     userToken_.clear();
     streaming_.reset();
     std::error_code ec;
@@ -217,6 +218,7 @@ SignInPoll Account::pollSignIn(const DeviceCode& code, std::string* detail) {
         if (t.refreshToken.empty() || t.accessToken.empty()) return SignInPoll::Failed;
         std::lock_guard lock(mutex_);
         tokens_ = std::move(t);
+        signedIn_ = true;
         userToken_.clear();
         streaming_.reset();
         store();
@@ -240,6 +242,7 @@ std::string Account::userAccessToken() {
     if (response.status == 400 || response.status == 401) {
         // The refresh token is no longer accepted (password changed, signed out elsewhere, 90 days unused).
         tokens_.reset();
+        signedIn_ = false;
         std::error_code ec;
         std::filesystem::remove(file_, ec);
         throw ServiceError(response.status, response.body, "sign-in expired");

@@ -741,13 +741,20 @@ Window {
             veyra.moonlightCapture(true)
         }
     }
-    readonly property bool ps5InputLocked: !!veyra.ps5Input && (veyra.ps5Input.ps5Captured || veyra.ps5Input.previewing)
-    readonly property bool ps5KeyboardReady: !!veyra.ps5Input && veyra.ps5Input.keyboardEnabled &&
+    readonly property bool ps5InputLocked: !!veyra.ps5Input &&
+        (veyra.ps5Input.ps5Captured || veyra.ps5Input.xboxCaptured || veyra.ps5Input.previewing)
+    readonly property bool ps5KeyboardReady: !!veyra.ps5Input && veyra.ps5Input.ps5KeyboardEnabled &&
         ((veyra.ps5.active === true && veyra.ps5.viewOnly !== true) ||
          (veyra.ps5Control.state === "connected" && veyra.isCapture))
+    readonly property bool xboxMappingSource: veyra.sourceKind === "xbox" ||
+        (veyra.sourceKind === "capture" && veyra.xboxControl?.state === "connected")
+    readonly property bool xboxKeyboardReady: xboxMappingSource && veyra.ps5Input?.xboxKeyboardEnabled === true &&
+        (veyra.sourceKind === "xbox" ? veyra.xbox?.state?.stream?.state === "streaming" && veyra.xbox.state.gamepad !== false
+            : veyra.xboxControl?.state === "connected")
+    onXboxMappingSourceChanged: if (dialogs.dialog === "") veyra.ps5Input?.selectPlatform(xboxMappingSource)
     readonly property bool consoleKeymapOnVideo: veyra.hasSource &&
         (root.page === "min" || root.page === "pro" || root.page === "node") &&
-        (root.ps5KeyboardReady || root.ps5InputLocked)
+        (root.ps5KeyboardReady || root.xboxKeyboardReady || root.ps5InputLocked)
     Binding {
         target: veyra.ps5Input
         property: "quickReferenceEnabled"
@@ -761,12 +768,13 @@ Window {
         when: !!veyra.ps5Input
     }
     TapHandler {
-        enabled: root.ps5KeyboardReady && !veyra.ps5Input.ps5Captured && dialogs.dialog === ""
+        enabled: (root.ps5KeyboardReady || root.xboxKeyboardReady) && !root.ps5InputLocked && dialogs.dialog === ""
         onTapped: eventPoint => {
             if (root.page !== "min" && root.page !== "pro" && root.page !== "node") return
             if (root.overVideoCover(eventPoint.scenePosition) || !root.pictureContains(eventPoint.scenePosition)) return
             if (veyra.protectionDrawShape.length > 0 || veyra.exclusionOverlayVisible || screenCrop.editing) return
-            veyra.ps5CaptureKeyboard()
+            if (root.xboxKeyboardReady) veyra.xboxCaptureKeyboard()
+            else veyra.ps5CaptureKeyboard()
         }
     }
     ConsoleKeymapOverlay {
@@ -774,10 +782,11 @@ Window {
         anchors.fill: parent
         z: 92
         input: veyra.ps5Input
+        xbox: root.xboxMappingSource
         active: root.consoleKeymapOnVideo
         locked: root.ps5InputLocked
         suppressed: dialogs.dialog !== "" || veyra.moonlightCaptured
-        onEditRequested: dialogs.openPs5Mapping()
+        onEditRequested: dialogs.openPs5Mapping(root.xboxMappingSource)
     }
     Connections {
         target: veyra.ps5Input
@@ -799,20 +808,20 @@ Window {
     }
     Shortcut {
         sequence: "Ctrl+Alt+F1"
-        enabled: !!veyra.ps5Input && !veyra.ps5Input.ps5Captured && !veyra.moonlightCaptured
-        onActivated: dialogs.openPs5Mapping()
+        enabled: !!veyra.ps5Input && !root.ps5InputLocked && !veyra.moonlightCaptured
+        onActivated: dialogs.openPs5Mapping(root.xboxMappingSource)
     }
     VButton {
         id: ps5QuickMapping
         objectName: "ps5-quick-mapping"
         readonly property bool videoCover: true
-        visible: root.quickPanelShown && !!veyra.ps5Input && !veyra.ps5Input.ps5Captured
-                 && (veyra.sourceKind==="ps5" || veyra.sourceKind==="capture") && dialogs.dialog===""
+        visible: root.quickPanelShown && !!veyra.ps5Input && !root.ps5InputLocked
+                 && (veyra.sourceKind==="ps5" || veyra.sourceKind==="capture" || veyra.sourceKind==="xbox") && dialogs.dialog===""
         anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.margins: 16
         z: 91
         text: qsTr("键鼠设置")
-        onClicked: dialogs.openPs5Mapping()
+        onClicked: dialogs.openPs5Mapping(root.xboxMappingSource)
     }
     VButton {
         objectName: "console-keymap-quick-reference"

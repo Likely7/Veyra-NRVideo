@@ -85,6 +85,7 @@ private:
     std::filesystem::path file_;
     mutable std::mutex mutex_;
     std::optional<SavedTokens> tokens_;
+    std::atomic<bool> signedIn_{false};
     std::string userToken_;          // user.auth.xboxlive.com
     int64_t userTokenExpiresAt_ = 0;
     std::optional<StreamingAccess> streaming_;

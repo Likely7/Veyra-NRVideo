@@ -107,6 +107,7 @@ public:
         State state = State::Waiting;
         bool fg = false;
         int percent = 0, progress = 0;
+        uint32_t motionSamples = 0;
         double manualDeadzone = 0.;
         std::array<double, 2> latencyMs{};
         AimCurve curve;
@@ -287,6 +288,7 @@ private:
             const auto speed = std::abs(*shift) * 1000000. / delta;
             lock.lock();
             if (status_.state != State::Running || !ready_) continue;
+            ++status_.motionSamples;
             if (mode_ == Mode::Latency) {
                 auto& results = latency_[status_.fg];
                 if (pulse_ && pulse_ != lastPulse_ && host >= pulse_ && host - pulse_ < 600000 && std::abs(*shift) > .25) {

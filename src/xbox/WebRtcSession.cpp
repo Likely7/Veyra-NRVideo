@@ -275,8 +275,8 @@ bool WebRtcSession::sendClientConfig() {
     sent &= sendMessageJson(message("/streaming/characteristics/touchinputenabledchanged", {{"touchInputEnabled", false}}));
     sent &= sendMessageJson(message("/streaming/characteristics/clientdevicecapabilities", json::object()));
     sent &= sendMessageJson(message("/streaming/characteristics/dimensionschanged", {
-        {"horizontal", 1920}, {"vertical", 1080}, {"preferredWidth", 1920}, {"preferredHeight", 1080},
-        {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", 1920}, {"safeAreaBottom", 1080}, {"supportsCustomResolution", true}}));
+        {"horizontal", videoWidth_}, {"vertical", videoHeight_}, {"preferredWidth", videoWidth_}, {"preferredHeight", videoHeight_},
+        {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", videoWidth_}, {"safeAreaBottom", videoHeight_}, {"supportsCustomResolution", true}}));
     return sent;
 }
 
@@ -344,6 +344,18 @@ void WebRtcSession::sendGamepad(const GamepadFrame& frame) {
     if(!gate_->open||!handshakeDone_)return;
     const auto report=gamepadReport(++inputSequence_,nowMs(),{frame});
     sendBinary(input_,report.data(),report.size());
+}
+void WebRtcSession::sendMouse(const MouseFrame& frame) {
+    std::lock_guard lock(gate_->mutex);
+    if (!gate_->open || !handshakeDone_) return;
+    const auto report = mouseReport(++inputSequence_, nowMs(), frame);
+    sendBinary(input_, report.data(), report.size());
+}
+void WebRtcSession::sendKeyboard(const KeyboardFrame& frame) {
+    std::lock_guard lock(gate_->mutex);
+    if (!gate_->open || !handshakeDone_) return;
+    const auto report = keyboardReport(++inputSequence_, nowMs(), frame);
+    sendBinary(input_, report.data(), report.size());
 }
 
 void WebRtcSession::videoPresented(uint32_t rtp,int64_t arrival,int64_t submitted,int64_t decoded,int64_t presented) {

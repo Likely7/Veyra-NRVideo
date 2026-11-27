@@ -40,6 +40,13 @@ struct Vibration {
     uint8_t repeat = 0;
 };
 
+struct MouseFrame {
+    int32_t x = 0, y = 0, wheelX = 0, wheelY = 0;
+    uint8_t buttons = 0;
+    bool relative = true;
+};
+struct KeyboardFrame { uint8_t key = 0; bool pressed = false; };
+
 namespace detail {
 inline void put16(std::vector<uint8_t>& b, size_t at, uint16_t v) { b[at] = uint8_t(v); b[at + 1] = uint8_t(v >> 8); }
 inline void put32(std::vector<uint8_t>& b, size_t at, uint32_t v) { for (int i = 0; i < 4; ++i) b[at + size_t(i)] = uint8_t(v >> (8 * i)); }
@@ -55,6 +62,33 @@ inline std::vector<uint8_t> clientMetadataReport(uint32_t sequence, double timeM
     detail::put32(b, 2, sequence);
     detail::putDouble(b, 6, timeMs);
     b[14] = maxTouchPoints;
+    return b;
+}
+
+// Wire layout: Greenlight 58e832a1, packages/player/src/client/lib/channel/input/packet.ts.
+inline std::vector<uint8_t> mouseReport(uint32_t sequence, double timeMs, const MouseFrame& frame) {
+    std::vector<uint8_t> b(33, 0);
+    detail::put16(b, 0, ReportMouse);
+    detail::put32(b, 2, sequence);
+    detail::putDouble(b, 6, timeMs);
+    b[14] = 1;
+    detail::put32(b, 15, uint32_t(frame.x));
+    detail::put32(b, 19, uint32_t(frame.y));
+    detail::put32(b, 23, uint32_t(frame.wheelX));
+    detail::put32(b, 27, uint32_t(frame.wheelY));
+    b[31] = frame.buttons;
+    b[32] = uint8_t(!frame.relative); // 0 relative, 1 absolute
+    return b;
+}
+inline std::vector<uint8_t> keyboardReport(uint32_t sequence, double timeMs, const KeyboardFrame& frame) {
+    std::vector<uint8_t> b(18, 0);
+    detail::put16(b, 0, ReportKeyboard);
+    detail::put32(b, 2, sequence);
+    detail::putDouble(b, 6, timeMs);
+    b[14] = 1;
+    b[15] = 2; // Virtual-key code
+    b[16] = uint8_t(frame.pressed);
+    b[17] = frame.key;
     return b;
 }
 

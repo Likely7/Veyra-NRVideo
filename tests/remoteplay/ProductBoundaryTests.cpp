@@ -4,6 +4,9 @@
 #include "veyra/remoteplay/KeyboardMousePad.h"
 #include "veyra/remoteplay/MappedController.h"
 #include <random>
+#ifdef VEYRA_ENABLE_XBOX
+#include "veyra/engine/XboxControllerSession.h"
+#endif
 #include <string_view>
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -16,6 +19,29 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 struct RemotePlaySessionSourceTestAccess {
+#ifdef VEYRA_ENABLE_XBOX
+static void xboxControllerLifetime() {
+    engine::XboxControllerSession control;
+    source::XboxConnectDesc request;
+    request.serverId = "fixture";
+    // An unsigned-in request fails before contacting the service. Exercise
+    // the real owner thread and replacement/stop path around that failure.
+    control.start(request);
+    const auto stopAt = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (control.status().stream.state != source::XboxStats::State::Failed &&
+           std::chrono::steady_clock::now() < stopAt) std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    const auto failed = control.status();
+    if (!failed.requested || failed.stream.state != source::XboxStats::State::Failed ||
+        !failed.stream.controlOnly || control.inputTarget())
+        throw std::runtime_error("controller-only session keeps a visible failure and no input target");
+    control.start(request);
+    control.stop();
+    const std::atomic<bool> cancel{false};
+    if (!control.waitIdle(cancel) || control.status().requested || control.inputTarget())
+        throw std::runtime_error("replacement followed by stop must leave no controller-only session");
+    std::cout << "XBOX_CONTROLLER_LIFETIME unsigned_in_failure=1 replacement_stop=1\n";
+}
+#endif
 static void aimCalibrationModel() {
     using namespace remoteplay;
     constexpr double deadzone = .18, exponent = 2., maximum = 220.;
@@ -748,6 +774,9 @@ int main(int argc,char** argv){
     }
     veyra::source::RemotePlaySessionSourceTestAccess::mappedControllerSender();
     veyra::source::RemotePlaySessionSourceTestAccess::aimCalibrationModel();
+#ifdef VEYRA_ENABLE_XBOX
+    veyra::source::RemotePlaySessionSourceTestAccess::xboxControllerLifetime();
+#endif
     if(!veyra::source::RemotePlaySessionSourceTestAccess::calibratedMouse())return 79;
     if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseTurnCurve()) {
         std::cerr << "PS5 mouse turn response regression\n";

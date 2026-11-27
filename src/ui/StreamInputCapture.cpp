@@ -208,8 +208,8 @@ Mapper::Tuning newProfileTuning() {
 // keyboard messages on the editor path and never receives mapped game events.
 struct StreamInputCapture::ConsoleInputWorker {
     ConsoleInputWorker(StreamInputCapture& owner, HWND target, std::shared_ptr<remoteplay::MappedController> mapped,
-                       int unlock, int quick)
-        : owner(owner), target(target), mapped(std::move(mapped)), unlock(unlock), quick(quick) {}
+                       int unlock, int quick, uint64_t nativeTarget)
+        : owner(owner), target(target), mapped(std::move(mapped)), unlock(unlock), quick(quick), nativeTarget(nativeTarget) {}
 
     bool start() {
         std::promise<bool> ready;
@@ -299,6 +299,12 @@ private:
             }, Qt::QueuedConnection);
             return;
         }
+#ifdef VEYRA_ENABLE_XBOX
+        if (nativeTarget) {
+            owner.engine_.xboxNativeKey(nativeTarget, {uint8_t(key), down});
+            return;
+        }
+#endif
         mapped->press(key, down, stamp);
     }
 
@@ -310,6 +316,27 @@ private:
         constexpr USHORT up[] = {RI_MOUSE_LEFT_BUTTON_UP, RI_MOUSE_MIDDLE_BUTTON_UP, RI_MOUSE_RIGHT_BUTTON_UP,
                                 RI_MOUSE_BUTTON_4_UP, RI_MOUSE_BUTTON_5_UP};
         const auto flags = raw.usButtonFlags;
+#ifdef VEYRA_ENABLE_XBOX
+        if (nativeTarget) {
+            constexpr uint8_t masks[]{1, 4, 2, 8, 16};
+            for (size_t i = 0; i < std::size(masks); ++i) {
+                if (flags & down[i]) buttons |= masks[i];
+                if (flags & up[i]) buttons &= uint8_t(~masks[i]);
+            }
+            const bool relative = (raw.usFlags & MOUSE_MOVE_ABSOLUTE) == 0;
+            const int delta = int(static_cast<SHORT>(raw.usButtonData));
+            const int wheelY = flags & RI_MOUSE_WHEEL ? delta : 0;
+            const int wheelX = flags & RI_MOUSE_HWHEEL ? delta : 0;
+            if (wheelY && owner.quickReferenceOpen()) {
+                QMetaObject::invokeMethod(&owner, [&capture = owner, delta] {
+                    emit capture.quickReferenceScrolled(delta);
+                }, Qt::QueuedConnection);
+            } else {
+                owner.engine_.xboxNativeMouse(nativeTarget, {raw.lLastX, raw.lLastY, wheelX, wheelY, buttons, relative});
+            }
+            return;
+        }
+#endif
         for (size_t i = 0; i < std::size(keys); ++i) {
             if (flags & down[i]) mapped->press(keys[i], true, stamp);
             if (flags & up[i]) mapped->press(keys[i], false, stamp);
@@ -352,6 +379,8 @@ private:
     HWND target;
     std::shared_ptr<remoteplay::MappedController> mapped;
     int unlock, quick, quickDown = 0;
+    uint64_t nativeTarget = 0;
+    uint8_t buttons = 0;
     bool active = true;
     std::array<bool, 256> pressed{};
     std::thread thread;
@@ -361,10 +390,12 @@ private:
 };
 
 StreamInputCapture::StreamInputCapture(engine::EngineController& engine, QString profilePath,
-                                       std::function<uint64_t()> ps5Target)
-    : engine_(engine), router_(*this), profilePath_(std::move(profilePath)), ps5Target_(std::move(ps5Target)) {
+                                       std::function<uint64_t()> ps5Target, std::function<uint64_t()> xboxTarget)
+    : engine_(engine), router_(*this), profilePath_(std::move(profilePath)),
+      ps5Target_(std::move(ps5Target)), xboxTarget_(std::move(xboxTarget)) {
     mapper_.setTuning(newProfileTuning());
     load();
+    ps5Profile_ = profile_;
     profiles_[profile_]=activeProfile();
     timer_.setTimerType(Qt::PreciseTimer);
     timer_.setInterval(33);
@@ -403,7 +434,14 @@ bool StreamInputCapture::capturePs5(bool on) {
         return true;
     }
     if (!keyboardEnabled_ || !ps5Target_ || !ps5Target_()) return false;
+    selectPlatform(false);
     return begin(Route::Ps5);
+}
+bool StreamInputCapture::captureXbox(bool on) {
+    if (!on) { if (xboxCaptured()) end(); return true; }
+    if (!xboxKeys_ || !xboxTarget_ || !xboxTarget_()) return false;
+    selectPlatform(true);
+    return begin(Route::Xbox);
 }
 
 bool StreamInputCapture::begin(Route route) {
@@ -411,6 +449,9 @@ bool StreamInputCapture::begin(Route route) {
     if (!window_ || GetForegroundWindow() != window_) return false;
     end();
     cancelLearning();
+    const uint64_t destination = route == Route::Ps5 && ps5Target_ ? ps5Target_() :
+        route == Route::Xbox && xboxTarget_ ? xboxTarget_() : 0;
+    const bool native = route == Route::Xbox && nativeXbox_ && !armedAimMode_;
     if (route == Route::Moonlight) {
         RAWINPUTDEVICE device{0x01, 0x02, 0, window_};
         if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
@@ -421,7 +462,7 @@ bool StreamInputCapture::begin(Route route) {
         auto mapped = std::make_shared<remoteplay::MappedController>(mapper_, [window = window_] {
             return GetAncestor(GetForegroundWindow(), GA_ROOT) == window;
         });
-        auto worker = std::make_unique<ConsoleInputWorker>(*this, window_, mapped, mapper_.tuning().unlock, quickKey_);
+        auto worker = std::make_unique<ConsoleInputWorker>(*this, window_, mapped, mapper_.tuning().unlock, quickKey_, native ? destination : 0);
         if (!worker->start()) {
             veyra::log::warn("console-input", "Raw keyboard and mouse registration failed");
             return false;
@@ -432,14 +473,20 @@ bool StreamInputCapture::begin(Route route) {
     router_.reset();
     mapper_.reset();
     route_ = route;
-    target_ = route_ == Route::Ps5 ? ps5Target_() : 0;
+    target_ = destination;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     if (route_ == Route::Ps5 && (!target_ || !engine_.remotePlayMappedController(target_, mapped_))) {
         end();
         return false;
     }
 #endif
-    if (route_ == Route::Ps5) {
+#ifdef VEYRA_ENABLE_XBOX
+    if (route_ == Route::Xbox && (!target_ || !engine_.xboxMappedController(target_, mapped_, native))) {
+        end();
+        return false;
+    }
+#endif
+    if (route_ == Route::Ps5 || route_ == Route::Xbox) {
         using Mode = remoteplay::AimTest::Mode;
         using Render = engine::EngineController::ConsoleRenderMode;
         if (armedAimMode_) {
@@ -505,7 +552,7 @@ void StreamInputCapture::end() {
         aimTest_.reset();
         emit aimStatusChanged();
     }
-    if (lowLatencyActive_ || old == Route::Ps5) {
+    if (lowLatencyActive_ || old == Route::Ps5 || old == Route::Xbox) {
         engine_.setConsoleRenderMode(engine::EngineController::ConsoleRenderMode::Normal);
         lowLatencyActive_ = false;
         emit aimStatusChanged();
@@ -530,6 +577,9 @@ void StreamInputCapture::end() {
     mapper_.reset();
 #ifdef VEYRA_ENABLE_MOONLIGHT
     if (old == Route::Moonlight) engine_.moonlightReleaseInput();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    if (old == Route::Xbox && target_) engine_.xboxMappedController(target_, {}, false);
 #endif
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     if (old == Route::Ps5 && target_) {
@@ -704,8 +754,11 @@ void StreamInputCapture::tick() {
     if (!mapped_) return;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     if (ps5Captured() && (!target_ || ps5Target_() != target_)) { end(); return; }
-    mapped_->setGameFps(engine_.mappedGameFps());
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    if (xboxCaptured() && (!target_ || xboxTarget_() != target_)) { end(); return; }
+#endif
+    mapped_->setGameFps(engine_.mappedGameFps());
     if (aimTest_) { tickAimTest(); return; }
     const auto latest = mapped_->preview();
     if (driving() != latest.driving) {
@@ -851,11 +904,12 @@ QVariantMap StreamInputCapture::padState() const {
             {QStringLiteral("r2"), previewState_.r2}};
 }
 void StreamInputCapture::setKeyboardEnabled(bool enabled) {
-    if (enabled == keyboardEnabled_) return;
+    auto& current = xboxPlatform_ ? xboxKeys_ : keyboardEnabled_;
+    if (enabled == current) return;
     releasePs5();
-    keyboardEnabled_ = enabled;
+    current = enabled;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    if (enabled && ps5Target_ && ps5Target_()) engine_.remotePlayController({});
+    if (!xboxPlatform_ && enabled && ps5Target_ && ps5Target_()) engine_.remotePlayController({});
 #endif
     save();
     emit mappingChanged();
@@ -1031,7 +1085,7 @@ void StreamInputCapture::preview(bool on) {
     begin(Route::Preview);
 }
 void StreamInputCapture::releasePs5() {
-    if (ps5Captured() || previewing()) end();
+    if (ps5Captured() || xboxCaptured() || previewing()) end();
     cancelLearning();
 }
 void StreamInputCapture::load() {
@@ -1042,6 +1096,9 @@ void StreamInputCapture::load() {
     profiles_ = json.value("profiles").toObject();
     const auto selected = json.value("profile").toString(profile_);
     keyboardEnabled_ = json.value("enabled").toBool();
+    xboxKeys_ = json.value("xboxEnabled").toBool();
+    nativeXbox_ = json.value("nativeXbox").toBool();
+    xboxProfile_ = json.value("xboxProfile").toString();
     const auto gta = QStringLiteral("GTA V");
     if (profiles_.value(gta).toObject().value("gtaVProfile").toBool() ||
         (selected == gta && json.value("gtaVProfile").toBool())) {
@@ -1078,6 +1135,7 @@ QString StreamInputCapture::unlockLabel()const{
     return values.value(mapper_.tuning().unlock);
 }
 void StreamInputCapture::readProfile(const QJsonObject& json){
+    xboxOnlyProfile_ = json.value("xboxOnly").toBool();
     mapper_.setTuning(readTuning(json.value("tuning").toObject().toVariantMap()));
     mapper_.setDriveKey(0);
     mapper_.resetBindings();
@@ -1095,6 +1153,9 @@ void StreamInputCapture::readProfile(const QJsonObject& json){
     readBindings(driving, true, 0);
     readBindings(json.value("alternateBindings").toArray(), false, 1);
     readBindings(json.value("drivingAlternateBindings").toArray(), true, 1);
+    const auto pedals = json.value("halfPedalBindings").toArray();
+    for (int slot = 0; slot < std::min<qsizetype>(Mapper::SlotCount, pedals.size()); ++slot)
+        mapper_.setBinding(Mapper::HalfPedal, pedals[slot].toInt(), true, slot);
     const auto& vehicle = mapper_.bindings(true);
     if (json.value("drivingLayoutVersion").toInt() < 2 && driving.size() >= 26 &&
         vehicle[Mapper::R1] == 'S' && vehicle[Mapper::R2] == 'W' && vehicle[Mapper::L2] == mapper_.bindings()[Mapper::L2]) {
@@ -1125,15 +1186,19 @@ void StreamInputCapture::readProfile(const QJsonObject& json){
 QJsonObject StreamInputCapture::activeProfile()const{
     const auto keys = [this](bool driving, int slot) {
         QJsonArray list;
-        for (const int key : mapper_.bindings(driving, slot)) list.append(key);
+        const auto& bindings = mapper_.bindings(driving, slot);
+        for (int action = 0; action < Mapper::HalfPedal; ++action) list.append(bindings[action]);
         return list;
     };
+    QJsonArray pedals;
+    for (int slot = 0; slot < Mapper::SlotCount; ++slot) pedals.append(mapper_.bindings(true, slot)[Mapper::HalfPedal]);
     return {{"bindings", keys(false, 0)}, {"drivingBindings", keys(true, 0)},
             {"alternateBindings", keys(false, 1)}, {"drivingAlternateBindings", keys(true, 1)},
             {"drivingLayoutVersion", 2}, {"driveKey", mapper_.driveKey()},
             {"quickKey", quickKey_}, {"actionNotes", QJsonArray::fromStringList(notes_[0])},
             {"drivingActionNotes", QJsonArray::fromStringList(notes_[1])},
-            {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
+            {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())},
+            {"xboxOnly", xboxOnlyProfile_}, {"halfPedalBindings", pedals}};
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}
 void StreamInputCapture::setToggleAction(int action,bool on){
@@ -1143,16 +1208,49 @@ void StreamInputCapture::setToggleAction(int action,bool on){
 }
 void StreamInputCapture::selectProfile(const QString& value,bool create){
     const auto name=value.trimmed();if(name.isEmpty()||name.size()>40||name==profile_)return;
-    if(create?(profiles_.contains(name)||profiles_.size()>=16):!profiles_.contains(name))return;
+    if(create?(profiles_.contains(name)||profiles_.size()>=16):!profiles().contains(name))return;
     releasePs5();profiles_[profile_]=activeProfile();profile_=name;
     if (!create) readProfile(profiles_.value(name).toObject());
     else {
         auto tuning = newProfileTuning();
         tuning.unlock = mapper_.tuning().unlock;
         mapper_.setTuning(tuning);
+        xboxOnlyProfile_ = false;
     }
     selectDriving(false);
     save();emit mappingChanged();
+}
+QStringList StreamInputCapture::profiles() const {
+    QStringList list;
+    for (auto i = profiles_.begin(); i != profiles_.end(); ++i)
+        if (xboxPlatform_ || !i.value().toObject().value("xboxOnly").toBool()) list.push_back(i.key());
+    return list;
+}
+void StreamInputCapture::selectPlatform(bool xbox) {
+    if (xbox == xboxPlatform_) return;
+    releasePs5();
+    profiles_[profile_] = activeProfile();
+    (xboxPlatform_ ? xboxProfile_ : ps5Profile_) = profile_;
+    xboxPlatform_ = xbox;
+    const auto preferred = xbox && !xboxProfile_.isEmpty() ? xboxProfile_ : ps5Profile_;
+    if (profiles().contains(preferred)) {
+        profile_ = preferred;
+        readProfile(profiles_.value(profile_).toObject());
+    }
+    emit mappingChanged();
+}
+void StreamInputCapture::setXboxOnlyProfile(bool only) {
+    if (!xboxPlatform_ || profile_ == ps5Profile_ || xboxOnlyProfile_ == only) return;
+    xboxOnlyProfile_ = only;
+    save();
+    emit mappingChanged();
+}
+void StreamInputCapture::setNativeXbox(bool enabled) {
+    if (nativeXbox_ == enabled) return;
+    releasePs5();
+    nativeXbox_ = enabled;
+    save();
+    emit mappingChanged();
 }
 void StreamInputCapture::useTemplate(int index){
     if(index<0||index>2)return;
@@ -1166,8 +1264,13 @@ void StreamInputCapture::useTemplate(int index){
     applyMouseTuning(t);
 }
 void StreamInputCapture::save() {
-    auto json=activeProfile();profiles_[profile_]=json;
-    json["version"]=1;json["enabled"]=keyboardEnabled_;json["profile"]=profile_;json["profiles"]=profiles_;
+    profiles_[profile_] = activeProfile();
+    (xboxPlatform_ ? xboxProfile_ : ps5Profile_) = profile_;
+    auto json = profiles_.value(ps5Profile_).toObject();
+    json["version"]=1;json["enabled"]=keyboardEnabled_;json["profile"]=ps5Profile_;json["profiles"]=profiles_;
+    json["xboxEnabled"] = xboxKeys_;
+    json["xboxProfile"] = xboxProfile_;
+    json["nativeXbox"] = nativeXbox_;
     QDir().mkpath(QFileInfo(profilePath_).absolutePath());
     QSaveFile file(profilePath_);
     const auto data = QJsonDocument(json).toJson(QJsonDocument::Compact);

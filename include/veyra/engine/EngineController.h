@@ -23,6 +23,7 @@
 #endif
 #ifdef VEYRA_ENABLE_XBOX
 #include "veyra/source/XboxSessionSource.h"
+#include "veyra/engine/XboxControllerSession.h"
 #endif
 #include "veyra/media/AudioTrack.h"
 #include "veyra/media/NetworkSettings.h"
@@ -249,6 +250,7 @@ public:
     enum class ConsoleRenderMode { Normal, LowLatency, MeasureWithoutFg, MeasureWithFg };
     bool setConsoleRenderMode(ConsoleRenderMode);
     bool consoleRenderReady() const;
+    double mappedGameFps() const;
     void setConsoleAimProbe(std::shared_ptr<remoteplay::AimTest> probe) { aimReadback_.setProbe(std::move(probe)); }
     void open(HWND video,const std::wstring& path,PlayerOptions options);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -257,7 +259,6 @@ public:
     void remotePlayController(const remoteplay::ControllerState&);
     bool remotePlayMappedController(uint64_t destination, std::weak_ptr<remoteplay::MappedController>);
     bool remotePlayInputActive() const;
-    double mappedGameFps() const;
     void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
@@ -291,9 +292,16 @@ public:
 #endif
 #ifdef VEYRA_ENABLE_XBOX
     void openXbox(HWND, source::XboxConnectDesc, PlayerOptions);
+    bool startXboxControl(source::XboxConnectDesc);
+    void stopXboxControl() { xboxControl_.stop(); }
+    XboxControllerSession::Status xboxControlStatus() const { return xboxControl_.status(); }
     // Pad and rumble for the running Xbox session; no-ops when none is streaming.
     void xboxController(const remoteplay::ControllerState&);
     remoteplay::ControllerFeedback xboxFeedback();
+    uint64_t xboxInputTarget() const;
+    bool xboxMappedController(uint64_t target, std::weak_ptr<remoteplay::MappedController>, bool native);
+    void xboxNativeKey(uint64_t target, xbox::KeyboardFrame);
+    void xboxNativeMouse(uint64_t target, xbox::MouseFrame);
 #endif
     void stop();
     sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
@@ -339,6 +347,10 @@ public:
     // the UI; queried in the background on events only. Any thread.
     DisplayStateService& displayStates(){return displayStates_;}
 private:
+#ifdef VEYRA_ENABLE_XBOX
+    std::shared_ptr<source::XboxSessionSource> xboxInputSession(uint64_t target = 0) const;
+    XboxControllerSession xboxControl_;
+#endif
     void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
     void post(std::function<void()>);

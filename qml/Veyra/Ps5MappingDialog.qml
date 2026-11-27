@@ -7,7 +7,8 @@ DialogLayer {
     id: panel
     objectName: "ps5-mapping"
     key: "ps5-mapping"
-    title: qsTr("PS5 键鼠映射")
+    property bool xboxMode: false
+    title: xboxMode ? qsTr("Xbox 键鼠映射") : qsTr("PS5 键鼠映射")
     glyph: "gamepad"
     dialogWidth: 992
     minimumBodyWidth: 0
@@ -25,7 +26,14 @@ DialogLayer {
         panel.input?.cancelLearning()
         panel.confirmReset = false
     }
-    onShownChanged: if (shown) editDriving = input?.driving === true
+    onShownChanged: if (shown) {
+        input?.selectPlatform?.(xboxMode)
+        editDriving = input?.driving === true
+    }
+    onXboxModeChanged: {
+        selected = -1
+        selectedSlot = 0
+    }
     Connections {
         target: panel.input
         ignoreUnknownSignals: true
@@ -38,7 +46,7 @@ DialogLayer {
     readonly property real fullSpeed: physicalAim
         ? Number(tune.aimFullSpeed ?? 25) / Number(tune.aimHorizontal ?? 1)
         : Number(pad.legacyFullSpeed ?? 0)
-    ConsolePadLabels { id: labels }
+    ConsolePadLabels { id: labels; xbox: panel.xboxMode }
     readonly property var names: labels.names
     readonly property int quickLearningAction: names.length + 1
 
@@ -98,6 +106,16 @@ DialogLayer {
             onToggled: on => panel.input?.setTuning("mixPhysical", on)
         }
     }
+    VRow {
+        visible: panel.xboxMode && panel.input?.keyboardEnabled === true
+        label: qsTr("原生键鼠（实验）")
+        hint: qsTr("向 Xbox 发送键鼠报告。家用串流是否接受取决于主机和游戏，无响应时关闭此项。")
+        hintBelow: true
+        VSwitch {
+            checked: panel.input?.nativeXbox === true
+            onToggled: on => { if (panel.input) panel.input.nativeXbox = on }
+        }
+    }
 
     VSubGroup {
         objectName: "ps5-profile-group"
@@ -136,6 +154,16 @@ DialogLayer {
                         if (panel.input.profile === name) profileName.text = ""
                     }
                 }
+            }
+        }
+        VRow {
+            visible: panel.xboxMode
+            label: qsTr("仅用于 Xbox")
+            hint: qsTr("原有档案按按键位置通用。为 Xbox 新建档案后可单独启用。")
+            hintBelow: true
+            VSwitch {
+                checked: panel.input?.xboxOnlyProfile === true
+                onToggled: on => panel.input?.setXboxOnlyProfile(on)
             }
         }
         VRow { label: qsTr("手感模板")
@@ -216,6 +244,7 @@ DialogLayer {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredWidth: 550
+            Layout.alignment: Qt.AlignTop
             spacing: 8
             VSeg {
                 readonly property bool ps5LearningControl: true
@@ -263,7 +292,8 @@ DialogLayer {
                         required property int index
                         required property string modelData
                         objectName: "ps5-bind-row-" + index
-                        visible: index !== 33 || panel.editDriving
+                        visible: (index !== 33 || panel.editDriving) &&
+                            (!panel.xboxMode || (index !== 14 && (index < 28 || index > 31)))
                         columns: 3
                         uniformCellWidths: true
                         columnSpacing: 6
@@ -312,14 +342,35 @@ DialogLayer {
                 border.color: Theme.stroke2
                 readonly property real unit: width / 560
                 Canvas {
+                    property bool xboxShell: panel.xboxMode
                     anchors.fill: parent
                     onWidthChanged: requestPaint()
                     onHeightChanged: requestPaint()
+                    onXboxShellChanged: requestPaint()
                     onPaint: {
                         const ctx = getContext("2d")
                         ctx.reset()
                         ctx.clearRect(0, 0, width, height)
                         ctx.scale(board.unit, board.unit)
+                        if (xboxShell) {
+                            ctx.beginPath()
+                            ctx.moveTo(280, 49)
+                            ctx.bezierCurveTo(203, 49, 123, 33, 82, 68)
+                            ctx.bezierCurveTo(50, 96, 32, 209, 45, 253)
+                            ctx.bezierCurveTo(59, 296, 103, 276, 123, 242)
+                            ctx.bezierCurveTo(149, 199, 190, 209, 280, 211)
+                            ctx.bezierCurveTo(370, 209, 411, 199, 437, 242)
+                            ctx.bezierCurveTo(457, 276, 501, 296, 515, 253)
+                            ctx.bezierCurveTo(528, 209, 510, 96, 478, 68)
+                            ctx.bezierCurveTo(437, 33, 357, 49, 280, 49)
+                            ctx.closePath()
+                            ctx.fillStyle = "#30443d"
+                            ctx.strokeStyle = "#84b5a2"
+                            ctx.lineWidth = 2
+                            ctx.fill()
+                            ctx.stroke()
+                            return
+                        }
                         ctx.beginPath()
                         ctx.moveTo(280, 59)
                         ctx.bezierCurveTo(228, 59, 215, 59, 176, 56)
@@ -363,7 +414,8 @@ DialogLayer {
                 }
 
                 Repeater {
-                    model: [{x:204, y:174, side:"left"}, {x:356, y:174, side:"right"}]
+                    model: panel.xboxMode ? [{x:128, y:114, side:"left"}, {x:356, y:182, side:"right"}]
+                        : [{x:204, y:174, side:"left"}, {x:356, y:174, side:"right"}]
                     delegate: Rectangle {
                         required property var modelData
                         readonly property real dx: panel.pad[modelData.side + "X"] || 0
@@ -387,7 +439,16 @@ DialogLayer {
                 }
 
                 Repeater {
-                    model: [
+                    model: panel.xboxMode ? [
+                        [16,121,31,62,23,"LT"],[17,439,31,62,23,"RT"],
+                        [8,121,56,60,23,"LB"],[9,439,56,60,23,"RB"],
+                        [13,236,99,38,22,"View"],[12,324,99,46,22,"Menu"],[15,280,67,50,22,"Xbox"],
+                        [6,202,155,26,24,"▲"],[4,174,182,26,24,"◀"],[5,230,182,26,24,"▶"],[7,202,209,26,24,"▼"],
+                        [3,434,97,30,27,"Y"],[2,402,125,30,27,"X"],[1,466,125,30,27,"B"],[0,434,153,30,27,"A"],
+                        [10,128,114,26,23,"LS"],[11,356,182,26,23,"RS"],
+                        [18,128,80,21,18,"↑"],[19,128,148,21,18,"↓"],[20,92,114,21,18,"←"],[21,164,114,21,18,"→"],
+                        [22,356,145,21,18,"↑"],[23,356,220,21,18,"↓"],[24,319,182,21,18,"←"],[25,393,182,21,18,"→"]
+                    ] : [
                         [16,121,31,62,23,"L2"],[17,439,31,62,23,"R2"],
                         [8,121,60,60,23,"L1"],[9,439,60,60,23,"R1"],
                         [13,193,86,19,23,"↗"],[12,367,86,19,23,"≡"],[14,280,88,132,46,""],
@@ -680,7 +741,7 @@ DialogLayer {
                 VSelect {title: qsTr("开镜触发键"); options: panel.names.slice(0,18).map((n,i)=>({id:String(i),label:n}))
                     value: panel.names[Number(panel.tune.adsAction??16)]; onPicked: id=>panel.input.setTuning("adsAction",Number(id))}
             }
-            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("鼠标陀螺仪")
+            VRow {visible: panel.advanced && !panel.xboxMode; enabled: panel.tune.mouseLook!==false; label: qsTr("鼠标陀螺仪")
                 VSelect {title: qsTr("鼠标陀螺仪"); options: [{id:"0",label:qsTr("关闭")},{id:"1",label:qsTr("始终开启")},{id:"2",label:qsTr("仅开镜")}]
                     value: options[Number(panel.tune.gyro||0)].label; onPicked: id=>panel.input.setTuning("gyro",Number(id))}
             }

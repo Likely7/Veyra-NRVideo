@@ -1,6 +1,7 @@
 #include "veyra/engine/EngineController.h"
 #include "veyra/engine/FgCompatibilityProbe.h"
 #include "veyra/Log.h"
+#include "veyra/remoteplay/AimTest.h"
 #include <chrono>
 #include <filesystem>
 #include <iostream>
@@ -18,6 +19,7 @@ int wmain(int argc,wchar_t** argv) {
     const bool probeFailure=argc==4&&std::wstring_view(argv[3])==L"probe-failure";
     const bool backendSwitch=argc==4&&std::wstring_view(argv[3])==L"backend-switch";
     const bool dynamicHud=argc==4&&std::wstring_view(argv[3])==L"dynamic-hud";
+    const bool consoleScope=argc==4&&std::wstring_view(argv[3])==L"console-scope";
     // FSR 4 ML on an adapter whose provider does not offer it (any non-RX 9000,
     // such as this NVIDIA test machine): the engine switches to FSR 3.1 at 2X.
     const bool fsr4Fallback=argc==4&&std::wstring_view(argv[3])==L"fsr4-fallback";
@@ -26,7 +28,7 @@ int wmain(int argc,wchar_t** argv) {
     // driver's AMF runtime may drive that GPU too) or turns FG off with a notice.
     const bool amdFrc=argc==4&&std::wstring_view(argv[3])==L"amdfrc";
     const bool amdFrcRefused=argc==4&&std::wstring_view(argv[3])==L"amdfrc-other";
-    if(argc==4&&!probeFailure&&!backendSwitch&&!fsr4Fallback&&!amdFrc&&!amdFrcRefused&&!dynamicHud)return 2;
+    if(argc==4&&!probeFailure&&!backendSwitch&&!fsr4Fallback&&!amdFrc&&!amdFrcRefused&&!dynamicHud&&!consoleScope)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
     std::filesystem::create_directories(argv[2]);
@@ -59,6 +61,44 @@ int wmain(int argc,wchar_t** argv) {
         };
         engine.open(window,argv[1],{});
         check(wait([](const auto& s){return s.frames>=12&&!s.fgActive&&s.generated==0;}),"plain playback");
+        if(consoleScope&&!failures){
+            using Render=EngineController::ConsoleRenderMode;
+            using Test=veyra::remoteplay::AimTest;
+            PresentationSettings original;
+            original.display=DisplaySync::Vsync;
+            engine.requestPresentation(original);
+            auto probe=std::make_shared<Test>(Test::Mode::Automatic);
+            probe->ready(true);
+            probe->sample(std::chrono::duration_cast<std::chrono::microseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count());
+            engine.setConsoleAimProbe(probe);
+            check(wait([&](const auto& s){return s.running&&probe->status().motionSamples>=5;},8),
+                  "real presented frames feed the asynchronous luminance probe");
+            engine.setConsoleAimProbe({});
+            std::cout<<"CONSOLE_AIM_GPU motion_samples="<<probe->status().motionSamples<<std::endl;
+
+            auto settings=engine.snapshot().desired;
+            settings.frameGenerationBackend=FrameGenerationBackend::Vfg;
+            settings.multiplier=2;
+            check(engine.requestSettings(settings),"enable VFG before console lock");
+            check(wait([](const auto& s){return !s.applying&&s.fgActive&&s.applied.multiplier==2;},20),"VFG runs before console lock");
+            check(engine.setConsoleRenderMode(Render::LowLatency)&&
+                  wait([](const auto& s){
+                      return !s.applying&&s.applied.multiplier==1&&!s.fgActive&&
+                          s.presentation.display==DisplaySync::Automatic&&s.presentation.enabled&&
+                          s.presentation.nvidiaLowLatency==NvidiaLowLatency::On;
+                  },15),"console lock suspends FG and enables low-latency presentation");
+            check(engine.setConsoleRenderMode(Render::Normal)&&
+                  wait([&](const auto& s){return !s.applying&&s.fgActive&&s.applied.multiplier==2&&s.presentation==original;},20),
+                  "console release restores VFG and original presentation");
+            check(engine.setConsoleRenderMode(Render::MeasureWithoutFg)&&
+                  wait([&](const auto& s){return engine.consoleRenderReady()&&s.applied.multiplier==1;},15),
+                  "comparison first phase suspends FG");
+            check(engine.setConsoleRenderMode(Render::MeasureWithFg)&&
+                  wait([&](const auto& s){return engine.consoleRenderReady()&&s.fgActive;},20),
+                  "comparison second phase restores FG");
+            engine.setConsoleRenderMode(Render::Normal);
+        }
         if(probeFailure&&!failures){
             const auto before=engine.snapshot();
             auto settings=before.desired;
@@ -167,7 +207,7 @@ int wmain(int argc,wchar_t** argv) {
             }
         }
         for(const unsigned multiplier:{2u,6u,1u,6u}){
-            if(probeFailure||backendSwitch||fsr4Fallback||amdFrc||amdFrcRefused||dynamicHud)break;
+            if(probeFailure||backendSwitch||fsr4Fallback||amdFrc||amdFrcRefused||dynamicHud||consoleScope)break;
             if(failures)break;
             const auto beforeSwitch=engine.snapshot();
             auto settings=beforeSwitch.desired;

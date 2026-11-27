@@ -33,6 +33,7 @@ public:
 
     void setLaunchHandler(LaunchFn handler) { launch_ = std::move(handler); }
     void updateStream(bool active, const source::XboxStats& stats);
+    std::optional<source::XboxConnectDesc> controlRequest(const QString& host) const;
 
     QVariantMap state() const;
     QVariantList consoles() const { return consoles_; }

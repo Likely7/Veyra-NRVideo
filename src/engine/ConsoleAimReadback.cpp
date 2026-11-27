@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #include "veyra/engine/ConsoleAimReadback.h"
 #include "veyra/pipeline/GpuPassUtils.h"
-#include "veyra/pipeline/FrameBatch.h"
 #include "veyra/remoteplay/AimTest.h"
 #include <atomic>
 #include <cstring>
@@ -124,7 +123,8 @@ bool ConsoleAimReadback::record(ID3D12GraphicsCommandList* list, const Frame& fr
     if (p.pending) p.collect();
     if (!probe || !probe->needsFrames() || !frame.texture || frame.width < AimImage::width) return false;
     if (frame.generated && probe->mode() != remoteplay::AimTest::Mode::Latency) return false;
-    const auto at = remoteplay::monotonic100ns() / 10;
+    const auto at = std::chrono::duration_cast<std::chrono::microseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count();
     if (p.previous.lock() != probe) {
         p.previous = probe;
         p.nextCapture = 0;

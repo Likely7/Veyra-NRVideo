@@ -49,6 +49,23 @@ DialogLayer {
     function labelOf(list, id, fallback) { const f = list.find(x => String(x.id) === String(id)); return f ? f.label : fallback }
     readonly property bool live: veyra.captureSignalLevel !== "idle"
     readonly property var pc: veyra.ps5Control
+    readonly property var xc: veyra.xboxControl ?? ({})
+    readonly property var xboxHosts: veyra.xbox?.consoles ?? []
+    readonly property string xboxStatus: {
+        switch (xc.state) {
+        case "connected":
+            return xc.keepaliveFps > 0 ? qsTr("Xbox 手柄控制已连接 · 保活画面 %1 fps（收到即丢弃）").arg(Number(xc.keepaliveFps).toFixed(1))
+                : qsTr("Xbox 手柄控制已连接")
+        case "starting": return qsTr("正在连接 Xbox…")
+        case "retry": return qsTr("重连中")
+        case "failed": return xc.message || qsTr("已停止")
+        case "signin": return qsTr("请先登录 Xbox 账号。")
+        case "host": return qsTr("请选择 Xbox 主机。")
+        case "full": return qsTr("请先断开完整 Xbox 串流，再开启采集卡的手柄控制。")
+        case "ps5": return qsTr("请先断开正在使用的 PS5 手柄控制。")
+        default: return qsTr("采集卡连上后自动连接 Xbox")
+        }
+    }
     readonly property bool pcOn: pc.available === true && pc.enabled === true
     readonly property string pcTag: {
         switch (pc.state) {
@@ -558,6 +575,61 @@ DialogLayer {
         visible: captureDialog.pcOn
         text: (captureDialog.pcStatus.length > 0 ? captureDialog.pcStatus + "\n" : "")
               + qsTr("PS5 仍会发一路 720p 30fps、约 5 Mbps 的保活画面，本机收到即丢弃；PS5 同一时间只允许一个远程游玩连接。再串流时记得选择上面的「音频输入」。")
+    }
+    DialogSection { visible: captureDialog.xc.available === true; text: qsTr("Xbox 手柄控制") }
+    DialogGroup {
+        visible: captureDialog.xc.available === true
+        VRow {
+            label: qsTr("用远程游玩控制 Xbox")
+            hint: qsTr("画面和声音来自采集卡，手柄经 Xbox 远程游玩发给主机。")
+            hintBelow: true
+            VSwitch {
+                objectName: "capture-xbox-control"
+                checked: captureDialog.xc.enabled === true
+                enabled: !captureDialog.onboardingActive
+                onToggled: on => veyra.xboxControlSet("enabled", on)
+            }
+        }
+        VRow {
+            visible: captureDialog.xc.enabled === true
+            label: qsTr("Xbox 主机")
+            hint: captureDialog.xboxStatus
+            hintBelow: true
+            VButton {
+                objectName: "capture-xbox-host"
+                text: captureDialog.xboxHosts.find(host => host.id === captureDialog.xc.host)?.name ?? qsTr("选择主机")
+                maxTextWidth: 160
+                onClicked: dialogHost.pickXboxHost()
+            }
+        }
+        VRow {
+            visible: captureDialog.xc.enabled === true
+            label: qsTr("控制方式")
+            VButton {
+                objectName: "capture-xbox-mapping"
+                text: veyra.ps5Input?.xboxKeyboardEnabled === true ? qsTr("键鼠映射") : qsTr("实体手柄")
+                ghost: true
+                onClicked: dialogHost.openPs5Mapping(true)
+            }
+        }
+        VRow {
+            visible: captureDialog.xc.enabled === true
+            label: qsTr("后台也转发手柄")
+            VSwitch {
+                objectName: "capture-xbox-background"
+                checked: captureDialog.xc.background === true
+                onToggled: on => veyra.xboxControlSet("background", on)
+            }
+        }
+        VRow {
+            visible: captureDialog.xc.state === "failed"
+            label: qsTr("连接失败")
+            VButton {
+                text: qsTr("重试")
+                ghost: true
+                onClicked: veyra.xboxControlSet("host", captureDialog.xc.host)
+            }
+        }
     }
     DialogSection { text: qsTr("格式与画面") }
     DialogGroup {

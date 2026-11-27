@@ -12,6 +12,8 @@ Item {
 
     property string dialog: ""
     property string ps5MappingReturn: "ps5"
+    property bool xboxHostPicker: false
+    property bool xboxMapping: false
     property bool onboardingActive: false
     readonly property alias captureSettings: captureDialog
     readonly property bool captureGuideOpen: captureGuide.visible
@@ -24,6 +26,7 @@ Item {
     }
 
     function open(key) {
+        if (key !== "xbox") xboxHostPicker = false
         if (key === "save") saveDialog.resetForOpen()
         if (key === "manage") {
             manageDialog.mode = veyra.nodeMode === 1 ? "node" : "list"
@@ -32,10 +35,16 @@ Item {
         veyra.logUi("ui-dialog", "open " + key + " (was " + (host.dialog || "none") + ")")
         host.dialog = key
     }
-    function close() { host.dialog = "" }
-    function openPs5Mapping() {
+    function close() { host.dialog = ""; xboxHostPicker = false }
+    function openPs5Mapping(xbox = false) {
         ps5MappingReturn = dialog
+        xboxMapping = xbox
+        veyra.ps5Input?.selectPlatform(xbox)
         open("ps5-mapping")
+    }
+    function pickXboxHost() {
+        xboxHostPicker = true
+        open("xbox")
     }
 
     signal startPs5()
@@ -112,7 +121,7 @@ Item {
         id: ps5Dialog
         dialogHost: host    }
 
-    Ps5MappingDialog { dialogHost: host }
+    Ps5MappingDialog { dialogHost: host; xboxMode: host.xboxMapping }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
     // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once
@@ -127,7 +136,9 @@ Item {
     // start. The software never sees the password; only a refresh token is kept, encrypted for this user.
     XboxSourceDialog {
         id: xbDialog
-        dialogHost: host    }
+        dialogHost: host
+        chooseForCapture: host.xboxHostPicker
+    }
 
     // --- 屏幕捕获 ---------------------------------------------------------
     DialogLayer {

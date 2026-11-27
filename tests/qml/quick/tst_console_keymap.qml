@@ -76,6 +76,17 @@ Item {
             expires(overlay, hint, "Ctrl+Alt+F1")
         }
 
+        function test_xbox_reference_uses_same_key_positions() {
+            const overlay = createTemporaryObject(fixture, parent, { xbox: true, active: true, locked: true })
+            verify(overlay)
+            mapper.quickReferenceRequested()
+            compare(overlay.referenceOpen, true)
+            verify(overlay.row(3).includes("F / Ctrl+F  →  Y"))
+            mapper.quickReferenceRequested()
+            compare(overlay.referenceOpen, false)
+            compare(overlay.locked, true)
+        }
+
         function test_referenceFit_data() {
             return [
                 { tag: "narrow", width: 453, height: 740 },

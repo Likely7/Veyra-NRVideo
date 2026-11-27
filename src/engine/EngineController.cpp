@@ -111,6 +111,9 @@ EngineController::EngineController()
     worker_=std::thread(&EngineController::dispatch,this);
 }
 EngineController::~EngineController(){
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
+#endif
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     // The PS5 手柄控制 thread starts closing its session now; joined below.
     controlThread_.request_stop();
@@ -220,6 +223,9 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
     // PS5 手柄控制 belongs to a capture card source; any other source ends it.
     if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopRemoteControl();
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    if(!path.starts_with(L"capture:")&&!path.starts_with(L"capture2:"))stopXboxControl();
+#endif
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
     opts.captureReplayForTest=captureReplay;
     opts.captureCpuUnpack=captureCpuUnpack;
@@ -231,6 +237,9 @@ void EngineController::open(HWND video,const std::wstring& path,PlayerOptions op
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc desc,PlayerOptions opts){
     stopRemoteControl();
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
+#endif
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.remotePlay=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
     post([this,window,request,opts]{paused_=false;seekSeconds_=-1;waitRemoteControlIdle();run(window,L"remoteplay:",opts,request);});
@@ -254,11 +263,6 @@ bool EngineController::remotePlayMappedController(uint64_t destination, std::wea
 bool EngineController::remotePlayInputActive() const {
     std::lock_guard lock(mutex_);
     return snapshot_.remotePlay && (snapshot_.running || snapshot_.transport == TransportState::Opening);
-}
-double EngineController::mappedGameFps() const {
-    std::lock_guard lock(mutex_);
-    if (snapshot_.captureHalfRate) return snapshot_.nominalSourceFps * .5;
-    return snapshot_.contentFps > 0 ? double(snapshot_.contentFps) : snapshot_.nominalSourceFps;
 }
 void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
 void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){
@@ -342,13 +346,59 @@ void EngineController::moonlightReleaseInput(){VEYRA_MOONLIGHT_INPUT(releaseInpu
 #undef VEYRA_MOONLIGHT_INPUT
 #endif
 #ifdef VEYRA_ENABLE_XBOX
-void EngineController::xboxController(const remoteplay::ControllerState& state){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_;}if(x)x->controller(state);}
-remoteplay::ControllerFeedback EngineController::xboxFeedback(){std::shared_ptr<source::XboxSessionSource> x;{std::lock_guard lock(mutex_);x=activeXbox_;}return x?x->takeFeedback():remoteplay::ControllerFeedback{};}
+std::shared_ptr<source::XboxSessionSource> EngineController::xboxInputSession(uint64_t target) const {
+    if (target & 1) return xboxControl_.source(target >> 1);
+    {
+        std::lock_guard lock(mutex_);
+        if (snapshot_.xboxActive && (!target || target >> 1 == snapshot_.sessionId)) return activeXbox_;
+    }
+    return target ? nullptr : xboxControl_.source();
+}
+uint64_t EngineController::xboxInputTarget() const {
+    {
+        std::lock_guard lock(mutex_);
+        if (snapshot_.xboxActive) return activeXbox_ && activeXbox_->inputReady() ? snapshot_.sessionId << 1 : 0;
+    }
+    const auto generation = xboxControl_.inputTarget();
+    return generation ? (generation << 1) | 1 : 0;
+}
+bool EngineController::startXboxControl(source::XboxConnectDesc desc) {
+    if (desc.serverId.empty()) return false;
+    {
+        std::lock_guard lock(mutex_);
+        if (snapshot_.xboxActive && (snapshot_.running || snapshot_.transport == TransportState::Opening)) return false;
+    }
+    xboxControl_.start(std::move(desc));
+    return true;
+}
+void EngineController::xboxController(const remoteplay::ControllerState& state) {
+    if (const auto session = xboxInputSession()) session->controller(state);
+}
+remoteplay::ControllerFeedback EngineController::xboxFeedback() {
+    const auto session = xboxInputSession();
+    return session ? session->takeFeedback() : remoteplay::ControllerFeedback{};
+}
+bool EngineController::xboxMappedController(uint64_t target, std::weak_ptr<remoteplay::MappedController> input, bool native) {
+    if (!target) return false;
+    const auto session = xboxInputSession(target);
+    if (!session) return false;
+    session->setMappedController(std::move(input), native);
+    return true;
+}
+void EngineController::xboxNativeKey(uint64_t target, xbox::KeyboardFrame report) {
+    if (const auto session = xboxInputSession(target)) session->nativeKey(report);
+}
+void EngineController::xboxNativeMouse(uint64_t target, xbox::MouseFrame report) {
+    if (const auto session = xboxInputSession(target)) session->nativeMouse(report);
+}
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
 void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc desc,PlayerOptions opts){
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     stopRemoteControl();
+#endif
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
 #endif
     auto request=std::make_shared<source::MoonlightConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.moonlightActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
@@ -357,15 +407,25 @@ void EngineController::openMoonlight(HWND window,source::MoonlightConnectDesc de
 #endif
 #ifdef VEYRA_ENABLE_XBOX
 void EngineController::openXbox(HWND window,source::XboxConnectDesc desc,PlayerOptions opts){
+    stopXboxControl();
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     stopRemoteControl();
 #endif
     auto request=std::make_shared<source::XboxConnectDesc>(std::move(desc));
     {std::lock_guard lock(mutex_);snapshot_={};requestedPlaybackRate_=1;activeFlow_.reset();previewView_={};fgMultiFrameMaxCap_=0;xessMaxInterpolatedFramesCap_=0;fsrMaxGeneratedFramesCap_=0;snapshot_.sessionId=++sessionId_;snapshot_.transport=TransportState::Opening;snapshot_.xboxActive=true;snapshot_.capture=true;savePath_.clear();desired_=opts.snapshot();desiredNodeOrder_=opts.nodeOrder;desired_.revision=++nextRevision_;snapshot_.desired=desired_;opts=PlayerOptions::from(desired_,desiredNodeOrder_,&opts);}
-    post([this,window,request,opts]{paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);});
+    post([this,window,request,opts]{
+        if (!xboxControl_.waitIdle(stop_)) {
+            if (!stop_) status(L"Xbox 手柄控制尚未断开，请稍后重试。", true);
+            return;
+        }
+        paused_=false;seekSeconds_=-1;run(window,L"xbox:",opts,{},{},request);
+    });
 }
 #endif
 void EngineController::stop(){
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
+#endif
     {std::lock_guard lock(mutex_);stop_=true;pending_={};snapshot_.transport=busy_?TransportState::Stopping:TransportState::Empty;
      snapshot_.captureEnhancementLoading=false;
      if(!busy_)pending_=[this]{prewarmed_.reset();};}
@@ -466,6 +526,9 @@ void EngineController::startExport(const std::wstring& input,const std::wstring&
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     stopRemoteControl(); // the export replaces the capture run it belonged to
 #endif
+#ifdef VEYRA_ENABLE_XBOX
+    stopXboxControl();
+#endif
     const auto frozen=opts.snapshot();const int audioStream=opts.audioStreamIndex;
     post([this,input,output,frozen,audioStream,hevc]{prewarmed_.reset();CoInitializeEx(nullptr,COINIT_MULTITHREADED);auto options=PlayerOptions::from(frozen);options.audioStreamIndex=audioStream;bool ok=exportVideo(input,output,options,hevc,stop_,[this](double p,const std::wstring& s){std::lock_guard lock(mutex_);snapshot_.status=s;snapshot_.position=p;snapshot_.duration=1;snapshot_.running=true;});{std::lock_guard lock(mutex_);snapshot_.running=false;snapshot_.failed=!ok&&!stop_;}CoUninitialize();});
 }
@@ -521,6 +584,11 @@ bool EngineController::consoleRenderReady() const {
     return mode == ConsoleRenderMode::MeasureWithFg
         ? snapshot_.applied.multiplier > 1
         : snapshot_.applied.multiplier == 1;
+}
+double EngineController::mappedGameFps() const {
+    std::lock_guard lock(mutex_);
+    if (snapshot_.captureHalfRate) return snapshot_.nominalSourceFps * .5;
+    return snapshot_.contentFps > 0 ? double(snapshot_.contentFps) : snapshot_.nominalSourceFps;
 }
 PlayerSnapshot EngineController::snapshot()const{
     // The flow window has its own mutex and percentile work; take it after

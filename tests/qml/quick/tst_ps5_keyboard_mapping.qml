@@ -93,6 +93,7 @@ Item {
         when: windowShown
         function init() {
             fixture.width = 980
+            editor.xboxMode = false
             host.dialog = "ps5-mapping"
             mapper.driving=false
             mapper.profile = "默认"
@@ -112,6 +113,22 @@ Item {
             mapper.releasePs5()
             mapper.padState = {buttons: 0}
             wait(30)
+        }
+        function test_xbox_layout_and_shared_bindings() {
+            editor.xboxMode = true
+            compare(editor.title, "Xbox 键鼠映射")
+            compare(editor.names[0], "A")
+            compare(editor.names[3], "Y")
+            compare(editor.names[17], "RT")
+            compare(editor.binding(0), "Space")
+            const stick = findChild(editor, "ps5-bind-10")
+            const dpad = findChild(editor, "ps5-bind-4")
+            verify(stick.y < dpad.y)
+            verify(findChild(editor, "ps5-bind-14") === null)
+            fixture.width = 453
+            tryVerify(() => editor.showList)
+            verify(!findChild(editor, "ps5-bind-row-14").visible)
+            verify(!findChild(editor, "ps5-bind-row-28").visible)
         }
         function test_click_controller_and_preview() {
             const trigger = findChild(editor, "ps5-bind-17")

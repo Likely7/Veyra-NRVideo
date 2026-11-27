@@ -213,6 +213,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QObject* moonlight READ moonlightModel CONSTANT)
     // Xbox home streaming (unofficial): sign-in, consoles and stream state; null without Xbox support.
     Q_PROPERTY(QObject* xbox READ xboxModel CONSTANT)
+    Q_PROPERTY(QVariantMap xboxControl READ xboxControl NOTIFY xboxControlChanged)
     Q_PROPERTY(bool moonlightCaptured READ moonlightCaptured NOTIFY moonlightUiChanged)
     Q_PROPERTY(QObject* ps5Input READ ps5Input CONSTANT)
     Q_PROPERTY(bool moonlightStatsVisible READ moonlightStatsVisible WRITE setMoonlightStatsVisible NOTIFY moonlightUiChanged)
@@ -854,6 +855,10 @@ public:
     QObject* xboxModel() const;
     Q_INVOKABLE void openXboxDialog();
     Q_INVOKABLE void xboxDisconnect();
+    Q_INVOKABLE bool xboxCaptureKeyboard();
+    Q_INVOKABLE void xboxControlSet(const QString& key, const QVariant& value);
+    QVariantMap xboxControl() const;
+    uint64_t xboxInputTarget() const;
     Q_INVOKABLE void ps5Load();
     Q_INVOKABLE bool ps5Set(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5SelectProfile(const QString& id);
@@ -1531,6 +1536,7 @@ signals:
     void nodeAnchorsChanged();
     void ps5Changed();
     void ps5ControlChanged();
+    void xboxControlChanged();
     void moonlightUiChanged();
     void imageBatchChanged();
     void audioDevicesChanged();

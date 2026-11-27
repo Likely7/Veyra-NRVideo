@@ -46,6 +46,12 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(int learningSlot READ learningSlot NOTIFY mappingChanged)
     Q_PROPERTY(QString feedback READ feedback NOTIFY mappingChanged)
     Q_PROPERTY(bool ps5Captured READ ps5Captured NOTIFY stateChanged)
+    Q_PROPERTY(bool xboxCaptured READ xboxCaptured NOTIFY stateChanged)
+    Q_PROPERTY(bool ps5KeyboardEnabled READ ps5KeyboardEnabled NOTIFY mappingChanged)
+    Q_PROPERTY(bool xboxKeyboardEnabled READ xboxKeyboardEnabled NOTIFY mappingChanged)
+    Q_PROPERTY(bool xboxPlatform READ xboxPlatform NOTIFY mappingChanged)
+    Q_PROPERTY(bool xboxOnlyProfile READ xboxOnlyProfile NOTIFY mappingChanged)
+    Q_PROPERTY(bool nativeXbox READ nativeXbox WRITE setNativeXbox NOTIFY mappingChanged)
     Q_PROPERTY(bool previewing READ previewing NOTIFY stateChanged)
     Q_PROPERTY(QVariantMap padState READ padState NOTIFY padStateChanged)
     Q_PROPERTY(QString aimStatus READ aimStatus NOTIFY aimStatusChanged)
@@ -54,15 +60,24 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
 
 public:
     explicit StreamInputCapture(engine::EngineController& engine, QString profilePath,
-                                std::function<uint64_t()> ps5Target);
+                                std::function<uint64_t()> ps5Target, std::function<uint64_t()> xboxTarget = {});
     ~StreamInputCapture() override;
 
     void setWindow(HWND topLevel);
     bool captured() const { return route_ == Route::Moonlight; }
     bool capture(bool on);
     bool capturePs5(bool on);
+    bool captureXbox(bool on);
 
-    bool keyboardEnabled() const { return keyboardEnabled_; }
+    bool keyboardEnabled() const { return xboxPlatform_ ? xboxKeys_ : keyboardEnabled_; }
+    bool ps5KeyboardEnabled() const { return keyboardEnabled_; }
+    bool xboxKeyboardEnabled() const { return xboxKeys_; }
+    bool xboxPlatform() const { return xboxPlatform_; }
+    bool xboxOnlyProfile() const { return xboxOnlyProfile_; }
+    bool nativeXbox() const { return nativeXbox_; }
+    void setNativeXbox(bool enabled);
+    Q_INVOKABLE void selectPlatform(bool xbox);
+    Q_INVOKABLE void setXboxOnlyProfile(bool only);
     void setKeyboardEnabled(bool enabled);
     QVariantList bindings() const;
     QVariantList drivingBindings() const;
@@ -78,7 +93,7 @@ public:
     QString aimStatus() const { return aimStatus_; }
     bool aimTesting() const { return bool(aimTest_); }
     bool lowLatencyActive() const { return lowLatencyActive_; }
-    QStringList profiles() const {return profiles_.keys();}
+    QStringList profiles() const;
     QString profile() const {return profile_;}
     QString unlockLabel() const;
     QString quickKeyLabel() const;
@@ -94,6 +109,7 @@ public:
     int learningSlot() const { return learningSlot_; }
     QString feedback() const { return feedback_; }
     bool ps5Captured() const { return route_ == Route::Ps5; }
+    bool xboxCaptured() const { return route_ == Route::Xbox; }
     bool previewing() const { return route_ == Route::Preview; }
     QVariantMap padState() const;
     Q_INVOKABLE void learn(int action, QObject* learningControls = nullptr, bool drivingLayout = false, int slot = 0);
@@ -128,7 +144,7 @@ private:
     using Mapper = remoteplay::KeyboardMousePad;
     static constexpr int LearnQuickKey = Mapper::ActionCount + 1;
     static constexpr int DefaultQuickKey = VK_F2;
-    enum class Route { None, Moonlight, Ps5, Preview };
+    enum class Route { None, Moonlight, Ps5, Xbox, Preview };
     void key(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) override;
     void mouseMove(int dx, int dy) override;
     void mouseButton(int button, bool down) override;
@@ -157,6 +173,7 @@ private:
     moonlight::InputRouter router_;
     QString profilePath_;
     std::function<uint64_t()> ps5Target_;
+    std::function<uint64_t()> xboxTarget_;
     HWND window_ = nullptr,imeWindow_=nullptr;
     HIMC oldIme_=nullptr;
     POINT savedCursor_{};
@@ -179,6 +196,8 @@ private:
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
+    bool xboxKeys_ = false, xboxPlatform_ = false, xboxOnlyProfile_ = false, nativeXbox_ = false;
+    QString ps5Profile_, xboxProfile_;
     bool quickReferenceEnabled_ = false;
     std::atomic_bool quickReferenceOpen_{false};
     int quickKey_ = DefaultQuickKey;
