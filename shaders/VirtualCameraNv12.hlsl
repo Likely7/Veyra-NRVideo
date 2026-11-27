@@ -37,33 +37,32 @@ float3 convert(float3 c){
     float y=dot(c,float3(.2126,.7152,.0722));
     return float3((16+219*y)/255.0,(128+224*(c.b-y)/1.8556)/255.0,(128+224*(c.r-y)/1.5748)/255.0);
 }
+#if defined(VEYRA_CAMERA_TILED_CUBIC)
 groupshared float3 cubicTile[16][16];
 [numthreads(16,16,1)]
 void main(uint3 id:SV_DispatchThreadID, uint3 local:SV_GroupThreadID){
-    // Only cubic resizing pays for the group barrier. A 2x2 chroma block
-    // stays inside the 16x16 tile, including at the padded content edges.
-    const bool cubic=fine!=0&&(inputWidth!=contentWidth||inputHeight!=contentHeight);
-    float3 col=0;
-    if(cubic){
-        const uint2 padded=uint2(width+(width&1u),height+(height&1u));
-        if(all(id.xy<padded))col=inputColor(id.xy);
-        cubicTile[local.y][local.x]=col;
-        GroupMemoryBarrierWithGroupSync();
-    }
+    // A 2x2 chroma block stays inside the 16x16 tile, including inside the padded content edges.
+    const uint2 padded=uint2(width+(width&1u),height+(height&1u));
+    const float3 col=all(id.xy<padded)?inputColor(id.xy):0;
+    cubicTile[local.y][local.x]=col;
+    GroupMemoryBarrierWithGroupSync();
     if(id.x>=width||id.y>=height)return;
-    if(!cubic)col=inputColor(id.xy);
     yPlane[id.xy]=convert(col).x;
     if((id.x&1)==0&&(id.y&1)==0){
-        float3 a,b,c;
-        if(cubic){
-            a=cubicTile[local.y][local.x+1];
-            b=cubicTile[local.y+1][local.x];
-            c=cubicTile[local.y+1][local.x+1];
-        }else{
-            a=inputColor(id.xy+uint2(1,0));
-            b=inputColor(id.xy+uint2(0,1));
-            c=inputColor(id.xy+uint2(1,1));
-        }
+        const float3 a=cubicTile[local.y][local.x+1];
+        const float3 b=cubicTile[local.y+1][local.x];
+        const float3 c=cubicTile[local.y+1][local.x+1];
         uvPlane[id.xy/2]=convert((col+a+b+c)*.25).yz;
     }
 }
+#else
+[numthreads(16,16,1)]
+void main(uint3 id:SV_DispatchThreadID){
+    if(id.x>=width||id.y>=height)return;
+    yPlane[id.xy]=convert(inputColor(id.xy)).x;
+    if((id.x&1)==0&&(id.y&1)==0){
+        float3 c=(inputColor(id.xy)+inputColor(id.xy+uint2(1,0))+inputColor(id.xy+uint2(0,1))+inputColor(id.xy+uint2(1,1)))*.25;
+        uvPlane[id.xy/2]=convert(c).yz;
+    }
+}
+#endif
