@@ -94,7 +94,8 @@ struct WasapiAudioInput::Impl {
         std::vector<BYTE> silent(maxFrames*raw->nBlockAlign,0);
         LARGE_INTEGER frequency{},qpc{};
         if(!QueryPerformanceFrequency(&frequency)||!QueryPerformanceCounter(&qpc)||frequency.QuadPart<=0)return E_FAIL;
-        WasapiPacketClock clock;clock.reset(raw->nSamplesPerSec,hostMs()-1000.0*double(qpc.QuadPart)/double(frequency.QuadPart));
+        WasapiPacketClock clock(virtualSpeaker?WasapiPacketClock::Input::Loopback:WasapiPacketClock::Input::Capture);
+        clock.reset(raw->nSamplesPerSec,hostMs()-1000.0*double(qpc.QuadPart)/double(frequency.QuadPart));
         {
             std::lock_guard lock(mutex);session=std::make_unique<sink::CaptureAudioSession>();
             if(!session->configure(format)){session.reset();return AUDCLNT_E_UNSUPPORTED_FORMAT;}

@@ -1,5 +1,7 @@
 #pragma once
 #include "veyra/sink/CaptureAudioSession.h"
+#include <algorithm>
+#include <cmath>
 #include <memory>
 #include <span>
 #include <vector>
@@ -17,17 +19,52 @@ inline const void* wasapiPacketData(const void* data,size_t bytes,bool silent,st
 // positions with DirectShow stream-relative PTS.
 class WasapiPacketClock {
 public:
+    enum class Input { Capture, Loopback };
     struct Stamp {double ptsMs;bool discontinuity,estimated;};
-    void reset(unsigned rate,double qpcToHostMs){rate_=rate;offset_=qpcToHostMs;have_=false;}
+    explicit WasapiPacketClock(Input input=Input::Capture):input_(input){}
+    void reset(unsigned rate,double qpcToHostMs){
+        rate_=rate;offset_=qpcToHostMs;have_=false;haveQpc_=false;stableQpcMs_=0;
+    }
     Stamp stamp(uint64_t position,uint64_t qpc100ns,unsigned frames,bool discontinuity,bool timestampError,double nowMs){
         const bool gap=have_&&!timestampError&&position!=nextPosition_;
-        const double pts=timestampError?(have_?nextPts_:nowMs-1000.0*frames/rate_):double(qpc100ns)/10000.0+offset_;
-        const bool reset=!have_||discontinuity||gap||(have_&&pts<lastPts_);
-        lastPts_=pts;nextPts_=pts+1000.0*frames/rate_;nextPosition_=(timestampError&&have_?nextPosition_:position)+frames;have_=true;
-        return {pts,reset,timestampError};
+        const double blockMs=1000.0*frames/rate_;
+        const double qpcPts=double(qpc100ns)/10000.0+offset_;
+        double pts=timestampError?(have_?nextPts_:nowMs-blockMs):qpcPts;
+        bool reset=!have_||discontinuity||gap||(have_&&pts<lastPts_);
+        bool estimated=timestampError;
+        if(input_==Input::Capture){
+            const double extraQpcMs=qpcPts-lastQpcPts_-lastBlockMs_;
+            const bool qpcInRange=!timestampError&&qpcPts<=nowMs+2.0;
+            const bool pausedOnHost=haveQpc_&&extraQpcMs>100.0&&nowMs-lastArrivalMs_-lastBlockMs_>100.0;
+            const bool markedClockBreak=discontinuity&&stableQpcMs_>=250.0&&extraQpcMs>100.0;
+            const bool clockJump=have_&&qpcInRange&&qpcPts-nextPts_>100.0&&(markedClockBreak||pausedOnHost);
+            reset=!have_||gap||clockJump||(timestampError&&discontinuity);
+            if(have_&&!gap&&!clockJump){
+                // Contiguous hardware samples carry through UAC QPC jitter.
+                pts=nextPts_;
+                if(qpcInRange&&haveQpc_&&!discontinuity&&qpcPts>lastQpcPts_&&std::abs(extraQpcMs)<=1.0){
+                    stableQpcMs_=std::min(250.0,stableQpcMs_+lastBlockMs_);
+                    if(stableQpcMs_>=250.0){
+                        // Follow the real oscillator after a stable run. Limit
+                        // phase adjustment to 1 ms per second of PCM.
+                        const double limit=lastBlockMs_*0.001;
+                        pts+=std::clamp((qpcPts-nextPts_)*0.04,-limit,limit);
+                    }
+                }else stableQpcMs_=0;
+            }else{
+                stableQpcMs_=0;
+                if(!qpcInRange){pts=nowMs-blockMs;estimated=true;}
+            }
+            haveQpc_=qpcInRange&&!discontinuity;
+            lastQpcPts_=qpcPts;lastBlockMs_=blockMs;lastArrivalMs_=nowMs;
+        }
+        lastPts_=pts;nextPts_=pts+blockMs;nextPosition_=(timestampError&&have_?nextPosition_:position)+frames;have_=true;
+        return {pts,reset,estimated};
     }
 private:
+    Input input_;
     unsigned rate_=48000;double offset_=0,nextPts_=0,lastPts_=0;uint64_t nextPosition_=0;bool have_=false;
+    double lastBlockMs_=0,lastQpcPts_=0,lastArrivalMs_=0,stableQpcMs_=0;bool haveQpc_=false;
 };
 class WasapiAudioInput {
 public:

@@ -1,6 +1,7 @@
 #include "veyra/source/WasapiAudioInput.h"
 #include "veyra/source/CaptureCardSource.h"
 #include "veyra/sink/WasapiAudioSink.h"
+#include "WasapiClockFixture.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -38,17 +39,7 @@ int wmain(int argc,wchar_t** argv){
               "refuse to open the render endpoint used for loopback");
         check(!renderer.started()&&renderer.framesWritten()==0,"no feedback PCM submitted");
     }else if(argc==2&&wcscmp(argv[1],L"--offline")==0){
-        WasapiPacketClock clock;clock.reset(48000,50);
-        auto a=clock.stamp(0,10000000,480,false,false,2000);check(a.ptsMs==1050&&a.discontinuity&&!a.estimated,"QPC 100ns maps to host axis; first epoch resets");
-        auto b=clock.stamp(480,10100000,480,false,false,3000);check(b.ptsMs==1060&&!b.discontinuity,"arrival delay does not change sample PTS");
-        auto c=clock.stamp(960,0,480,false,true,4000);check(c.ptsMs==1070&&c.estimated&&!c.discontinuity,"bad timestamp continues frame timeline");
-        auto d=clock.stamp(1920,10400000,480,false,false,5000);check(d.discontinuity,"missing device frames reset epoch");
-        check(clock.stamp(2400,10500000,480,true,false,5000).discontinuity,"explicit device discontinuity retained");
-        check(clock.stamp(2880,10000000,480,false,false,5000).discontinuity,"backwards timestamp resets");
-        clock.reset(48000,0);clock.stamp(0,10000000,480,false,false,1000);
-        auto bad=clock.stamp(999999,0,480,false,true,3000);check(!bad.discontinuity&&bad.ptsMs==1010,"unreliable device position does not fabricate a gap");
-        check(!clock.stamp(960,10200000,480,false,false,3000).discontinuity,"valid timestamp resumes after estimated packet");
-        clock.reset(44100,0);auto e=clock.stamp(0,0,441,false,true,1000);check(e.ptsMs==990&&e.estimated&&e.discontinuity,"first invalid timestamp estimated from packet duration");
+        veyra::test::wasapiClockChecks(check);
         CaptureDevice video{L"Video",L"video:path"},audio{L"Audio",L"endpoint:id",false,true};
         auto path=CaptureCardSource::makeCapturePath(0,video,0,0,&audio);check(path.starts_with(L"capture2:")&&path.find(L":-3:")!=std::wstring::npos,"WASAPI provider encoded with explicit stable ID");
         audio.virtualSpeaker=true;
