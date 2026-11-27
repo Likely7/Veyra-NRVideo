@@ -11,6 +11,7 @@
 #include "veyra/engine/FgRecoveryBudget.h"
 #include "veyra/sink/CaptureSyncTarget.h"
 #include <atomic>
+#include <cmath>
 #include <chrono>
 #include <functional>
 #include <iostream>
@@ -85,6 +86,73 @@ TEST(clock_long_session_drift_and_fg){
             if(i>fps*10u){CHECK(std::abs(stamp->pts100ns-base)<150000);++measured;admitted+=admittedNow;}
         }
         CHECK(admitted>measured*98/100);
+    }
+}
+TEST(clock_tracks_sustained_slow_ps5_video) {
+    constexpr HostTime origin = 237512080000LL;
+    constexpr double ingressMs = double(origin) / 10000.0;
+    constexpr double pipelineMs = 50.0;
+    for (const double actualFps : {29.84, 29.5}) {
+        RemotePlayClock clock;
+        clock.reset(origin, 30);
+        veyra::sink::CaptureSyncTarget sync;
+        HostTime previous = -1;
+        double maxLagMs = 0, maxAudioErrorMs = 0;
+        for (uint64_t frame = 0; frame < uint64_t(actualFps * 300); ++frame) {
+            const auto jitter = frame % 97 == 11 ? 30000 : HostTime(frame % 7) * 2200;
+            const HostTime arrival = origin + std::llround(double(frame) * 10000000.0 / actualFps) + jitter;
+            const auto stamp = clock.video(frame, arrival);
+            CHECK(stamp && !stamp->discontinuity && stamp->pts100ns > previous);
+            previous = stamp->pts100ns;
+            const double arrivalMs = double(arrival) / 10000.0;
+            const double hostMs = arrivalMs + pipelineMs;
+            const double lag = arrivalMs - ingressMs - double(stamp->pts100ns) / 10000.0;
+            const auto estimate = sync.observe(pipelineMs + lag, hostMs, arrivalMs);
+            maxLagMs = std::max(maxLagMs, std::abs(lag));
+            maxAudioErrorMs = std::max(maxAudioErrorMs, std::abs(estimate.targetMs - pipelineMs));
+        }
+        std::cout << "slow fps=" << actualFps << " maxLagMs=" << maxLagMs << " maxAudioErrorMs=" << maxAudioErrorMs << '\n';
+        CHECK(maxLagMs < 20.0 && maxAudioErrorMs < 18.0);
+    }
+}
+TEST(clock_tracks_ps5_vfr_transitions) {
+    RemotePlayClock clock;
+    clock.reset(0, 30);
+    HostTime source = 0, previous = -1;
+    uint64_t frame = 0;
+    double maxLagMs = 0;
+    for (const double rate : {30.0, 24.0, 27.0, 30.0, 25.0, 30.0}) {
+        for (unsigned sample = 0; sample < 300; ++sample, ++frame) {
+            if (frame) source += std::llround(10000000.0 / rate);
+            const auto jitter = frame % 97 == 11 ? 30000 : HostTime(frame % 7) * 2200;
+            const auto stamp = clock.video(frame, source + jitter);
+            CHECK(stamp && !stamp->discontinuity && stamp->pts100ns > previous);
+            previous = stamp->pts100ns;
+            maxLagMs = std::max(maxLagMs, double(std::abs(source + jitter - stamp->pts100ns)) / 10000.0);
+        }
+    }
+    std::cout << "24-30 fps maxLagMs=" << maxLagMs << '\n';
+    CHECK(maxLagMs < 55.0);
+}
+TEST(clock_rejects_short_network_burst_as_slow_cadence) {
+    for (const unsigned fps : {30u, 60u}) {
+        RemotePlayClock clock;
+        clock.reset(0, fps);
+        HostTime lastArrival = 0;
+        HostTime maxPtsError = 0;
+        const unsigned burstFrames = (12 * fps + 99) / 100;
+        for (uint64_t frame = 0; frame < fps * 10u; ++frame) {
+            const HostTime source = HostTime(frame * 10000000 / fps);
+            const HostTime delay = frame >= 2 * fps && frame < 2 * fps + burstFrames ? 1200000 : 0;
+            // Delayed packets catch up in index order with a tiny gap.
+            const HostTime arrival = frame ? std::max(lastArrival + 1000, source + delay) : source;
+            lastArrival = arrival;
+            const auto stamp = clock.video(frame, arrival);
+            CHECK(stamp && !stamp->discontinuity);
+            maxPtsError = std::max(maxPtsError, std::abs(stamp->pts100ns - source));
+        }
+        std::cout << "short burst fps=" << fps << " maxPtsErrorMs=" << double(maxPtsError) / 10000.0 << '\n';
+        CHECK(maxPtsError < 10000);
     }
 }
 TEST(audio_sync_uses_original_video_arrival) {

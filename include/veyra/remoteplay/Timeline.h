@@ -33,6 +33,7 @@ private:
     std::deque<PhaseSample> phaseWindow_;
     std::int64_t phase_=0,lastPts_=0;
     std::uint64_t firstIndex_=0,lastIndex_=0;
-    std::uint32_t fps_=0;bool anchored_=false;
+    std::uint32_t fps_=0, recentSlowIntervals_=0;
+    bool anchored_=false;
 };
 } // namespace veyra::remoteplay
