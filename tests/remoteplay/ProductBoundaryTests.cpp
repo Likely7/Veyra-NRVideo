@@ -582,7 +582,7 @@ static void mailbox(){
     const auto now=remoteplay::monotonic100ns();
     auto inbox=std::make_shared<remoteplay::SessionInbox>();auto token=inbox->begin(now-20000000);token.connected();
     inbox->decodeStarted(now-15000000,now-15050000);inbox->decodeFinished(now-14900000);inbox->frameDecoded(now-14900000);
-    s.telemetryInbox_=inbox;
+    s.sessionInbox_=inbox;
     auto progress=s.sessionSnapshot();
     if(progress.decodedFrames!=1||progress.decodedFps!=0||progress.decodeMeanMs||!progress.ratesReady)throw std::runtime_error("stale decode telemetry");
     inbox->decodeStarted(now-100000,now-150000);inbox->decodeFinished(now);inbox->frameDecoded(now);
