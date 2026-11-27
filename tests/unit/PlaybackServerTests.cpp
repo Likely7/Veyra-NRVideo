@@ -3,6 +3,7 @@
 #include <QEventLoop>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QList>
 #include <QTcpSocket>
 #include <QTimer>
 #include <iostream>
@@ -55,5 +56,88 @@ int main(int argc, char** argv) {
     check(delivered==1,"rejections never dispatch");
     check(request(post(R"({"url":"https://example.com/live.m3u8","quality":80,"cookie":""})")).startsWith("HTTP/1.1 200"),"legacy direct URL without credentials");
     check(delivered==2&&last=="https://example.com/live.m3u8","legacy direct URL delivered");
+
+    using Action = veyra::ui::CaptureControlAction;
+    using Result = veyra::ui::CaptureControlResult;
+    QList<Action> actions;
+    bool recording = false, busy = false;
+    int stateReads = 0;
+    server.setControlHandlers([&](Action action) {
+        actions.append(action);
+        switch (action) {
+        case Action::Screenshot: return busy ? Result::Busy : Result::Accepted;
+        case Action::RecordStart:
+            if (recording) return Result::Unchanged;
+            recording = true;
+            return Result::Accepted;
+        case Action::RecordStop:
+            if (!recording) return Result::Unchanged;
+            recording = false;
+            return Result::Accepted;
+        case Action::ReplaySave: return Result::Unavailable;
+        }
+        return Result::Unavailable;
+    }, [&] {
+        ++stateReads;
+        return QJsonObject{{"recording", recording}};
+    });
+
+    const auto control = [&](QByteArray method, QByteArray path, QByteArray extra = {}, QByteArray data = {}) {
+        return request(method + " " + path + " HTTP/1.1\r\nHost: " + host + "\r\n" + extra +
+                       "Content-Length: " + QByteArray::number(data.size()) + "\r\n\r\n" + data);
+    };
+    const auto delayWrite = [] {
+        QEventLoop loop;
+        QTimer::singleShot(360, &loop, &QEventLoop::quit);
+        loop.exec();
+    };
+    const QByteArray shot = "/control/screenshot", state = "/control/state";
+    check(server.controlAvailable() && !server.controlEnabled() && server.controlToken().isEmpty(), "control is opt-in");
+    check(control("POST", shot).startsWith("HTTP/1.1 404") && actions.isEmpty(), "disabled actions do not dispatch");
+    check(control("GET", state).startsWith("HTTP/1.1 404") && stateReads == 0, "disabled state does not dispatch");
+    check(server.setControlEnabled(true) && server.controlToken().size() == 64, "enable an independent 256-bit token");
+    const auto token = server.controlToken();
+    const QByteArray bearer = "Authorization: Bearer " + token + "\r\n";
+    check(control("POST", shot).startsWith("HTTP/1.1 403"), "a missing token is denied");
+    check(control("GET", state, "Authorization: Bearer wrong\r\n").startsWith("HTTP/1.1 403"), "state also requires a token");
+    check(control("POST", shot, bearer + bearer).startsWith("HTTP/1.1 400"), "duplicate authorization is rejected");
+    reply = control("OPTIONS", shot, "Origin: " + origin + "\r\n");
+    check(reply.startsWith("HTTP/1.1 403") && !reply.contains("Access-Control-Allow-Origin"), "control never issues CORS approval");
+    check(control("POST", shot, bearer + "Origin: \r\n").startsWith("HTTP/1.1 403"), "empty Origin is still refused");
+    check(control("POST", shot, bearer + "Origin: " + origin + "\r\n").startsWith("HTTP/1.1 403"), "extension origin refused with token");
+    check(control("POST", shot, bearer + "Sec-Fetch-Site: same-origin\r\n").startsWith("HTTP/1.1 403"), "browser Fetch Metadata refused with token");
+    check(request("POST " + shot + " HTTP/1.1\r\nHost: external.invalid\r\n" + bearer +
+                  "Content-Length: 0\r\n\r\n").startsWith("HTTP/1.1 403"), "control requires a loopback Host");
+    check(control("POST", shot, bearer + "Content-Type: application/json\r\n", R"({"path":"other.png"})").startsWith("HTTP/1.1 400"),
+          "control cannot supply output paths");
+    check(control("POST", shot, bearer, QByteArray(129, ' ')).startsWith("HTTP/1.1 413"), "control body is bounded");
+    check(actions.isEmpty() && stateReads == 0, "security and framing rejections never reach handlers");
+
+    reply = control("GET", state, bearer);
+    check(reply.startsWith("HTTP/1.1 200") && reply.contains(R"("recording":false)") && !reply.contains(token), "authorized minimal state without token");
+    check(control("GET", state, bearer).startsWith("HTTP/1.1 429") && stateReads == 1, "state burst is limited");
+    check(control("POST", shot, bearer + "Content-Type: application/json\r\n", "{}").startsWith("HTTP/1.1 202") &&
+          actions == QList<Action>{Action::Screenshot}, "accepted screenshot dispatches once");
+    check(control("POST", shot, bearer).startsWith("HTTP/1.1 429") && actions.size() == 1, "write burst is limited");
+    delayWrite();
+    busy = true;
+    check(control("POST", shot, bearer).contains(R"("error":"capture busy")"), "busy is not reported as accepted");
+    delayWrite();
+    check(control("POST", "/control/record/start", bearer).startsWith("HTTP/1.1 202") && recording, "record start accepted");
+    delayWrite();
+    check(control("POST", "/control/record/start", bearer).contains(R"("result":"unchanged")") && recording, "repeat start is idempotent");
+    delayWrite();
+    check(control("POST", "/control/record/stop", bearer).startsWith("HTTP/1.1 202") && !recording, "record stop accepted");
+    delayWrite();
+    check(control("POST", "/control/replay/save", bearer).contains(R"("error":"capture unavailable")"), "unavailable replay is not reported as accepted");
+    check(control("POST", "/control/record/toggle", bearer).startsWith("HTTP/1.1 404"), "remote recording actions are explicit");
+
+    check(server.setControlEnabled(false) && server.controlToken().isEmpty(), "disable erases the session token");
+    const auto dispatched = actions.size();
+    check(control("POST", shot, bearer).startsWith("HTTP/1.1 404") && actions.size() == dispatched, "disable revokes the credential");
+    check(server.setControlEnabled(true) && server.controlToken() != token, "re-enabling rotates the token");
+    check(control("POST", shot, bearer).startsWith("HTTP/1.1 403") && actions.size() == dispatched, "prior token is no longer valid");
+    check(control("GET", state, "Authorization: Bearer " + server.controlToken() + "\r\n").startsWith("HTTP/1.1 200"), "only the current token works");
+    check(request(post(body,"Origin: "+origin+"\r\n")).startsWith("HTTP/1.1 200") && delivered == 3, "extension playback stays compatible");
     std::cout<<checks<<" checks, "<<failed<<" failures\n";return failed?1:0;
 }

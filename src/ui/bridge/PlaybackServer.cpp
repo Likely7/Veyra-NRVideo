@@ -6,12 +6,17 @@
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QMetaObject>
+#include <QPointer>
+#include <QRandomGenerator>
 #include <QTcpSocket>
 #include <QTimer>
 #include <QUrl>
 #include <algorithm>
+#include <array>
 #include <format>
+#include <iterator>
 #include <memory>
+#include <utility>
 
 namespace veyra::ui {
 namespace {
@@ -23,6 +28,15 @@ bool extensionOrigin(const QByteArray& origin){
     return id.size()==32&&std::all_of(id.begin(),id.end(),[](char c){return c>='a'&&c<='p';});
 }
 struct Pending{QByteArray bytes;qsizetype expected=-1;bool finished=false;};
+
+bool validBearer(QByteArrayView authorization, QByteArrayView token) {
+    constexpr QByteArrayView prefix("Bearer ");
+    if (!authorization.startsWith(prefix) || authorization.size() != prefix.size() + token.size()) return false;
+    unsigned difference = 0;
+    for (qsizetype i = 0; i < token.size(); ++i)
+        difference |= static_cast<unsigned char>(authorization[i + prefix.size()] ^ token[i]);
+    return difference == 0;
+}
 }
 PlaybackServer::PlaybackServer(PlayHandler handler,QObject* parent)
     :QObject(parent),handler_(std::move(handler)){
@@ -30,19 +44,47 @@ PlaybackServer::PlaybackServer(PlayHandler handler,QObject* parent)
     connect(&server_,&QTcpServer::newConnection,this,&PlaybackServer::onNewConnection);
 }
 PlaybackServer::~PlaybackServer(){server_.close();}
+
+void PlaybackServer::setControlHandlers(ControlHandler control, StateHandler state) {
+    setControlEnabled(false);
+    control_ = std::move(control);
+    state_ = std::move(state);
+    emit controlChanged();
+}
+
+bool PlaybackServer::setControlEnabled(bool enabled) {
+    if (enabled == controlEnabled()) return true;
+    if (enabled && !controlAvailable()) return false;
+    ++controlGeneration_;
+    controlPending_ = false;
+    lastControlRead_.invalidate();
+    lastControlWrite_.invalidate();
+    if (enabled) {
+        std::array<quint32, 8> random;
+        QRandomGenerator::system()->fillRange(random.data(), random.size());
+        controlToken_ = QByteArray(reinterpret_cast<const char*>(random.data()), sizeof(random)).toHex();
+    } else {
+        controlToken_.clear();
+    }
+    emit controlChanged();
+    return true;
+}
+
 bool PlaybackServer::listen(quint16 port){
     if(!server_.listen(QHostAddress::LocalHost,port)){
         log::warn("playback-server",std::format("loopback listen failed: {}",server_.errorString().toStdString()));return false;
     }
-    log::info("playback-server",std::format("listening on 127.0.0.1:{}",server_.serverPort()));return true;
+    log::info("playback-server",std::format("listening on 127.0.0.1:{}",server_.serverPort()));
+    emit controlChanged();
+    return true;
 }
 void PlaybackServer::respond(QTcpSocket* socket,int status,const QByteArray& body,const QByteArray& origin){
-    const char* reason=status==200?"OK":status==400?"Bad Request":status==403?"Forbidden":
-        status==404?"Not Found":status==408?"Request Timeout":status==411?"Length Required":
-        status==413?"Content Too Large":status==415?"Unsupported Media Type":"Service Unavailable";
+    const char* reason=status==200?"OK":status==202?"Accepted":status==400?"Bad Request":status==403?"Forbidden":
+        status==404?"Not Found":status==408?"Request Timeout":status==409?"Conflict":status==411?"Length Required":
+        status==413?"Content Too Large":status==415?"Unsupported Media Type":status==429?"Too Many Requests":"Service Unavailable";
     QByteArray head=QByteArray::fromStdString(std::format("HTTP/1.1 {} {}\r\n",status,reason));
     head+="Content-Type: application/json; charset=utf-8\r\n";
-    head+="Content-Length: "+QByteArray::number(body.size())+"\r\nConnection: close\r\n";
+    head+="Content-Length: "+QByteArray::number(body.size())+"\r\nCache-Control: no-store\r\nConnection: close\r\n";
     if(extensionOrigin(origin)){
         head+="Access-Control-Allow-Origin: "+origin+"\r\nVary: Origin\r\n";
         head+="Access-Control-Allow-Methods: GET, POST, OPTIONS\r\nAccess-Control-Allow-Headers: Content-Type\r\n";
@@ -72,6 +114,15 @@ void PlaybackServer::handleRequest(QTcpSocket* socket,const QByteArray& request)
         respond(socket,400,R"({"ok":false,"error":"invalid request framing"})",origin);return;
     }
     const auto& method=start[0];const auto& path=start[1];
+    if (path.startsWith("/control/")) {
+        if (headers.contains("origin") || headers.contains("sec-fetch-site") || headers.contains("sec-fetch-mode") ||
+            headers.contains("sec-fetch-dest") || headers.contains("sec-fetch-user")) {
+            respond(socket, 403, R"({"ok":false,"error":"native clients only"})");
+            return;
+        }
+        handleControl(socket, method, path, headers.value("authorization"), headers.value("content-type"), request.mid(end + 4));
+        return;
+    }
     if(method=="OPTIONS"&&(path=="/play"||path=="/ping")){respond(socket,200,"{}",origin);return;}
     if(method=="GET"&&path=="/ping"){respond(socket,200,R"({"ok":true,"app":"veyra"})",origin);return;}
     if(method!="POST"||path!="/play"){respond(socket,404,R"({"ok":false,"error":"not found"})",origin);return;}
@@ -94,6 +145,82 @@ void PlaybackServer::handleRequest(QTcpSocket* socket,const QByteArray& request)
     log::info("playback-server",std::format("play requested: host={}",parsed.host().toStdString()));
     respond(socket,200,R"({"ok":true})",origin);
 }
+
+void PlaybackServer::handleControl(QTcpSocket* socket, const QByteArray& method, const QByteArray& path,
+                                   const QByteArray& authorization, const QByteArray& contentType,
+                                   const QByteArray& body) {
+    if (!controlEnabled()) { respond(socket, 404, R"({"ok":false,"error":"not found"})"); return; }
+    if (!validBearer(authorization, controlToken_)) {
+        respond(socket, 403, R"({"ok":false,"error":"control token required"})");
+        return;
+    }
+
+    if (method == "GET" && path == "/control/state") {
+        if (!body.isEmpty()) { respond(socket, 400, R"({"ok":false,"error":"unexpected body"})"); return; }
+        if (lastControlRead_.isValid() && lastControlRead_.elapsed() < 250) {
+            respond(socket, 429, R"({"ok":false,"error":"state rate limit"})");
+            return;
+        }
+        lastControlRead_.start();
+        auto state = state_();
+        state.insert("ok", true);
+        respond(socket, 200, QJsonDocument(state).toJson(QJsonDocument::Compact));
+        return;
+    }
+
+    static constexpr std::pair<const char*, CaptureControlAction> routes[] = {
+        {"/control/screenshot", CaptureControlAction::Screenshot},
+        {"/control/record/start", CaptureControlAction::RecordStart},
+        {"/control/record/stop", CaptureControlAction::RecordStop},
+        {"/control/replay/save", CaptureControlAction::ReplaySave}
+    };
+    const auto route = std::find_if(std::begin(routes), std::end(routes), [&](const auto& entry) { return path == entry.first; });
+    if (method != "POST" || route == std::end(routes)) { respond(socket, 404, R"({"ok":false,"error":"not found"})"); return; }
+    if (body.size() > 128) { respond(socket, 413, R"({"ok":false,"error":"control body too large"})"); return; }
+    if (!body.isEmpty()) {
+        if (contentType.split(';').first().trimmed().toLower() != "application/json") {
+            respond(socket, 415, R"({"ok":false,"error":"expected application/json"})");
+            return;
+        }
+        const auto doc = QJsonDocument::fromJson(body);
+        if (!doc.isObject() || !doc.object().isEmpty()) {
+            respond(socket, 400, R"({"ok":false,"error":"control does not take parameters"})");
+            return;
+        }
+    }
+    if (controlPending_ || (lastControlWrite_.isValid() && lastControlWrite_.elapsed() < 300)) {
+        respond(socket, 429, R"({"ok":false,"error":"control rate limit"})");
+        return;
+    }
+
+    lastControlWrite_.start();
+    controlPending_ = true;
+    const auto generation = controlGeneration_;
+    QMetaObject::invokeMethod(this, [this, reply = QPointer<QTcpSocket>(socket), action = route->second, generation] {
+        if (generation != controlGeneration_) {
+            if (reply) respond(reply, 403, R"({"ok":false,"error":"control authorization revoked"})");
+            return;
+        }
+        if (!reply || reply->state() != QAbstractSocket::ConnectedState) {
+            controlPending_ = false;
+            return;
+        }
+        const auto result = control_(action);
+        if (generation == controlGeneration_) controlPending_ = false;
+        if (!reply) return;
+        switch (result) {
+        case CaptureControlResult::Accepted:
+            respond(reply, 202, R"({"ok":true,"result":"accepted"})"); break;
+        case CaptureControlResult::Unchanged:
+            respond(reply, 200, R"({"ok":true,"result":"unchanged"})"); break;
+        case CaptureControlResult::Busy:
+            respond(reply, 409, R"({"ok":false,"error":"capture busy"})"); break;
+        case CaptureControlResult::Unavailable:
+            respond(reply, 409, R"({"ok":false,"error":"capture unavailable"})"); break;
+        }
+    }, Qt::QueuedConnection);
+}
+
 void PlaybackServer::onNewConnection(){
     while(auto* socket=server_.nextPendingConnection()){
         if(activeConnections_>=32){
