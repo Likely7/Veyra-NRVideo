@@ -2,13 +2,12 @@
 
 #include "veyra/base/PortableUpdateManifest.h"
 
-#include <QCryptographicHash>
 #include <QNetworkAccessManager>
 #include <QProcess>
-#include <QSaveFile>
 #include <QTimer>
 #include <filesystem>
-#include <memory>
+
+class QThread;
 
 namespace veyra::ui {
 
@@ -55,10 +54,9 @@ signals:
 
 private:
     void requestManifest(portable::DownloadRoute route);
-    bool requestArchive(portable::DownloadRoute route);
-    void request(const QUrl& url, int buffer, int idleMs);
-    bool consume();
-    void finish();
+    void requestArchive(portable::DownloadRoute route);
+    bool consumeManifest();
+    void finishManifest();
     void discardDownload();
     bool hasDownloadedArchive() const;
     bool hasPreparedVersion() const;
@@ -74,9 +72,9 @@ private:
     QProcess worker_;
     QTimer manifestDeadline_;
     QNetworkReply* reply_ = nullptr;
-    std::unique_ptr<QSaveFile> download_;
-    QCryptographicHash hash_{QCryptographicHash::Sha256};
-    qint64 received_ = 0;
+    QThread* download_ = nullptr;
+    quint64 downloadGeneration_ = 0;
+    int progress_ = 0;
     portable::DownloadRoute route_ = portable::DownloadRoute::GitHub;
     portable::DownloadRoute requestRoute_ = portable::DownloadRoute::GitHub;
     int installStep_ = 0;
