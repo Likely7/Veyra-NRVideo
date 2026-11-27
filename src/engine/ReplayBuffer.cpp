@@ -26,7 +26,7 @@ void ReplayBuffer::setFormat(VideoFormat video,std::vector<AudioFormat> audio){
 
 void ReplayBuffer::setOrigin(int64_t originUs){std::lock_guard lock(m_);origin_=originUs;}
 
-void ReplayBuffer::pushVideo(Packet packet){
+void ReplayBuffer::pushVideo(Packet packet,uint64_t cfrRepeated,uint64_t cfrDropped){
     std::lock_guard lock(m_);
     if(end_>=0||!packet.data)return;
     // Until the first keyframe there is nothing a clip could start from.
@@ -36,6 +36,7 @@ void ReplayBuffer::pushVideo(Packet packet){
     ++nextSequence_;
     bytes_+=packet.data->size();
     videoPackets_.push_back(std::move(packet));
+    cfrRepeated_=cfrRepeated;cfrDropped_=cfrDropped;
     trim();
 }
 
@@ -87,6 +88,7 @@ void ReplayBuffer::trim(){
 
 int64_t ReplayBuffer::videoEnd() const {
     if(videoPackets_.empty())return 0;
+    if(video_.cfr)return videoPackets_.back().pts+videoPackets_.back().duration;
     return end_>=0?end_:videoPackets_.back().pts+frameUs_;
 }
 
@@ -114,6 +116,7 @@ ReplayBuffer::Clip ReplayBuffer::clip(int64_t clockUs) const {
     std::lock_guard lock(m_);
     Clip out;
     out.video=video_;out.audio=audio_;out.originUs=origin_;
+    out.cfrRepeated=cfrRepeated_;out.cfrDropped=cfrDropped_;
     out.audioPackets.resize(audioPackets_.size());
     if(videoPackets_.empty())return out;
     const int64_t end=std::min(clockUs-origin_,videoEnd());
@@ -125,7 +128,8 @@ ReplayBuffer::Clip ReplayBuffer::clip(int64_t clockUs) const {
     }
     if(out.videoPackets.empty()){out.videoPackets.push_back(videoPackets_[start]);out.bytes+=videoPackets_[start].data->size();}
     // At least one frame long, as a recording's last frame is.
-    out.endUs=std::max(end,out.videoPackets.back().pts+frameUs_);
+    const auto& lastPicture=out.videoPackets.back();
+    out.endUs=video_.cfr?lastPicture.pts+lastPicture.duration:std::max(end,lastPicture.pts+frameUs_);
     const int64_t first=samplesOf(out.startUs)-kAudioLead,last=samplesOf(out.endUs);
     for(size_t t=0;t<audioPackets_.size();++t)
         for(const auto& packet:audioPackets_[t])

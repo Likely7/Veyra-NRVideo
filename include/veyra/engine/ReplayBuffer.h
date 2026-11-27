@@ -31,6 +31,7 @@ public:
     struct VideoFormat {
         uint32_t width=0,height=0,hdrMode=0,fps=60;
         bool hevc=false;
+        bool cfr=false;
         std::vector<uint8_t> extradata;   // Annex B parameter sets
     };
     struct AudioFormat {
@@ -45,6 +46,7 @@ public:
         int64_t startUs=0,endUs=0;                     // on the recording timeline
         int64_t originUs=0;                            // recording clock of the timeline's zero
         size_t bytes=0;
+        uint64_t cfrRepeated=0,cfrDropped=0;            // segment totals when saved
     };
     struct Coverage {
         double seconds=0;   // what a save now would hold, at most the chosen length
@@ -58,7 +60,7 @@ public:
     // Recording clock (µs) of the timeline's zero; a clip asked for at a clock
     // time ends there.
     void setOrigin(int64_t originUs);
-    void pushVideo(Packet packet);
+    void pushVideo(Packet packet,uint64_t cfrRepeated=0,uint64_t cfrDropped=0);
     void pushAudio(size_t track,Packet packet);
     // The segment ended at `endUs` (timeline); nothing more arrives.
     void finish(int64_t endUs);
@@ -90,6 +92,7 @@ private:
     size_t bytes_=0;
     int64_t origin_=0,end_=-1,frameUs_=16667;
     bool limited_=false;
+    uint64_t cfrRepeated_=0,cfrDropped_=0;
 };
 
 } // namespace veyra::engine

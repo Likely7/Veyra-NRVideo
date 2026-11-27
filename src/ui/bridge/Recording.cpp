@@ -36,6 +36,7 @@ engine::RecordingSettings QmlPlayerBridge::recordingOptions() const {
     options.bitrateMbps = uint32_t(recordingBitrateMbps());
     options.hevc = recordingHevc();
     options.fpsLimit = uint32_t(std::max(0, recordingFpsLimit()));
+    options.cfr = impl_->prefBool("recordCfr", false);
     options.audio = recordingAudio();
     options.microphone = recordingMicrophone();
     options.microphoneId = recordingMicrophoneId().toStdWString();
