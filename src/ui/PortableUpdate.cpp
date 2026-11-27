@@ -77,7 +77,7 @@ ArchiveResult fetchArchive(QNetworkAccessManager& network, QUrl url, const Updat
             }
             received += chunk.size();
             if (EVP_DigestUpdate(hash.get(), chunk.constData(), static_cast<size_t>(chunk.size())) != 1) return false;
-            progress(int(std::min(qint64(99), received * 100 / package.archiveBytes)));
+            progress(int((std::min)(qint64(99), received * 100 / package.archiveBytes)));
             return true;
         };
         QObject::connect(reply.get(), &QNetworkReply::metaDataChanged, &loop, [&] {
