@@ -475,6 +475,7 @@ static void mailbox(){
     if(!woken)throw std::runtime_error("real mailbox waiter did not wake on republish");
     if(s.read(out,&frame)!=SourceReadStatus::Frame||out.sequence!=4||out.sourceEpoch!=(uint64_t(1)<<32)||!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("reconnect keeps application sequence and pending clock reset across mailbox overwrite");
     s.publishDecoded(raw,packet,info);av_frame_free(&raw);
+    if(WaitForSingleObject(event,0)!=WAIT_OBJECT_0)throw std::runtime_error("pending mailbox event before close");
     s.close();
     if(WaitForSingleObject(event,0)!=WAIT_TIMEOUT)throw std::runtime_error("closed mailbox event");
 }
