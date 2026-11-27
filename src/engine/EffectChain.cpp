@@ -628,7 +628,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
     const auto append = [&](uint32_t index) {
         const auto& node = chain.nodes[index];
         if (!node.enabled) return;
-        if (node.type == EffectType::SuperResolution && !srStage.enlarges() && cursor == srStage.output) return;
+        if (node.type == EffectType::SuperResolution && !srStage.enlarges() && cursor == srStage.output && !request.smartSr) return;
         ChainExecutionStep step;
         step.type = node.type; step.nodeIndex = index;
         step.parameterIndex = parameterIndices[index];
@@ -652,14 +652,15 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
         // goes first. Anti-aliasing follows it too: NR redraws edges and its change
         // gain sharpens them again, which undid an earlier pass (user 2026-10-26).
         // Behind SR that is the output size. Without enabled NR it stays at source
-        // size, ahead of any enlargement.
+        // size, ahead of any enlargement, except for smart SR: an earlier pass would
+        // change the scaled picture whose render size is detected and restored.
         bool nrActive = false;
         for (uint32_t i = 0; i < chain.nodeCount; ++i)
             if (chain.nodes[i].enabled && chain.nodes[i].type == EffectType::NrEnhance) nrActive = true;
         const std::array<EffectType, effectTypeCount> order = nrFirst
             ? std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer, EffectType::Beauty,
                 EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
-            : nrActive
+            : nrActive || request.smartSr
             ? std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::SuperResolution, EffectType::NrEnhance, EffectType::Protection, EffectType::NrStabilizer,
                 EffectType::Beauty, EffectType::AntiAliasing, EffectType::VideoHdr, EffectType::Exclusion, EffectType::FrameGeneration}
             : std::array{EffectType::VideoDenoise, EffectType::Color, EffectType::AntiAliasing, EffectType::SuperResolution, EffectType::NrEnhance,
@@ -678,6 +679,7 @@ ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality; c.dlssSrModel = s.dlssSrModel;
     c.fsrSrSharpness=s.fsrSrSharpness;
     c.srPrescale = s.srPrescale; c.srOutput = s.srOutput;
+    c.smartSr = s.smartSr;
     c.dualSrEnabled=s.dualSrEnabled;c.dualSrTarget=s.dualSrTarget;c.dualSrQuality=s.dualSrQuality;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
     c.vfgQuality=s.vfgQuality;
@@ -695,6 +697,7 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality; s.dlssSrModel = dlssSrModel;
     s.fsrSrSharpness=fsrSrSharpness;
     s.srPrescale = srPrescale; s.srOutput = srOutput;
+    s.smartSr = smartSr;
     s.dualSrEnabled=dualSrEnabled;s.dualSrTarget=dualSrTarget;s.dualSrQuality=dualSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
     s.vfgQuality=vfgQuality;
@@ -716,7 +719,7 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality && dlssSrModel == other.dlssSrModel &&
-        fsrSrSharpness==other.fsrSrSharpness && srPrescale == other.srPrescale && srOutput == other.srOutput &&
+        fsrSrSharpness==other.fsrSrSharpness && srPrescale == other.srPrescale && srOutput == other.srOutput && smartSr == other.smartSr &&
         dualSrEnabled==other.dualSrEnabled&&dualSrTarget==other.dualSrTarget&&dualSrQuality==other.dualSrQuality&&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&
@@ -822,6 +825,8 @@ bool requiresGraphRebuild(const EnhancementSettings& savedPrevious, const Enhanc
     if (previous.srTarget != next.srTarget) return true;
     // The double SR reduction and the supersample shrink change what SR reads and writes.
     if (previous.srPrescale != next.srPrescale || previous.srOutput != next.srOutput) return true;
+    // Smart SR adds the detection probe and the descale resources.
+    if (previous.smartSr != next.smartSr) return true;
     if(previous.dualSrEnabled!=next.dualSrEnabled||previous.dualSrTarget!=next.dualSrTarget||previous.dualSrQuality!=next.dualSrQuality)return true;
     // A different DLSS SR model (render preset) needs a new SR feature.
     if (previous.dlssSrModel != next.dlssSrModel) return true;

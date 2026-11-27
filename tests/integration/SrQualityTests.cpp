@@ -646,6 +646,117 @@ int supersample(const std::filesystem::path& directory){
     }
     ring.shutdown();ctx.shutdown();std::cout<<"SUPERSAMPLE_RESULT passed="<<ok<<std::endl;return ok?0:1;
 }
+// Smart SR on HDR10: a 1080p picture enlarged to 4K in PQ codes by each known scaler is
+// found, and strokes keep their width through descale, RTX Video SR and the HDR restore.
+// With a raw RGBA32F scRGB 3840x2160 file it runs that picture and stores the result.
+double pqOf(double nits){const double y=std::pow(std::clamp(nits/10000.0,0.0,1.0),2610.0/16384.0);
+    return std::pow((3424.0/4096.0+2413.0/128.0*y)/(1+2392.0/128.0*y),2523.0/32.0);}
+// PQ codes (BT.2020 R'G'B', three per pixel) as P010.
+Frame pqFrame(const std::vector<double>& code,unsigned w,unsigned h){
+    Frame f(av_frame_alloc());if(!f)return {};
+    f->format=AV_PIX_FMT_P010;f->width=int(w);f->height=int(h);
+    f->color_range=AVCOL_RANGE_MPEG;f->colorspace=AVCOL_SPC_BT2020_NCL;f->color_primaries=AVCOL_PRI_BT2020;f->color_trc=AVCOL_TRC_SMPTE2084;
+    if(av_frame_get_buffer(f.get(),32)<0)return {};
+    const auto luma=[&](size_t i){return 0.2627*code[i*3]+0.6780*code[i*3+1]+0.0593*code[i*3+2];};
+    const auto q=[](double v){return uint16_t(std::clamp(std::lround(v),0l,1023l)<<6);};
+    for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x)
+        reinterpret_cast<uint16_t*>(f->data[0]+size_t(y)*f->linesize[0])[x]=q(64+876*luma(size_t(y)*w+x));
+    for(unsigned y=0;y<h/2;++y)for(unsigned x=0;x<w/2;++x){
+        double cb=0,cr=0;for(unsigned k=0;k<4;++k){const size_t i=size_t(y*2+k/2)*w+x*2+k%2;const double l=luma(i);cb+=(code[i*3+2]-l)/1.8814/4;cr+=(code[i*3]-l)/1.4746/4;}
+        auto* row=reinterpret_cast<uint16_t*>(f->data[1]+size_t(y)*f->linesize[1]);row[x*2]=q(512+896*cb);row[x*2+1]=q(512+896*cr);
+    }
+    return f;
+}
+int smart(const std::filesystem::path& directory,const std::filesystem::path& raw){
+    std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    using pipeline::SmartSrScaler;
+    constexpr unsigned W=3840,H=2160,w=1920,h=1080;
+    struct Result{bool ok=false;pipeline::Extent extent{};SmartSrScaler scaler{};sink::RgbaImage image;double srMs=-1;};
+    const auto process=[&](const AVFrame* frame){
+        Result r;auto settings=vsr(4,pipeline::SrTarget::Uhd4K);settings.smartSr=true;
+        engine::StageRequest request;request.width=W;request.height=H;request.sr=true;request.uncompressedSource=true;
+        pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
+        desc.hdrInput=desc.hdrOutput=true;desc.outputDitherStep=0;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
+        pipeline::EnhanceGraph graph(ctx,ring);
+        if(!graph.initialize(desc)||!graph.createViews()){graph.shutdown();return r;}
+        graph.recordGpuTimings();std::vector<double> ms;pipeline::EnhanceGraph::FrameOutputs out;bool ok=true;
+        for(unsigned i=0;i<150&&ok;++i){
+            out={};ok=graph.process(frame,i*16.666667,i==0,out,i+1)&&ring.waitIdle();
+            for(const auto& t:graph.takeGpuTimings()){const auto& v=t.gpu[size_t(diagnostics::GpuStage::Sr)];if(v.milliseconds&&t.identity.sourceFrameId>120)ms.push_back(*v.milliseconds);}
+        }
+        if(ok){auto* tex=graph.videoFrameResource(out.videoSlot);
+            ok=tex&&tex->GetDesc().Format==DXGI_FORMAT_R16G16B16A16_FLOAT&&read(ctx,ring,tex,D3D12_RESOURCE_STATE_COMMON,8,r.image);}
+        r.extent=graph.smartSrExtent();r.scaler=graph.smartSrVerdict().scaler;r.ok=ok;
+        if(!ms.empty()){std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];}
+        out={};ring.drainQueue();graph.shutdown();return r;
+    };
+    if(!raw.empty()){
+        std::ifstream in(raw,std::ios::binary);std::vector<float> px(size_t(W)*H*4);
+        if(!in.read(reinterpret_cast<char*>(px.data()),std::streamsize(px.size()*sizeof(float))))return 2;
+        std::vector<double> code(size_t(W)*H*3);
+        constexpr double m[9]={.627404,.329283,.043313,.069097,.919540,.011362,.016391,.088013,.895595};
+        for(size_t i=0;i<size_t(W)*H;++i)for(unsigned c=0;c<3;++c)
+            code[i*3+c]=pqOf(80.0*std::max(0.0,m[c*3]*px[i*4]+m[c*3+1]*px[i*4+1]+m[c*3+2]*px[i*4+2]));
+        const auto frame=pqFrame(code,W,H);if(!frame)return 2;
+        const auto r=process(frame.get());
+        std::cout<<"SMART_HDR raw extent="<<r.extent.width<<'x'<<r.extent.height<<" aligned="<<(r.scaler==SmartSrScaler::Aligned2x)<<" srMs="<<r.srMs<<" ok="<<r.ok<<std::endl;
+        if(r.ok){std::ofstream o(directory/L"smart-output.f16",std::ios::binary);o.write(reinterpret_cast<const char*>(r.image.pixels.data()),std::streamsize(r.image.pixels.size()));}
+        ring.shutdown();ctx.shutdown();return r.ok?0:1;
+    }
+    // 1080p render in PQ codes. Left: text-like strokes, dark on 211 nits above and bright
+    // (203 nits) on black below; right: detail at every frequency for the detection.
+    const double paper=pqOf(211),ink=pqOf(1.2),light=pqOf(203),night=pqOf(0.2);
+    std::vector<double> render(size_t(w)*h);
+    const auto texture=pattern(w,h);
+    for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
+        double v;
+        if(x<w/2){
+            const bool top=y<h/2;
+            const unsigned u=x%37,s=y%41;
+            const bool stroke=(u>=8&&u<10)||(s>=12&&s<14)||((x+y)%53<2)||(u>=20&&u<23&&s>18&&s<36);
+            v=top?(stroke?ink:paper):(stroke?light:night);
+        }else v=pqOf(decode(texture.pixels[(size_t(y)*w+x)*4+1])*200);
+        render[size_t(y)*w+x]=v;
+    }
+    bool ok=true;
+    for(const auto scaler:{SmartSrScaler::Bilinear,SmartSrScaler::Aligned2x}){
+        const auto weight=[&](uint32_t j,uint32_t high,uint32_t low,int i){
+            if(scaler==SmartSrScaler::Aligned2x)return pipeline::smartSrAlignedWeight(j,i);
+            int i0,i1;double w0,w1;pipeline::smartSrBilinear(j,high,low,i0,w0,i1,w1);
+            return (i==i0?w0:0.0)+(i==i1?w1:0.0);
+        };
+        std::vector<double> rows(size_t(W)*h),code(size_t(W)*H*3);
+        for(unsigned y=0;y<h;++y)for(unsigned x=0;x<W;++x){
+            double v=0;for(int i=int(x/2)-4;i<=int(x/2)+4;++i)if(const double k=weight(x,W,w,i))v+=k*render[size_t(y)*w+size_t(std::clamp(i,0,int(w)-1))];
+            rows[size_t(y)*W+x]=v;
+        }
+        for(unsigned y=0;y<H;++y)for(unsigned x=0;x<W;++x){
+            double v=0;for(int i=int(y/2)-4;i<=int(y/2)+4;++i)if(const double k=weight(y,H,h,i))v+=k*rows[size_t(std::clamp(i,0,int(h)-1))*W+x];
+            for(unsigned c=0;c<3;++c)code[(size_t(y)*W+x)*3+c]=std::clamp(v,0.0,1.0);
+        }
+        const auto frame=pqFrame(code,W,H);if(!frame)return 2;
+        const auto r=process(frame.get());
+        const bool found=r.ok&&r.extent==pipeline::Extent{w,h}&&r.scaler==scaler&&r.image.width==W&&r.image.height==H;
+        // Stroke area: samples past half way (in PQ codes) from the background to the stroke,
+        // against the strokes of the render itself (four output samples per render sample).
+        double area[2][2]{};
+        if(found)for(unsigned y=16;y<H-16;++y)for(unsigned x=16;x<W/2-16;++x){
+            if(y>H/2-16&&y<H/2+16)continue;
+            const bool top=y<H/2;const double middle=top?(paper+ink)/2:(light+night)/2;
+            const size_t p=(size_t(y)*W+x)*4;
+            const double out=pqOf(80.0*std::max(0.0,0.212639*half(r.image,p)+0.715169*half(r.image,p+1)+0.072192*half(r.image,p+2)));
+            area[top?0:1][0]+=(render[size_t(y/2)*w+x/2]<middle)==top;area[top?0:1][1]+=(out<middle)==top;
+        }
+        const double dark=found?area[0][1]/area[0][0]:0,bright=found?area[1][1]/area[1][0]:0;
+        const bool passed=found&&dark>0.92&&dark<1.08&&bright>0.92&&bright<1.08;
+        std::cout<<"SMART_HDR scaler="<<(scaler==SmartSrScaler::Aligned2x?"aligned2x":"bilinear")<<" extent="<<r.extent.width<<'x'<<r.extent.height
+                 <<" darkStrokes="<<dark<<" brightStrokes="<<bright<<" srMs="<<r.srMs<<" passed="<<passed<<std::endl;
+        ok=ok&&passed;
+    }
+    ring.shutdown();ctx.shutdown();std::cout<<"SMART_HDR_RESULT passed="<<ok<<std::endl;return ok?0:1;
+}
 pipeline::SrPrescale reduceArg(std::wstring_view v){
     if(v==L"720")return pipeline::SrPrescale::P720;if(v==L"900")return pipeline::SrPrescale::P900;
     if(v==L"1080")return pipeline::SrPrescale::P1080;if(v==L"1440")return pipeline::SrPrescale::P1440;
@@ -774,6 +885,7 @@ int wmain(int argc,wchar_t** argv){
         const int result=stage::any(argv[1],hdr,!hdr,argc==5?std::stoi(argv[3]):-1,argc==5?std::stoi(argv[4]):-1);
         CoUninitialize();return result;
     }
+    if((argc==3||argc==4)&&std::wstring_view(argv[2])==L"smart-hdr"){const int result=stage::smart(argv[1],argc==4?argv[3]:L"");CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"supersample"){const int result=stage::supersample(argv[1]);CoUninitialize();return result;}
     if(argc>=11&&std::wstring_view(argv[2])==L"sr-image"){
         const int result=stage::image(argv[1],argv[3],argv[4],unsigned(std::stoi(argv[5])),argv[6],argv[7],argv[8],argv[9],unsigned(std::stoi(argv[10])),argc>11?argv[11]:L"video");

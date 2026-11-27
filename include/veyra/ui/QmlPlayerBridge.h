@@ -62,6 +62,10 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(QString outputSummary READ outputSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageSummary READ srStageSummary NOTIFY snapshotChanged)
     Q_PROPERTY(QString srStageNote READ srStageNote NOTIFY snapshotChanged)
+    // Smart SR: what the running graph detected (empty when it does not run).
+    Q_PROPERTY(QString smartSrStatus READ smartSrStatus NOTIFY snapshotChanged)
+    // The running graph detects render extents: list-mode anti-aliasing is behind SR.
+    Q_PROPERTY(bool smartSrRunning READ smartSrRunning NOTIFY snapshotChanged)
     Q_PROPERTY(bool fullscreenMemorySafe READ fullscreenMemorySafe NOTIFY snapshotChanged)
     Q_PROPERTY(double queuedFrames READ queuedFrames NOTIFY snapshotChanged)
     Q_PROPERTY(bool queuedFramesKnown READ queuedFramesKnown NOTIFY snapshotChanged)
@@ -444,6 +448,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int dualSrTargetIndex READ dualSrTargetIndex WRITE setDualSrTargetIndex NOTIFY settingsChanged)
     Q_PROPERTY(int dualSrQuality READ dualSrQuality WRITE setDualSrQuality NOTIFY settingsChanged)
     Q_PROPERTY(int srOutput READ srOutput WRITE setSrOutput NOTIFY settingsChanged)
+    // Smart SR (EnhancementSettings::smartSr): render detection for one standard RTX Video SR pass.
+    Q_PROPERTY(bool smartSr READ smartSr WRITE setSmartSr NOTIFY settingsChanged)
     Q_PROPERTY(bool protectionEnabled READ protectionEnabled WRITE setProtectionEnabled NOTIFY settingsChanged)
     Q_PROPERTY(QVariantMap protectionState READ protectionState NOTIFY protectionChanged)
     Q_PROPERTY(bool exclusionOverlayVisible READ exclusionOverlayVisible WRITE setExclusionOverlayVisible NOTIFY protectionChanged)
@@ -705,6 +711,8 @@ public:
     QString outputSummary() const;
     QString srStageSummary() const;
     QString srStageNote() const;
+    QString smartSrStatus() const;
+    bool smartSrRunning() const;
     double queuedFrames() const;
     bool queuedFramesKnown() const;
     int skippedFrames() const;
@@ -1158,6 +1166,8 @@ public:
     void setSrPrescale(int value);
     int srOutput() const;
     void setSrOutput(int value);
+    bool smartSr() const;
+    void setSmartSr(bool enabled);
     bool protectionEnabled() const;
     void setProtectionEnabled(bool value);
     QVariantMap protectionState() const;

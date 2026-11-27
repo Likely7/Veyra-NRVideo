@@ -9,7 +9,8 @@ class PresetStore {
 public:
     explicit PresetStore(std::filesystem::path path)
         : path_(std::move(path)), xessSrPath_(std::filesystem::path(path_).concat(L".xess-sr")),
-          fsrRcasPath_(std::filesystem::path(path_).concat(L".fsr-rcas")) {}
+          fsrRcasPath_(std::filesystem::path(path_).concat(L".fsr-rcas")),
+           smartSrPath_(std::filesystem::path(path_).concat(L".smart-sr")) {}
     bool load();
     bool save();
     bool put(std::wstring name,EnhancementSettings,bool replace=false);
@@ -22,7 +23,7 @@ public:
 private:
     static bool parse(const std::string&,std::vector<UserPreset>&,std::wstring&);
     std::string serialize()const;
-    std::filesystem::path path_,xessSrPath_,fsrRcasPath_;
+    std::filesystem::path path_,xessSrPath_,fsrRcasPath_,smartSrPath_;
     std::vector<UserPreset> entries_;
     std::wstring default_,error_;
     bool corrupt_=false;

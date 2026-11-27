@@ -12,6 +12,7 @@ ColumnLayout {
     readonly property bool supported: veyra.srAlgorithmOf(veyra.videoSrQuality).startsWith("rtx") && srAvailable
     readonly property bool secondRtx: veyra.srAlgorithmOf(veyra.dualSrQuality).startsWith("rtx")
     readonly property bool finalFsr: veyra.srAlgorithmOf(veyra.dualSrEnabled ? veyra.dualSrQuality : veyra.videoSrQuality) === "5"
+    readonly property bool smartSrSupported: veyra.srAlgorithmOf(veyra.videoSrQuality) === "rtx" && srAvailable
     readonly property bool manual: veyra.srPrescale >= 150 && veyra.srPrescale <= 190
     readonly property var targets: [{id:"1",label:"2K"},{id:"2",label:"4K"},{id:"4",label:"5K"},{id:"5",label:"6K"},{id:"6",label:"7K"},{id:"3",label:"8K"}]
     VRow {
@@ -50,6 +51,18 @@ ColumnLayout {
             onPicked: id => veyra.srOutput=Number(id)
         }
     }
+    // Smart SR: detect a source's render extent (console 4K output of a 1080p/1440p game),
+    // invert that upscale and let the standard RTX Video SR enlarge the render instead.
+    VRow {
+        label: qsTr("智能超分")
+        hint: !editor.smartSrSupported ? qsTr("智能超分目前仅支持 RTX 视频超分（标准）")
+            : veyra.dualSrEnabled || veyra.srOutput !== 0 ? qsTr("双重超分或超分后缩回开启时不使用。")
+            : qsTr("游戏机常把 1080p、1440p 的画面放大成 4K 输出。开启后自动检测实际渲染分辨率，精确还原后再超分；原生画面照常处理。用于实时视频，支持 SDR 与 HDR10。列表模式的抗锯齿会移到超分之后执行。")
+        enabled: editor.smartSrSupported && !veyra.dualSrEnabled && veyra.srOutput === 0
+        opacity: enabled ? 1 : 0.4
+        VSwitch { objectName: editor.namePrefix+"-smart-sr-toggle"; checked: veyra.smartSr; onToggled: checked => veyra.smartSr=checked }
+    }
+    Text { text: veyra.smartSrStatus; visible: text.length>0 && veyra.smartSr; color: Theme.t2; font.pixelSize: 11; wrapMode: Text.WordWrap; Layout.fillWidth: true }
     VRow {
         label: qsTr("双重超分")
         hint: qsTr("先完成基础超分，再将结果降低分辨率并执行第二次超分；两次执行独立，会增加耗时和显存。")

@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-27 智能超分 PR #258
+
+circerio 的智能超分在单层 RTX 视频超分（标准）下根据原图留下的放大特征，识别稳定的渲染尺寸，反推后再调用 VSR，默认关闭。双线性和对齐 2× 两种算法共用采样统计和异步回读，支持 SDR 和保留 HDR 输出的 HDR10。普通 4K 源若没有稳定的匹配，仍按该片源原有的超分路径处理。 [PR #258](https://github.com/Likely7/Veyra-NRVideo/pull/258)
+
+本地基线 `90ab9246` 合入 PR 原始头 `8b2e655f`，手工合并七处冲突。与 GitHub PR 采用相同的预设 v42、预设库 v29 和会话 v24。启用智能超分的文件写 `.smart-sr`，预留相同的 FSR 锐化字段，继续解析已有 XeSS 与 FSR 锐化配置。在本地测试中，智能开关和已有锐化参数可以同时保存并分别恢复。旧预设文件保持原字节。
+
+复用 `build/codex-community-pr-followup-20261127`，按 `tmp/codex-smart-sr-258-20261127/build-local.py` 构建，FFmpeg 9.0.2，并发 2。主程序、实际 HDR 图像和实时呈现入口均编译成功。效果链 579 项、预设库 685 项、预设文件回归和 9 种翻译校验通过。Qt Quick 使用软件渲染与离屏环境，306 项通过、1 项跳过。首次用离屏默认渲染后端的测试未通过，改用本项目验收配置复测。 [构建](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/build-20261127-114602/compile.log>) · [预设测试](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/merge-library/result.log>) · [Qt Quick](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/merge-qml-software/results.log>)
+
+RTX 5070 的 HDR10 测试两种放大方式均从 4K 识别到 1920×1080。亮底黑字和黑底白字的笔画面积分别为参考的 95.5% 和 104.8%。用 4K60 的动态 SDR 样片验证了从 1920×1080 切到 2560×1440，耗时统计取启动后实际运行区间。同画面对照中，超分 GPU 耗时中位数从 7.53 ms 降到 2.65 ms，提交帧间隔 P99 从 18.02 ms 到 19.12 ms。另一段带额外压缩的素材没有足够的检测证据，继续做整幅超分。智能开关关闭时，该素材在旧代码与合入代码的提交间隔 P99 为 18.15 和 18.13 ms。 [实际 HDR 像素检查](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/merge-hdr/result.log>) · [SDR 检测时间线](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/merge-sdr-exact-on/engine.log>) · [回放指标](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/playback-compare.json>)
+
+回放用 `tmp/codex-smart-sr-258-20261127/qa.py` 的 `baseline`、`local`、`exact` 模式，测试进程使用私有配置。素材源为 `tests/codex-github-fixes-20261126/media/gta-native-2997.mp4`。无损样片去饱和后分别缩到 1080p 和 1440p，用双线性放大到 4K，60 FPS，libx264 QP 0。复用 `tests/runtime-dependency-refresh-20261127/app` 的测试程序。性能数据覆盖本机文件回放和测试图案，主机实卡以及高负载 HDR 组合沿用作者的测试记录作为参考。
+
 ## 2026-11-27 采集卡自动去重与补帧节奏
 
 基线是本地 main `4b0312ca`。来源为用户提供的 @George Discord 投稿，面向 2.2.1 的 UGREEN CM630 + PS5 Pro 报告和 `veyra-2.2.1-capture-fixes.zip`。报告记录了 60.01 Hz 采样与 59.94 Hz 主机约每 14 秒发生一次错位，以及静止地图开关时出现的额外停顿。

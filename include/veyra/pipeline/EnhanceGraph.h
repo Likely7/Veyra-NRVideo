@@ -12,6 +12,7 @@
 #include "veyra/beauty/FaceTracker.h"
 #include "veyra/pipeline/NrInstance.h"
 #include "veyra/pipeline/ResolutionPlan.h"
+#include "veyra/pipeline/SmartSr.h"
 #include "veyra/pipeline/NrTemporalPass.h"
 #include "veyra/pipeline/NrHoldPass.h"
 #include "veyra/pipeline/NrReuse.h"
@@ -152,6 +153,11 @@ struct EnhanceGraphDesc {
     // (dualSrQuality) reads its reduction. Each pass has its own backend: DLSS SR,
     // FSR or any RTX Video SR family (user 2026-11-08).
     bool dualSr=false;
+    // Smart SR (engine::describeStages): a single NGX RTX Video SR detects the source's
+    // render extent. Without one, a raw frame already at the work size is copied
+    // (smartSrNativeCopy, the skip of uncompressed sources) and anything else keeps SR.
+    // smartSrBlocked: asked for, but a stage ahead of SR changes the picture.
+    bool smartSr=false,smartSrNativeCopy=false,smartSrBlocked=false;
     uint32_t firstSrWidth=0,firstSrHeight=0,dualSrQuality=engine::kDefaultVideoSrQuality;
     uint32_t finalSrQuality()const{return dualSr?dualSrQuality:videoSrQuality;}
     bool firstSrEnlarges()const{return firstSrWidth!=sourceWidth||firstSrHeight!=sourceHeight;}
@@ -425,6 +431,13 @@ struct EnhanceGraphDesc {
             if(fixedExecutionPlan->steps[i].type==engine::EffectType::NrEnhance)return true;
         return false;
     }
+    // A plan step behind the SR step.
+    bool afterSrStep(uint32_t s) const {
+        if(!fixedExecutionPlan)return false;
+        for(uint32_t i=0;i<s&&i<fixedExecutionPlan->stepCount&&i<fixedExecutionPlan->steps.size();++i)
+            if(fixedExecutionPlan->steps[i].type==engine::EffectType::SuperResolution)return true;
+        return false;
+    }
     bool sourcePostActive() const {
         // Without a compiled plan (tiled full-resolution images) enabled
         // anti-aliasing instances follow the list chain: behind NR when NR
@@ -443,10 +456,10 @@ struct EnhanceGraphDesc {
             // List mode: the grade is fused into the input conversion; beauty and,
             // whenever NR runs, anti-aliasing follow the whole NR group
             // (compileChainExecutionPlan). Without NR anti-aliasing runs at source
-            // size right after the input conversion.
+            // size right after the input conversion, or behind SR for smart SR.
             if(type==EffectType::VideoDenoise)return PassSlot::SourcePost;
             if(type==EffectType::Color)return videoDenoiseEnabled?PassSlot::SourcePost:PassSlot::Ingress;
-            if(type==EffectType::AntiAliasing&&!afterNrStep(s))return PassSlot::SourcePost;
+            if(type==EffectType::AntiAliasing&&!afterNrStep(s)&&!afterSrStep(s))return PassSlot::SourcePost;
             return nrBeforeSr?PassSlot::PreSr:PassSlot::Tail;
         }
         if(sourcePostStep(s))return PassSlot::SourcePost;
@@ -755,6 +768,13 @@ public:
     ID3D12Resource* hudBackgroundMotion(unsigned slot) const;
     ID3D12Resource* hudProtectionCounters(unsigned slot) const;
     bool srEnabled() const { return srEnabled_; }
+    // Smart SR (SmartSr.h): detection on, whether a verdict has settled, the render
+    // extent SR enlarges (empty: ordinary SR path) and the last probe's verdict.
+    bool smartSrDetecting() const { return smartSrAuto_; }
+    bool smartSrSettled() const { return smartSrSettled_; }
+    bool smartSrBlocked() const { return desc_.smartSrBlocked; }
+    Extent smartSrExtent() const { return {smartSrW_,smartSrH_}; }
+    const SmartSrVerdict& smartSrVerdict() const { return smartSrVerdict_; }
     bool nrEnabled() const { return nrEnabled_ && !nrPreparing_; }
     bool nrPreparing() const { return nrPreparing_; }
     bool fgEnabled() const { return fgEnabled_; }
@@ -989,6 +1009,28 @@ private:
     ComPtr<ID3D12Resource> workRgba_;
     ComPtr<ID3D12Resource> videoSrInput_,videoSrOutput_;
     ComPtr<ID3D12Resource> srPrescaled_; // linear second-SR input: the double SR reduction of the first result
+    // Smart SR (SmartSr.h): probes every kSmartSrProbeInterval frames; after
+    // kSmartSrProbeStreak equal votes the render extent (smartSrW_ x smartSrH_,
+    // top-left of the source-sized srPrescaled_) follows. The descale inverts the
+    // source's own upscale (smartSrScaler_), rows into smartSrMid_ (coded, render width x
+    // source height), columns into srPrescaled_. A zero extent keeps the ordinary
+    // SR of the whole source (or the same-size copy of a raw frame).
+    bool smartSrAuto_ = false, smartSrSettled_ = false;
+    SmartSrAxis smartSrX_, smartSrY_;
+    ComPtr<ID3D12Resource> smartSrMid_;
+    uint32_t smartSrW_ = 0, smartSrH_ = 0;
+    SmartSrScaler smartSrScaler_ = SmartSrScaler::Bilinear;
+    std::vector<SmartSrAxis> smartSrProbeAxes_;  // inverse taps per candidate width, then the aligned 2x probe
+    ComPtr<ID3D12Resource> smartSrProbeReduced_, smartSrProbeStats_;
+    ComPtr<ID3D12Resource> smartSrProbeReadback_; // one probe at a time
+    bool smartSrProbePending_ = false;            // recorded, not collected yet
+    uint64_t smartSrProbeFence_ = 0;              // ring fence value that covers it (0: not known yet)
+    uint64_t smartSrProbeFrames_ = 0, smartSrProbeCount_ = 0;
+    SmartSrTarget smartSrProbeTarget_{};
+    uint32_t smartSrProbeStreak_ = 0;
+    uint32_t smartSrKeptVotes_ = 0, smartSrNoneVotes_ = 0, smartSrOtherVotes_ = 0, smartSrFlatProbes_ = 0; // since the last report
+    SmartSrVerdict smartSrVerdict_{};
+    void collectSmartSrProbe();
     ComPtr<ID3D12Resource> firstSrInput_,firstSrOutput_,firstSrLinear_;
     // Double SR temporal passes: a first DLSS SR pass takes motion in its output
     // pixels (first result), a second FSR pass in its render pixels (SR input).
@@ -1060,6 +1102,8 @@ private:
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
     ComputePass srPrescalePass_,srResolvePass_; // area shrinks: double SR reduction / supersample shrink after RTX Video SR
+    ComputePass smartSrPass_;                   // SmartSrReduce: descale rows / columns
+    ComputePass smartSrProbeReducePass_, smartSrProbeResidualPass_;
     ComputePass firstSrRestorePass_;
     ComputePass downsamplePass_,residualPass_,stackProtectionPass_,flowAdaptPass_;
     ComputePass flowRefinePass_,flowFillPass_,fgFlowAdaptPass_,flowClaimPass_;

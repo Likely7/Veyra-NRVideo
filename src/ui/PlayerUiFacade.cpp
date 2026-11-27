@@ -62,6 +62,8 @@ bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::P
         a.rejectedRevision == b.rejectedRevision &&
         a.desired == b.desired && a.applied == b.applied && a.nrActive == b.nrActive &&
         a.srActive == b.srActive && a.fgActive == b.fgActive && a.failed == b.failed &&
+        a.smartSrActive == b.smartSrActive && a.smartSrSettled == b.smartSrSettled && a.smartSrBlocked == b.smartSrBlocked &&
+        a.smartSrWidth == b.smartSrWidth && a.smartSrHeight == b.smartSrHeight &&
         a.volume == b.volume && a.muted == b.muted && a.selectedAudioTrack == b.selectedAudioTrack &&
         a.audioTracks.size() == b.audioTracks.size() && a.running == b.running &&
         a.sourceWidth == b.sourceWidth && a.sourceHeight == b.sourceHeight &&

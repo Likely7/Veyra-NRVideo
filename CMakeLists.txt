@@ -399,6 +399,10 @@ veyra_add_compute_shader(veyra_shader_packed_capture PackedCaptureToLinear)
 add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 # ScaleBlit: working frame -> swapchain backbuffer (Phase 6 present path).
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
+# Smart SR: descale (inverse of a source's own bilinear upscale) and render detection probes.
+veyra_add_compute_shader(veyra_shader_smart_sr_reduce SmartSrReduce)
+veyra_add_compute_shader(veyra_shader_smart_sr_probe_reduce SmartSrProbeReduce)
+veyra_add_compute_shader(veyra_shader_smart_sr_probe_residual SmartSrProbeResidual)
 veyra_add_nis_shaders(veyra_shader_nis)
 enable_testing()
 
@@ -717,7 +721,7 @@ if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
   target_link_libraries(veyra_pipeline PRIVATE veyra_ngx veyra_nvof ${FFMPEG_LIBRARIES})
   add_dependencies(veyra_pipeline
     veyra_shader_yuv_to_rgb veyra_shader_rgb_to_linear veyra_shader_parity_encode
-    veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_nis
+    veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_nis veyra_shader_smart_sr_reduce veyra_shader_smart_sr_probe_reduce veyra_shader_smart_sr_probe_residual
     veyra_shader_hdr_amd_nr_encode veyra_shader_hdr_amd_nr_restore
     veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture)
 endif()
@@ -2109,7 +2113,7 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
     ${FFMPEG_LIBRARIES} psapi dxgi shell32)
   add_dependencies(veyra_quality_probe
     veyra_shader_yuv_to_rgb veyra_shader_parity_encode
-    veyra_shader_parity_decode veyra_shader_scale_blit
+    veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_smart_sr_reduce veyra_shader_smart_sr_probe_reduce veyra_shader_smart_sr_probe_residual
     veyra_shader_nv12_upload veyra_shader_nvof_densify)
 
   # UI migration guard: per-frame output hashes for fixed stage configurations.
@@ -2151,7 +2155,7 @@ target_link_options(veyra_hdr_tuning_tests PRIVATE /STACK:33554432)
       ${FFMPEG_LIBRARIES} psapi ole32 mmdevapi avrt)
     add_dependencies(veyra_player_probe
       veyra_shader_yuv_to_rgb veyra_shader_parity_encode
-      veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_nv12_upload
+      veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_smart_sr_reduce veyra_shader_smart_sr_probe_reduce veyra_shader_smart_sr_probe_residual veyra_shader_nv12_upload
       veyra_shader_present_blit veyra_shader_nvof_densify)
   endif()
 endif()

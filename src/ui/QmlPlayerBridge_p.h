@@ -992,6 +992,7 @@ struct QmlPlayerBridge::Impl {
                 s.dlssSrModel = previous.dlssSrModel;
                 s.fsrSrSharpness=previous.fsrSrSharpness;
                 s.srPrescale = previous.srPrescale; s.srOutput = previous.srOutput;
+                s.smartSr = previous.smartSr;
                 s.dualSrEnabled=previous.dualSrEnabled;s.dualSrTarget=previous.dualSrTarget;s.dualSrQuality=previous.dualSrQuality;
             }
             if (!projected->firstOf(engine::EffectType::FrameGeneration)){

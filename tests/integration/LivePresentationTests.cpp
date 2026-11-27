@@ -301,6 +301,8 @@ __declspec(noinline) static int runContentCadenceReplay(engine::EngineController
     std::cout<<" frames="<<end->frames-start->frames<<" skipped="<<end->captureRateSkipped-start->captureRateSkipped<<" generated="<<end->generated-start->generated
              <<" contentFps="<<end->contentFps<<" realPresented="<<end->metrics.flow.counters.realPresented-start->metrics.flow.counters.realPresented
              <<" generatedPresented="<<end->metrics.flow.counters.generatedPresented-start->metrics.flow.counters.generatedPresented
+             <<" smartSrActive="<<end->smartSrActive<<" smartSrSettled="<<end->smartSrSettled
+             <<" smartSrExtent="<<end->smartSrWidth<<'x'<<end->smartSrHeight
              <<" fgInvalid="<<end->metrics.flow.counters.fgInvalid-start->metrics.flow.counters.fgInvalid
              <<" submit1PercentLow="<<end->submissionLow1Fps.value_or(0)<<std::endl;
     const auto minimumFrames=engine::isCaptureHalfRate(start->applied.content)?sampleSeconds*15:300;
@@ -455,7 +457,10 @@ int wmain(int argc,wchar_t**argv){
             engine.requestPresentation(display);
         }
         if(dedupMode.starts_with(L"nr-")){options.nr=true;dedupMode.erase(0,3);}
-        if(dedupMode.starts_with(L"sr-")){options.sr=true;options.settings.videoSrQuality=2;dedupMode.erase(0,3);}
+        if(dedupMode.starts_with(L"sr-")){
+            options.sr=true;options.settings.videoSrQuality=2;dedupMode.erase(0,3);
+            if(dedupMode.starts_with(L"smart-")){options.settings.smartSr=true;dedupMode.erase(0,6);}
+        }
         options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Dlss;
         if(dedupMode.starts_with(L"anr-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Anr;dedupMode.erase(0,4);}
         else if(dedupMode.starts_with(L"vfg-")){options.settings.frameGenerationBackend=engine::FrameGenerationBackend::Vfg;dedupMode.erase(0,4);}
