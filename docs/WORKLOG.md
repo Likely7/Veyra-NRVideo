@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-27 社区 PR 适配
+
+从本地 main 08d2e28a 开工。对截图中的 20 个 PR 固定上游 head，逐个检查全补丁和当前实现。采用本地新版 PS5/Xbox 键鼠覆盖 #354 功能。接入 #274 的 1080p/1440p 请求和 #376 的自适应超宽预览，并分拆 #384 首页键盘与辅助功能、#331 录制状态和 Unicode 诊断路径。普通预览的三份显示与运动着色器 DXIL 保持字节一致。#382 的独立调度夹具有明显的 RIFE 容量缺口，#316 的旧对照存在读帧尾部上升，继续保留在独立验证范围。 [20 条结果](<E:/项目/Veyra/reports/community-pr-followup-20261127/RESULTS.md>)
+
+使用 tmp/community-pr-followup-20261127/build-local.py 以并发 2 构建程序、Qt Quick、Xbox 协议、PS5 边界、界面契约、字幕和 GPU 测试。正式预览入口实时调整超宽缩放并重启恢复，实画面验证椭圆画框和拖动。Qt Quick 306 项通过、1 项既有跳过，Xbox 160 项通过，九种语言翻译无缺失。4K60 NVENC 固定帧率录制生成 482 帧，0 丢帧。第一次整套 Qt Quick 的蒙版点击被测试窗口截获，关窗后重跑通过。 [最终构建](<E:/项目/Veyra/logs/codex-community-pr-followup-20261127/build-20261127-091734/compile.log>) · [应用验证](<E:/项目/Veyra/logs/codex-community-pr-followup-20261127/app-20261127-091828>) · [CPU 界面验证](<E:/项目/Veyra/logs/codex-community-pr-followup-20261127/cpu-20261127-091213>)
+
+RTX 5070 的两组轮换共 12 轮。GTA 1440p29.97 使用 VFG 2×，四轮基线的 P99 中位 17.038 ms，四轮候选 17.072 ms，超过 50 ms 的间隔从 1 次到 0 次。候选提交 59.66–59.67 FPS，软件统计的单轮最低 1% Low 为 58.16 FPS。120 Hz 输入仍识别 30 FPS 内容。启用超宽模式时四个旋转方向的 GPU 像素位置误差小于 0.00045。Xbox 档位验证使用回环对端，实际主机协商及 Arc XeSS 需要对应硬件。 [回放对照](<E:/项目/Veyra/logs/codex-community-pr-followup-20261127/playback-20261127-090907/summary.json>) · [GTA 复测](<E:/项目/Veyra/logs/codex-community-pr-followup-20261127/playback-repeat-20261127-091521/summary.json>)
+
 ## 2026-11-27 鼠标反向响应、死区测试和双摇杆向内推
 
 鼠标新版映射的密集输入改用 6–12 ms 的采样窗口，按鼠标报告周期维持和释放输出。微动和单计数仍覆盖一个游戏帧，长时间停手后再次移动不会混入上一段输入。800 DPI、30 FPS 的报告回放在 125／500／1000 Hz 下，反向到摇杆输出改变方向的四相位均值由 14.0／17.75／18.875 ms 降至 3.0／3.75／3.875 ms，停手回中由 35.0／35.75／36.125 ms 降至 23.0／8.75／8.125 ms。48 组回放保持单计数和慢速跟踪，旧算法 100,000 次对拍无差异。 [输入回放基线](<E:/项目/Veyra/tmp/controller-panel-20261127/mouse-ab/baseline.json>) · [新版回放](<E:/项目/Veyra/tmp/controller-panel-20261127/mouse-ab/candidate.json>)
