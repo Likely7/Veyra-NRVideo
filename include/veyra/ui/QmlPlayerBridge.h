@@ -164,6 +164,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(int captureAudioIngress READ captureAudioIngress WRITE setCaptureAudioIngress NOTIFY settingsChanged)
     Q_PROPERTY(int captureBufferMode READ captureBufferMode WRITE setCaptureBufferMode NOTIFY settingsChanged)
     Q_PROPERTY(bool captureQueryBusy READ captureQueryBusy NOTIFY captureChanged)
+    Q_PROPERTY(bool captureQueryTimedOut READ captureQueryTimedOut NOTIFY captureChanged)
     Q_PROPERTY(QString captureStatus READ captureStatus NOTIFY captureChanged)
     // Magewell Pro Capture low-latency mode (MagewellCapture.h): whether the selected device is
     // one, and a one-line state (active with its latency, missing runtime, or why it fell back).
@@ -796,6 +797,7 @@ public:
     int captureBufferMode() const;
     void setCaptureBufferMode(int value);
     bool captureQueryBusy() const;
+    bool captureQueryTimedOut() const;
     QString captureStatus() const;
     QVariantMap screenOptions() const;
     // Declared here, in the public section: a Q_INVOKABLE above `public:` is

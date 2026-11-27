@@ -123,8 +123,12 @@ DialogLayer {
             spacing: 8
             VTag {
                 objectName: "capture-signal"
-                text: veyra.captureSignalText
-                kind: veyra.captureSignalLevel === "ok" ? "ok" : veyra.captureSignalLevel === "warn" ? "warn" : ""
+                text: captureDialog.live ? veyra.captureSignalText
+                      : veyra.captureQueryTimedOut ? qsTr("设备查询超时")
+                      : veyra.captureDeviceId.length > 0 ? qsTr("待连接")
+                      : veyra.captureSignalText
+                kind: veyra.captureSignalLevel === "ok" ? "ok"
+                      : veyra.captureSignalLevel === "warn" || veyra.captureQueryTimedOut ? "warn" : ""
             }
             Text {
                 Layout.fillWidth: true
@@ -145,7 +149,9 @@ DialogLayer {
         VRow {
             id: videoDeviceRow
             label: qsTr("视频输入设备")
-            hint: veyra.captureQueryBusy ? qsTr("正在查询…当前播放继续") : (veyra.captureDevices.length === 0 ? qsTr("未检测到采集设备") : "")
+            hint: veyra.captureQueryTimedOut ? veyra.captureStatus
+                  : veyra.captureQueryBusy ? qsTr("正在查询…当前播放继续")
+                  : (veyra.captureDevices.length === 0 ? qsTr("未检测到采集设备") : "")
             RowLayout {
                 spacing: 6
                 VSelect {
@@ -161,11 +167,12 @@ DialogLayer {
                     VButton {
                         objectName: "capture-refresh"
                         anchors.fill: parent
-                        visible: !veyra.captureQueryBusy
+                        visible: !veyra.captureQueryBusy || veyra.captureQueryTimedOut
+                        enabled: !veyra.captureQueryBusy
                         icon: true; ghost: true; iconName: "refresh"; tip: qsTr("刷新设备")
                         onClicked: veyra.refreshCaptureDevices()
                     }
-                    VSpinner { anchors.centerIn: parent; visible: veyra.captureQueryBusy }
+                    VSpinner { anchors.centerIn: parent; visible: veyra.captureQueryBusy && !veyra.captureQueryTimedOut }
                 }
             }
         }
@@ -616,5 +623,5 @@ DialogLayer {
             }
         }
     }
-    DialogNote { visible: veyra.captureStatus.length > 0; text: veyra.captureStatus }
+    DialogNote { visible: veyra.captureStatus.length > 0 && !veyra.captureQueryTimedOut; text: veyra.captureStatus }
 }

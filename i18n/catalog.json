@@ -27901,6 +27901,45 @@
    "ru": "Просмотр"
   },
   {
+   "zh": "设备查询超时",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "裝置查詢逾時",
+   "en": "Device scan timed out",
+   "ja": "デバイス検索がタイムアウトしました",
+   "ko": "장치 검색 시간 초과",
+   "es": "La búsqueda de dispositivos agotó el tiempo de espera",
+   "fr": "Délai de recherche des appareils dépassé",
+   "de": "Zeitlimit der Gerätesuche erreicht",
+   "pt-BR": "Tempo limite da busca de dispositivos",
+   "ru": "Истекло время поиска устройств"
+  },
+  {
+   "zh": "待连接",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "待連線",
+   "en": "Ready to connect",
+   "ja": "接続待ち",
+   "ko": "연결 대기",
+   "es": "Pendiente de conexión",
+   "fr": "Connexion en attente",
+   "de": "Verbindung ausstehend",
+   "pt-BR": "Aguardando conexão",
+   "ru": "Ожидание подключения"
+  },
+  {
+   "zh": "采集设备查询超时。请关闭占用采集卡的软件。如果驱动一直未返回，请重启 Veyra。",
+   "src": "src/ui/bridge/Capture.cpp",
+   "zh-TW": "擷取裝置查詢逾時。請關閉占用擷取卡的軟體。如果驅動程式一直未回應，請重新啟動 Veyra。",
+   "en": "The capture device scan timed out. Close other apps using the capture card. Restart Veyra if the driver stays unresponsive.",
+   "ja": "キャプチャーデバイスの検索がタイムアウトしました。キャプチャーカードを使用中のアプリを閉じてください。ドライバーが応答しない場合は Veyra を再起動してください。",
+   "ko": "캡처 장치 검색 시간이 초과되었습니다. 캡처 카드를 사용하는 앱을 닫으세요. 드라이버가 계속 응답하지 않으면 Veyra를 다시 시작하세요.",
+   "es": "Se agotó el tiempo de búsqueda de dispositivos de captura. Cierra las aplicaciones que estén usando la capturadora. Si el controlador sigue sin responder, reinicia Veyra.",
+   "fr": "La recherche des périphériques de capture a expiré. Fermez les autres applications utilisant la carte de capture. Si le pilote reste bloqué, redémarrez Veyra.",
+   "de": "Die Suche nach Aufnahmegeräten hat das Zeitlimit erreicht. Schließe andere Apps, die die Aufnahmekarte verwenden. Starte Veyra neu, falls der Treiber weiterhin nicht reagiert.",
+   "pt-BR": "A busca de dispositivos de captura atingiu o tempo limite. Feche outros aplicativos que usam a placa de captura. Se o driver continuar sem responder, reinicie o Veyra.",
+   "ru": "Истекло время поиска устройств захвата. Закройте другие приложения, использующие карту захвата. Если драйвер не отвечает, перезапустите Veyra."
+  },
+  {
    "zh": "正在查询…当前播放继续",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "正在查詢…當前播放繼續",

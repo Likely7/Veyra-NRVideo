@@ -429,11 +429,13 @@ struct QmlPlayerBridge::Impl {
     double resumeAt = 0;
     std::vector<sink::RenderEndpoint> audioEndpoints;
     // --- capture connection (P4-e) ---
-    struct CaptureQuery { int kind = 0; std::wstring device,requestedResolution; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats;source::CaptureFormatQueryInfo info; };
+    struct CaptureQuery { int kind = 0; std::wstring device,requestedResolution; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats;source::CaptureFormatQueryInfo info; bool virtualAudioInstalled=false; };
     std::future<CaptureQuery> captureQuery;
     std::optional<std::pair<int,std::wstring>> captureNextQuery;
     bool captureBusy = false, captureListed = false, captureResumePending = false;
     bool captureDriverSettingsOpen = false;
+    bool captureQueryTimedOut = false;
+    std::chrono::steady_clock::time_point captureQueryStarted{};
     std::wstring captureDriverFormatKey;
     int captureQueryKind = 0;   // 0 device list, 1 formats, 2 formats then connect (continue)
     std::vector<source::CaptureDevice> captureVideo, captureAudio;
