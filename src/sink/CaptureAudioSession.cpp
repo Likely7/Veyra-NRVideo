@@ -5,6 +5,7 @@
 #include "veyra/sink/ArrivalClockMapping.h"
 #include "veyra/sink/CaptureAudioDsp.h"
 #include "veyra/sink/CaptureSyncTarget.h"
+#include "veyra/sink/RemotePlayAudioStartup.h"
 #include "veyra/diagnostics/CapturePcmRecording.h"
 #include <algorithm>
 #include <cmath>
@@ -82,7 +83,11 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
     std::optional<double> lastPullEndPtsMs()const override{return pullEnd;}
     bool padUnderruns()const override{return false;}
     void observeRenderedPcm(const float* samples,size_t frames,unsigned channels,unsigned padding)override{recording.rendered(samples,frames,channels,padding);}
-    void run(){
+    void run(CaptureVideoSyncClock videoClock){
+        const bool remotePlayClock = videoClock == CaptureVideoSyncClock::RemotePlayArrival;
+        RemotePlayAudioStartup remoteStartup;
+        uint64_t startupObservation = 0;
+        bool audioHasStarted = false;
         AudioRenderer renderer;
         bool endpointReady=false,tapOnly=false;int64_t retryAt=0;
         uint64_t tapGeneration=0;
@@ -205,6 +210,9 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 log::info("capture-audio-sync",std::format("mode={} offsetMs={} reanchor=explicit-audio-setting",appliedMode,appliedOffset));
             }
             if(syncChanged&&!clearCorrection()){fail(L"音频同步补偿重置失败");break;}
+            const auto residence = remotePlayClock ? originalVideoResidence(vHost, vArrival) : std::nullopt;
+            const double ptsTarget = vHost - vPts - ingress;
+            const double autoTarget = residence.value_or(ptsTarget);
             if(reset||chunk.discontinuity){
                 syncTarget.reset();syncEstimate={};lastVideoObservation=0;
                 if(!tapOnly)renderer.fadeAndReset(*this,stop);
@@ -288,7 +296,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                     const double now=double(hostTime())/10000;
                     const bool fresh=video&&now>=vHost&&now-vHost<500;
                     if(appliedMode==0&&fresh&&observation!=lastVideoObservation){
-                        syncEstimate=syncTarget.observe(vHost-vPts-ingress,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
+                        syncEstimate=syncTarget.observe(autoTarget,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
                         lastVideoObservation=observation;
                     }
                     const double target=appliedMode==0?std::clamp(syncEstimate.targetMs,0.0,maxAutoDelayMs):
@@ -336,9 +344,20 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             // to host time; the endpoint's own queued frames are not added again.
             const double now=double(hostTime())/10000;
             const bool fresh=video&&now>=vHost&&now-vHost<500;
-            if(appliedMode==0&&fresh&&observation!=lastVideoObservation){
+            const bool remoteFirstStart = remotePlayClock && !audioHasStarted && appliedMode == 0;
+            const size_t queuedFrames=pcm.size()/layout.channels;
+            bool allowStart = true;
+            if (remoteFirstStart && fresh) {
+                const bool firstObservation = startupObservation == 0;
+                const bool nearlyFull = 1000.0 * queuedFrames / kAudioRate >= maxQueuedMs - 50.0;
+                allowStart = remoteStartup.observe(now, residence, observation != startupObservation) || nearlyFull;
+                startupObservation = observation;
+                if (firstObservation && !allowStart)
+                    log::info("capture-audio-ps5-start",std::format("firstOriginalResidenceMs={:.3f} waitingForNewFrame=1",residence.value_or(-1.0)));
+            }
+            if(appliedMode==0&&fresh&&allowStart&&observation!=lastVideoObservation){
                 const bool previousFallback=syncEstimate.fallback;
-                syncEstimate=syncTarget.observe(vHost-vPts-ingress,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
+                syncEstimate=syncTarget.observe(autoTarget,vHost,vArrival?std::optional<double>(double(*vArrival)/10000):std::nullopt);
                 lastVideoObservation=observation;
                 if(previousFallback!=syncEstimate.fallback)
                     log::warn("capture-audio-clock",std::format("fallback={} rawMs={:.3f} localVideoMs={:.3f} acceptedMs={:.3f} basis=matched-original-arrival hardwareOffsetUnmeasured=1",syncEstimate.fallback,syncEstimate.rawMs,syncEstimate.localMs,syncEstimate.targetMs));
@@ -360,16 +379,21 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             // endpoint capacity when starting or re-anchoring.
             const double startupPrefillMs=capturePrefillMs(renderer.capacityMs(),blockMs);
             const size_t prefill=size_t(std::ceil(startupPrefillMs*kAudioRate/1000));
-            const size_t queuedFrames=pcm.size()/layout.channels;
-            if(!renderer.started()&&haveHead&&queuedFrames>=prefill&&(appliedMode!=0||fresh)){
+            if(!renderer.started()&&haveHead&&queuedFrames>=prefill&&(appliedMode!=0||(fresh&&allowStart))){
                 // Live recovery discards expired sound rather than replaying
                 // an obsolete half-second after a GPU stall or graph reset.
-                const size_t expired=std::min(queuedFrames-prefill,size_t(std::max(0.0,(now-mapping-headPts-5)*kAudioRate/1000)));
+                size_t expired=std::min(queuedFrames-prefill,size_t(std::max(0.0,(now-mapping-headPts-5)*kAudioRate/1000)));
+                if (remoteFirstStart && residence)
+                    expired = keepRemotePlayStartupPcm(expired, queuedFrames, prefill, target, blockMs, kAudioRate);
                 {std::lock_guard lock(mutex);discardPcm(expired);state.recoveryDiscardedFrames+=expired;}
                 if(expired)log::info("capture-audio-reanchor",std::format("expiredFrames={} expiredMs={:.3f} targetMs={:.3f} reason=startup-or-recovery",expired,1000.0*expired/kAudioRate,target));
                 const bool due=now>=mapping+headPts;
                 if(due&&!pcm.empty()){
                     if(!renderer.startAnchored(*this)){if(!recoverEndpoint())break;continue;}
+                    if(remoteFirstStart)log::info("capture-audio-ps5-start",
+                        std::format("started=1 originalResidenceMs={:.3f} ptsTargetMs={:.3f} targetMs={:.3f} keptFrames={}",
+                            residence.value_or(-1.0),ptsTarget,target,queuedFrames-expired));
+                    audioHasStarted=true;
                     justStarted=true;endpointEventReady=false;
                     lastReset=hostTime();filteredError=correctionPpm=0;nextCorrection=lastReset+2500000;
                 }
@@ -454,7 +478,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
                 state.endpointBufferedMs=renderer.bufferedMs();
                 const auto audioPts=renderer.mediaTimeMs();
                 const double observedNow=double(hostTime())/10000;
-                state.skewMs=fresh&&std::isfinite(audioPts)?std::optional<double>(audioPts-(state.syncClockFallback?observedNow-mapping:vPts+observedNow-vHost)):std::nullopt;
+                const bool arrivalClock = state.syncClockFallback || (appliedMode == 0 && residence.has_value());
+                state.skewMs=fresh&&std::isfinite(audioPts)?std::optional<double>(audioPts-(arrivalClock?observedNow-mapping:vPts+observedNow-vHost)):std::nullopt;
                 if(hostTime()>=nextSyncLog){
                     nextSyncLog=hostTime()+20000000;
                     if(appliedMode==0)log::info("capture-audio-reserve",std::format("queuedAtCorrectionMs={:.3f} minimumMs={:.3f} rateLimited={} correctionPpm={:.1f} (real scheduling reserve, not extra video delay)",correctionQueuedMs,startupPrefillMs,correctionReserveLimited,correctionPpm));
@@ -490,12 +515,12 @@ bool CaptureAudioSession::configure(const WAVEFORMATEX& f,size_t bytes){
     if(!parseWavePcm(&f,bytes,parsed))return false;
     return configure(parsed);
 }
-bool CaptureAudioSession::start(std::wstring excludedEndpoint){
+bool CaptureAudioSession::start(std::wstring excludedEndpoint,CaptureVideoSyncClock clock){
     if(!p_->format.nBlockAlign||p_->thread.joinable())return false;
     {std::lock_guard lock(p_->mutex);p_->input.clear();p_->inputBytes=p_->convertingBytes=0;p_->clearPcmLocked();p_->haveHead=p_->haveVideo=p_->haveIngress=p_->pendingReset=false;p_->lastArrival=0;p_->state={};p_->state.inputChannels=p_->layout.channels;p_->state.inputChannelMask=p_->layout.mask;p_->state.inputSampleRate=p_->format.nSamplesPerSec;p_->state.inputContainerBits=p_->format.wBitsPerSample;p_->state.inputValidBits=p_->validBits;p_->state.inputFloating=p_->floating;}
     p_->stop=false;
     p_->excludedEndpoint=std::move(excludedEndpoint);
-    try{p_->thread=std::thread([this]{try{p_->run();}catch(const std::exception& e){log::error("capture-audio",std::format("audio thread failed: {}",e.what()));p_->fail(L"音频线程异常，请重新打开采集");}});}
+    try{p_->thread=std::thread([this,clock]{try{p_->run(clock);}catch(const std::exception& e){log::error("capture-audio",std::format("audio thread failed: {}",e.what()));p_->fail(L"音频线程异常，请重新打开采集");}});}
     catch(const std::exception& e){log::error("capture-audio",std::format("audio thread start failed: {}",e.what()));p_->fail(L"无法创建音频线程");return false;}
     return true;
 }

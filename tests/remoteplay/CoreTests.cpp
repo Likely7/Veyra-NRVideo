@@ -10,6 +10,7 @@
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/FgRecoveryBudget.h"
 #include "veyra/sink/CaptureSyncTarget.h"
+#include "veyra/sink/RemotePlayAudioStartup.h"
 #include <atomic>
 #include <cmath>
 #include <chrono>
@@ -163,6 +164,59 @@ TEST(audio_sync_uses_original_video_arrival) {
     CHECK(!unanchored.fallback && unanchored.targetMs == 952.0);
     const auto anchored = sync.observe(952.0, arrival + residence, arrival);
     CHECK(anchored.fallback && anchored.targetMs == residence && anchored.localMs == residence);
+}
+TEST(ps5_audio_start_ignores_stale_first_present) {
+    using veyra::sink::RemotePlayAudioStartup;
+    RemotePlayAudioStartup normal;
+    CHECK(normal.observe(10100, 41.0, true));
+
+    // PS5 field reports started on a stale display frame before jumping
+    // forward toward the latest picture. Polling repeats are not new samples.
+    RemotePlayAudioStartup backlog;
+    CHECK(!backlog.observe(10100, 1481.0, true));
+    CHECK(!backlog.observe(10140, 1481.0, false));
+    CHECK(!backlog.observe(10200, 739.0, true));
+    CHECK(!backlog.observe(10230, 300.0, true));
+    CHECK(backlog.observe(10260, 39.0, true));
+
+    RemotePlayAudioStartup steadySlow;
+    CHECK(!steadySlow.observe(10100, 195.0, true));
+    CHECK(!steadySlow.observe(10134, 188.0, true));
+    CHECK(steadySlow.observe(10168, 196.0, true));
+
+    RemotePlayAudioStartup deadline;
+    CHECK(!deadline.observe(10100, 1000.0, true));
+    CHECK(!deadline.observe(10449, 410.0, true));
+    CHECK(deadline.observe(10450, 405.0, true));
+
+    RemotePlayAudioStartup missing;
+    CHECK(missing.observe(10100, std::nullopt, true));
+    CHECK(!missing.observe(10134, 700.0, true));
+}
+TEST(ps5_audio_start_measured_target_and_pcm_tail) {
+    using namespace veyra::sink;
+    constexpr double presentHost = 10039.0;
+    const auto measured = originalVideoResidence(presentHost, 100000000LL);
+    CHECK(measured && *measured == 39.0);
+    CHECK(!originalVideoResidence(presentHost, 100400000LL));
+    CHECK(!originalVideoResidence(presentHost, std::nullopt));
+
+    CaptureSyncTarget clock;
+    constexpr double biasedPtsTarget = 78.0;
+    const auto chosen = clock.observe(measured.value_or(biasedPtsTarget), presentHost, 10000.0);
+    CHECK(chosen.targetMs == 39.0 && chosen.localMs == 39.0 && !chosen.fallback);
+    // At most the buffered section older than the chosen video residence
+    // and the newest callback is removed. This count is in complete stereo
+    // sample frames, so the left/right marker stays paired.
+    constexpr size_t queue = 3600, prefill = 1536;
+    const auto discard = keepRemotePlayStartupPcm(queue - prefill, queue, prefill, chosen.targetMs, 10.0, 48000);
+    CHECK(discard == 1248 && queue - discard == 2352);
+    CHECK(keepRemotePlayStartupPcm(queue - prefill, queue, prefill, 100.0, 10.0, 48000) == 0);
+    const std::array<int16_t, 6> newest{100, -100, 101, -101, 102, -102};
+    std::vector<int16_t> stereo(queue * 2, 0);
+    std::copy(newest.begin(), newest.end(), stereo.data() + stereo.size() - newest.size());
+    const std::span<const int16_t> kept(stereo.data() + discard * 2, (queue - discard) * 2);
+    CHECK(std::equal(newest.begin(), newest.end(), kept.last(newest.size()).begin()));
 }
 TEST(clock_reject_invalid){RemotePlayClock c;CHECK(!c.video(0,0));THROWS(c.reset(0,120));THROWS(c.reset(-1,60));c.reset(10,60);CHECK(!c.video(0,9));CHECK(c.video(1,20));CHECK(!c.video(1,20));CHECK(!c.video(2,19));CHECK(!c.audioPts(0,0,10));CHECK(!c.audioPts(std::numeric_limits<std::uint64_t>::max(),8000,10));}
 TEST(queue_limits_validation){QueueLimits l;l.maxFrames=0;THROWS(VideoIngress{l});l={};l.maxConfigBytes=l.maxBytes+1;THROWS(VideoIngress{l});l={};l.maxAge100ns=0;THROWS(VideoIngress{l});}
