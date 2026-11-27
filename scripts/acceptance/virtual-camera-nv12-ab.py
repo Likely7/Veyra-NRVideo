@@ -124,12 +124,13 @@ def main():
     args.results.mkdir()
     shader = args.producer.parent / "shaders" / "VirtualCameraNv12.dxil"
     saved = shader.with_name(f"{shader.name}.ab-{os.getpid()}.original")
-    if not shader.is_file() or shader.is_symlink() or saved.exists():
+    if not shader.is_file() or shader.resolve() != shader or saved.exists():
         parser.error("Use an isolated test stage with its own shader path.")
     if shader in (args.baseline, args.candidate):
         parser.error("Store the comparison shaders outside the producer shader path.")
     shutil.copy2(shader, args.results / "previous-stage-shader.dxil")
-    env = os.environ.copy()
+    env = {name: value for name, value in os.environ.items()
+           if not name.upper().startswith(("VEYRA_TEST_VIRTUALCAM_", "VEYRA_LOG_FILE"))}
     env["TEMP"] = env["TMP"] = str(args.results)
     env["VEYRA_TEST_VIRTUALCAM_MODULE_DIR"] = str(args.module.parent)
     report = {}
