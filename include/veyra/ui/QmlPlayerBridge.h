@@ -1658,6 +1658,7 @@ private:
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
     void openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill = false);
 
+    friend struct CaptureQueryBridgeTest;
     struct Impl;
     std::unique_ptr<Impl> impl_;
     QObject* nvidiaVrrProfile_ = nullptr;
