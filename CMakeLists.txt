@@ -171,6 +171,7 @@ add_library(veyra_gfx STATIC
   src/gfx/RifeDmlBackend.cpp
   src/gfx/AmfVideoSrBackend.cpp
   src/gfx/FsrSrBackend.cpp
+  src/gfx/XessSrBackend.cpp
 )
 veyra_apply_warnings(veyra_gfx)
 target_compile_features(veyra_gfx PUBLIC cxx_std_20)
@@ -185,6 +186,10 @@ veyra_apply_warnings(veyra_vrr_profile_tests)
 if(EXISTS "${VEYRA_XESS_ROOT}/inc/xess_fg/xefg_swapchain_d3d12.h")
   target_include_directories(veyra_gfx PRIVATE "${VEYRA_XESS_ROOT}/inc")
   target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_XESS=1)
+endif()
+if(EXISTS "${VEYRA_XESS_ROOT}/inc/xess/xess_d3d12.h")
+  target_include_directories(veyra_gfx PRIVATE "${VEYRA_XESS_ROOT}/inc")
+  target_compile_definitions(veyra_gfx PRIVATE VEYRA_HAS_XESS_SR=1)
 endif()
 # AMD AMF SDK headers (MIT) for AMD FRC; the runtime comes with the AMD driver.
 set(VEYRA_AMF_SDK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party_local/amd/AMF-SDK-1.5.3" CACHE PATH "AMD AMF SDK (include/core, include/components)")

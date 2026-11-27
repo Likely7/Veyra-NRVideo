@@ -96,6 +96,7 @@ inline constexpr uint32_t kVideoSrFsr=5;
 inline constexpr uint32_t kVideoSrNis=24;
 inline constexpr uint32_t kVideoSrAmf10=25;
 inline constexpr uint32_t kVideoSrAmf11=26;
+inline constexpr uint32_t kVideoSrXess=27; // ID 6 remains reserved for the retired FSR experiment.
 // Fresh SR selections use RTX Video SR medium; explicit saved selections retain
 // their numeric IDs. The UI seeds FSR separately on AMD/Intel adapters.
 inline constexpr uint32_t kDefaultVideoSrQuality=2;
@@ -121,13 +122,14 @@ constexpr uint32_t currentVideoSrQuality(uint32_t quality) {
 }
 constexpr bool amdVideoSr(uint32_t q){return q==kVideoSrAmf10||q==kVideoSrAmf11;}
 constexpr bool spatialVideoSr(uint32_t q){return q==kVideoSrNis||amdVideoSr(q);}
-constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q);}
+constexpr bool lowResolutionMotionSr(uint32_t q){return q==kVideoSrFsr||q==kVideoSrXess;}
+constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q)||q==kVideoSrXess;}
 constexpr bool videoSrRunsOn(uint32_t q,bool nvidia,bool amd){
     if (amdVideoSr(q)) return amd;
-    return validVideoSrQuality(q) && (nvidia || q==kVideoSrFsr || q==kVideoSrNis);
+    return validVideoSrQuality(q) && (nvidia || lowResolutionMotionSr(q) || q==kVideoSrNis);
 }
-// DLSS SR and FSR are temporal: they read the SR motion source. RTX Video SR is spatial.
-constexpr bool temporalVideoSr(uint32_t q){return q==0||q==kVideoSrFsr;}
+// Temporal SR reads the configured SR motion source.
+constexpr bool temporalVideoSr(uint32_t q){return q==0||lowResolutionMotionSr(q);}
 inline constexpr uint32_t kVfxVideoSrQualities[]={16,17,18,19,21,23};
 constexpr VideoSrFamily videoSrFamily(uint32_t q){
     return q>=16&&q<=19?VideoSrFamily::HighBitrate:q==21||q==23?VideoSrFamily::Streaming:VideoSrFamily::Standard;

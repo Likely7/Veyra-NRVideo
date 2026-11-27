@@ -57,6 +57,7 @@ namespace veyra::guidance { class AmdOpticalFlow; class GpuDisOpticalFlow; }
 namespace veyra::pipeline { class VfgBackend; class VfxSrBackend; class NisScaler; }
 
 namespace veyra::gfx {
+class XessSrBackend;
 class D3D12DeviceContext;
 class CommandSlotRing;
 class FsrSrBackend;
@@ -828,6 +829,7 @@ public:
         (desc_.finalSrQuality()==engine::kVideoSrFsr || desc_.firstSrRuns(engine::kVideoSrFsr)); }
     // Out of line: the backend type is only forward declared here.
     bool fsrSrEnabled() const;
+    bool xessSrEnabled() const;
     // Requested output multiplier (2 = one generated frame). Consumed by the
     // present sink so the XeSS provider knows how many frames to generate.
     uint32_t fgMultiplier() const { return desc_.fgMultiplier; }
@@ -935,6 +937,7 @@ private:
     Extent firstSrMotionExtent() const;
     bool initNgxFeatures(const std::atomic<bool>* rdna3StartupCancel);
     bool initFsrSr();
+    bool initXessSr();
     bool initSpatialSr();
     bool initFsrFg();
     bool initVfg();
@@ -1251,6 +1254,7 @@ private:
     // Double SR first passes on DLSS SR / FSR (the final pass keeps the members above).
     std::unique_ptr<ngx::DlssSrBackend> firstDlssSrBackend_;
     std::unique_ptr<gfx::FsrSrBackend> firstFsrSrBackend_;
+    std::unique_ptr<gfx::XessSrBackend> xessSrBackend_,firstXessSrBackend_;
     // Index 0 is the optional first pass, index 1 is the final or only pass.
     std::array<std::unique_ptr<NisScaler>, 2> nisSr_;
     std::array<std::unique_ptr<gfx::AmfVideoSrBackend>, 2> amfSr_;

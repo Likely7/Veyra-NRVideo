@@ -72,7 +72,7 @@ struct StageRequest {
 inline bool dualSrRuns(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false,bool amdAdapter=false){
     return s.dualSrEnabled&&videoSrRunsOn(s.videoSrQuality,nvidiaAdapter,amdAdapter)&&
         videoSrRunsOn(s.dualSrQuality,nvidiaAdapter,amdAdapter)&&
-        !(stillImage&&(s.videoSrQuality==kVideoSrFsr||s.dualSrQuality==kVideoSrFsr));
+        !(stillImage&&(lowResolutionMotionSr(s.videoSrQuality)||lowResolutionMotionSr(s.dualSrQuality)));
 }
 inline pipeline::SrPrescale runningSrPrescale(const EnhancementSettings& s,bool nvidiaAdapter,bool stillImage=false,bool amdAdapter=false){
     return dualSrRuns(s,nvidiaAdapter,stillImage,amdAdapter)?s.srPrescale:pipeline::SrPrescale::Off;
@@ -150,7 +150,8 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // (5090 field log 57: 4K->4K VSR cost ~8.7 ms a frame and pushed 60 fps over budget).
     const bool nativeVideoRestore=request.sr&&!request.stillImage&&!request.uncompressedSource&&request.nvidiaAdapter&&
         ngxVideoSr(settings.videoSrQuality);
-    desc.enableSr=(plan.srApplied||nativeVideoRestore)&&videoSrRunsOn(settings.videoSrQuality,request.nvidiaAdapter,request.amdAdapter);
+    desc.enableSr=(plan.srApplied||nativeVideoRestore)&&videoSrRunsOn(settings.videoSrQuality,request.nvidiaAdapter,request.amdAdapter)&&
+        (!request.stillImage||settings.videoSrQuality!=kVideoSrXess);
     desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
     if(!desc.enableNr||!request.nvidiaAdapter||settings.opticalFlowBackend!=OpticalFlowBackend::Nvidia)
         plan.flow=plan.source;

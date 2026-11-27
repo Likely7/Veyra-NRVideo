@@ -110,6 +110,8 @@ static QVariantMap scanEffectCapabilities() {
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     const auto srId = [](uint32_t id) { return "sr" + QString::number(id); };
     const auto shaders = runtime::shaderDirectory();
+    add(srId(engine::kVideoSrXess), H::CrossVendor, exists(data / "intel/experimental/libxess.dll"),
+        QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add(srId(engine::kVideoSrNis), H::CrossVendor, exists(shaders / "NisSdr.dxil") && exists(shaders / "NisHdr.dxil"),
         QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add(srId(engine::kVideoSrAmf10), H::AmdFrc, gfx::AmfVideoSrBackend::available(),
@@ -271,6 +273,7 @@ QVariantList QmlPlayerBridge::srBackendChoices() const {
     for (const auto& entry : std::initializer_list<Entry>{{"0", 0, "DLSS SR"}, {"rtx", 4, tr("RTX 视频超分 · 标准")},
             {"rtx-hb", 16, tr("RTX 视频超分 · 高码率")}, {"rtx-st", 21, tr("RTX 视频超分 · 流媒体")},
             {"5", 5, effectGpu().vendor == 0x1002 ? tr("FSR 3.1 / 4 · 自动兼容") : QString("FSR 3.1")},
+            {QString::number(engine::kVideoSrXess), engine::kVideoSrXess, tr("Intel XeSS 超分 · 实验")},
             {QString::number(engine::kVideoSrNis), engine::kVideoSrNis, "NVIDIA NIS"},
             {QString::number(engine::kVideoSrAmf10), engine::kVideoSrAmf10, "AMD VideoSR 1.0"}}) {
         const auto cap = caps.value("sr" + QString::number(entry.capability)).toMap();

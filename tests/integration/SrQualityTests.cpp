@@ -7,6 +7,7 @@
 #include "veyra/RuntimePaths.h"
 #include "veyra/Log.h"
 #include <DirectXPackedVector.h>
+#include <d3d12sdklayers.h>
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
@@ -24,7 +25,7 @@ extern "C" {
 
 // Matched deterministic frames, actual SDK evaluation and output pixels.
 // Readbacks are restricted to this test; these are not playback timings.
-static int referenceTest(const std::filesystem::path& directory,const std::wstring& path,int seconds,bool moving,bool zeroMotion,int inputHeight,int outputHeight,bool models=false){
+static int referenceTest(const std::filesystem::path& directory,const std::wstring& path,int seconds,bool moving,bool zeroMotion,int inputHeight,int outputHeight,bool models=false,bool xessOnly=false){
     using namespace veyra;
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/L"engine.log").wstring());
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
@@ -33,6 +34,7 @@ static int referenceTest(const std::filesystem::path& directory,const std::wstri
     bool ok=true;
     const std::vector<Case> cases=models
         ?std::vector<Case>{{"dlss-K",0,false,true,0},{"dlss-M",0,false,true,1},{"dlss-L",0,false,true,2}}
+        :xessOnly?std::vector<Case>{{"reference",4,true,false},{"bilinear",4,false,false},{"xess",engine::kVideoSrXess,false,true}}
         :std::vector<Case>{{"reference",4,true,false},{"bilinear",4,false,false},
             {"vsr1",1,false,true},{"vsr4",4,false,true},{"dlss",0,false,true},{"fsr",5,false,true}};
     for(const auto test:cases){
@@ -173,7 +175,7 @@ Frame hdrFrame(const sink::RgbaImage& img){
     }
     return f;
 }
-struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{},first{};bool enabled=false;};
+struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1,srP95Ms=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{},first{};bool enabled=false;};
 Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* frame,bool hdr,const engine::EnhancementSettings& settings,
         bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false){
     engine::StageRequest request;request.width=unsigned(frame->width);request.height=unsigned(frame->height);request.sr=settings.sr;
@@ -196,7 +198,7 @@ Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* f
     if(ok&&readSrInput)ok=read(ctx,ring,graph.diagnosticVideoSrInput(),hdr?D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE:D3D12_RESOURCE_STATE_COMMON,4,r.srInput);
     if(ok&&readFirst)ok=read(ctx,ring,graph.diagnosticFirstSrLinear(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,8,r.firstLinear);
     r.evaluations=graph.metrics().srEvaluateCount;r.enabled=graph.srEnabled();
-    if(!ms.empty()){std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];}
+    if(!ms.empty()){std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];r.srP95Ms=ms[(ms.size()-1)*95/100];}
     r.ok=ok;out={};ring.drainQueue();graph.shutdown();return r;
 }
 engine::EnhancementSettings vsr(unsigned quality,pipeline::SrTarget target){
@@ -392,6 +394,50 @@ std::pair<double,bool> meanLinear(const sink::RgbaImage& img){
 
 // Moving detail with an integer translation at both input and output. Save the
 // actual FSR pixels and compare motion-compensated temporal error against zero.
+int xess(const std::filesystem::path& directory,uint32_t vendor){
+    std::filesystem::create_directories(directory);
+    Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    gfx::DeviceContextDesc device;device.enableDebugLayer=true;device.requiredVendorId=vendor;
+    if(!ctx.initialize(device,status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    gfx::ComPtr<ID3D12InfoQueue> info;
+    ctx.device()->QueryInterface(IID_PPV_ARGS(&info));
+    if(info)info->ClearStoredMessages();
+    const auto source=pattern(1280,720);
+    const auto sdr=sdrFrame(source),hdr=hdrFrame(source);
+    if(!sdr||!hdr)return 2;
+    constexpr auto quality=engine::kVideoSrXess;
+    using pipeline::SrTarget;using pipeline::SrPrescale;
+    auto single=vsr(quality,SrTarget::Qhd);
+    const auto dual=twoPass(quality,SrTarget::Qhd,SrPrescale::P1080,SrTarget::Uhd4K,quality);
+    auto flow=single;flow.srMotion=engine::MotionSource::OpticalFlow;
+    struct Case {const char* name;const AVFrame* frame;bool hdr,dual;engine::EnhancementSettings settings;};
+    const Case cases[]={{"sdr",sdr.get(),false,false,single},{"sdr-flow",sdr.get(),false,false,flow},
+                        {"p010",hdr.get(),true,false,single},{"dual",sdr.get(),false,true,dual}};
+    bool ok=true;
+    const auto expectedMean=meanLinear(source).first;
+    for(const auto& test:cases){
+        const auto result=run(ctx,ring,test.frame,test.hdr,test.settings,false,false,false,6,test.dual);
+        const auto [mean,finite]=meanLinear(result.output);
+        const bool passed=result.ok&&result.enabled&&finite&&result.evaluations==(test.dual?12u:6u)&&
+            result.output.width==(test.dual?3840u:2560u)&&(test.hdr?mean>0:std::abs(mean-expectedMean)<0.05);
+        if(passed&&!test.hdr)ok=sink::saveImage((directory/(std::string(test.name)+".png")).wstring(),result.output,false)&&ok;
+        ok=ok&&passed;
+        std::cout<<"XESS_SR case="<<test.name<<" vendor="<<ctx.adapter().vendorId<<" evaluations="<<result.evaluations
+                 <<" srP50Ms="<<result.srMs<<" srP95Ms="<<result.srP95Ms<<" mean="<<mean<<" passed="<<passed<<std::endl;
+    }
+    unsigned errors=0;
+    if(info)for(UINT64 i=0;i<info->GetNumStoredMessagesAllowedByRetrievalFilter();++i){
+        SIZE_T size=0;info->GetMessage(i,nullptr,&size);std::vector<uint8_t> bytes(size);
+        auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());
+        if(SUCCEEDED(info->GetMessage(i,message,&size))&&message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR){
+            std::cout<<"D3D12_ERROR "<<message->pDescription<<std::endl;++errors;
+        }
+    }
+    std::cout<<"XESS_SR debugErrors="<<errors<<std::endl;
+    return ok&&errors==0?0:1;
+}
+
 int fsrFlow(const std::filesystem::path& directory){
     std::filesystem::create_directories(directory);
     Logger::instance().openFile((directory/L"engine.log").wstring());
@@ -644,6 +690,11 @@ int wmain(int argc,wchar_t** argv){
     if(argc==3&&std::wstring_view(argv[2])==L"dual-capabilities"){const int result=stage::capabilities(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-any"){const int result=stage::any(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"fsr-flow"){const int result=stage::fsrFlow(argv[1]);CoUninitialize();return result;}
+    if(argc==3&&(std::wstring_view(argv[2])==L"xess"||std::wstring_view(argv[2])==L"xess-amd"||std::wstring_view(argv[2])==L"xess-intel")){
+        const auto mode=std::wstring_view(argv[2]);
+        const int result=stage::xess(argv[1],mode==L"xess-amd"?0x1002:mode==L"xess-intel"?0x8086:0);
+        CoUninitialize();return result;
+    }
     if((argc==3||argc==5)&&(std::wstring_view(argv[2])==L"dual-any-hdr"||std::wstring_view(argv[2])==L"dual-any-sdr")){
         const bool hdr=std::wstring_view(argv[2])==L"dual-any-hdr";
         const int result=stage::any(argv[1],hdr,!hdr,argc==5?std::stoi(argv[3]):-1,argc==5?std::stoi(argv[4]):-1);
@@ -654,11 +705,12 @@ int wmain(int argc,wchar_t** argv){
         const int result=stage::image(argv[1],argv[3],argv[4],unsigned(std::stoi(argv[5])),argv[6],argv[7],argv[8],argv[9],unsigned(std::stoi(argv[10])),argc>11?argv[11]:L"video");
         CoUninitialize();return result;
     }
-    if(argc>5&&(std::wstring_view(argv[2])==L"reference"||std::wstring_view(argv[2])==L"models")){
+    if(argc>5&&(std::wstring_view(argv[2])==L"reference"||std::wstring_view(argv[2])==L"models"||std::wstring_view(argv[2])==L"xess-reference")){
         const std::wstring_view mode=argv[5];
         if(mode.starts_with(L"legacy-"))return 2; // withdrawn experiment; no production toggle remains
         const int result=referenceTest(argv[1],argv[3],std::stoi(argv[4]),mode.ends_with(L"moving"),mode.starts_with(L"zero-"),
-            mode.find(L"p720")!=std::wstring_view::npos?720:1080,mode.find(L"qhd")!=std::wstring_view::npos?1440:2160,std::wstring_view(argv[2])==L"models");
+            mode.find(L"p720")!=std::wstring_view::npos?720:1080,mode.find(L"qhd")!=std::wstring_view::npos?1440:2160,
+            std::wstring_view(argv[2])==L"models",std::wstring_view(argv[2])==L"xess-reference");
         CoUninitialize();return result;
     }
     const bool baseline=argc>2&&std::wstring_view(argv[2])==L"baseline";

@@ -3134,6 +3134,19 @@
    "ru": "Intel XeSS · экспериментально"
   },
   {
+   "zh": "Intel XeSS 超分 · 实验",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "Intel XeSS 超解析度 · 實驗",
+   "en": "Intel XeSS Super Resolution · experimental",
+   "ja": "Intel XeSS 超解像 · 実験的",
+   "ko": "Intel XeSS 초해상도 · 실험적",
+   "es": "Superresolución Intel XeSS · experimental",
+   "fr": "Super résolution Intel XeSS · expérimentale",
+   "de": "Intel XeSS Super Resolution · experimentell",
+   "pt-BR": "Super-resolução Intel XeSS · experimental",
+   "ru": "Суперразрешение Intel XeSS · экспериментально"
+  },
+  {
    "zh": "Intel XeSS 原生补帧 · 启用后检测支持的倍率",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "Intel XeSS 原生補幀 · 啟用後檢查支援倍率",
