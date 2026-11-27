@@ -383,7 +383,9 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
             pr.variableRefresh = saved.value(QStringLiteral("vrr")).toBool();
         }
         if (pr.valid()) impl_->engine.requestPresentation(pr);
-        impl_->aspectMode = std::clamp(impl_->prefs.value(QStringLiteral("aspect")).toInt(), 0, 6);
+        impl_->aspectMode = std::clamp(impl_->prefs.value(QStringLiteral("aspect")).toInt(), 0, engine::PreviewView::kAdaptiveWideMode);
+        impl_->adaptivePreservation = std::clamp(impl_->prefInt("adaptivePreservation", 87), 0, 100);
+        impl_->adaptiveZoom = std::clamp(impl_->prefInt("adaptiveZoom", 0), 0, 15);
     }
     impl_->sessionSaveTimer = new QTimer(this);
     impl_->sessionSaveTimer->setSingleShot(true);
@@ -401,11 +403,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     impl_->hdrMemorySaveTimer=new QTimer(this);
     impl_->hdrMemorySaveTimer->setSingleShot(true);impl_->hdrMemorySaveTimer->setInterval(400);
     connect(impl_->hdrMemorySaveTimer,&QTimer::timeout,this,[this]{flushHdrMemory();});
-    impl_->volumeSaveTimer=new QTimer(this);
-    impl_->volumeSaveTimer->setSingleShot(true);impl_->volumeSaveTimer->setInterval(500);
-    connect(impl_->volumeSaveTimer,&QTimer::timeout,this,[this]{
-        if(impl_->savePrefs())veyra::log::info("ui-prefs",std::format("volume={:.3f} saved",impl_->prefs.value(QStringLiteral("volume")).toDouble()));
-        else veyra::log::warn("ui-prefs","volume not saved");
+    impl_->prefsSaveTimer=new QTimer(this);
+    impl_->prefsSaveTimer->setSingleShot(true);impl_->prefsSaveTimer->setInterval(500);
+    connect(impl_->prefsSaveTimer,&QTimer::timeout,this,[this]{
+        if(!impl_->savePrefs())veyra::log::warn("ui-prefs","pending preferences not saved");
     });
     impl_->timer = new QTimer(this);
     connect(impl_->timer, &QTimer::timeout, this, [this] {
@@ -775,8 +776,8 @@ QmlPlayerBridge::~QmlPlayerBridge() {
     flushHdrMemory();
     if (qApp) qApp->removeEventFilter(this);
     if (qApp) qApp->removeNativeEventFilter(&impl_->displayEventFilter);
-    // rememberPosition(true) writes every preference, a pending volume included.
-    if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->stop();
+    // rememberPosition(true) writes every preference, including any pending interactive changes.
+    if (impl_->prefsSaveTimer) impl_->prefsSaveTimer->stop();
     rememberPosition(true);
     if (impl_->sessionSaveTimer) impl_->sessionSaveTimer->stop();
     if (!impl_->persistSession())

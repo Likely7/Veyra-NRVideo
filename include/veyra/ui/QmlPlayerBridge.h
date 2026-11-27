@@ -531,6 +531,8 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool compareBase READ compareBase WRITE setCompareBase NOTIFY compareChanged)
     Q_PROPERTY(double compareSplit READ compareSplit NOTIFY compareChanged)
     Q_PROPERTY(int aspectMode READ aspectMode WRITE setAspectMode NOTIFY compareChanged)
+    Q_PROPERTY(int adaptivePreservation READ adaptivePreservation WRITE setAdaptivePreservation NOTIFY compareChanged)
+    Q_PROPERTY(int adaptiveZoom READ adaptiveZoom WRITE setAdaptiveZoom NOTIFY compareChanged)
     // Measured audio/video skew of a live source (ms); unknown otherwise.
     Q_PROPERTY(double audioSkewMs READ audioSkewMs NOTIFY snapshotChanged)
     Q_PROPERTY(bool audioSkewKnown READ audioSkewKnown NOTIFY snapshotChanged)
@@ -1257,6 +1259,10 @@ public:
     double compareSplit() const;
     int aspectMode() const;
     void setAspectMode(int value);
+    int adaptivePreservation() const;
+    void setAdaptivePreservation(int value);
+    int adaptiveZoom() const;
+    void setAdaptiveZoom(int value);
     double audioSkewMs() const;
     bool audioSkewKnown() const;
     QString exportSizeEstimate() const;

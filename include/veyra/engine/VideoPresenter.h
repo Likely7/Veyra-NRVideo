@@ -166,7 +166,11 @@ private:
     gfx::CommandSlotRing presentationRing_;
     diagnostics::GpuTimer gpuTimer_;
     gfx::PresentSink sink_;
+    bool ensureAdaptivePasses(gfx::D3D12DeviceContext&,pipeline::EnhanceGraph&);
     pipeline::GraphicsPass pass_;
+    Microsoft::WRL::ComPtr<ID3D12PipelineState> adaptiveBlit_;
+    pipeline::ComputePass adaptiveMotionPass_;
+    bool adaptivePassesAttempted_=false;
     pipeline::ComputePass presentMotionPass_;
     std::array<Microsoft::WRL::ComPtr<ID3D12Resource>,2> presentMotion_;
     PreviewView previousXessView_{};

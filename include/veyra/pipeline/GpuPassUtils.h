@@ -359,6 +359,21 @@ struct GraphicsPass {
         if (FAILED(D3D12SerializeVersionedRootSignature(&rd, &sig, &err))) return false;
         if (FAILED(device->CreateRootSignature(0, sig->GetBufferPointer(),
                 sig->GetBufferSize(), IID_PPV_ARGS(&rootSig)))) return false;
+        if (!createPipelineState(device, vs, ps, outputFormat, pso)) return false;
+        D3D12_DESCRIPTOR_HEAP_DESC hd{};
+        hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        hd.NumDescriptors = heapSlots;
+        hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+        if (FAILED(device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&heap)))) return false;
+        increment = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        return true;
+    }
+
+    // Additional shaders may use the same root signature and descriptors.
+    bool createPipelineState(ID3D12Device* device, const std::vector<uint8_t>& vs,
+                             const std::vector<uint8_t>& ps, DXGI_FORMAT outputFormat,
+                             ComPtr<ID3D12PipelineState>& state) const
+    {
         D3D12_GRAPHICS_PIPELINE_STATE_DESC pd{};
         pd.pRootSignature = rootSig.Get();
         pd.VS.pShaderBytecode = vs.data();
@@ -373,14 +388,7 @@ struct GraphicsPass {
         pd.NumRenderTargets = 1;
         pd.RTVFormats[0] = outputFormat;
         pd.SampleDesc.Count = 1;
-        if (FAILED(device->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(&pso)))) return false;
-        D3D12_DESCRIPTOR_HEAP_DESC hd{};
-        hd.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-        hd.NumDescriptors = heapSlots;
-        hd.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-        if (FAILED(device->CreateDescriptorHeap(&hd, IID_PPV_ARGS(&heap)))) return false;
-        increment = device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        return true;
+        return SUCCEEDED(device->CreateGraphicsPipelineState(&pd, IID_PPV_ARGS(state.ReleaseAndGetAddressOf())));
     }
 };
 

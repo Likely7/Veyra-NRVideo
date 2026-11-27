@@ -47,9 +47,44 @@ ColumnLayout {
             hint: veyra.aspectMode === 1 ? qsTr("原始 = 一个输出像素对一个屏幕像素") : veyra.aspectMode === 2 ? qsTr("填满窗口，超出部分裁掉") : ""
             VSelect {
                 objectName: "display-aspect"
-                options: [{ id: "0", label: qsTr("适应") }, { id: "1", label: qsTr("原始像素") }, { id: "2", label: qsTr("填充裁切") }, { id: "3", label: qsTr("拉伸铺满") }, { id: "4", label: "16:9" }, { id: "5", label: "4:3" }, { id: "6", label: "21:9" }]
-                value: options[veyra.aspectMode].label
+                options: [{ id: "0", label: qsTr("适应") }, { id: "1", label: qsTr("原始像素") }, { id: "2", label: qsTr("填充裁切") }, { id: "3", label: qsTr("拉伸铺满") }, { id: "4", label: "16:9" }, { id: "5", label: "4:3" }, { id: "6", label: "21:9" }, { id: "7", label: qsTr("自适应超宽屏") }]
+                value: options[veyra.aspectMode]?.label ?? options[0].label
                 onPicked: id => veyra.aspectMode = Number(id)
+            }
+        }
+        VRow {
+            visible: veyra.aspectMode === 7
+            label: qsTr("中心保形")
+            hint: qsTr("窗口比片源宽时，让边缘承担更多横向拉伸。")
+            value: veyra.adaptivePreservation + "%"
+            VSlider {
+                objectName: "adaptive-preservation"
+                implicitWidth: 120
+                valueFromModel: true
+                resettable: true
+                defaultValue: 87
+                from: 0
+                to: 100
+                stepSize: 1
+                value: veyra.adaptivePreservation
+                onMoved: value => veyra.adaptivePreservation = Math.round(value)
+            }
+        }
+        VRow {
+            visible: veyra.aspectMode === 7
+            label: qsTr("超宽屏缩放")
+            value: veyra.adaptiveZoom + "%"
+            VSlider {
+                objectName: "adaptive-zoom"
+                implicitWidth: 120
+                valueFromModel: true
+                resettable: true
+                defaultValue: 0
+                from: 0
+                to: 15
+                stepSize: 1
+                value: veyra.adaptiveZoom
+                onMoved: value => veyra.adaptiveZoom = Math.round(value)
             }
         }
         VRow {

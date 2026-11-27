@@ -1326,7 +1326,7 @@ void QmlPlayerBridge::setVolume(double value) {
     const QString key = QStringLiteral("volume");
     if (impl_->prefs.contains(key) && impl_->prefs.value(key).toDouble() == volume) return;
     impl_->prefs[key] = volume;
-    if (impl_->volumeSaveTimer) impl_->volumeSaveTimer->start();
+    if (impl_->prefsSaveTimer) impl_->prefsSaveTimer->start();
 }
 bool QmlPlayerBridge::muted() const { return impl_->snapshot.muted; }
 void QmlPlayerBridge::setMuted(bool value) {
@@ -1334,7 +1334,7 @@ void QmlPlayerBridge::setMuted(bool value) {
     impl_->engine.setVolume(impl_->snapshot.volume, value);
     impl_->snapshot.muted=value;
     impl_->prefs[QStringLiteral("audioMuted")]=value;
-    if(impl_->volumeSaveTimer)impl_->volumeSaveTimer->start();
+    if(impl_->prefsSaveTimer)impl_->prefsSaveTimer->start();
     emit snapshotChanged();
 }
 double QmlPlayerBridge::playbackSpeed() const { return impl_->snapshot.playbackSpeed; }

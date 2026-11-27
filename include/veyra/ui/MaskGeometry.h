@@ -22,10 +22,8 @@ inline engine::ProtectionRect moved(engine::ProtectionRect r,float du,float dv) 
 // Coded source coordinates -> oriented, zoomed host pixels, inverse of sourcePoint.
 inline std::array<float,4> hostBounds(const engine::ProtectionRect& r,const engine::PreviewView& view,
                                      float cw,float ch,float iw,float ih) {
-    const auto [rw,rh]=view.renderedSize(cw,ch,iw,ih);
-    const auto a=view.displayUv(r.left,r.top),b=view.displayUv(r.right,r.bottom);
-    const float x0=cw*.5f+(a.first-view.centerX)*rw,x1=cw*.5f+(b.first-view.centerX)*rw;
-    const float y0=ch*.5f+(a.second-view.centerY)*rh,y1=ch*.5f+(b.second-view.centerY)*rh;
+    const auto [x0,y0]=view.displayPoint(r.left,r.top,cw,ch,iw,ih);
+    const auto [x1,y1]=view.displayPoint(r.right,r.bottom,cw,ch,iw,ih);
     return {std::min(x0,x1),std::min(y0,y1),std::max(x0,x1),std::max(y0,y1)};
 }
 }

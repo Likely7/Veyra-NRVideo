@@ -5,6 +5,9 @@
 
 #include "HdrColor.hlsli"
 #include "PresentationRotation.hlsli"
+#ifdef VEYRA_ADAPTIVE_WIDTH
+#include "PresentationAdaptiveWidth.hlsli"
+#endif
 Texture2D<float4> sourceTex : register(t0);
 
 cbuffer PresentBlitConstants : register(b0)
@@ -254,6 +257,9 @@ float4 psMain(VSOut input) : SV_Target
         outside=any(uv<0)||any(uv>1);
     }
     uint flags=uint(srcDims.z+0.5);
+#ifdef VEYRA_ADAPTIVE_WIDTH
+    uv.x=PresentationRemapWidth(uv.x,curve1.z);
+#endif
     uv=PresentationSourceUv(uv,(flags>>6)&3);
     // Texel position and its screen derivatives, taken before the letterbox exit
     // so every pixel of a quad still has them (derivatives in divergent flow are

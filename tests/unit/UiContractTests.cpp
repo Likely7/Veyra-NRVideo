@@ -312,6 +312,26 @@ int wmain(int argc,wchar_t** argv){try{
         v.mode=0;v.rotationDegrees=-90;const auto opposite=v.sourceUv(.25f,.25f);require(opposite.first==.75f&&opposite.second==.25f,"opposite display matrix rotates the other way");
         v.rotationDegrees=180;const auto upsideDown=v.sourceUv(.25f,.25f);require(upsideDown.first==.75f&&upsideDown.second==.75f,"upside-down display matrix maps both axes");
         v.rotationDegrees=90;v.displayAspect=.75;require(std::abs(v.aspect(64,32)-.75)<.00001,"already-oriented SAR is not inverted twice");}
+    {
+        engine::PreviewView v;
+        v.mode=engine::PreviewView::kAdaptiveWideMode;
+        require(v.renderedSize(3440,1440,1920,1080)==std::pair{3440.0f,1440.0f},"adaptive view fills a wider display");
+        require(v.renderedSize(1920,1440,1920,1080)==std::pair{1920.0f,1080.0f},"adaptive view contains on a narrower display");
+        const float ratio=v.adaptiveWidthRatio(3440,1440,1920,1080);
+        require(ratio>1.0f&&v.remapWidth(.5f,ratio)==.5f&&std::abs(v.remapWidth(1.0f,ratio)-1.0f)<.00001f,
+                "adaptive width preserves center and endpoints");
+        require(v.remapWidth(.2f,ratio)<.2f&&v.remapWidth(-.1f,ratio)<0.0f,"adaptive width stretches edges without hiding outside coordinates");
+        v.adaptiveZoom=8;
+        for(int angle:{0,90,180,270}){
+            v.rotationDegrees=angle;
+            v.zoom=1;v.centerX=v.centerY=.5f;
+            const auto source=v.sourcePoint(800,640,3440,1440,1920,1080);
+            v.wheel(1,800,640,3440,1440,1920,1080);
+            const auto point=v.displayPoint(source.first,source.second,3440,1440,1920,1080);
+            require(std::abs(point.first-800)<.005f&&std::abs(point.second-640)<.005f,
+                    "adaptive display, mouse and mask transform share the same anchor after zoom and rotation");
+        }
+    }
     ui::UiSessionState state;require(!state.enhanced&&!state.configured.nr&&!state.configured.sr&&state.configured.multiplier==1,"fresh startup effects disabled");state.configured.forceSdrPreview=true;state.enhanced=true;state.configured.nr=true;state.configured.multiplier=4;state.configured.sr=true;state.configured.model.intensity=.37f;state.configured.residual.color=1.4f;
     auto before=state.effective();require(state.mode==ui::Mode::Daily,"startup Daily");state.mode=ui::Mode::Professional;require(state.effective()==before,"mode cannot alter settings");state.enhanced=false;auto bypass=state.effective();require(!bypass.nr&&!bypass.sr&&bypass.multiplier==1,"true full bypass");require(bypass.forceSdrPreview,"master bypass retains SDR display choice");state.enhanced=true;require(state.effective()==before,"restore all settings");
     for(bool input:{false,true})for(bool display:{false,true})for(bool force:{false,true}){engine::EnhancementSettings s;s.forceSdrPreview=force;require(s.useHdrPreview(input,display)==(input&&display&&!force),"HDR output policy");}

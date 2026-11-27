@@ -55,6 +55,30 @@ bool createPresentationPasses(gfx::D3D12DeviceContext& ctx,pipeline::EnhanceGrap
 }
 }
 
+bool VideoPresenter::ensureAdaptivePasses(gfx::D3D12DeviceContext& ctx,pipeline::EnhanceGraph& graph){
+    if(adaptivePassesAttempted_)return bool(adaptiveBlit_);
+    adaptivePassesAttempted_=true;
+    std::vector<uint8_t> vs,ps,cs;
+    if(!pipeline::loadShaderBytes("PresentBlit_vs.dxil",vs)||
+       !pipeline::loadShaderBytes("PresentAdaptive_ps.dxil",ps)||
+       !pass_.createPipelineState(ctx.device(),vs,ps,graph.outputFormat(),adaptiveBlit_)){
+        log::warn("present","adaptive ultrawide shader unavailable");
+        return false;
+    }
+    if(!sink_.xess())return true;
+    auto& motion=adaptiveMotionPass_;
+    if(!pipeline::loadShaderBytes("PresentAdaptiveMotion.dxil",cs)||!motion.create(ctx.device(),cs,4,1,1,20)){
+        adaptiveBlit_.Reset();
+        log::warn("present","adaptive ultrawide XeSS motion shader unavailable");
+        return false;
+    }
+    for(unsigned i=0;i<2;++i){
+        pipeline::makeSrv(ctx.device(),graph.presentMotion(i),DXGI_FORMAT_R16G16_FLOAT,pipeline::cpuHandleOf(motion,i*2));
+        pipeline::makeUav(ctx.device(),presentMotion_[i].Get(),DXGI_FORMAT_R16G16_FLOAT,pipeline::cpuHandleOf(motion,i*2+1));
+    }
+    return true;
+}
+
 bool VideoPresenter::prepareOpening(gfx::D3D12DeviceContext& ctx,pipeline::EnhanceGraph& graph,PreparedOpening& opening){
     if(graph.xessEnabled()){
         opening.xess=std::make_unique<gfx::XessPresenter>();
@@ -138,6 +162,7 @@ bool VideoPresenter::open(gfx::D3D12DeviceContext& ctx,HWND window,pipeline::Enh
     if(!prepared&&!createPresentationPasses(ctx,graph,direct,sink_.xess()!=nullptr))return false;
     auto& opening=prepared?*prepared:direct;
     pass_=std::move(opening.blit);
+    adaptiveBlit_.Reset();adaptiveMotionPass_={};adaptivePassesAttempted_=false;
     if(sink_.xess()){
         presentMotionPass_=std::move(opening.motion);
         presentMotion_=std::move(opening.motionTextures);
@@ -264,6 +289,9 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     // and rebuilding provider resources at monitor/DPI boundaries.
     const bool windowChanging=GetPropW(window_,L"Veyra.InteractiveMove")||GetPropW(window_,L"Veyra.DpiTransition");
     view=filmPixelAlignedView(window_,rc.right,rc.bottom,graph.workWidth(),graph.workHeight(),view);
+    float widthRatio=view.adaptiveWidthRatio(float(rc.right),float(rc.bottom),float(graph.workWidth()),float(graph.workHeight()));
+    if(widthRatio!=1.0f&&!ensureAdaptivePasses(ctx,graph)){view.mode=0;widthRatio=1.0f;}
+    auto* blitState=widthRatio!=1.0f?adaptiveBlit_.Get():pass_.pso.Get();
     auto hdrBaseline=graph.hdrCurve();
     const auto& metadataBaseline=graph.hdrMetadata();
     const bool needsDisplayPeak=hdrBaseline.enabled||(metadataBaseline.enabled&&
@@ -410,7 +438,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
     const auto [renderW,renderH]=view.renderedSize(float(rc.right),float(rc.bottom),float(graph.workWidth()),float(graph.workHeight()));
     D3D12_VIEWPORT viewport{0,0,float(sink_.bufferWidth()),float(sink_.bufferHeight()),0,1};
     D3D12_RECT rect{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};list->RSSetViewports(1,&viewport);list->RSSetScissorRects(1,&rect);
-    ID3D12DescriptorHeap* heaps[]={pass_.heap.Get()};list->SetDescriptorHeaps(1,heaps);list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
+    ID3D12DescriptorHeap* heaps[]={pass_.heap.Get()};list->SetDescriptorHeaps(1,heaps);list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(blitState);
     const float rotationFlags=float(view.quarterTurns()<<6);
     const float samplingFlags=(graph.highQualityPresentation()?2.0f:0.0f)+rotationFlags;
     // PresentBlit uses a contain mapping. Cancel its fit so these dimensions
@@ -455,7 +483,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         dims[12]=std::max(1.0f,peak-start)*float(effective.rollOffPercent)/100.0f;
         dims[13]=float(effective.peakCapNits);
     }
-    dims[14]=0.0f;dims[15]=0.0f;
+    dims[14]=widthRatio;dims[15]=0.0f;
     if(traceDovi){
         // Gated trace: proves the per-frame curve reached the blit constants.
         // Throttled like the source-side dovi-probe so a long file stays small.
@@ -502,7 +530,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         state.transition(list,probeStats_.Get(),D3D12_RESOURCE_STATE_COMMON);
         state.transition(list,source,D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         // Restore the present state for comparisons, subtitles and provider work.
-        list->SetDescriptorHeaps(1,heaps);list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
+        list->SetDescriptorHeaps(1,heaps);list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(blitState);
         list->SetGraphicsRoot32BitConstants(0,16,dims,0);
         list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+size_t(slot+(generated?2:0))*pass_.increment});
         probeCurve_=hdrCurve;probeIdentity_=identity;probeIssued=true;
@@ -599,12 +627,16 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
             states.transition(list,mapped,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto previous=reset?view:previousXessView_;
             const auto [prevRenderW,prevRenderH]=previous.renderedSize(float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),float(graph.workWidth()),float(graph.workHeight()));
-            const float mapping[16]={float(graph.workWidth()),float(graph.workHeight()),float(rc.right),float(rc.bottom),
+            const float prevWidthRatio=previous.adaptiveWidthRatio(float(reset?rc.right:previousXessWidth_),
+                float(reset?rc.bottom:previousXessHeight_),float(graph.workWidth()),float(graph.workHeight()));
+            const bool mappedWidth=adaptiveBlit_&&(widthRatio!=1.0f||prevWidthRatio!=1.0f);
+            const float mapping[20]={float(graph.workWidth()),float(graph.workHeight()),float(rc.right),float(rc.bottom),
                 renderW,view.centerX,view.centerY,reset?1.0f:0.0f,
                 renderH,previous.centerX,previous.centerY,float(view.quarterTurns()),
-                float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),prevRenderW,prevRenderH};
-            const auto heap=presentMotionPass_.heap->GetGPUDescriptorHandleForHeapStart().ptr;
-            presentMotionPass_.bind(list,mapping,heap+size_t(slot*2)*presentMotionPass_.increment,heap+size_t(slot*2+1)*presentMotionPass_.increment);
+                float(reset?rc.right:previousXessWidth_),float(reset?rc.bottom:previousXessHeight_),prevRenderW,prevRenderH,
+                widthRatio,1.0f/prevWidthRatio,0,0};
+            const auto& motionPass=mappedWidth?adaptiveMotionPass_:presentMotionPass_;
+            motionPass.bind(list,mapping,pipeline::gpuHandleOf(motionPass,slot*2).ptr,pipeline::gpuHandleOf(motionPass,slot*2+1).ptr);
             list->Dispatch((graph.workWidth()+7)/8,(graph.workHeight()+7)/8,1);
             states.transition(list,mapped,D3D12_RESOURCE_STATE_COMMON);
             states.transition(list,motion,D3D12_RESOURCE_STATE_COMMON);
@@ -628,7 +660,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
                 const D3D12_RECT all{0,0,LONG(sink_.bufferWidth()),LONG(sink_.bufferHeight())};
                 list->RSSetScissorRects(1,&all);
                 list->SetDescriptorHeaps(1,heaps);
-                list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
+                list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(blitState);
                 auto uiDims=std::to_array(dims);uiDims[2]=mainFlags+256.f;
                 list->SetGraphicsRoot32BitConstants(0,16,uiDims.data(),0);
                 list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+
@@ -647,7 +679,7 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
                 list->OMSetRenderTargets(1,&hudlessRtv,FALSE,nullptr);
                 list->RSSetScissorRects(1,&all);
                 list->SetDescriptorHeaps(1,heaps);
-                list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(pass_.pso.Get());
+                list->SetGraphicsRootSignature(pass_.rootSig.Get());list->SetPipelineState(blitState);
                 list->SetGraphicsRoot32BitConstants(0,16,dims,0);
                 list->SetGraphicsRootDescriptorTable(1,{pass_.heap->GetGPUDescriptorHandleForHeapStart().ptr+
                     size_t(pipeline::kOutputPoolSlots+6+slot)*pass_.increment});
@@ -787,6 +819,7 @@ void VideoPresenter::close(){
     if(presentationRing_.initialized())presentationRing_.drainQueue();
     hasPresented_=false;gpuTimer_.close();compositeTarget_.Reset();exclusionUiTarget_.Reset();exclusionHudlessTarget_.Reset();exclusionUiEnabled_=false;copyBeforePresent_=copyEligible_=false;rtvs_.Reset();
     probeStats_.Reset();probeReadback_.Reset();probeCpuViews_.Reset();probePass_={};probePending_=false;probeFailed_=false;probeNext_={};probeCurve_={};probeIdentity_={};liveCoverage_={};pass_={};sink_.shutdown();
+    adaptiveBlit_.Reset();adaptiveMotionPass_={};adaptivePassesAttempted_=false;
     presentMotionPass_={};presentMotion_={};previousXessWidth_=previousXessHeight_=0;
     presentationRing_.shutdown();presentationFence_.Reset();presentationQueue_.Reset();
     if(presentationEvent_){CloseHandle(presentationEvent_);presentationEvent_=nullptr;}

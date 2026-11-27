@@ -108,6 +108,26 @@ function(veyra_add_graphics_shader_pair target_name shader_name)
   add_custom_target(${target_name} DEPENDS "${vs_out}" "${ps_out}")
 endfunction()
 
+# Compiles an optional pixel-shader variant. Its vertex shader and root
+# signature are reused from the standard graphics pass.
+function(veyra_add_pixel_shader_variant target_name shader_name output_name define)
+  veyra_find_dxc(DXC_EXE)
+  veyra_shader_includes(SHADER_INCLUDES)
+  set(source "${CMAKE_CURRENT_SOURCE_DIR}/shaders/${shader_name}.hlsl")
+  set(output "${CMAKE_CURRENT_BINARY_DIR}/shaders/${output_name}.dxil")
+  set(config_flags -O3 -Qstrip_debug -Qstrip_reflect)
+  if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(config_flags -Od -Zi -Qembed_debug)
+  endif()
+  add_custom_command(
+    OUTPUT "${output}"
+    COMMAND "${DXC_EXE}" -T ps_6_0 -E psMain ${config_flags} "-D${define}" -Fo "${output}" "${source}"
+    DEPENDS "${source}" ${SHADER_INCLUDES}
+    COMMENT "dxc ${shader_name}.hlsl -> ${output_name}.dxil (${CMAKE_BUILD_TYPE})"
+    VERBATIM)
+  add_custom_target(${target_name} DEPENDS "${output}")
+endfunction()
+
 # NVIDIA Image Scaling. FP32 covers DX12 hardware without native FP16.
 function(veyra_add_nis_shaders target)
   veyra_find_dxc(DXC_EXE)

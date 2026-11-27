@@ -330,12 +330,40 @@ void QmlPlayerBridge::setCompareSplitAt(double fx) {
 }
 int QmlPlayerBridge::aspectMode() const { return impl_->screenFillActive ? 2 : impl_->aspectMode; }
 void QmlPlayerBridge::setAspectMode(int value) {
-    if (value < 0 || value > 6 || (impl_->aspectMode == value && !impl_->screenFillActive)) return;
+    if (value < 0 || value > engine::PreviewView::kAdaptiveWideMode || (impl_->aspectMode == value && !impl_->screenFillActive)) return;
     impl_->aspectMode = value;
     impl_->screenFillActive = false;
     impl_->prefs[QStringLiteral("aspect")] = value;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "aspect mode not saved");
     applyAspect(true);
+    emit compareChanged();
+}
+int QmlPlayerBridge::adaptivePreservation() const { return impl_->adaptivePreservation; }
+void QmlPlayerBridge::setAdaptivePreservation(int value) {
+    auto& i = *impl_;
+    value = std::clamp(value, 0, 100);
+    if (i.adaptivePreservation == value) return;
+    i.adaptivePreservation = value;
+    i.prefs[QStringLiteral("adaptivePreservation")] = value;
+    if (auto view = i.engine.previewView(); view.mode == engine::PreviewView::kAdaptiveWideMode) {
+        view.adaptivePreservation = value;
+        i.engine.previewView(view);
+    }
+    i.prefsSaveTimer->start();
+    emit compareChanged();
+}
+int QmlPlayerBridge::adaptiveZoom() const { return impl_->adaptiveZoom; }
+void QmlPlayerBridge::setAdaptiveZoom(int value) {
+    auto& i = *impl_;
+    value = std::clamp(value, 0, 15);
+    if (i.adaptiveZoom == value) return;
+    i.adaptiveZoom = value;
+    i.prefs[QStringLiteral("adaptiveZoom")] = value;
+    if (auto view = i.engine.previewView(); view.mode == engine::PreviewView::kAdaptiveWideMode) {
+        view.adaptiveZoom = value;
+        i.engine.previewView(view);
+    }
+    i.prefsSaveTimer->start();
     emit compareChanged();
 }
 void QmlPlayerBridge::applyAspect(bool force) {
@@ -350,6 +378,10 @@ void QmlPlayerBridge::applyAspect(bool force) {
     i.screenFitClient = client; i.screenFitImage = image; i.aspectApplied = mode; i.screenFitAspect = dar;
     auto view=force||i.screenCropPreview?engine::PreviewView{}:i.engine.previewView();
     view.mode=mode;
+    if(mode==engine::PreviewView::kAdaptiveWideMode){
+        view.adaptivePreservation=i.adaptivePreservation;
+        view.adaptiveZoom=i.adaptiveZoom;
+    }
     view.displayAspect=dar>0&&image.height()>0&&std::abs(dar-double(image.width())/image.height())>.001?dar:0;
     i.engine.previewView(view);
     veyra::log::info("ui-aspect", std::format("mode={} zoom={:.3f} dar={:.4f} client={}x{} image={}x{}",mode,view.zoom,dar,

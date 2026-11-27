@@ -274,7 +274,7 @@ struct QmlPlayerBridge::Impl {
     engine::ChainSession savedSession;
     QTimer* sessionSaveTimer = nullptr;
     // 音量 is a shell preference (2026-11-08); a drag is written once it settles.
-    QTimer* volumeSaveTimer = nullptr;
+    QTimer* prefsSaveTimer = nullptr;
     int selectedNr=-1;
     int nrIndex() const {
         if(selectedNr>=0&&uint32_t(selectedNr)<chain.nodeCount&&
@@ -665,6 +665,7 @@ struct QmlPlayerBridge::Impl {
     bool compareBase = false;
     double compareSplit = 0.5;
     int aspectMode = 0, aspectApplied = 0;
+    int adaptivePreservation = 87, adaptiveZoom = 0;
     uint64_t aspectSession = 0;
     std::jthread gpuSampler;                 // joined before gpuUtil goes away
     std::filesystem::path prefsFile() const { return dataDir / L"qml-preferences.v1.json"; }

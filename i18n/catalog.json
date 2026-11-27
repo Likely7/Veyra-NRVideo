@@ -40280,6 +40280,58 @@
    "ru": "График программного обеспечения: лучшая совместимость, отсутствие видеопамяти, отсутствие конкуренции с видео для GPU; некоторые тени и размытия упрощены."
   },
   {
+   "zh": "自适应超宽屏",
+   "src": "qml/ProDisplayPanel.qml",
+   "zh-TW": "自適應超寬螢幕",
+   "en": "Adaptive ultrawide",
+   "ja": "適応型ウルトラワイド",
+   "ko": "적응형 울트라와이드",
+   "es": "Ultrapanorámico adaptativo",
+   "fr": "Ultra-large adaptatif",
+   "de": "Adaptives Ultrawide",
+   "pt-BR": "Ultrawide adaptativo",
+   "ru": "Адаптивный сверхширокий режим"
+  },
+  {
+   "zh": "中心保形",
+   "src": "qml/ProDisplayPanel.qml",
+   "zh-TW": "中心保形",
+   "en": "Center shape preservation",
+   "ja": "中央の形状を保持",
+   "ko": "중앙 형태 유지",
+   "es": "Conservar la forma central",
+   "fr": "Préserver la forme au centre",
+   "de": "Form in der Mitte erhalten",
+   "pt-BR": "Preservar forma no centro",
+   "ru": "Сохранение пропорций в центре"
+  },
+  {
+   "zh": "窗口比片源宽时，让边缘承担更多横向拉伸。",
+   "src": "qml/ProDisplayPanel.qml",
+   "zh-TW": "視窗比片源寬時，將更多橫向拉伸分配到邊緣。",
+   "en": "When the window is wider than the source, stretch the edges more than the center.",
+   "ja": "ウィンドウが映像より横長の場合、中央よりも端を大きく伸ばします。",
+   "ko": "창이 원본보다 가로로 넓으면 중앙보다 가장자리를 더 늘립니다.",
+   "es": "Si la ventana es más ancha que la fuente, se estiran más los bordes que el centro.",
+   "fr": "Sur une fenêtre plus large que la source, les bords sont davantage étirés que le centre.",
+   "de": "Ist das Fenster breiter als die Quelle, werden die Ränder stärker gedehnt als die Mitte.",
+   "pt-BR": "Quando a janela é mais larga que a fonte, as bordas são esticadas mais do que o centro.",
+   "ru": "Если окно шире источника, края растягиваются сильнее центра."
+  },
+  {
+   "zh": "超宽屏缩放",
+   "src": "qml/ProDisplayPanel.qml",
+   "zh-TW": "超寬螢幕縮放",
+   "en": "Ultrawide zoom",
+   "ja": "ウルトラワイドのズーム",
+   "ko": "울트라와이드 확대",
+   "es": "Zoom ultrapanorámico",
+   "fr": "Zoom ultra-large",
+   "de": "Ultrawide-Zoom",
+   "pt-BR": "Zoom ultrawide",
+   "ru": "Масштаб сверхширокого режима"
+  },
+  {
    "zh": "串流分辨率",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "串流解析度",
