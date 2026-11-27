@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-26 GitHub 串流、截图、AMD 和音频修复
+
+- 在首批提交 `5d6f900d` 上接入 #287 Xbox 原生按键修正、#308 MPEG-TS 回零、#307 HTTP 内嵌字幕及 #372 采样率表。串流和音频回归共 16 项通过。MPEG-TS 文件与 HTTP 的前后两轮逐帧 PTS、亮度哈希一致。真实播放器的两个 Matroska 都显示两条字幕，扩展名为 .mkv 的 MP4 跳过扫描。三次本机 HTTP 播放合计提交 512 帧，均无缓冲停顿或重连。 [串流和音频证据](<E:/项目/Veyra/reports/codex-github-fixes-20261126/STREAM-FOLLOWUP.md>)
+- #332 在自动配置时优先匹配同一 Elgato 设备实例的 DirectShow 音源，保留明确指定的端点和关闭音频选项。9 种设备身份组合通过，监听关时录制与回放 PCM 峰值均为 0.25，时间戳连续。已保存为手动关闭的旧配置可在采集页重新选自动。实体 Elgato 仍需复测。
+- #313 只对要截图的原帧记录一次读回，使用同帧的 GPU 栅栏，PNG/JXR 编码移到单个后台任务。4K30 SDR 加 VFG 的截图最长呈现间隔从 285–299 ms 降至 18.5–18.6 ms。4K60 PQ 加 VFG 从 1,335–1,499 ms 降至 10.1–10.2 ms。4K60 PQ 的两秒即时回放由 73–94 帧恢复至 240–241 帧，两轮丢帧计数从 49–58 降为 0。保存耗时仍随图像和磁盘变化。 [SDR/PQ 加 VFG](<E:/项目/Veyra/logs/codex-github-fixes-20261126/screenshot/ab-vfg-results.json>) · [SDR 原画](<E:/项目/Veyra/logs/codex-github-fixes-20261126/screenshot/ab-results.json>)
+- #379 释放 AMD FSR 图上下文时保留已加载的共享模块，RX 7000 异步建立 NR 时保持原画并支持取消。AMD Radeon 核显的八轮 SR/FG 开关、窗口大小变化、关闭和重开均通过，共 304 张有效生成帧，D3D12 调试错误为 0。RX 7000 异步冷启动用长耗时夹具验证 67 项，实际 RDNA3 的推理和缓存仍需同硬件验证。 [FSR 实测](<E:/项目/Veyra/tests/github-amd-recovery-20261126/fsr-amd-delta.log>) · [长耗时夹具](<E:/项目/Veyra/tests/github-amd-recovery-20261126/rdna3-contract.log>)
+- #314 每个文件会话只解析一次 HDR 旁文件的身份。#312 在专业模式打开现有播放列表，快捷键可重绑，阻止与全屏锁定争抢。原生 Windows 播放列表 45 项通过，Qt Quick 总集 270 项通过、1 项既有可选项跳过。 [原生窗口](<E:/项目/Veyra/logs/codex-github-fixes-20261126/playlist/20261126-224420-native-console.log>) · [整体验收](<E:/项目/Veyra/reports/codex-github-fixes-20261126/RESULTS.md>)
+
 ## 2026-11-26 GitHub 首批构建、自动去重和采集色度修复
 
 按 [PR 审查方案](<E:/项目/Veyra/reports/codex-github-review-20261126/REVIEW.md>)，从本地 2.2.2 主线 `9d7e1e44` 验证 #305、#334、#371、#306、#309、#304、#346、#349 与 #310。预设应用保留显式关闭的补帧节点，也保留旧预设缺节点和选项缺省时的行为。
