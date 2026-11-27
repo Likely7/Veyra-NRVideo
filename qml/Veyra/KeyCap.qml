@@ -13,6 +13,8 @@ Item {
     property bool interactive: false
     property string accessibleText: text
     signal clicked()
+    readonly property bool softwareRendering: (typeof vySoftwareUi !== "undefined" && vySoftwareUi)
+        || GraphicsInfo.api === GraphicsInfo.Software
     readonly property int capHeight: size === "s" ? 18 : 24
     readonly property var parts: {
         if (visualState === "recording" || kind !== "auto" && kind !== "combo")
@@ -105,16 +107,16 @@ Item {
                 height: key.capHeight
                 Rectangle {
                     anchors.fill: parent
-                    visible: !piece.separator && !piece.empty
+                    visible: !piece.separator && (!piece.empty || key.softwareRendering)
                     radius: 5
-                    color: Theme.card3
+                    color: piece.empty ? "transparent" : Theme.card3
                     border.color: key.visualState === "recording" || key.activeFocus || hover.hovered ? Theme.accent
-                        : key.visualState === "conflict" ? Theme.warn : Theme.stroke2
+                        : key.visualState === "conflict" ? Theme.warn : piece.empty ? Theme.t3 : Theme.stroke2
                     border.width: key.visualState === "recording" || key.visualState === "conflict" || key.activeFocus ? 2 : 1
                 }
                 Shape {
                     anchors.fill: parent
-                    visible: piece.empty
+                    visible: piece.empty && !key.softwareRendering
                     ShapePath {
                         strokeColor: key.activeFocus || hover.hovered ? Theme.accent : Theme.t3
                         strokeWidth: 1

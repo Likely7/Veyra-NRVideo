@@ -216,9 +216,17 @@ Item {
             const panel = owner.controllerPanel
             panel.open(options)
             tryCompare(panel, "visible", true)
-            tryCompare(panel, "reveal", 1)
+            checkDock(owner, panel.dockWidth)
             verify(panel.content)
             return panel
+        }
+
+        function checkDock(owner, width) {
+            const panel = owner.controllerPanel
+            tryCompare(panel, "width", width)
+            tryCompare(panel, "height", owner.height)
+            tryCompare(panel, "x", owner.x + owner.width - width)
+            tryCompare(panel, "y", owner.y)
         }
 
         function find(panel, name) {
@@ -252,9 +260,7 @@ Item {
             const panel = owner.controllerPanel
             owner.mockBridge.setPreference("controllerPanelWidth", data.width)
             open(owner, {platform: "ps5", page: "connect"})
-            compare(panel.width, data.width)
-            compare(panel.x, owner.x + owner.width - data.width)
-            compare(panel.height, owner.height)
+            checkDock(owner, data.width)
             compare(panel.rightInset, data.width)
             compare(panel.overlay, false)
 
@@ -263,14 +269,47 @@ Item {
             compare(panel.rightInset, 0)
             click(panel, "controller-panel-collapse")
             compare(panel.folded, true)
-            compare(panel.width, 40)
+            checkDock(owner, 40)
+            owner.x += 31
+            owner.y += 18
+            checkDock(owner, 40)
             click(panel, "controller-panel-expand")
             compare(panel.folded, false)
-            compare(panel.width, data.width)
+            checkDock(owner, data.width)
             owner.width = 1240
+            checkDock(owner, data.width)
             tryCompare(panel, "rightInset", data.width)
             panel.dismiss()
+            tryCompare(panel, "visible", false)
             tryCompare(panel, "rightInset", 0)
+        }
+
+        function test_dockFollowsOwnerAcrossReopen() {
+            const owner = createPlayer()
+            const panel = open(owner, {platform: "ps5", page: "connect"})
+            owner.x += 84
+            owner.y += 57
+            owner.width = 1260
+            owner.height = 705
+            owner.mockBridge.setPreference("controllerPanelWidth", 500)
+            checkDock(owner, 500)
+            compare(panel.rightInset, 500)
+            owner.hide()
+            tryCompare(panel, "visible", false)
+            compare(panel.rightInset, 0)
+
+            owner.x += 53
+            owner.y += 21
+            owner.width = 1020
+            owner.height = 665
+            owner.show()
+            tryCompare(panel, "visible", true)
+            checkDock(owner, 500)
+            panel.dismiss()
+            tryCompare(panel, "visible", false)
+            open(owner, {page: "connect"})
+            checkDock(owner, 500)
+            compare(panel.rightInset, 500)
         }
 
         function test_methodAndBindingSlots() {
@@ -327,30 +366,95 @@ Item {
             verify(!find(panel, "controller-panel-step-feel").enabled)
         }
 
-        function test_diagramAndAutomaticList() {
+        function test_diagramTargets_data() {
+            return [
+                {tag: "PS5 380", width: 380, xbox: false},
+                {tag: "Xbox 380", width: 380, xbox: true},
+                {tag: "PS5 520", width: 520, xbox: false},
+                {tag: "Xbox 520", width: 520, xbox: true}
+            ]
+        }
+
+        function test_diagramTargets(data) {
             const owner = createPlayer()
-            owner.mockBridge.setPreference("controllerPanelWidth", 520)
-            owner.mapper.keyboardEnabled = true
-            const panel = open(owner, {page: "bindings"})
+            owner.mockBridge.setPreference("controllerPanelWidth", data.width)
+            owner.mapper.ps5KeyboardEnabled = true
+            owner.mapper.xboxKeyboardEnabled = true
+            const panel = open(owner, {platform: data.xbox ? "xbox" : "ps5", page: "bindings"})
             const editor = find(panel, "controller-panel-bindings")
             tryCompare(editor, "showList", false)
             const diagram = find(panel, "controller-panel-diagram")
-            const trigger = find(panel, "controller-panel-diagram-key-17")
-            const point = trigger.mapToItem(diagram, 0, 0)
-            verify(point.x >= -1 && point.x + trigger.width <= diagram.width + 1)
-            click(panel, "controller-panel-diagram-key-17")
-            compare(editor.selected, 17)
-            compare(owner.mapper.learning, -1)
-            click(panel, "controller-panel-edit-slot-0")
-            compare(owner.mapper.learning, 17)
-            owner.mapper.cancelLearning()
+            const art = find(panel, "controller-panel-controller-art")
+            verify(art.width >= diagram.width - 16, "Silhouette must use the actual panel width")
+            tryCompare(find(panel, "controller-panel-silhouette"), "status", Image.Ready)
 
-            owner.mockBridge.setPreference("controllerPanelWidth", 380)
+            const targets = []
+            for (let action = 0; action <= 32; ++action) {
+                if (data.xbox && (action === 14 || action >= 28 && action <= 31)) continue
+                const target = find(panel, "controller-panel-diagram-key-" + action)
+                verify(target.visible && target.width >= 28 && target.height >= 28, "Hit area " + action)
+                if (action >= 18) continue
+                const corner = target.mapToItem(art, 0, 0)
+                const rect = Qt.rect(corner.x, corner.y, target.width, target.height)
+                verify(rect.x >= 0 && rect.x + rect.width <= art.width &&
+                    rect.y >= 0 && rect.y + rect.height <= art.height, "Shielded hit area " + action)
+                for (const other of targets) {
+                    const overlap = rect.x < other.x + other.width && other.x < rect.x + rect.width &&
+                        rect.y < other.y + other.height && other.y < rect.y + rect.height
+                    verify(!overlap, "Adjacent buttons need separate hit areas " + action)
+                }
+                targets.push(rect)
+            }
+            mouseClick(art, 2, 2)
+            compare(owner.mapper.learning, -1)
+            for (const action of [16, 9, 17, 0, 6, 10, 11, 19, 25]) {
+                click(panel, "controller-panel-diagram-key-" + action)
+                compare(editor.selected, action)
+                compare(owner.mapper.learning, action)
+                compare(owner.mapper.learningSlot, 0)
+            }
+
+            const combination = find(panel, "controller-panel-diagram-key-32")
+            compare(combination.text, data.xbox ? "LS + RS" : "L3 + R3")
+            click(panel, "controller-panel-diagram-key-32")
+            compare(editor.selected, 32)
+            compare(owner.mapper.learning, 32)
+            compare(owner.mapper.learningDriving, false)
+            compare(owner.mapper.learningSlot, 0)
+            click(panel, "controller-panel-edit-slot-1")
+            compare(owner.mapper.learningSlot, 1)
+            compare(owner.mapper.learningDriving, false)
+            compare(owner.mapper.learning, 32)
+
+            click(panel, "controller-panel-layout-1")
+            tryCompare(editor, "driving", true)
+            click(panel, "controller-panel-diagram-key-32")
+            compare(owner.mapper.learning, 32)
+            compare(owner.mapper.learningDriving, true)
+            compare(owner.mapper.learningSlot, 0)
+            click(panel, "controller-panel-edit-slot-1")
+            compare(owner.mapper.learning, 32)
+            compare(owner.mapper.learningSlot, 1)
+            compare(owner.mapper.learningDriving, true)
+
+            click(panel, "controller-panel-diagram-key-33")
+            compare(owner.mapper.learning, 33)
+            compare(owner.mapper.learningDriving, true)
+            const body = find(panel, "controller-panel-body")
+            const slot = find(panel, "controller-panel-edit-slot-1")
+            tryVerify(() => {
+                const point = slot.mapToItem(body.contentItem, 0, 0)
+                return point.y >= body.contentY - 1 && point.y + slot.height <= body.contentY + body.height + 1
+            }, 1000, "Alternate binding must be brought into the viewport")
+
+            click(panel, "controller-panel-binding-view-1")
             tryCompare(editor, "showList", true)
             const list = find(panel, "controller-panel-binding-list")
             const alternate = find(panel, "controller-panel-list-alternate-0")
             const end = alternate.mapToItem(list, alternate.width, 0)
             verify(end.x <= list.width + 1)
+            click(panel, "controller-panel-binding-view-0")
+            tryCompare(editor, "showList", false)
         }
 
         function test_editorPreviewAndEscape() {

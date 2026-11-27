@@ -2,10 +2,12 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Shapes
+import QtQuick.Layouts
+import QtQuick.Window
 
 Rectangle {
     id: diagram
+    objectName: "controller-panel-diagram"
     property string platform: "ps5"
     property bool driving: false
     property int selected: -1
@@ -13,300 +15,258 @@ Rectangle {
     property var live: ({})
     property bool editable: true
     readonly property bool xbox: platform === "xbox"
-    readonly property var leftActions: [16, 8, 18, 10, 4, 13]
-    readonly property var rightActions: [17, 9, 3, 1, 2, 0, 22, 11]
-    readonly property var footerActions: (xbox ? [12, 15] : [14, 15, 12]).concat(driving ? [33] : [])
-    readonly property var coordinates: [
-        [434, 153], [466, 125], [402, 125], [434, 97],
-        xbox ? [174, 182] : [92, 125], xbox ? [230, 182] : [154, 125],
-        xbox ? [202, 155] : [123, 97], xbox ? [202, 209] : [123, 153],
-        [121, 59], [439, 59], xbox ? [128, 114] : [204, 174], xbox ? [356, 182] : [356, 174],
-        xbox ? [324, 99] : [367, 86], xbox ? [236, 99] : [193, 86], [280, 88], xbox ? [280, 67] : [280, 159],
-        [121, 31], [439, 31],
-        xbox ? [128, 80] : [204, 138], xbox ? [128, 148] : [204, 210],
-        xbox ? [92, 114] : [168, 174], xbox ? [164, 114] : [240, 174],
-        xbox ? [356, 145] : [356, 138], xbox ? [356, 220] : [356, 210],
-        xbox ? [319, 182] : [320, 174], xbox ? [393, 182] : [392, 174]
+    readonly property var locations: [
+        [442, 236], [495, 184], [389, 184], [442, 135],
+        xbox ? [161, 219] : [64, 183], xbox ? [267, 219] : [172, 183],
+        xbox ? [214, 175] : [118, 135], xbox ? [214, 273] : [118, 236],
+        [110, 81], [450, 81],
+        xbox ? [112, 141] : [228, 242], xbox ? [333, 235] : [333, 242],
+        xbox ? [331, 120] : [373, 84], xbox ? [229, 120] : [187, 84],
+        [280, 82], xbox ? [280, 61] : [280, 154], [110, 27], [450, 27]
     ]
+    readonly property var extraActions: (
+        xbox ? [26, 27] : [26, 27, 28, 29, 30, 31]
+    ).concat(driving ? [33] : [])
     signal picked(int action)
 
-    objectName: "controller-panel-diagram"
     implicitWidth: 388
-    implicitHeight: content.implicitHeight + 16
+    implicitHeight: content.implicitHeight + 14
     radius: Theme.rCard
     color: Theme.card2
     border.color: Theme.stroke2
-    clip: true
 
     ConsolePadLabels { id: labels; xbox: diagram.xbox }
 
-    function selectAt(x, y) {
-        let nearest = -1
-        let limit = 14 * 14
-        for (let action = 0; action < coordinates.length; ++action) {
-            if (xbox && action === 14) continue
-            const point = coordinates[action]
-            const dx = x - point[0] * shellSlot.unit
-            const dy = y - point[1] * shellSlot.unit
-            const distance = dx * dx + dy * dy
-            if (distance < limit) {
-                nearest = action
-                limit = distance
-            }
-        }
-        if (nearest >= 0) picked(nearest)
-    }
-    function groupPressed(action) {
-        if (action === 4 || action === 18 || action === 22)
-            return [0, 1, 2, 3].some(offset => labels.pressed(live, action + offset))
-        return labels.pressed(live, action)
-    }
-    function primaryFor(action) {
-        if (action === 22 && input?.tuning?.mouseLook !== false) return qsTr("鼠标")
-        if (action === 4 || action === 18 || action === 22) {
-            const keys = [0, 1, 2, 3].map(offset => labels.binding(input, driving, action + offset))
-                .filter(key => key !== "—")
-            return keys.length ? keys.join(" ") : "—"
-        }
-        return labels.binding(input, driving, action)
-    }
-    function selectedGroup(action) {
-        return (action === 4 || action === 18 || action === 22)
-            ? selected >= action && selected < action + 4 : selected === action
+    function keyDescription(action) {
+        return qsTr("%1，主键 %2，备用键 %3").arg(labels.names[action])
+            .arg(labels.binding(input, driving, action))
+            .arg(labels.binding(input, driving, action, 1))
     }
 
-    component DiagramTag: Rectangle {
-        id: tag
+    function silhouette() {
+        const path = xbox
+            ? "M280,53 C203,53 119,36 77,71 C44,99 27,228 41,277 C56,316 99,309 121,275 C145,241 176,262 209,276 Q280,290 351,276 C384,262 415,241 439,275 C461,309 504,316 519,277 C533,228 516,99 483,71 C441,36 357,53 280,53 Z"
+            : "M280,56 C228,56 218,60 177,54 C145,40 100,43 76,68 C51,95 39,147 31,205 C20,256 39,307 70,304 C99,300 115,260 138,235 C159,214 180,243 207,259 Q280,279 353,259 C380,243 401,214 422,235 C445,260 461,300 490,304 C521,307 540,256 529,205 C521,147 509,95 484,68 C460,43 415,40 383,54 C342,60 332,56 280,56 Z"
+        const edge = Theme.t3
+        const stroke = "rgb(" + Math.round(edge.r * 255) + "," + Math.round(edge.g * 255) + "," + Math.round(edge.b * 255) + ")"
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="560" height="320" viewBox="0 0 560 320">'
+            + '<path d="' + path + '" fill="' + Theme.card + '" stroke="' + stroke
+            + '" stroke-opacity="' + edge.a + '" stroke-width="3"/></svg>'
+        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)
+    }
+
+    component OnPadTarget: Item {
+        id: target
         required property int action
-        property bool rightSide: false
-        readonly property bool ps5LearningControl: diagram.editable
-        readonly property string primary: diagram.primaryFor(action)
-        readonly property string alternate: labels.binding(diagram.input, diagram.driving, action, 1)
-        readonly property bool showAlternate: alternate !== "—" && alternate !== "" && ![4, 18, 22].includes(action)
-        readonly property bool marked: diagram.selectedGroup(action)
-        objectName: "controller-panel-diagram-key-" + action
-        implicitWidth: Math.min(112, tagGlyph.implicitWidth + primaryCap.implicitWidth
-            + (showAlternate ? alternateCap.implicitWidth + caption.spacing : 0) + caption.spacing + 6)
-        height: 28
-        radius: 6
-        color: marked || activeFocus ? Theme.accentSoft : "transparent"
-        border.color: Theme.accent
-        border.width: activeFocus ? 2 : marked ? 1 : 0
-        activeFocusOnTab: diagram.editable
-        Accessible.role: Accessible.Button
-        Accessible.name: qsTr("%1，主键 %2，备用键 %3").arg(labels.names[action]).arg(primary).arg(alternate)
-        Accessible.onPressAction: if (diagram.editable) diagram.picked(action)
-        Keys.onReturnPressed: if (diagram.editable) diagram.picked(action)
-        Keys.onSpacePressed: if (diagram.editable) diagram.picked(action)
-        HoverHandler { id: hover; enabled: diagram.editable; cursorShape: Qt.PointingHandCursor }
-        TapHandler { enabled: diagram.editable; onTapped: diagram.picked(tag.action) }
-        ToolTip.text: Accessible.name
-        ToolTip.visible: hover.hovered
-        ToolTip.delay: 400
+        required property var point
+        required property real unit
+        readonly property bool ps5LearningControl: true
+        readonly property bool pressed: labels.pressed(diagram.live, action)
+        readonly property bool shoulder: action === 8 || action === 9 || action === 16 || action === 17
+        readonly property bool stick: action === 10 || action === 11
+        readonly property bool direction: action >= 4 && action <= 7
+        readonly property bool touchpad: action === 14
+        readonly property bool marked: action === diagram.selected || activeFocus || pointer.hovered
+        readonly property color edge: marked ? Theme.accent : pressed ? Theme.ok : Theme.stroke2
 
-        Row {
-            id: caption
-            anchors.left: parent.left
-            anchors.right: parent.right
-            anchors.verticalCenter: parent.verticalCenter
-            anchors.leftMargin: 3
-            anchors.rightMargin: 3
-            layoutDirection: tag.rightSide ? Qt.RightToLeft : Qt.LeftToRight
-            spacing: 2
-            clip: true
-            ConsoleGlyph {
-                id: tagGlyph
-                anchors.verticalCenter: parent.verticalCenter
-                platform: diagram.platform
-                action: tag.action
-                size: 19
-                visualState: diagram.groupPressed(action) ? "pressed" : tag.marked ? "selected" : "normal"
-            }
-            KeyCap {
-                id: primaryCap
-                anchors.verticalCenter: parent.verticalCenter
-                width: Math.max(18, Math.min(implicitWidth, caption.width - tagGlyph.width - caption.spacing -
-                    (tag.showAlternate ? 20 : 0)))
-                text: tag.primary
-                size: "s"
-                kind: tag.action === 22 && diagram.input?.tuning?.mouseLook !== false ? "mouse" : "auto"
-            }
-            KeyCap {
-                id: alternateCap
-                visible: tag.showAlternate
-                anchors.verticalCenter: parent.verticalCenter
-                width: Math.min(implicitWidth, 25)
-                text: tag.alternate
-                size: "s"
-                visualState: "secondary"
-            }
+        objectName: "controller-panel-diagram-key-" + action
+        enabled: diagram.editable
+        activeFocusOnTab: enabled
+        x: Math.round(point[0] * unit - width / 2)
+        y: Math.round(point[1] * unit - height / 2)
+        width: shoulder ? Math.max(44, Math.round(100 * unit))
+            : touchpad ? Math.max(48, Math.round(124 * unit))
+            : Math.max(30, Math.round((stick ? 58 : 46) * unit))
+        height: Math.max(30, Math.round((stick ? 58 : touchpad ? 54 : 44) * unit))
+
+        Accessible.role: Accessible.Button
+        Accessible.name: diagram.keyDescription(action)
+        Accessible.onPressAction: if (enabled) diagram.picked(action)
+        Keys.onReturnPressed: diagram.picked(action)
+        Keys.onSpacePressed: diagram.picked(action)
+        HoverHandler { id: pointer; cursorShape: Qt.PointingHandCursor }
+        TapHandler { gesturePolicy: TapHandler.WithinBounds; onTapped: diagram.picked(target.action) }
+        ToolTip.visible: pointer.hovered
+        ToolTip.delay: 450
+        ToolTip.text: Accessible.name
+
+        ConsoleGlyph {
+            anchors.fill: parent
+            visible: !target.stick && !target.direction && !target.touchpad
+            platform: diagram.platform
+            action: target.action
+            visualState: target.pressed ? "pressed" : target.marked ? "selected" : "normal"
+        }
+        Rectangle {
+            anchors.fill: parent
+            visible: target.stick || target.direction || target.touchpad
+            radius: target.stick ? height / 2 : 7
+            color: target.pressed ? Theme.ok : target.marked ? Theme.accentSoft : Theme.card3
+            border.color: target.edge
+            border.width: target.marked ? 2 : 1
+        }
+        Rectangle {
+            readonly property bool leftStick: target.action === 10
+            readonly property real dx: Number((leftStick ? diagram.live?.leftX : diagram.live?.rightX) ?? 0)
+            readonly property real dy: Number((leftStick ? diagram.live?.leftY : diagram.live?.rightY) ?? 0)
+            visible: target.stick && (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01)
+            width: 6
+            height: width
+            x: (parent.width - width) / 2 + Math.max(-1, Math.min(1, dx)) * parent.width * 0.29
+            y: (parent.height - height) / 2 + Math.max(-1, Math.min(1, dy)) * parent.height * 0.29
+            radius: width / 2
+            color: target.pressed ? Theme.accentInk : Theme.accent
+        }
+        Text {
+            anchors.centerIn: parent
+            width: Math.max(0, parent.width - 8)
+            visible: target.direction || target.touchpad || target.stick
+            text: target.direction ? ["←", "→", "↑", "↓"][target.action - 4]
+                : target.touchpad ? qsTr("触摸板") : labels.names[target.action]
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            color: target.pressed ? Theme.accentInk : Theme.t1
+            font.family: Theme.fontUi
+            font.pixelSize: target.direction ? Theme.fsH3 : Theme.fsSmall
+            font.weight: Font.DemiBold
         }
     }
 
-    Column {
+    component ActionTarget: ControllerPanelButton {
+        id: button
+        required property int action
+        readonly property bool ps5LearningControl: true
+        objectName: "controller-panel-diagram-key-" + action
+        enabled: diagram.editable
+        text: labels.names[action]
+        tip: diagram.keyDescription(action)
+        Accessible.name: tip
+        primary: diagram.selected === action
+        onClicked: diagram.picked(action)
+        fontSize: Theme.fsSmall
+    }
+
+    ColumnLayout {
         id: content
-        x: 8
-        y: 8
-        width: Math.max(0, parent.width - 16)
-        spacing: 4
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.margins: 7
+        spacing: 6
+
+        RowLayout {
+            Layout.fillWidth: true
+            Text {
+                Layout.fillWidth: true
+                Layout.minimumWidth: 0
+                text: qsTr("点手柄上的按键即可录入主键。")
+                wrapMode: Text.Wrap
+                color: Theme.t2
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSmall
+            }
+            ActionTarget {
+                action: 32
+                iconName: "gamepad"
+            }
+        }
 
         Item {
-            id: board
+            id: art
             objectName: "controller-panel-controller-art"
-            width: parent.width
-            height: Math.max(left.height, right.height, shellSlot.height)
-            readonly property int rail: Math.round(Math.min(107, width * 0.29))
-
-            Canvas {
-                id: leaders
+            Layout.fillWidth: true
+            implicitHeight: Math.round(320 * unit)
+            readonly property real unit: width / 560
+            // A cached image respects the panel's scroll clip in the software renderer.
+            Image {
+                objectName: "controller-panel-silhouette"
                 anchors.fill: parent
-                property int selectedAction: diagram.selected
-                property bool xbox: diagram.xbox
-                property color idleLine: Theme.stroke2
-                property color selectedLine: Theme.accent
-                onWidthChanged: requestPaint()
-                onHeightChanged: requestPaint()
-                onSelectedActionChanged: requestPaint()
-                onXboxChanged: requestPaint()
-                onIdleLineChanged: requestPaint()
-                onSelectedLineChanged: requestPaint()
-                onPaint: {
-                    const ctx = getContext("2d")
-                    ctx.reset()
-                    ctx.clearRect(0, 0, width, height)
-                    for (const side of [left, right]) {
-                        const isRight = side === right
-                        const actions = isRight ? diagram.rightActions : diagram.leftActions
-                        for (let index = 0; index < actions.length; ++index) {
-                            const action = actions[index]
-                            const anchor = diagram.coordinates[action]
-                            const fromX = isRight ? side.x : side.x + side.width
-                            const fromY = side.y + index * (28 + side.spacing) + 14
-                            const toX = shellSlot.x + anchor[0] * shellSlot.unit
-                            const toY = shellSlot.y + anchor[1] * shellSlot.unit
-                            ctx.beginPath()
-                            ctx.moveTo(fromX, fromY)
-                            ctx.lineTo((fromX + toX) * 0.5, fromY)
-                            ctx.lineTo(toX, toY)
-                            ctx.strokeStyle = diagram.selectedGroup(action) ? selectedLine : idleLine
-                            ctx.lineWidth = 1
-                            ctx.stroke()
-                        }
-                    }
+                cache: true
+                smooth: true
+                sourceSize.width: Math.max(1, Math.ceil(width * Screen.devicePixelRatio))
+                sourceSize.height: Math.max(1, Math.ceil(height * Screen.devicePixelRatio))
+                source: diagram.silhouette()
+            }
+            Rectangle {
+                x: diagram.locations[4][0] * art.unit
+                y: diagram.locations[4][1] * art.unit - height / 2
+                width: (diagram.locations[5][0] - diagram.locations[4][0]) * art.unit
+                height: 24 * art.unit
+                color: Theme.card3
+                border.color: Theme.stroke2
+                radius: height / 2
+            }
+            Rectangle {
+                x: diagram.locations[6][0] * art.unit - width / 2
+                y: diagram.locations[6][1] * art.unit
+                width: 24 * art.unit
+                height: (diagram.locations[7][1] - diagram.locations[6][1]) * art.unit
+                color: Theme.card3
+                border.color: Theme.stroke2
+                radius: width / 2
+            }
+            Repeater {
+                model: diagram.locations.length
+                delegate: OnPadTarget {
+                    required property int index
+                    action: index
+                    point: diagram.locations[index]
+                    unit: art.unit
+                    visible: !diagram.xbox || index !== 14
                 }
             }
-            Column {
-                id: left
-                anchors.left: parent.left
-                anchors.verticalCenter: parent.verticalCenter
-                width: board.rail
-                spacing: 1
-                Repeater {
-                    model: diagram.leftActions
-                    delegate: DiagramTag {
-                        required property int modelData
-                        width: left.width
-                        action: modelData
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            Repeater {
+                model: [{ label: qsTr("左摇杆"), first: 18 }, { label: qsTr("右摇杆"), first: 22 }]
+                delegate: ColumnLayout {
+                    id: axes
+                    required property var modelData
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    spacing: 3
+                    Text {
+                        Layout.fillWidth: true
+                        text: axes.modelData.label
+                        wrapMode: Text.Wrap
+                        color: Theme.t2
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsSmall
                     }
-                }
-            }
-            Item {
-                id: shellSlot
-                readonly property bool ps5LearningControl: diagram.editable
-                anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
-                width: Math.max(1, parent.width - 2 * board.rail)
-                height: 306 * unit
-                readonly property real unit: width / 560
-                Shape {
-                    width: 560
-                    height: 306
-                    transformOrigin: Item.TopLeft
-                    scale: shellSlot.unit
-                    ShapePath {
-                        strokeWidth: 3
-                        strokeColor: Theme.stroke2
-                        fillColor: Theme.card2
-                        PathSvg {
-                            path: diagram.xbox
-                                ? "M280,49 C203,49 123,33 82,68 C50,96 32,209 45,253 C59,296 103,276 123,242 C149,199 190,209 280,211 C370,209 411,199 437,242 C457,276 501,296 515,253 C528,209 510,96 478,68 C437,33 357,49 280,49 Z"
-                                : "M280,59 C228,59 215,59 176,56 C145,39 105,42 82,69 C58,91 52,143 41,192 C27,247 44,285 69,279 C94,273 110,239 136,212 C153,195 177,208 198,210 Q280,218 362,210 C383,208 407,195 424,212 C450,239 466,273 491,279 C516,285 533,247 519,192 C508,143 502,91 478,69 C455,42 415,39 384,56 C345,59 332,59 280,59 Z"
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 3
+                        Repeater {
+                            model: ["↑", "↓", "←", "→"]
+                            delegate: ActionTarget {
+                                required property int index
+                                required property string modelData
+                                action: axes.modelData.first + index
+                                text: modelData
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 30
+                            }
                         }
-                    }
-                }
-                Repeater {
-                    model: [10, 11]
-                    delegate: Rectangle {
-                        id: stick
-                        required property int modelData
-                        readonly property var point: diagram.coordinates[modelData]
-                        readonly property real offsetX: Number((modelData === 10 ? diagram.live?.leftX : diagram.live?.rightX) || 0)
-                        readonly property real offsetY: Number((modelData === 10 ? diagram.live?.leftY : diagram.live?.rightY) || 0)
-                        width: 52 * shellSlot.unit
-                        height: width
-                        x: point[0] * shellSlot.unit - width / 2
-                        y: point[1] * shellSlot.unit - height / 2
-                        radius: width / 2
-                        color: Theme.card3
-                        border.color: Theme.stroke2
-                        Rectangle {
-                            width: 15 * shellSlot.unit
-                            height: width
-                            x: (parent.width - width) / 2 + 14 * shellSlot.unit * stick.offsetX
-                            y: (parent.height - height) / 2 + 14 * shellSlot.unit * stick.offsetY
-                            radius: width / 2
-                            color: diagram.groupPressed(stick.modelData) ? Theme.ok : Theme.t2
-                        }
-                    }
-                }
-                Repeater {
-                    model: diagram.coordinates
-                    delegate: ConsoleGlyph {
-                        required property int index
-                        required property var modelData
-                        visible: !(diagram.xbox && index === 14) && index !== 10 && index !== 11
-                            && (index < 18 || diagram.selected === index || labels.pressed(diagram.live, index))
-                        platform: diagram.platform
-                        action: index
-                        size: Math.max(10, Math.round(28 * shellSlot.unit))
-                        visualState: labels.pressed(diagram.live, index) ? "pressed" : diagram.selected === index ? "selected" : "normal"
-                        x: modelData[0] * shellSlot.unit - width / 2
-                        y: modelData[1] * shellSlot.unit - height / 2
-                    }
-                }
-                TapHandler {
-                    enabled: diagram.editable
-                    gesturePolicy: TapHandler.WithinBounds
-                    onTapped: point => diagram.selectAt(point.position.x, point.position.y)
-                }
-                HoverHandler { enabled: diagram.editable; cursorShape: Qt.PointingHandCursor }
-            }
-            Column {
-                id: right
-                anchors.right: parent.right
-                anchors.verticalCenter: parent.verticalCenter
-                width: board.rail
-                spacing: 1
-                Repeater {
-                    model: diagram.rightActions
-                    delegate: DiagramTag {
-                        required property int modelData
-                        width: right.width
-                        rightSide: true
-                        action: modelData
                     }
                 }
             }
         }
-        Row {
-            anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 4
+        GridLayout {
+            Layout.fillWidth: true
+            columns: 2
+            columnSpacing: 5
+            rowSpacing: 3
             Repeater {
-                model: diagram.footerActions
-                delegate: DiagramTag {
+                model: diagram.extraActions
+                delegate: ActionTarget {
                     required property int modelData
-                    width: Math.min(82, implicitWidth)
                     action: modelData
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
                 }
             }
         }

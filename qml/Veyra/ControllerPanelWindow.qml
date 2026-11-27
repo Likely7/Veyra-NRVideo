@@ -16,6 +16,8 @@ Window {
     readonly property bool overlay: owner.width < 960
     readonly property int preferredWidth: Math.max(380, Math.min(520, Number(bridge.preferences?.controllerPanelWidth) || 420))
     readonly property int expandedWidth: Math.min(owner.width, preferredWidth)
+    readonly property int dockWidth: overlay && folded ? Math.min(40, owner.width) : expandedWidth
+    readonly property rect dockGeometry: Qt.rect(owner.x + owner.width - dockWidth, owner.y, dockWidth, owner.height)
     readonly property int rightInset: visible && !overlay ? expandedWidth : 0
     readonly property bool inlinePin: visible && opened && !folded && !xbox && !locked
     property bool opened: false
@@ -26,7 +28,6 @@ Window {
     property string page: "connect"
     property bool editDriving: false
     property var visited: ({})
-    property real reveal: 0
     property int pendingWidth: preferredWidth
 
     signal captureSettingsRequested()
@@ -36,13 +37,9 @@ Window {
 
     transientParent: owner
     flags: Qt.Tool | Qt.FramelessWindowHint
-    color: "transparent"
+    color: Theme.card
     title: qsTr("手柄控制")
-    width: overlay && folded ? Math.min(40, owner.width) : expandedWidth
-    height: owner.height
-    x: owner.x + owner.width - width
-    y: owner.y
-    visible: ownerVisible && (opened || reveal > 0)
+    visible: ownerVisible && opened
 
     readonly property bool keyboard: xbox ? input?.xboxKeyboardEnabled === true : input?.ps5KeyboardEnabled === true
     readonly property string platformKey: xbox ? "xbox" : "ps5"
@@ -54,6 +51,13 @@ Window {
     readonly property bool bindingsDone: wasVisited("bindings") || content?.methodUsesDefaultProfile === false
     property bool firstVisit: true
 
+    // Resize and move the owned HWND together. Separate width and x updates
+    // can expose the old backing-store contents at the new window edge.
+    function syncDockGeometry() {
+        const target = dockGeometry
+        if (x !== target.x || y !== target.y || width !== target.width || height !== target.height)
+            setGeometry(target.x, target.y, target.width, target.height)
+    }
     function setVisited(step) {
         const next = Object.assign({}, visited)
         next[platformKey + "/" + step] = true
@@ -106,6 +110,7 @@ Window {
         else if (options.page) selectPage(options.page)
         else if (firstVisit || before !== platformKey || previouslyCaptureOnly !== captureOnly) selectPage(firstPage())
         firstVisit = false
+        syncDockGeometry()
         opened = true
         if (!locked) {
             raise()
@@ -128,6 +133,7 @@ Window {
         if (input?.previewing) input.preview(false)
         content?.closeMenu()
         folded = true
+        syncDockGeometry()
         if (!locked) owner.requestActivate()
     }
     function primaryAction() {
@@ -156,25 +162,15 @@ Window {
         selectPage("method")
     onKeyboardChanged: if (!keyboard && (page === "bindings" || page === "feel")) selectPage("method")
     onOverlayChanged: if (!overlay) folded = false
-    onOpenedChanged: {
-        slide.stop()
-        slide.to = opened ? 1 : 0
-        if (Theme.reduced || folded) reveal = slide.to
-        else slide.start()
-    }
-    onVisibleChanged: if (!visible && initialized) {
-        input?.cancelLearning()
-        if (input?.previewing) input.preview(false)
+    onDockGeometryChanged: if (opened) Qt.callLater(syncDockGeometry)
+    onVisibleChanged: {
+        if (visible) syncDockGeometry()
+        else if (initialized) {
+            input?.cancelLearning()
+            if (input?.previewing) input.preview(false)
+        }
     }
     onClosing: event => { event.accepted = false; dismiss() }
-
-    NumberAnimation {
-        id: slide
-        target: panel
-        property: "reveal"
-        duration: Theme.d(Theme.durNormal)
-        easing.type: Easing.OutCubic
-    }
 
     Shortcut {
         sequence: "Ctrl+Alt+F1"
@@ -235,9 +231,7 @@ Window {
 
             Rectangle {
                 id: surface
-                x: Math.round((1 - panel.reveal) * panel.width)
-                width: panel.width
-                height: panel.height
+                anchors.fill: parent
                 visible: !panel.folded
                 radius: Theme.rWindow
                 color: Theme.card
@@ -346,7 +340,7 @@ Window {
                         boundsBehavior: Flickable.StopAtBounds
                         contentWidth: width
                         contentHeight: pages.implicitHeight
-                        ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                        ScrollBar.vertical: VScrollBar { policy: ScrollBar.AsNeeded }
                         ColumnLayout {
                             id: pages
                             width: body.width - (body.contentHeight > body.height ? 10 : 0)

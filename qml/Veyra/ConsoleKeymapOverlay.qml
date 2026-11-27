@@ -270,7 +270,7 @@ Item {
                 contentHeight: rows.implicitHeight
                 clip: true
                 boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar { }
+                ScrollBar.vertical: VScrollBar { }
                 ColumnLayout {
                     id: rows
                     width: Math.max(0, rowsView.width - 8)

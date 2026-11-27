@@ -217,7 +217,7 @@ ColumnLayout {
                     implicitHeight: contentHeight
                     model: profiles.popup.visible ? profiles.delegateModel : null
                     currentIndex: profiles.highlightedIndex
-                    ScrollBar.vertical: ScrollBar {}
+                    ScrollBar.vertical: VScrollBar {}
                 }
             }
             delegate: ItemDelegate {

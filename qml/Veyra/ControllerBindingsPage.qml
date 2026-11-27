@@ -16,7 +16,7 @@ ColumnLayout {
     property int selectedSlot: 0
     property bool listPreferred: false
     property string profileOperation: ""
-    readonly property bool showList: listPreferred || (width > 0 && width < 360)
+    readonly property bool showList: listPreferred
     readonly property bool editingEnabled: input !== null && !input.previewing
     readonly property bool recording: (input?.learning ?? -1) >= 0
     readonly property var conflict: input?.bindingConflict || ({})
@@ -37,6 +37,26 @@ ColumnLayout {
         input.cancelLearning()
         selected = action
         selectedSlot = slot < 0 ? 0 : slot
+    }
+    function pickFromDiagram(action) {
+        if (!editingEnabled) return
+        choose(action, 0)
+        beginLearning(0)
+        Qt.callLater(revealDiagramControls)
+    }
+    function revealDiagramControls() {
+        const editor = diagramInspector.item
+        if (!active || showList || !editor) return
+        for (let view = diagramInspector.parent; view; view = view.parent) {
+            if (!(view instanceof Flickable)) continue
+            const top = diagramInspector.mapToItem(view.contentItem, 0, 0).y
+            const bottom = top + editor.controlsBottom
+            let target = view.contentY
+            if (top < target || bottom - top >= view.height) target = top
+            else if (bottom > target + view.height) target = bottom - view.height
+            view.contentY = Math.max(view.originY, Math.min(target, view.originY + Math.max(0, view.contentHeight - view.height)))
+            break
+        }
     }
     function beginLearning(slot) {
         if (!editingEnabled || selected < 0) return
@@ -402,13 +422,13 @@ ColumnLayout {
 
     RowLayout {
         Layout.fillWidth: true
-        visible: page.width >= 360
         Item { Layout.fillWidth: true }
         Repeater {
             model: [qsTr("图示"), qsTr("列表")]
             delegate: ControllerPanelButton {
                 required property int index
                 required property string modelData
+                objectName: "controller-panel-binding-view-" + index
                 text: modelData
                 primary: (index === 1) === page.showList
                 fontSize: Theme.fsSmall
@@ -421,6 +441,13 @@ ColumnLayout {
         }
     }
     Loader {
+        id: diagramInspector
+        Layout.fillWidth: true
+        active: !page.showList && page.selected >= 0
+        visible: active
+        sourceComponent: bindingEditor
+    }
+    Loader {
         Layout.fillWidth: true
         active: !page.showList
         visible: active
@@ -431,7 +458,7 @@ ColumnLayout {
             editable: page.editingEnabled
             input: page.input
             live: page.live
-            onPicked: action => page.choose(action)
+            onPicked: action => page.pickFromDiagram(action)
         }
     }
     Loader {
@@ -508,17 +535,12 @@ ColumnLayout {
         }
     }
 
-    Loader {
-        Layout.fillWidth: true
-        active: !page.showList && page.selected >= 0
-        visible: active
-        sourceComponent: bindingEditor
-    }
     Component {
         id: bindingEditor
         Rectangle {
             id: editor
             objectName: "controller-panel-binding-editor"
+            readonly property real controlsBottom: form.y + editSlots.y + editSlots.height
             implicitHeight: form.implicitHeight + 20
             radius: Theme.rCard
             color: Theme.popover
@@ -561,6 +583,7 @@ ColumnLayout {
                     }
                 }
                 RowLayout {
+                    id: editSlots
                     Layout.fillWidth: true
                     spacing: 7
                     Repeater {

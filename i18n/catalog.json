@@ -13184,6 +13184,19 @@
    "ru": "Справа внизу"
   },
   {
+   "zh": "右摇杆",
+   "src": "qml/ControllerDiagram.qml",
+   "zh-TW": "右搖桿",
+   "en": "Right stick",
+   "ja": "右スティック",
+   "ko": "오른쪽 스틱",
+   "es": "Palanca derecha",
+   "fr": "Stick droit",
+   "de": "Rechter Stick",
+   "pt-BR": "Analógico direito",
+   "ru": "Правый стик"
+  },
+  {
    "zh": "右摇杆 上",
    "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "右搖桿 上",
@@ -17641,6 +17654,19 @@
    "de": "Unten links",
    "pt-BR": "Inferior esquerdo",
    "ru": "Слева внизу"
+  },
+  {
+   "zh": "左摇杆",
+   "src": "qml/ControllerDiagram.qml",
+   "zh-TW": "左搖桿",
+   "en": "Left stick",
+   "ja": "左スティック",
+   "ko": "왼쪽 스틱",
+   "es": "Palanca izquierda",
+   "fr": "Stick gauche",
+   "de": "Linker Stick",
+   "pt-BR": "Analógico esquerdo",
+   "ru": "Левый стик"
   },
   {
    "zh": "左摇杆 上",
@@ -31307,6 +31333,19 @@
    "ru": "Нажмите файл слева для предварительного просмотра"
   },
   {
+   "zh": "点手柄上的按键即可录入主键。",
+   "src": "qml/ControllerDiagram.qml",
+   "zh-TW": "點擊手把按鍵即可錄入主按鍵。",
+   "en": "Click a controller button to record its primary binding.",
+   "ja": "コントローラーのボタンをクリックしてメインキーを登録します。",
+   "ko": "컨트롤러 버튼을 클릭해 기본 키를 등록하세요.",
+   "es": "Haz clic en un botón del mando para asignar su tecla principal.",
+   "fr": "Cliquez sur un bouton de la manette pour enregistrer sa touche principale.",
+   "de": "Zum Belegen der Haupttaste eine Controller-Taste anklicken.",
+   "pt-BR": "Clique em um botão do controle para gravar sua tecla principal.",
+   "ru": "Нажмите кнопку на схеме, чтобы назначить основную клавишу."
+  },
+  {
    "zh": "点曲线",
    "src": "qml/ColourPanel.qml",
    "zh-TW": "點曲線",
@@ -37428,6 +37467,19 @@
    "de": "Bei Hard Cap %1 % · Hervorhebung der Kompression %2 % · Schattenlift %3 %",
    "pt-BR": "Na tampa dura %1 % · compressão de realce %2 % · sombreamento %3 %",
    "ru": "Жесткая крышка %1% · выделение сжатия %2% · поднятие тени %3%"
+  },
+  {
+   "zh": "触摸板",
+   "src": "qml/ControllerDiagram.qml",
+   "zh-TW": "觸控板",
+   "en": "Touchpad",
+   "ja": "タッチパッド",
+   "ko": "터치패드",
+   "es": "Panel táctil",
+   "fr": "Pavé tactile",
+   "de": "Touchpad",
+   "pt-BR": "Touchpad",
+   "ru": "Сенсорная панель"
   },
   {
    "zh": "触摸板上滑",
@@ -46375,7 +46427,7 @@
   },
   {
    "zh": "默认",
-   "src": "qml/ControllerConnectionPage.qml",
+   "src": "qml/ControllerBindingsPage.qml",
    "zh-TW": "預設",
    "en": "Default",
    "ja": "既定",
@@ -46580,19 +46632,6 @@
    "de": "Der voreingestellte Bearbeitungsmodus ist ungültig",
    "pt-BR": "O modo de edição predefinido é inválido",
    "ru": "Режим редактирования по умолчанию является недействительным"
-  },
-  {
-   "zh": "鼠标",
-   "src": "qml/ControllerDiagram.qml",
-   "zh-TW": "滑鼠",
-   "en": "Mouse",
-   "ja": "マウス",
-   "ko": "마우스",
-   "es": "Ratón",
-   "fr": "Souris",
-   "de": "Maus",
-   "pt-BR": "Mouse",
-   "ru": "Мышь"
   },
   {
    "zh": "鼠标 → 右摇杆",

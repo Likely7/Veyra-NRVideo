@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-27 手柄图点选和侧栏拖动复修
+
+旧图示的左右标签各占一段宽度，L3 + R3 只在列表。新版手柄图使用内容全宽，实体按键直接开始录入主键，备用键显示在同页的编辑卡。L3 + R3／LS + RS 在图示右上角，步行和驾驶各自保存。手柄壳用普通图像节点绘制，软件模式的未绑定键帽用矩形边框。键位、档案与 F2 速查改用 Veyra 的细滚动条，避免 Windows 默认白条盖住按钮。
+
+原生对照在 125% 缩放捕获到旧版原尺寸的界面短暂被新窗口边缘裁掉。侧栏改为不透明，移除整页平移动画，合并窗口位置和尺寸更新。保持拖边松手时才更新视频尺寸。 [原版实测](<E:/项目/Veyra/logs/codex-controller-panel-20261127/ui-drag-clip-before-125b/result.json>) · [新版实测](<E:/项目/Veyra/logs/codex-controller-panel-20261127/ui-drag-native-fixed-125/result.json>)
+
+Qt Quick 软件绘制 301 项通过、1 项可选栅格对比跳过，九种翻译及占位符无缺项。Windows 播放窗口在 PS5 100% 和 Xbox 150% 下各点录四次，两次均核对了步行主键与驾驶备用键的实际档案写入。把面板从 380 拖到 500，每次只调整一次视频交换链，测试视频持续播放。借用现有构建对象和同一试用入口，新测试程序在同一构建目录。 [PS5](<E:/项目/Veyra/logs/codex-controller-panel-20261127/panel-final-ps5-100/result.json>) · [Xbox](<E:/项目/Veyra/logs/codex-controller-panel-20261127/panel-final-xbox-150/result.json>) · [全量测试](<E:/项目/Veyra/logs/codex-controller-panel-20261127/final-input-and-scroll-qml.log>) · [构建](<E:/项目/Veyra/logs/codex-controller-panel-20261127/panel-interaction-build/compile.log>)
+
 ## 2026-11-27 手柄控制侧边面板
 
 从本地 main `08d2e28a` 建立 `codex/controller-panel-20261127`。采集卡、PS5、Xbox 共用连接、方式、键位和手感页。首次选择键鼠会显示默认键位说明及档案选择。右侧工具窗口在宽窗让出视频区域，在窄窗以覆盖模式显示。F2 的编辑入口恢复正在查看的步行或驾驶布局。原 Windows 输入模块区分视频、录键与预览的窗口，档案继续使用原 JSON 格式。 [操作说明](CONTROLLER_PANEL.md)
