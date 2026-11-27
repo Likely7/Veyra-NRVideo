@@ -51,6 +51,7 @@
 #include "veyra/diagnostics/CpuStallTrace.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/ImageExportSink.h"
+#include "veyra/engine/LiveScreenshot.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/gfx/PresentationHooks.h"
@@ -608,6 +609,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     sink::AudioPipeline audioPipe;sink::AudioRenderer audio;
     CapturePreviewWindow capturePreviewWindow;
     HWND provisionalCaptureSurface=nullptr;
+    LiveScreenshot liveScreenshot;
+    PresentCaptureFanout capturesWithScreenshot(captures_, liveScreenshot);
+    const auto publishScreenshot = [&](const LiveScreenshot::Result& result) {
+        std::lock_guard lock(mutex_);
+        if (snapshot_.sessionId != runSessionId) return;
+        if (result.saved) snapshot_.savedFramePath = result.path;
+        if (snapshot_.failed) return;
+        if (result.saved) snapshot_.status = (result.hdr ? L"HDR截图已保存：" : L"图片已保存：") + result.path;
+        else snapshot_.status = result.hdr ? L"HDR截图保存失败，请查看日志" : L"保存失败（目标文件可能已存在），播放已保留";
+    };
     auto presenter=std::make_unique<VideoPresenter>();
     presenter->setCapture(&captures_);presenter->setDisplayStates(&displayStates_);
     auto& coreCache=gpu->core;auto& recentGraphCache=gpu->recent;auto& graph=gpu->graph;
@@ -2329,11 +2340,19 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const auto state=xb->audioState();
                     std::lock_guard lock(mutex_);snapshot_.audioAvailable=state.available;snapshot_.captureAudio=state;}
 #endif
-                // Save the latest processed real frame before a settings transaction
-                // invalidates it (live rendering can be one batch behind processing).
+                if (isCapture && liveScreenshot.active()) {
+                    if (auto result = liveScreenshot.poll()) publishScreenshot(*result);
+                    presenter->setCapture(liveScreenshot.needsFrame() ? &capturesWithScreenshot : &captures_);
+                }
+                // A live shot copies the next real presented frame using the
+                // same command list and frame lease as recording and replay.
                 std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
-                {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;if(hasOutput)save.swap(savePath_);}
-                if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();
+                {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;
+                 if(hasOutput&&!liveScreenshot.active())save.swap(savePath_);}
+                if (!save.empty() && isCapture) {
+                    liveScreenshot.request(std::move(save));
+                    presenter->setCapture(&capturesWithScreenshot);
+                } else if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();
                     const auto saved=[this](const std::wstring& path,const std::wstring& message){
                         {std::lock_guard lock(mutex_);snapshot_.savedFramePath=path;}
                         status(message);
@@ -2863,7 +2882,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         graph=std::move(prepared.graph);
                         if(prepared.presenter){
                             std::swap(presenter,prepared.presenter);
-                            presenter->setCapture(&captures_);presenter->setDisplayStates(&displayStates_);
+                            presenter->setCapture(liveScreenshot.needsFrame() ? &capturesWithScreenshot : &captures_);
+                            presenter->setDisplayStates(&displayStates_);
                             presenterGeneration=0;
                             provisionalCaptureSurface=nullptr;
                         }else if(!openPreparedPresenter(startupRequest->selected,false,std::move(prepared.opening))||
@@ -4322,7 +4342,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
     // Each step is logged: a session that stopped responding after a remote
     // play failure left "graph shutdown complete" as its last line.
     audioPipe.stopThread();audio.shutdown();veyra::log::info("engine","teardown: audio stopped");
-    ring.drainQueue();presenter->close();graph->shutdown();recentGraphCache.evict("session-close");
+    ring.drainQueue();presenter->close();
+    if (auto result = liveScreenshot.finish()) publishScreenshot(*result);
+    graph->shutdown();recentGraphCache.evict("session-close");
     veyra::log::info("engine","teardown: closing sources");
     if(captureDriver)captureDriver->close();
     screenSource.close();source.close();av_frame_free(&cachedFrame);av_frame_free(&imageFrame);

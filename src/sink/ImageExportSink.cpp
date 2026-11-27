@@ -10,44 +10,113 @@
 #include <DirectXPackedVector.h>
 #include <cmath>
 #include <format>
+#include <utility>
 namespace veyra::sink {
 using Microsoft::WRL::ComPtr;
-static bool readPixels(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* tex,RgbaImage& img,unsigned bytesPerPixel) {
-    if(!tex) return false;
-    auto d=tex->GetDesc();
-    D3D12_PLACED_SUBRESOURCE_FOOTPRINT fp{}; UINT rows=0; UINT64 rowBytes=0,total=0;
-    ctx.device()->GetCopyableFootprints(&d,0,1,0,&fp,&rows,&rowBytes,&total);
-    D3D12_HEAP_PROPERTIES hp{}; hp.Type=D3D12_HEAP_TYPE_READBACK;
-    D3D12_RESOURCE_DESC bd{}; bd.Dimension=D3D12_RESOURCE_DIMENSION_BUFFER; bd.Width=total;
-    bd.Height=1; bd.DepthOrArraySize=1; bd.MipLevels=1; bd.SampleDesc.Count=1; bd.Layout=D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    ComPtr<ID3D12Resource> rb;
-    if(FAILED(ctx.device()->CreateCommittedResource(&hp,D3D12_HEAP_FLAG_NONE,&bd,D3D12_RESOURCE_STATE_COPY_DEST,nullptr,IID_PPV_ARGS(&rb)))) return false;
-    Status st=Status::Ok; const auto slot=ring.slotCount()-1; auto* list=ring.acquire(slot,st); if(!list)return false;
-    D3D12_RESOURCE_BARRIER b{}; b.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    b.Transition={tex,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,D3D12_RESOURCE_STATE_COMMON,D3D12_RESOURCE_STATE_COPY_SOURCE};
-    list->ResourceBarrier(1,&b);
-    D3D12_TEXTURE_COPY_LOCATION src{},dst{};src.pResource=tex;src.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-    dst.pResource=rb.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;dst.PlacedFootprint=fp;
-    list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);
-    std::swap(b.Transition.StateBefore,b.Transition.StateAfter);list->ResourceBarrier(1,&b);
-    if(!ring.submitAndSignal(slot)||!ring.waitIdle())return false;
-    uint8_t* data=nullptr; D3D12_RANGE range{0,static_cast<SIZE_T>(total)};
-    if(FAILED(rb->Map(0,&range,reinterpret_cast<void**>(&data))))return false;
-    img.width=static_cast<uint32_t>(d.Width);img.height=d.Height;img.pixels.resize(size_t(img.width)*img.height*bytesPerPixel);
-    for(UINT y=0;y<img.height;++y)std::memcpy(img.pixels.data()+size_t(y)*img.width*bytesPerPixel,data+fp.Offset+size_t(y)*fp.Footprint.RowPitch,size_t(img.width)*bytesPerPixel);
-    D3D12_RANGE empty{0,0};rb->Unmap(0,&empty);return true;
+namespace {
+unsigned imageBytesPerPixel(DXGI_FORMAT format) {
+    switch (format) {
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+    case DXGI_FORMAT_R10G10B10A2_UNORM: return 4;
+    case DXGI_FORMAT_R16G16B16A16_FLOAT: return 8;
+    default: return 0;
+    }
 }
-bool readRgba8(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* tex,RgbaImage& img){
-    return tex&&tex->GetDesc().Format==DXGI_FORMAT_R8G8B8A8_UNORM&&readPixels(ctx,ring,tex,img,4);
+bool checkHdrScreenshot(HRESULT hr, const char* stage) {
+    if (SUCCEEDED(hr)) return true;
+    log::error("hdr-screenshot", std::format("stage={} hr=0x{:08X}", stage, unsigned(hr)));
+    return false;
 }
-bool saveHdrScreenshot(const std::wstring& path,gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,ID3D12Resource* texture){
-    const auto check=[](HRESULT hr,const char* stage){if(SUCCEEDED(hr))return true;log::error("hdr-screenshot",std::format("stage={} hr=0x{:08X}",stage,unsigned(hr)));return false;};
-    if(!texture)return check(E_POINTER,"source-texture");
-    if(std::filesystem::exists(path))return check(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),"destination");
-    const auto format=texture->GetDesc().Format;const bool pq=format==DXGI_FORMAT_R10G10B10A2_UNORM;
-    log::info("hdr-screenshot",std::format("source format={} extent={}x{}",unsigned(format),texture->GetDesc().Width,texture->GetDesc().Height));
-    if(!pq&&format!=DXGI_FORMAT_R16G16B16A16_FLOAT)return check(E_INVALIDARG,"source-format");
-    RgbaImage raw;if(!readPixels(ctx,ring,texture,raw,pq?4:8))return check(E_FAIL,"gpu-readback");
+}
+bool prepareImageReadback(ID3D12Device* device, ID3D12Resource* texture, ImageReadback& result) {
+    const auto desc = texture->GetDesc();
+    if (!imageBytesPerPixel(desc.Format)) return false;
+    ImageReadback readback;
+    readback.format = desc.Format;
+    device->GetCopyableFootprints(&desc, 0, 1, 0, &readback.footprint, nullptr, nullptr, &readback.bytes);
+    D3D12_HEAP_PROPERTIES heap{};
+    heap.Type = D3D12_HEAP_TYPE_READBACK;
+    D3D12_RESOURCE_DESC buffer{};
+    buffer.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+    buffer.Width = readback.bytes;
+    buffer.Height = 1;
+    buffer.DepthOrArraySize = 1;
+    buffer.MipLevels = 1;
+    buffer.SampleDesc.Count = 1;
+    buffer.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+    const HRESULT created = device->CreateCommittedResource(&heap, D3D12_HEAP_FLAG_NONE, &buffer,
+        D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback.buffer));
+    if (FAILED(created)) {
+        log::warn("image-save", std::format("image readback allocation {}x{} hr=0x{:08X}", desc.Width, desc.Height, unsigned(created)));
+        return false;
+    }
+    result = std::move(readback);
+    return true;
+}
+void recordImageReadback(ID3D12GraphicsCommandList* list, ID3D12Resource* texture, const ImageReadback& readback) {
+    D3D12_RESOURCE_BARRIER barrier{};
+    barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition = {texture, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_STATE_COPY_SOURCE};
+    list->ResourceBarrier(1, &barrier);
+    D3D12_TEXTURE_COPY_LOCATION source{}, destination{};
+    source.pResource = texture;
+    source.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+    destination.pResource = readback.buffer.Get();
+    destination.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+    destination.PlacedFootprint = readback.footprint;
+    list->CopyTextureRegion(&destination, 0, 0, 0, &source, nullptr);
+    std::swap(barrier.Transition.StateBefore, barrier.Transition.StateAfter);
+    list->ResourceBarrier(1, &barrier);
+}
+bool readImagePixels(const ImageReadback& readback, RgbaImage& image) {
+    const auto& footprint = readback.footprint.Footprint;
+    const auto rowBytes = size_t(footprint.Width) * imageBytesPerPixel(readback.format);
+    if (!readback.buffer || !rowBytes) return false;
+    image.width = footprint.Width;
+    image.height = footprint.Height;
+    image.pixels.resize(rowBytes * image.height);
+    const D3D12_RANGE range{0, static_cast<SIZE_T>(readback.bytes)};
+    void* mapped = nullptr;
+    if (FAILED(readback.buffer->Map(0, &range, &mapped))) return false;
+    const auto* data = static_cast<const uint8_t*>(mapped) + readback.footprint.Offset;
+    for (UINT y = 0; y < image.height; ++y)
+        std::memcpy(image.pixels.data() + size_t(y) * rowBytes, data + size_t(y) * footprint.RowPitch, rowBytes);
+    const D3D12_RANGE empty{0, 0};
+    readback.buffer->Unmap(0, &empty);
+    return true;
+}
+static bool readPixels(gfx::D3D12DeviceContext& ctx, gfx::CommandSlotRing& ring, ID3D12Resource* texture, RgbaImage& image) {
+    ImageReadback readback;
+    if (!texture || !prepareImageReadback(ctx.device(), texture, readback)) return false;
+    Status status = Status::Ok;
+    const auto slot = ring.slotCount() - 1;
+    auto* list = ring.acquire(slot, status);
+    if (!list) return false;
+    recordImageReadback(list, texture, readback);
+    return ring.submitAndSignal(slot) && ring.waitIdle() && readImagePixels(readback, image);
+}
+bool readRgba8(gfx::D3D12DeviceContext& ctx, gfx::CommandSlotRing& ring, ID3D12Resource* texture, RgbaImage& image) {
+    return texture && texture->GetDesc().Format == DXGI_FORMAT_R8G8B8A8_UNORM && readPixels(ctx, ring, texture, image);
+}
+bool saveHdrScreenshot(const std::wstring& path, gfx::D3D12DeviceContext& ctx, gfx::CommandSlotRing& ring, ID3D12Resource* texture) {
+    if (!texture) return checkHdrScreenshot(E_POINTER, "source-texture");
+    if (std::filesystem::exists(path)) return checkHdrScreenshot(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS), "destination");
+    const auto format = texture->GetDesc().Format;
+    if (format != DXGI_FORMAT_R10G10B10A2_UNORM && format != DXGI_FORMAT_R16G16B16A16_FLOAT)
+        return checkHdrScreenshot(E_INVALIDARG, "source-format");
+    RgbaImage raw;
+    if (!readPixels(ctx, ring, texture, raw)) return checkHdrScreenshot(E_FAIL, "gpu-readback");
+    return saveHdrScreenshot(path, raw, format);
+}
+bool saveHdrScreenshot(const std::wstring& path, const RgbaImage& raw, DXGI_FORMAT format) {
+    const auto check = checkHdrScreenshot;
+    const bool pq = format == DXGI_FORMAT_R10G10B10A2_UNORM;
+    if (!pq && format != DXGI_FORMAT_R16G16B16A16_FLOAT) return check(E_INVALIDARG, "source-format");
+    const uint64_t bytes = uint64_t(raw.width) * raw.height * (pq ? 4 : 8);
+    if (!raw.width || !raw.height || bytes != raw.pixels.size() || uint64_t(raw.width) * raw.height > UINT_MAX / 8)
+        return check(E_INVALIDARG, "source-size");
+    if (std::filesystem::exists(path)) return check(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS), "destination");
+    log::info("hdr-screenshot", std::format("source format={} extent={}x{}", unsigned(format), raw.width, raw.height));
     const size_t count=size_t(raw.width)*raw.height;std::vector<uint16_t> pixels(count*4);
     if(!pq)memcpy(pixels.data(),raw.pixels.data(),count*8);
     else for(size_t i=0;i<count;++i){
