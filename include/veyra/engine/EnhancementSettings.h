@@ -93,6 +93,11 @@ inline size_t exportBitrateIndex(uint32_t mbps){for(size_t i=0;i<kExportBitrateC
 // videoSrQuality values: 0 = DLSS SR, 1..4 = RTX video SR quality steps,
 // 5 = AMD FSR upscaling (vendor neutral; verified on an NVIDIA adapter).
 inline constexpr uint32_t kVideoSrFsr=5;
+// 6 = Intel XeSS super resolution (cross-vendor DP4a, XMX on Arc). Temporal.
+inline constexpr uint32_t kVideoSrXess=6;
+// 7 = AMD FSR4 ML upscaling via the driver DLL (Intel Arc only, user-supplied
+// amdxcffx64.dll; INT8 Lite model forced). Temporal, same harness as FSR/XeSS.
+inline constexpr uint32_t kVideoSrFsr4=7;
 inline constexpr uint32_t kVideoSrNis=24;
 inline constexpr uint32_t kVideoSrAmf10=25;
 inline constexpr uint32_t kVideoSrAmf11=26;
@@ -121,13 +126,16 @@ constexpr uint32_t currentVideoSrQuality(uint32_t quality) {
 }
 constexpr bool amdVideoSr(uint32_t q){return q==kVideoSrAmf10||q==kVideoSrAmf11;}
 constexpr bool spatialVideoSr(uint32_t q){return q==kVideoSrNis||amdVideoSr(q);}
-constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q);}
+constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr4||vfxVideoSr(q)||spatialVideoSr(q);}
 constexpr bool videoSrRunsOn(uint32_t q,bool nvidia,bool amd){
     if (amdVideoSr(q)) return amd;
-    return validVideoSrQuality(q) && (nvidia || q==kVideoSrFsr || q==kVideoSrNis);
+    // FSR4-on-Arc is gated by the backend's own Intel check + runtime presence;
+    // the settings layer accepts the ID on any adapter so saved sessions load.
+    if (q==kVideoSrFsr4) return true;
+    return validVideoSrQuality(q) && (nvidia || q==kVideoSrFsr || q==kVideoSrNis || q==kVideoSrXess);
 }
-// DLSS SR and FSR are temporal: they read the SR motion source. RTX Video SR is spatial.
-constexpr bool temporalVideoSr(uint32_t q){return q==0||q==kVideoSrFsr;}
+// DLSS SR, FSR, XeSS and FSR4 SR are temporal: they read the SR motion source. RTX Video SR is spatial.
+constexpr bool temporalVideoSr(uint32_t q){return q==0||q==kVideoSrFsr||q==kVideoSrXess||q==kVideoSrFsr4;}
 inline constexpr uint32_t kVfxVideoSrQualities[]={16,17,18,19,21,23};
 constexpr VideoSrFamily videoSrFamily(uint32_t q){
     return q>=16&&q<=19?VideoSrFamily::HighBitrate:q==21||q==23?VideoSrFamily::Streaming:VideoSrFamily::Standard;

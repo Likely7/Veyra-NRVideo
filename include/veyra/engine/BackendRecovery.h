@@ -20,8 +20,9 @@ inline bool disableUnsupportedNvidiaEffects(EnhancementSettings& settings,bool n
     settings.sr=settings.sr&&videoSrRunsOn(settings.videoSrQuality,nvidia,amdNr);
     if(nvidia)return settings.sr!=before.sr;
     if(!amdNr)settings.nr=false;
-    // NVOF does not exist on these adapters; NR motion uses AMD FidelityFX flow.
-    if(amdNr&&settings.nr&&settings.opticalFlowBackend==OpticalFlowBackend::Nvidia)
+    // NVOF does not exist on these adapters; every non-NVIDIA vendor (AMD NR
+    // motion, Intel SR/FG guidance) uses the cross-vendor FidelityFX flow.
+    if(settings.opticalFlowBackend==OpticalFlowBackend::Nvidia)
         settings.opticalFlowBackend=OpticalFlowBackend::AmdFidelityFx;
     settings.videoHdr.enabled=false;
     if(settings.frameGenerationBackend==FrameGenerationBackend::Dlss)settings.multiplier=1;

@@ -71,6 +71,9 @@ public:
         // XeLL low-latency sleep on the source-input thread. Must stay true
         // for generation (provider returns -15 otherwise); diagnostic toggle.
         bool xessLowLatencySleep = true;
+        // PCI vendor of the presentation adapter; Intel (0x8086) uses native
+        // multi-frame generation and driver pacing instead of the unlock.
+        uint32_t adapterVendorId = 0;
         // Probe runs create their own window class name per process.
         std::wstring title = L"Veyra";
         HWND targetWindow = nullptr; // borrowed UI-owned child HWND; never destroyed by sink
