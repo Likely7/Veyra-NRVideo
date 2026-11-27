@@ -3,11 +3,14 @@
 #include "veyra/source/WasapiAudioInput.h"
 #include "VirtualCaptureAudioSetup.h"
 #include <dxgi1_6.h>
+#include <limits>
 #include <wrl/client.h>
 #include <map>
 
 namespace veyra::ui {
 // --- capture dialog ----------------------------------------------------------
+// Menu action only. The matched endpoint is stored using the normal capture settings.
+constexpr int kMatchElgatoAudio = std::numeric_limits<int>::min();
 static std::vector<source::CaptureDevice> captureAudioDeviceDetails() {
     auto devices = source::CaptureCardSource::deviceDetails(true);
     for (auto& endpoint : source::WasapiAudioInput::devices(true))
@@ -41,11 +44,16 @@ void QmlPlayerBridge::setCaptureDeviceId(const QString& value) {
     impl_->captureRequestedResolution.clear();
     impl_->captureFormatKey=impl_->captureDevice==impl_->capturePrefs.videoPath?impl_->capturePrefs.formatKey:std::wstring{};
     impl_->captureDriverFormatKey.clear();
-    // Colour follows the device, as in 1.4.4; audio returns to "none" unless it
-    // is the remembered device.
+    // Keep the saved choice, including explicitly disabled audio.
     impl_->captureColor = impl_->capturePrefs.colorForDevice(impl_->captureDevice);
     if(impl_->captureDevice==impl_->capturePrefs.videoPath)impl_->restoreCaptureForm();
-    else {impl_->captureAudioChoice=source::kCaptureAudioDisabled;impl_->captureAudioMissing=false;}
+    else {
+        const auto audio = source::CaptureCardSource::recommendElgatoCaptureAudio(
+            impl_->captureDevice, impl_->captureVideo, impl_->captureAudio);
+        impl_->captureAudioChoice = audio.value_or(source::kCaptureAudioDisabled);
+        impl_->captureAudioMissing = false;
+        if (audio) log::info("capture-ui", "selected matching Elgato capture audio");
+    }
     if(!impl_->persistCaptureSelection())emit notice(tr("采集设置保存失败，请检查配置目录是否可写"),true);
     if (!impl_->captureDevice.empty()) queryCapture(1, impl_->captureDevice);
     emit captureChanged();
@@ -194,9 +202,13 @@ void QmlPlayerBridge::setCapturePixelId(const QString& id) {
     setCaptureFormatKey(id);
 }
 QVariantList QmlPlayerBridge::captureAudioInputs() const {
-    // Only what the user picks explicitly is ever opened (1.4.4 rule).
     QVariantList out{QVariantMap{{"id", source::kCaptureAudioDisabled}, {"label", tr("不采集音频")}}};
     if(impl_->captureAudioMissing)out<<QVariantMap{{"id",-4},{"label",tr("上次的音频输入未连接")},{"disabled",true}};
+    if (const auto audio = source::CaptureCardSource::recommendElgatoCaptureAudio(
+            impl_->captureDevice, impl_->captureVideo, impl_->captureAudio)) {
+        const auto target = *audio < 0 ? tr("视频设备内置音频（已检测）") : utf8Of(impl_->captureAudio[size_t(*audio)].name);
+        out << QVariantMap{{"id", kMatchElgatoAudio}, {"label", tr("自动") + QStringLiteral(" · ") + target}};
+    }
     for (const auto& d : impl_->captureVideo)
         if (d.path == impl_->captureDevice)
             out << QVariantMap{{"id", source::kCaptureAudioFromVideoDevice},
@@ -211,6 +223,12 @@ QVariantList QmlPlayerBridge::captureAudioInputs() const {
 }
 int QmlPlayerBridge::captureAudioChoice() const { return impl_->captureAudioMissing?-4:impl_->captureAudioChoice; }
 void QmlPlayerBridge::setCaptureAudioChoice(int choice) {
+    if (choice == kMatchElgatoAudio) {
+        const auto audio = source::CaptureCardSource::recommendElgatoCaptureAudio(
+            impl_->captureDevice, impl_->captureVideo, impl_->captureAudio);
+        if (!audio) return;
+        choice = *audio;
+    }
     if (choice < source::kCaptureAudioFromVideoDevice || choice >= int(impl_->captureAudio.size())) return;
     impl_->captureAudioChoice = choice;
     impl_->captureAudioMissing=false;
@@ -399,7 +417,7 @@ void QmlPlayerBridge::tickCapture() {
     if (q.kind == 2 && q.device == i.capturePrefs.videoPath) restoreRememberedAudio();
     if (q.kind == 0) {
         veyra::log::info("capture-ui", std::format("devices video={} audio={}", i.captureVideo.size(), i.captureAudio.size()));
-        // Restore the remembered device; otherwise the first one. Never guess audio.
+        // Restore the remembered device; otherwise select the first available one.
         std::wstring pick;
         const auto choices=captureDevices();
         auto allowed=[&](std::wstring_view path){for(const auto& value:choices)if(wideOf(value.toMap().value("id").toString())==path)return true;return false;};

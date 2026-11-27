@@ -6,6 +6,8 @@
 #include <chrono>
 #include <functional>
 #include <memory>
+#include <optional>
+#include <span>
 #include <string_view>
 #include <vector>
 #include "veyra/sink/CaptureAudioSession.h"
@@ -52,6 +54,10 @@ public:
     CaptureCardSource();~CaptureCardSource()override;
     static std::vector<CaptureDevice> deviceDetails(bool audio=false);
     static std::vector<std::wstring> devices(bool audio=false);
+    // Uses the existing enumeration. The result is an audio input index or
+    // kCaptureAudioFromVideoDevice, and may be absent if the match is ambiguous.
+    static std::optional<int> recommendElgatoCaptureAudio(std::wstring_view videoPath,
+        std::span<const CaptureDevice> videoDevices, std::span<const CaptureDevice> audioDevices);
     static std::wstring makeCapturePath(unsigned videoIndex,const CaptureDevice& video,
         int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride=0,double requestedFps=0,std::wstring_view formatKey={});
     static std::vector<CaptureFormat> formats(unsigned device);

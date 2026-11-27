@@ -226,6 +226,15 @@ int wmain(int argc,wchar_t** argv){try{
         ui::CapturePreferenceStore store(argv[1]);ui::CapturePreferences p{L"\\\\?\\usb#video-\u91c7\u96c6",L"1920:1080:166833:{SUBTYPE}:RGB32",L"{audio-endpoint}",-3,2};
         require(store.load().videoPath.empty(),"fresh capture preference empty");require(store.save(p),"capture preference atomic save");
         const auto restored=store.load();require(restored.videoPath==p.videoPath&&restored.formatKey==p.formatKey&&restored.audioPath==p.audioPath&&restored.audioMode==p.audioMode&&restored.colorOverride==p.colorOverride,"capture stable identifiers and Unicode round trip");
+        auto elgato=p;
+        elgato.audioMode=0;
+        elgato.audioPath=LR"(@device:cm:{category}\wave:{elgato})";
+        require(store.save(elgato)&&store.load().audioMode==0&&store.load().audioPath==elgato.audioPath,
+                "matched capture audio is saved as the existing stable DirectShow endpoint");
+        elgato.audioMode=source::kCaptureAudioDisabled;
+        elgato.audioPath.clear();
+        require(store.save(elgato)&&store.load().audioMode==source::kCaptureAudioDisabled&&store.load().audioPath.empty(),
+                "an explicitly silent capture choice survives restarting");
         auto virtualSpeaker=p;
         virtualSpeaker.audioMode=source::kCaptureAudioVirtualSpeaker;
         require(store.save(virtualSpeaker),"save explicit virtual speaker audio");

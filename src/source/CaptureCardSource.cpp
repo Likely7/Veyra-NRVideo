@@ -1029,6 +1029,72 @@ std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio){
     return result;
 }
 std::vector<std::wstring> CaptureCardSource::devices(bool audio){std::vector<std::wstring> result;for(auto& device:deviceDetails(audio))result.push_back(std::move(device.name));return result;}
+namespace {
+std::wstring_view captureHardwareInstance(std::wstring_view path) {
+    constexpr std::wstring_view monikerPrefix = L"@device:pnp:";
+    if (path.starts_with(monikerPrefix)) path.remove_prefix(monikerPrefix.size());
+    const auto interfaceClass = path.find(L"#{");
+    if (!path.starts_with(L"\\\\?\\") || interfaceClass == std::wstring_view::npos) return {};
+    return path.substr(0, interfaceClass);
+}
+
+bool sameCaptureHardwareInstance(std::wstring_view lhs, std::wstring_view rhs) {
+    return !lhs.empty() && lhs.size() == rhs.size() &&
+        CompareStringOrdinal(lhs.data(), int(lhs.size()), rhs.data(), int(rhs.size()), TRUE) == CSTR_EQUAL;
+}
+
+std::wstring elgatoAudioModel(std::wstring name) {
+    std::ranges::transform(name, name.begin(), [](wchar_t ch) { return wchar_t(std::towlower(ch)); });
+    std::wstring_view model = name;
+    const auto parenthesis = model.find(L" (");
+    if (parenthesis != std::wstring_view::npos && model.ends_with(L")")) {
+        const auto prefix = model.substr(0, parenthesis);
+        const auto wrapped = model.substr(parenthesis + 2, model.size() - parenthesis - 3);
+        if ((prefix == L"audio interface" || prefix == L"digital audio interface" ||
+             prefix.starts_with(L"elgato ") || prefix.starts_with(L"game capture ")) &&
+            (wrapped.starts_with(L"elgato ") || wrapped.starts_with(L"game capture "))) model = wrapped;
+    }
+    for (const std::wstring_view brand : {L"elgato ", L"game capture "})
+        if (model.starts_with(brand)) model.remove_prefix(brand.size());
+    if (model.ends_with(L" audio")) model.remove_suffix(6);
+    return std::wstring(model);
+}
+}
+
+std::optional<int> CaptureCardSource::recommendElgatoCaptureAudio(std::wstring_view videoPath,
+    std::span<const CaptureDevice> videoDevices, std::span<const CaptureDevice> audioDevices) {
+    const auto video = std::ranges::find_if(videoDevices, [&](const auto& device) { return device.path == videoPath; });
+    if (video == videoDevices.end()) return {};
+    const auto instance = captureHardwareInstance(video->path);
+    if (instance.empty() || !isElgatoDevice(video->name)) return {};
+    const std::optional<int> embedded = video->hasEmbeddedAudio ? std::optional{kCaptureAudioFromVideoDevice} : std::nullopt;
+
+    // The MK.2 advertises a separate filter on the same PCI instance. Its
+    // similarly named Wave wrapper is not the hardware moniker.
+    std::optional<int> match;
+    for (size_t i = 0; i < audioDevices.size(); ++i) {
+        const auto& audio = audioDevices[i];
+        if (audio.wasapi || audio.virtualSpeaker || !sameCaptureHardwareInstance(instance, captureHardwareInstance(audio.path))) continue;
+        if (match) return embedded;
+        match = int(i);
+    }
+    if (match) return match;
+
+    // USB audio can appear as a DirectShow Wave wrapper. Accept an exact model
+    // name only when there is one card of that model and one eligible input.
+    const auto model = elgatoAudioModel(video->name);
+    if (model.empty() || std::ranges::count_if(videoDevices, [&](const auto& device) { return elgatoAudioModel(device.name) == model; }) != 1)
+        return embedded;
+    for (size_t i = 0; i < audioDevices.size(); ++i) {
+        const auto& audio = audioDevices[i];
+        if (audio.wasapi || audio.virtualSpeaker || !audio.path.starts_with(L"@device:cm:") ||
+            elgatoAudioModel(audio.name) != model) continue;
+        if (match) return embedded;
+        match = int(i);
+    }
+    return match ? match : embedded;
+}
+
 std::wstring CaptureCardSource::makeCapturePath(unsigned videoIndex,const CaptureDevice& video,int format,int audioMode,const CaptureDevice* audio,unsigned colorOverride,double requestedFps,std::wstring_view formatKey){
     if(!validCaptureFrameRate(requestedFps)||!validCaptureColorOverride(colorOverride))return {};
     const auto suffix=capturePathOptions(requestedFps,encodePath(formatKey));

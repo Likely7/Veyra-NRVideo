@@ -11,11 +11,58 @@
 #include <vector>
 #include <algorithm>
 #include <cstring>
+#include <initializer_list>
 extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/imgutils.h>
 }
 int wmain(int argc,wchar_t** argv){
+    if (argc == 2 && wcscmp(argv[1], L"--elgato-audio-selection") == 0) {
+        using namespace veyra::source;
+        const CaptureDevice mk2{L"Game Capture 4K60 Pro MK.2",
+            LR"(\\?\pci#ven_12ab&dev_0710#instance-a#{video})"};
+        const CaptureDevice audioMk2{L"Game Capture 4K60 Pro MK.2 Audio",
+            LR"(@device:pnp:\\?\PCI#VEN_12AB&DEV_0710#INSTANCE-A#{audio})"};
+        const CaptureDevice waveMk2{L"Game Capture 4K60 Pro MK.2 Audio (Game Capture 4K60 Pro MK.2)",
+            LR"(@device:cm:{category}\wave:{mk2})"};
+        const CaptureDevice fourKx{L"Game Capture 4K X", LR"(\\?\usb#vid_0fd9&pid_x#capture-a#{video})"};
+        const CaptureDevice otherFourKx{fourKx.name, LR"(\\?\usb#vid_0fd9&pid_x#capture-b#{video})"};
+        const CaptureDevice audioFourKx{L"Digital Audio Interface (Elgato 4K X)",
+            LR"(@device:cm:{category}\wave:{4kx})"};
+        const CaptureDevice microphone{L"Microphone (Game Capture 4K X)",
+            LR"(@device:cm:{category}\wave:{mic})"};
+        const CaptureDevice uac{fourKx.name, L"{wasapi}", false, true};
+        const CaptureDevice other{L"HDMI Capture", LR"(\\?\usb#other#input#{video})", true};
+        auto embedded = fourKx;
+        embedded.hasEmbeddedAudio = true;
+        int failures = 0;
+        const auto check = [&](bool ok, const char* message) {
+            printf("%s %s\n", ok ? "PASS" : "FAIL", message);
+            failures += !ok;
+        };
+        const auto match = [](const CaptureDevice& video, std::initializer_list<CaptureDevice> videos,
+                              std::initializer_list<CaptureDevice> inputs) {
+            return CaptureCardSource::recommendElgatoCaptureAudio(video.path,
+                {videos.begin(), videos.size()}, {inputs.begin(), inputs.size()});
+        };
+        check(match(mk2, {mk2}, {waveMk2, audioMk2}) == 1, "MK.2 uses the physical DirectShow pin ahead of its Wave alias");
+        check(match(fourKx, {fourKx}, {microphone, uac, audioFourKx}) == 2, "unique 4K X DirectShow audio can be matched by its model");
+        check(!match(fourKx, {fourKx, otherFourKx}, {audioFourKx}), "two identical capture cards need explicit name-only selection");
+        check(!match(fourKx, {fourKx}, {audioFourKx, {audioFourKx.name, L"@device:cm:other"}}),
+              "two name-only inputs remain unselected");
+        check(!match(fourKx, {fourKx}, {microphone, uac}), "automatic setup does not open a microphone or WASAPI source");
+        check(!match(mk2, {mk2}, {{audioMk2.name, LR"(\\?\pci#ven_12ab&dev_0710#instance-b#{audio})"}}),
+              "the dedicated hardware audio path of a different instance is not opened");
+        check(match(embedded, {embedded}, {microphone, uac}) == kCaptureAudioFromVideoDevice,
+              "an advertised embedded audio pin stays available on the selected Elgato device");
+        check(!match(other, {other}, {audioFourKx}), "unrelated devices keep their existing audio default");
+        const std::vector<CaptureDevice> inputs{microphone, uac, audioFourKx};
+        const auto selected = CaptureCardSource::recommendElgatoCaptureAudio(fourKx.path, {&fourKx, 1}, inputs);
+        check(selected == 2 && CaptureCardSource::makeCapturePath(0, fourKx, 1, *selected,
+                  &inputs[size_t(*selected)]).starts_with(L"capture2:"),
+              "the recommended input becomes a stable DirectShow capture connection");
+        return failures ? 1 : 0;
+    }
     if (argc == 4 && wcscmp(argv[1], L"--bitstream-capture") == 0) {
         if (FAILED(CoInitializeEx(nullptr, COINIT_MULTITHREADED))) return 2;
         int result = 2;
