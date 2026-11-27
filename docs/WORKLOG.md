@@ -1,5 +1,32 @@
 # 当前工作日志
 
+## 2026-11-27 采集卡自动去重与补帧节奏
+
+基线是本地 main `4b0312ca`。来源为用户提供的 @George Discord 投稿，面向 2.2.1 的 UGREEN CM630 + PS5 Pro 报告和 `veyra-2.2.1-capture-fixes.zip`。报告记录了 60.01 Hz 采样与 59.94 Hz 主机约每 14 秒发生一次错位，以及静止地图开关时出现的额外停顿。
+
+在 59–61 Hz 采集的自动去重和图内补帧路径中，检测到已拟合的 30 帧画面晚一个采样槽时，给后续补帧保留最多 1.1 槽余量。依据最近约 30 秒的活动画面更新余量，静止或慢速菜单暂停老化。学到 30 帧后，静止画面沿原节奏刷新。恢复运动后用新画面重新拟合，逐步收回内容时钟偏移和补帧呈现等待。DirectShow 单槽邮箱遇到下一份同画面的重复拷贝时可保留未读的首份及其原采样时间和序号，真实时间断点仍随最新帧送出。
+
+余量以实测错位触发，省去投稿中的启动阶段预留一整槽。投稿的第 11–13 项为限速、会话固定余量和依赖两者的实验时钟，其中限速会丢掉真 60 帧的隔帧画面。本轮实施节奏与邮箱修复，真 60 帧仍使用全部新画面。显式“帧节奏修复”走原调度路径，专有运行库和预设格式沿用基线。
+
+复用 `build/codex-community-pr-followup-20261127`。通过 `tmp/codex-capture-timing-20261127/build-local.py` 以 2 并发构建 `veyra_qml_ui`、`veyra_live_presentation_tests`、`veyra_live_timing_tests`、`veyra_capture_color_tests`、`veyra_presentation_worker_tests`，使用 FFmpeg 9.0.2。首次运行修正了构建目标名和测试变量与 Windows 宏的冲突。最终编译通过，时序 568 项、采集色彩及原生接收端 296 项、呈现工作线程 249 项通过。合成的一槽相位偏移随后遇到下一次拍频，最长内容帧间隔从 66.612 降至 35.369 ms。长静止余量、恢复运动、真 24/25/40/60 帧的选择均有针对性检查。 [构建记录](<E:/项目/Veyra/logs/codex-capture-timing-20261127/build-20261127-110810/compile.log>) · [测试日志](<E:/项目/Veyra/logs/codex-capture-timing-20261127/unit>)
+
+将已有的 29.97 FPS GTA 游戏录像缩为 1080p，注入 1.5175 秒静止并无损重采样到 6001/100 FPS。夹具用原输入采样时间模拟回调，校正了早期基线用去重后时间模拟的误差。用 RTX 5070 和 VFG 2X 跑两轮 54 秒回放，顺序互换。两组均使用同一构建，关修复的对照设 `VEYRA_TEST_LEGACY_AUTO_CAPTURE_TIMING=1`。回放命令为 `python -B -X utf8 replay.py <legacy|fixed> <beat|beat-repeat> <视频> --dedup-vfg-auto 54`，脚本位于本轮 `tmp`。下表提交间隔统计剔除前三秒启动，尾段读数是界面同口径的 10 秒滚动 1% Low。
+
+| 指标 | 第一轮 关闭 → 启用 | 倒序复测 关闭 → 启用 |
+|---|---:|---:|
+| 提交间隔 P99 | 21.13 → 18.66 ms | 19.93 → 18.93 ms |
+| 最长提交间隔 | 50.24 → 39.81 ms | 55.23 → 35.95 ms |
+| 超过 25 ms 的提交间隔次数 | 22 → 10 | 22 → 10 |
+| 到期未提交的生成帧 | 1 → 0 | 4 → 0 |
+| 补帧预算拒绝帧对 | 1 → 0 | 2 → 0 |
+| 尾段滚动 1% Low | 51.44 → 49.40 FPS | 43.16 → 53.94 FPS |
+| GPU 补帧时间中位数 | 3.29 → 3.40 ms | 3.43 → 3.53 ms |
+| GPU 补帧时间 P95 | 4.73 → 10.84 ms | 9.59 → 9.95 ms |
+
+拍频余量峰值 16.664 ms，调度等待中位数由 24.7–25.1 ms 增至 33.9–34.6 ms。真 60 帧对照两侧均处理 659 张原画面，0 张被去重跳过，余量为 0。两档 60→30 约 30 帧，120 Hz 输入中的 30 帧内容两侧各处理 366 帧。GPU 耗时和短窗低帧存在跨轮波动。回放核验了提交节奏和时序修复，CM630 实卡回调、PS5 联机结果和屏幕端到端延迟尚待专项测量。 [逐轮对比数据](<E:/项目/Veyra/logs/codex-capture-timing-20261127/comparison.json>)
+
+本轮共用 `tests/runtime-dependency-refresh-20261127/app` 测试程序，114 个着色器与编译输出独立核验一致。保留构建、私有日志及复跑脚本，清理生成的两段测试视频和临时基线程序，共 998,569,462 字节。复跑视频的输入保留在 `tests/codex-github-fixes-20261126/media`。用于拍频的 FFmpeg 主要参数为 `-stream_loop 3 -i gta-native-2997.mp4 -t 59 -an -vf "scale=1920:1080,setpts='PTS+gte(N,495)*1.5175/TB',fps=6001/100:round=up" -c:v libx264 -preset ultrafast -qp 0 -g 120 -pix_fmt yuv420p -video_track_timescale 60010`。 [着色器配套检查](<E:/项目/Veyra/logs/codex-capture-timing-20261127/unit/shader-check.json>)
+
 ## 2026-11-27 SDK、运行库和模型更新
 
 以本地 main `30cde02a` 为基线，公共 DLSS SDK 和签名 DLSS SR 更新到 310.9.16，NVENC 头文件更新到 n13.0.19.1 并维持 13.0 ABI。RedDuke RX 7000 worker 更新至 1.4.0 网络层，保留当前 ZLUDA、模型与缓存。构建采用 FSR SDK 2.4.0 的头文件，兼容运行库保留 2.3.0。AMD 核显 ABBA 对照的超分 GPU P50 为 16.411→17.584 ms，独立留存 2.4.0 官方运行组件。RTX 5070 和 AMD 核显的 FSR 补帧热切换分别通过 18、15 轮，共 774、660 个生成帧，D3D12 错误为 0。RX 7000 的 14 项诊断和 67 项 GPU 进程间检查通过。 [上游版本、证据和硬件范围](<E:/项目/Veyra/reports/runtime-dependency-refresh-20261127/DEPENDENCY-AUDIT.md>)

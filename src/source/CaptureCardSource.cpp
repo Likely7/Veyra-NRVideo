@@ -547,6 +547,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     double pendingTime=0,lastPts=0,readAgeMs=0;bool pendingDiscontinuity=false,forceDiscontinuity=false;
     int64_t nominalDuration100ns=0;pipeline::Rational pendingDuration=pipeline::Rational::unknown();
     uint64_t received=0,dropped=0,lastDrop=0,sequence=0;
+    uint64_t pendingSequence=0,retainedRepeats=0;
     uint64_t discontinuitySamples=0;
     CaptureDriverDiscontinuity driverDiscontinuity;
     uint64_t suppressedDriverDiscontinuities=0;
@@ -646,7 +647,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     // Manual capture flip; read by the DirectShow callback thread.
     std::atomic<bool> verticalFlip{false};
     // Content dedup wants picture numbers; the reference lives on the callback thread.
-    std::atomic<bool> pictureCompare{false};
+    std::atomic<bool> pictureCompare{false}, retainFirstUnread{false};
     pipeline::PictureReference pictureReference{1};
     std::unique_ptr<WasapiAudioInput> wasapi;
     std::unique_ptr<decklink::Capture> decklink;
@@ -709,16 +710,17 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
             if(!staged||!written||!pendingFrame){++dropped;return;}
             // Continue the stream's timeline from the last DirectShow sample instead of jumping
             // to the card's clock, so the audio mapping and cadence checks see one timeline.
-            if(!externalTimeAnchored||(discontinuity&&received&&deviceSeconds+externalTimeOffset<=pendingTime)){
-                externalTimeOffset=(received?pendingTime+(nominalDuration100ns>0?double(nominalDuration100ns)/1e7:1.0/60):0.0)-deviceSeconds;
+            if(!externalTimeAnchored||(discontinuity&&received&&deviceSeconds+externalTimeOffset<=lastCallbackTime)){
+                externalTimeOffset=(received?lastCallbackTime+(nominalDuration100ns>0?double(nominalDuration100ns)/1e7:1.0/60):0.0)-deviceSeconds;
                 externalTimeAnchored=true;
             }
             const double time=deviceSeconds+externalTimeOffset;
             std::swap(stagingFrame,pendingFrame);
             if(pending)++dropped;
-            pendingDiscontinuity=captureDiscontinuity(pending,pendingDiscontinuity,discontinuity,received>0,pendingTime,time,info.averageFps);
+            pendingDiscontinuity=captureDiscontinuity(pending,pendingDiscontinuity,discontinuity,received>0,lastCallbackTime,time,info.averageFps);
             pending=true;pendingTime=time;pendingArrival=arrival;
             pendingNativePts100ns=nativePts100ns;
+            pendingSequence=received+1;lastCallbackTime=time;
             pendingDuration=captureDuration(0,duration100ns,duration100ns>0,nominalDuration100ns);
             if(!received)firstArrival=arrival;
             ++received;latestArrival=arrival;
@@ -891,7 +893,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         const auto driverAge=sampleTime&&!compressedPath?observeDriverAge(sampleStart,arrival):-1;
         const bool valid=sample&&std::isfinite(time)&&SUCCEEDED(sample->GetPointer(&data))&&data&&
             (compressedPath?sample->GetActualDataLength()>0:sample->GetActualDataLength()>=LONG(layout.sampleBytes));
-        bool enqueued=false;uint64_t timingSequence=0;int64_t copied100ns=0;double lockWaitMs=0,arrivalDeltaMs=0,ptsDeltaMs=0;
+        bool enqueued=false;uint64_t timingSequence=0,repeatCount=0;int64_t copied100ns=0;double lockWaitMs=0,arrivalDeltaMs=0,ptsDeltaMs=0;
         // Native path: claim the staging frame, copy outside the lock.
         AVFrame* staged=nullptr;bool stagedOk=false,probeNow=false,commitPicture=false;CaptureSignalSample signalSample;
         // A new picture's reference copy runs when this call returns (every path), after the publish below.
@@ -916,7 +918,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
             // empty between reads; only the native path requires it here.
             if(!valid||(!compressedPath&&!pendingFrame)){callbackError=true;if(staged)stagingBusy=false;}
             else {
-                const double previous=compressedPath?lastCallbackTime:pendingTime;
+                const double previous=lastCallbackTime;
                 if(received){arrivalDeltaMs=std::chrono::duration<double,std::milli>(arrival-latestArrival).count();ptsDeltaMs=(time-previous)*1000;}
                 const bool driverFlag=sample->IsDiscontinuity()==S_OK;
                 const bool driverBreak=driverDiscontinuity.observe(driverFlag,!compressedPath,
@@ -963,27 +965,38 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
                     entry.order=++compressedOrder;
                     entry.bad=entry.bad||driverBreak||clockBreak;
                     entry.reset=entry.reset||((driverBreak||clockBreak)&&codec!=CaptureCodec::Mjpeg);
-                    lastCallbackTime=time;
                     compressedQueue.push_back(std::move(entry));enqueued=true;
                 }else{
+                    bool retain=false;
                     if(staged){
                         stagingBusy=false;
                         if(!stagedOk){callbackError=true;wake.notify_one();return S_OK;}
-                        // Publish: the copied frame becomes pendingFrame; the
-                        // previous pendingFrame is the next staging target.
-                        std::swap(stagingFrame,pendingFrame);
+                        // A repeat of the unread first copy would delay the
+                        // same picture by a full slot. Keep it for one callback;
+                        // on a longer backlog the mailbox still takes the latest.
+                        if(pending&&pendingSequence==received&&!driverBreak&&!clockBreak&&
+                           retainFirstUnread.load(std::memory_order_relaxed)){
+                            const auto* incoming=pipeline::captureUploadFrame(staged);
+                            const auto* unread=pipeline::captureUploadFrame(pendingFrame);
+                            retain=incoming&&unread&&incoming->pictureValid&&unread->pictureValid&&incoming->pictureRepeat&&
+                                !unread->pictureRepeat&&incoming->pictureId==unread->pictureId;
+                        }
+                        if(!retain)std::swap(stagingFrame,pendingFrame);
                     }else{
                         // Staging frame unavailable (should not happen once
                         // configured); keep the locked copy as a safe fallback.
                         if(!writeCaptureFrame(layout,data,size_t(sample->GetActualDataLength()),*pendingFrame,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr)){callbackError=true;wake.notify_one();return S_OK;}
                     }
                     if(pending)++dropped;
-                    // Inspect consecutive callbacks, not consecutive mailbox reads.
-                    // Preserve a driver/clock break when its sample is overwritten.
-                    pendingDiscontinuity=captureDiscontinuity(pending,pendingDiscontinuity,
-                        driverBreak,received>0,pendingTime,time,info.averageFps);
-                    pending=true;pendingTime=time;pendingArrival=arrival;
-                    pendingDuration=captureDuration(sampleStart,sampleEnd,sampleTime,nominalDuration100ns);
+                    if(retain)repeatCount=++retainedRepeats;
+                    else{
+                        // Preserve a driver/clock break when its sample is overwritten.
+                        pendingDiscontinuity=captureDiscontinuity(pending,pendingDiscontinuity,
+                            driverBreak,received>0,previous,time,info.averageFps);
+                        pending=true;pendingTime=time;pendingArrival=arrival;
+                        pendingSequence=received+1;pendingNativePts100ns=0;
+                        pendingDuration=captureDuration(sampleStart,sampleEnd,sampleTime,nominalDuration100ns);
+                    }
                     if(watchDriverCadence){
                         if(driverBreak||clockBreak||!sampleTime)driverCadence.reset();
                         else if(driverCadence.observe(
@@ -995,6 +1008,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
                         }
                     }
                 }
+                lastCallbackTime=time;
                 if(!received)firstArrival=arrival;
                 ++received;latestArrival=arrival;
                 recentArrivals.push_back(arrival);
@@ -1004,6 +1018,8 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         }
         if(enqueued)decodeWake.notify_one();
         if(frameEvent)SetEvent(frameEvent);
+        if(repeatCount==1||(repeatCount&&repeatCount%50==0))
+            log::info("capture-mailbox",std::format("retainedFirstCopies={} (same-picture repeat discarded, original timestamp retained)",repeatCount));
         if(timingSequence&&(timingSequence%120==0||lockWaitMs>5))log::info("capture-callback",std::format("source={} entryToLockMs={:.3f} entryToCopiedMs={:.3f} bytes={} compressed={} arrivalDeltaMs={:.3f} ptsDeltaMs={:.3f} sampleDurationMs={:.3f} (callback cost, not display latency)",timingSequence,lockWaitMs,(copied100ns-std::chrono::duration_cast<std::chrono::nanoseconds>(arrival.time_since_epoch()).count()/100)/10000.0,sample->GetActualDataLength(),compressedPath,arrivalDeltaMs,ptsDeltaMs,sampleTime?double(sampleEnd-sampleStart)/10000:-1));
         if(log::verboseFrameLogs()&&timingSequence)log::info("capture-ingress-sample",std::format("source={} arrival={} copied={} compressed={}",timingSequence,std::chrono::duration_cast<std::chrono::nanoseconds>(arrival.time_since_epoch()).count()/100,copied100ns,compressedPath));
         wake.notify_one();return S_OK;
@@ -1250,7 +1266,8 @@ void CaptureCardSource::setVerticalFlip(bool enabled){
     if(p.verticalFlip.exchange(enabled)==enabled)return;
     log::info("capture-flip",std::format("manual vertical flip={} (applies to the next sample; ingest only)",enabled?1:0));
 }
-void CaptureCardSource::setPictureCompare(bool enabled){
+void CaptureCardSource::setPictureCompare(bool enabled,bool retainFirstUnread){
+    p_->retainFirstUnread.store(enabled&&retainFirstUnread,std::memory_order_relaxed);
     if(p_->pictureCompare.exchange(enabled)!=enabled)log::info("capture-dedup",std::format("picture compare={} (whole driver sample against the last new picture, band {} levels of 255, about 5 per million components may lie beyond it; content dedup)",enabled?1:0,pipeline::PictureReference::kBand8));
 }
 void CaptureCardSource::setCpuUnpack(bool enabled){
@@ -2593,7 +2610,7 @@ SourceReadStatus CaptureCardSource::readWithWait(pipeline::FramePacket& packet,c
         if(p.dropped!=p.lastDrop)flags|=static_cast<uint32_t>(pipeline::FrameFlagBits::Drop);
         if(p.pendingDiscontinuity)flags|=static_cast<uint32_t>(pipeline::FrameFlagBits::Discontinuity);
         if(p.forceDiscontinuity){flags|=static_cast<uint32_t>(pipeline::FrameFlagBits::Discontinuity);p.forceDiscontinuity=false;}
-        p.lastDrop=p.dropped;p.lastPts=time;++p.sequence;sequence=p.compressedPath?p.compressedDecoded:p.received;
+        p.lastDrop=p.dropped;p.lastPts=time;++p.sequence;sequence=p.compressedPath?p.compressedDecoded:p.pendingSequence;
     }
     if(feedDecode)p.decodeWake.notify_all();
     if(expiredHardware)av_frame_free(&expiredHardware);
@@ -2659,7 +2676,7 @@ void CaptureCardSource::closeGraph(bool stopped)noexcept{
     if(p.decodeDevice){p.decodeDevice->Release();p.decodeDevice=nullptr;}if(p.decodeQueue){p.decodeQueue->Release();p.decodeQueue=nullptr;}
     p.pendingIsHardware=false;p.compressedPath=false;p.codec=CaptureCodec::None;p.compressedDecoded=p.compressedErrors=0;
     p.info={};
-    p.sequence=p.received=p.dropped=p.lastDrop=0;p.pending=p.callbackError=p.configured=p.forceDiscontinuity=false;p.lastPts=p.readAgeMs=0;
+    p.sequence=p.received=p.dropped=p.lastDrop=p.pendingSequence=p.retainedRepeats=0;p.pending=p.callbackError=p.configured=p.forceDiscontinuity=false;p.lastPts=p.readAgeMs=0;
     p.recentArrivals.clear();
     p.signalProbeEnabled=false;p.signalProbe={};p.nextSignalProbe={};
     p.driverDiscontinuity.reset();p.suppressedDriverDiscontinuities=p.discontinuitySamples=0;

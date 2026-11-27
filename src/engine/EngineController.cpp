@@ -24,6 +24,7 @@
 #include "veyra/engine/VfgQueueBudget.h"
 #include "veyra/engine/VfgOverloadEstimate.h"
 #include "veyra/engine/LivePairLatency.h"
+#include "veyra/engine/LiveContentLagReserve.h"
 #include "veyra/engine/RealtimePreviewScheduling.h"
 #include "veyra/engine/CaptureHalfRate.h"
 #include "veyra/engine/ContentDedup.h"
@@ -1621,6 +1622,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             double vfgChosenFgMs=0,vfgFastFgMs=0;uint64_t vfgFastPairs=0,vfgFastBudgetPairs=0,vfgChosenPairs=0;int64_t vfgChosenAt=0,nextVfgFastLog=0;
             uint64_t generatedDropDeadline=0,generatedDropCapacity=0,generatedDropCap=0;
             LivePairLatency pairLatency;
+            LiveContentLagReserve contentLagReserve;
+            const bool legacyAutoCaptureTiming=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_AUTO_CAPTURE_TIMING",nullptr,0)>0;
             // Capture-card FG pairs: automatic deadline margin (0-1 ms) on top of the phase.
             LiveDeadlineMargin deadlineMargin;
             // Capture-card FG pairs rejected for a second: real frames without the FG phase.
@@ -1629,7 +1632,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             // window capture what a USB card has: this phase and a late callback.
             const bool adaptiveCapturePhase=(physicalCapture||testReplayAsCard||(isScreen&&GetEnvironmentVariableW(L"VEYRA_TEST_ADAPTIVE_SCREEN_PHASE",nullptr,0)>0))&&GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_CAPTURE_PHASE",nullptr,0)==0;
             static const double testArrivalJitterMs=[]{wchar_t v[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_ARRIVAL_JITTER_MS",v,16)?std::clamp(_wtof(v),0.0,10.0):0.0;}();
-            uint32_t testArrivalSeed=7;int64_t testCardStart=0;double testCardFirstPtsMs=0;
+            uint32_t testArrivalSeed=7;int64_t testCardStart=0,testCardFirstSample=0;
             const unsigned testReplayDropEvery=[]{wchar_t value[16]{};return GetEnvironmentVariableW(L"VEYRA_TEST_REPLAY_DROP_EVERY",value,16)?unsigned(std::clamp(_wtoi(value),0,120)):0u;}();
             bool testReplayDropPending=false;
             int64_t nextFgAdmissionLog=0,nextFgRejectionLog=0;
@@ -1640,7 +1643,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             struct CompletionWatch {
                 uint64_t reflexFrame=0;
                 int64_t captureArrival=0;
-                int64_t phaseAnchor=0;
+                int64_t phaseAnchor=0, phaseReserve=0;
                 uint64_t presentationGeneration=0;
                 pipeline::EnhanceGraph::FrameOutputs output;
                 std::shared_ptr<FrameFlowWindow> flow;
@@ -1850,7 +1853,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             const auto ready=watch.frameReadyObserved[i]?watch.frameReadyObserved[i]:observed;
                             requiredDelay=std::max(requiredDelay,ready-watch.phaseAnchor+batch.batch.b100ns-item.pts100ns);
                         }
-                        pairLatency.observe(observed,requiredDelay);
+                        pairLatency.observe(observed,requiredDelay+watch.phaseReserve);
                     }
                     completeReset(batch.batch.identity);
                     watch.readyObserved=Clock::now();
@@ -1919,7 +1922,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 {std::lock_guard lock(mutex_);snapshot_.presentationEffective=presentationEffective;snapshot_.presentationRevision=revision;snapshot_.presentationStatus=message;snapshot_.presentationProviderOwned=presenter->providerOwnedPresentation();}
                 veyra::log::info("pacing",std::format("revision={} requested={}/{}/{} effective={}/{}/{} displayQueuePaced={} variableRefresh={} vrrLevel={} vrrSync={}",revision,requested.enabled,unsigned(requested.mode),unsigned(requested.display),presentationEffective.enabled,unsigned(presentationEffective.mode),unsigned(presentationEffective.display),presentationPaced,requested.variableRefresh,gfx::vrrLevel(presenter->displayVrr()),presenter->vrrSync()));
             };
-            auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();deadlineMargin.reset();fgRejectionHold.reset();};
+            auto drainLivePresentation=[&]{cadence.reset();if(liveScheduler){++presentationDrains;liveScheduler->cancel();pollCompletions();pendingCompletions.clear();}pairLatency.reset();contentLagReserve.reset();deadlineMargin.reset();fgRejectionHold.reset();};
             const bool preciseDeadlines=GetEnvironmentVariableW(L"VEYRA_TEST_LEGACY_DEADLINE_WAIT",nullptr,0)==0;
             // A ready frame whose deadline has come goes out before the completion
             // poll: the poll collects GPU timings and FG budget samples, and a frame
@@ -3216,12 +3219,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     veyra::log::info("capture-rate",std::format("revision={} mode={} samplerReset=1",
                         options.settings.revision,halfRateMode));
                 const bool dedupActive=isCapture&&!isImage&&!legacyCadence&&dedupContent(options.settings.content);
+                const bool captureCadenceRepair=cardTiming&&dedupActive&&contentRate==ContentRate::Auto&&
+                    CaptureHalfRate::supported(activeSource->info().averageFps)&&options.fg&&
+                    !presentSinkFrameGeneration(options.settings.frameGenerationBackend)&&!legacyAutoCaptureTiming&&
+                    !legacyLivePacing&&adaptiveCapturePhase&&!options.settings.pacingRepair;
                 // The callback compares whole pictures only while dedup or the 60->30 phase needs them.
-                if(physicalCapture)captureSource.setPictureCompare(dedupActive||halfRate);
+                if(physicalCapture)captureSource.setPictureCompare(dedupActive||halfRate,captureCadenceRepair);
                 const int64_t driverPts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
                 const auto capturePeriod=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
                 bool captureClockCorrected=false;
-                int64_t dedupHoldInterval100ns=0;
+                int64_t dedupHoldInterval100ns=0,dedupLateSampleLag=0;
                 if(physicalCapture&&!nativeCapture&&!captureSource.compressedVideo()&&!rereadCached&&
                    CaptureHalfRate::supported(activeSource->info().averageFps)&&!pkt.pts.isUnknown()&&pkt.arrivalHost100ns>0){
                     const bool wasCorrecting=capturePreviewClock.correcting();
@@ -3256,7 +3263,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const int64_t hint=content==ContentRate::Fps30?333333:content==ContentRate::Fps50?200000:content==ContentRate::Fps60?166667:0;
                     const auto* capturedPicture=pipeline::captureUploadFrame(frame);
                     const auto pictureSequence=capturedPicture&&capturedPicture->pictureValid?pkt.sequence:0;
-                    const auto decision=contentDedup.observe(pictured?&picture.id:nullptr,pkt.pts.to100ns(),interval,boundary,hint,pictureSequence);
+                    const auto decision=contentDedup.observe(pictured?&picture.id:nullptr,pkt.pts.to100ns(),interval,boundary,
+                        hint,pictureSequence,captureCadenceRepair);
                     const double dedupUs=elapsedMs(compareStart)*1000;
                     if(veyra::log::verboseFrameLogs())veyra::log::info("content-dedup-frame",std::format("source={} pts100ns={} keep={} reason={} picture={:x} withinBand={} over={} maxDiff={} contentPts100ns={} intervalMs={:.3f} cpuUs={:.1f}",
                         pkt.sequence,pkt.pts.to100ns(),decision.keep,decision.reason,pictured?picture.id:0,picture.repeat,picture.over,picture.max8,decision.contentPts,decision.interval/1e4,dedupUs));
@@ -3265,6 +3273,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;
                     }
                     dedupHoldInterval100ns=decision.holdInterval;
+                    dedupLateSampleLag=decision.lateSampleLag;
                     int64_t contentPts=decision.contentPts,contentInterval=decision.interval;
                     // Frame pacing repair: frame generation shows a real frame one content
                     // interval after it arrives, which is the room the repair uses; without
@@ -3368,9 +3377,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 if(!retainCandidate()){status(L"无法保存解码帧，已停止播放",true);break;}
                 if(testReplayAsCard||(testArrivalJitterMs>0&&isScreen)){
                     double sum=0;for(int i=0;i<12;++i){testArrivalSeed=testArrivalSeed*1664525u+1013904223u;sum+=double(testArrivalSeed>>8)/double(1u<<24);}
-                    // A card's clock: 800 ppm slow against the host, as in the field log.
-                    if(testReplayAsCard&&!testCardStart){testCardStart=host100ns();testCardFirstPtsMs=pkt.pts.toDouble()*1000;}
-                    const auto line=testReplayAsCard?testCardStart+int64_t((pkt.pts.toDouble()*1000-testCardFirstPtsMs)*10000*1.0008):pkt.arrivalHost100ns;
+                    // Recreate callback arrivals from the sampling clock, even
+                    // when dedup has already moved this picture's content PTS.
+                    if(testReplayAsCard&&!testCardStart){
+                        testCardStart=host100ns();
+                        testCardFirstSample=samplePts100ns;
+                    }
+                    const auto line=testReplayAsCard?testCardStart+int64_t((samplePts100ns-testCardFirstSample)*1.0008):pkt.arrivalHost100ns;
                     const auto until=line+int64_t(std::max(0.0,sum-3)*testArrivalJitterMs*10000);
                     while(host100ns()<until){advanceLive();std::this_thread::yield();}
                     pkt.arrivalHost100ns=host100ns();
@@ -3459,7 +3472,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     nextFgAdmissionLog=now+10000000;if(!admitted)nextFgRejectionLog=now+10000000;
                     veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} multiplier={} requestedMultiplier={} admitted={} admittedPairs={} rejectedPairs={} remainingDeadlineMs={:.3f} firstDeadlineMs={:.3f} queuedGpuMs={:.3f} predictedMs={:.3f} elapsedMs={:.3f} blitGpuP95Ms={:.3f} presentCpuP95Ms={:.3f} warmingHistory={} (CPU Present is backpressure, not added GPU cost; firstDeadlineMs=-1 when unused)",timeline,batch.identity.settingsRevision,batch.identity.sourceFrameId,previewFgMultiplier,options.fgMultiplier,admitted,fgAdmittedPairs,fgRejectedPairs,double(deadline-now)/10000,firstDeadline?double(firstDeadline-now)/10000:-1,queuedMs,fgBudget.predicted(now,warmingHistory).value_or(-1),elapsed,blit,livePresent.p95(),warmingHistory));
                 };
-                if(fgBudgetRevision!=options.settings.revision||hardFrameReset){fgBudget.reset();vfgOverload.reset();vfgCostSettling.reset();vfgChosenFgMs=vfgFastFgMs=0;liveArrival.reset();pairLatency.reset();deadlineMargin.reset();fgRejectionHold.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
+                if(fgBudgetRevision!=options.settings.revision||hardFrameReset){fgBudget.reset();vfgOverload.reset();vfgCostSettling.reset();vfgChosenFgMs=vfgFastFgMs=0;liveArrival.reset();pairLatency.reset();contentLagReserve.reset();deadlineMargin.reset();fgRejectionHold.reset();fgBudgetRevision=options.settings.revision;displayFgGate.reset();}
                 previewFgMultiplier=options.fgMultiplier;
                 // An output cap used to only drop candidates at present time, so
                 // the GPU still generated frames that were thrown away: at 6X on
@@ -3568,10 +3581,25 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // generated frames before this change), so their bound stays as it was;
                 // the FG allowance is for 60->30 and transport pairs.
                 const int64_t fgPhaseAllowance=marginPair&&!smoothContentAnchor?fgBudget.phaseAllowance(host100ns(),liveInterval):0;
-                const auto phaseAllowance=std::max(transportInterval/2,fgPhaseAllowance);
-                const auto phaseLimit=legacyPairDelay+phaseAllowance;
+                int64_t contentLag=0, reserve=0;
+                bool slewCapturePhase=false;
+                if(captureCadenceRepair&&smoothContentAnchor&&!rereadCached){
+                    contentLag=std::max<int64_t>(0,samplePts100ns-pkt.pts.to100ns());
+                    const bool held=dedupHoldInterval100ns>0||(pairContentFps>0.0&&pairContentFps<24.0);
+                    const bool halfCadence=contentDedup.nearHalfCadence(transportInterval);
+                    // A still or slow menu cannot expose the next clock beat.
+                    // Learn from moving 30 Hz content and exclude lost inputs.
+                    if(held)contentLagReserve.hold(liveInputReady);
+                    else contentLagReserve.observe(liveInputReady,!gapCandidate?dedupLateSampleLag:0,transportInterval);
+                    slewCapturePhase=held||halfCadence;
+                    if(slewCapturePhase)reserve=contentLagReserve.peak();
+                }
+                const auto phaseAllowance=std::max({transportInterval/2,fgPhaseAllowance,reserve});
                 auto pairDelay=marginPair?
-                    pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier,phaseAllowance)+pairExtra:legacyPairDelay;
+                    pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier,phaseAllowance,slewCapturePhase)+pairExtra:legacyPairDelay;
+                // Keep any phase above the new cap while it is slewing down.
+                const auto phaseLimit=slewCapturePhase?std::max(legacyPairDelay+phaseAllowance,pairDelay-pairExtra):
+                    legacyPairDelay+phaseAllowance;
                 std::optional<int64_t> pairPresentAnchor;
                 const auto presentAnchorFor=[&](int64_t source){
                     if(!pairPresentAnchor){
@@ -3966,7 +3994,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const bool smoothedCapacity=smoothTransportAnchor||smoothContentAnchor;
                         if(smoothedCapacity&&host100ns()>=nextLiveAnchorLog){
                             nextLiveAnchorLog=host100ns()+10000000;
-                            veyra::log::info("live-anchor",std::format("revision={} contentClock={} callbackJitterMs={:.3f} clockDriftPpm={:.0f} snaps={} callbackMinusAnchorMs={:.3f} phaseMs={:.3f} deadlineExtraMs={:.3f} fgPhaseAllowanceMs={:.3f} fgHeld={} capacityWaitMs={:.2f} (presentation anchor: source or deduplicated content PTS on the tracked capture clock; fgHeld: real frame shown when ready, phase unused; capacity wait applies under explicit VSync)",options.settings.revision,smoothContentAnchor,liveArrival.jitterMs(),liveArrival.driftPpm(smoothContentAnchor?transportInterval:liveInterval),liveArrival.snaps(),double(liveInputReady-presentAnchor)/10000,double(pairDelay)/10000,double(pairExtra)/10000,double(fgPhaseAllowance)/10000,fgHeld,liveSmoothedCapacityWaitMs(double(liveInterval)/10000/std::max(1u,previewFgMultiplier),fixedCapacityWait?0:liveArrival.jitterMs())));
+                            veyra::log::info("live-anchor",std::format("revision={} contentClock={} callbackJitterMs={:.3f} clockDriftPpm={:.0f} snaps={} callbackMinusAnchorMs={:.3f} phaseMs={:.3f} deadlineExtraMs={:.3f} fgPhaseAllowanceMs={:.3f} contentLagReserveMs={:.3f} fgHeld={} capacityWaitMs={:.2f} (presentation anchor: source or deduplicated content PTS on the tracked capture clock; fgHeld: real frame shown when ready, phase unused; capacity wait applies under explicit VSync)",options.settings.revision,smoothContentAnchor,liveArrival.jitterMs(),liveArrival.driftPpm(smoothContentAnchor?transportInterval:liveInterval),liveArrival.snaps(),double(liveInputReady-presentAnchor)/10000,double(pairDelay)/10000,double(pairExtra)/10000,double(fgPhaseAllowance)/10000,double(reserve)/10000,fgHeld,liveSmoothedCapacityWaitMs(double(liveInterval)/10000/std::max(1u,previewFgMultiplier),fixedCapacityWait?0:liveArrival.jitterMs())));
                         }
                     }
                     else if(!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts))liveTimeline.reset(out.batch.identity.epoch,out.batch.b100ns,liveInputReady,options.fg?duration100ns:0,paceSourcePts);
@@ -3982,6 +4010,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     watch->captureArrival=captureArrival;watch->presentationGeneration=jobGeneration;
                     // Learn enough phase for early content-clock deadlines on late capture slots.
                     watch->phaseAnchor=smoothContentAnchor?presentAnchorFor(out.batch.b100ns):captureArrival;
+                    // Readiness is already late by contentLag on the beat itself.
+                    // Train for that late pair even when the current B arrived on time.
+                    watch->phaseReserve=std::max<int64_t>(0,reserve-contentLag);
                     watch->reflexFrame=currentReflexFrame;
                     pendingCompletions.push_back(watch);
                     if(physicalCapture&&gpuReadyEvent.handle)for(unsigned i=0;i<out.batch.count;++i){

@@ -32,8 +32,9 @@ namespace veyra::engine {
 // sample; hitches and variable rates keep their sample times.
 //
 // Repetition in a quiet menu is not a measurement of its rendering cadence.
-// Keep feeding at transport cadence after the ordinary duplicate slots, and
-// train the content clock only on pictures that actually change.
+// Keep refreshing stills after the ordinary duplicate slots, and train the
+// content clock only on pictures that actually change. For graph FG on a
+// 60 Hz card, a learned 30 Hz cadence also sets the still refresh interval.
 class ContentDedup {
 public:
     struct Decision {
@@ -41,6 +42,7 @@ public:
         int64_t contentPts = 0;   // 100 ns, kept frames
         int64_t interval = 0;     // 100 ns from the previous kept frame (0 = unknown)
         int64_t holdInterval = 0; // static refresh cadence, not the preceding hitch span
+        int64_t lateSampleLag = 0; // extra sample slot on a fitted moving 30 Hz cadence
         const char* reason = "first";
     };
     struct Stats {
@@ -54,13 +56,15 @@ public:
         timeCount_ = 0; timeHead_ = 0; period_ = 0; misses_ = 0;
         rateCount_ = rateHead_ = 0; observedPeriod_ = 0;ratePictures_=rateLastPicture_=rateLastSequence_=0;
         halfRateSamples_.fill(0); halfRateRepeats_={}; halfRateSeen_=0; halfRateOrigin_=0;
+        contentShift_ = 0; carryingShift_ = false; resetPhaseEase();
     }
     // picture: picture number of the sample, or nullptr (no CPU picture: keep everything).
     // hintPeriod: expected content period of the selected content rate, 0 = unknown.
     // captureSequence is supplied only with all-callback PictureReference ids:
     // their low 56 bits count new pictures even if the engine missed a sample.
     // Engine-only comparisons have no knowledge of skipped pictures, so pass 0.
-    Decision observe(const uint64_t* picture, int64_t pts, int64_t transport, bool boundary, int64_t hintPeriod = 0,uint64_t captureSequence=0) {
+    Decision observe(const uint64_t* picture, int64_t pts, int64_t transport, bool boundary,
+                     int64_t hintPeriod = 0, uint64_t captureSequence = 0, bool preserveCaptureCadence = false) {
         Decision d;
         ++stats_.observed;
         if (transport <= 0) transport = 166667;
@@ -84,17 +88,24 @@ public:
             // Wait at least one 24 Hz content period before holding at high
             // transport rates, where an ordinary picture spans more samples.
             constexpr int64_t slowContentPeriod=416667;
-            const auto wait=transport>=250000?transport*7/8:std::max(transport*23/8,slowContentPeriod);
-            if(!holding_&&pts-lastKeptSample_<wait){
+            const bool halfCadence = preserveCaptureCadence && nearHalfCadence(transport);
+            const auto transportWait = transport >= 250000 ? transport * 7 / 8 :
+                std::max(transport * 23 / 8, slowContentPeriod);
+            // First hold on slot four, with one quarter slot of clock tolerance.
+            const auto wait = halfCadence ? (holding_ ? 2 : 4) * transport - transport / 4 :
+                (holding_ ? 0 : transportWait);
+            if(pts-lastKeptSample_<wait){
                 ++stats_.repeats;d.keep=false;d.reason="repeat";return d;
             }
             holding_=true;
             ++stats_.held;
-            d.holdInterval=transport;
-            return keep(d,pts,previous,transport,picture,Timing::Sample,"hold");
+            d.holdInterval = halfCadence ? transport * 2 : transport;
+            return keep(d, pts, previous, transport, picture,
+                        halfCadence ? Timing::Hold : Timing::Sample, "hold");
         }
         holding_ = false;
-        return keep(d, pts, previous, transport, picture, Timing::Cadence, "new", hintPeriod,captureSequence);
+        return keep(d, pts, previous, transport, picture, Timing::Cadence, "new", hintPeriod,
+                    captureSequence, preserveCaptureCadence);
     }
     // A failed constant-period fit is not an unknown content rate. Measure the
     // moving pictures separately, including genuinely varying game cadence.
@@ -102,6 +113,9 @@ public:
     double contentFps() const { const auto period=measuredPeriod();return period > 0 ? 1e7 / double(period) : 0.0; }
     int64_t intervalHint(int64_t transport) const {
         return std::max(transport, measuredPeriod() > 0 ? measuredPeriod() : transport);
+    }
+    bool nearHalfCadence(int64_t transport) const {
+        return transport > 0 && std::llabs(measuredPeriod() - transport * 2) <= transport / 8;
     }
     const Stats& stats() const { return stats_; }
     bool suggestHalfRate()const{
@@ -119,7 +133,28 @@ private:
         ++halfRateSeen_;
     }
 
-    enum class Timing { Sample, Cadence };
+    enum class Timing { Sample, Hold, Cadence };
+    void resetPhaseEase() { phaseSamples_ = 0; easingPhase_ = false; }
+    int64_t easeStuckPhase(int64_t content, int64_t pts, int64_t transport) {
+        const auto shift = pts - content;
+        // 40-in-60 naturally alternates between different sampling offsets.
+        // A whole-slot cadence should recover a stuck phase without shifting
+        // steady clocks that are already gliding back after a capture beat.
+        const auto wholePeriod = period_ < transport * 3 / 2 ? transport : transport * 2;
+        if (std::llabs(period_ - wholePeriod) > transport / 8 ||
+            shift <= (easingPhase_ ? transport / 8 : transport / 4)) {
+            resetPhaseEase();
+            return content;
+        }
+        if (!easingPhase_) {
+            if (!phaseSamples_) phaseReference_ = shift;
+            if (++phaseSamples_ == 8) {
+                easingPhase_ = phaseReference_ - shift < transport / 100;
+                phaseSamples_ = 0;
+            }
+        }
+        return easingPhase_ ? std::min(pts, content + transport / 32) : content;
+    }
     static constexpr unsigned kTimes = 48;
     int64_t measuredPeriod() const {
         // A stable fit removes transport-grid quantization from the rate
@@ -129,17 +164,23 @@ private:
         return observedPeriod_;
     }
     Decision& keep(Decision& d, int64_t pts, int64_t previous, int64_t transport, const uint64_t* picture, Timing timing,
-                   const char* reason, int64_t hint = 0,uint64_t captureSequence=0) {
+                   const char* reason, int64_t hint = 0, uint64_t captureSequence = 0,
+                   bool preserveCaptureCadence = false) {
         d.keep = true; d.reason = reason; ++stats_.kept;
         int64_t content = pts;
+        bool fitted = false;
         if (!haveContent_&&picture) observeRate(pts, transport, false,*picture,captureSequence);
         if (timing == Timing::Cadence) {
             const auto lastChange=rateCount_?rateTimes_[(rateHead_+kTimes-1)%kTimes]:pts;
             const bool longStill=skipSpan_&&pts-lastChange>std::max<int64_t>(transport*6,2500000);
             observeRate(pts, transport, longStill,*picture,captureSequence);
             // A span that started at a held (still-screen) frame is not a content period.
+            const bool resumeAfterHold = skipSpan_ && preserveCaptureCadence && carryingShift_;
             if (skipSpan_) { timeCount_ = 0; timeHead_ = 0; }
-            if (timeCount_ == 0) push(lastKeptSample_);
+            // The synthetic hold may be on the other sample parity. Start
+            // fitting again at the first moving picture after the hold.
+            if (resumeAfterHold) { period_ = 0; misses_ = 0; }
+            if (timeCount_ == 0 && !resumeAfterHold) push(lastKeptSample_);
             push(pts);
             if (timeCount_ >= 8) {
                 // Least-squares slope of sample time over kept-frame index: the
@@ -162,18 +203,47 @@ private:
                 const int64_t predicted = lastContent_ + period_, tolerance = transport / 2;
                 if (predicted >= lo - tolerance && predicted <= hi + tolerance) {
                     content = std::clamp(predicted, lo + 1, hi); misses_ = 0; ++stats_.regular;
+                    fitted = true;
+                    if (preserveCaptureCadence) content = easeStuckPhase(content, pts, transport);
                 } else {
                     ++stats_.irregular;
                     // Two misses in a row: the rate changed; relearn it from here.
                     if (++misses_ >= 2) { timeCount_ = 0; timeHead_ = 0; period_ = 0; misses_ = 0; push(pts); }
                 }
             }
+            if (preserveCaptureCadence) {
+                if (fitted) carryingShift_ = false;
+                else {
+                    resetPhaseEase();
+                    // A held frame used the last capture-to-content offset.
+                    // Keep it on resume and ease it away while the fit relearns.
+                    if (carryingShift_) {
+                        contentShift_ = std::max<int64_t>(0, contentShift_ - transport / 32);
+                        content = std::clamp(pts - contentShift_, lo + 1, hi);
+                    }
+                }
+            }
+        }
+        if (timing == Timing::Hold) {
+            content = pts - contentShift_;
+            carryingShift_ = true;
+            resetPhaseEase();
         }
         if (haveContent_) {
             content = std::max(content, lastContent_ + 10000);
             d.interval = content - lastContent_;
+            // Only learn from a late sample whose source cadence stayed on
+            // time. Startup, stills, and slow/variable content can have
+            // offsets without a sampling beat.
+            if (preserveCaptureCadence && fitted && !skipSpan_ &&
+                std::llabs(pts - lastKeptSample_ - 3 * transport) <= transport / 4 &&
+                std::llabs(d.interval - 2 * transport) <= transport / 4 && pts - content >= transport / 2) {
+                d.lateSampleLag = pts - content;
+            }
         }
-        skipSpan_ = timing == Timing::Sample && haveContent_;
+        if (preserveCaptureCadence || timing == Timing::Hold)
+            contentShift_ = std::max<int64_t>(0, pts - content);
+        skipSpan_ = timing != Timing::Cadence && haveContent_;
         haveContent_ = true;
         stats_.maxShiftMs = std::max(stats_.maxShiftMs, double(pts - content) / 1e4);
         d.contentPts = content;
@@ -221,6 +291,9 @@ private:
     uint64_t halfRateSeen_=0;
     int64_t halfRateOrigin_=0;
     int64_t observedPeriod_ = 0;
+    int64_t contentShift_ = 0, phaseReference_ = 0;
+    unsigned phaseSamples_ = 0;
+    bool carryingShift_ = false, easingPhase_ = false;
     Stats stats_;
 };
 }

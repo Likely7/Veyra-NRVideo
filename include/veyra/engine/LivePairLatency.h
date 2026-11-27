@@ -29,12 +29,17 @@ public:
         selected_=std::min(std::max(selected_,need),limit);
         return selected_;
     }
-    int64_t select(int64_t now,int64_t legacyDelay,int64_t interval,unsigned multiplier,int64_t samplingAllowance=0){
+    int64_t select(int64_t now,int64_t legacyDelay,int64_t interval,unsigned multiplier,int64_t samplingAllowance=0,bool slewCapturePhase=false){
         if(interval<=0||multiplier<2){selected_=0;return legacyDelay;}
         std::array<int64_t,kMaxSamples> current;
         size_t count=0;
         for(const auto& sample:samples_)if(sample.time>=now-10000000)current[count++]=sample.delay;
-        const auto limit=legacyDelay+samplingAllowance;
+        const auto step = slewCapturePhase ? std::max<int64_t>(2500, interval / multiplier / 32) :
+            std::min<int64_t>(5000, interval / multiplier / 8);
+        // A static map can change the pair interval in one step. Allow an
+        // existing phase to descend without advancing a deadline by a slot.
+        const auto limit = slewCapturePhase ? std::max(legacyDelay + samplingAllowance, selected_ - step) :
+            legacyDelay + samplingAllowance;
         // A gap in readiness observations is expected when pairs are skipped.
         // Retain the last phase until enough new samples arrive.
         if(count<8){
@@ -49,7 +54,6 @@ public:
         // content clock, and FG whose own interpolation does not fit in the
         // legacy delay (FgRecoveryBudget::phaseAllowance).
         const auto target=std::min(limit,current[index]+kMargin100ns);
-        const auto step=std::min<int64_t>(5000,interval/multiplier/8);
         selected_=std::clamp(selected_?selected_-step:legacyDelay,target,limit);
         return selected_;
     }

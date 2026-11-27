@@ -93,7 +93,7 @@ public:
     void setVerticalFlip(bool enabled);
     // Content dedup: compare every sample's whole picture with the last new one and
     // number the pictures (CaptureUploadFrame.h). Any thread; applies to the next sample.
-    void setPictureCompare(bool enabled);
+    void setPictureCompare(bool enabled, bool retainFirstUnread = false);
     // N1 diagnostic: keep the legacy per-pixel CPU unpack (BGR0/YUY2 targets)
     // instead of the GPU unpack path. Applied on the next connect.
     void setCpuUnpack(bool enabled);

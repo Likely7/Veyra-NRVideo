@@ -1,6 +1,7 @@
 #define NOMINMAX
 #include "veyra/engine/LivePresentationTiming.h"
 #include "veyra/engine/LivePairLatency.h"
+#include "veyra/engine/LiveContentLagReserve.h"
 #include "veyra/engine/LivePresentationResetPolicy.h"
 #include "veyra/source/CaptureTiming.h"
 #include "veyra/engine/CaptureHalfRate.h"
@@ -41,6 +42,28 @@ int main(){
         check(std::abs(edge.right-1)<1e-6f&&std::abs(edge.top)<1e-6f&&std::abs((edge.right-edge.left)-.35f)<1e-6f,"drag clamps to source boundary preserving region size");
         auto ellipse=region;ellipse.ellipse=true;
         check(!ui::mask::contains(ellipse,.101f,.201f)&&ui::mask::contains(ellipse,.275f,.425f),"ellipse selection rejects bounding-box corners");
+    }
+    {
+        using namespace veyra::engine;
+        constexpr int64_t slot=166667, second=10000000;
+        LiveContentLagReserve reserve;
+        reserve.observe(second,slot/8,slot);
+        check(reserve.peak()==0,"capture lag reserve does not seed or learn sub-slot jitter");
+        reserve.observe(2*second,slot*3,slot);
+        check(reserve.peak()==slot+slot/10,"capture lag reserve cannot exceed one slot plus jitter allowance");
+        reserve.hold(3*second);
+        reserve.hold(90*second);
+        reserve.observe(91*second,0,slot);
+        check(reserve.peak()==slot+slot/10,"a long static screen stops the reserve aging");
+        reserve.observe(123*second,0,slot);
+        check(reserve.peak()==0,"capture lag reserve expires after moving content stops beating");
+
+        LivePairLatency phase;
+        const auto large=phase.select(second,slot*4,slot*4,2,slot,true);
+        const auto afterMap=phase.select(second+slot*2,slot*2,slot*2,2,slot/2,true);
+        check(large-afterMap==slot/32,"map exit slews the capture phase even without enough readiness samples");
+        check(phase.select(second+slot*4,slot*2,slot*2,2,slot/2)==slot*2+slot/2,
+              "other sources retain the original immediate phase cap");
     }
     for(int64_t interval:{166667LL,333333LL}){
         veyra::engine::PresentationScheduler scheduler;
@@ -846,6 +869,64 @@ int main(){
         {// Hitch: one picture shown for four samples, then the 30 fps cadence resumes one slot later.
          const auto r=run(60.0,[](int i){return int64_t(i<301?i/2:(i<304?150:(i-1)/2));},n,0,0,333333);
          check(r.keptRepeats==1&&r.droppedReal==0&&r.monotonic&&r.neverLate,"dedup hitch: one static refresh, no lost picture or nonmonotonic timestamp");}
+        {
+            ContentDedup cadence;
+            constexpr int64_t slot=166667;
+            int firstHold=0, held=0, missed=0;
+            bool grid=true;
+            uint64_t previous=0;
+            for(int i=0;i<960;++i){
+                const uint64_t picture=i<240?uint64_t(i/2+1):i<720?1000u:uint64_t(i/2+1000);
+                const auto d=cadence.observe(&picture,i*slot,slot,i==0,0,i+1,true);
+                if(picture!=previous&&!d.keep)++missed;
+                previous=picture;
+                if(d.holdInterval){
+                    if(!firstHold)firstHold=i;
+                    grid&=d.holdInterval==2*slot&&i%2==0;
+                    ++held;
+                }
+            }
+            check(firstHold==244&&held==238&&grid&&!missed,
+                  "60 Hz Automatic keeps a learned 30 Hz still on its grid and retains every new picture");
+
+            for(int sourceRate:{24,25,40,60}){
+                ContentDedup differentCadence;
+                uint64_t last=0;
+                int changes=0, kept=0;
+                for(int i=0;i<600;++i){
+                    const uint64_t picture=uint64_t(i*sourceRate/60+1);
+                    const auto d=differentCadence.observe(&picture,i*slot,slot,i==0,0,i+1,true);
+                    changes+=picture!=last;
+                    kept+=d.keep;
+                    last=picture;
+                }
+                check(kept==changes,"Automatic cadence repair preserves every real 24/25/40/60 Hz picture");
+            }
+        }
+        {
+            // A one-refresh shift followed by a 60.01/59.94 Hz beat is
+            // different from a game that actually stops producing frames.
+            // The former must not snap the content clock a second time.
+            const auto longestAfterShift=[](bool repaired,bool still){
+                ContentDedup cadence;
+                const double slot=1e7/60.01, refresh=1e7/59.94;
+                int64_t longest=0;
+                for(int i=0;i<7200;++i){
+                    const auto time=i*slot+5000;
+                    const double end=still?42.7:40.7;
+                    const auto displayed=still&&time>40e7&&time<end*1e7?40e7:time;
+                    const auto display=int64_t(displayed/refresh)+(time>end*1e7?(still?-1:1):0);
+                    const uint64_t picture=uint64_t(display/2+1);
+                    const auto d=cadence.observe(&picture,int64_t(time),int64_t(slot),i==0,0,0,repaired);
+                    if(d.keep&&time>(end+0.25)*1e7)longest=std::max(longest,d.interval);
+                }
+                return longest;
+            };
+            const auto before=longestAfterShift(false,false), after=longestAfterShift(true,false);
+            std::printf("CAPTURE_CLOCK_SHIFT beforeMs=%.3f afterMs=%.3f\n",before/1e4,after/1e4);
+            check(before>500000&&after<370000,"content clock recovers from a one-refresh shift before the next beat");
+            check(longestAfterShift(true,true)<410000,"motion after a still does not fit the clock to a synthetic hold");
+        }
         {// Mailbox overwrite: the first sample of a picture is never read; its second still counts as new.
          ContentDedup dedup;int kept=0;
          for(int i=0;i<120;++i){if(i%4==2)continue;const uint64_t shown=uint64_t(i/2);kept+=dedup.observe(&shown,i*166667+1000,166667,i==0).keep;}
