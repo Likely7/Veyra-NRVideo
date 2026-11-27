@@ -9,6 +9,7 @@
 #include "veyra/remoteplay/StreamRecovery.h"
 #include "veyra/engine/PresentationScheduler.h"
 #include "veyra/engine/FgRecoveryBudget.h"
+#include "veyra/sink/CaptureSyncTarget.h"
 #include <atomic>
 #include <chrono>
 #include <functional>
@@ -85,6 +86,15 @@ TEST(clock_long_session_drift_and_fg){
         }
         CHECK(admitted>measured*98/100);
     }
+}
+TEST(audio_sync_uses_original_video_arrival) {
+    veyra::sink::CaptureSyncTarget sync;
+    constexpr double residence = 52.0;
+    constexpr double arrival = 10000.0;
+    const auto unanchored = sync.observe(952.0, arrival + residence, std::nullopt);
+    CHECK(!unanchored.fallback && unanchored.targetMs == 952.0);
+    const auto anchored = sync.observe(952.0, arrival + residence, arrival);
+    CHECK(anchored.fallback && anchored.targetMs == residence && anchored.localMs == residence);
 }
 TEST(clock_reject_invalid){RemotePlayClock c;CHECK(!c.video(0,0));THROWS(c.reset(0,120));THROWS(c.reset(-1,60));c.reset(10,60);CHECK(!c.video(0,9));CHECK(c.video(1,20));CHECK(!c.video(1,20));CHECK(!c.video(2,19));CHECK(!c.audioPts(0,0,10));CHECK(!c.audioPts(std::numeric_limits<std::uint64_t>::max(),8000,10));}
 TEST(queue_limits_validation){QueueLimits l;l.maxFrames=0;THROWS(VideoIngress{l});l={};l.maxConfigBytes=l.maxBytes+1;THROWS(VideoIngress{l});l={};l.maxAge100ns=0;THROWS(VideoIngress{l});}

@@ -4210,7 +4210,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             // paused cached frames must not invent input anchors.
                             if(didPresent&&physicalCapture&&!generated&&!rereadCached)captureSource.videoPresented(double(captureClockCorrected?driverPts100ns:item.pts100ns)/10000,host100ns(),captureArrival);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-                            if(didPresent&&remote)remote->videoPresented(double(item.pts100ns)/10000,host100ns());
+                            if(didPresent&&remote&&!generated&&!rereadCached)
+                                remote->videoPresented(double(item.pts100ns)/10000,host100ns(),
+                                    sourceArrivalHost>0?std::optional<int64_t>(sourceArrivalHost):std::nullopt);
 #endif
 #ifdef VEYRA_ENABLE_MOONLIGHT
                             if(didPresent&&moon)moon->videoPresented(double(item.pts100ns)/10000,host100ns());
