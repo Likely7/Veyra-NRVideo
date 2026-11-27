@@ -104,6 +104,7 @@ public:
     uint64_t xessGeneratedCount() const {return sink_.xess()?sink_.xess()->generatedCount():0;}
     uint64_t xessPresentedCount() const {return sink_.xess()?sink_.xess()->presentedCount():0;}
     bool xessActive() const {return sink_.xess()!=nullptr;}
+    uint32_t xessMaxInterpolatedFrames() const {return sink_.xess()?sink_.xess()->maxInterpolatedFrames():0;}
     bool xessFailed() const {return xessFailed_;}
     // Sustained under-rate may suppress SDK-owned XeSS-FG generation over a
     // stable interval (xefgSwapChainSetEnabled); re-enabling goes through the

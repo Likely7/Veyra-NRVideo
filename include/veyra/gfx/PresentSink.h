@@ -66,8 +66,9 @@ public:
         bool hdr = false;
         bool hdr10 = false;
         // Requested frame-generation multiplier (2 = one generated frame).
-        // Only the XeSS path consumes it today; >2 requires the provider unlock.
+        // The XeSS path validates it with the runtime on this render adapter.
         uint32_t fgMultiplier = 1;
+        uint32_t adapterVendorId = 0;
         // XeLL low-latency sleep on the source-input thread. Must stay true
         // for generation (provider returns -15 otherwise); diagnostic toggle.
         bool xessLowLatencySleep = true;

@@ -217,6 +217,7 @@ struct PlayerSnapshot {
     // 0 = no XeSS session has reported yet; the settings UI then falls back to
     // the audited-provider probe.
     int xessMaxInterpolatedFrames=0;
+    bool xessIntelNative=false; // Active render adapter uses Intel's unmodified runtime.
     // AMD FSR frame-generation ceiling (generated frames per presented frame;
     // 1 = 2X). 0 = no FSR session has reported yet.
     int fsrMaxGeneratedFrames=0;

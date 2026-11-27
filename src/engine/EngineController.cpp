@@ -1132,7 +1132,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const auto xessState=gfx::XessMfgUnlock::snapshot();
                 // Unknown until the XeSS provider actually ran: a DLSS-only
                 // session must not restrict the XeSS choices in the UI.
-                xessMaxInterpolatedFramesCap_=presenter->xessActive()?int(std::max(1u,xessState.maxInterpolations)):0;
+                snapshot_.xessIntelNative=ctx.adapter().vendorId==0x8086;
+                if(snapshot_.xessIntelNative){
+                    if(presenter->xessActive())xessMaxInterpolatedFramesCap_=int(presenter->xessMaxInterpolatedFrames());
+                }else xessMaxInterpolatedFramesCap_=presenter->xessActive()?int(std::max(1u,xessState.maxInterpolations)):0;
                 snapshot_.xessMaxInterpolatedFrames=xessMaxInterpolatedFramesCap_;
                 // AMD FSR ceiling comes from the active graph provider; 0 keeps the
                 // settings UI on its static 2X fallback until a session ran.
@@ -1142,7 +1145,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 snapshot_.hudLockState=graph->hudLockState();
                 snapshot_.dynamicHudState=graph->dynamicHudState();
                 if(fgMultiFrameMaxCap_>0)veyra::log::info("settings",std::format("frame-generation capability: maxGeneratedFrames={} maxMultiplier={}",fgMultiFrameMaxCap_,fgMultiFrameMaxCap_+1));
-                veyra::log::info("settings",std::format("xess capability: active={} maxInterpolatedFrames={} unlockApplied={} (active context only)",presenter->xessActive(),xessMaxInterpolatedFramesCap_,xessState.applied));
+                veyra::log::info("settings",std::format("xess capability: active={} maxInterpolatedFrames={} unlockApplied={} intelNative={}",presenter->xessActive(),xessMaxInterpolatedFramesCap_,!snapshot_.xessIntelNative&&xessState.applied,snapshot_.xessIntelNative));
                 if(fsrMaxGeneratedFramesCap_>0)veyra::log::info("settings",std::format("fsr capability: generatedPerPresent={} => maxMultiplier={}",fsrMaxGeneratedFramesCap_,fsrMaxGeneratedFramesCap_+1));
             };
             const auto initialRequested=options.snapshot();

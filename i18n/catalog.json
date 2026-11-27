@@ -3134,6 +3134,32 @@
    "ru": "Intel XeSS · экспериментально"
   },
   {
+   "zh": "Intel XeSS 原生补帧 · 启用后检测支持的倍率",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "Intel XeSS 原生補幀 · 啟用後檢查支援倍率",
+   "en": "Native Intel XeSS frame generation · checks supported multipliers when enabled",
+   "ja": "Intel XeSS ネイティブフレーム生成 · 有効化時に対応倍率を確認",
+   "ko": "Intel XeSS 네이티브 프레임 생성 · 활성화 시 지원 배율 확인",
+   "es": "Generación nativa de fotogramas Intel XeSS · comprueba los multiplicadores al activarla",
+   "fr": "Génération d’images native Intel XeSS · vérifie les multiplicateurs à l’activation",
+   "de": "Native Intel-XeSS-Framegenerierung · prüft Multiplikatoren beim Aktivieren",
+   "pt-BR": "Geração de quadros nativa Intel XeSS · verifica os multiplicadores ao ativar",
+   "ru": "Нативная генерация кадров Intel XeSS · проверка множителей при включении"
+  },
+  {
+   "zh": "Intel XeSS 原生补帧 · 最高 %1X",
+   "src": "src/ui/bridge/FrameGeneration.cpp",
+   "zh-TW": "Intel XeSS 原生補幀 · 最高 %1X",
+   "en": "Native Intel XeSS frame generation · up to %1X",
+   "ja": "Intel XeSS ネイティブフレーム生成 · 最大 %1X",
+   "ko": "Intel XeSS 네이티브 프레임 생성 · 최대 %1X",
+   "es": "Generación nativa de fotogramas Intel XeSS · hasta %1X",
+   "fr": "Génération d’images native Intel XeSS · jusqu’à %1X",
+   "de": "Native Intel-XeSS-Framegenerierung · bis %1X",
+   "pt-BR": "Geração de quadros nativa Intel XeSS · até %1X",
+   "ru": "Нативная генерация кадров Intel XeSS · до %1X"
+  },
+  {
    "zh": "K 保留原有模型；M、L 为 DLSS 4.5。L 针对较低输入分辨率，实际画质与耗时取决于片源。",
    "src": "qml/NodePage.qml",
    "zh-TW": "K 保留原有模型；M、L 為 DLSS 4.5。L 針對較低輸入解析度，實際畫質與耗時取決於片源。",

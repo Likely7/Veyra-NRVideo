@@ -9,10 +9,28 @@
 #include <xess_fg/xefg_swapchain_d3d12.h>
 #include <xess_fg/xefg_swapchain_debug.h>
 #include <xell/xell_d3d12.h>
+#include <mutex>
+#include <wrl/client.h>
 #endif
 
 namespace {
 std::atomic<uint64_t> nextTraceInstance{0};
+#ifdef VEYRA_HAS_XESS
+// Native and modified sessions can share the same module during an adapter switch.
+enum class ProviderMode { Stock, Intel, Unlocked };
+std::mutex providerModeMutex;
+unsigned nativeContexts=0, unlockedContexts=0;
+
+uint32_t renderVendor(ID3D12Device* device) {
+    Microsoft::WRL::ComPtr<IDXGIFactory4> factory;
+    Microsoft::WRL::ComPtr<IDXGIAdapter1> adapter;
+    DXGI_ADAPTER_DESC1 desc{};
+    if(!device||FAILED(CreateDXGIFactory1(IID_PPV_ARGS(&factory)))||
+        FAILED(factory->EnumAdapterByLuid(device->GetAdapterLuid(),IID_PPV_ARGS(&adapter)))||
+        FAILED(adapter->GetDesc1(&desc)))return 0;
+    return desc.VendorId;
+}
+#endif
 int64_t traceHost(){return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count()/100;}
 // Local wide->narrow for log lines (the presenter's detail strings are wide).
 std::string narrowDetail(const std::wstring& value){
@@ -38,8 +56,10 @@ struct XessPresenter::Impl {
     int64_t presentBegin=0;
     uint64_t generated=0,presented=0;
     uint32_t requestedGenerated=0;   // generated frames requested by the user (0 = 2X stock)
-    uint32_t maxInterpolations=1;    // runtime-reported ceiling after the unlock
+    uint32_t maxInterpolations=1;    // runtime-reported ceiling on the current device
 #ifdef VEYRA_HAS_XESS
+    ProviderMode mode=ProviderMode::Stock;
+    bool usesLegacyState=false;
     HMODULE fgDll=nullptr,llDll=nullptr;
     xefg_swapchain_handle_t fg=nullptr;
     xell_context_handle_t ll=nullptr;
@@ -90,26 +110,45 @@ struct XessPresenter::Impl {
     ~Impl(){
         if(fg&&xefgSwapChainDestroyFn)check(xefgSwapChainDestroyFn(fg),"Destroy",true);
         if(ll&&xellDestroyContextFn)check(xellDestroyContextFn(ll),"XeLL destroy",true);
-        // Restore the provider bytes only after every XeFG/XeLL context is gone.
-        XessMfgUnlock::release();
-        // Same rule for the pacing thunk: the present hook is removed before the
-        // provider module is released.
-        XessPacing::release();
+        // Intel's native session does not own either legacy hook.
+        if(usesLegacyState){XessMfgUnlock::release();XessPacing::release();}
         if(fgDll)FreeLibrary(fgDll);if(llDll)FreeLibrary(llDll);
+        if(mode!=ProviderMode::Stock){
+            std::lock_guard lock(providerModeMutex);
+            if(mode==ProviderMode::Intel)--nativeContexts;
+            else --unlockedContexts;
+        }
     }
 #endif
 };
 XessPresenter::XessPresenter():p_(std::make_unique<Impl>()){}
 XessPresenter::~XessPresenter()=default;
-bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,IDXGIFactory2* factory,HWND window,const DXGI_SWAP_CHAIN_DESC1& desc,IDXGISwapChain3** swapchain,uint32_t fgMultiplier,bool lowLatencySleep){
-    return prepare(device,fgMultiplier,lowLatencySleep,false)&&bindSwapChain(queue,factory,window,desc,swapchain);
+bool XessPresenter::initialize(ID3D12Device* device,ID3D12CommandQueue* queue,IDXGIFactory2* factory,HWND window,const DXGI_SWAP_CHAIN_DESC1& desc,IDXGISwapChain3** swapchain,uint32_t fgMultiplier,bool lowLatencySleep,uint32_t adapterVendorId){
+    return prepare(device,fgMultiplier,lowLatencySleep,false,adapterVendorId)&&bindSwapChain(queue,factory,window,desc,swapchain);
 }
-bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowLatencySleep,bool buildPipelines){
+bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowLatencySleep,bool buildPipelines,uint32_t adapterVendorId){
     if(GetEnvironmentVariableW(L"VEYRA_TEST_XESS_INIT_FAILURE",nullptr,0)){
         log::warn("xess-fg","test-only initialization rejection; runtime not loaded");return false;
     }
 #ifdef VEYRA_HAS_XESS
     auto& p=*p_;const auto root=runtime::localDataDirectory()/"intel"/"experimental";
+    if(!adapterVendorId)adapterVendorId=renderVendor(device);
+    const bool intel=adapterVendorId==0x8086;
+    p.requestedGenerated=fgMultiplier>1?fgMultiplier-1:0;
+    if(!adapterVendorId&&p.requestedGenerated>1){
+        log::warn("xess-mfg","render adapter could not be identified for multi-frame generation");
+        return false;
+    }
+    if(intel||p.requestedGenerated>1){
+        std::lock_guard lock(providerModeMutex);
+        if(intel?unlockedContexts!=0:nativeContexts!=0){
+            log::warn("xess-mfg","active XeSS context uses a different provider mode");
+            return false;
+        }
+        if(intel){++nativeContexts;p.mode=ProviderMode::Intel;}
+        else{++unlockedContexts;p.mode=ProviderMode::Unlocked;}
+    }
+    p.usesLegacyState=!intel;
     auto load=[&](const wchar_t* name){auto path=std::filesystem::absolute(root/name);
         auto module=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_APPLICATION_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
         log::info("xess-fg",std::format("load {} result={} win32={}",path.string(),module!=nullptr,module?0:GetLastError()));return module;};
@@ -136,13 +175,9 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
     LOAD(llDll,xellSleep)
     LOAD(llDll,xellAddMarkerData)
 #undef LOAD
-    // Multi-frame generation needs the audited OptiScaler unlock before the
-    // first XeFG context exists; 2X deliberately leaves the provider untouched.
-    p.requestedGenerated=fgMultiplier>1?fgMultiplier-1:0;
-    // 2X is the provider's stock behaviour: no unlock, no pacing, and the
-    // presenter must not treat "nothing to unlock" as a failure (that used to
-    // drop the whole XeSS session back to native presentation).
-    if(p.requestedGenerated>1){
+    // Keep SDK-owned frame generation and pacing on Intel. Other devices
+    // retain stock 2X and the existing audited unlock for higher requests.
+    if(p.mode==ProviderMode::Unlocked){
         const auto unlock=XessMfgUnlock::apply(p.fgDll,p.requestedGenerated);
         p.maxInterpolations=unlock.maxInterpolations;
         veyra::log::info("xess-mfg",std::format("unlock requestedGenerated={} applied={} identityVerified={} recognisedBuild={}",
@@ -168,13 +203,15 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
     xell_sleep_params_t sleep{};sleep.bLowLatencyMode=lowLatencySleep?1:0;
     if(!p.check(p.xellSetSleepModeFn(p.ll,&sleep),"XeLL sleep mode",true))return false;
     log::info("xess-fg",std::format("XeLL bLowLatencyMode={} (0 = pass-through; sleep/markers still issued per XeLL contract)",unsigned(sleep.bLowLatencyMode)));
-    // Query the real ceiling before deciding what to request. The unlock (U5)
-    // is what makes this report more than 1 on a non-Intel GPU.
+    // Use the actual runtime limit without increasing swapchain allocation.
     {
         xefg_swapchain_properties_t runtimeProperties{};
-        if(p.check(p.xefgSwapChainGetPropertiesFn(p.fg,&runtimeProperties),"GetProperties(runtime)",true)){
+        const bool reported=p.check(p.xefgSwapChainGetPropertiesFn(p.fg,&runtimeProperties),"GetProperties(runtime)",true);
+        if(intel&&(!reported||runtimeProperties.maxSupportedInterpolations==0))return false;
+        if(reported){
             p.maxInterpolations=runtimeProperties.maxSupportedInterpolations>0?runtimeProperties.maxSupportedInterpolations:1;
-            XessMfgUnlock::reportRuntimeCeiling(p.maxInterpolations);
+            if(intel)log::info("xess-mfg",std::format("Intel native requested={}X maximum={}X",p.requestedGenerated+1,p.maxInterpolations+1));
+            else XessMfgUnlock::reportRuntimeCeiling(p.maxInterpolations);
         }
         if(p.requestedGenerated>0&&p.maxInterpolations<p.requestedGenerated){
             log::error("xess-mfg",std::format("requested {}X but the runtime reports maxInterpolatedFrames={}",p.requestedGenerated+1,p.maxInterpolations));
@@ -189,7 +226,7 @@ bool XessPresenter::prepare(ID3D12Device* device,uint32_t fgMultiplier,bool lowL
     }
     return true;
 #else
-    (void)device;(void)fgMultiplier;(void)lowLatencySleep;(void)buildPipelines;
+    (void)device;(void)fgMultiplier;(void)lowLatencySleep;(void)buildPipelines;(void)adapterVendorId;
     log::error("xess-fg","Intel XeSS SDK unavailable at build time");return false;
 #endif
 }

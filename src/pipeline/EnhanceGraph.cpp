@@ -860,7 +860,8 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc, const std::atomic<bo
         // Double SR runs any SR backend; the supersample shrink only RTX Video SR.
         if(!desc.enableSr||(!desc.dualSr&&!engine::rtxVideoSr(desc.videoSrQuality))){veyra::log::error("resolution","supersampled SR runs on RTX Video SR only");return false;}
     }
-    if(context_.adapter().vendorId==0x1002 && desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia)
+    const auto vendor=context_.adapter().vendorId;
+    if((vendor==0x1002||(vendor==0x8086&&xessEnabled()))&&desc_.opticalFlowBackend==engine::OpticalFlowBackend::Nvidia)
         desc_.opticalFlowBackend=engine::OpticalFlowBackend::AmdFidelityFx;
     if(desc_.opticalFlowBackend==engine::OpticalFlowBackend::AmdFidelityFx&&desc.amdFlowHalfResolution){nvofW_=std::max(1u,nvofW_/2);nvofH_=std::max(1u,nvofH_/2);}
     diagnostics::DiagnosticEvent initDiagnostic;initDiagnostic.stage="initialize";initDiagnostic.identity={epoch_+1,desc.settingsRevision,0};initDiagnostic.resolution.source={srcW_,srcH_};initDiagnostic.resolution.base=initDiagnostic.resolution.fg=initDiagnostic.resolution.output={workW_,workH_};initDiagnostic.resolution.nr={nrW_,nrH_};initDiagnostic.resolution.flow={nvofW_,nvofH_};initDiagnostic.flowApplied=std::to_string(unsigned(desc.flowQuality));initDiagnostic.runtimeHash="unverified-user-replaceable";Logger::diagnosticContext(initDiagnostic);

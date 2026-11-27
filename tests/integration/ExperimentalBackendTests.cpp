@@ -230,7 +230,7 @@ int wmain(int argc,wchar_t** argv){
     bool ok=graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
     if(xess)ok=ok&&presenter.xessActive();
     if(xess)ok=ok&&checkDisplayMotion(ctx,ring);
-    if(xess&&desc.fgMultiplier>2&&ok){
+    if(xess&&desc.fgMultiplier>2&&ok&&ctx.adapter().vendorId!=0x8086){
         const auto again=gfx::XessPacing::install(GetModuleHandleW(L"libxess_fg.dll"),desc.fgMultiplier-1);
         ok=again.installed;
     }
