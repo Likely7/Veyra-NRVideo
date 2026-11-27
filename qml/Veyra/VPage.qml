@@ -26,7 +26,7 @@ Item {
     // dock capsule moved the window). Below the page's own items, so buttons and fields
     // there keep their clicks; empty space drags, a double click maximizes. Pages whose
     // top is the picture set a smaller strip (node) or none (min).
-    property real dragStripHeight: 56
+    property real dragStripHeight: 0
     Item {
         objectName: "page-drag-strip"
         z: -1

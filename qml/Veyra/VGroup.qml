@@ -18,8 +18,8 @@ Rectangle {
     property real motionDy: 0
     transform: Translate { y: group.motionDy }
     Layout.fillWidth: true
-    radius: 12
-    color: Theme.card2
+    radius: Theme.rCard
+    color: Theme.card
     border.width: 1
     border.color: Theme.stroke
     // Rows carry their own vertical padding. A note, button or plain layout at

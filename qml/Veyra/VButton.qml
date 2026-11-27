@@ -8,8 +8,9 @@ Rectangle {
     property bool ghost: false
     property bool icon: false
     property string glyph: ""
-    // A Lucide name from IconData.js; drawn before the text with the design's 7px gap.
+    // An app icon alias, resolved through Font Awesome Free.
     property string iconName: ""
+    property string accentTokenName: "primary" // e.g., "primary", "blue", "green", "purple"
     // A chevron (or any icon) after the text: the design's dropdown buttons.
     property string trailingIcon: ""
     // Hover tooltip, for icon-only buttons.
@@ -25,6 +26,13 @@ Rectangle {
     // instance.
     property int fontSize: 0
     signal clicked()
+    activeFocusOnTab: enabled && visible
+    Accessible.role: Accessible.Button
+    Accessible.name: text.length > 0 ? text : tip
+    Accessible.onPressAction: if (enabled) clicked()
+    Keys.onReturnPressed: if (enabled) clicked()
+    Keys.onEnterPressed: if (enabled) clicked()
+    Keys.onSpacePressed: if (enabled) clicked()
 
     implicitWidth: icon ? Theme.ctlHeight : (Math.min(label.implicitWidth, maxTextWidth > 0 ? maxTextWidth : label.implicitWidth)
         + (iconName.length ? 25 : 0) + (trailingIcon.length ? 19 : 0) + 24)
@@ -33,20 +41,30 @@ Rectangle {
     color: primary ? Theme.accent
          : ghost ? (hover.hovered ? Qt.rgba(1, 1, 1, 0.07) : "transparent")
          : (hover.hovered ? Theme.card3 : Theme.card2)
-    border.width: (primary || ghost) ? 0 : 1
-    border.color: hover.hovered ? Qt.rgba(1, 1, 1, 0.2) : Theme.stroke2
+    border.width: activeFocus ? 2 : (primary || ghost) ? 0 : 1
+    border.color: activeFocus ? Theme.accent : hover.hovered ? Qt.rgba(1, 1, 1, 0.2) : Theme.stroke2
     Behavior on color { ColorAnimation { duration: Theme.d(Theme.durFast) } }
-    // .btn:active { transform: scale(.95) }
     // A disabled button reads as such (undo with nothing to undo).
     opacity: enabled ? 1.0 : 0.4
-    scale: tap.pressed ? 0.95 : 1.0
-    Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
+    // Press feedback stays inside the control bounds.
+    Rectangle { anchors.fill: parent; radius: parent.radius; color: Theme.t1; opacity: tap.pressed ? 0.08 : 0; z: 2 }
 
     // The dusk palette's sunset accent: a primary button is the gradient.
     VAccentFill {
         anchors.fill: parent
         radius: parent.radius
         visible: btn.primary && Theme.accentGradient
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        anchors.margins: 2
+        radius: Math.max(0, btn.radius - 2)
+        color: "transparent"
+        border.width: 1
+        border.color: btn.primary ? Theme.accentInk : Theme.accent
+        visible: btn.activeFocus
+        z: 3
     }
 
     Row {

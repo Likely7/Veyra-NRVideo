@@ -93,8 +93,8 @@ Rectangle {
     // (field report 2026-10-05).
     readonly property int bodyTopGap: 8
     implicitHeight: headerHeight + (open ? body.implicitHeight + bodyTopGap + body.Layout.bottomMargin : 0)
-    radius: 12
-    color: Theme.card2
+    radius: Theme.rCard
+    color: Theme.card
     border.width: 1
     border.color: open ? Theme.stroke2 : Theme.stroke
     Behavior on border.color { ColorAnimation { duration: Theme.d(250) } }
@@ -133,13 +133,13 @@ Rectangle {
                     visible: !leadingTools.visible
                     implicitWidth: 26
                     implicitHeight: 26
-                    radius: 8
-                    color: Qt.rgba(acc.hue.r, acc.hue.g, acc.hue.b, 0.16)
+                    radius: Theme.rCtl
+                    color: "transparent"
                     VIcon {
                         anchors.centerIn: parent
                         name: acc.glyph
                         size: 14
-                        color: acc.hue
+                        color: Theme.t2
                     }
                 }
 

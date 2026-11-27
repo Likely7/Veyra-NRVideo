@@ -2022,3 +2022,44 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 - T900 实卡使用设备提供的 4K60 MJPEG。实际应用送显约 60 FPS，NR 与 FSR 均运行，NVOF 从 1920×1080 转回 3840×2160。462 次 FSR 评估，0 次派发失败和采集丢帧。RGB 夹具也通过 4K 至 1080p 光流的几何验证。实卡 4K60 NV12 尚未验证。
 - WGC 320 Hz 跟随默认 NR 实测约 125.8 个原始帧、12.5 个生成帧每秒。在本次 HDR 测试场景每秒均有生成帧，数量波动 5 至 29。50% NR 内部尺寸时生成约 95.5 帧每秒。WGC 本轮保持既有节拍策略。冷启动从 WGC 打开到首轮送显，DLSS SR 24.34 秒、RTX Video SR 15.67 秒、Video Effects SR 14.71 秒，模型加载期的原画预览仍待实现。
 - 确认可用管理员权限启动 PresentMon。2.6.0 和 2.5.1 分别只输出 6 条和 2 条记录，无法验收稳定的屏幕显示间隔。完整命令、日志及产物路径见 `E:/项目/Veyra/reports/codex-magpie-perf-20261122/RESULTS.md`。
+
+
+### 2026-11-27 Desktop UI continuation
+
+Worked in the user-selected `C:/Users/2024b/Desktop/Veyra-NRVideo` checkout on `main`, preserving the existing uncommitted Main/Theme/TopDock/VPage changes. The E-drive source/dependency paths in earlier records are absent on this machine. No build, dependency installation, configuration writes, device access, commit or push.
+
+Replaced Home's animated hero with a small product header, file actions, a responsive six-source grid, and the existing session/history actions. Kept source callbacks and onboarding targets. Moved sponsorship to the footer; clearing history is a secondary action. Added keyboard activation and focus cues to buttons, source cards, app-bar tabs and Settings sections. Limited tab widths for translated labels, improved muted-text contrast, used Segoe UI for non-CJK languages, removed button scaling and segmented-control shadows, shortened inspector transitions, and made Settings navigation narrower on small windows. Export's Add action now has primary emphasis. Settings' intro switch now matches the existing opt-in startup change.
+
+Validation: `git diff --check` passed (only existing LF/CRLF notices); inline Python checked balanced delimiters across all ten changed QML files and 14 source-grid width/spacing combinations. An inline Node VM executed the actual `ExportLayout.calculate` over 60 window/tab combinations with the 40px chrome inset; all checked card and video bounds passed. These are source/geometry checks, not a QML parser or visual acceptance. Qt/qmllint/qmltestrunner, PySide6, the documented dependencies and a runnable app build were not available. Actual rendering, keyboard interaction, translated UI and native video positioning still require QtQuick tests and a private app run on a configured build machine.
+
+### 2026-11-27 Runnable UI preview
+
+Found the existing official Veyra 2.2.1 installation at `%LOCALAPPDATA%/Programs/Veyra (NVIDIA)/versions/2.2.1`, including its Qt runtime. Created a separate real-copy runtime at `%LOCALAPPDATA%/VeyraDev/ui-preview/app` and overlaid this checkout's QML; separate data and QML cache directories live beside it. The user's request to run this checkout is handled locally because the historical E-drive paths are absent. Original installation and its settings remain untouched. This uses the installed 2.2.1 native engine; it is not a fresh C++ build.
+
+Added `Veyra-Preview.cmd` and `scripts/start-ui-preview.ps1` to refresh QML and launch the private preview. The launcher refuses to overwrite QML while its preview process is running. Verified launcher PowerShell parsing, git diff whitespace, and matching SHA-256 for all 108 copied shaders. Actual Home, Pro, Export and Settings windows rendered and tab navigation worked at 1280x800 on RTX 5060. No QML errors were found in the preview log during this pass. Fixed the untranslated Pro tab by reusing the existing translated `专业模式` string. Playback, export jobs, capture hardware and minimum-window layout were not tested in this pass.
+
+### 2026-11-27 Runnable UI preview
+
+Found the existing Veyra 2.2.1 installation at `%LOCALAPPDATA%/Programs/Veyra (NVIDIA)/versions/2.2.1`, including Qt. Created a separate real-copy runtime at `%LOCALAPPDATA%/VeyraDev/ui-preview/app` and overlaid this checkout's QML; separate data and QML cache folders live beside it. The current request to run this checkout is handled locally because the historical E-drive paths are absent. Original installation and settings remain untouched. This uses the installed 2.2.1 native engine, not a fresh C++ build.
+
+Added `Veyra-Preview.cmd` and `scripts/start-ui-preview.ps1` to refresh QML and launch the private preview. It refuses to overwrite QML while its preview process is running. Verified PowerShell parsing, git diff whitespace, and matching SHA-256 for all 108 copied shaders. Actual Home, Pro, Export and Settings windows rendered and tab navigation worked at 1280x800 on RTX 5060. No QML errors found in the preview log during this pass. Fixed the untranslated Pro tab using the existing translated string. Playback, export jobs, capture hardware and minimum-window layout were not tested. Preview restarted using the new launcher and left running for the user.
+
+### 2026-11-27 Flat desktop styling
+
+User requested a more conventional desktop UI and fewer rounded corners. Replaced the decorative background with a solid neutral surface, sunset fills with solid amber/white, and neon branding with the monochrome asset. Panel radius is now zero and ordinary controls use 3 px; switches and state dots retain their functional circular shapes. Inspector and Settings groups are square, icon badges are uncolored, and performance rings are numeric values with thin linear meters. Removed status glow and easing overshoot. Home uses wider, shorter source rows in a three-column grid. Removed the obsolete background-gradient setting from the UI while preserving stored preference compatibility.
+
+Reloaded the private runtime and visually inspected Home, Pro, and Settings at 1280x800; navigation worked and no QML errors or binding-loop warnings appeared in the log. Structural delimiter checks and git diff --check passed. No processing logic, frame timings, capture sessions, or installed application files changed. Hardware playback and export execution were not tested in this visual pass.
+
+### 2026-11-27 Font Awesome and Inter
+
+Reviewed the intervening edits before continuing: Theme gained blue/green/purple accent tokens, VButton gained accentTokenName, and VIcon partially switched to a missing FontAwesomeIconData.js while still referencing IconData. Preserved the accent additions and completed the icon migration.
+
+Bundled 73 app aliases mapped to Font Awesome Free 7.3.1 solid SVG paths from the official tagged metadata. VIcon renders those paths with native aspect ratios through Qt SVG on both scene graphs; compatibility properties remain, and seek icons retain their 10-second labels. Bundled unmodified Inter 4.1 variable TTF with an app-local FontLoader, retaining CJK fallbacks and monospaced telemetry. Body text is 13 px and small text 12 px. Added upstream licenses, pinned source/digest records, and third-party notices. No system fonts installed.
+
+Validated complete legacy alias coverage, all 73 generated SVG XML definitions, the TrueType file signature, and exact SHA-256 agreement for staged renderer/data/theme/font/license assets. Reloaded the preview and inspected Home and the visible Pro controls at 1280x800; a separate always-on-top video partially obscured the inspector and was left alone. Current-session log contains no QML/font-load/binding errors; older clipboard warnings remain in the shared append-only log. git diff --check passed. Full C++ build, CJK rendering, high-DPI and GPU-renderer comparison remain untested.
+
+### 2026-11-27 Expanded accent palette
+
+Added amber (legacy orange ID), blue, green, teal, purple, rose, red, and white swatches with tooltips, selected checkmark, keyboard activation, and accessible radio-button names. Theme derives solid and soft accent colors from the selected option. Since the installed 2.2.1 native bridge rejects accent IDs other than orange/white, Main owns a QtCore.Settings appearance file in the current data directory (`ui-appearance.ini`); unset values inherit the legacy preference. No native rebuild required and each preview/data directory remains isolated.
+
+Verified all eight swatches in the live Settings page, blue applying immediately, the saved INI value, and blue buttons after a normal shutdown/relaunch. All palette colors provide at least 6.96:1 computed contrast against the primary-control text color. git diff --check passed and no startup QML errors appeared. Original amber selection restored after the test; preview left on Settings.

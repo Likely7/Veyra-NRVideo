@@ -37,7 +37,7 @@ VPage {
         for (let k = 0; k < col.children.length; ++k) {
             const c = col.children[k]
             if (!c.visible || c.motionDy === undefined) continue
-            staggerComp.createObject(root, { target: c, delay: i * 40, span: 480, dy: 12 }).start()
+            staggerComp.createObject(root, { target: c, delay: 0, span: Theme.durFast, dy: 0 }).start()
             ++i
         }
     }
@@ -66,7 +66,7 @@ VPage {
         anchors.topMargin: 14
         anchors.bottom: parent.bottom
         anchors.bottomMargin: 14
-        width: 220
+        width: root.width < 900 ? 180 : 220
         radius: Theme.rCard
         color: Theme.card
         border.width: 1
@@ -97,11 +97,26 @@ VPage {
                     required property var modelData
                     Layout.fillWidth: true
                     implicitHeight: 36
-                    radius: 9
+                    radius: Theme.rCtl
                     color: root.section === modelData.id ? Theme.card3
                          : navHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
                     Behavior on color { ColorAnimation { duration: Theme.d(200) } }
-                    // .setnav button: icon, 10px, label.
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: modelData.label
+                    Accessible.onPressAction: root.section = modelData.id
+                    Keys.onReturnPressed: root.section = modelData.id
+                    Keys.onSpacePressed: root.section = modelData.id
+                    border.width: activeFocus ? 1 : 0
+                    border.color: Theme.accent
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 3; height: 16; radius: 1
+                        color: Theme.accent
+                        visible: root.section === modelData.id
+                    }
+                    // Section navigation.
                     RowLayout {
                         anchors.left: parent.left
                         anchors.right: parent.right
@@ -140,7 +155,7 @@ VPage {
     Rectangle {
         id: bodyCard
         anchors.left: parent.left
-        anchors.leftMargin: 14 + 220 + 10
+        anchors.leftMargin: navCard.x + navCard.width + 10
         anchors.right: parent.right
         anchors.rightMargin: 14
         anchors.top: parent.top
@@ -194,7 +209,7 @@ VPage {
                         // 日落 (the default) or the original black-grey 经典 palette.
                         VRow {
                             label: qsTr("界面配色")
-                            hint: qsTr("日落：深靛紫底、日落渐变强调色；经典：原来的黑灰配色")
+
                             VSeg {
                                 objectName: "set-palette"
                                 options: [{ id: "dusk", label: qsTr("日落") }, { id: "classic", label: qsTr("经典") }]
@@ -209,7 +224,7 @@ VPage {
                             hint: qsTr("日落配色下打开软件时播放，单击或按任意键可跳过")
                             VSwitch {
                                 objectName: "set-intro"
-                                checked: veyra.preferences.introAnimation !== false
+                                checked: veyra.preferences.introAnimation === true
                                 onToggled: checked => veyra.setPreference("introAnimation", checked)
                             }
                         }
@@ -242,37 +257,39 @@ VPage {
                         VRow {
                             label: qsTr("强调色")
                             hint: qsTr("开关、进度、选中状态")
-                            // .swatch: two colour dots, the chosen one ringed and 1.12x.
                             Row {
                                 objectName: "set-accent"
-                                spacing: 10
+                                spacing: 8
                                 Repeater {
-                                    model: [{ id: "orange", c: "#FF8A3D", tip: qsTr("橙色"), duskTip: qsTr("日落渐变") },
-                                            { id: "white", c: "#F3F3F5", tip: qsTr("白色光晕"), duskTip: qsTr("白色光晕") }]
+                                    model: Theme.accentOptions
                                     delegate: Rectangle {
                                         id: swatch
                                         required property var modelData
-                                        readonly property bool on: (veyra.preferences.accent || "orange") === modelData.id
+                                        readonly property bool on: Theme.accentName === modelData.id
                                         objectName: "set-accent-" + modelData.id
-                                        width: 24; height: 24; radius: 12
-                                        // The dusk palette shows what each choice paints: the sunset
-                                        // gradient, or the neon white (the ring stays on top).
-                                        color: Theme.dusk ? "#FFF6FB" : modelData.c
-                                        gradient: Theme.dusk && modelData.id === "orange" ? sunset : undefined
-                                        Gradient {
-                                            id: sunset
-                                            orientation: Gradient.Horizontal
-                                            GradientStop { position: 0.0; color: Theme.accentFrom }
-                                            GradientStop { position: 1.0; color: Theme.accentTo }
+                                        width: 28; height: 28; radius: Theme.rCtl
+                                        color: modelData.color
+                                        border.width: on || activeFocus ? 2 : 1
+                                        border.color: on || activeFocus ? Theme.t1 : Theme.stroke2
+                                        activeFocusOnTab: true
+                                        Accessible.role: Accessible.RadioButton
+                                        Accessible.name: modelData.label
+                                        Accessible.checked: on
+                                        Accessible.onPressAction: Theme.accentPicked(modelData.id)
+                                        Keys.onSpacePressed: Theme.accentPicked(modelData.id)
+                                        Keys.onReturnPressed: Theme.accentPicked(modelData.id)
+                                        Keys.onEnterPressed: Theme.accentPicked(modelData.id)
+                                        VIcon {
+                                            anchors.centerIn: parent
+                                            name: "check"
+                                            size: 12
+                                            color: Theme.accentInk
+                                            visible: swatch.on
                                         }
-                                        border.width: 2
-                                        border.color: on ? "#FFFFFF" : "transparent"
-                                        scale: on ? 1.12 : 1
-                                        Behavior on scale { NumberAnimation { duration: Theme.d(400); easing.bezierCurve: Theme.spring } }
                                         HoverHandler { id: swHover; cursorShape: Qt.PointingHandCursor }
-                                        TapHandler { onTapped: veyra.setPreference("accent", modelData.id) }
-                                        ToolTip.visible: swHover.hovered
-                                        ToolTip.text: Theme.dusk ? modelData.duskTip : modelData.tip
+                                        TapHandler { onTapped: Theme.accentPicked(modelData.id) }
+                                        ToolTip.visible: swHover.hovered || activeFocus
+                                        ToolTip.text: modelData.label
                                     }
                                 }
                             }
@@ -293,16 +310,6 @@ VPage {
                                 options: [{ id: "1", label: "1" }, { id: "0.1", label: "0.1" }, { id: "0.01", label: "0.01" }]
                                 current: String(veyra.preferences.sliderKeyStep !== undefined ? veyra.preferences.sliderKeyStep : 0.1)
                                 onPicked: id => veyra.setPreference("sliderKeyStep", Number(id))
-                            }
-                        }
-                        VRow {
-                            label: qsTr("背景渐变强度")
-                            hint: Theme.dusk ? qsTr("日落天空的渐变强度，带抖动防色带") : qsTr("深黑底上的极轻渐变与抖动（防色带）")
-                            VSeg {
-                                objectName: "set-backdrop"
-                                options: [{ id: "0", label: qsTr("无") }, { id: "1", label: qsTr("轻") }, { id: "2", label: qsTr("中") }]
-                                current: String(veyra.preferences.backdrop !== undefined ? veyra.preferences.backdrop : 1)
-                                onPicked: id => veyra.setPreference("backdrop", Number(id))
                             }
                         }
                         VRow {
@@ -1241,7 +1248,7 @@ VPage {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: psNote.implicitHeight + 20
-                        radius: 9
+                        radius: Theme.rCtl
                         color: Qt.rgba(0.961, 0.784, 0.294, 0.06)
                         Text {
                             id: psNote
@@ -1292,7 +1299,7 @@ VPage {
                                     readonly property bool capturing: root.capturingKey === keyRow.modelData.id
                                     implicitWidth: Math.max(64, keyText.implicitWidth + 20)
                                     implicitHeight: 26
-                                    radius: 7
+                                    radius: Theme.rCtl
                                     color: capturing ? Theme.accentSoft : Qt.rgba(1, 1, 1, 0.06)
                                     border.width: 1
                                     border.color: capturing ? Theme.accent : Theme.stroke
@@ -1521,7 +1528,7 @@ VPage {
                     Rectangle {
                         Layout.fillWidth: true
                         implicitHeight: 220
-                        radius: 9
+                        radius: Theme.rCtl
                         color: Theme.card2
                         clip: true
                         Flickable {

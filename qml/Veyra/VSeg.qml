@@ -1,7 +1,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Effects
 Rectangle {
     id: seg
     property var options: []      // [{ id, label }]
@@ -37,10 +36,10 @@ Rectangle {
         y: 3
         width: seg.currentItem ? seg.currentItem.width : 0
         height: 24
-        radius: 7
+        radius: Theme.rCtl
         color: Theme.card3
-        Behavior on x { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
-        Behavior on width { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
+        Behavior on x { NumberAnimation { duration: Theme.d(Theme.durFast); easing.bezierCurve: Theme.easeOut } }
+        Behavior on width { NumberAnimation { duration: Theme.d(Theme.durFast); easing.bezierCurve: Theme.easeOut } }
         // box-shadow 0 1px 0 rgba(255,255,255,.06) inset: the lit top edge.
         Rectangle {
             anchors.left: parent.left; anchors.right: parent.right
@@ -48,20 +47,6 @@ Rectangle {
             height: 1
             color: Qt.rgba(1, 1, 1, 0.06)
         }
-    }
-
-    // box-shadow 0 4px 10px rgba(0,0,0,.35): card3 alone is the same grey as the seg
-    // background, so the shadow is what makes the indicator visible (G1.5).
-    MultiEffect {
-        source: indicator
-        anchors.fill: indicator
-        visible: indicator.visible
-        shadowEnabled: true
-        shadowColor: Qt.rgba(0, 0, 0, 0.35)
-        shadowVerticalOffset: 4
-        shadowHorizontalOffset: 0
-        blurMax: 16
-        shadowBlur: 0.625
     }
 
     RowLayout {

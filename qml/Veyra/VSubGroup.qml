@@ -17,7 +17,7 @@ Rectangle {
     default property alias content: inner.data
 
     implicitHeight: header.implicitHeight + (expanded ? inner.implicitHeight + 8 : 0)
-    radius: 9
+    radius: Theme.rCtl
     color: Qt.rgba(1, 1, 1, 0.03)
     clip: true
     Behavior on implicitHeight {

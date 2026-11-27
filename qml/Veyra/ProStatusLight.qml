@@ -3,7 +3,6 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Shapes
-import QtQuick.Effects
 
 RowLayout {
     id: light
@@ -25,16 +24,6 @@ RowLayout {
             color: light.tone
             opacity: veyra.runStatusLevel === "idle" ? 0.35 : 0.9
             Behavior on color { enabled: strip.visible; ColorAnimation { duration: Theme.d(300) } }
-        }
-        // A sibling MultiEffect, not layer.effect: Qt recreates a layer's effect item on
-        // a screen DPI change while it walks the parent's children, and the walk then touched
-        // the deleted item (crash moving the window to a 200 % monitor, field 2026-10-01).
-        MultiEffect {
-            source: strip
-            anchors.fill: strip
-            visible: veyra.runStatusLevel !== "idle"
-            opacity: strip.opacity
-            shadowEnabled: true; shadowColor: light.tone; shadowBlur: 0.6; shadowVerticalOffset: 0; blurMax: 12; autoPaddingEnabled: true
         }
     }
     ColumnLayout {

@@ -16,7 +16,7 @@ RowLayout {
         fraction: known ? veyra.chainTotalMs / veyra.stageBudgetMs : 0
         value: veyra.chainTotalMsKnown ? veyra.chainTotalMs.toFixed(1) + "ms" : "—"
         label: qsTr("处理耗时")
-        tip: qsTr("增强链总耗时（最近一秒平均，与 1.4.4 相同口径），环 = 占源帧预算") + (veyra.stageBudgetMs > 0 ? " " + veyra.stageBudgetMs.toFixed(1) + " ms" : "") + qsTr(" 的比例")
+        tip: qsTr("负载预算") + (veyra.stageBudgetMs > 0 ? " " + veyra.stageBudgetMs.toFixed(1) + " ms" : "") + qsTr(" 的比例")
     }
     ProPerfOrb {
         size: parent.size
