@@ -31,6 +31,7 @@
 #include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/VirtualCamera.h"
 #include "veyra/engine/ScreenTextCapture.h"
+#include "veyra/engine/ConsoleAimReadback.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
 namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback;class MappedController; }
@@ -245,6 +246,10 @@ public:
     void setEnhancementPrewarmEnabled(bool);
     bool requestSettings(EnhancementSettings,std::optional<ChainRuntimeOrder> = std::nullopt,uint64_t* acceptedRevision=nullptr);
     void requestPresentation(PresentationSettings);
+    enum class ConsoleRenderMode { Normal, LowLatency, MeasureWithoutFg, MeasureWithFg };
+    bool setConsoleRenderMode(ConsoleRenderMode);
+    bool consoleRenderReady() const;
+    void setConsoleAimProbe(std::shared_ptr<remoteplay::AimTest> probe) { aimReadback_.setProbe(std::move(probe)); }
     void open(HWND video,const std::wstring& path,PlayerOptions options);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
@@ -375,7 +380,9 @@ private:
     std::unique_ptr<VirtualCamera> virtualCamera_=std::make_unique<VirtualCamera>();
     std::unique_ptr<ScreenTextCapture> screenText_=std::make_unique<ScreenTextCapture>();
     PresentCaptureFanout outputCaptures_{*virtualCamera_,*screenText_};
-    PresentCaptureFanout captures_{recordingCaptures_,outputCaptures_};
+    ConsoleAimReadback aimReadback_;
+    PresentCaptureFanout observedCaptures_{outputCaptures_,aimReadback_};
+    PresentCaptureFanout captures_{recordingCaptures_,observedCaptures_};
     // Declared before worker_: it outlives the engine thread's presenters.
     DisplayStateService displayStates_;
     std::thread worker_;
@@ -389,6 +396,13 @@ private:
     std::wstring hangPreviousStatus_; // mutex_
     EnhancementSettings desired_;uint64_t nextRevision_=1;
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_
+    uint64_t publishSettingsRequest(EnhancementSettings, std::optional<ChainRuntimeOrder>); // mutex held
+    struct ConsoleRenderScope {
+        ConsoleRenderMode mode = ConsoleRenderMode::Normal;
+        uint64_t session = 0;
+        uint32_t multiplier = 1;
+        PresentationSettings presentation;
+    } consoleScope_; // mutex held
     std::atomic<bool> stop_{false},paused_{false},muted_{false};
     std::atomic<bool> captureAudioMonitoring_{true};
     std::shared_ptr<sink::HdmiBitstreamOutput> hdmiBitstream_;

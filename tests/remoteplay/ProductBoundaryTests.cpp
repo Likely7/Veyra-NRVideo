@@ -3,6 +3,7 @@
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/KeyboardMousePad.h"
 #include "veyra/remoteplay/MappedController.h"
+#include <random>
 #include <string_view>
 #include <SDL3/SDL.h>
 #include <cmath>
@@ -15,6 +16,61 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 struct RemotePlaySessionSourceTestAccess {
+static void aimCalibrationModel() {
+    using namespace remoteplay;
+    constexpr double deadzone = .18, exponent = 2., maximum = 220.;
+    const auto rate = [](double x) { return std::pow(std::max(0., (x - deadzone) / (1. - deadzone)), exponent); };
+    std::array<double, 41> stick{}, velocity{};
+    for (size_t i = 0; i < stick.size(); ++i) {
+        stick[i] = i / 40.;
+        velocity[i] = rate(stick[i]);
+    }
+    const auto fit = AimCurve::fit(stick, velocity);
+    AimCurve curve{fit.deadzone, fit.exponent, maximum, 1.5};
+    for (size_t i = 0; i < curve.rates.size(); ++i)
+        curve.rates[i] = rate(std::lerp(curve.deadzone, 1., curve.points[i]));
+    double maxError = 0.;
+    for (int i = 1; i <= 100; ++i) {
+        const double requested = i / 100.;
+        const double recovered = rate(curve.deflection(requested));
+        maxError = std::max(maxError, std::abs(recovered / requested - 1.));
+    }
+    if (!curve.valid() || std::abs(curve.deadzone - deadzone) > .01 || maxError > .05)
+        throw std::runtime_error("game curve calibration and inverse error");
+
+    AimImage previous, translated;
+    std::mt19937 rng(911);
+    for (auto& cell : previous.luma) cell = uint8_t(40 + rng() % 170);
+    constexpr double shift = 2.3;
+    for (int y = 0; y < AimImage::height; ++y)
+        for (int x = 0; x < AimImage::width; ++x) {
+            const int source = (x + AimImage::width - 3) % AimImage::width;
+            const auto a = previous.luma[y * AimImage::width + source];
+            const auto b = previous.luma[y * AimImage::width + (source + 1) % AimImage::width];
+            translated.luma[y * AimImage::width + x] = uint8_t(std::lround(std::lerp(double(a), double(b), .7)));
+        }
+    const auto detected = aimImageShift(previous, translated);
+    if (aimImageShift(previous, previous) || !detected || std::abs(*detected - shift) > .35)
+        throw std::runtime_error("background image shift test");
+
+    constexpr int64_t start = 1000000;
+    AimTest manual(AimTest::Mode::Vertical);
+    manual.ready(true);
+    manual.sample(start);
+    if (manual.sample(start + 5400000).rightY != 5898) throw std::runtime_error("vertical deadzone ramp");
+    manual.key(0x20, true);
+    if (std::abs(manual.status().manualDeadzone - .19) > .001 || manual.sample(start + 5404000) != ControllerState{})
+        throw std::runtime_error("manual calibration must save and neutralize input");
+    AimTest automatic(AimTest::Mode::Automatic);
+    automatic.ready(true);
+    automatic.sample(start);
+    automatic.key('A', true);
+    if (automatic.status().state != AimTest::State::Cancelled || automatic.sample(start + 4000) != ControllerState{})
+        throw std::runtime_error("automatic calibration must abort to neutral");
+    std::cout << "AIM_CALIBRATION_MODEL deadzone=" << curve.deadzone << " exponent=" << curve.exponent
+              << " worst_relative_error=" << maxError << " phase_shift_expected=" << shift
+              << " phase_shift_measured=" << *detected << '\n';
+}
 static bool keyboardMouseMapping() {
     using Pad = remoteplay::KeyboardMousePad;
     using State = remoteplay::ControllerState;
@@ -691,6 +747,7 @@ int main(int argc,char** argv){
         return 46;
     }
     veyra::source::RemotePlaySessionSourceTestAccess::mappedControllerSender();
+    veyra::source::RemotePlaySessionSourceTestAccess::aimCalibrationModel();
     if(!veyra::source::RemotePlaySessionSourceTestAccess::calibratedMouse())return 79;
     if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseTurnCurve()) {
         std::cerr << "PS5 mouse turn response regression\n";

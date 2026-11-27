@@ -110,6 +110,9 @@ QString bindingLabel(int binding) {
 }
 
 QVariantMap tuningMap(const Mapper::Tuning& t) {
+    QVariantList measured;
+    if (t.measuredCurve.valid())
+        for (const auto rate : t.measuredCurve.rates) measured.push_back(rate);
     return {{QStringLiteral("horizontal"), t.horizontal}, {QStringLiteral("vertical"), t.vertical},
             {QStringLiteral("turnBoost"), t.turnBoost}, {QStringLiteral("inputDeadzone"), t.inputDeadzone},
             {"dpi",t.dpi},{"turnSpeed",t.turnSpeed},{"adsScale",t.adsScale},{"adsDelayMs",t.adsDelayMs},{"adsAction",t.adsAction},
@@ -121,6 +124,9 @@ QVariantMap tuningMap(const Mapper::Tuning& t) {
             {"aimFullSpeed", t.aimFullSpeed}, {"aimHorizontal", t.aimHorizontal}, {"aimVertical", t.aimVertical},
             {"gameDeadzoneX", t.gameDeadzoneX}, {"gameDeadzoneY", t.gameDeadzoneY}, {"gameCurve", t.gameCurve},
             {"aimFps", t.aimFps}, {"mixPhysical", t.mixPhysical}, {"graduatedSteering", t.graduatedSteering},
+            {"angleCarry", t.angleCarry}, {"consoleLowLatency", t.consoleLowLatency},
+            {"measuredRates", measured}, {"measuredDeadzone", t.measuredCurve.deadzone}, {"measuredExponent", t.measuredCurve.exponent},
+            {"measuredMax", t.measuredCurve.maxPixelsPerSecond}, {"measuredAcceleration", t.measuredCurve.acceleration},
             {"steeringInitial", t.steeringInitial}, {"steeringFullMs", t.steeringFullMs},
             {"steeringReturnMs", t.steeringReturnMs}, {"pedalRiseMs", t.pedalRiseMs},
             {"mouseSteering", t.mouseSteering}, {"mouseSteerGain", t.mouseSteerGain},
@@ -158,6 +164,21 @@ Mapper::Tuning readTuning(const QVariantMap& map) {
     t.gameCurve = bounded("gameCurve", 2., 1., 3.);
     const int fps = map.value("aimFps").toInt();
     t.aimFps = fps == 30 || fps == 60 ? fps : 0;
+    t.angleCarry = map.value("angleCarry").toBool();
+    t.consoleLowLatency = map.value("consoleLowLatency").toBool();
+    auto& measured = t.measuredCurve;
+    const auto rates = map.value("measuredRates").toList();
+    if (rates.size() == qsizetype(measured.rates.size())) {
+        measured.deadzone = bounded("measuredDeadzone", 0., 0., .4);
+        measured.exponent = bounded("measuredExponent", 2., .8, 3.2);
+        measured.maxPixelsPerSecond = bounded("measuredMax", 0., 0., 20000.);
+        measured.acceleration = bounded("measuredAcceleration", 1., 1., 10.);
+        for (qsizetype i = 0; i < rates.size(); ++i) {
+            const auto rate = rates[i].toDouble();
+            measured.rates[i] = std::isfinite(rate) ? std::clamp(rate, 0., 1.) : 0.;
+        }
+        if (!measured.valid()) measured = {};
+    }
     t.mixPhysical = map.value("mixPhysical", true).toBool();
     t.graduatedSteering = map.value("graduatedSteering", false).toBool();
     t.steeringInitial = bounded("steeringInitial", .4, .2, .6);
@@ -266,6 +287,7 @@ private:
             if (pressed[k]) mods |= Mapper::modifier(k);
         const int chord = Mapper::encode(key, mods);
         if (down && unlockChord(chord, unlock)) { release(); return; }
+        if (mapped->aimKey(key, down)) return;
         if (key == quickDown || (down && chord == quick)) {
             quickDown = down ? key : 0;
             if (down) QMetaObject::invokeMethod(&owner, &StreamInputCapture::quickReferenceRequested, Qt::QueuedConnection);
@@ -417,6 +439,24 @@ bool StreamInputCapture::begin(Route route) {
         return false;
     }
 #endif
+    if (route_ == Route::Ps5) {
+        using Mode = remoteplay::AimTest::Mode;
+        using Render = engine::EngineController::ConsoleRenderMode;
+        if (armedAimMode_) {
+            aimTest_ = std::make_shared<remoteplay::AimTest>(Mode(armedAimMode_));
+            armedAimMode_ = 0;
+            measuredFg_ = false;
+            aimStageAt_ = nowUs();
+            mapped_->setAimTest(aimTest_);
+            engine_.setConsoleAimProbe(aimTest_);
+            if (aimTest_->mode() == Mode::Latency && !engine_.setConsoleRenderMode(Render::MeasureWithoutFg))
+                aimTest_->cancel();
+            emit aimStatusChanged();
+        } else if (mapper_.tuning().consoleLowLatency) {
+            lowLatencyActive_ = engine_.setConsoleRenderMode(Render::LowLatency);
+            emit aimStatusChanged();
+        }
+    }
     if(route_!=Route::Moonlight){
         restoreCursor_=GetCursorPos(&savedCursor_)!=FALSE;
         suspendIme();
@@ -458,6 +498,18 @@ void StreamInputCapture::end() {
     route_ = Route::None;
     timer_.stop();
     if (mapped_) mapped_->stop();
+    if (aimTest_) {
+        if (aimTest_->status().state == remoteplay::AimTest::State::Cancelled)
+            setAimStatus(tr("校准或延迟测试已取消"));
+        engine_.setConsoleAimProbe({});
+        aimTest_.reset();
+        emit aimStatusChanged();
+    }
+    if (lowLatencyActive_ || old == Route::Ps5) {
+        engine_.setConsoleRenderMode(engine::EngineController::ConsoleRenderMode::Normal);
+        lowLatencyActive_ = false;
+        emit aimStatusChanged();
+    }
     consoleInput_.reset();
     if (previewSender_.joinable()) {
         previewSender_.request_stop();
@@ -654,6 +706,7 @@ void StreamInputCapture::tick() {
     if (ps5Captured() && (!target_ || ps5Target_() != target_)) { end(); return; }
     mapped_->setGameFps(engine_.mappedGameFps());
 #endif
+    if (aimTest_) { tickAimTest(); return; }
     const auto latest = mapped_->preview();
     if (driving() != latest.driving) {
         mapper_.selectDriving(latest.driving);
@@ -676,6 +729,89 @@ void StreamInputCapture::tick() {
         previewState_ = latest.pad;
         previewSpeed_ = speed;
         emit padStateChanged();
+    }
+}
+
+void StreamInputCapture::setAimStatus(QString value) {
+    if (aimStatus_ == value) return;
+    aimStatus_ = std::move(value);
+    emit aimStatusChanged();
+}
+void StreamInputCapture::armAimTest(int mode) {
+    if (mode < 0 || mode > int(remoteplay::AimTest::Mode::Latency)) return;
+    releasePs5();
+    armedAimMode_ = mode;
+    setAimStatus(mode ? tr("返回游戏画面后点击接管。请站在开阔、静止的场景，松开手柄。") : QString{});
+}
+void StreamInputCapture::tickAimTest() {
+    using Test = remoteplay::AimTest;
+    using Render = engine::EngineController::ConsoleRenderMode;
+    const auto status = aimTest_->status();
+    const auto mode = aimTest_->mode();
+    if (status.state == Test::State::Cancelled || status.state == Test::State::Unreliable) {
+        end();
+        setAimStatus(status.state == Test::State::Cancelled ? tr("校准或延迟测试已取消") :
+            tr("画面运动样本不足。请换到开阔、静止的场景再试。"));
+        return;
+    }
+    if (status.state == Test::State::Complete) {
+        if (mode == Test::Mode::Latency) {
+            if (!engine_.snapshot().fgActive) {
+                end();
+                setAimStatus(tr("画面处理尚未就绪，延迟测试已结束。"));
+                return;
+            }
+            setAimStatus(tr("摇杆发送到画面提交 · 关闭补帧 %1 ms · 开启补帧 %2 ms")
+                .arg(status.latencyMs[0], 0, 'f', 1).arg(status.latencyMs[1], 0, 'f', 1));
+            veyra::log::info("console-aim", std::format("inputToPresent five samples per mode fgOffMs={:.2f} fgOnMs={:.2f}",
+                status.latencyMs[0], status.latencyMs[1]));
+        } else {
+            auto tune = mapper_.tuning();
+            tune.physicalAim = tune.aimConfigured = true;
+            if (mode == Test::Mode::Automatic) {
+                const auto curve = aimTest_->resultCurve();
+                if (!curve.valid()) {
+                    end();
+                    setAimStatus(tr("画面运动样本不足。请换到开阔、静止的场景再试。"));
+                    return;
+                }
+                tune.measuredCurve = curve;
+                tune.gameDeadzoneX = curve.deadzone;
+                tune.gameCurve = std::clamp(curve.exponent, 1., 3.);
+                setAimStatus(tr("校准完成 · 横向死区 %1% · 满杆画面速度 %2 px/s")
+                    .arg(curve.deadzone * 100., 0, 'f', 1).arg(curve.maxPixelsPerSecond, 0, 'f', 1));
+                veyra::log::info("console-aim", std::format("calibration deadzone={:.3f} response={:.3f} speedPxPerSec={:.2f} acceleration={:.3f}",
+                    curve.deadzone, curve.exponent, curve.maxPixelsPerSecond, curve.acceleration));
+            } else {
+                if (mode == Test::Mode::Vertical) tune.gameDeadzoneY = status.manualDeadzone;
+                else {
+                    tune.gameDeadzoneX = status.manualDeadzone;
+                    tune.measuredCurve = {};
+                }
+                setAimStatus(tr("已保存游戏死区 %1%").arg(status.manualDeadzone * 100., 0, 'f', 0));
+            }
+            applyMouseTuning(tune);
+        }
+        end();
+        return;
+    }
+    if (mode == Test::Mode::Latency && status.fg != measuredFg_) {
+        measuredFg_ = status.fg;
+        aimStageAt_ = nowUs();
+        if (!engine_.setConsoleRenderMode(Render::MeasureWithFg)) aimTest_->cancel();
+    }
+    const bool ready = engine_.consoleRenderReady();
+    aimTest_->ready(ready);
+    if (!ready && nowUs() - aimStageAt_ > 15000000) {
+        aimTest_->cancel();
+        end();
+        setAimStatus(tr("画面处理尚未就绪，延迟测试已结束。"));
+        return;
+    }
+    if (aimTest_->needsFrames()) {
+        setAimStatus(tr("正在测量画面响应 %1% · 任意键取消").arg(status.progress));
+    } else {
+        setAimStatus(tr("摇杆 %1% · 镜头开始转动时按空格 · ←／→ 微调 · Esc 取消").arg(status.percent));
     }
 }
 
@@ -869,6 +1005,7 @@ void StreamInputCapture::setTuning(const QString& key, const QVariant& value) {
     if (!map.contains(key)) return;
     map[key] = value;
     if (key == "dpi") map["dpiConfirmed"] = true;
+    if (key == "gameDeadzoneX" || key == "gameCurve") map["measuredRates"] = QVariantList{};
     applyMouseTuning(readTuning(map));
 }
 void StreamInputCapture::applyMouseTuning(const Mapper::Tuning& next) {

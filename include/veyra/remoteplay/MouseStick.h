@@ -2,6 +2,7 @@
 #pragma once
 
 #include "veyra/remoteplay/Types.h"
+#include "veyra/remoteplay/AimCurve.h"
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -28,6 +29,8 @@ public:
         double aimFullSpeed = 25.0, aimHorizontal = 1.0, aimVertical = 1.0;
         double gameDeadzoneX = 0.18, gameDeadzoneY = 0.18, gameCurve = 2.0;
         int aimFps = 0; // 0 uses the source's measured or negotiated game cadence.
+        AimCurve measuredCurve;
+        bool angleCarry = false, consoleLowLatency = false;
         bool mixPhysical = true, graduatedSteering = false;
         double steeringInitial = .40;
         int steeringFullMs = 240, steeringReturnMs = 60, pedalRiseMs = 0;
@@ -219,12 +222,29 @@ private:
         filteredY_ = dy * reportScale;
         const double adsGain = ads ? tuning_.adsScale : 1.;
         const double scale = 2.54 * adsGain / (tuning_.dpi * tuning_.aimFullSpeed);
-        const double x = filteredX_ * scale * tuning_.aimHorizontal;
-        const double y = filteredY_ * scale * tuning_.aimVertical * (tuning_.invertY ? -1. : 1.);
+        double x = filteredX_ * scale * tuning_.aimHorizontal;
+        double y = filteredY_ * scale * tuning_.aimVertical * (tuning_.invertY ? -1. : 1.);
+        const auto& measured = tuning_.measuredCurve;
+        const bool calibrated = measured.valid();
+        if (calibrated && tuning_.angleCarry) {
+            const double dt = std::clamp(double(lastSampleUs_ < 0 ? 4000 : nowUs - lastSampleUs_) / 1000000., .0005, .016);
+            lastSampleUs_ = nowUs;
+            if (x * carryX_ + y * carryY_ < 0.) carryX_ = carryY_ = 0.;
+            const double amountX = x * dt + carryX_, amountY = y * dt + carryY_;
+            const double amount = std::hypot(amountX, amountY);
+            const double sent = std::min(1., dt / std::max(1e-9, amount));
+            x = amountX * sent / dt;
+            y = amountY * sent / dt;
+            const double rest = std::min(1. - sent, .15 / std::max(1e-9, amount));
+            carryX_ = amountX * rest;
+            carryY_ = amountY * rest;
+        }
         const double length = std::hypot(x, y);
         if (length <= 0.) return {};
         const double dirX = x / length, dirY = y / length;
-        const double response = std::pow(std::min(1., length), 1. / tuning_.gameCurve);
+        const double speed = std::min(1., length);
+        const double response = calibrated ? (measured.deflection(speed) - measured.deadzone) / (1. - measured.deadzone)
+                                           : std::pow(speed, 1. / tuning_.gameCurve);
         const double radial = std::hypot(dirX * tuning_.gameDeadzoneX, dirY * tuning_.gameDeadzoneY);
         const auto axis = [&](double direction, double deadzone) {
             const double radialOffset = radial * direction;

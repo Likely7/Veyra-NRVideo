@@ -2,8 +2,10 @@
 #pragma once
 
 #include "veyra/remoteplay/KeyboardMousePad.h"
+#include "veyra/remoteplay/AimTest.h"
 #include <array>
 #include <functional>
+#include <memory>
 #include <mutex>
 
 namespace veyra::remoteplay {
@@ -38,6 +40,7 @@ public:
     void press(int key, bool down, int64_t us) {
         std::lock_guard lock(mutex_);
         if (!active_) return;
+        if (aimTest_) { aimTest_->key(key, down); return; }
         enqueue({key, down, us});
     }
 
@@ -74,6 +77,17 @@ public:
         std::lock_guard lock(mutex_);
         mouse_.setGameFps(fps);
     }
+    void setAimTest(std::shared_ptr<AimTest> test) {
+        std::lock_guard lock(mutex_);
+        aimTest_ = std::move(test);
+        mouse_.resetMotion();
+        mapper_.reset();
+        eventCount_ = wheelCount_ = 0;
+    }
+    bool aimKey(int key, bool down) {
+        std::lock_guard lock(mutex_);
+        return aimTest_ && aimTest_->key(key, down);
+    }
 
     void selectDriving(bool driving, int64_t us) {
         std::lock_guard lock(mutex_);
@@ -89,11 +103,16 @@ public:
         std::lock_guard lock(mutex_);
         return preview_;
     }
+    bool hasFocus() const {
+        std::lock_guard lock(mutex_);
+        return active_ && (!focused_ || focused_());
+    }
 
     ControllerState sample(int64_t us, const ControllerState& physical = {}) {
         std::lock_guard lock(mutex_);
         if (!active_) return {};
         if (focused_ && !focused_()) { deactivate(); return {}; }
+        if (aimTest_) return aimTest_->sample(us);
         const auto& tune = mapper_.tuning();
         if (!windowStart_) windowStart_ = us;
         const auto elapsedUs = previousSend_ ? us - previousSend_ : 0;
@@ -260,6 +279,7 @@ private:
 
     void deactivate() {
         active_ = false;
+        if (aimTest_) aimTest_->cancel();
         eventCount_ = wheelCount_ = 0;
         mapper_.reset();
         mouse_.resetMotion();
@@ -270,6 +290,7 @@ private:
     KeyboardMousePad mapper_;
     MouseStick mouse_;
     std::function<bool()> focused_;
+    std::shared_ptr<AimTest> aimTest_;
     std::array<Event, 64> events_{};
     std::array<Event, 16> wheelKeys_{};
     size_t eventStart_ = 0, eventCount_ = 0, wheelStart_ = 0, wheelCount_ = 0;

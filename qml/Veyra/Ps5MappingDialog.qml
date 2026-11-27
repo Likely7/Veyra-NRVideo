@@ -687,6 +687,86 @@ DialogLayer {
             VRow {visible: panel.advanced && !panel.physicalAim; enabled: panel.tune.mouseLook!==false; label: qsTr("快速转身补偿")
                 VSwitch {checked: panel.tune.carry===true; onToggled: on=>panel.input.setTuning("carry",on)}
             }
+            VSubGroup {
+                visible: panel.physicalAim
+                Layout.fillWidth: true
+                label: qsTr("游戏校准与输入延迟")
+                VRow {
+                    label: qsTr("键鼠接管时降低延迟")
+                    VSwitch {
+                        checked: panel.tune.consoleLowLatency === true
+                        onToggled: on => panel.input?.setTuning("consoleLowLatency", on)
+                    }
+                }
+                VRow {
+                    label: qsTr("测游戏死区")
+                    enabled: panel.input?.keyboardEnabled === true
+                    VSelect {
+                        title: qsTr("测游戏死区")
+                        value: qsTr("选择")
+                        options: [{id: "1", label: qsTr("横向")}, {id: "2", label: qsTr("纵向")}]
+                        onPicked: id => panel.input?.armAimTest(Number(id))
+                    }
+                }
+                VRow {
+                    label: qsTr("校准当前游戏")
+                    enabled: panel.input?.keyboardEnabled === true
+                    VButton {
+                        text: qsTr("开始")
+                        onClicked: panel.input?.armAimTest(3)
+                    }
+                }
+                VRow {
+                    label: qsTr("测输入延迟")
+                    enabled: panel.input?.keyboardEnabled === true
+                    VButton {
+                        text: qsTr("开始")
+                        onClicked: panel.input?.armAimTest(4)
+                    }
+                }
+                Text {
+                    visible: text.length > 0
+                    text: panel.input?.aimStatus ?? ""
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: Theme.t2
+                }
+                Canvas {
+                    Layout.fillWidth: true
+                    implicitHeight: 54
+                    visible: rates.length === 9
+                    property var rates: panel.tune.measuredRates ?? []
+                    onRatesChanged: requestPaint()
+                    onWidthChanged: requestPaint()
+                    onPaint: {
+                        if (rates.length !== 9) return
+                        const c = getContext("2d")
+                        c.reset()
+                        c.fillStyle = "#181f2d"
+                        c.fillRect(0, 0, width, height)
+                        const steps = [.02, .05, .10, .20, .35, .50, .65, .80, 1.]
+                        const dz = Number(panel.tune.measuredDeadzone ?? 0)
+                        c.strokeStyle = "#92b7ff"
+                        c.lineWidth = 2
+                        c.beginPath()
+                        c.moveTo(1, height - 2)
+                        c.lineTo(width * dz, height - 2)
+                        for (let i = 0; i < steps.length; ++i)
+                            c.lineTo((width - 2) * (dz + (1 - dz) * steps[i]), height - 2 - (height - 4) * rates[i])
+                        c.stroke()
+                    }
+                }
+                VRow {
+                    label: qsTr("新版甩枪补偿")
+                    visible: Number(panel.tune.measuredMax ?? 0) > 0
+                    hint: qsTr("推满后最多补足 150 ms 的转动量，停手后镜头可能继续转动。")
+                    hintBelow: true
+                    VSwitch {
+                        checked: panel.tune.angleCarry === true
+                        onToggled: on => panel.input?.setTuning("angleCarry", on)
+                    }
+                }
+            }
             Canvas {
                 Layout.fillWidth: true; implicitHeight: 54; visible: panel.advanced && !panel.physicalAim
                 property var settings: panel.tune

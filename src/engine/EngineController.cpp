@@ -420,12 +420,22 @@ bool EngineController::requestSettings(EnhancementSettings s,std::optional<Chain
         veyra::log::info("settings",std::format("fsr multiplier gate: requested={} maxGeneratedFrames=1 applied=unchanged",s.multiplier));
         return false;
     }
+    if (consoleScope_.mode != ConsoleRenderMode::Normal && consoleScope_.session == snapshot_.sessionId) {
+        consoleScope_.multiplier = s.multiplier;
+        s.multiplier = consoleScope_.mode == ConsoleRenderMode::MeasureWithFg ? std::max(2u, s.multiplier) : 1;
+    }
+    const auto revision = publishSettingsRequest(s, order);
+    if (acceptedRevision) *acceptedRevision = revision;
+    return true;
+}
+uint64_t EngineController::publishSettingsRequest(EnhancementSettings s, std::optional<ChainRuntimeOrder> order) {
     // Revision partitions GPU history and measurements. Saved bypassed-effect
     // parameters and audio-only edits must not invalidate in-flight video.
-    s.revision=desired_.revision;if(s==desired_&&order==desiredNodeOrder_){if(acceptedRevision)*acceptedRevision=desired_.revision;return true;}
+    s.revision=desired_.revision;
+    if(s==desired_&&order==desiredNodeOrder_)return desired_.revision;
     if(!s.sameVideoConfiguration(desired_)||order!=desiredNodeOrder_)s.revision=++nextRevision_;
     desiredNodeOrder_=order;desired_=s;snapshot_.desired=s;snapshot_.applying=snapshot_.applied!=desired_;
-    if(acceptedRevision)*acceptedRevision=s.revision;return true;
+    return s.revision;
 }
 void EngineController::saveFrame(const std::wstring& path){std::lock_guard lock(mutex_);savePath_=path;snapshot_.savedFramePath.clear();}
 bool EngineController::requestRecording(const RecordingSettings& options,std::wstring& error){return recorder_->start(options,error);}
@@ -461,8 +471,56 @@ void EngineController::startExport(const std::wstring& input,const std::wstring&
 }
 void EngineController::requestPresentation(PresentationSettings settings){
     if(!settings.valid())return;
-    std::lock_guard lock(mutex_);if(presentation_==settings)return;
+    std::lock_guard lock(mutex_);
+    if (consoleScope_.mode != ConsoleRenderMode::Normal) {
+        consoleScope_.presentation = settings;
+        if (consoleScope_.mode == ConsoleRenderMode::LowLatency && consoleScope_.session == snapshot_.sessionId) {
+            settings.enabled = true;
+            settings.nvidiaLowLatency = NvidiaLowLatency::On;
+            settings.display = DisplaySync::Automatic;
+            settings.variableRefresh = false;
+        }
+    }
+    if(presentation_==settings)return;
     presentation_=settings;++presentationRevision_;
+}
+bool EngineController::setConsoleRenderMode(ConsoleRenderMode mode) {
+    std::lock_guard lock(mutex_);
+    auto& scope = consoleScope_;
+    if (scope.mode == mode && (mode == ConsoleRenderMode::Normal || scope.session == snapshot_.sessionId)) return true;
+    if (mode != ConsoleRenderMode::Normal && (!snapshot_.running || snapshot_.image)) return false;
+    if (scope.mode == ConsoleRenderMode::Normal) scope = {mode, snapshot_.sessionId, desired_.multiplier, presentation_};
+    const bool sameSession = scope.session == snapshot_.sessionId;
+    if (!sameSession && mode != ConsoleRenderMode::Normal) return false;
+    auto request = desired_;
+    if (sameSession) {
+        request.multiplier = mode == ConsoleRenderMode::Normal ? scope.multiplier :
+            mode == ConsoleRenderMode::MeasureWithFg ? std::max(2u, scope.multiplier) : 1;
+        publishSettingsRequest(request, desiredNodeOrder_);
+    }
+    auto presentation = scope.presentation;
+    if (mode == ConsoleRenderMode::LowLatency) {
+        presentation.enabled = true;
+        presentation.nvidiaLowLatency = NvidiaLowLatency::On;
+        presentation.display = DisplaySync::Automatic;
+        presentation.variableRefresh = false;
+    }
+    if (presentation_ != presentation) { presentation_ = presentation; ++presentationRevision_; }
+    scope.mode = mode;
+    log::info("console-render", std::format("mode={} session={} multiplier={} lowQueue={} nvidiaLowLatency={} display={} vrr={}",
+        int(mode), snapshot_.sessionId, desired_.multiplier, presentation.enabled, unsigned(presentation.nvidiaLowLatency),
+        unsigned(presentation.display), presentation.variableRefresh));
+    return true;
+}
+bool EngineController::consoleRenderReady() const {
+    std::lock_guard lock(mutex_);
+    const auto mode = consoleScope_.mode;
+    if (!snapshot_.running || snapshot_.applying) return false;
+    if (mode == ConsoleRenderMode::Normal) return true;
+    if (consoleScope_.session != snapshot_.sessionId) return false;
+    return mode == ConsoleRenderMode::MeasureWithFg
+        ? snapshot_.applied.multiplier > 1
+        : snapshot_.applied.multiplier == 1;
 }
 PlayerSnapshot EngineController::snapshot()const{
     // The flow window has its own mutex and percentile work; take it after

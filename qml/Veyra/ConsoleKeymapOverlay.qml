@@ -46,6 +46,7 @@ Item {
                 parts.push(qsTr("%1 切到%2").arg(toggle).arg(input.driving ? walk : drive))
             if (quick && quick !== "—") parts.push(qsTr("%1 查看键位").arg(quick))
             parts.push(qsTr("%1 释放鼠标").arg(input.unlockLabel))
+            if (input.lowLatencyActive === true) parts.push(qsTr("低延迟模式 · 补帧暂停"))
         } else if (reason === "layout") {
             parts.push(qsTr("已切到%1").arg(input.driving ? drive : walk))
             if (input.driving) {
@@ -94,13 +95,16 @@ Item {
             if (overlay.locked) overlay.showHint("layout")
         }
         function onQuickReferenceRequested() { overlay.toggleReference() }
+        function onAimStatusChanged() {
+            if (overlay.input.aimTesting) overlay.referenceOpen = false
+        }
         function onQuickReferenceScrolled(delta) {
             if (!reference.visible) return
             rowsView.contentY = Math.max(0, Math.min(Math.max(0, rowsView.contentHeight - rowsView.height),
                 rowsView.contentY - delta * 0.5))
         }
     }
-    Timer { id: hintTimer; interval: 4700; onTriggered: hintFade.start() }
+    Timer { id: hintTimer; interval: 4700; onTriggered: if (overlay.input?.aimTesting !== true) hintFade.start() }
     NumberAnimation {
         id: hintFade
         target: hint
@@ -116,7 +120,8 @@ Item {
         objectName: "ps5-input-hint"
         readonly property bool videoCover: visible
         readonly property real coverRadius: radius
-        visible: overlay.active && !overlay.suppressed && !overlay.referenceOpen && overlay.hintText.length > 0
+        visible: overlay.active && !overlay.suppressed && !overlay.referenceOpen &&
+            (overlay.hintText.length > 0 || overlay.input?.aimTesting === true)
         anchors.top: parent.top
         anchors.topMargin: 55
         anchors.horizontalCenter: parent.horizontalCenter
@@ -130,7 +135,7 @@ Item {
             id: hintLabel
             anchors.centerIn: parent
             width: hint.width - 24
-            text: overlay.hintText
+            text: overlay.input?.aimTesting === true ? overlay.input.aimStatus : overlay.hintText
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
             color: Theme.t1

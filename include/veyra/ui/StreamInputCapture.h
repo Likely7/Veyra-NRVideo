@@ -48,6 +48,9 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(bool ps5Captured READ ps5Captured NOTIFY stateChanged)
     Q_PROPERTY(bool previewing READ previewing NOTIFY stateChanged)
     Q_PROPERTY(QVariantMap padState READ padState NOTIFY padStateChanged)
+    Q_PROPERTY(QString aimStatus READ aimStatus NOTIFY aimStatusChanged)
+    Q_PROPERTY(bool aimTesting READ aimTesting NOTIFY aimStatusChanged)
+    Q_PROPERTY(bool lowLatencyActive READ lowLatencyActive NOTIFY aimStatusChanged)
 
 public:
     explicit StreamInputCapture(engine::EngineController& engine, QString profilePath,
@@ -72,6 +75,9 @@ public:
     Q_INVOKABLE void learnQuickKey(QObject* learningControls);
     Q_INVOKABLE void setActionNote(int action, bool driving, const QString& note);
     QVariantMap tuning() const;
+    QString aimStatus() const { return aimStatus_; }
+    bool aimTesting() const { return bool(aimTest_); }
+    bool lowLatencyActive() const { return lowLatencyActive_; }
     QStringList profiles() const {return profiles_.keys();}
     QString profile() const {return profile_;}
     QString unlockLabel() const;
@@ -97,6 +103,7 @@ public:
     Q_INVOKABLE void resetMouseTuning();
     Q_INVOKABLE void setTuning(const QString& key, const QVariant& value);
     Q_INVOKABLE void selectAimAlgorithm(bool physical);
+    Q_INVOKABLE void armAimTest(int mode);
     Q_INVOKABLE void preview(bool on);
     // Invoked while opening another panel or changing source.
     Q_INVOKABLE void releasePs5();
@@ -115,6 +122,7 @@ signals:
     void quickReferenceRequested();
     void quickReferenceScrolled(int delta);
     void applicationHotkeyRequested(const QString& chord);
+    void aimStatusChanged();
 
 private:
     using Mapper = remoteplay::KeyboardMousePad;
@@ -129,6 +137,8 @@ private:
     void end();
     void clipToWindow();
     void tick();
+    void tickAimTest();
+    void setAimStatus(QString);
     void digital(int key, bool down);
     void bind(int key, int modifiers);
     bool quickKeyAvailable(int chord) const;
@@ -155,6 +165,11 @@ private:
     std::unique_ptr<ConsoleInputWorker> consoleInput_;
     std::shared_ptr<remoteplay::MappedController> mapped_;
     std::jthread previewSender_;
+    std::shared_ptr<remoteplay::AimTest> aimTest_;
+    int armedAimMode_ = 0;
+    bool measuredFg_ = false, lowLatencyActive_ = false;
+    int64_t aimStageAt_ = 0;
+    QString aimStatus_;
     QJsonObject profiles_;
     QString profile_=QStringLiteral("默认");
     double previewSpeed_=0;
