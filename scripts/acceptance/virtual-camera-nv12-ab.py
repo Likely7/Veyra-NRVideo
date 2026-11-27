@@ -112,6 +112,10 @@ def main():
     parser.add_argument("--pixels-only", action="store_true")
     args = parser.parse_args()
     args.producer = args.producer.resolve(strict=True)
+    producer_image = args.producer.read_bytes()
+    if not all(marker in producer_image for marker in
+               (b"RegOverridePredefKey", "--pixel-fixtures".encode("utf-16le"), b"PULL_READY")):
+        parser.error("Rebuild the producer with the private registry and DirectShow benchmark entry points.")
     args.consumer = args.consumer.resolve(strict=True)
     args.module = args.module.resolve(strict=True)
     args.baseline = args.baseline.resolve(strict=True)
