@@ -26,6 +26,7 @@ pipeline::ColorDescription resolveCompressedCaptureColor(AVFrame&,const pipeline
 
 class CaptureCompressedDecoder {
 public:
+    enum class HardwareMode { Default, D3D11Retained };
     CaptureCompressedDecoder();
     ~CaptureCompressedDecoder();
 
@@ -55,13 +56,13 @@ public:
 
     bool open(CaptureCodec codec, unsigned width, unsigned height,
         const uint8_t* extradata, size_t extradataBytes,
-        ID3D12Device* device, ID3D12CommandQueue* queue);
+        ID3D12Device* device, ID3D12CommandQueue* queue, HardwareMode mode = HardwareMode::Default);
 
     // Decodes one payload; data=nullptr, bytes=0 receives remaining output
     // without submitting input or EOS. Drain this way before the next payload.
     // On success `*out` is a frame whose lifetime the
     // caller must not extend past the next decode():
-    //  - hardware=true:  decoder-owned D3D12 surface (AV_PIX_FMT_D3D12);
+    //  - hardware=true: decoder-owned D3D12 or D3D11 surface;
     //  - hardware=false: converted into `nv12Target` (owned by the caller).
     // Returns false when the payload produced no frame (pending input) or the
     // decoder reported an error; see lastError()/waitingForInput().
@@ -75,6 +76,7 @@ public:
     bool opened() const;
     bool hardwareActive() const;
     bool waitingForInput() const;
+    bool surfaceBusy() const;
     void recoverAtKeyframe();
     const char* backendName() const;
     const std::string& lastError() const;

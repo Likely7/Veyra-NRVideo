@@ -35,11 +35,12 @@ struct DecoderStats {
     uint64_t pixelReadbackCount = 0; // software decode uploads only; always 0 on the GPU path
 };
 
-enum class DecodeReceiveStatus { NeedInput, Frame, EndOfStream, Error };
+enum class DecodeReceiveStatus { NeedInput, Frame, EndOfStream, Error, SurfaceBusy };
+enum class D3D11SurfaceOwnership { Borrowed, RetainedByFrame };
 
 // Decoded surface handed to the graph ingress for paths whose texture does not
-// travel inside the AVFrame (D3D11VA). Pointers are borrowed: the decoder owns
-// the texture view and the D3D12 fence and keeps both alive until close().
+// travel inside the AVFrame (D3D11VA). For asynchronous decoding, keep an
+// AVFrame reference with this view so the slot and producer fence stay alive.
 struct HardwareSurfaceView {
     ID3D12Resource* texture = nullptr;
     uint32_t subresourceIndex = 0;
@@ -83,7 +84,8 @@ public:
     // D3D11VA cannot take the render device down with it.
     bool openD3D11VA(const AVCodecParameters* codecParameters,
         int streamTimeBaseNum, int streamTimeBaseDen,
-        uint64_t adapterLuid, ID3D12Device* d3d12Device, bool lowLatency = false);
+        uint64_t adapterLuid, ID3D12Device* d3d12Device, bool lowLatency = false,
+        D3D11SurfaceOwnership ownership = D3D11SurfaceOwnership::Borrowed);
     void close();
 
     // This FFmpeg build registers libdav1d ahead of the native AV1 decoder, and
@@ -153,14 +155,14 @@ public:
 private:
     enum class HardwareDecodeKind { None, D3D12VA, D3D11VA };
 
-    // Decoded slices are copied into these D3D11 textures, which are shared to
-    // D3D12 as NT handles. The ring is oversized for the app's six command
-    // slots, so a slot is only rewritten well after the graph finished reading
-    // it (see the comment in receiveFrame()).
+    // The synchronous reader's ring is larger than the graph's command queue.
+    // The asynchronous reader uses this same pool and returns slots by AVFrame
+    // ownership, independent of how far ahead the decoder can run.
     static constexpr uint32_t kInteropSlotCount = 8;
     struct InteropSlot {
         ID3D11Texture2D* texture = nullptr;
         ID3D12Resource* resource = nullptr;
+        AVBufferRef* frameLease = nullptr;
         uint32_t width = 0;
         uint32_t height = 0;
         uint64_t lastFenceValue = 0;
@@ -169,6 +171,7 @@ private:
     ID3D12Resource* importD3D11Texture(ID3D11Texture2D* texture);
     bool createInteropSlots(const void* sourceDesc);
     bool createInteropFence(ID3D12Device* d3d12Device);
+    void releaseInteropSlots();
     void releaseInterop();
 
     AVCodecContext* context_ = nullptr;
@@ -200,7 +203,9 @@ private:
     uint64_t interopFenceValue_ = 0;
     uint64_t interopFrameIndex_ = 0;
     uint32_t interopSlotIndex_ = 0;
+    uint32_t interopFormat_ = 0;
     InteropSlot interopSlots_[kInteropSlotCount];
+    D3D11SurfaceOwnership surfaceOwnership_ = D3D11SurfaceOwnership::Borrowed;
     HardwareSurfaceView hardwareSurface_{};
     struct D3D11TextureImport { ID3D12Resource* resource = nullptr; bool logged = false; };
     // One decoder pool is a single texture array, so this map stays tiny; the

@@ -172,6 +172,17 @@ DialogLayer {
             hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
             VSwitch { objectName: "xbox-software-decode"; checked: xbDialog.st.softwareDecode === true; onToggled: checked => xbDialog.xb.set("softwareDecode", checked) }
         }
+        VRow {
+            visible: !xbDialog.chooseForCapture
+            label: qsTr("D3D11VA 硬件解码")
+            hint: qsTr("部分 Intel 核显花屏时可尝试。关闭软件解码后重新连接生效。")
+            VSwitch {
+                objectName: "xbox-d3d11-decode"
+                enabled: xbDialog.st.softwareDecode !== true
+                checked: enabled && xbDialog.st.d3d11Decode === true
+                onToggled: checked => xbDialog.xb.set("d3d11Decode", checked)
+            }
+        }
     }
     DialogNote { objectName: "xbox-status"; visible: (xbDialog.st.status || "").length > 0; text: (xbDialog.st.busy ? qsTr("处理中 · ") : "") + (xbDialog.st.status || "") }
 }

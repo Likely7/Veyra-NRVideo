@@ -36,6 +36,7 @@ struct XboxConnectDesc {
     bool gamepad = true;             // forward the PC's controller
     bool softwareDecode = false;    // opt-in workaround for silent hardware decode corruption
     bool controlOnly = false;       // receive keepalive media without decoding or playback
+    bool d3d11Decode = false;       // opt-in native alternative for problematic D3D12 decode drivers
     std::string locale = "zh-CN";
     std::shared_ptr<ID3D12Device> decodeDevice;
     std::shared_ptr<ID3D12CommandQueue> decodeQueue;
@@ -52,7 +53,7 @@ struct XboxStats {
     uint32_t width = 0, height = 0;
     bool hardwareDecode = false;
     uint64_t units = 0, decoded = 0, dropped = 0, decodeErrors = 0, keyframeRequests = 0;
-    uint64_t ingressEvicted = 0, waitingKeyframeDropped = 0, mailboxOverwritten = 0;
+    uint64_t ingressEvicted = 0, waitingKeyframeDropped = 0, mailboxOverwritten = 0, interopSkipped = 0;
     unsigned decodeQueueDepth = 0, decodeQueueHighWater = 0;
     xbox::VideoRtpStats videoRtp;
     uint64_t audioPacketsDiscarded = 0;

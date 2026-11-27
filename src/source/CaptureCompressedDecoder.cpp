@@ -75,6 +75,7 @@ struct CaptureCompressedDecoder::Impl {
     bool nativeSoftwareExtent = false;
     bool stream = false;               // setStreamProfile(): PC / Xbox streaming
     bool hardwareRequested = false;
+    bool preferredD3D11 = false;
     bool hardware = false;
     bool hardwareChecked = false;
     bool waiting = false;
@@ -144,7 +145,7 @@ struct CaptureCompressedDecoder::Impl {
         decoder.close();
         codec = CaptureCodec::None;
         width = height = 0;
-        hardwareRequested = hardware = hardwareChecked = waiting = false;
+        hardwareRequested = hardware = hardwareChecked = waiting = preferredD3D11 = false;
         decoder.setPreferNativeAv1Hardware(false);
         depthWarningLogged = false;
         frames = failures = fallbacks = 0;
@@ -242,7 +243,7 @@ CaptureCompressedDecoder::CaptureCompressedDecoder() : p_(std::make_unique<Impl>
 CaptureCompressedDecoder::~CaptureCompressedDecoder() = default;
 
 bool CaptureCompressedDecoder::open(CaptureCodec codec, unsigned width, unsigned height,
-    const uint8_t* extradata, size_t extradataBytes, ID3D12Device* device, ID3D12CommandQueue* queue)
+    const uint8_t* extradata, size_t extradataBytes, ID3D12Device* device, ID3D12CommandQueue* queue, HardwareMode mode)
 {
     auto& p = *p_;
     p.close();
@@ -275,11 +276,14 @@ bool CaptureCompressedDecoder::open(CaptureCodec codec, unsigned width, unsigned
     // decoder as the recorded fallback.
     if (codec != CaptureCodec::Mjpeg && device != nullptr && queue != nullptr) {
         p.hardwareRequested = true;
+        const bool retained = mode == HardwareMode::D3D11Retained && codec == CaptureCodec::H264;
+        p.preferredD3D11 = retained || (p.stream && codec == CaptureCodec::Hevc);
         bool opened = false;
-        if (p.stream && codec == CaptureCodec::Hevc) {
+        if (p.preferredD3D11) {
             const LUID luid = device->GetAdapterLuid();
             opened = p.decoder.openD3D11VA(p.parameters, 1, 10000000,
-                (uint64_t(uint32_t(luid.HighPart)) << 32) | uint64_t(luid.LowPart), device, true);
+                (uint64_t(uint32_t(luid.HighPart)) << 32) | uint64_t(luid.LowPart), device, true,
+                retained ? media::D3D11SurfaceOwnership::RetainedByFrame : media::D3D11SurfaceOwnership::Borrowed);
         } else {
             p.decoder.setPreferNativeAv1Hardware(p.stream);
             opened = p.decoder.openD3D12VA(p.parameters, 1, 10000000, device, queue, true);
@@ -287,8 +291,8 @@ bool CaptureCompressedDecoder::open(CaptureCodec codec, unsigned width, unsigned
         if (opened) {
             p.hardware = true;
         } else {
-            log::warn("capture-decode", std::format(
-                "D3D12VA open failed codec={}; falling back to the software decoder", captureCodecKey(codec)));
+            log::warn("capture-decode", std::format("{} open failed codec={}; falling back to the software decoder",
+                p.preferredD3D11 ? "D3D11VA" : "D3D12VA", captureCodecKey(codec)));
         }
     }
     if (!p.hardware && !p.openSoftwareDecoder()) {
@@ -417,11 +421,12 @@ void CaptureCompressedDecoder::preserveSoftwareStreamExtent(bool enabled) { p_->
 bool CaptureCompressedDecoder::opened() const { return p_->decoder.opened(); }
 bool CaptureCompressedDecoder::hardwareActive() const { return p_->hardware; }
 bool CaptureCompressedDecoder::waitingForInput() const { return p_->waiting; }
+bool CaptureCompressedDecoder::surfaceBusy() const { return p_->decoder.receiveStatus() == media::DecodeReceiveStatus::SurfaceBusy; }
 void CaptureCompressedDecoder::recoverAtKeyframe() { p_->decoder.recoverAtKeyframe(); }
 const char* CaptureCompressedDecoder::backendName() const
 {
-    if (p_->hardware) return p_->stream && p_->codec == CaptureCodec::Hevc ? "d3d11va" : "d3d12va";
-    if (p_->hardwareRequested) return "software(after d3d12va)";
+    if (p_->hardware) return p_->decoder.decodePathName();
+    if (p_->hardwareRequested) return p_->preferredD3D11 ? "software(after d3d11va)" : "software(after d3d12va)";
     return p_->decoder.opened() ? "software" : "none";
 }
 const std::string& CaptureCompressedDecoder::lastError() const { return p_->error; }

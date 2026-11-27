@@ -2380,6 +2380,19 @@
    "ru": "Cube LUT (*.cube); Все файлы (*.*)"
   },
   {
+   "zh": "D3D11VA 硬件解码",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "D3D11VA 硬體解碼",
+   "en": "D3D11VA hardware decoding",
+   "ja": "D3D11VA ハードウェアデコード",
+   "ko": "D3D11VA 하드웨어 디코딩",
+   "es": "Decodificación por hardware D3D11VA",
+   "fr": "Décodage matériel D3D11VA",
+   "de": "D3D11VA-Hardwaredecodierung",
+   "pt-BR": "Decodificação por hardware D3D11VA",
+   "ru": "Аппаратное декодирование D3D11VA"
+  },
+  {
    "zh": "D3D12VA 硬件",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "D3D12VA 硬體",
@@ -40418,6 +40431,19 @@
    "de": "Progressiv",
    "pt-BR": "Progressivo",
    "ru": "прогрессивный"
+  },
+  {
+   "zh": "部分 Intel 核显花屏时可尝试。关闭软件解码后重新连接生效。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "部分 Intel 內顯畫面異常時可試用。關閉軟體解碼並重新連線後生效。",
+   "en": "Try this if video is corrupted on an Intel iGPU. Turn off software decoding and reconnect to apply.",
+   "ja": "一部の Intel 内蔵 GPU で映像が乱れる場合にお試しください。ソフトウェアデコードをオフにして再接続すると適用されます。",
+   "ko": "일부 Intel 내장 GPU에서 영상이 깨질 때 사용해 보세요. 소프트웨어 디코딩을 끄고 다시 연결하면 적용됩니다.",
+   "es": "Pruébalo si la imagen se distorsiona en una GPU integrada Intel. Desactiva la decodificación por software y vuelve a conectar.",
+   "fr": "À essayer si l’image est altérée sur un GPU intégré Intel. Désactivez le décodage logiciel puis reconnectez-vous.",
+   "de": "Bei Bildfehlern auf einer integrierten Intel-GPU ausprobieren. Softwaredecodierung ausschalten und neu verbinden.",
+   "pt-BR": "Experimente se a imagem apresentar artefatos em uma GPU integrada Intel. Desative a decodificação por software e reconecte.",
+   "ru": "Попробуйте при искажении изображения на встроенной графике Intel. Отключите программное декодирование и переподключитесь."
   },
   {
    "zh": "部分轨道当前封装装不下，未保留（详见队列说明）",

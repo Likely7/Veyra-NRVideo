@@ -17,6 +17,7 @@ extern "C" {
 
 #include <format>
 #include <algorithm>
+#include <new>
 
 #include "veyra/Log.h"
 
@@ -25,6 +26,12 @@ namespace veyra::media {
 namespace {
 
 using Microsoft::WRL::ComPtr;
+
+struct D3D11FrameLease {
+    ComPtr<ID3D11Texture2D> copyTexture;
+    ComPtr<ID3D12Resource> importedTexture;
+    ComPtr<ID3D12Fence> producerFence;
+};
 
 std::string hrText(HRESULT hr)
 {
@@ -218,15 +225,10 @@ bool FFmpegVideoDecoder::openD3D12VA(const AVCodecParameters* codecParameters,
     return true;
 }
 
-void FFmpegVideoDecoder::releaseInterop()
+void FFmpegVideoDecoder::releaseInteropSlots()
 {
-    for (auto& entry : d3d11Imports_) {
-        if (entry.second.resource != nullptr) {
-            entry.second.resource->Release();
-        }
-    }
-    d3d11Imports_.clear();
     for (auto& slot : interopSlots_) {
+        av_buffer_unref(&slot.frameLease);
         if (slot.resource != nullptr) {
             slot.resource->Release();
             slot.resource = nullptr;
@@ -240,7 +242,18 @@ void FFmpegVideoDecoder::releaseInterop()
     }
     interopFrameIndex_ = 0;
     interopSlotIndex_ = 0;
+    interopFormat_ = 0;
     hardwareSurface_ = HardwareSurfaceView{};
+}
+
+void FFmpegVideoDecoder::releaseInterop()
+{
+    for (auto& entry : d3d11Imports_) {
+        if (entry.second.resource != nullptr) entry.second.resource->Release();
+    }
+    d3d11Imports_.clear();
+    releaseInteropSlots();
+    surfaceOwnership_ = D3D11SurfaceOwnership::Borrowed;
     if (d3d12Fence_ != nullptr) {
         d3d12Fence_->Release();
         d3d12Fence_ = nullptr;
@@ -358,9 +371,23 @@ bool FFmpegVideoDecoder::createInteropSlots(const void* sourceDescVoid)
             return false;
         }
         slot.resource = resource.Detach();
+        if (surfaceOwnership_ == D3D11SurfaceOwnership::RetainedByFrame) {
+            auto* lease = new (std::nothrow) D3D11FrameLease;
+            if (!lease) return false;
+            lease->copyTexture = slot.texture;
+            lease->importedTexture = slot.resource;
+            lease->producerFence = d3d12Fence_;
+            slot.frameLease = av_buffer_create(reinterpret_cast<uint8_t*>(lease), sizeof(*lease),
+                [](void*, uint8_t* data) { delete reinterpret_cast<D3D11FrameLease*>(data); }, nullptr, 0);
+            if (!slot.frameLease) {
+                delete lease;
+                return false;
+            }
+        }
         slot.width = desc.Width;
         slot.height = desc.Height;
     }
+    interopFormat_ = uint32_t(sourceDesc.Format);
     log::info("media", std::format("decoder: d3d11va interop ring ready slots={} surface={}x{} format={}",
         kInteropSlotCount, sourceDesc.Width, sourceDesc.Height, static_cast<int>(sourceDesc.Format)));
     return true;
@@ -368,7 +395,7 @@ bool FFmpegVideoDecoder::createInteropSlots(const void* sourceDescVoid)
 
 bool FFmpegVideoDecoder::openD3D11VA(const AVCodecParameters* codecParameters,
     int streamTimeBaseNum, int streamTimeBaseDen,
-    uint64_t adapterLuid, ID3D12Device* d3d12Device, bool lowLatency)
+    uint64_t adapterLuid, ID3D12Device* d3d12Device, bool lowLatency, D3D11SurfaceOwnership ownership)
 {
     receiveStatus_ = DecodeReceiveStatus::NeedInput;
     if (context_ != nullptr) {
@@ -506,6 +533,8 @@ bool FFmpegVideoDecoder::openD3D11VA(const AVCodecParameters* codecParameters,
         close();
         return false;
     }
+    surfaceOwnership_ = ownership;
+    if (ownership == D3D11SurfaceOwnership::RetainedByFrame) setExtraHardwareFrames(8);
     log::info("media", std::format("decoder: d3d11va decoder opened codec={} {}x{} lowLatency={} (private device, shared surfaces)",
         codec->name, context_->width, context_->height, lowLatency));
     return true;
@@ -762,42 +791,72 @@ const AVFrame* FFmpegVideoDecoder::receiveFrame()
         // D3D11 fence is signalled so the graph can enqueue one GPU-side wait.
         // Nothing here waits on the CPU.
         hardwareSurface_ = HardwareSurfaceView{};
+        const bool leased = surfaceOwnership_ == D3D11SurfaceOwnership::RetainedByFrame;
+        if (leased && ((frame_->flags & AV_FRAME_FLAG_CORRUPT) || frame_->decode_error_flags)) {
+            receiveStatus_ = DecodeReceiveStatus::Error;
+            return nullptr;
+        }
         auto* decoded = reinterpret_cast<ID3D11Texture2D*>(frame_->data[0]);
         if (decoded == nullptr) {
             log::error("media", "decoder: d3d11va frame without a texture");
+            if (leased) { receiveStatus_ = DecodeReceiveStatus::Error; return nullptr; }
             return frame_;
         }
         D3D11_TEXTURE2D_DESC desc{};
         decoded->GetDesc(&desc);
-        if (stats_.framesDecoded == 1) {
+        const auto& layout = interopSlots_[0];
+        const bool layoutChanged = leased && (layout.width != desc.Width || layout.height != desc.Height || interopFormat_ != uint32_t(desc.Format));
+        if (stats_.framesDecoded == 1 || layoutChanged) {
             log::info("media", std::format(
                 "decoder: d3d11va decoded surface {}x{} visible={}x{} array={} slice={} format={} bind=0x{:X} misc=0x{:X}",
                 desc.Width, desc.Height, frame_->width, frame_->height, desc.ArraySize,
                 static_cast<uint32_t>(reinterpret_cast<intptr_t>(frame_->data[1])),
                 static_cast<int>(desc.Format), desc.BindFlags, desc.MiscFlags));
+            if (layoutChanged) releaseInteropSlots();
             if (!createInteropSlots(&desc)) {
                 log::error("media", "decoder: d3d11va interop ring creation failed");
+                if (leased) { receiveStatus_ = DecodeReceiveStatus::Error; return nullptr; }
                 return frame_;
             }
         }
         if (d3d11Context_ == nullptr || d3d11Context4_ == nullptr || d3d11Fence_ == nullptr || d3d12Fence_ == nullptr) {
             log::error("media", "decoder: d3d11va interop state missing; frame cannot be ordered");
+            if (leased) { receiveStatus_ = DecodeReceiveStatus::Error; return nullptr; }
             return frame_;
         }
-        // Ring reuse is safe by construction: the app submits one frame per
-        // read() and its six command slots force the GPU to finish frame N-6
-        // before frame N is submitted, so a slot rewritten eight frames later
-        // can no longer be in flight on the D3D12 queue. The previous copy into
-        // this slot is also ordered by a GPU-side fence wait on the D3D11 side.
-        interopSlotIndex_ = static_cast<uint32_t>(interopFrameIndex_ % kInteropSlotCount);
+        // Asynchronous streaming can run arbitrarily ahead of graph submission.
+        // The graph keeps an AVFrame reference until the GPU is done with the
+        // input, and a paused or cached frame can keep its lease longer.
+        uint32_t offset = 0;
+        if (leased) {
+            for (; offset < kInteropSlotCount; ++offset) {
+                const auto& slot = interopSlots_[(interopFrameIndex_ + offset) % kInteropSlotCount];
+                if (slot.frameLease && av_buffer_is_writable(slot.frameLease)) break;
+            }
+            if (offset == kInteropSlotCount) {
+                receiveStatus_ = DecodeReceiveStatus::SurfaceBusy;
+                return nullptr;
+            }
+            if (frame_->opaque_ref) {
+                log::error("media", "decoder: d3d11va frame already has an opaque reference");
+                receiveStatus_ = DecodeReceiveStatus::Error;
+                return nullptr;
+            }
+        }
+        interopSlotIndex_ = static_cast<uint32_t>((interopFrameIndex_ + offset) % kInteropSlotCount);
+        interopFrameIndex_ += offset + 1;
         auto& slot = interopSlots_[interopSlotIndex_];
-        ++interopFrameIndex_;
         if (slot.texture == nullptr) {
             log::error("media", "decoder: d3d11va interop slot missing");
             return frame_;
         }
         if (slot.lastFenceValue != 0) {
-            d3d11Context4_->Wait(d3d11Fence_, slot.lastFenceValue);
+            const HRESULT hr = d3d11Context4_->Wait(d3d11Fence_, slot.lastFenceValue);
+            if (leased && FAILED(hr)) {
+                log::error("media", std::format("decoder: d3d11va slot fence wait failed hr={}", hrText(hr)));
+                receiveStatus_ = DecodeReceiveStatus::Error;
+                return nullptr;
+            }
         }
         const UINT slice = static_cast<UINT>(reinterpret_cast<intptr_t>(frame_->data[1]));
         d3d11Context_->CopySubresourceRegion(slot.texture, 0, 0, 0, 0, decoded, slice, nullptr);
@@ -811,6 +870,14 @@ const AVFrame* FFmpegVideoDecoder::receiveFrame()
             ++gpuQueueWaitCount_;
         } else {
             log::error("media", std::format("decoder: d3d11va fence signal failed hr={}", hrText(hr)));
+            if (leased) { receiveStatus_ = DecodeReceiveStatus::Error; return nullptr; }
+        }
+        if (leased) {
+            frame_->opaque_ref = av_buffer_ref(slot.frameLease);
+            if (!frame_->opaque_ref) {
+                receiveStatus_ = DecodeReceiveStatus::Error;
+                return nullptr;
+            }
         }
         hardwareSurface_.texture = slot.resource;
         hardwareSurface_.subresourceIndex = 0;

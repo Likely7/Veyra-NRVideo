@@ -11,13 +11,20 @@ extern "C" {
 }
 using namespace veyra;
 #include "HardwareImportFixtures.h"
+#include "D3D11FrameLeaseFixture.h"
 // Explicit diagnostic readback. Compare the entire GPU-converted image, not
 // merely successful decode/evaluate return codes or one non-black pixel.
 int wmain(int argc,wchar_t** argv){
- if(argc!=3)return 2;
+ const bool lease=argc==4&&std::wstring_view(argv[3])==L"--d3d11-lease";
+ if(argc!=3&&!lease)return 2;
  CoInitializeEx(nullptr,COINIT_MULTITHREADED);
  gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status st;
  if(!ctx.initialize({},st)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),6,st))return 3;
+ if(lease){
+  const bool passed=d3d11FrameLeaseFixture(argv[1],argv[2],ctx,ring);
+  ring.shutdown();ctx.shutdown();CoUninitialize();
+  return passed?0:12;
+ }
  std::vector<sink::RgbaImage> reference;double worst=0;
  for(bool hardware:{false,true}){
   source::MediaFileSource source;source::SourceOpenDesc sd;sd.path=argv[1];sd.preferHardwareDecode=hardware;sd.d3d12Device=ctx.device();sd.d3d12Queue=ctx.directQueue();sd.d3d12AdapterLuid=ctx.adapter().luid;

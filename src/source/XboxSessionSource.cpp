@@ -47,7 +47,7 @@ std::wstring widen(const std::string& text) {
 }
 
 pipeline::SourcePixelFormat pixelFormatOf(const AVFrame& frame) {
-    if (frame.format == AV_PIX_FMT_D3D12 && frame.hw_frames_ctx) {
+    if ((frame.format == AV_PIX_FMT_D3D12 || frame.format == AV_PIX_FMT_D3D11) && frame.hw_frames_ctx) {
         const auto* context = reinterpret_cast<const AVHWFramesContext*>(frame.hw_frames_ctx->data);
         return context->sw_format == AV_PIX_FMT_NV12 ? pipeline::SourcePixelFormat::NV12
              : context->sw_format == AV_PIX_FMT_P010 ? pipeline::SourcePixelFormat::P010 : pipeline::SourcePixelFormat::Unknown;
@@ -122,11 +122,11 @@ void logVideoReceive(const XboxStats& stats, const char* sample) {
     log::info("xbox-video", std::format(
         "sample={} rtp_received={} rtp_pending_missing={} rtp_expired_missing={} rtp_recovered_reorder={} "
         "rtp_duplicate={} rtp_outside_window={} rtp_sequence_resets={} au_received={} au_queue_evicted={} "
-        "au_waiting_keyframe={} pictures_decoded={} pictures_mailbox_overwritten={} decode_errors={} "
+        "au_waiting_keyframe={} pictures_decoded={} pictures_mailbox_overwritten={} pictures_interop_skipped={} decode_errors={} "
         "keyframe_requests={} decode_queue={}/{} au_to_decode_ms={:.3f}",
         sample, rtp.received, rtp.pendingMissing, rtp.expiredMissing, rtp.recoveredReorder, rtp.duplicate,
         rtp.outsideWindow, rtp.sequenceResets, stats.units, stats.ingressEvicted, stats.waitingKeyframeDropped,
-        stats.decoded, stats.mailboxOverwritten, stats.decodeErrors, stats.keyframeRequests, stats.decodeQueueDepth,
+        stats.decoded, stats.mailboxOverwritten, stats.interopSkipped, stats.decodeErrors, stats.keyframeRequests, stats.decodeQueueDepth,
         stats.decodeQueueHighWater, stats.decodeQueueMs));
 }
 
@@ -194,6 +194,7 @@ struct XboxSessionSource::Impl {
     bool rumbling = false;
 
     std::atomic<uint64_t> units{0}, decoded{0}, ingressEvicted{0}, waitingKeyframeDropped{0}, errors{0};
+    std::atomic<uint64_t> interopSkipped{0};
     std::atomic<unsigned> queueDepth{0}, queueHighWater{0};
     std::atomic<uint64_t> audioDiscarded{0};
     std::mutex statsMutex;
@@ -543,6 +544,7 @@ void XboxSessionSource::decodeLoop() {
     const auto session = p_.load();
     auto& p = *session;
     bool seenKeyframe = false, recovering = false, forceSoftware = p.desc.softwareDecode;
+    bool pendingInteropDrop = false;
     xbox::VideoDecodeRecovery recovery;
     int64_t lastPts = -1;
     uint32_t lastRtp = 0;
@@ -597,7 +599,8 @@ void XboxSessionSource::decodeLoop() {
             p.decoder.preserveSoftwareStreamExtent(true);
             if (!p.decoder.open(CaptureCodec::H264, p.width, p.height, nullptr, 0,
                                 forceSoftware ? nullptr : p.desc.decodeDevice.get(),
-                                forceSoftware ? nullptr : p.desc.decodeQueue.get())) {
+                                forceSoftware ? nullptr : p.desc.decodeQueue.get(),
+                                p.desc.d3d11Decode ? CaptureCompressedDecoder::HardwareMode::D3D11Retained : CaptureCompressedDecoder::HardwareMode::Default)) {
                 log::error("xbox", "no usable H.264 decoder");
                 setState(XboxStats::State::Failed, L"没有可用的 H.264 解码器。");
                 p.ended = true;
@@ -629,6 +632,15 @@ void XboxSessionSource::decodeLoop() {
         const double decodeMs = std::chrono::duration<double, std::milli>(Clock::now() - begin).count();
         if (!produced) {
             if (needsTarget && target) av_frame_free(&target);
+            if (p.decoder.waitingForInput() && p.decoder.surfaceBusy()) {
+                p.interopSkipped.fetch_add(1, std::memory_order_relaxed);
+                pendingInteropDrop = true;
+                // Decoder references advanced with this valid picture. Display
+                // pressure does not put the compressed stream back into IDR wait.
+                seenKeyframe = true;
+                recovery.picture();
+                continue;
+            }
             if (!p.decoder.waitingForInput()) {
                 ++p.errors;
                 seenKeyframe = false;
@@ -703,6 +715,10 @@ void XboxSessionSource::decodeLoop() {
         packet.colorInfo = pipeline::resolveFrameColor(*frame, fallback);
         packet.colorInfo.pixelFormat = pixelFormatOf(*frame);
         if (packet.colorInfo.pixelFormat == pipeline::SourcePixelFormat::Unknown) { ++p.errors; continue; }
+        if (frame->format == AV_PIX_FMT_D3D11 && !p.decoder.hardwareSurface(packet.hardwareSurface)) {
+            ++p.errors;
+            continue;
+        }
 
         SourceInfo info;
         {
@@ -712,8 +728,12 @@ void XboxSessionSource::decodeLoop() {
             stats_.height = unsigned(frame->height);
         }
         info.color = packet.colorInfo;
-        info.hardwareDecodeActive = frame->format == AV_PIX_FMT_D3D12;
-        info.videoDecodePath = info.hardwareDecodeActive ? "d3d12va" : "software";
+        info.hardwareDecodeActive = hardware;
+        info.videoDecodePath = hardware ? p.decoder.backendName() : "software";
+        if (pendingInteropDrop) {
+            packet.flags |= static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Drop);
+            pendingInteropDrop = false;
+        }
         if (info.width != unsigned(frame->width) || info.height != unsigned(frame->height)) {
             info.width = unsigned(frame->width);
             info.height = unsigned(frame->height);
@@ -916,7 +936,8 @@ XboxStats XboxSessionSource::stats() const {
     s.decoded = p.decoded.load();
     s.ingressEvicted = p.ingressEvicted.load(std::memory_order_relaxed);
     s.waitingKeyframeDropped = p.waitingKeyframeDropped.load(std::memory_order_relaxed);
-    s.dropped = s.ingressEvicted + s.waitingKeyframeDropped + s.mailboxOverwritten;
+    s.interopSkipped = p.interopSkipped.load(std::memory_order_relaxed);
+    s.dropped = s.ingressEvicted + s.waitingKeyframeDropped + s.mailboxOverwritten + s.interopSkipped;
     s.decodeQueueDepth = p.queueDepth.load(std::memory_order_relaxed);
     s.decodeQueueHighWater = p.queueHighWater.load(std::memory_order_relaxed);
     s.audioPacketsDiscarded = p.audioDiscarded.load(std::memory_order_relaxed);
