@@ -734,6 +734,40 @@ static void controlOnlyBoundary(){
 };
 }
 
+std::array<int16_t, 240> hapticTestSignal(double frequency) {
+    std::array<int16_t, 240> samples{};
+    for (size_t i = 0; i < samples.size() / 2; ++i) {
+        const auto amplitude = int16_t(std::sin(6.283185307179586 * frequency * double(i) / 3000.0) * 15000.0);
+        samples[2 * i] = amplitude;
+        samples[2 * i + 1] = int16_t(-amplitude);
+    }
+    return samples;
+}
+
+bool hapticsFilter() {
+    using namespace veyra::remoteplay;
+    HapticsRumbleFallback low, high;
+    const auto bass = hapticTestSignal(30.0), texture = hapticTestSignal(500.0);
+    const auto heavy = low.feed(bass, 100000);
+    const auto light = high.feed(texture, 100000);
+    if (!heavy || !light || heavy->low <= 2 * heavy->high || light->high <= 2 * light->low) return false;
+
+    // Even a large change in payload cannot bypass the motor write limit.
+    if (low.feed(texture, 150000)) return false;
+    low.noteLegacyRumble(true, 300000);
+    if (low.feed(bass, 10000000)) return false;
+    low.noteLegacyRumble(false, 10000000);
+    if (!low.feed(bass, 10160000)) return false;
+
+    const std::array<int16_t, 240> quiet{};
+    unsigned stops = 0;
+    for (int64_t time = 10360000; time <= 16360000; time += 200000) {
+        const auto motors = low.feed(quiet, time);
+        if (motors && motors->low == 0 && motors->high == 0) ++stops;
+    }
+    return stops == 1 && !low.active();
+}
+
 int virtualInput(){
     using namespace veyra::remoteplay;
     if(!SDL_InitSubSystem(SDL_INIT_GAMEPAD))return 20;
@@ -743,9 +777,13 @@ int virtualInput(){
     SDL_VirtualJoystickTouchpadDesc touch{};touch.nfingers=2;desc.ntouchpads=1;desc.touchpads=&touch;
     SDL_VirtualJoystickSensorDesc sensors[2]={{SDL_SENSOR_GYRO,120},{SDL_SENSOR_ACCEL,120}};desc.nsensors=2;desc.sensors=sensors;
     desc.SetSensorsEnabled=[](void*,bool){return true;};
-    struct Fixture {unsigned rumble=0,led=0;Uint8 rgb[3]{};int player=-1;} fixture;desc.userdata=&fixture;
+    struct Fixture {unsigned rumble=0,led=0;Uint16 low=0,high=0;Uint8 rgb[3]{};int player=-1;} fixture;desc.userdata=&fixture;
     unsigned& rumbleCalls=fixture.rumble;
-    desc.Rumble=[](void* p,Uint16,Uint16){++static_cast<Fixture*>(p)->rumble;return true;};
+    desc.Rumble=[](void* p,Uint16 low,Uint16 high){
+        auto& state=*static_cast<Fixture*>(p);
+        ++state.rumble;state.low=low;state.high=high;
+        return true;
+    };
     desc.SetLED=[](void* p,Uint8 r,Uint8 g,Uint8 b){auto& f=*static_cast<Fixture*>(p);++f.led;f.rgb[0]=r;f.rgb[1]=g;f.rgb[2]=b;return true;};
     desc.SetPlayerIndex=[](void* p,int index){static_cast<Fixture*>(p)->player=index;};
     desc.SendEffect=[](void*,const void*,int){return true;};
@@ -779,6 +817,26 @@ int virtualInput(){
     auto calibrated=input.poll(true);ok&=std::abs(calibrated.gyro[0])<1e-5&&std::abs(calibrated.gyro[2])<1e-5;
     ControllerFeedback f;f.rumble=true;f.left=5;input.feedback(f,true);ok&=rumbleCalls>0;
     const auto before=rumbleCalls;ok&=input.poll(false)==ControllerState{};ok&=rumbleCalls>before;
+    const auto bass=hapticTestSignal(30.0);
+    ControllerFeedback native;
+    native.haptics.assign(bass.begin(),bass.end());
+    const auto beforeFallback=rumbleCalls;
+    input.feedback(native,true);
+    const bool motorBands = rumbleCalls == beforeFallback + 1 && fixture.low > fixture.high &&
+                            !input.capabilities().haptics;
+    ControllerFeedback legacy=native;
+    legacy.rumble=true;legacy.left=5;legacy.right=0;
+    input.feedback(legacy,true);
+    const auto afterLegacy=rumbleCalls;
+    input.feedback(native,true);
+    const bool legacyExclusive=afterLegacy==beforeFallback+2&&rumbleCalls==afterLegacy&&
+        fixture.low==uint16_t(5*257)&&fixture.high==0;
+    input.poll(false);
+    const bool released=fixture.low==0&&fixture.high==0;
+    const bool filter=hapticsFilter();
+    ok&=motorBands&&legacyExclusive&&released&&filter;
+    std::cout<<"VIRTUAL_HAPTICS two_motor="<<motorBands<<" legacy_exclusive="<<legacyExclusive
+             <<" focus_stop="<<released<<" filter="<<filter<<std::endl;
     // Console light bar / player indicator: applied when focused; a change while unfocused
     // is kept and applied when focus returns.
     ControllerFeedback lights;lights.led=true;lights.ledColor={255,64,0};lights.playerIndex=true;lights.player=2;

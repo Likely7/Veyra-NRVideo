@@ -1,6 +1,7 @@
 #pragma once
 #include "Types.h"
 #include "TriggerFilter.h"
+#include "HapticsRumbleFallback.h"
 #include <deque>
 #include <string>
 #include <vector>
@@ -28,6 +29,7 @@ private:
     void activate(SDL_Gamepad*);
     void deactivate();
     void applyLights();
+    void tryNativeHaptics(HostTime now);
     bool opened(uint32_t id)const;
     SDL_Gamepad* gamepad_=nullptr;
     std::vector<SDL_Gamepad*> others_; // follow mode: open, not read
@@ -38,7 +40,8 @@ private:
     bool gyro_=false,accel_=false,effectsActive_=false,audioInitialized_=false,hapticAttempted_=false;
     HostTime hapticRetryAt_=0;
     uint32_t hapticEndpoint_=0;
-    bool hapticWarned_=false;
+    bool hapticWarned_=false, fallbackRumbleAvailable_=false, fallbackRumbleWarned_=false;
+    HapticsRumbleFallback hapticsFallback_;
     SDL_AudioStream* hapticStream_=nullptr;
     std::vector<int16_t> hapticPcm_;
     // Console-set light bar and player indicator: kept while unfocused, applied to the read pad.
