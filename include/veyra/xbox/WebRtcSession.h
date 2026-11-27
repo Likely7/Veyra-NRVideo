@@ -63,6 +63,7 @@ public:
     WebRtcSession& operator=(const WebRtcSession&) = delete;
 
     void setCallbacks(WebRtcCallbacks callbacks) { callbacks_ = std::move(callbacks); }
+    void preferVideoSize(unsigned width, unsigned height) { videoWidth_ = width; videoHeight_ = height; }
     // Tests: gather candidates on this address only (e.g. "127.0.0.1"). Empty: every interface.
     void setBindAddress(std::string address) { bindAddress_ = std::move(address); }
 
@@ -73,6 +74,8 @@ public:
     bool waitReady(std::chrono::milliseconds timeout);
 
     void sendGamepad(const GamepadFrame& frame);   // sent when it changes, and at least every 33 ms by the caller
+    void sendMouse(const MouseFrame&);
+    void sendKeyboard(const KeyboardFrame&);
     void requestKeyframe();
     void videoPresented(uint32_t rtpTimestamp,int64_t arrival,int64_t submitted,int64_t decoded,int64_t presented);
     void close();
@@ -110,6 +113,7 @@ private:
     std::chrono::steady_clock::time_point origin_ = std::chrono::steady_clock::now();
     std::string failure_;
     std::string bindAddress_;
+    unsigned videoWidth_ = 1920, videoHeight_ = 1080;
 };
 
 } // namespace veyra::xbox

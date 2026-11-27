@@ -23,6 +23,7 @@
 #endif
 #ifdef VEYRA_ENABLE_XBOX
 #include "veyra/source/XboxSessionSource.h"
+#include "veyra/engine/XboxControllerSession.h"
 #endif
 #include "veyra/media/AudioTrack.h"
 #include "veyra/media/NetworkSettings.h"
@@ -31,9 +32,10 @@
 #include "veyra/engine/LiveRecorder.h"
 #include "veyra/engine/VirtualCamera.h"
 #include "veyra/engine/ScreenTextCapture.h"
+#include "veyra/engine/ConsoleAimReadback.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
-namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback;class MouseStick; }
+namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback;class MappedController; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::engine {
@@ -246,11 +248,18 @@ public:
     void setEnhancementPrewarmEnabled(bool);
     bool requestSettings(EnhancementSettings,std::optional<ChainRuntimeOrder> = std::nullopt,uint64_t* acceptedRevision=nullptr);
     void requestPresentation(PresentationSettings);
+    enum class ConsoleRenderMode { Normal, LowLatency, MeasureWithoutFg, MeasureWithFg };
+    bool setConsoleRenderMode(ConsoleRenderMode);
+    bool consoleRenderReady() const;
+    double mappedGameFps() const;
+    void setConsoleAimProbe(std::shared_ptr<remoteplay::AimTest> probe) { aimReadback_.setProbe(std::move(probe)); }
     void open(HWND video,const std::wstring& path,PlayerOptions options);
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
-    void remotePlayController(const remoteplay::ControllerState&, std::weak_ptr<remoteplay::MouseStick> mouse = {});
+    void remotePlayController(const remoteplay::ControllerState&);
+    bool remotePlayMappedController(uint64_t destination, std::weak_ptr<remoteplay::MappedController>);
+    bool remotePlayInputActive() const;
     void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
@@ -284,9 +293,16 @@ public:
 #endif
 #ifdef VEYRA_ENABLE_XBOX
     void openXbox(HWND, source::XboxConnectDesc, PlayerOptions);
+    bool startXboxControl(source::XboxConnectDesc);
+    void stopXboxControl() { xboxControl_.stop(); }
+    XboxControllerSession::Status xboxControlStatus() const { return xboxControl_.status(); }
     // Pad and rumble for the running Xbox session; no-ops when none is streaming.
     void xboxController(const remoteplay::ControllerState&);
     remoteplay::ControllerFeedback xboxFeedback();
+    uint64_t xboxInputTarget() const;
+    bool xboxMappedController(uint64_t target, std::weak_ptr<remoteplay::MappedController>, bool native);
+    void xboxNativeKey(uint64_t target, xbox::KeyboardFrame);
+    void xboxNativeMouse(uint64_t target, xbox::MouseFrame);
 #endif
     void stop();
     sink::HdmiBitstreamOutput& hdmiBitstream() { return *hdmiBitstream_; }
@@ -332,6 +348,10 @@ public:
     // the UI; queried in the background on events only. Any thread.
     DisplayStateService& displayStates(){return displayStates_;}
 private:
+#ifdef VEYRA_ENABLE_XBOX
+    std::shared_ptr<source::XboxSessionSource> xboxInputSession(uint64_t target = 0) const;
+    XboxControllerSession xboxControl_;
+#endif
     void run(HWND,std::wstring,PlayerOptions,std::shared_ptr<source::RemotePlayConnectDesc> remoteRequest={},std::shared_ptr<source::MoonlightConnectDesc> moonlightRequest={},std::shared_ptr<source::XboxConnectDesc> xboxRequest={});
     void runLargeImage(HWND,const sink::RgbaImage&,PlayerOptions,gfx::D3D12DeviceContext&,gfx::CommandSlotRing&);
     void post(std::function<void()>);
@@ -373,7 +393,9 @@ private:
     std::unique_ptr<VirtualCamera> virtualCamera_=std::make_unique<VirtualCamera>();
     std::unique_ptr<ScreenTextCapture> screenText_=std::make_unique<ScreenTextCapture>();
     PresentCaptureFanout outputCaptures_{*virtualCamera_,*screenText_};
-    PresentCaptureFanout captures_{recordingCaptures_,outputCaptures_};
+    ConsoleAimReadback aimReadback_;
+    PresentCaptureFanout observedCaptures_{outputCaptures_,aimReadback_};
+    PresentCaptureFanout captures_{recordingCaptures_,observedCaptures_};
     // Declared before worker_: it outlives the engine thread's presenters.
     DisplayStateService displayStates_;
     std::thread worker_;
@@ -387,6 +409,13 @@ private:
     std::wstring hangPreviousStatus_; // mutex_
     EnhancementSettings desired_;uint64_t nextRevision_=1;
     std::optional<ChainRuntimeOrder> desiredNodeOrder_; // protected by mutex_, paired with desired_
+    uint64_t publishSettingsRequest(EnhancementSettings, std::optional<ChainRuntimeOrder>); // mutex held
+    struct ConsoleRenderScope {
+        ConsoleRenderMode mode = ConsoleRenderMode::Normal;
+        uint64_t session = 0;
+        uint32_t multiplier = 1;
+        PresentationSettings presentation;
+    } consoleScope_; // mutex held
     std::atomic<bool> stop_{false},paused_{false},muted_{false};
     std::atomic<bool> captureAudioMonitoring_{true};
     std::shared_ptr<sink::HdmiBitstreamOutput> hdmiBitstream_;

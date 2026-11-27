@@ -8,13 +8,18 @@ DialogLayer {
     objectName: "xbox-dialog"
     key: "xbox"
     glyph: "gamepad"
-    title: qsTr("Xbox 串流")
-    sub: qsTr("串流你自己的 Xbox 主机 · 非官方实验功能 · 增强与调色沿用软件自己的处理链")
+    property bool chooseForCapture: false
+    title: chooseForCapture ? qsTr("Xbox 手柄控制") : qsTr("Xbox 串流")
+    sub: chooseForCapture ? qsTr("选择用于采集卡手柄控制的 Xbox 主机")
+        : qsTr("串流你自己的 Xbox 主机 · 非官方实验功能 · 增强与调色沿用软件自己的处理链")
     dialogWidth: 680
     readonly property var xb: veyra.xbox
     readonly property var st: xb ? xb.state : ({})
     readonly property var list: xb ? xb.consoles : []
-    actions: st.streaming ? [
+    actions: chooseForCapture ? [
+        { label: st.busy ? qsTr("取消操作") : qsTr("返回") },
+        ...(st.signedIn ? [{ label: qsTr("使用此主机"), primary: true }] : [])
+    ] : st.streaming ? [
         { label: qsTr("关闭") },
         { label: qsTr("断开"), primary: true }
     ] : !st.signedIn ? [
@@ -26,8 +31,16 @@ DialogLayer {
     onActionTriggered: label => {
         if (label === qsTr("断开")) { veyra.xboxDisconnect(); dialogHost.close(); return }
         if (label === qsTr("取消操作")) { xb.cancel(); return }
+        if (chooseForCapture && label === qsTr("返回")) { dialogHost.open("capture"); return }
         if (label === qsTr("关闭")) { dialogHost.close(); return }
-        if (st.signedIn && !st.busy && (st.selected || "").length > 0) xb.connectStream()
+        if (st.signedIn && !st.busy && (st.selected || "").length > 0) {
+            if (chooseForCapture) selectForCapture()
+            else xb.connectStream()
+        }
+    }
+    function selectForCapture() {
+        veyra.xboxControlSet("host", st.selected)
+        dialogHost.open("capture")
     }
     Connections {
         target: xbDialog
@@ -109,7 +122,12 @@ DialogLayer {
             HoverHandler { id: consoleHover; cursorShape: Qt.PointingHandCursor }
             TapHandler {
                 onTapped: xbDialog.xb.select(consoleRow.modelData.id)
-                onDoubleTapped: { xbDialog.xb.select(consoleRow.modelData.id); if (!xbDialog.st.busy) xbDialog.xb.connectStream() }
+                onDoubleTapped: {
+                    xbDialog.xb.select(consoleRow.modelData.id)
+                    if (xbDialog.st.busy) return
+                    if (xbDialog.chooseForCapture) xbDialog.selectForCapture()
+                    else xbDialog.xb.connectStream()
+                }
             }
             RowLayout {
                 anchors.fill: parent
@@ -134,11 +152,22 @@ DialogLayer {
             VButton { text: qsTr("刷新"); ghost: true; enabled: !xbDialog.st.busy; onClicked: xbDialog.xb.refresh() }
         }
         VRow {
+            visible: !xbDialog.chooseForCapture
             label: qsTr("手柄")
             hint: qsTr("把电脑手柄当作主机上的手柄")
             VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: checked => xbDialog.xb.set("gamepad", checked) }
         }
         VRow {
+            visible: !xbDialog.chooseForCapture && !!veyra.ps5Input
+            label: qsTr("Xbox 键鼠映射")
+            VButton {
+                text: qsTr("键鼠设置")
+                ghost: true
+                onClicked: dialogHost.openPs5Mapping(true)
+            }
+        }
+        VRow {
+            visible: !xbDialog.chooseForCapture
             label: qsTr("软件视频解码")
             hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
             VSwitch { objectName: "xbox-software-decode"; checked: xbDialog.st.softwareDecode === true; onToggled: checked => xbDialog.xb.set("softwareDecode", checked) }

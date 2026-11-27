@@ -7,7 +7,8 @@ DialogLayer {
     id: panel
     objectName: "ps5-mapping"
     key: "ps5-mapping"
-    title: qsTr("PS5 键鼠映射")
+    property bool xboxMode: false
+    title: xboxMode ? qsTr("Xbox 键鼠映射") : qsTr("PS5 键鼠映射")
     glyph: "gamepad"
     dialogWidth: 992
     minimumBodyWidth: 0
@@ -25,7 +26,14 @@ DialogLayer {
         panel.input?.cancelLearning()
         panel.confirmReset = false
     }
-    onShownChanged: if (shown) editDriving = input?.driving === true
+    onShownChanged: if (shown) {
+        input?.selectPlatform?.(xboxMode)
+        editDriving = input?.driving === true
+    }
+    onXboxModeChanged: {
+        selected = -1
+        selectedSlot = 0
+    }
     Connections {
         target: panel.input
         ignoreUnknownSignals: true
@@ -34,13 +42,13 @@ DialogLayer {
     Timer { interval: 3000; running: panel.confirmReset; onTriggered: panel.confirmReset=false }
     readonly property var pad: input ? input.padState : ({})
     readonly property var tune: input ? input.tuning : ({})
-    readonly property var names: [
-        "×", "○", "□", "△", qsTr("方向键 左"), qsTr("方向键 右"), qsTr("方向键 上"), qsTr("方向键 下"),
-        "L1", "R1", "L3", "R3", qsTr("选项键"), qsTr("创建键"), qsTr("触摸板按下"), "PS", "L2", "R2",
-        qsTr("左摇杆 上"), qsTr("左摇杆 下"), qsTr("左摇杆 左"), qsTr("左摇杆 右"),
-        qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"), qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"), qsTr("触摸板左滑"), qsTr("触摸板右滑"),
-        "L3 + R3"
-    ]
+    readonly property bool physicalAim: tune.physicalAim === true
+    readonly property real fullSpeed: physicalAim
+        ? Number(tune.aimFullSpeed ?? 25) / Number(tune.aimHorizontal ?? 1)
+        : Number(pad.legacyFullSpeed ?? 0)
+    ConsolePadLabels { id: labels; xbox: panel.xboxMode }
+    readonly property var names: labels.names
+    readonly property int quickLearningAction: names.length + 1
 
     onActionTriggered: dialogHost.ps5MappingReturn ? dialogHost.open(dialogHost.ps5MappingReturn) : dialogHost.close()
     Connections {
@@ -90,6 +98,24 @@ DialogLayer {
             onPicked: id => { if (panel.input) panel.input.keyboardEnabled = id === "keys" }
         }
     }
+    VRow {
+        label: qsTr("锁定时也转发实体手柄")
+        visible: panel.input?.keyboardEnabled === true
+        VSwitch {
+            checked: panel.tune.mixPhysical !== false
+            onToggled: on => panel.input?.setTuning("mixPhysical", on)
+        }
+    }
+    VRow {
+        visible: panel.xboxMode && panel.input?.keyboardEnabled === true
+        label: qsTr("原生键鼠（实验）")
+        hint: qsTr("向 Xbox 发送键鼠报告。家用串流是否接受取决于主机和游戏，无响应时关闭此项。")
+        hintBelow: true
+        VSwitch {
+            checked: panel.input?.nativeXbox === true
+            onToggled: on => { if (panel.input) panel.input.nativeXbox = on }
+        }
+    }
 
     VSubGroup {
         objectName: "ps5-profile-group"
@@ -130,6 +156,16 @@ DialogLayer {
                 }
             }
         }
+        VRow {
+            visible: panel.xboxMode
+            label: qsTr("仅用于 Xbox")
+            hint: qsTr("原有档案按按键位置通用。为 Xbox 新建档案后可单独启用。")
+            hintBelow: true
+            VSwitch {
+                checked: panel.input?.xboxOnlyProfile === true
+                onToggled: on => panel.input?.setXboxOnlyProfile(on)
+            }
+        }
         VRow { label: qsTr("手感模板")
             VSelect { title: qsTr("手感模板"); value: qsTr("选择")
                 options: [{id:"0",label:qsTr("低死区 FPS")},{id:"1",label:qsTr("第三人称")},{id:"2",label:qsTr("线性")}]
@@ -154,9 +190,10 @@ DialogLayer {
     }
     VRow {
         label: qsTr("切换步行／驾驶")
-        hint: panel.input?.learning === panel.names.length
+        hint: panel.input?.learning === panel.names.length || panel.input?.learning === panel.quickLearningAction
               ? (panel.input.feedback || qsTr("正在录键"))
-              : qsTr("锁定键鼠后即可切换。默认 W（R2）加速、S（L2）刹车／倒车，A/D 转向。")
+              : qsTr("%1 切换步行／驾驶").arg(panel.input?.driveKeyLabel ?? "F6") + " · " +
+                qsTr("%1 查看键位").arg(panel.input?.quickKeyLabel ?? "F2")
         hintBelow: true
         RowLayout {
             VButton {
@@ -168,6 +205,19 @@ DialogLayer {
                 onClicked: {
                     if (panel.input.learning === panel.names.length) panel.input.cancelLearning()
                     else panel.input.learnDriveKey(panel)
+                }
+            }
+            VButton {
+                objectName: "console-keymap-shortcut"
+                primary: panel.input?.learning === panel.quickLearningAction
+                text: primary ? qsTr("取消") : (panel.input?.quickKeyLabel ?? "F2")
+                tip: qsTr("查看键位")
+                Accessible.name: tip + " · " + text
+                maxTextWidth: panel.bodyWidth < 500 ? 68 : 0
+                enabled: panel.input !== null && !panel.input.previewing
+                onClicked: {
+                    if (primary) panel.input.cancelLearning()
+                    else panel.input.learnQuickKey(panel)
                 }
             }
             VButton {
@@ -194,6 +244,7 @@ DialogLayer {
         ColumnLayout {
             Layout.fillWidth: true
             Layout.preferredWidth: 550
+            Layout.alignment: Qt.AlignTop
             spacing: 8
             VSeg {
                 readonly property bool ps5LearningControl: true
@@ -241,6 +292,8 @@ DialogLayer {
                         required property int index
                         required property string modelData
                         objectName: "ps5-bind-row-" + index
+                        visible: (index !== 33 || panel.editDriving) &&
+                            (!panel.xboxMode || (index !== 14 && (index < 28 || index > 31)))
                         columns: 3
                         uniformCellWidths: true
                         columnSpacing: 6
@@ -289,14 +342,35 @@ DialogLayer {
                 border.color: Theme.stroke2
                 readonly property real unit: width / 560
                 Canvas {
+                    property bool xboxShell: panel.xboxMode
                     anchors.fill: parent
                     onWidthChanged: requestPaint()
                     onHeightChanged: requestPaint()
+                    onXboxShellChanged: requestPaint()
                     onPaint: {
                         const ctx = getContext("2d")
                         ctx.reset()
                         ctx.clearRect(0, 0, width, height)
                         ctx.scale(board.unit, board.unit)
+                        if (xboxShell) {
+                            ctx.beginPath()
+                            ctx.moveTo(280, 49)
+                            ctx.bezierCurveTo(203, 49, 123, 33, 82, 68)
+                            ctx.bezierCurveTo(50, 96, 32, 209, 45, 253)
+                            ctx.bezierCurveTo(59, 296, 103, 276, 123, 242)
+                            ctx.bezierCurveTo(149, 199, 190, 209, 280, 211)
+                            ctx.bezierCurveTo(370, 209, 411, 199, 437, 242)
+                            ctx.bezierCurveTo(457, 276, 501, 296, 515, 253)
+                            ctx.bezierCurveTo(528, 209, 510, 96, 478, 68)
+                            ctx.bezierCurveTo(437, 33, 357, 49, 280, 49)
+                            ctx.closePath()
+                            ctx.fillStyle = "#30443d"
+                            ctx.strokeStyle = "#84b5a2"
+                            ctx.lineWidth = 2
+                            ctx.fill()
+                            ctx.stroke()
+                            return
+                        }
                         ctx.beginPath()
                         ctx.moveTo(280, 59)
                         ctx.bezierCurveTo(228, 59, 215, 59, 176, 56)
@@ -340,7 +414,8 @@ DialogLayer {
                 }
 
                 Repeater {
-                    model: [{x:204, y:174, side:"left"}, {x:356, y:174, side:"right"}]
+                    model: panel.xboxMode ? [{x:128, y:114, side:"left"}, {x:356, y:182, side:"right"}]
+                        : [{x:204, y:174, side:"left"}, {x:356, y:174, side:"right"}]
                     delegate: Rectangle {
                         required property var modelData
                         readonly property real dx: panel.pad[modelData.side + "X"] || 0
@@ -364,7 +439,16 @@ DialogLayer {
                 }
 
                 Repeater {
-                    model: [
+                    model: panel.xboxMode ? [
+                        [16,121,31,62,23,"LT"],[17,439,31,62,23,"RT"],
+                        [8,121,56,60,23,"LB"],[9,439,56,60,23,"RB"],
+                        [13,236,99,38,22,"View"],[12,324,99,46,22,"Menu"],[15,280,67,50,22,"Xbox"],
+                        [6,202,155,26,24,"▲"],[4,174,182,26,24,"◀"],[5,230,182,26,24,"▶"],[7,202,209,26,24,"▼"],
+                        [3,434,97,30,27,"Y"],[2,402,125,30,27,"X"],[1,466,125,30,27,"B"],[0,434,153,30,27,"A"],
+                        [10,128,114,26,23,"LS"],[11,356,182,26,23,"RS"],
+                        [18,128,80,21,18,"↑"],[19,128,148,21,18,"↓"],[20,92,114,21,18,"←"],[21,164,114,21,18,"→"],
+                        [22,356,145,21,18,"↑"],[23,356,220,21,18,"↓"],[24,319,182,21,18,"←"],[25,393,182,21,18,"→"]
+                    ] : [
                         [16,121,31,62,23,"L2"],[17,439,31,62,23,"R2"],
                         [8,121,60,60,23,"L1"],[9,439,60,60,23,"R1"],
                         [13,193,86,19,23,"↗"],[12,367,86,19,23,"≡"],[14,280,88,132,46,""],
@@ -466,6 +550,18 @@ DialogLayer {
                     }
                 }
             }
+            VRow {
+                visible: panel.selected >= 0
+                label: qsTr("动作备注")
+                TextField {
+                    objectName: "console-keymap-action-note"
+                    Layout.preferredWidth: panel.bodyWidth < 500 ? 128 : 160
+                    maximumLength: 12
+                    enabled: panel.input !== null && !panel.learningSelected && !panel.input.previewing
+                    text: (panel.editDriving ? panel.input?.drivingActionNotes : panel.input?.actionNotes)?.[panel.selected] ?? ""
+                    onTextEdited: panel.input?.setActionNote(panel.selected, panel.editDriving, text)
+                }
+            }
         }
 
         ColumnLayout {
@@ -478,6 +574,25 @@ DialogLayer {
                 VSwitch {
                     checked: panel.tune.mouseLook !== false
                     onToggled: on => panel.input?.setTuning("mouseLook", on)
+                }
+            }
+            VRow {
+                label: qsTr("瞄准算法")
+                VSelect {
+                    title: qsTr("瞄准算法")
+                    options: [{id: "physical", label: qsTr("游戏曲线补偿")}, {id: "legacy", label: qsTr("旧算法")}]
+                    value: options[panel.physicalAim ? 0 : 1].label
+                    onPicked: id => panel.input?.selectAimAlgorithm(id === "physical")
+                }
+            }
+            VRow {
+                visible: panel.tune.dpiConfirmed === false
+                label: qsTr("确认鼠标 DPI")
+                hint: qsTr("请在下方填入鼠标驱动里的 DPI。默认值为 800。")
+                hintBelow: true
+                VButton {
+                    text: qsTr("确认")
+                    onClicked: panel.input?.setTuning("dpiConfirmed", true)
                 }
             }
             VSeg { current: panel.advanced?"advanced":"basic"
@@ -498,13 +613,36 @@ DialogLayer {
                     {id:"curve", title:qsTr("瞄准曲线"), min:0.3, max:2.5, step:0.05, scale:1, initial:1, decimals:2, unit:""},
                     {id:"inputDeadzone", title:qsTr("输入死区"), min:0, max:0.1, step:0.005, scale:100, initial:0, decimals:1, unit:"%"},
                     {id:"deadzone", title:qsTr("死区补偿"), min:0, max:0.3, step:0.01, scale:100, initial:.08, decimals:0, unit:"%"},
-                    {id:"smoothing", title:qsTr("平滑时间"), min:0, max:32, step:1, scale:1, initial:0, decimals:0, unit:" ms"}
+                    {id:"smoothing", title:qsTr("平滑时间"), min:0, max:32, step:1, scale:1, initial:0, decimals:0, unit:" ms"},
+                    {id:"aimFullSpeed",title:qsTr("满杆手速"),min:.25,max:150,step:.25,scale:1,initial:25,decimals:1,unit:" cm/s"},
+                    {id:"aimHorizontal",title:qsTr("横向灵敏度"),min:.1,max:6,step:.05,scale:1,initial:1,decimals:2,unit:"×"},
+                    {id:"aimVertical",title:qsTr("纵向灵敏度"),min:.1,max:6,step:.05,scale:1,initial:1,decimals:2,unit:"×"},
+                    {id:"gameDeadzoneX",title:qsTr("游戏横向死区"),min:0,max:.50,step:.01,scale:100,initial:.18,decimals:0,unit:"%"},
+                    {id:"gameDeadzoneY",title:qsTr("游戏纵向死区"),min:0,max:.50,step:.01,scale:100,initial:.18,decimals:0,unit:"%"},
+                    {id:"gameCurve",title:qsTr("游戏响应曲线"),min:1,max:3,step:.05,scale:1,initial:2,decimals:2,unit:""},
+                    {id:"steeringInitial",title:qsTr("初始转向"),min:.2,max:.6,step:.01,scale:100,initial:.4,decimals:0,unit:"%"},
+                    {id:"steeringFullMs",title:qsTr("转向加满时间"),min:80,max:400,step:5,scale:1,initial:240,decimals:0,unit:" ms"},
+                    {id:"steeringReturnMs",title:qsTr("转向回正时间"),min:30,max:200,step:5,scale:1,initial:60,decimals:0,unit:" ms"},
+                    {id:"pedalRiseMs",title:qsTr("油门／刹车上升时间"),min:0,max:300,step:5,scale:1,initial:0,decimals:0,unit:" ms"},
+                    {id:"mouseSteerGain",title:qsTr("鼠标转向灵敏度"),min:.1,max:6,step:.1,scale:1,initial:1,decimals:1,unit:"×"},
+                    {id:"autoDriveMs",title:qsTr("进出载具切换延时"),min:200,max:3000,step:50,scale:1,initial:1200,decimals:0,unit:" ms"}
                 ]
                 delegate: VRow {
                     required property var modelData
                     enabled: panel.tune.mouseLook!==false
                     opacity: enabled?1:.45
-                    visible: panel.advanced===["curve","turnBoost","turnSpeed","smoothing","inputDeadzone","walkScale","adsDelayMs","deadzoneShape"].includes(modelData.id)
+                    visible: {
+                        const id = modelData.id
+                        if (id === "mouseSteerGain") return panel.editDriving && panel.tune.mouseSteering === true
+                        if (id === "autoDriveMs") return panel.editDriving && panel.tune.autoDriving === true
+                        if (id.startsWith("steering")) return panel.editDriving && panel.tune.graduatedSteering === true
+                        if (id === "pedalRiseMs") return panel.editDriving
+                        if (["aimFullSpeed", "aimHorizontal", "aimVertical"].includes(id)) return panel.physicalAim && !panel.advanced
+                        if (["gameDeadzoneX", "gameDeadzoneY", "gameCurve"].includes(id)) return panel.physicalAim && panel.advanced
+                        if (panel.physicalAim && ["horizontal","vertical","curve","turnBoost","turnSpeed","smoothing","inputDeadzone","deadzone"].includes(id))
+                            return false
+                        return panel.advanced === ["curve","turnBoost","turnSpeed","smoothing","inputDeadzone","walkScale","adsDelayMs","deadzoneShape"].includes(id)
+                    }
                     label: modelData.title
                     hint: modelData.id === "dpi" ? qsTr("与鼠标驱动的档位填同一个值。想调快慢，请调灵敏度。") :
                           modelData.id === "turnSpeed" ? qsTr("数值越小，越容易快速推满右摇杆。") : ""
@@ -537,11 +675,64 @@ DialogLayer {
                 }
             }
             VRow {
+                visible: panel.physicalAim && panel.advanced
+                label: qsTr("游戏帧率")
+                VSelect {
+                    title: qsTr("游戏帧率")
+                    options: [{id: "0", label: qsTr("自动")}, {id: "30", label: "30 FPS"}, {id: "60", label: "60 FPS"}]
+                    value: options.find(item => item.id === String(panel.tune.aimFps ?? 0))?.label ?? ""
+                    onPicked: id => panel.input?.setTuning("aimFps", Number(id))
+                }
+            }
+            VRow {
+                visible: panel.editDriving
+                label: qsTr("分段转向")
+                VSwitch {
+                    checked: panel.tune.graduatedSteering === true
+                    onToggled: on => panel.input?.setTuning("graduatedSteering", on)
+                }
+            }
+            VRow {
+                visible: panel.editDriving
+                label: qsTr("驾驶时鼠标转向")
+                VSwitch {
+                    checked: panel.tune.mouseSteering === true
+                    onToggled: on => panel.input?.setTuning("mouseSteering", on)
+                }
+            }
+            VRow {
+                visible: panel.editDriving
+                label: qsTr("进出载具时切换布局")
+                hint: qsTr("按下 %1 对应的键后延时切换。").arg(panel.names[3])
+                hintBelow: true
+                VSwitch {
+                    checked: panel.tune.autoDriving === true
+                    onToggled: on => panel.input?.setTuning("autoDriving", on)
+                }
+            }
+            VRow {
+                visible: panel.editDriving && !panel.showList
+                label: panel.names[33]
+                RowLayout {
+                    Repeater {
+                        model: 2
+                        VButton {
+                            required property int index
+                            readonly property bool ps5LearningControl: true
+                            text: panel.binding(33, index)
+                            onClicked: panel.choose(33, index)
+                        }
+                    }
+                }
+            }
+            VRow {
                 enabled: panel.tune.mouseLook!==false; visible: !panel.advanced
                 label: qsTr("反转纵向")
                 VSwitch { checked: panel.tune.invertY === true; onToggled: on => panel.input?.setTuning("invertY", on) }
             }
             VRow { visible: panel.advanced; label: qsTr("解锁快捷键")
+                hint: panel.input?.learning < 0 ? (panel.input.feedback || "") : ""
+                hintBelow: true
                 VSelect { title: qsTr("解锁快捷键"); value: panel.input?.unlockLabel || "Esc"
                     options: ["Esc","Ctrl+Alt+Z","Alt+Q","F1","~"].map((n,i)=>({id:String(i),label:n}))
                     onPicked: id=>panel.input.setTuning("unlock",Number(id)) }
@@ -550,15 +741,95 @@ DialogLayer {
                 VSelect {title: qsTr("开镜触发键"); options: panel.names.slice(0,18).map((n,i)=>({id:String(i),label:n}))
                     value: panel.names[Number(panel.tune.adsAction??16)]; onPicked: id=>panel.input.setTuning("adsAction",Number(id))}
             }
-            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("鼠标陀螺仪")
+            VRow {visible: panel.advanced && !panel.xboxMode; enabled: panel.tune.mouseLook!==false; label: qsTr("鼠标陀螺仪")
                 VSelect {title: qsTr("鼠标陀螺仪"); options: [{id:"0",label:qsTr("关闭")},{id:"1",label:qsTr("始终开启")},{id:"2",label:qsTr("仅开镜")}]
                     value: options[Number(panel.tune.gyro||0)].label; onPicked: id=>panel.input.setTuning("gyro",Number(id))}
             }
-            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("快速转身补偿")
+            VRow {visible: panel.advanced && !panel.physicalAim; enabled: panel.tune.mouseLook!==false; label: qsTr("快速转身补偿")
                 VSwitch {checked: panel.tune.carry===true; onToggled: on=>panel.input.setTuning("carry",on)}
             }
+            VSubGroup {
+                visible: panel.physicalAim
+                Layout.fillWidth: true
+                label: qsTr("游戏校准与输入延迟")
+                VRow {
+                    label: qsTr("键鼠接管时降低延迟")
+                    VSwitch {
+                        checked: panel.tune.consoleLowLatency === true
+                        onToggled: on => panel.input?.setTuning("consoleLowLatency", on)
+                    }
+                }
+                VRow {
+                    label: qsTr("测游戏死区")
+                    enabled: panel.input?.keyboardEnabled === true
+                    VSelect {
+                        title: qsTr("测游戏死区")
+                        value: qsTr("选择")
+                        options: [{id: "1", label: qsTr("横向")}, {id: "2", label: qsTr("纵向")}]
+                        onPicked: id => panel.input?.armAimTest(Number(id))
+                    }
+                }
+                VRow {
+                    label: qsTr("校准当前游戏")
+                    enabled: panel.input?.keyboardEnabled === true
+                    VButton {
+                        text: qsTr("开始")
+                        onClicked: panel.input?.armAimTest(3)
+                    }
+                }
+                VRow {
+                    label: qsTr("测输入延迟")
+                    enabled: panel.input?.keyboardEnabled === true
+                    VButton {
+                        text: qsTr("开始")
+                        onClicked: panel.input?.armAimTest(4)
+                    }
+                }
+                Text {
+                    visible: text.length > 0
+                    text: panel.input?.aimStatus ?? ""
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: Theme.t2
+                }
+                Canvas {
+                    Layout.fillWidth: true
+                    implicitHeight: 54
+                    visible: rates.length === 9
+                    property var rates: panel.tune.measuredRates ?? []
+                    onRatesChanged: requestPaint()
+                    onWidthChanged: requestPaint()
+                    onPaint: {
+                        if (rates.length !== 9) return
+                        const c = getContext("2d")
+                        c.reset()
+                        c.fillStyle = "#181f2d"
+                        c.fillRect(0, 0, width, height)
+                        const steps = [.02, .05, .10, .20, .35, .50, .65, .80, 1.]
+                        const dz = Number(panel.tune.measuredDeadzone ?? 0)
+                        c.strokeStyle = "#92b7ff"
+                        c.lineWidth = 2
+                        c.beginPath()
+                        c.moveTo(1, height - 2)
+                        c.lineTo(width * dz, height - 2)
+                        for (let i = 0; i < steps.length; ++i)
+                            c.lineTo((width - 2) * (dz + (1 - dz) * steps[i]), height - 2 - (height - 4) * rates[i])
+                        c.stroke()
+                    }
+                }
+                VRow {
+                    label: qsTr("新版甩枪补偿")
+                    visible: Number(panel.tune.measuredMax ?? 0) > 0
+                    hint: qsTr("推满后最多补足 150 ms 的转动量，停手后镜头可能继续转动。")
+                    hintBelow: true
+                    VSwitch {
+                        checked: panel.tune.angleCarry === true
+                        onToggled: on => panel.input?.setTuning("angleCarry", on)
+                    }
+                }
+            }
             Canvas {
-                Layout.fillWidth: true; implicitHeight: 54; visible: panel.advanced
+                Layout.fillWidth: true; implicitHeight: 54; visible: panel.advanced && !panel.physicalAim
                 property var settings: panel.tune
                 onSettingsChanged: requestPaint()
                 onWidthChanged: requestPaint()
@@ -576,14 +847,21 @@ DialogLayer {
                     c.stroke()
                 }
             }
-            Text { visible: panel.advanced; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
+            Text { visible: panel.advanced && !panel.physicalAim; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
                 text: qsTr("曲线小于 1 提高低速响应；等于 1 为线性；大于 1 便于微调。") }
+            Text {
+                visible: panel.physicalAim && panel.advanced
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.t3
+                text: qsTr("游戏内灵敏度决定转速上限。能调的话，降低游戏死区、关闭加速、选线性曲线。改动后请重新设置 Veyra 中的游戏死区和曲线。")
+            }
             Canvas {
                 visible: !!panel.input?.previewing
                 Layout.alignment: Qt.AlignHCenter; implicitWidth: 76; implicitHeight: 76
                 property real xAxis: panel.pad.rightX||0
                 property real yAxis: panel.pad.rightY||0
-                property real dz: panel.tune.deadzone||0
+                property real dz: panel.physicalAim ? (panel.tune.gameDeadzoneX ?? .18) : (panel.tune.deadzone ?? 0)
                 onXAxisChanged: requestPaint()
                 onYAxisChanged: requestPaint()
                 onDzChanged: requestPaint()
@@ -597,8 +875,38 @@ DialogLayer {
                     c.beginPath();c.arc(m+r*xAxis,m+r*yAxis,3.5,0,2*Math.PI);c.fill()
                 }
             }
-            Text {visible: !!panel.input?.previewing; color: Math.hypot(panel.pad.rightX||0,panel.pad.rightY||0)>.98?"#ffad65":Theme.t1
-                text: Math.round(panel.pad.speed||0)+" counts/s   X "+Math.round(100*(panel.pad.rightX||0))+"%   Y "+Math.round(100*(panel.pad.rightY||0))+"%   ADS "+(panel.pad.ads?"●":"○") }
+            Text {
+                visible: panel.tune.mouseLook !== false && panel.fullSpeed > 0
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.t2
+                text: qsTr("横向约 %1 cm/s 时推满右摇杆").arg(panel.fullSpeed.toFixed(1))
+            }
+            Text {
+                visible: panel.input?.previewing === true
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Math.hypot(panel.pad.rightX || 0, panel.pad.rightY || 0) > .98 ? "#ffad65" : Theme.t1
+                text: qsTr("手速 %1 cm/s · 右摇杆 %2%").arg(Number(panel.pad.speedCms ?? 0).toFixed(1))
+                    .arg(Math.round(100 * Math.hypot(panel.pad.rightX || 0, panel.pad.rightY || 0)))
+            }
+            Text {
+                visible: panel.pad.timingReady === true
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.t2
+                text: qsTr("最近 10 秒 · 按键 P50/P95 %1 ms · 鼠标 P50/P95 %2 ms · 发送间隔 P95 %3 ms · 满杆 %4%")
+                    .arg(panel.pad.keyCount ? panel.pad.keyP50.toFixed(1) + "/" + panel.pad.keyP95.toFixed(1) : "—")
+                    .arg(panel.pad.mouseCount ? panel.pad.mouseP50.toFixed(1) + "/" + panel.pad.mouseP95.toFixed(1) : "—")
+                    .arg(Number(panel.pad.sendP95 ?? 0).toFixed(1)).arg(Math.round(panel.pad.fullStickPct ?? 0))
+            }
+            Text {
+                visible: (panel.pad.fullStickPct ?? 0) > 30
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: "#ffad65"
+                text: qsTr("右摇杆经常推满。可降低映射灵敏度，或调高游戏内灵敏度。")
+            }
             VButton {
                 objectName: "ps5-reset-mouse"
                 Layout.alignment: Qt.AlignRight

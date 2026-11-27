@@ -238,6 +238,18 @@ bool XboxModel::connectStream() {
     for (const QVariant& c : std::as_const(consoles_)) if (c.toMap().value("id").toString() == selected_) name = c.toMap().value("name").toString();
     return launchConsole(selected_, name);
 }
+std::optional<source::XboxConnectDesc> XboxModel::controlRequest(const QString& host) const {
+    if (!account_->signedIn() || host.isEmpty()) return std::nullopt;
+    source::XboxConnectDesc request;
+    request.account = account_;
+    request.serverId = host.toStdString();
+    request.controlOnly = true;
+    for (const auto& console : consoles_) {
+        const auto fields = console.toMap();
+        if (fields.value("id").toString() == host) request.consoleName = fields.value("name").toString().toStdString();
+    }
+    return request;
+}
 
 bool XboxModel::resumeLast() {
     if (!loaded_) { loadSettings(); loaded_ = true; }

@@ -30,6 +30,8 @@ public:
     virtual void submitted(ID3D12Fence* fence,uint64_t value)=0;
     // The list was not submitted (failed present); nothing will execute.
     virtual void discarded()=0;
+    // Timestamp of a successful Present call, or zero on failure.
+    virtual void presented(int64_t) {}
 };
 
 // The presenter has one capture; a recording and the instant replay buffer
@@ -46,6 +48,7 @@ public:
     // Each one acts only on what it recorded itself.
     void submitted(ID3D12Fence* fence,uint64_t value) override {first_.submitted(fence,value);second_.submitted(fence,value);}
     void discarded() override {first_.discarded();second_.discarded();}
+    void presented(int64_t timestamp) override {first_.presented(timestamp);second_.presented(timestamp);}
 private:
     PresentCapture& first_;
     PresentCapture& second_;

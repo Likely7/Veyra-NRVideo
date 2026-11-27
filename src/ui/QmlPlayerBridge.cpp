@@ -88,10 +88,10 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     // The compute GPU decides which effects exist, so it is settled before
     // anything below samples the capabilities or restores the saved chain.
     impl_->loadPrefs();
-#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT)
+#if defined(VEYRA_ENABLE_REMOTEPLAY) || defined(VEYRA_ENABLE_MOONLIGHT) || defined(VEYRA_ENABLE_XBOX)
     impl_->streamInput = std::make_unique<ui::StreamInputCapture>(engine,
         QString::fromStdWString((impl_->dataDir / L"ps5-keyboard-map.v1.json").wstring()),
-        [this] { return ps5InputTarget(); });
+        [this] { return ps5InputTarget(); }, [this] { return xboxInputTarget(); });
     connect(this, &QmlPlayerBridge::mediaOpenRequested, this, [this] { impl_->streamInput->releasePs5(); });
 #endif
     impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));

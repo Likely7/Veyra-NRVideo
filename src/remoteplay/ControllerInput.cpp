@@ -4,6 +4,7 @@
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_hints.h>
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <SDL3/SDL_sensor.h>
 #include <SDL3/SDL_timer.h>
@@ -66,7 +67,8 @@ ControllerState ControllerInput::poll(bool focused){
         std::erase_if(others_,[](SDL_Gamepad* pad){if(SDL_GamepadConnected(pad))return false;SDL_CloseGamepad(pad);return true;});
         if(!gamepad_&&!others_.empty()){auto* next=others_.front();others_.erase(others_.begin());activate(next);}
     }
-    const auto now=monotonic100ns();
+    const auto now = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count() / 100;
     // Follow mode keeps enumerating while a pad is open: a virtual pad created
     // by a streaming tool joins after the local one.
     if((!gamepad_||follow_)&&now>=enumerateAt_){
