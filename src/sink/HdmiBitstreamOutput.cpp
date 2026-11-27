@@ -607,7 +607,7 @@ std::vector<HdmiBitstreamEndpoint> HdmiBitstreamOutput::endpoints(unsigned rate)
     for (auto& endpoint : devices) {
         auto client = audioClient(endpoint.device.Get());
         if (client) {
-            constexpr unsigned captureRates[]{48000, 44100, 32000};
+            static constexpr unsigned captureRates[]{48000, 44100, 32000};
             const auto supports = [&](BitstreamKind codec) {
                 if (rate) return supportsEncodedFormat(client.Get(), codec, rate);
                 return std::ranges::any_of(captureRates, [&](unsigned candidate) {
