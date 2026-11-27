@@ -15,6 +15,7 @@ VPage {
     id: root
     signal requestPage(string page)
     property Item fullscreenBackground
+    property var fullscreenDisplays: []
 
     property string section: "look"
     property bool hdrAdvancedExpanded: false
@@ -387,6 +388,20 @@ VPage {
                                 options: sizes
                                 value: (sizes.find(o => o.id === (veyra.preferences.windowSize || "1280x800")) || sizes[0]).label
                                 onPicked: id => veyra.setPreference("windowSize", id)
+                            }
+                        }
+                        VRow {
+                            visible: root.fullscreenDisplays.length > 0 || !!veyra.preferences.fullscreenDisplay
+                            label: qsTr("全屏显示器")
+                            hint: (veyra.preferences.fullscreenDisplay && !root.fullscreenDisplays.some(
+                                      screen => screen.id === veyra.preferences.fullscreenDisplay))
+                                  ? qsTr("所选显示器未连接，将使用当前显示器。") : qsTr("下次进入全屏时生效。")
+                            VSelect {
+                                objectName: "set-fullscreen-display"
+                                options: [{id: "", label: qsTr("当前显示器")}].concat(root.fullscreenDisplays)
+                                readonly property string selected: veyra.preferences.fullscreenDisplay || ""
+                                value: (options.find(o => o.id === selected) || options[0]).label
+                                onPicked: id => veyra.setPreference("fullscreenDisplay", id)
                             }
                         }
                         VRow {

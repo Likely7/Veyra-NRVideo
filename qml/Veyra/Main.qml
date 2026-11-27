@@ -333,6 +333,7 @@ Window {
             pageId: "set"
             home: pages
             fullscreenBackground: ultrawideBackground
+            fullscreenDisplays: root.fullscreenDisplays
             onRequestPage: p => {
                 if (p === "translation" || p === "update") dialogs.open(p)
                 else root.goPage(p)
@@ -472,6 +473,18 @@ Window {
     // Windows may briefly report Windowed while restoring a maximized window.
     // Keep cinema sizing out of that native transition, without a polling timer.
     property bool fullRestorePending: false
+    property var fullscreenPlacement: null
+    readonly property var fullscreenDisplays: Qt.application.screens.length > 0 ? veyra.fullscreenDisplays() : []
+
+    onFullscreenDisplaysChanged: {
+        Qt.callLater(function() {
+            if (root.fullscreenPlacement && !root.fullscreenDisplays.some(
+                    display => display.id === root.fullscreenPlacement.target)) {
+                root.restoreFullscreenWindow()
+                toast.show(qsTr("全屏显示器已断开，已恢复窗口。"), true)
+            }
+        })
+    }
     property bool fullLocked: false
     // Fullscreen quick-adjust panel (Home): the professional mode's own controls
     // over the picture - the list inspector (with the performance orbs) in list
@@ -521,7 +534,21 @@ Window {
         fullHide.restart()
         videoHost.syncRect()
     }
+    function restoreFullscreenWindow() {
+        const previous = fullscreenPlacement
+        fullscreenPlacement = null
+        fullRestorePending = true
+        fullTarget = false
+        visibility = Window.Windowed
+        Qt.callLater(function() {
+            veyra.placeFullscreenWindow(root, previous.origin, previous.rect)
+            root.visibility = root.fullRestoreVisibility
+            root.fullRestorePending = false
+            videoHost.syncRect()
+        })
+    }
     function toggleFullscreen() {
+        if (fullRestorePending) return
         if (!fullscreen && veyra.fullscreenMemorySafe === false) {
             toast.show(qsTr("本次播放检测到全屏显存持续增长，请使用窗口播放；重新打开片源后可再次测试全屏。"), true)
             veyra.logUi("ui-fullscreen", "blocked after sustained video-memory growth")
@@ -531,7 +558,17 @@ Window {
         if (!fullscreen) {
             fullRestoreVisibility = maximized ? Window.Maximized : Window.Windowed
             fullTarget = true
+            const target = veyra.preferences.fullscreenDisplay || ""
+            if (target && fullscreenDisplays.some(display => display.id === target)) {
+                const origin = veyra.fullscreenDisplayId(root)
+                if (origin !== target && maximized) visibility = Window.Windowed
+                const previous = { origin: origin, target: target, rect: Qt.rect(x, y, width, height) }
+                if (origin === target || veyra.placeFullscreenWindow(root, target, Qt.rect(0, 0, 0, 0)))
+                    fullscreenPlacement = previous
+            }
             visibility = Window.FullScreen
+        } else if (fullscreenPlacement) {
+            restoreFullscreenWindow()
         } else {
             fullRestorePending = fullRestoreVisibility === Window.Maximized
             fullTarget = false

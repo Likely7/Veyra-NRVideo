@@ -6410,6 +6410,19 @@
    "ru": "Примените эту предустановку автоматически при следующем запуске приложения"
   },
   {
+   "zh": "下次进入全屏时生效。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "下次進入全螢幕時生效。",
+   "en": "Applies the next time you enter fullscreen.",
+   "ja": "次に全画面表示にしたときに適用されます。",
+   "ko": "다음에 전체 화면으로 전환할 때 적용됩니다.",
+   "es": "Se aplica la próxima vez que actives la pantalla completa.",
+   "fr": "S’applique au prochain passage en plein écran.",
+   "de": "Wird beim nächsten Wechsel in den Vollbildmodus angewendet.",
+   "pt-BR": "Será aplicado na próxima vez que você entrar em tela cheia.",
+   "ru": "Применится при следующем входе в полноэкранный режим."
+  },
+  {
    "zh": "下移",
    "src": "qml/ProPage.qml",
    "zh-TW": "下移",
@@ -9242,6 +9255,32 @@
    "de": "Fullscreen VRAM Wachstumsschutz",
    "pt-BR": "Proteção de crescimento VRAM em tela cheia",
    "ru": "Полноэкранная VRAM защита роста"
+  },
+  {
+   "zh": "全屏显示器",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "全螢幕顯示器",
+   "en": "Fullscreen display",
+   "ja": "全画面表示のディスプレイ",
+   "ko": "전체 화면 디스플레이",
+   "es": "Pantalla para modo de pantalla completa",
+   "fr": "Écran en plein écran",
+   "de": "Vollbildschirm",
+   "pt-BR": "Tela para modo de tela cheia",
+   "ru": "Дисплей для полноэкранного режима"
+  },
+  {
+   "zh": "全屏显示器已断开，已恢复窗口。",
+   "src": "qml/Main.qml",
+   "zh-TW": "全螢幕顯示器已中斷連線，已恢復視窗。",
+   "en": "The fullscreen display was disconnected. The window was restored.",
+   "ja": "全画面表示のディスプレイが切断されたため、ウィンドウ表示に戻しました。",
+   "ko": "전체 화면 디스플레이가 연결 해제되어 창 모드로 돌아갔습니다.",
+   "es": "Se desconectó la pantalla de pantalla completa. Se restauró la ventana.",
+   "fr": "L’écran plein écran a été déconnecté. La fenêtre a été rétablie.",
+   "de": "Der Vollbildschirm wurde getrennt. Das Fenster wurde wiederhergestellt.",
+   "pt-BR": "A tela de tela cheia foi desconectada. A janela foi restaurada.",
+   "ru": "Полноэкранный дисплей отключён. Окно восстановлено."
   },
   {
    "zh": "全屏期间显存持续增长了 %1 GB，已退出全屏保护播放；当前会话使用窗口播放。增强设置保留。原因尚未确认，可开启设置中的 OBS 游戏采集兼容、重启后测试全屏。",
@@ -19580,6 +19619,19 @@
    "ru": "При средней настройке VFG на этом адаптере и драйвере произошла ошибка доступа к памяти. Выбрано низкое качество."
   },
   {
+   "zh": "当前显示器",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "目前顯示器",
+   "en": "Current display",
+   "ja": "現在のディスプレイ",
+   "ko": "현재 디스플레이",
+   "es": "Pantalla actual",
+   "fr": "Écran actuel",
+   "de": "Aktueller Bildschirm",
+   "pt-BR": "Tela atual",
+   "ru": "Текущий дисплей"
+  },
+  {
    "zh": "当前最多支持 {}X 帧生成，已按 {}X 应用",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "當前最多支援 {}X 幀生成，已按 {}X 應用",
@@ -20618,6 +20670,19 @@
    "de": "Audiospuren und eingebettete Untertitel der ausgewählten Datei",
    "pt-BR": "Faixas de áudio e legendas incorporadas do arquivo selecionado",
    "ru": "Аудиодорожки и встроенные субтитры выбранного файла"
+  },
+  {
+   "zh": "所选显示器未连接，将使用当前显示器。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "所選顯示器未連線，將使用目前顯示器。",
+   "en": "The selected display is disconnected. The current display will be used.",
+   "ja": "選択したディスプレイが接続されていないため、現在のディスプレイを使用します。",
+   "ko": "선택한 디스플레이가 연결되지 않아 현재 디스플레이를 사용합니다.",
+   "es": "La pantalla seleccionada está desconectada. Se usará la pantalla actual.",
+   "fr": "L’écran sélectionné est déconnecté. L’écran actuel sera utilisé.",
+   "de": "Der gewählte Bildschirm ist nicht verbunden. Der aktuelle Bildschirm wird verwendet.",
+   "pt-BR": "A tela selecionada está desconectada. A tela atual será usada.",
+   "ru": "Выбранный дисплей отключён. Будет использован текущий дисплей."
   },
   {
    "zh": "所选格式为 {:.3f} FPS，但采集卡返回 {:.3f} FPS；请重新选择设备支持的格式。",

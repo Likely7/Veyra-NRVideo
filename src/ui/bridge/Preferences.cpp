@@ -1,6 +1,7 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include <QColor>
+#include <QWindow>
 #include "veyra/ngx/AnrProvider.h"
 #include "veyra/gfx/AmfFrcBackend.h"
 #include "veyra/gfx/RifeDmlBackend.h"
@@ -183,6 +184,32 @@ void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     impl_->prefs[QStringLiteral("lastWindow")] = v;
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last window size not saved");
 }
+namespace {
+QString displayInterfaceId(const QScreen* screen) {
+    if (!screen || QGuiApplication::platformName() != QLatin1String("windows")) return {};
+    // Qt's Windows backend keeps the virtual desktop origin in native pixels
+    // even when a screen's logical size is scaled.
+    const auto origin = screen->geometry().topLeft();
+    const auto monitor = MonitorFromPoint(POINT{origin.x(), origin.y()}, MONITOR_DEFAULTTONULL);
+    MONITORINFOEXW info{};
+    info.cbSize = sizeof(info);
+    if (!monitor || !GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&info)) ||
+        info.rcMonitor.left != origin.x() || info.rcMonitor.top != origin.y()) return {};
+    DISPLAY_DEVICEW device{};
+    device.cb = sizeof(device);
+    if (!EnumDisplayDevicesW(info.szDevice, 0, &device, EDD_GET_DEVICE_INTERFACE_NAME)) return {};
+    return QString::fromWCharArray(device.DeviceID).toCaseFolded();
+}
+
+QScreen* findFullscreenDisplay(const QString& id) {
+    if (id.isEmpty()) return nullptr;
+    for (auto* screen : QGuiApplication::screens()) {
+        if (displayInterfaceId(screen) == id) return screen;
+    }
+    return nullptr;
+}
+}
+
 QRect QmlPlayerBridge::screenAvailableAt(int x, int y) const {
     QScreen* screen = QGuiApplication::screenAt(QPoint(x, y));
     if (!screen) screen = QGuiApplication::primaryScreen();
@@ -191,6 +218,56 @@ QRect QmlPlayerBridge::screenAvailableAt(int x, int y) const {
 QRect QmlPlayerBridge::launchScreenAvailable() const {
     const QPoint at = QCursor::pos();
     return screenAvailableAt(at.x(), at.y());
+}
+
+QVariantList QmlPlayerBridge::fullscreenDisplays() const {
+    QVariantList displays;
+    for (const auto* screen : QGuiApplication::screens()) {
+        const auto id = displayInterfaceId(screen);
+        if (id.isEmpty()) continue;
+        // Model names can repeat. The position disambiguates the labels while
+        // the per-target Windows device interface is the saved choice.
+        const auto bounds = screen->geometry();
+        const auto size = bounds.size() * screen->devicePixelRatio();
+        auto label = QStringLiteral("%1 · %2×%3 · %4 Hz · (%5, %6)")
+            .arg(screen->name()).arg(size.width()).arg(size.height()).arg(qRound(screen->refreshRate()))
+            .arg(bounds.x()).arg(bounds.y());
+        displays.append(QVariantMap{{"id", id}, {"label", std::move(label)}});
+    }
+    return displays;
+}
+
+QString QmlPlayerBridge::fullscreenDisplayId(QObject* object) const {
+    const auto* window = qobject_cast<QWindow*>(object);
+    return window ? displayInterfaceId(window->screen()) : QString{};
+}
+
+bool QmlPlayerBridge::placeFullscreenWindow(QObject* object, const QString& display, const QRect& restoreGeometry) const {
+    auto* window = qobject_cast<QWindow*>(object);
+    if (!window || window->visibility() == QWindow::FullScreen) return false;
+    const bool restoring = restoreGeometry.isValid();
+    auto* target = findFullscreenDisplay(display);
+    if (!target && restoring) target = QGuiApplication::screenAt(restoreGeometry.center());
+    if (!target && restoring) target = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+    if (!target) return false;
+
+    if (window->screen() != target) {
+        // Setting a screen outside the current virtual desktop can recreate
+        // the top-level native window, dropping the existing video child.
+        if (window->screen() && !window->screen()->virtualSiblings().contains(target)) return false;
+        window->setScreen(target);
+    }
+    if (restoring) {
+        const auto area = target->availableGeometry();
+        const int width = std::min(restoreGeometry.width(), area.width());
+        const int height = std::min(restoreGeometry.height(), area.height());
+        const int x = std::clamp(restoreGeometry.x(), area.x(), area.x() + area.width() - width);
+        const int y = std::clamp(restoreGeometry.y(), area.y(), area.y() + area.height() - height);
+        window->setGeometry(x, y, width, height);
+    } else {
+        window->setPosition(target->geometry().topLeft());
+    }
+    return true;
 }
 
 bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
@@ -324,6 +401,10 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         const QString v = value.toString();
         if (!v.isEmpty() && std::none_of(impl_->gpuAdapters.begin(), impl_->gpuAdapters.end(), [&](const auto& a) { return a.id == v; })) return false;
         stored = v;
+    } else if (key == QLatin1String("fullscreenDisplay")) {
+        const auto id = value.toString();
+        if (!id.isEmpty() && !findFullscreenDisplay(id)) return false;
+        stored = id;
     } else if (key == QLatin1String("windowSize")) {
         const QString v = value.toString();
         static const QStringList sizes{"1280x800", "1600x1000", "1920x1200", "last"};

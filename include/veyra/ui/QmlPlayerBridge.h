@@ -888,6 +888,9 @@ public:
     // pointer is on at start. QML's Screen.desktopAvailable* span the whole virtual desktop,
     // which centred the window across two of three monitors (field report 2026-10-01).
     Q_INVOKABLE QRect screenAvailableAt(int x, int y) const;
+    Q_INVOKABLE QVariantList fullscreenDisplays() const;
+    Q_INVOKABLE QString fullscreenDisplayId(QObject* window) const;
+    Q_INVOKABLE bool placeFullscreenWindow(QObject* window, const QString& display, const QRect& restoreGeometry) const;
     Q_INVOKABLE QRect launchScreenAvailable() const;
     QString screenshotDirectory() const;
     QString lastScreenshot() const;
