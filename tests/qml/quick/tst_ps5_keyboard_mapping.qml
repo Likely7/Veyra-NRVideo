@@ -18,16 +18,16 @@ Item {
     QtObject {
         id: mapper
         property bool keyboardEnabled: false
-        property var bindings: Array(33).fill("—")
-        property var alternateBindings: Array(33).fill("—")
-        property var drivingBindings: Array(33).fill("—")
-        property var drivingAlternateBindings: Array(33).fill("—")
+        property var bindings: Array(34).fill("—")
+        property var alternateBindings: Array(34).fill("—")
+        property var drivingBindings: Array(34).fill("—")
+        property var drivingAlternateBindings: Array(34).fill("—")
         property int learningSlot: 0
         property bool learningDriving: false
         property string driveKeyLabel: "F6"
         property bool driving: false
         function selectDriving(on) { driving = on }
-        function learnDriveKey(button) { learning = 33 }
+        function learnDriveKey(button) { learning = 34 }
         property var tuning: ({ horizontal: 1, vertical: 1, mouseLook: true })
         property int learning: -1
         property string feedback: ""
@@ -48,7 +48,7 @@ Item {
             learning = -1
         }
         function applyDefaults(drivingLayout) {
-            const keys = Array(33).fill("—")
+            const keys = Array(34).fill("—")
             keys[0] = "Space"
             keys[16] = drivingLayout ? "S" : "鼠标右键"
             keys[17] = drivingLayout ? "W" : "鼠标左键"
@@ -56,14 +56,14 @@ Item {
             keys[32] = "V"
             if (drivingLayout) {
                 drivingBindings = keys
-                drivingAlternateBindings = Array(33).fill("—")
+                drivingAlternateBindings = Array(34).fill("—")
             } else {
                 bindings = keys
-                alternateBindings = Array(33).fill("—")
+                alternateBindings = Array(34).fill("—")
             }
         }
         function resetMouseTuning() {
-            tuning = { horizontal: 1, vertical: 1, turnBoost: 3.6, inputDeadzone: 0, mouseLook: tuning.mouseLook }
+            tuning = { dpi: 800, physicalAim: true, aimFullSpeed: 25, mouseLook: tuning.mouseLook }
         }
         function setTuning(name, value) {
             const next = Object.assign({}, tuning)
@@ -108,7 +108,7 @@ Item {
             editor.advanced=false
             mapper.applyDefaults(false)
             mapper.applyDefaults(true)
-            mapper.resetMouseTuning()
+            mapper.tuning = { horizontal: 1, vertical: 1, turnBoost: 3.6, inputDeadzone: 0, mouseLook: true }
             mapper.releasePs5()
             mapper.padState = {buttons: 0}
             wait(30)
@@ -152,9 +152,15 @@ Item {
             fuzzyCompare(mapper.tuning.inputDeadzone, 0.035, 0.0001)
             const key = mapper.bindings[0]
             mapper.setTuning("mouseLook", false)
-            mouseClick(findChild(editor, "ps5-reset-mouse"))
-            compare(boost.value, 3.6)
-            compare(filter.value, 0)
+            const reset = findChild(editor, "ps5-reset-mouse")
+            const view = editor.bodyViewport
+            const y = reset.mapToItem(view.contentItem, 0, 0).y
+            view.contentY = Math.min(y, view.contentHeight - view.height)
+            mouseClick(reset)
+            compare(mapper.tuning.dpi, 800)
+            compare(mapper.tuning.aimFullSpeed, 25)
+            verify(mapper.tuning.physicalAim)
+            verify(!boost.visible && !filter.visible)
             compare(mapper.tuning.mouseLook, false)
             compare(mapper.bindings[0], key)
             verify(editor.shown)
@@ -168,7 +174,7 @@ Item {
             compare(editor.binding(9), "Q")
             const key = findChild(editor, "ps5-drive-key")
             key.clicked()
-            compare(mapper.learning, 33)
+            compare(mapper.learning, 34)
             key.clicked()
             compare(mapper.learning, -1)
             findChild(editor, "ps5-input-preview").clicked()

@@ -237,13 +237,28 @@ void EngineController::openRemotePlay(HWND window,source::RemotePlayConnectDesc 
 }
 // A PS5 stream (activeRemote_) takes precedence; otherwise PS5 手柄控制.
 remoteplay::ControllerFeedback EngineController::remotePlayFeedback(){std::lock_guard lock(mutex_);if(activeRemote_)return activeRemote_->takeFeedback();return controlRemote_?controlRemote_->takeFeedback():remoteplay::ControllerFeedback{};}
-void EngineController::remotePlayController(const remoteplay::ControllerState& state,
-                                            std::weak_ptr<remoteplay::MouseStick> mouse){
+void EngineController::remotePlayController(const remoteplay::ControllerState& state){
     std::lock_guard lock(mutex_);
     const auto& target=activeRemote_?activeRemote_:controlRemote_;
     if(!target)return;
-    target->controller(remotePlayTouchpadPressOnly_ ? remoteplay::touchpadPressOnly(state) : state,
-                       std::move(mouse));
+    target->controller(remotePlayTouchpadPressOnly_ ? remoteplay::touchpadPressOnly(state) : state);
+}
+bool EngineController::remotePlayMappedController(uint64_t destination, std::weak_ptr<remoteplay::MappedController> input) {
+    std::lock_guard lock(mutex_);
+    if ((destination >> 1) != snapshot_.sessionId) return false;
+    const auto& target = (destination & 1) ? controlRemote_ : activeRemote_;
+    if (!target) return false;
+    target->setMappedController(std::move(input), remotePlayTouchpadPressOnly_);
+    return true;
+}
+bool EngineController::remotePlayInputActive() const {
+    std::lock_guard lock(mutex_);
+    return snapshot_.remotePlay && (snapshot_.running || snapshot_.transport == TransportState::Opening);
+}
+double EngineController::mappedGameFps() const {
+    std::lock_guard lock(mutex_);
+    if (snapshot_.captureHalfRate) return snapshot_.nominalSourceFps * .5;
+    return snapshot_.contentFps > 0 ? double(snapshot_.contentFps) : snapshot_.nominalSourceFps;
 }
 void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
 void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){

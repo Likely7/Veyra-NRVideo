@@ -506,11 +506,10 @@ bool QmlPlayerBridge::ps5Connect() {
                 i.controllerTimer = new QTimer(this);
                 connect(i.controllerTimer, &QTimer::timeout, this, [this] {
                     auto& j = *impl_;
-                    const auto s = j.engine.snapshot();
-                    if (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening)) {
+                    if (j.engine.remotePlayInputActive()) {
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
                         const auto physical = j.controller.poll(focused);
-                        if (!j.streamInput->ps5Captured()) j.engine.remotePlayController(physical);
+                        j.engine.remotePlayController(physical);
                         j.controller.feedback(j.engine.remotePlayFeedback(), focused);
                     } else {
                         j.engine.remotePlayController({}); j.releasePad(Impl::PadPs5); j.controllerTimer->stop();
@@ -746,7 +745,7 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
             }
             const bool focused = QGuiApplication::focusWindow() != nullptr || j.prefBool("ps5ControlBackground", false);
             const auto physical = j.controller.poll(focused);
-            if (!j.streamInput->ps5Captured()) j.engine.remotePlayController(physical);
+            j.engine.remotePlayController(physical);
             j.controller.feedback(j.engine.remotePlayFeedback(), focused);
         });
     }

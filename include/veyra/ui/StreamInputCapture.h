@@ -8,7 +8,8 @@
 #include <QTimer>
 #include <QVariant>
 #include <functional>
-#include <deque>
+#include <atomic>
+#include <thread>
 #include <QJsonObject>
 #include <memory>
 #include <windows.h>
@@ -16,6 +17,7 @@
 
 #include "veyra/moonlight/InputRouter.h"
 #include "veyra/remoteplay/KeyboardMousePad.h"
+#include "veyra/remoteplay/MappedController.h"
 
 namespace veyra::engine { class EngineController; }
 
@@ -36,7 +38,7 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(QString unlockLabel READ unlockLabel NOTIFY mappingChanged)
     Q_PROPERTY(QString quickKeyLabel READ quickKeyLabel NOTIFY mappingChanged)
     Q_PROPERTY(bool quickReferenceEnabled MEMBER quickReferenceEnabled_)
-    Q_PROPERTY(bool quickReferenceOpen MEMBER quickReferenceOpen_)
+    Q_PROPERTY(bool quickReferenceOpen READ quickReferenceOpen WRITE setQuickReferenceOpen)
     Q_PROPERTY(QStringList actionNotes READ actionNotes NOTIFY mappingChanged)
     Q_PROPERTY(QStringList drivingActionNotes READ drivingActionNotes NOTIFY mappingChanged)
     Q_PROPERTY(QVariantMap tuning READ tuning NOTIFY mappingChanged)
@@ -74,6 +76,8 @@ public:
     QString profile() const {return profile_;}
     QString unlockLabel() const;
     QString quickKeyLabel() const;
+    bool quickReferenceOpen() const { return quickReferenceOpen_.load(); }
+    void setQuickReferenceOpen(bool open) { quickReferenceOpen_.store(open); }
     QStringList actionNotes() const { return notes_[0]; }
     QStringList drivingActionNotes() const { return notes_[1]; }
     Q_INVOKABLE void selectProfile(const QString& name,bool create=false);
@@ -92,6 +96,7 @@ public:
     Q_INVOKABLE void applyDefaults(bool drivingLayout = false);
     Q_INVOKABLE void resetMouseTuning();
     Q_INVOKABLE void setTuning(const QString& key, const QVariant& value);
+    Q_INVOKABLE void selectAimAlgorithm(bool physical);
     Q_INVOKABLE void preview(bool on);
     // Invoked while opening another panel or changing source.
     Q_INVOKABLE void releasePs5();
@@ -109,6 +114,7 @@ signals:
     void drivingChanged();
     void quickReferenceRequested();
     void quickReferenceScrolled(int delta);
+    void applicationHotkeyRequested(const QString& chord);
 
 private:
     using Mapper = remoteplay::KeyboardMousePad;
@@ -123,7 +129,6 @@ private:
     void end();
     void clipToWindow();
     void tick();
-    void emitPad();
     void digital(int key, bool down);
     void bind(int key, int modifiers);
     bool quickKeyAvailable(int chord) const;
@@ -146,22 +151,21 @@ private:
     HIMC oldIme_=nullptr;
     POINT savedCursor_{};
     bool restoreCursor_=false;
-    std::deque<int> wheelQueue_;
-    int64_t wheelGapUs_=0;
-    struct Ps5MouseInput;
-    std::unique_ptr<Ps5MouseInput> ps5MouseInput_;
+    struct ConsoleInputWorker;
+    std::unique_ptr<ConsoleInputWorker> consoleInput_;
+    std::shared_ptr<remoteplay::MappedController> mapped_;
+    std::jthread previewSender_;
     QJsonObject profiles_;
     QString profile_=QStringLiteral("默认");
     double previewSpeed_=0;
     Route route_ = Route::None;
     Mapper mapper_;
-    std::shared_ptr<remoteplay::MouseStick> mouse_;
     QTimer timer_;
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
     bool quickReferenceEnabled_ = false;
-    bool quickReferenceOpen_ = false;
+    std::atomic_bool quickReferenceOpen_{false};
     int quickKey_ = DefaultQuickKey;
     int quickKeyDown_ = 0;
     std::array<QStringList, 2> notes_;
@@ -170,8 +174,7 @@ private:
     int learningSlot_ = 0;
     int learningModifier_ = 0;
     bool learningDriving_ = false;
-    int wheelKey_ = 0;
-    int64_t wheelReleaseUs_ = 0;
+    remoteplay::MappedController::Diagnostics inputDiagnostics_;
     QString feedback_;
 };
 

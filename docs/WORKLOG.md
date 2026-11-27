@@ -6,7 +6,11 @@
 
 本轮构建命令为 `py -3.11 -B -X utf8 scripts/acceptance/build-recording-handoff.py --task codex-keymap-feel-xbox-20261126 --root "E:/项目/Veyra/worktrees/keymap-feel-xbox-20261126" --jobs 2 --timeout 880 veyra_qml_ui veyra_qml_quick_tests veyra_ui_i18n_tests`。MSVC 链接和 pkg-config 对 E 盘 Unicode 参数出现编码问题，采用现有 `C:/veyra-deps` 兼容连接后通过。产物为 `E:/项目/Veyra/build/codex-keymap-feel-xbox-20261126`，私有试用为 `E:/项目/Veyra/tests/codex-keymap-feel-xbox-20261126`，日志为 `E:/项目/Veyra/logs/codex-keymap-feel-xbox-20261126`。同步 111 个着色器并复核一致。
 
-QML 提示、速查、窄窗与 4K 几何及编辑器验证通过。九种语言缺译与占位符错误均为零。Moonlight 135 项及 PS5 输入边界通过。实窗测试因前台为其他应用被输入锁定检查拒绝，记录与中英截图见 `E:/项目/Veyra/reports/codex-keymap-feel-xbox-20261126/FIRST-BATCH.md`。
+QML 提示、速查、窄窗与 4K 几何及编辑器验证通过。九种语言缺译与占位符错误均为零。Moonlight 135 项及 PS5 输入边界通过。用户确认切换前台后，真实 2560×1440 全屏验证 F2 开关速查时 W 仍生效，F1 释放锁定，提示超时后视频窗口恢复矩形。记录与中英截图见 `E:/项目/Veyra/reports/codex-keymap-feel-xbox-20261126/FIRST-BATCH.md`。
+
+第二批将键鼠捕获与状态采样移出 Qt 线程。旧档案维持旧曲线和转向设置，新建和重置瞄准按 800 DPI 和游戏曲线补偿初始化。回放 100,000 次采样与旧算法逐样本一致。30 FPS 的模拟跟枪波动由 0.408 降至 0.029，满杆占比由 61.1% 降至 0%。PS5 发包采样夹具在无界面心跳的 10.2 秒内测了 1,000 个按键边沿，按键 P50/P95/最大值为 2/2.5/2.5 ms。输入、转向与混合验证使用软件夹具。
+
+同目录构建 `build-20261126-200610` 通过，PS5 边界复测记录在 `stage2-input-boundary.log`。旧测试对切换布局后清空 W 的期望随行为更新。Qt Quick、Moonlight 和翻译的第二批日志在 `stage2-*.log`，鼠标回放数据见 `mouse-replay.json`。
 
 ## 2026-11-26 2.2.2 主线整合
 

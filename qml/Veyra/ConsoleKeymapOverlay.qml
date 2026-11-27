@@ -192,7 +192,7 @@ Item {
                     Repeater {
                         model: [
                             { title: qsTr("移动"), actions: overlay.showDriving ? [18,19,26,10] : [18,19,20,21,26,10] },
-                            { title: qsTr("驾驶"), actions: overlay.showDriving ? [17,16,20,21] : [] },
+                            { title: qsTr("驾驶"), actions: overlay.showDriving ? [17,16,20,21,33] : [] },
                             { title: qsTr("视角"), actions: [22,23,24,25], mouse: true },
                             { title: qsTr("战斗"), actions: overlay.showDriving ? [8,9,11,32] : [17,16,8,9,11,32] },
                             { title: qsTr("交互"), actions: [0,1,2,3] },

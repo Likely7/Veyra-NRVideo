@@ -23,6 +23,17 @@ public:
         double inputDeadzone = 0;
         bool invertY = false;
         bool mouseLook = true;
+        bool physicalAim = false, aimConfigured = false;
+        bool dpiConfirmed = true;
+        double aimFullSpeed = 25.0, aimHorizontal = 1.0, aimVertical = 1.0;
+        double gameDeadzoneX = 0.18, gameDeadzoneY = 0.18, gameCurve = 2.0;
+        int aimFps = 0; // 0 uses the source's measured or negotiated game cadence.
+        bool mixPhysical = true, graduatedSteering = false;
+        double steeringInitial = .40;
+        int steeringFullMs = 240, steeringReturnMs = 60, pedalRiseMs = 0;
+        bool mouseSteering = false, autoDriving = false;
+        double mouseSteerGain = 1.;
+        int autoDriveMs = 1200;
         bool operator==(const Tuning&) const = default;
     };
 
@@ -37,6 +48,23 @@ public:
     void resetMotion() {
         std::lock_guard lock(mutex_);
         clear();
+    }
+
+    void setGameFps(double fps) {
+        std::lock_guard lock(mutex_);
+        if (std::isfinite(fps) && fps >= 20. && fps <= 120.) gameFps_ = fps;
+    }
+
+    // Use the old saturation point when a saved profile opts into physical aim.
+    static double legacyFullSpeed(const Tuning& t) {
+        double low = 0., high = 1.;
+        for (int i = 0; i < 24; ++i) {
+            const double u = (low + high) * .5;
+            const double k = std::clamp((u - .10) / .35, 0., 1.);
+            if (u * std::lerp(1., t.turnBoost, k * k * (3. - 2. * k)) >= 1.) high = u;
+            else low = u;
+        }
+        return (high + t.inputDeadzone) * t.turnSpeed * 2.54 / (800. * t.horizontal);
     }
 
     void move(int dx, int dy, int64_t nowUs) {
@@ -58,7 +86,7 @@ public:
         const bool sparse = firstFine ||
             (gap >= 6500 && gap <= 70000 && count <= std::max(2., tuning_.dpi / 800.) &&
              count * 1000000. / gap <= 200. * tuning_.dpi / 800.);
-        if (gap > 70000 || (!sparse && gap > 16000) || (sparse && !sparse_)) used_ = 0;
+        if (!tuning_.physicalAim && (gap > 70000 || (!sparse && gap > 16000) || (sparse && !sparse_))) used_ = 0;
         int64_t interval=period_;
         if(firstFine)interval=28571; // One isolated count carries no report-period evidence.
         else if(sparse)interval=gap;
@@ -75,7 +103,7 @@ public:
         lastMove_=nowUs;
         newest_ = (newest_ + 1) % reports_.size();
         reports_[newest_] = {nowUs, std::max<int64_t>(interval, 125), double(dx), double(dy)};
-        used_ = std::min(used_ + 1, reports_.size());
+        used_ = std::min(used_ + 1, tuning_.physicalAim ? reports_.size() : size_t{256});
     }
 
     std::pair<int16_t, int16_t> sample(int64_t nowUs) {
@@ -107,6 +135,7 @@ public:
 
 private:
     std::pair<int16_t,int16_t> axes(int64_t nowUs,bool ads){
+        if (tuning_.physicalAim) return physicalAxes(nowUs, ads);
         if(!used_)return {};
         const auto& last=reports_[newest_];
         const auto age=std::max<int64_t>(0,nowUs-last.timeUs);
@@ -175,6 +204,39 @@ private:
         const double normal=32767./std::max(1.,std::hypot(x,y));
         return {int16_t(std::lround(x*normal)),int16_t(std::lround(y*normal))};
     }
+
+    std::pair<int16_t, int16_t> physicalAxes(int64_t nowUs, bool ads) {
+        const double fps = tuning_.aimFps > 0 ? double(tuning_.aimFps) : gameFps_;
+        const auto windowUs = int64_t(std::lround(1000000. / fps));
+        double dx = 0., dy = 0.;
+        for (size_t i = 0; i < used_; ++i) {
+            const auto& report = reports_[(newest_ + reports_.size() - i) % reports_.size()];
+            if (report.timeUs <= nowUs - windowUs) break;
+            if (report.timeUs <= nowUs) { dx += report.dx; dy += report.dy; }
+        }
+        const double reportScale = 1000000. / windowUs;
+        filteredX_ = dx * reportScale;
+        filteredY_ = dy * reportScale;
+        const double adsGain = ads ? tuning_.adsScale : 1.;
+        const double scale = 2.54 * adsGain / (tuning_.dpi * tuning_.aimFullSpeed);
+        const double x = filteredX_ * scale * tuning_.aimHorizontal;
+        const double y = filteredY_ * scale * tuning_.aimVertical * (tuning_.invertY ? -1. : 1.);
+        const double length = std::hypot(x, y);
+        if (length <= 0.) return {};
+        const double dirX = x / length, dirY = y / length;
+        const double response = std::pow(std::min(1., length), 1. / tuning_.gameCurve);
+        const double radial = std::hypot(dirX * tuning_.gameDeadzoneX, dirY * tuning_.gameDeadzoneY);
+        const auto axis = [&](double direction, double deadzone) {
+            const double radialOffset = radial * direction;
+            const double axialOffset = direction == 0. ? 0. : std::copysign(deadzone, direction);
+            const double offset = std::lerp(radialOffset, axialOffset, tuning_.deadzoneShape);
+            return (1. - response) * offset + response * direction;
+        };
+        const double outX = axis(dirX, tuning_.gameDeadzoneX);
+        const double outY = axis(dirY, tuning_.gameDeadzoneY);
+        const double normal = 32767. / std::max(1., std::hypot(outX, outY));
+        return {int16_t(std::lround(outX * normal)), int16_t(std::lround(outY * normal))};
+    }
     struct Report {
         int64_t timeUs;
         int64_t periodUs;
@@ -190,13 +252,14 @@ private:
 
     std::mutex mutex_;
     Tuning tuning_;
-    std::array<Report, 256> reports_{};
+    std::array<Report, 512> reports_{};
     size_t newest_ = 0, used_ = 0;
     int64_t lastSampleUs_ = -1;
     int64_t lastMove_=-1,period_=3000,adsSince_=0;
     bool knownPeriod_=false,sparse_=false,adsWas_=false,menu_=false,driving_=false;
     double carryX_=0,carryY_=0;
     double filteredX_ = 0, filteredY_ = 0;
+    double gameFps_ = 30.;
 };
 
 } // namespace veyra::remoteplay

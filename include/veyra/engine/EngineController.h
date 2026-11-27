@@ -33,7 +33,7 @@
 #include "veyra/engine/ScreenTextCapture.h"
 #include "veyra/engine/DisplayStateService.h"
 namespace veyra::source { struct RemotePlayConnectDesc; class RemotePlaySessionSource; struct MoonlightConnectDesc; class MoonlightSessionSource; struct XboxConnectDesc; class XboxSessionSource; }
-namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback;class MouseStick; }
+namespace veyra::remoteplay { struct ControllerState;struct ControllerFeedback;class MappedController; }
 namespace veyra::sink { struct RgbaImage; }
 namespace veyra::gfx { class D3D12DeviceContext; class CommandSlotRing; }
 namespace veyra::engine {
@@ -249,7 +249,10 @@ public:
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     void openRemotePlay(HWND, source::RemotePlayConnectDesc, PlayerOptions);
     remoteplay::ControllerFeedback remotePlayFeedback();
-    void remotePlayController(const remoteplay::ControllerState&, std::weak_ptr<remoteplay::MouseStick> mouse = {});
+    void remotePlayController(const remoteplay::ControllerState&);
+    bool remotePlayMappedController(uint64_t destination, std::weak_ptr<remoteplay::MappedController>);
+    bool remotePlayInputActive() const;
+    double mappedGameFps() const;
     void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
     void remotePlayLoginPin(std::string);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session

@@ -8,7 +8,7 @@
 #include <mutex>
 #include <thread>
 
-namespace veyra::remoteplay { class MouseStick; }
+namespace veyra::remoteplay { class MappedController; }
 
 namespace veyra::source {
 // Network/decoder owner keeps consuming reference pictures while the GPU is
@@ -25,7 +25,8 @@ public:
     SourceReadStatus read(pipeline::FramePacket&, const AVFrame**) override;
     bool seek(const pipeline::Rational&) override { return false; }
     void close() noexcept override;
-    void controller(remoteplay::ControllerState state, std::weak_ptr<remoteplay::MouseStick> mouse = {});
+    void controller(remoteplay::ControllerState state);
+    void setMappedController(std::weak_ptr<remoteplay::MappedController>, bool touchpadPressOnly);
     void loginPin(std::string pin);
     remoteplay::ControllerFeedback takeFeedback();
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;
@@ -48,7 +49,6 @@ private:
     struct ControllerUpdate {
         remoteplay::HostTime stamp;
         remoteplay::ControllerState state;
-        std::weak_ptr<remoteplay::MouseStick> mouse{};
     };
     mutable std::mutex mutex_;
     std::condition_variable ready_;
@@ -61,7 +61,8 @@ private:
     remoteplay::SessionInbox::Snapshot snapshot_;
     std::shared_ptr<const remoteplay::SessionInbox> telemetryInbox_;
     remoteplay::ControllerState controller_;
-    std::weak_ptr<remoteplay::MouseStick> controllerMouse_;
+    std::weak_ptr<remoteplay::MappedController> mappedController_;
+    bool mappedPressOnly_ = false;
     std::deque<ControllerUpdate> pendingControllers_;
     remoteplay::HostTime controllerStamp_=0;
     std::string pin_;

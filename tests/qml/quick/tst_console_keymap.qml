@@ -13,19 +13,19 @@ Item {
         property string quickKeyLabel: "F2"
         property string unlockLabel: "F1"
         property var bindings: {
-            let keys = Array(33).fill("—")
+            let keys = Array(34).fill("—")
             for (let action = 4; action <= 25; ++action) keys[action] = "K" + action
             keys[3] = "F"
             keys[18] = "W"
             return keys
         }
         property var alternateBindings: {
-            let keys = Array(33).fill("—")
+            let keys = Array(34).fill("—")
             keys[3] = "Ctrl+F"
             return keys
         }
         property var drivingBindings: {
-            let keys = Array(33).fill("—")
+            let keys = Array(34).fill("—")
             keys[17] = "Up"
             keys[16] = "Down"
             keys[20] = "A"

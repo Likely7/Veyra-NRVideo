@@ -779,6 +779,16 @@ Window {
         suppressed: dialogs.dialog !== "" || veyra.moonlightCaptured
         onEditRequested: dialogs.openPs5Mapping()
     }
+    Connections {
+        target: veyra.ps5Input
+        function onApplicationHotkeyRequested(chord) {
+            if (chord === veyra.shortcuts.screenshot) veyra.takeScreenshot()
+            if (chord === veyra.shortcuts.record) veyra.toggleRecording("shortcut")
+            if (chord === veyra.shortcuts.replay) veyra.saveReplay("shortcut")
+            if (chord === veyra.shortcuts.fullscreenStats && root.fullscreen && dialogs.dialog === "" && !screenCrop.editing)
+                veyra.setPreference("fullscreenFrameStats", !veyra.preferences.fullscreenFrameStats)
+        }
+    }
 
     // Stream statistics on and off. While a PC stream has the keyboard, the capture filter sees the keys
     // first and toggles the same switch.

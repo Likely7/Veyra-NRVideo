@@ -12,6 +12,7 @@ QtObject {
         qsTr("左摇杆 上"), qsTr("左摇杆 下"), qsTr("左摇杆 左"), qsTr("左摇杆 右"),
         qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"),
         qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"),
-        qsTr("触摸板左滑"), qsTr("触摸板右滑"), xbox ? "LS + RS" : "L3 + R3"
+        qsTr("触摸板左滑"), qsTr("触摸板右滑"), xbox ? "LS + RS" : "L3 + R3",
+        qsTr("半油门／刹车")
     ]
 }

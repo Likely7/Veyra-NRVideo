@@ -34,6 +34,10 @@ DialogLayer {
     Timer { interval: 3000; running: panel.confirmReset; onTriggered: panel.confirmReset=false }
     readonly property var pad: input ? input.padState : ({})
     readonly property var tune: input ? input.tuning : ({})
+    readonly property bool physicalAim: tune.physicalAim === true
+    readonly property real fullSpeed: physicalAim
+        ? Number(tune.aimFullSpeed ?? 25) / Number(tune.aimHorizontal ?? 1)
+        : Number(pad.legacyFullSpeed ?? 0)
     ConsolePadLabels { id: labels }
     readonly property var names: labels.names
     readonly property int quickLearningAction: names.length + 1
@@ -84,6 +88,14 @@ DialogLayer {
             current: panel.input && panel.input.keyboardEnabled ? "keys" : "pad"
             options: [{ id: "pad", label: qsTr("实体手柄") }, { id: "keys", label: qsTr("键鼠映射") }]
             onPicked: id => { if (panel.input) panel.input.keyboardEnabled = id === "keys" }
+        }
+    }
+    VRow {
+        label: qsTr("锁定时也转发实体手柄")
+        visible: panel.input?.keyboardEnabled === true
+        VSwitch {
+            checked: panel.tune.mixPhysical !== false
+            onToggled: on => panel.input?.setTuning("mixPhysical", on)
         }
     }
 
@@ -251,6 +263,7 @@ DialogLayer {
                         required property int index
                         required property string modelData
                         objectName: "ps5-bind-row-" + index
+                        visible: index !== 33 || panel.editDriving
                         columns: 3
                         uniformCellWidths: true
                         columnSpacing: 6
@@ -502,6 +515,25 @@ DialogLayer {
                     onToggled: on => panel.input?.setTuning("mouseLook", on)
                 }
             }
+            VRow {
+                label: qsTr("瞄准算法")
+                VSelect {
+                    title: qsTr("瞄准算法")
+                    options: [{id: "physical", label: qsTr("游戏曲线补偿")}, {id: "legacy", label: qsTr("旧算法")}]
+                    value: options[panel.physicalAim ? 0 : 1].label
+                    onPicked: id => panel.input?.selectAimAlgorithm(id === "physical")
+                }
+            }
+            VRow {
+                visible: panel.tune.dpiConfirmed === false
+                label: qsTr("确认鼠标 DPI")
+                hint: qsTr("请在下方填入鼠标驱动里的 DPI。默认值为 800。")
+                hintBelow: true
+                VButton {
+                    text: qsTr("确认")
+                    onClicked: panel.input?.setTuning("dpiConfirmed", true)
+                }
+            }
             VSeg { current: panel.advanced?"advanced":"basic"
                 options: [{id:"basic",label:qsTr("基础")},{id:"advanced",label:qsTr("进阶")}]
                 onPicked: id => panel.advanced=id==="advanced"
@@ -520,13 +552,36 @@ DialogLayer {
                     {id:"curve", title:qsTr("瞄准曲线"), min:0.3, max:2.5, step:0.05, scale:1, initial:1, decimals:2, unit:""},
                     {id:"inputDeadzone", title:qsTr("输入死区"), min:0, max:0.1, step:0.005, scale:100, initial:0, decimals:1, unit:"%"},
                     {id:"deadzone", title:qsTr("死区补偿"), min:0, max:0.3, step:0.01, scale:100, initial:.08, decimals:0, unit:"%"},
-                    {id:"smoothing", title:qsTr("平滑时间"), min:0, max:32, step:1, scale:1, initial:0, decimals:0, unit:" ms"}
+                    {id:"smoothing", title:qsTr("平滑时间"), min:0, max:32, step:1, scale:1, initial:0, decimals:0, unit:" ms"},
+                    {id:"aimFullSpeed",title:qsTr("满杆手速"),min:.25,max:150,step:.25,scale:1,initial:25,decimals:1,unit:" cm/s"},
+                    {id:"aimHorizontal",title:qsTr("横向灵敏度"),min:.1,max:6,step:.05,scale:1,initial:1,decimals:2,unit:"×"},
+                    {id:"aimVertical",title:qsTr("纵向灵敏度"),min:.1,max:6,step:.05,scale:1,initial:1,decimals:2,unit:"×"},
+                    {id:"gameDeadzoneX",title:qsTr("游戏横向死区"),min:0,max:.50,step:.01,scale:100,initial:.18,decimals:0,unit:"%"},
+                    {id:"gameDeadzoneY",title:qsTr("游戏纵向死区"),min:0,max:.50,step:.01,scale:100,initial:.18,decimals:0,unit:"%"},
+                    {id:"gameCurve",title:qsTr("游戏响应曲线"),min:1,max:3,step:.05,scale:1,initial:2,decimals:2,unit:""},
+                    {id:"steeringInitial",title:qsTr("初始转向"),min:.2,max:.6,step:.01,scale:100,initial:.4,decimals:0,unit:"%"},
+                    {id:"steeringFullMs",title:qsTr("转向加满时间"),min:80,max:400,step:5,scale:1,initial:240,decimals:0,unit:" ms"},
+                    {id:"steeringReturnMs",title:qsTr("转向回正时间"),min:30,max:200,step:5,scale:1,initial:60,decimals:0,unit:" ms"},
+                    {id:"pedalRiseMs",title:qsTr("油门／刹车上升时间"),min:0,max:300,step:5,scale:1,initial:0,decimals:0,unit:" ms"},
+                    {id:"mouseSteerGain",title:qsTr("鼠标转向灵敏度"),min:.1,max:6,step:.1,scale:1,initial:1,decimals:1,unit:"×"},
+                    {id:"autoDriveMs",title:qsTr("进出载具切换延时"),min:200,max:3000,step:50,scale:1,initial:1200,decimals:0,unit:" ms"}
                 ]
                 delegate: VRow {
                     required property var modelData
                     enabled: panel.tune.mouseLook!==false
                     opacity: enabled?1:.45
-                    visible: panel.advanced===["curve","turnBoost","turnSpeed","smoothing","inputDeadzone","walkScale","adsDelayMs","deadzoneShape"].includes(modelData.id)
+                    visible: {
+                        const id = modelData.id
+                        if (id === "mouseSteerGain") return panel.editDriving && panel.tune.mouseSteering === true
+                        if (id === "autoDriveMs") return panel.editDriving && panel.tune.autoDriving === true
+                        if (id.startsWith("steering")) return panel.editDriving && panel.tune.graduatedSteering === true
+                        if (id === "pedalRiseMs") return panel.editDriving
+                        if (["aimFullSpeed", "aimHorizontal", "aimVertical"].includes(id)) return panel.physicalAim && !panel.advanced
+                        if (["gameDeadzoneX", "gameDeadzoneY", "gameCurve"].includes(id)) return panel.physicalAim && panel.advanced
+                        if (panel.physicalAim && ["horizontal","vertical","curve","turnBoost","turnSpeed","smoothing","inputDeadzone","deadzone"].includes(id))
+                            return false
+                        return panel.advanced === ["curve","turnBoost","turnSpeed","smoothing","inputDeadzone","walkScale","adsDelayMs","deadzoneShape"].includes(id)
+                    }
                     label: modelData.title
                     hint: modelData.id === "dpi" ? qsTr("与鼠标驱动的档位填同一个值。想调快慢，请调灵敏度。") :
                           modelData.id === "turnSpeed" ? qsTr("数值越小，越容易快速推满右摇杆。") : ""
@@ -559,6 +614,57 @@ DialogLayer {
                 }
             }
             VRow {
+                visible: panel.physicalAim && panel.advanced
+                label: qsTr("游戏帧率")
+                VSelect {
+                    title: qsTr("游戏帧率")
+                    options: [{id: "0", label: qsTr("自动")}, {id: "30", label: "30 FPS"}, {id: "60", label: "60 FPS"}]
+                    value: options.find(item => item.id === String(panel.tune.aimFps ?? 0))?.label ?? ""
+                    onPicked: id => panel.input?.setTuning("aimFps", Number(id))
+                }
+            }
+            VRow {
+                visible: panel.editDriving
+                label: qsTr("分段转向")
+                VSwitch {
+                    checked: panel.tune.graduatedSteering === true
+                    onToggled: on => panel.input?.setTuning("graduatedSteering", on)
+                }
+            }
+            VRow {
+                visible: panel.editDriving
+                label: qsTr("驾驶时鼠标转向")
+                VSwitch {
+                    checked: panel.tune.mouseSteering === true
+                    onToggled: on => panel.input?.setTuning("mouseSteering", on)
+                }
+            }
+            VRow {
+                visible: panel.editDriving
+                label: qsTr("进出载具时切换布局")
+                hint: qsTr("按下 %1 对应的键后延时切换。").arg(panel.names[3])
+                hintBelow: true
+                VSwitch {
+                    checked: panel.tune.autoDriving === true
+                    onToggled: on => panel.input?.setTuning("autoDriving", on)
+                }
+            }
+            VRow {
+                visible: panel.editDriving && !panel.showList
+                label: panel.names[33]
+                RowLayout {
+                    Repeater {
+                        model: 2
+                        VButton {
+                            required property int index
+                            readonly property bool ps5LearningControl: true
+                            text: panel.binding(33, index)
+                            onClicked: panel.choose(33, index)
+                        }
+                    }
+                }
+            }
+            VRow {
                 enabled: panel.tune.mouseLook!==false; visible: !panel.advanced
                 label: qsTr("反转纵向")
                 VSwitch { checked: panel.tune.invertY === true; onToggled: on => panel.input?.setTuning("invertY", on) }
@@ -578,11 +684,11 @@ DialogLayer {
                 VSelect {title: qsTr("鼠标陀螺仪"); options: [{id:"0",label:qsTr("关闭")},{id:"1",label:qsTr("始终开启")},{id:"2",label:qsTr("仅开镜")}]
                     value: options[Number(panel.tune.gyro||0)].label; onPicked: id=>panel.input.setTuning("gyro",Number(id))}
             }
-            VRow {visible: panel.advanced; enabled: panel.tune.mouseLook!==false; label: qsTr("快速转身补偿")
+            VRow {visible: panel.advanced && !panel.physicalAim; enabled: panel.tune.mouseLook!==false; label: qsTr("快速转身补偿")
                 VSwitch {checked: panel.tune.carry===true; onToggled: on=>panel.input.setTuning("carry",on)}
             }
             Canvas {
-                Layout.fillWidth: true; implicitHeight: 54; visible: panel.advanced
+                Layout.fillWidth: true; implicitHeight: 54; visible: panel.advanced && !panel.physicalAim
                 property var settings: panel.tune
                 onSettingsChanged: requestPaint()
                 onWidthChanged: requestPaint()
@@ -600,14 +706,21 @@ DialogLayer {
                     c.stroke()
                 }
             }
-            Text { visible: panel.advanced; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
+            Text { visible: panel.advanced && !panel.physicalAim; Layout.fillWidth: true; wrapMode: Text.Wrap; color: Theme.t3
                 text: qsTr("曲线小于 1 提高低速响应；等于 1 为线性；大于 1 便于微调。") }
+            Text {
+                visible: panel.physicalAim && panel.advanced
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.t3
+                text: qsTr("游戏内灵敏度决定转速上限。能调的话，降低游戏死区、关闭加速、选线性曲线。改动后请重新设置 Veyra 中的游戏死区和曲线。")
+            }
             Canvas {
                 visible: !!panel.input?.previewing
                 Layout.alignment: Qt.AlignHCenter; implicitWidth: 76; implicitHeight: 76
                 property real xAxis: panel.pad.rightX||0
                 property real yAxis: panel.pad.rightY||0
-                property real dz: panel.tune.deadzone||0
+                property real dz: panel.physicalAim ? (panel.tune.gameDeadzoneX ?? .18) : (panel.tune.deadzone ?? 0)
                 onXAxisChanged: requestPaint()
                 onYAxisChanged: requestPaint()
                 onDzChanged: requestPaint()
@@ -621,8 +734,38 @@ DialogLayer {
                     c.beginPath();c.arc(m+r*xAxis,m+r*yAxis,3.5,0,2*Math.PI);c.fill()
                 }
             }
-            Text {visible: !!panel.input?.previewing; color: Math.hypot(panel.pad.rightX||0,panel.pad.rightY||0)>.98?"#ffad65":Theme.t1
-                text: Math.round(panel.pad.speed||0)+" counts/s   X "+Math.round(100*(panel.pad.rightX||0))+"%   Y "+Math.round(100*(panel.pad.rightY||0))+"%   ADS "+(panel.pad.ads?"●":"○") }
+            Text {
+                visible: panel.tune.mouseLook !== false && panel.fullSpeed > 0
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.t2
+                text: qsTr("横向约 %1 cm/s 时推满右摇杆").arg(panel.fullSpeed.toFixed(1))
+            }
+            Text {
+                visible: panel.input?.previewing === true
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Math.hypot(panel.pad.rightX || 0, panel.pad.rightY || 0) > .98 ? "#ffad65" : Theme.t1
+                text: qsTr("手速 %1 cm/s · 右摇杆 %2%").arg(Number(panel.pad.speedCms ?? 0).toFixed(1))
+                    .arg(Math.round(100 * Math.hypot(panel.pad.rightX || 0, panel.pad.rightY || 0)))
+            }
+            Text {
+                visible: panel.pad.timingReady === true
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: Theme.t2
+                text: qsTr("最近 10 秒 · 按键 P50/P95 %1 ms · 鼠标 P50/P95 %2 ms · 发送间隔 P95 %3 ms · 满杆 %4%")
+                    .arg(panel.pad.keyCount ? panel.pad.keyP50.toFixed(1) + "/" + panel.pad.keyP95.toFixed(1) : "—")
+                    .arg(panel.pad.mouseCount ? panel.pad.mouseP50.toFixed(1) + "/" + panel.pad.mouseP95.toFixed(1) : "—")
+                    .arg(Number(panel.pad.sendP95 ?? 0).toFixed(1)).arg(Math.round(panel.pad.fullStickPct ?? 0))
+            }
+            Text {
+                visible: (panel.pad.fullStickPct ?? 0) > 30
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                color: "#ffad65"
+                text: qsTr("右摇杆经常推满。可降低映射灵敏度，或调高游戏内灵敏度。")
+            }
             VButton {
                 objectName: "ps5-reset-mouse"
                 Layout.alignment: Qt.AlignRight

@@ -21,7 +21,7 @@ public:
         Cross, Circle, Square, Triangle, Left, Right, Up, Down,
         L1, R1, L3, R3, Options, Share, Touchpad, PS, L2, R2,
         LeftUp, LeftDown, LeftLeft, LeftRight, RightUp, RightDown, RightLeft, RightRight,
-        LeftSlow, MenuStick, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, StickClickBoth, ActionCount
+        LeftSlow, MenuStick, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, StickClickBoth, HalfPedal, ActionCount
     };
     static constexpr int MouseLeft = 257, MouseMiddle = 258, MouseRight = 259;
     static constexpr int MouseBack = 260, MouseForward = 261;
@@ -75,8 +75,16 @@ public:
     void selectDriving(bool driving) {
         if (driving_ == driving) return;
         driving_ = driving;
-        // A held key belongs to the old layout until physically released.
         clearActions();
+        const int mods = modifiers();
+        for (int key = 1; key < WheelUp; ++key) {
+            if (!held_[key] || encode(key, mods) == driveKey_) continue;
+            const auto [action, matchedModifiers] = matchAction(key, mods);
+            if (action < 0 || (action >= SwipeUp && action <= SwipeRight) ||
+                (activeToggles() & (uint64_t{1} << action))) continue;
+            active_[key] = action;
+            activeModifiers_[key] = matchedModifiers;
+        }
     }
     bool setDriveKey(int binding) {
         if (!validBinding(binding, tuning_.unlock != 0)) return false;
@@ -131,32 +139,17 @@ public:
 
     // A primary key selects its action on press; release never changes it to
     // a different action, even if a shortcut modifier has already been lifted.
-    bool digital(int key, bool down) {
+    bool digital(int key, bool down, int64_t now = clockUs()) {
         if (key < 1 || key > WheelRight || held_[key] == down) return false;
         held_[key] = down;
         const int currentModifiers = modifiers();
         if (down) {
-            int best = -1;
-            int matchedAction = -1;
-            int matchedModifiers = 0;
             const int chord = encode(key, currentModifiers);
             if (driveKey_ && chord == driveKey_) {
                 selectDriving(!driving_);
                 return true;
             }
-            const auto& layout = driving_ ? drivingBindings_ : bindings_;
-            for (const auto& keys : layout) {
-                for (int action = 0; action < ActionCount; ++action) {
-                    const int binding = keys[action];
-                    const int mods = binding >> 9;
-                    if ((binding & KeyMask) != key || (mods & (chord >> 9)) != mods) continue;
-                    const int rank = std::popcount(unsigned(mods));
-                    if (rank <= best) continue;
-                    best = rank;
-                    matchedAction = action;
-                    matchedModifiers = mods;
-                }
-            }
+            const auto [matchedAction, matchedModifiers] = matchAction(key, currentModifiers);
             if (matchedAction < 0) return false;
             const auto bit = uint64_t{1} << matchedAction;
             const bool toggle = (activeToggles() & bit) != 0;
@@ -167,7 +160,7 @@ public:
                 if (toggle) toggled_ ^= bit;
                 if (swipe) {
                     swipeAction_ = matchedAction;
-                    swipeStart_ = clockUs();
+                    swipeStart_ = now;
                     touchId_ = (touchId_ + 1) % 127;
                 }
             }
@@ -211,16 +204,23 @@ public:
         setStick(pad.leftX, pad.leftY, int(on[LeftRight]) - int(on[LeftLeft]),
                   int(on[LeftDown]) - int(on[LeftUp]));
         if (driving_) {
-            const double dt = steerAt_ ? std::clamp(double(now - steerAt_) / 80000., 0., 1.) : 0;
+            const double dtMs = steerAt_ ? std::clamp(double(now - steerAt_) / 1000., 0., 300.) : 0;
             steerAt_ = now;
             const double target = pad.leftX / 32767.;
-            if ((target < 0 && steer_ > 0) || (target > 0 && steer_ < 0)) steer_ = 0;
-            steer_ += std::clamp(target - steer_, -dt, dt);
+            if (tuning_.graduatedSteering) updateSteering(target, dtMs);
+            else {
+                const double dt = std::min(1., dtMs / 80.);
+                if (target * steer_ < 0.) steer_ = 0.;
+                steer_ += std::clamp(target - steer_, -dt, dt);
+            }
             pad.leftX = int16_t(std::lround(steer_ * 32767.));
+            const double limit = on[HalfPedal] ? 128. : 255.;
+            pad.l2 = rampPedal(l2_, on[L2] ? limit : 0., dtMs);
+            pad.r2 = rampPedal(r2_, on[R2] ? limit : 0., dtMs);
         }
         if(on[LeftSlow]){pad.leftX=int16_t(std::lround(pad.leftX*tuning_.walkScale));pad.leftY=int16_t(std::lround(pad.leftY*tuning_.walkScale));}
         if(swipeAction_>=SwipeUp){
-            const double t=double(clockUs()-swipeStart_)/90000.;
+            const double t=double(now-swipeStart_)/90000.;
             if(t>=0 && t<1.){const double d=(std::min(1.,t*1.25)-.5)*.75;
                 pad.touches[0]={int8_t(touchId_),uint16_t(960+1920*d*(int(swipeAction_==SwipeRight)-int(swipeAction_==SwipeLeft))),
                     uint16_t(464+928*d*(int(swipeAction_==SwipeDown)-int(swipeAction_==SwipeUp)))};
@@ -241,11 +241,50 @@ public:
     KeyboardMousePad() { reset(); }
 
 private:
+    std::pair<int, int> matchAction(int key, int modifiers) const {
+        const int chordModifiers = encode(key, modifiers) >> 9;
+        const auto& layout = driving_ ? drivingBindings_ : bindings_;
+        int bestRank = -1, result = -1, required = 0;
+        for (const auto& slot : layout) {
+            for (int action = 0; action < ActionCount; ++action) {
+                const int binding = slot[action], mods = binding >> 9;
+                if ((binding & KeyMask) != key || (mods & chordModifiers) != mods) continue;
+                const int rank = std::popcount(unsigned(mods));
+                if (rank <= bestRank) continue;
+                bestRank = rank;
+                result = action;
+                required = mods;
+            }
+        }
+        return {result, required};
+    }
+    void updateSteering(double target, double ms) const {
+        if (target == 0. || target * steer_ < 0.) {
+            const double toCenter = std::abs(steer_) * tuning_.steeringReturnMs;
+            steer_ = std::copysign(std::max(0., std::abs(steer_) - ms / tuning_.steeringReturnMs), steer_);
+            ms = std::max(0., ms - toCenter);
+            if (target == 0. || ms == 0.) return;
+        }
+        double amount = std::abs(steer_);
+        const double initial = tuning_.steeringInitial;
+        if (amount < initial) {
+            const double toInitial = (initial - amount) * (40. / initial);
+            amount += std::min(ms, toInitial) * (initial / 40.);
+            ms = std::max(0., ms - toInitial);
+        }
+        amount += ms * (1. - initial) / tuning_.steeringFullMs;
+        steer_ = std::copysign(std::min(amount, std::abs(target)), target);
+    }
+    uint8_t rampPedal(double& value, double target, double ms) const {
+        value = tuning_.pedalRiseMs > 0 && value < target
+            ? std::min(target, value + 255. * ms / tuning_.pedalRiseMs) : target;
+        return uint8_t(std::lround(value));
+    }
     void clearActions() {
         active_.fill(-1);
         toggled_ = 0;
         swipeAction_ = -1;
-        steer_ = 0;
+        steer_ = l2_ = r2_ = 0;
         steerAt_ = 0;
     }
     static void setStick(int16_t& xAxis, int16_t& yAxis, double x, double y) {
@@ -257,7 +296,7 @@ private:
     std::array<Bindings, SlotCount> drivingBindings_{DrivingDefaults, {}};
     int driveKey_ = DefaultDriveKey;
     bool driving_ = false;
-    mutable double steer_ = 0;
+    mutable double steer_ = 0, l2_ = 0, r2_ = 0;
     mutable int64_t steerAt_ = 0;
     std::array<bool, WheelRight + 1> held_{};
     std::array<int, WheelRight + 1> active_{};
