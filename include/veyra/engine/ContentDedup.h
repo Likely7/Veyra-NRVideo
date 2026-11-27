@@ -81,9 +81,10 @@ public:
         const bool repeated=*picture==kept_;
         if(transport>=150000&&transport<=185200)learnHalfRate(pts,transport,captureSequence,repeated);
         if(repeated){
-            // Keep one normal 30 Hz source slot. At typical 60 Hz transport,
-            // allow two duplicate slots for 24/25 Hz content before holding.
-            const auto wait=transport>=250000?transport*7/8:transport*23/8;
+            // Wait at least one 24 Hz content period before holding at high
+            // transport rates, where an ordinary picture spans more samples.
+            constexpr int64_t slowContentPeriod=416667;
+            const auto wait=transport>=250000?transport*7/8:std::max(transport*23/8,slowContentPeriod);
             if(!holding_&&pts-lastKeptSample_<wait){
                 ++stats_.repeats;d.keep=false;d.reason="repeat";return d;
             }
