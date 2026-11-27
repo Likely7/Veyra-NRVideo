@@ -34,7 +34,7 @@ public:
     sink::CaptureAudioState audioState() const { return audio_.snapshot(); }
     void setAudioGain(float value) { audio_.setGain(value); }
     void setAudioSync(unsigned mode, int offset) { audio_.setSync(mode, offset); }
-    void videoPresented(double pts, int64_t host) { audio_.videoPresented(pts, host); }
+    void videoPresented(double pts, int64_t host, std::optional<int64_t> arrival = {}) { audio_.videoPresented(pts, host, arrival); }
     void videoReset(bool resetAudio=true) { audio_.videoReset(resetAudio); }
 private:
     friend struct RemotePlaySessionSourceTestAccess;

@@ -39,14 +39,21 @@ std::optional<EstimatedStamp> RemotePlayClock::video(std::uint64_t index,HostTim
     if(!delta || videoAnchor_>std::numeric_limits<std::int64_t>::max()-*delta)return {};
     const auto nominal=videoAnchor_+*delta;
     const auto error=(arrival-origin_)-nominal;
-    while(!phaseWindow_.empty()&&phaseWindow_.front().arrival<=arrival-10000000)phaseWindow_.pop_front();
+    // 200 ms lower-envelope window (6 frames at 30 fps, 12 at 60 fps): filters
+    // transient network jitter bursts while keeping lag tightly bounded during
+    // genuine console VFR dips (a 1 s window would lag by ~200 ms at 24 fps).
+    while(!phaseWindow_.empty()&&phaseWindow_.front().arrival<=arrival-2000000)phaseWindow_.pop_front();
     while(!phaseWindow_.empty()&&phaseWindow_.back().error>=error)phaseWindow_.pop_back();
     phaseWindow_.push_back({arrival,error});
-    // At most 0.5% slew; even after a jitter burst successive PTS cannot
-    // reverse or abruptly jump. A real network gap still resets above.
+    // Lower-envelope PLL: keep backward slew tight (0.5%) so bursty network
+    // arrivals never bunch or reverse PTS, while allowing positive lag beyond
+    // a small jitter band to track genuine console VFR dips (e.g. a 30 fps
+    // PS5 game dipping to 25-29.5 fps) without unbounded arrival-vs-PTS drift.
     const auto step=10000000/static_cast<std::int64_t>(fps_);
-    const auto maxSlew=step/200;
-    phase_+=std::clamp(phaseWindow_.front().error-phase_,-maxSlew,maxSlew);
+    const auto fineSlew=step/200;
+    const auto deltaPhase=phaseWindow_.front().error-phase_;
+    const auto forwardCap=deltaPhase>step/4?std::clamp(deltaPhase/2,fineSlew,step/2):fineSlew;
+    phase_+=std::clamp(deltaPhase,-fineSlew,forwardCap);
     if(phase_>0&&nominal>std::numeric_limits<std::int64_t>::max()-phase_)return {};
     auto pts=nominal+phase_;
     if(index!=firstIndex_&&!gap)pts=std::max(pts,lastPts_+1);

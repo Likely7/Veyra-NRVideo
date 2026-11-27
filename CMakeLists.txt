@@ -959,6 +959,10 @@ if(VEYRA_FFMPEG_ROOT AND EXISTS "${VEYRA_FFMPEG_ROOT}/include/libavformat/avform
   target_compile_definitions(veyra_adaptive_fg_multiplier_tests PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
   target_include_directories(veyra_adaptive_fg_multiplier_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_link_libraries(veyra_adaptive_fg_multiplier_tests PRIVATE veyra_base veyra_engine ${FFMPEG_LIBRARIES})
+  add_executable(veyra_remoteplay_vfr_sync_tests tests/unit/RemotePlayVfrSyncTests.cpp src/remoteplay/Timeline.cpp)
+  target_compile_features(veyra_remoteplay_vfr_sync_tests PRIVATE cxx_std_20)
+  target_compile_options(veyra_remoteplay_vfr_sync_tests PRIVATE /utf-8)
+  target_include_directories(veyra_remoteplay_vfr_sync_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   # Live HUD Lock on a real D3D12 device (ported from PushFPS).
   add_executable(veyra_hud_lock_gpu_tests tests/integration/HudLockGpuTests.cpp)
   target_compile_features(veyra_hud_lock_gpu_tests PRIVATE cxx_std_20)
