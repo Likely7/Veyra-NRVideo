@@ -2214,3 +2214,11 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 对比后保留 512 KiB，归档校验采用 Veyra 已有 OpenSSL Crypto 的 EVP SHA-256。签名清单与安装子进程的独立复验沿用原实现。`compare-tuning.ps1 -Copies 4` 在同机 296.4 MB 回环测得，1 MiB 和 2 MiB 缓冲的 302 下载约 1.39–1.45 秒，工作集升到约 22 或 24 MiB。512 KiB 加 EVP 时，经 302 从基线的 1.382–1.403 秒降至 0.408–0.430 秒，界面最大间隔从 890–1081 ms 降至约 24 ms，工作集约 21 MiB。直连从 1.423–1.517 秒降至 0.442–0.454 秒。模拟 100 Mbps 的直连及 302 在 74.1 MB 下约 5.94–5.96 秒，两版本 P95 均约 4.6 ms。 [缓冲和 SHA-256 对照](<E:/项目/Veyra/logs/github-update-20261126/tuning-buffer.log>) · [100 Mbps 原始日志](<E:/项目/Veyra/logs/github-update-20261126/tuning-limited.log>)
 
 最终源码独立编译，12 路下载、失败与实际更新器用例重跑全过。以 `compare-tuning.ps1 -Limited -OpenSsl -RedirectOnly -Copies 1 -PairCount 2` 复查同一 100 Mbps 302，流式下载期间最大心跳间隔从 5.45–5.95 ms 到 5.21–5.66 ms，进入安装的交接间隔从 32.15–33.83 ms 到 22.40–22.44 ms，首次的单次 57 ms 峰值未复现。 [最终功能回归](<E:/项目/Veyra/logs/github-update-20261126/evp-archive-regressions.log>) · [交接相位对照](<E:/项目/Veyra/logs/github-update-20261126/tuning-limited-recheck.log>)
+
+## 2026-11-27 GitHub 审查续办、分项验收和积压关闭
+
+从本地 main `e9a60ec3` 开始，复查 11 月 26 日的 47 个 PR、当天新增修复和 173 条当时仍开放的 Issue。复用 `build/codex-github-fixes-20261126` 与同任务单套应用。`3ed0d003` 纳入 PS5 唤醒、Xbox 控制器、加密的网络历史、虚拟摄像机和 WASAPI 增量，`05c47411` 纳入 CFR、自启、PS5 触觉和 Xbox D3D11VA。`3f710380` 集成 #343 的 FSR 版本和 RCAS、#253 的 RIFE 中点预算、#356 的本机授权录制、#275 的 PS5 启动音画、#262 的 LAN 登录 PIN、#331 的 Unicode 着色器和部分预设，以及普通视频截图。 [验证报告](<E:/项目/Veyra/reports/codex-github-completion-20261127/RESULTS.md>) · [关闭依据](<E:/项目/Veyra/reports/codex-github-completion-20261127/CLOSED.md>) · [保留的范围](<E:/项目/Veyra/reports/codex-github-completion-20261127/OPEN-PR-REVIEW.md>)
+
+Windows Release 使用 `build-local.py` 和 `-j2`，授权与性能测试使用独立配置。节点预设初次适配误用了主线已删除的字段，修正为保全现有 VFG 后端、档位及倍数。更新 PS5 会话指针后同步修复产品边界测试的旧字段名。最终 `build-20261127-014724` 的 11 个目标通过，3,568 条文案九语无缺失。 [构建日志](<E:/项目/Veyra/logs/codex-github-fixes-20261126/build-20261127-014724/compile.log>) · [预设、回环与 UI 回归](<E:/项目/Veyra/tests/codex-github-completion-20261127/candidate-cpu-20261127-014815/result.json>)
+
+4K60 文件截图四轮的预览跳帧 16 → 0，PNG 后台完成中位 121.4 → 146.0 ms。GTA 1440p29.97 加 VFG 2× 的最终 A–B–B–A 均约 59.67 FPS，候选 1% Low 58.66–58.83 FPS，无超过 50 ms 的送显间隔。CFR 30/60、F9、32 位/64 位虚拟摄像机、D3D11VA、PS5 静音 WASAPI、Whisper/Parakeet 全模型都有原始验收记录。实体采集卡、主机、Arc、管理员安装和缺现场证据的报告保留复测。 [最终实片与 HDR 截图](<E:/项目/Veyra/logs/codex-github-fixes-20261126/final-abba-20261127-014913>)
