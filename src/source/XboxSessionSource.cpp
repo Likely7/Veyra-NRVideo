@@ -386,12 +386,17 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
                     std::chrono::system_clock::now().time_since_epoch()).count();
             };
             const xbox::StreamApi::RenewToken renew = [&]() -> std::string {
-                if (cancelled() || q.ended.load() || Clock::now() < nextRenewal) return {};
-                nextRenewal = Clock::now() + std::chrono::minutes(2);
+                const auto now = Clock::now();
+                if (cancelled() || q.ended.load() || now < nextRenewal) return {};
+                nextRenewal = now + std::chrono::minutes(2);
                 try {
-                    auto renewed = q.desc.account->renewStreamingAccess(q.gsToken, *q.http);
-                    expiresAt = renewed.expiresAt;
-                    q.gsToken = std::move(renewed.gsToken);
+                    auto renewed = q.desc.account->tryRenewStreamingAccess(q.gsToken, *q.http);
+                    if (!renewed) {
+                        nextRenewal = now + std::chrono::seconds(30);
+                        return {};
+                    }
+                    expiresAt = renewed->expiresAt;
+                    q.gsToken = std::move(renewed->gsToken);
                     log::info("xbox", std::format("streaming lease refreshed; valid for {} s", expiresAt - nowUnix()));
                     return q.gsToken;
                 } catch (const std::exception& e) {

@@ -291,25 +291,31 @@ void accountTests() {
         auto release = releaseRequest.get_future();
         renewal->beforeReply = [&] { requestEntered.set_value(); release.wait(); };
         auto failedRenewal = std::async(std::launch::async, [&] {
-            try { account.renewStreamingAccess("GS", *renewal); }
+            try { account.tryRenewStreamingAccess("GS", *renewal); }
             catch (const ServiceError& e) { return e.status == 503; }
             return false;
         });
         const bool pending = requestPending.wait_for(std::chrono::seconds(1)) == std::future_status::ready;
-        auto signedIn = std::async(std::launch::async, [&] { return account.signedIn(); });
-        const bool statusReady = signedIn.wait_for(std::chrono::milliseconds(200)) == std::future_status::ready;
+        FakeTransport competing;
+        auto status = std::async(std::launch::async, [&] {
+            if (!account.signedIn()) return false;
+            try { return !account.tryRenewStreamingAccess("GS", competing) && competing.seen.empty(); }
+            catch (const std::exception&) { return false; }
+        });
+        const bool statusReady = status.wait_for(std::chrono::seconds(1)) == std::future_status::ready;
         releaseRequest.set_value();
-        check(pending && statusReady && signedIn.get(), "UI sign-in status is available while token renewal blocks in HTTP");
+        check(pending && statusReady && status.get(), "UI status stays responsive and a concurrent renewal skips a busy account without sending HTTP");
         check(failedRenewal.get() && account.signedIn() && account.streamingAccess().gsToken == "GS",
               "an unavailable renewal endpoint preserves the valid lease and sign-in");
         renewal->beforeReply = {};
         renewal->add("xsts.auth.xboxlive.com", "/xsts/authorize", 200, R"({"Token":"GSSV2"})");
         renewal->add("xhome.gssv-play-prod.xboxlive.com", "/v2/login/user", 200,
                      R"({"offeringSettings":{"regions":[{"name":"EastAsia","baseUri":"https://eas.core.gssv-play-prodxhome.xboxlive.com/","isDefault":true}]},"gsToken":"GS2","durationInSeconds":14400})");
-        const auto access2 = account.renewStreamingAccess("GS", *renewal);
-        check(access2.gsToken == "GS2" && access2.expiresAt == now + 14400 && account.streamingAccess().gsToken == "GS2",
+        const auto access2 = account.tryRenewStreamingAccess("GS", *renewal);
+        check(access2 && access2->gsToken == "GS2" && access2->expiresAt == now + 14400 && account.streamingAccess().gsToken == "GS2",
               "forced renewal uses the session transport and publishes the replacement lease");
-        check(account.renewStreamingAccess("GS", *renewal).gsToken == "GS2" && renewal->seen.size() == 3,
+        const auto reused = account.tryRenewStreamingAccess("GS", *renewal);
+        check(reused && reused->gsToken == "GS2" && renewal->seen.size() == 3,
               "a caller holding a stale lease reuses the already renewed one");
 
         http->add("login.live.com", "/oauth20_token.srf", 200, R"({"access_token":"LPT","refresh_token":"RT-X"})");

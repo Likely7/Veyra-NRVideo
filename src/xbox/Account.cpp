@@ -279,8 +279,9 @@ StreamingAccess Account::streamingAccess() {
     return fetchStreamingAccess(*http_);
 }
 
-StreamingAccess Account::renewStreamingAccess(std::string_view previousToken, HttpsTransport& transport) {
-    std::lock_guard lock(mutex_);
+std::optional<StreamingAccess> Account::tryRenewStreamingAccess(std::string_view previousToken, HttpsTransport& transport) {
+    std::unique_lock lock(mutex_, std::try_to_lock);
+    if (!lock) return std::nullopt;
     if (streaming_ && streaming_->gsToken != previousToken && streaming_->expiresAt - 120 > clock_()) return *streaming_;
     return fetchStreamingAccess(transport);
 }

@@ -71,9 +71,9 @@ public:
     // A streaming token for the home (console) offering. Refreshes everything that has expired.
     // Throws ServiceError / NetworkError / std::runtime_error.
     StreamingAccess streamingAccess();
-    // Refresh the lease used by a session through that session's cancellable transport.
-    // Another caller's live replacement can be reused. A failed refresh keeps a valid lease.
-    StreamingAccess renewStreamingAccess(std::string_view previousToken, HttpsTransport& transport);
+    // Use the session transport to renew its lease. An account operation in
+    // progress defers renewal to the next keepalive. A valid replacement can be reused.
+    std::optional<StreamingAccess> tryRenewStreamingAccess(std::string_view previousToken, HttpsTransport& transport);
     // The token the session's /connect step wants (MSAL "console transfer" token).
     std::string transferToken();
 
