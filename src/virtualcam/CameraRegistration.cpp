@@ -3,6 +3,7 @@
 #include "virtualcam-guid.h"
 #include <dshow.h>
 #include <wrl/client.h>
+#include <iterator>
 #include <string>
 
 namespace veyra::virtualcam {
@@ -50,5 +51,15 @@ std::wstring registeredModule(bool x86,bool machine){
     wchar_t value[32768]{};DWORD bytes=sizeof(value),type=0;
     if(RegQueryValueExW(key.value,nullptr,nullptr,&type,reinterpret_cast<BYTE*>(value),&bytes)!=ERROR_SUCCESS||type!=REG_SZ||bytes<sizeof(wchar_t)||bytes>sizeof(value))return {};
     value[std::size(value)-1]=0;return value;
+}
+bool registeredDeviceEntry(HKEY root,bool x86){
+    Key key;
+    const auto path=std::wstring(classes)+category+VeyraCameraClsid;
+    const REGSAM view=x86?KEY_WOW64_32KEY:KEY_WOW64_64KEY;
+    if(RegOpenKeyExW(root,path.c_str(),0,KEY_QUERY_VALUE|view,&key.value)!=ERROR_SUCCESS)return false;
+    wchar_t clsid[std::size(VeyraCameraClsid)]{};
+    DWORD bytes=sizeof(clsid);
+    return RegGetValueW(key.value,nullptr,L"CLSID",RRF_RT_REG_SZ,nullptr,clsid,&bytes)==ERROR_SUCCESS&&
+        CompareStringOrdinal(clsid,-1,VeyraCameraClsid,-1,TRUE)==CSTR_EQUAL;
 }
 }

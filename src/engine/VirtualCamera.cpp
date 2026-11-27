@@ -46,7 +46,8 @@ DWORD launchCameraSetup(const std::filesystem::path& file,bool remove,HANDLE& pr
 bool machineRegistered(){
     for(bool x86:{false,true}){
         const auto path=virtualcam::registeredModule(x86,true);std::error_code ec;
-        if(path.empty()||!std::filesystem::is_regular_file(path,ec))return false;
+        if(path.empty()||!std::filesystem::is_regular_file(path,ec)||
+           !virtualcam::registeredDeviceEntry(HKEY_LOCAL_MACHINE,x86))return false;
     }
     return true;
 }

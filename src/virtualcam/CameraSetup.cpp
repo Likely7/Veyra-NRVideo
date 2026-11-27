@@ -6,8 +6,6 @@
 #include <aclapi.h>
 #include <bcrypt.h>
 #include <dbt.h>
-#include <dshow.h>
-#include <wrl/client.h>
 #include <filesystem>
 #include <algorithm>
 #include <array>
@@ -71,26 +69,18 @@ static void copySecure(const fs::path& source,const fs::path& dest,std::wstring_
 static bool samePath(const std::wstring& a,const fs::path& b){
     return !a.empty()&&CompareStringOrdinal(a.c_str(),-1,b.c_str(),-1,TRUE)==CSTR_EQUAL;
 }
-// Elevated: only the machine registration and the device list are read. The
-// filter is never instantiated here (no BindToObject): COM would resolve the
-// class through the merged HKCR, which the same user's unelevated processes can
-// write, and load that DLL into this administrator process.
+// Check the exact entries that the installer writes, in both machine views.
+// DirectShow consumers open the installed filter at their own privilege level.
 static HRESULT verifyDevice(const fs::path& module64,const fs::path& module32){
-    using Microsoft::WRL::ComPtr;
-    if(!samePath(veyra::virtualcam::registeredModule(false,true),module64)||!samePath(veyra::virtualcam::registeredModule(true,true),module32))
+    if(!samePath(veyra::virtualcam::registeredModule(false,true),module64)||!samePath(veyra::virtualcam::registeredModule(true,true),module32)||
+       !veyra::virtualcam::registeredDeviceEntry(HKEY_LOCAL_MACHINE,false)||!veyra::virtualcam::registeredDeviceEntry(HKEY_LOCAL_MACHINE,true))
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    ComPtr<ICreateDevEnum> devices;HRESULT hr=CoCreateInstance(CLSID_SystemDeviceEnum,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&devices));if(FAILED(hr))return hr;
-    ComPtr<IEnumMoniker> entries;hr=devices->CreateClassEnumerator(CLSID_VideoInputDeviceCategory,&entries,0);if(hr!=S_OK)return FAILED(hr)?hr:HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
-    for(;;){ComPtr<IMoniker> entry;if(entries->Next(1,&entry,nullptr)!=S_OK)break;ComPtr<IPropertyBag> bag;if(FAILED(entry->BindToStorage(nullptr,nullptr,IID_PPV_ARGS(&bag))))continue;
-        VARIANT value;VariantInit(&value);const bool own=SUCCEEDED(bag->Read(L"CLSID",&value,nullptr))&&value.vt==VT_BSTR&&CompareStringOrdinal(value.bstrVal,-1,VeyraCameraClsid,-1,TRUE)==CSTR_EQUAL;VariantClear(&value);
-        if(own)return S_OK;
-    }
-    return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    return S_OK;
 }
 static void resultFile(const fs::path& folder){
     const auto path=folder/L"install-result.json";if(fs::exists(path))secure(path);Local sd;auto sa=attributes(sd,false);Handle file;
     file.value=CreateFileW(path.c_str(),GENERIC_WRITE,0,&sa,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);win(file.value!=INVALID_HANDLE_VALUE);
-    constexpr char text[]="{\"elevated\":true,\"deviceEnumerated\":true,\"machineRegistered\":true,\"architecture\":64}\n";DWORD written=0;win(WriteFile(file.value,text,DWORD(sizeof(text)-1),&written,nullptr));require(written==sizeof(text)-1,ERROR_WRITE_FAULT);win(FlushFileBuffers(file.value));
+    constexpr char text[]="{\"elevated\":true,\"deviceEntryRegistered\":true,\"machineRegistered\":true,\"architecture\":64}\n";DWORD written=0;win(WriteFile(file.value,text,DWORD(sizeof(text)-1),&written,nullptr));require(written==sizeof(text)-1,ERROR_WRITE_FAULT);win(FlushFileBuffers(file.value));
 }
 static void install(){
     const auto source=beside();require(hash(source/L"veyra-virtualcam64.dll")==CameraHash64&&hash(source/L"veyra-virtualcam32.dll")==CameraHash32,ERROR_CRC);
@@ -136,7 +126,6 @@ static void uninstall(){
 }
 int wmain(int argc,wchar_t** argv){
     SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32);
-    CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     try{
         require(argc==2,ERROR_INVALID_PARAMETER);const std::wstring mode=argv[1];
         if(mode==L"--verify"){

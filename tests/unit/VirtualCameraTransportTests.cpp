@@ -1,10 +1,13 @@
 #include <windows.h>
 #include "shared-memory-queue.h"
 #include "tiny-nv12-scale.h"
+#include "CameraRegistration.h"
+#include "virtualcam-guid.h"
 #include <algorithm>
 #include <atomic>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <string>
 #include <thread>
 #include <vector>
@@ -114,7 +117,33 @@ static void crash(const wchar_t* exe){
     video_queue_close(reader);CloseHandle(process.hThread);CloseHandle(process.hProcess);CloseHandle(ready);CloseHandle(opened);
     auto* next=video_queue_create(640,480,166667);CHECK(next);video_queue_close(next);
 }
+static int registration(const std::filesystem::path& path){
+    CHECK(path.is_absolute()&&!std::filesystem::exists(path));
+    HKEY hive=nullptr;
+    CHECK(RegLoadAppKeyW(path.c_str(),&hive,KEY_ALL_ACCESS,REG_PROCESS_APPKEY,0)==ERROR_SUCCESS);
+    const auto entry=std::wstring(L"Software\\Classes\\CLSID\\{860BB310-5D01-11D0-BD3B-00A0C911CE86}\\Instance\\")+VeyraCameraClsid;
+    for(bool x86:{false,true}){
+        using veyra::virtualcam::registeredDeviceEntry;
+        CHECK(!registeredDeviceEntry(hive,x86));
+        const REGSAM view=x86?KEY_WOW64_32KEY:KEY_WOW64_64KEY;
+        HKEY key=nullptr;
+        CHECK(RegCreateKeyExW(hive,entry.c_str(),0,nullptr,0,KEY_WRITE|view,nullptr,&key,nullptr)==ERROR_SUCCESS);
+        const auto value=reinterpret_cast<const BYTE*>(VeyraCameraClsid);
+        CHECK(RegSetValueExW(key,L"CLSID",0,REG_BINARY,value,sizeof(VeyraCameraClsid))==ERROR_SUCCESS);
+        CHECK(!registeredDeviceEntry(hive,x86));
+        CHECK(RegSetValueExW(key,L"CLSID",0,REG_SZ,value,sizeof(VeyraCameraClsid))==ERROR_SUCCESS);
+        CHECK(registeredDeviceEntry(hive,x86));
+        CHECK(RegDeleteValueW(key,L"CLSID")==ERROR_SUCCESS);
+        RegCloseKey(key);
+        CHECK(!registeredDeviceEntry(hive,x86));
+    }
+    RegCloseKey(hive);
+    std::printf("PASS registration checks=%u bits=%zu\n",checks,sizeof(void*)*8);
+    return 0;
+}
+
 int wmain(int argc,wchar_t** argv){
+    if(argc==3&&std::wstring_view(argv[1])==L"--registration")return registration(argv[2]);
     if(argc==4&&std::wstring(argv[1])==L"--crash"){
         auto* writer=video_queue_create(640,480,166667);if(!writer)return 2;
         std::vector<uint8_t> pixels(640*480*3/2,90);uint8_t* planes[]={pixels.data(),pixels.data()+640*480};uint32_t pitch[]={640,640};
