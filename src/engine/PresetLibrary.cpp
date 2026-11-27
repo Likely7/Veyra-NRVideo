@@ -625,6 +625,8 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
     auto values = settings;
     if (document.globals) document.globals->apply(values);
     const auto keepFlow = PresetFlowSettings::capture(values);
+    const auto keepFgBackend = values.frameGenerationBackend;
+    const auto keepVfgQuality = values.vfgQuality;
     if ((entry.contents & presetContentMask(PresetContent::Chain)) && entry.nodeConfiguration) {
         const auto& saved = *entry.nodeConfiguration;
         if (saved.editor) *next = *saved.editor;
@@ -652,11 +654,13 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
                 PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
                 keep.contents = presetContentMask(PresetContent::FrameGeneration);
                 const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
-                keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
+                keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, keepFgBackend, keepVfgQuality};
                 if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
+                nodes.fgAutoMultiplier = old && old->enabled && document.nodes.fgAutoMultiplier;
             } else {
-                values.frameGenerationBackend = settings.frameGenerationBackend;
-                values.vfgQuality = settings.vfgQuality;
+                values.frameGenerationBackend = keepFgBackend;
+                values.vfgQuality = keepVfgQuality;
+                nodes.fgAutoMultiplier = false;
             }
             nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
         }
