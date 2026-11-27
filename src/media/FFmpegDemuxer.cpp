@@ -530,10 +530,8 @@ bool FFmpegDemuxer::seekToUs(int64_t targetUs)
     // make the first frames after a seek pair against stale layer pictures.
     for (auto*& stale : elPending_) av_packet_free(&stale);
     elPending_.clear();
-    const int64_t target = av_rescale_q(targetUs + startTimeUs(), { 1, 1000000 },
-        AVRational{1, AV_TIME_BASE});
     interrupt_.arm();
-    const int result = av_seek_frame(context_, -1, target, AVSEEK_FLAG_BACKWARD);
+    const int result = seekMediaInput(*context_, targetUs, startTimeUs());
     interrupt_.disarm();
     if (result < 0) {
         char errorText[AV_ERROR_MAX_STRING_SIZE]{};
