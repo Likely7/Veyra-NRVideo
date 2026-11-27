@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
+#include <chrono>
 #include <cstddef>
+#include <optional>
 
 namespace veyra::xbox {
 enum class VideoDecodeRecoveryAction { ResetHistory, ReopenHardware, UseSoftware, Stop };
@@ -23,10 +25,20 @@ public:
         }
         return VideoDecodeRecoveryAction::Stop;
     }
-    void picture() { consecutiveFailures_ = 0; }
+    // Count from the first input that could not rebuild a picture. The caller
+    // checks this only while media is arriving, so idle transport is separate.
+    bool keyframeWaitExpired(std::chrono::steady_clock::time_point now) {
+        if (!keyframeWaitSince_) keyframeWaitSince_ = now;
+        return now - *keyframeWaitSince_ >= std::chrono::seconds(8);
+    }
+    void picture() {
+        consecutiveFailures_ = 0;
+        keyframeWaitSince_.reset();
+    }
 private:
     unsigned consecutiveFailures_ = 0;
     bool hardwareReopened_ = false, softwareUsed_ = false;
+    std::optional<std::chrono::steady_clock::time_point> keyframeWaitSince_;
 };
 
 // Call while holding the source queue lock, before adding the new AU. Loss

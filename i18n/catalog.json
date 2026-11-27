@@ -5591,6 +5591,19 @@
    "ru": "Xbox Потоковая ошибка: "
   },
   {
+   "zh": "Xbox 串流持续未收到可用关键帧。请重新连接并保留日志。",
+   "src": "src/source/XboxSessionSource.cpp",
+   "zh-TW": "Xbox 串流持續未收到可用關鍵影格。請重新連線並保留日誌。",
+   "en": "The Xbox stream did not receive a usable keyframe. Reconnect and keep the log.",
+   "ja": "Xbox ストリームで有効なキーフレームを受信できませんでした。再接続してログを保存してください。",
+   "ko": "Xbox 스트림에서 사용할 수 있는 키 프레임을 받지 못했습니다. 다시 연결하고 로그를 보관하세요.",
+   "es": "La transmisión de Xbox no recibió un fotograma clave válido. Vuelve a conectar y conserva el registro.",
+   "fr": "Le flux Xbox n’a reçu aucune image clé utilisable. Reconnectez-vous et conservez le journal.",
+   "de": "Der Xbox-Stream hat kein nutzbares Schlüsselbild empfangen. Verbinde dich erneut und bewahre das Protokoll auf.",
+   "pt-BR": "A transmissão do Xbox não recebeu um quadro-chave utilizável. Reconecte e guarde o log.",
+   "ru": "В потоке Xbox не получен пригодный ключевой кадр. Переподключитесь и сохраните журнал."
+  },
+  {
    "zh": "Xbox 串流连接失败，请查看诊断",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "Xbox 串流連接失敗，請查看診斷",

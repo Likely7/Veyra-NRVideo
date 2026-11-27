@@ -689,6 +689,14 @@ int main(int argc, char** argv) {
               recovery.failed(false)==VideoDecodeRecoveryAction::ResetHistory&&
               recovery.failed(false)==VideoDecodeRecoveryAction::Stop,
               "persistent failure after software fallback ends explicitly");
+        const auto start = std::chrono::steady_clock::time_point{};
+        check(!recovery.keyframeWaitExpired(start) && !recovery.keyframeWaitExpired(start + std::chrono::milliseconds(7999)) &&
+              recovery.keyframeWaitExpired(start + std::chrono::seconds(8)),
+              "a continuous run of unusable input gets one bounded recovery interval");
+        recovery.picture();
+        check(!recovery.keyframeWaitExpired(start + std::chrono::seconds(9)) &&
+              recovery.keyframeWaitExpired(start + std::chrono::seconds(17)),
+              "a valid picture starts a fresh wait interval without refilling the hardware retry budget");
         struct Unit { unsigned id; bool inputLoss=false; };
         std::deque<Unit> queue;
         for(unsigned i=0;i<8;++i)queue.push_back({i});

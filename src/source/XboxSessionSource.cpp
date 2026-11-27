@@ -519,6 +519,16 @@ void XboxSessionSource::decodeLoop() {
         p.lastKeyframeRequest = now;
         p.rtc.requestKeyframe();
     };
+    const auto waitForKeyframe = [&] {
+        if (!recovery.keyframeWaitExpired(Clock::now())) {
+            requestKeyframe();
+            return true;
+        }
+        logVideoReceive(stats(), "keyframe-timeout");
+        setState(XboxStats::State::Failed, L"Xbox 串流持续未收到可用关键帧。请重新连接并保留日志。");
+        p.ended = true;
+        return false;
+    };
     log::info("xbox", "decode thread started");
     for (;;) {
         Impl::Unit unit;
@@ -543,7 +553,7 @@ void XboxSessionSource::decodeLoop() {
         }
         if (!seenKeyframe && !startsDecoding(unit.data)) {
             p.waitingKeyframeDropped.fetch_add(1, std::memory_order_relaxed);
-            requestKeyframe();
+            if (!waitForKeyframe()) break;
             continue;
         }
         if (!p.decoderOpen) {
@@ -609,6 +619,8 @@ void XboxSessionSource::decodeLoop() {
                     if (action == xbox::VideoDecodeRecoveryAction::UseSoftware) forceSoftware = true;
                 }
                 requestKeyframe();
+            } else if (!seenKeyframe && !waitForKeyframe()) {
+                break;
             }
             continue;
         }
