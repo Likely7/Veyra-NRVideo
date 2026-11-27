@@ -2,6 +2,7 @@
 #include "veyra/sink/AudioGain.h"
 #include "veyra/sink/WasapiAudioSink.h"
 #include "veyra/sink/RecordingAudioTap.h"
+#include "veyra/sink/ExclusivePassthrough.h"
 #include "veyra/sink/ArrivalClockMapping.h"
 #include "veyra/sink/CaptureAudioDsp.h"
 #include "veyra/sink/CaptureSyncTarget.h"
@@ -84,7 +85,7 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
     void observeRenderedPcm(const float* samples,size_t frames,unsigned channels,unsigned padding)override{recording.rendered(samples,frames,channels,padding);}
     void run(){
         AudioRenderer renderer;
-        bool endpointReady=false,tapOnly=false;int64_t retryAt=0;
+        bool endpointReady=false,tapOnly=false;int64_t retryAt=0;bool waitingForPassthrough=false;
         uint64_t tapGeneration=0;
         const bool injectEndpointLoss=GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_ENDPOINT_LOSS",nullptr,0)>0;
         const bool injectSlowStart=GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_SLOW_START",nullptr,0)>0;
@@ -138,6 +139,12 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             const auto error=renderer.lastError();renderer.shutdown();endpointReady=false;
             const bool handoff=error==AUDCLNT_E_DEVICE_INVALIDATED&&bitstreamRenderEndpointReserved();
             retryAt=hostTime()+(handoff?0:5000000);
+            // XCAP Dolby passthrough owns this endpoint: no PCM is sent meanwhile, so wait for its release quietly.
+            // A stream that was already open when the passthrough took the endpoint is cut off with DEVICE_INVALIDATED;
+            // one opened afterwards is refused with DEVICE_IN_USE.
+            const bool held=(error==AUDCLNT_E_DEVICE_IN_USE||error==AUDCLNT_E_DEVICE_INVALIDATED)&&exclusivePassthroughActive();
+            if(held&&!waitingForPassthrough)log::info("capture-audio","output endpoint held by bitstream passthrough; PCM output waits for its release");
+            waitingForPassthrough=held;
             if(injectEndpointLoss&&GetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_LONG_OUTAGE",nullptr,0)>0)
                 retryAt=hostTime()+40000000;
             clearPcm();swr_close(swr);if(swr_init(swr)<0){fail(L"音频重采样重置失败");return false;}
@@ -145,8 +152,8 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             endpointEventReady=false;
             std::lock_guard lock(mutex);input.clear();inputBytes=convertingBytes=0;pendingReset=false;haveVideo=false;
             state.available=false;state.running=false;state.skewMs.reset();state.endpointBufferedMs=0;
-            state.outputRecovering=true;
-            state.error=error==HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY)
+            state.outputRecovering=!held;
+            if(held)state.error.clear();else state.error=error==HRESULT_FROM_WIN32(ERROR_CIRCULAR_DEPENDENCY)
                 ? L"虚拟扬声器回录需要将音频输出设为真实耳机或音箱"
                 : L"音频输出断开，正在重连（"+std::to_wstring(unsigned(error))+L"）";queueChanged();return true;
         };
@@ -157,7 +164,9 @@ struct CaptureAudioSession::Impl : AudioPcmSource {
             }
             if(!endpointReady&&!tapOnly){
                 const auto time=hostTime();
-                if(time<retryAt){std::unique_lock lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(20),[&]{return stop.load();});continue;}
+                if(waitingForPassthrough&&exclusivePassthroughActive()){std::unique_lock lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(20),[&]{return stop.load();});continue;}
+                if(waitingForPassthrough){waitingForPassthrough=false;log::info("capture-audio","bitstream passthrough released the endpoint; PCM output reopens");}
+                else if(time<retryAt){std::unique_lock lock(mutex);wake.wait_for(lock,std::chrono::milliseconds(20),[&]{return stop.load();});continue;}
                 {std::lock_guard lock(mutex);++state.endpointRetries;}
                 if(injectSlowStart&&!startupDelayed){
                     startupDelayed=true;log::info("capture-audio-test","delay owned endpoint startup by 650 ms");

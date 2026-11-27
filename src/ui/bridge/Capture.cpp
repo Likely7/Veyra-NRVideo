@@ -23,7 +23,8 @@ QVariantList QmlPlayerBridge::captureDevices() const {
     // empty list means the machine reports no capture devices.
     QVariantList out;
     for (const auto& d : impl_->captureVideo) {
-        const bool native=source::decklink::isPath(d.path);
+        const bool xcap=source::decklink::isXcapPath(d.path);
+        const bool native=!xcap&&source::decklink::isPath(d.path);
         const bool enabled=impl_->prefBool("blackmagicNativeCapture",false);
         if(native&&!enabled)continue;
         if(!native&&enabled&&source::isBlackmagicCaptureDevice(d.name,d.path))continue;
@@ -261,7 +262,7 @@ void QmlPlayerBridge::setCaptureBufferMode(int value) {
 bool QmlPlayerBridge::captureQueryBusy() const { return impl_->captureBusy || impl_->captureDriverSettingsOpen; }
 QString QmlPlayerBridge::captureStatus() const { return impl_->captureStatus; }
 bool QmlPlayerBridge::captureBlackmagicDevice() const {
-    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return source::decklink::isPath(d.path)||source::isBlackmagicCaptureDevice(d.name, d.path);
+    for (const auto& d : impl_->captureVideo) if (d.path == impl_->captureDevice) return !source::decklink::isXcapPath(d.path)&&(source::decklink::isPath(d.path)||source::isBlackmagicCaptureDevice(d.name, d.path));
     return false;
 }
 bool QmlPlayerBridge::openCaptureDriverSettings(bool inputSelector) {
@@ -399,7 +400,7 @@ void QmlPlayerBridge::tickCapture() {
         const bool native=i.prefBool("blackmagicNativeCapture",false);
         const auto remembered=wideOf(i.prefs.value(native?"blackmagicNativeLastDevice":"blackmagicDirectShowLastDevice").toString());
         if(pick.empty()&&allowed(remembered))pick=remembered;
-        if(pick.empty()&&native){std::vector<std::wstring> candidates;for(const auto& d:i.captureVideo)if(source::decklink::isPath(d.path))candidates.push_back(d.path);if(candidates.size()==1)pick=candidates.front();}
+        if(pick.empty()&&native){std::vector<std::wstring> candidates;for(const auto& d:i.captureVideo)if(source::decklink::isPath(d.path)&&!source::decklink::isXcapPath(d.path))candidates.push_back(d.path);if(candidates.size()==1)pick=candidates.front();}
         if (pick.empty() && !choices.empty() && i.capturePrefs.videoPath.empty()&&!native) pick=wideOf(choices.front().toMap().value("id").toString());
         i.captureStatus = i.captureVideo.empty() ? tr("未找到采集设备。连接后点击刷新。")
                         : pick.empty() ? tr("上次采集设备未连接。插回后刷新，或手动选择其他设备。") : QString();
@@ -447,6 +448,7 @@ void QmlPlayerBridge::tickCapture() {
     i.captureStatus = i.captureFormatList.empty() ? tr("驱动未提供可解析的视频格式，请检查设备与驱动后刷新。")
                     : i.captureFormatKey.empty() ? (!i.capturePrefs.formatKey.empty()?tr("此采集卡无此格式，请重新选择分辨率、帧率和像素格式。"):tr("先选择分辨率，再选择该分辨率支持的帧率和像素格式"))
                     : q.kind == 3 ? tr("驱动设置已关闭。请核对所选格式与设备帧率，再连接。")
+                    : source::decklink::isXcapPath(i.captureDevice) ? tr("连接后使用当前增强设置。格式与音频变更需要重新连接。")
                     : source::decklink::isPath(i.captureDevice) ? tr("原生采集先确认有效信号；请在设备列表选择对应的 HDMI/SDI 输入，支持自动检测的卡建议选择自动。Driver 保留驱动当前输入。")
                     : captureBlackmagicDevice() ? tr("请选择与输入信号一致的格式。驱动默认格式不代表检测到的信号。")
                     : tr("连接后使用当前增强设置。格式与音频变更需要重新连接。");

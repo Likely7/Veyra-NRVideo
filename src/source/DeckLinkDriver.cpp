@@ -265,14 +265,14 @@ public:
     }
 };
 }
-std::vector<Device> devices(){std::vector<Device> out;for(auto& row:enumerate())out.push_back(std::move(row.details));return out;}
-std::vector<Mode> modes(std::wstring_view path){for(auto& row:enumerate())if(row.details.path==path)return readModes(row.input.Get(),row.requestedConnection);return {};}
-std::unique_ptr<Driver> makeDriver(){return std::make_unique<ComDriver>();}
+std::vector<Device> sdkDevices(){std::vector<Device> out;for(auto& row:enumerate())out.push_back(std::move(row.details));return out;}
+std::vector<Mode> sdkModes(std::wstring_view path){for(auto& row:enumerate())if(row.details.path==path)return readModes(row.input.Get(),row.requestedConnection);return {};}
+std::unique_ptr<Driver> makeSdkDriver(){return std::make_unique<ComDriver>();}
 }
 #else
 namespace veyra::source::decklink {
-std::vector<Device> devices(){return {};}
-std::vector<Mode> modes(std::wstring_view){return {};}
-std::unique_ptr<Driver> makeDriver(){return {};}
+std::vector<Device> sdkDevices(){return {};}
+std::vector<Mode> sdkModes(std::wstring_view){return {};}
+std::unique_ptr<Driver> makeSdkDriver(){return {};}
 }
 #endif

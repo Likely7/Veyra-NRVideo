@@ -18,14 +18,15 @@ bool sameColor(const pipeline::ColorDescription& a,const pipeline::ColorDescript
         a.primaries==b.primaries&&a.displayReferred709==b.displayReferred709&&a.preserveSdrCodeValues==b.preserveSdrCodeValues&&
         a.hdrMaxCllNits==b.hdrMaxCllNits&&a.hdrMaxFallNits==b.hdrMaxFallNits&&a.hdrMasteringPeakNits==b.hdrMasteringPeakNits;
 }
-bool isPath(std::wstring_view path){return path.starts_with(L"decklink-native:");}
+bool isXcapPath(std::wstring_view path){return path.starts_with(L"xcap-native:");}
+bool isPath(std::wstring_view path){return path.starts_with(L"decklink-native:")||isXcapPath(path);}
 std::wstring modeKey(uint32_t id){return id?std::format(L"decklink:{:08x}",id):L"decklink:auto";}
 struct Capture::Impl {
     std::unique_ptr<Driver> driver;
     mutable std::mutex mutex;std::condition_variable changed;
     std::optional<Signal> pending;
     Frame contract;Mode mode;
-    bool automatic=false,embeddedAudio=false,probing=false,valid=false,running=false,reopen=false;
+    bool automatic=false,embeddedAudio=false,probing=false,valid=false,running=false,reopen=false,xcap=false;
     Pixel pixel=Pixel::V210;
     std::wstring error;
     std::function<void(const Frame&)> onVideo;
@@ -69,7 +70,10 @@ void Capture::video(const Frame& frame){
         if(p_->probing){
             p_->contract=frame;p_->contract.data=nullptr;p_->contract.bytes=0;p_->valid=true;p_->changed.notify_all();return;
         }
-        if(frame.stride!=p_->contract.stride||frame.bottomUp!=p_->contract.bottomUp||!sameColor(frame.color,p_->contract.color)){
+        // XCAP reports the console's own mastering data, which a game may change at any time: that is no new format.
+        auto color=frame.color;
+        if(p_->xcap){color.hdrMaxCllNits=p_->contract.color.hdrMaxCllNits;color.hdrMaxFallNits=p_->contract.color.hdrMaxFallNits;color.hdrMasteringPeakNits=p_->contract.color.hdrMasteringPeakNits;}
+        if(frame.stride!=p_->contract.stride||frame.bottomUp!=p_->contract.bottomUp||!sameColor(color,p_->contract.color)){
             p_->error=L"BMD 输入颜色/行距合同已变化，正在重建处理链";p_->reopen=true;return;
         }
         callback=p_->onVideo;
@@ -88,6 +92,7 @@ bool Capture::configure(std::wstring_view path,std::wstring_view key,bool audio,
     {std::lock_guard lock(p.mutex);p.error.clear();p.reopen=false;p.valid=false;p.contract={};p.pending.reset();p.embeddedAudio=audio;}
     auto failed=[&](std::wstring message){p.driver->stop();std::lock_guard lock(p.mutex);p.probing=false;if(!message.empty())p.error=std::move(message);return false;};
     if(!isPath(path)||!p.driver){failure(L"BMD 原生接口不可用，请安装 Desktop Video 驱动或使用 DirectShow 入口");return false;}
+    {std::lock_guard lock(p.mutex);p.xcap=isXcapPath(path);}
     if(!p.driver->open(path,*this,why))return failed(why);
     const auto available=p.driver->modes();
     const bool automatic=key==L"decklink:auto"||key.empty();
@@ -156,5 +161,7 @@ void Capture::stop()noexcept{
 bool Capture::needsReopen()const{std::lock_guard lock(p_->mutex);return p_->reopen;}
 std::wstring Capture::error()const{std::lock_guard lock(p_->mutex);return p_->error;}
 Frame Capture::contract()const{std::lock_guard lock(p_->mutex);return p_->contract;}
+unsigned Capture::audioChannels()const{return p_->driver?p_->driver->audioChannels():2;}
+unsigned Capture::audioBits()const{return p_->driver?p_->driver->audioBits():16;}
 Mode Capture::mode()const{std::lock_guard lock(p_->mutex);return p_->mode;}
 }

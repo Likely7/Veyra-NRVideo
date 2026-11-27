@@ -2,6 +2,7 @@
 #include "veyra/source/CaptureStartFallback.h"
 #include "veyra/sink/AudioGain.h"
 #include "veyra/source/DeckLinkCapture.h"
+#include "veyra/source/XcapAudio.h"
 #include "veyra/source/CaptureFrameRate.h"
 #include "veyra/source/WasapiAudioInput.h"
 #include "veyra/source/CaptureTiming.h"
@@ -515,6 +516,52 @@ static bool writeCaptureFrame(const CaptureMediaLayout& layout,const uint8_t* da
     }
     return true;
 }
+// Picture numbers for frames whose card compares every byte with the previous frame.
+struct NativePictures {
+    uint64_t id=0,counter=0;
+    unsigned sinceRepeat=0; // frames since the card last reported an exact repeat
+    static constexpr unsigned kTrust=120;
+    static constexpr uint64_t kSpace=uint64_t(0xC0)<<56; // never a PictureReference number
+};
+// A frame whose rows are still being written by the card (decklink::Frame::awaitRows).
+// Same result as writeCaptureFrame, but the copy overlaps the transfer.
+static bool writeProgressiveFrame(const CaptureMediaLayout& layout,const decklink::Frame& native,AVFrame& frame,bool flipRows,
+        pipeline::PictureReference* pictures,NativePictures& numbers,bool* commit,std::chrono::steady_clock::time_point& arrival){
+    const bool flip=layout.bottomUp!=flipRows;
+    const bool packedRows=layout.planes==1&&!flip&&(layout.packing==CapturePacking::V210||layout.packing==CapturePacking::Bgra32)&&frame.linesize[0]>=int(layout.rowBytes);
+    const bool overlap=packedRows&&layout.packing==CapturePacking::V210;
+    if(overlap){
+        pipeline::selectCaptureUploadTarget(frame);
+        constexpr unsigned band=36;
+        for(unsigned y=0;y<layout.height;){
+            const unsigned end=std::min(y+band,layout.height);
+            if(!native.awaitRows(end))return false;
+            for(;y<end;++y)std::memcpy(frame.data[0]+size_t(y)*frame.linesize[0],native.data+size_t(y)*layout.stride,layout.rowBytes);
+        }
+        arrival=std::chrono::steady_clock::now();
+        if(!native.awaitRows(layout.height))return false; // still intact after the last row was copied
+    }else{
+        if(!native.awaitRows(layout.height))return false;
+        arrival=std::chrono::steady_clock::now();
+        return writeCaptureFrame(layout,native.data,native.bytes,frame,flipRows,pictures,commit);
+    }
+    pipeline::sampleCaptureV210Proxy(frame,native.data,layout.stride,flip);
+    if(pictures){
+        auto* info=pipeline::captureUploadFrame(&frame);
+        numbers.sinceRepeat=native.repeat==1?0:std::min(numbers.sinceRepeat+1,NativePictures::kTrust);
+        const auto number=[&](uint64_t id,bool repeat){info->pictureId=numbers.id=id;info->pictureRepeat=repeat;info->pictureOver=0;info->pictureMax8=0;info->pictureValid=true;};
+        if(info&&native.repeat==1&&numbers.id)number(numbers.id,true);
+        else if(info&&native.repeat>=0&&numbers.sinceRepeat<NativePictures::kTrust){
+            // A digital 30-in-60 signal repeats exactly, so a difference is a new picture: no CPU compare.
+            number(NativePictures::kSpace|++numbers.counter,false);pictures->reset();
+        }else{
+            // No exact repeat for two seconds: a real 60 fps signal, or noise. Let the tolerant compare decide.
+            if(compareCaptureSample(layout,native.data,frame,*pictures)){if(commit)*commit=true;else commitCaptureSample(layout,native.data,*pictures);}
+            if(info&&info->pictureValid)numbers.id=info->pictureId;
+        }
+    }else numbers={};
+    return true;
+}
 struct CaptureCardSource::Impl:ISampleGrabberCB {
     using Clock=std::chrono::steady_clock;
     HANDLE deviceLease = nullptr;
@@ -635,6 +682,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     // Content dedup wants picture numbers; the reference lives on the callback thread.
     std::atomic<bool> pictureCompare{false};
     pipeline::PictureReference pictureReference{1};
+    NativePictures nativePictures;
     std::unique_ptr<WasapiAudioInput> wasapi;
     std::unique_ptr<decklink::Capture> decklink;
     std::wstring audioError;
@@ -682,13 +730,17 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
     long driverBuffers=0;
     bool externalTimeAnchored=false;double externalTimeOffset=0;
     int64_t pendingNativePts100ns=0;
-    void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity,int64_t duration100ns=0,int64_t nativePts100ns=0){
-        const auto arrival=Clock::now();
+    void deliverExternal(const uint8_t* data,size_t bytes,double deviceSeconds,bool discontinuity,int64_t duration100ns=0,int64_t nativePts100ns=0,const decklink::Frame* native=nullptr){
+        auto arrival=Clock::now();
         AVFrame* staged=nullptr;bool written=false,commitPicture=false;
         // A new picture's reference copy runs when this call returns, after the publish below.
         struct CommitAfterPublish{Impl& p;const uint8_t* data;bool& owed;~CommitAfterPublish(){if(owed)commitCaptureSample(p.layout,data,p.pictureReference);}} commitLater{*this,data,commitPicture};
         {std::lock_guard lock(mutex);if(stagingFrame&&!stagingBusy){stagingBusy=true;staged=stagingFrame;}}
-        if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr,&commitPicture);
+        if(staged&&native&&native->awaitRows){
+            // The frame is still arriving: follow the DMA band by band, so the copy ends with the
+            // last line. `arrival` becomes the moment the last line was readable.
+            written=writeProgressiveFrame(layout,*native,*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr,nativePictures,&commitPicture,arrival);
+        }else if(staged)written=writeCaptureFrame(layout,data,bytes,*staged,verticalFlip.load(),pictureCompare.load(std::memory_order_relaxed)?&pictureReference:nullptr,&commitPicture);
         {
             std::lock_guard lock(mutex);
             if(staged)stagingBusy=false;
@@ -1010,7 +1062,7 @@ std::vector<CaptureDevice> CaptureCardSource::deviceDetails(bool audio){
         }
         result.push_back(std::move(device));
     }
-    if(!audio)for(auto& device:decklink::devices())result.push_back({std::move(device.name),std::move(device.path),true,false});
+    if(!audio)for(auto& device:decklink::devices())result.push_back({std::move(device.name),std::move(device.path),device.embeddedAudio,false});
     if(audio)for(auto& endpoint:WasapiAudioInput::devices())result.push_back({std::move(endpoint.name),std::move(endpoint.id),false,true});
     return result;
 }
@@ -1107,9 +1159,9 @@ std::vector<CaptureFormat> CaptureCardSource::formatsByPath(std::wstring_view de
     if(decklink::isPath(devicePath)){
         std::vector<CaptureFormat> out;
         for(const auto& device:decklink::devices())if(device.path==devicePath&&device.autoDetection)
-            out.push_back({0,0,0,0,L"自动检测实际信号 · BMD 原生",decklink::modeKey(0),0,0,true,L"自动选择像素格式",L"",false,0,true,true});
+            out.push_back({0,0,0,0,decklink::isXcapPath(devicePath)?L"自动检测实际信号 · XCAP":L"自动检测实际信号 · BMD 原生",decklink::modeKey(0),0,0,true,L"自动选择像素格式",L"",false,0,true,true});
         int index=1;for(const auto& mode:decklink::modes(devicePath))out.push_back({index++,mode.width,mode.height,double(mode.scale)/mode.duration,
-            std::format(L"{} · {} x {} @ {:.3f} fps · {} · BMD 原生",mode.name,mode.width,mode.height,double(mode.scale)/mode.duration,mode.interlaced?L"隔行":L"逐行"),decklink::modeKey(mode.id),1,0,false,L"自动选择像素格式",mode.interlaced?L"隔行":L"逐行",mode.interlaced,int64_t(1e7*mode.duration/mode.scale),mode.width<=3840&&mode.height<=2160});
+            std::format(L"{} · {} x {} @ {:.3f} fps · {} · {}",mode.name,mode.width,mode.height,double(mode.scale)/mode.duration,mode.interlaced?L"隔行":L"逐行",decklink::isXcapPath(devicePath)?L"XCAP":L"BMD 原生"),decklink::modeKey(mode.id),1,0,false,L"自动选择像素格式",mode.interlaced?L"隔行":L"逐行",mode.interlaced,int64_t(1e7*mode.duration/mode.scale),mode.width<=3840&&mode.height<=2160});
         return out;
     }
     ComPtr<IGraphBuilder> g;ComPtr<ICaptureGraphBuilder2>b;ComPtr<IBaseFilter>f;ComPtr<IAMStreamConfig>c;HRESULT status=S_OK;
@@ -1154,6 +1206,7 @@ void CaptureCardSource::setAudioIngress(unsigned mode){
     const unsigned clamped=mode>2?0:mode;
     if(p.audioIngressMode==clamped)return;
     p.audioIngressMode=clamped;
+    xcapture::setAudioIngress(clamped);
     log::info("capture-audio-ingress",std::format("mode={} ({}) takes effect on the next connect",clamped,
         clamped==1?"PCM only":clamped==2?"bitstream preferred":"automatic"));
 }
@@ -1197,11 +1250,12 @@ bool CaptureCardSource::setAudioGain(float gain){
     p.lastAudioGain=gain;p.audioGainSupported=SUCCEEDED(hr);log::info("capture-audio",std::format("application gain={} hr=0x{:X}",gain,unsigned(hr)));return p.audioGainSupported;
 }
 void CaptureCardSource::videoPresented(double pts,int64_t time,int64_t arrival){
+    if(p_->decklink)xcapture::videoLatency(double(time-arrival)/10000);
     if(p_->wasapi)p_->wasapi->videoPresented(double(arrival)/10000,time,arrival);
     else if(p_->audioSession)p_->audioSession->videoPresented(pts,time,arrival);
 }
 void CaptureCardSource::videoReset(bool resetAudio){if(p_->wasapi)p_->wasapi->videoReset(resetAudio);else if(p_->audioSession)p_->audioSession->videoReset(resetAudio);}
-void CaptureCardSource::setAudioSync(unsigned mode,int offset){if(p_->wasapi)p_->wasapi->setSync(mode,offset);else if(p_->audioSession)p_->audioSession->setSync(mode,offset);}
+void CaptureCardSource::setAudioSync(unsigned mode,int offset){xcapture::setAudioDelay(mode==1?40+offset:mode==2?20:40);xcapture::setAutoAudioDelay(mode==0);if(p_->wasapi)p_->wasapi->setSync(mode,offset);else if(p_->audioSession)p_->audioSession->setSync(mode,offset);}
 sink::CaptureAudioState CaptureCardSource::audioState()const{
     auto state=p_->wasapi?p_->wasapi->snapshot():p_->audioSession?p_->audioSession->snapshot():sink::CaptureAudioState{};
     if(p_->vendorAudio){const auto vendor=p_->vendorAudio->state();
@@ -1246,7 +1300,21 @@ bool CaptureCardSource::configureDeckLink(const SourceOpenDesc& desc){
     if(selection.audio==kCaptureAudioFromVideoDevice){
         WAVEFORMATEX wave{};wave.wFormatTag=WAVE_FORMAT_PCM;wave.nChannels=2;wave.nSamplesPerSec=48000;wave.wBitsPerSample=16;wave.nBlockAlign=4;wave.nAvgBytesPerSec=192000;
         p.audioSession=std::make_unique<sink::CaptureAudioSession>();
-        if(!p.audioSession->configure(wave,sizeof(wave))){p.audioSession.reset();p.audioError=L"BMD PCM 音频配置失败；视频继续运行";}
+        bool configured=false;
+        if(p.decklink->audioBits()==32){
+            // 24-bit PCM in 32-bit containers (XCAP): keeps the full HDMI sample depth
+            const WORD ch=WORD(p.decklink->audioChannels()==8?8:2);
+            WAVEFORMATEXTENSIBLE wide{};wide.Format.wFormatTag=WAVE_FORMAT_EXTENSIBLE;wide.Format.nChannels=ch;wide.Format.nSamplesPerSec=48000;wide.Format.wBitsPerSample=32;
+            wide.Format.nBlockAlign=WORD(ch*4);wide.Format.nAvgBytesPerSec=48000u*ch*4u;wide.Format.cbSize=sizeof(wide)-sizeof(WAVEFORMATEX);wide.Samples.wValidBitsPerSample=24;
+            wide.dwChannelMask=ch==8?KSAUDIO_SPEAKER_7POINT1_SURROUND:KSAUDIO_SPEAKER_STEREO;wide.SubFormat=KSDATAFORMAT_SUBTYPE_PCM;
+            configured=p.audioSession->configure(wide.Format,sizeof(wide));
+        }else if(p.decklink->audioChannels()==8){
+            WAVEFORMATEXTENSIBLE wide{};wide.Format=wave;wide.Format.wFormatTag=WAVE_FORMAT_EXTENSIBLE;wide.Format.nChannels=8;wide.Format.nBlockAlign=16;
+            wide.Format.nAvgBytesPerSec=768000;wide.Format.cbSize=sizeof(wide)-sizeof(WAVEFORMATEX);wide.Samples.wValidBitsPerSample=16;
+            wide.dwChannelMask=KSAUDIO_SPEAKER_7POINT1_SURROUND;wide.SubFormat=KSDATAFORMAT_SUBTYPE_PCM;
+            configured=p.audioSession->configure(wide.Format,sizeof(wide));
+        }else configured=p.audioSession->configure(wave,sizeof(wave));
+        if(!configured){p.audioSession.reset();p.audioError=L"PCM 音频配置失败；视频继续运行";}
     }else if(captureAudioIsWasapi(selection.audio)){
         p.wasapi=std::make_unique<WasapiAudioInput>();
         if(!p.wasapi->configure(selection.audioPath,selection.audio==kCaptureAudioVirtualSpeaker)){p.wasapi.reset();p.audioError=L"WASAPI 音频端点无效；视频继续运行";}
@@ -2148,7 +2216,7 @@ bool CaptureCardSource::start(){
     p.audioRecovery.reset(GetTickCount64());
     if(p.decklink){
         if(p.control){const HRESULT hr=p.control->Run();log::info("decklink-audio",std::format("Run separate audio hr=0x{:08X}",uint32_t(hr)));}
-        p.info.opened=p.decklink->start([&p](const decklink::Frame& frame){p.deliverExternal(frame.data,frame.bytes,double(frame.pts100ns)/1e7,false,frame.duration100ns,frame.pts100ns);},
+        p.info.opened=p.decklink->start([&p](const decklink::Frame& frame){p.deliverExternal(frame.data,frame.bytes,double(frame.pts100ns)/1e7,false,frame.duration100ns,frame.pts100ns,&frame);},
             [&p](const void* data,size_t bytes,int64_t pts){if(p.audioSession)p.audioSession->push(data,bytes,double(pts)/10000,false);});
         if(!p.info.opened){error_=p.decklink->error();return false;}
         p.lastFrame=Impl::Clock::now();
