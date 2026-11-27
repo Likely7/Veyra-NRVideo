@@ -10,6 +10,7 @@ namespace veyra::remoteplay {
 class SessionInbox {
     struct Shared;
 public:
+    struct PacketWindow { uint64_t received=0, lost=0; };
     struct Snapshot {
         Generation generation=0;SessionState state=SessionState::Idle;HostTime commonOrigin100ns=0;
         std::uint64_t staleCallbacks=0;int errorCode=0;
@@ -21,6 +22,8 @@ public:
         bool ratesReady=false;
         bool hardwareDecode=false,decodeFallback=false,decodeConfirmed=false;
         VideoProfile requestedProfile;
+        // Populated by the stream owner from its existing Chiaki telemetry.
+        std::optional<PacketWindow> packetWindow;
     };
     class Token {
     public:

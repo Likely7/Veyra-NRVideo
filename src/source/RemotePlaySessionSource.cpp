@@ -75,7 +75,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     try {
         const bool ok=source.connect(desc);
         if(!ok){retryWasRpInUse=source.nativeSnapshot().startupRetryAllowed;retryAfterLiveSession=false;retry=recovery.poll(milliseconds(),false,true)==remoteplay::StreamRecovery::Action::Reconnect;}
-        {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;telemetryInbox_=source.telemetryInbox();
+        {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;telemetryInbox_=source.telemetryInbox();snapshot_.packetWindow.reset();
             if(failed_)recovery_.message=desc.controlOnly?L"PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。":L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
         ready_.notify_all();
         if(ok&&desc.controlOnly) {
@@ -214,6 +214,8 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                         native.assemblyErrors,native.lastQuitReason,native.lastApiError,
                         snapshot.video.recoveries,snapshot.video.highWaterDepth,snapshot.video.dropped,snapshot.video.waitingForIdr));}
                 {std::lock_guard lock(mutex_);snapshot_=snapshot;feedback_.merge(std::move(feedback));
+                    if(native.packetReceived || native.packetLost)
+                        snapshot_.packetWindow=remoteplay::SessionInbox::PacketWindow{native.packetReceived,native.packetLost};
                     rates_.received=receivedBase+snapshot.video.accessUnits;rates_.ingressDropped=droppedBase+snapshot.video.dropped;
                     const double elapsed=std::chrono::duration<double>(now-rateStart).count();
                     if(elapsed>=1){rates_.receivedFps=double(rates_.received-previousReceived)/elapsed;
@@ -396,8 +398,17 @@ remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remote
 }
 void RemotePlaySessionSource::loginPin(std::string pin){std::lock_guard lock(mutex_);SecureZeroMemory(pin_.data(),pin_.size());pin_=std::move(pin);}
 remoteplay::SessionInbox::Snapshot RemotePlaySessionSource::sessionSnapshot()const{
-    std::shared_ptr<const remoteplay::SessionInbox> inbox;{std::lock_guard lock(mutex_);inbox=telemetryInbox_;if(!inbox)return snapshot_;}
-    return inbox->snapshot();
+    std::shared_ptr<const remoteplay::SessionInbox> inbox;
+    std::optional<remoteplay::SessionInbox::PacketWindow> packetWindow;
+    {
+        std::lock_guard lock(mutex_);
+        inbox=telemetryInbox_;
+        if(!inbox)return snapshot_;
+        packetWindow=snapshot_.packetWindow;
+    }
+    auto snapshot=inbox->snapshot();
+    snapshot.packetWindow=packetWindow;
+    return snapshot;
 }
 RemotePlaySessionSource::Rates RemotePlaySessionSource::rates()const{std::lock_guard lock(mutex_);return rates_;}
 remoteplay::ControllerFeedback RemotePlaySessionSource::takeFeedback(){std::lock_guard lock(mutex_);auto result=std::move(feedback_);feedback_={};return result;}

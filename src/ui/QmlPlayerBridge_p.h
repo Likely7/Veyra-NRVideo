@@ -1019,10 +1019,11 @@ struct QmlPlayerBridge::Impl {
         options = engine::PlayerOptions::from(s,order);
         return true;
     }
+    bool streamStatsVisible = false;
 #ifdef VEYRA_ENABLE_MOONLIGHT
     // --- PC streaming (Moonlight). Last, so they are destroyed first: the model joins its workers.
     QTimer* moonlightTimer = nullptr;
-    bool moonlightWantCapture = false, moonlightStatsVisible = false, moonlightWasActive = false;
+    bool moonlightWantCapture = false, moonlightWasActive = false;
     int moonlightStatsTicks = 0;
     std::unique_ptr<ui::MoonlightModel> moonlight;
 #endif

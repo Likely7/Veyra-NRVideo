@@ -858,7 +858,8 @@ Window {
     // first and toggles the same switch.
     Shortcut {
         sequence: "Ctrl+Alt+Shift+S"
-        enabled: (veyra.moonlight && veyra.moonlight.state.streaming === true) || (veyra.xbox && veyra.xbox.state.streaming === true)
+        enabled: veyra.ps5VideoActive || (veyra.moonlight && veyra.moonlight.state.streaming === true)
+                 || (veyra.xbox && veyra.xbox.state.streaming === true)
         onActivated: veyra.moonlightStatsVisible = !veyra.moonlightStatsVisible
     }
     Shortcut {

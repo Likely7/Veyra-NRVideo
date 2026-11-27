@@ -30,6 +30,42 @@ QVariantMap QmlPlayerBridge::ps5() const {
 }
 QVariantList QmlPlayerBridge::ps5Profiles() const { return impl_->ps5ProfileList; }
 
+bool QmlPlayerBridge::ps5VideoActive() const {
+    const auto& snapshot = impl_->snapshot;
+    return snapshot.remotePlay && snapshot.running && !snapshot.failed &&
+           snapshot.transport != engine::TransportState::Stopping;
+}
+
+QVariantMap QmlPlayerBridge::ps5StreamStatistics() const {
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    if (ps5VideoActive()) {
+        const auto& snapshot = impl_->snapshot;
+        const auto& stream = snapshot.remoteStream;
+        const auto& requested = stream.requestedProfile;
+        const auto codec = requested.codec == remoteplay::Codec::H264 ? QStringLiteral("H.264") : QStringLiteral("H.265");
+        QVariantMap result{
+            {"width", snapshot.sourceWidth}, {"height", snapshot.sourceHeight},
+            {"codec", stream.decodeConfirmed ? codec : QString()},
+            {"hdr", snapshot.sourceHdrLabel != L"SDR" && !snapshot.sourceHdrLabel.empty()},
+            {"hardware", stream.hardwareDecode}, {"decodeConfirmed", stream.decodeConfirmed},
+            {"decodeMs", stream.decodeMeanMs.value_or(0.0)},
+            {"videoMbps", stream.ratesReady ? stream.videoMbps : 0.0},
+            {"requestedMbps", double(requested.bitrateKbps) / 1000.0},
+            {"receivedFps", stream.ratesReady ? stream.receivedFps : 0.0},
+            {"decodedFps", stream.ratesReady ? stream.decodedFps : 0.0},
+            {"submitFps", snapshot.submissionFps.value_or(0.0)},
+            {"dropped", qulonglong(snapshot.remoteIngressDropped + snapshot.remotePlaySkipped)}
+        };
+        if (stream.packetWindow) {
+            result["packets"] = qulonglong(stream.packetWindow->received);
+            result["lost"] = qulonglong(stream.packetWindow->lost);
+        }
+        return result;
+    }
+#endif
+    return {};
+}
+
 // --- PC streaming (Moonlight / Sunshine) -----------------------------------------------------------
 QObject* QmlPlayerBridge::moonlightModel() const {
 #ifdef VEYRA_ENABLE_MOONLIGHT
@@ -46,20 +82,12 @@ bool QmlPlayerBridge::moonlightCaptured() const {
 #endif
 }
 bool QmlPlayerBridge::moonlightStatsVisible() const {
-#ifdef VEYRA_ENABLE_MOONLIGHT
-    return impl_->moonlightStatsVisible;
-#else
-    return false;
-#endif
+    return impl_->streamStatsVisible;
 }
 void QmlPlayerBridge::setMoonlightStatsVisible(bool visible) {
-#ifdef VEYRA_ENABLE_MOONLIGHT
-    if (impl_->moonlightStatsVisible == visible) return;
-    impl_->moonlightStatsVisible = visible;
+    if (impl_->streamStatsVisible == visible) return;
+    impl_->streamStatsVisible = visible;
     emit moonlightUiChanged();
-#else
-    (void)visible;
-#endif
 }
 void QmlPlayerBridge::openMoonlightDialog() { emit navigate(QStringLiteral("moonlight")); }
 

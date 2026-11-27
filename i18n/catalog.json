@@ -37391,6 +37391,19 @@
    "ru": "Проверьте подключение карты захвата"
   },
   {
+   "zh": "接收窗口：%1 包",
+   "src": "qml/StreamHud.qml",
+   "zh-TW": "接收視窗：%1 個封包",
+   "en": "Receive window: %1 packets",
+   "ja": "受信ウィンドウ：%1 パケット",
+   "ko": "수신 구간: 패킷 %1개",
+   "es": "Ventana de recepción: %1 paquetes",
+   "fr": "Fenêtre de réception : %1 paquets",
+   "de": "Empfangsfenster: %1 Pakete",
+   "pt-BR": "Janela de recepção: %1 pacotes",
+   "ru": "Окно приёма: %1 пакетов"
+  },
+  {
    "zh": "请求码率",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "請求位元率",
