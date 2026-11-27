@@ -57,7 +57,9 @@ static SECURITY_ATTRIBUTES attributes(Local& sd,bool directory){
 }
 static void directory(const fs::path& p){Local sd;auto sa=attributes(sd,true);if(!CreateDirectoryW(p.c_str(),&sa)&&GetLastError()!=ERROR_ALREADY_EXISTS)throw GetLastError();secure(p);}
 static void copySecure(const fs::path& source,const fs::path& dest,std::wstring_view expected={}){
-    ordinaryPath(source);Handle input;input.value=CreateFileW(source.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL,nullptr);win(input.value!=INVALID_HANDLE_VALUE);
+    ordinaryPath(source);Handle input;input.value=CreateFileW(source.c_str(),GENERIC_READ,FILE_SHARE_READ,nullptr,OPEN_EXISTING,FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OPEN_REPARSE_POINT,nullptr);win(input.value!=INVALID_HANDLE_VALUE);
+    // The handle itself, not the earlier path check: a link swapped in after ordinaryPath is refused.
+    {FILE_BASIC_INFO opened{};win(GetFileInformationByHandleEx(input.value,FileBasicInfo,&opened,sizeof(opened)));require(!(opened.FileAttributes&(FILE_ATTRIBUTE_REPARSE_POINT|FILE_ATTRIBUTE_DIRECTORY)),ERROR_REPARSE_TAG_INVALID);}
     if(!expected.empty())require(hash(input.value)==expected,ERROR_CRC);
     if(fs::exists(dest)){secure(dest);if(hash(dest)==hash(input.value))return;}
     LARGE_INTEGER zero{};win(SetFilePointerEx(input.value,zero,nullptr,FILE_BEGIN));const auto temp=dest.wstring()+L"."+std::to_wstring(GetCurrentProcessId())+L".new";
@@ -66,20 +68,29 @@ static void copySecure(const fs::path& source,const fs::path& dest,std::wstring_
         secure(temp);win(MoveFileExW(temp.c_str(),dest.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_WRITE_THROUGH));secure(dest);
     }catch(...){if(output.value!=INVALID_HANDLE_VALUE){CloseHandle(output.value);output.value=INVALID_HANDLE_VALUE;}DeleteFileW(temp.c_str());throw;}
 }
-static HRESULT verifyDevice(){
+static bool samePath(const std::wstring& a,const fs::path& b){
+    return !a.empty()&&CompareStringOrdinal(a.c_str(),-1,b.c_str(),-1,TRUE)==CSTR_EQUAL;
+}
+// Elevated: only the machine registration and the device list are read. The
+// filter is never instantiated here (no BindToObject): COM would resolve the
+// class through the merged HKCR, which the same user's unelevated processes can
+// write, and load that DLL into this administrator process.
+static HRESULT verifyDevice(const fs::path& module64,const fs::path& module32){
     using Microsoft::WRL::ComPtr;
+    if(!samePath(veyra::virtualcam::registeredModule(false,true),module64)||!samePath(veyra::virtualcam::registeredModule(true,true),module32))
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     ComPtr<ICreateDevEnum> devices;HRESULT hr=CoCreateInstance(CLSID_SystemDeviceEnum,nullptr,CLSCTX_INPROC_SERVER,IID_PPV_ARGS(&devices));if(FAILED(hr))return hr;
     ComPtr<IEnumMoniker> entries;hr=devices->CreateClassEnumerator(CLSID_VideoInputDeviceCategory,&entries,0);if(hr!=S_OK)return FAILED(hr)?hr:HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     for(;;){ComPtr<IMoniker> entry;if(entries->Next(1,&entry,nullptr)!=S_OK)break;ComPtr<IPropertyBag> bag;if(FAILED(entry->BindToStorage(nullptr,nullptr,IID_PPV_ARGS(&bag))))continue;
         VARIANT value;VariantInit(&value);const bool own=SUCCEEDED(bag->Read(L"CLSID",&value,nullptr))&&value.vt==VT_BSTR&&CompareStringOrdinal(value.bstrVal,-1,VeyraCameraClsid,-1,TRUE)==CSTR_EQUAL;VariantClear(&value);
-        if(own){ComPtr<IBaseFilter> filter;return entry->BindToObject(nullptr,nullptr,IID_PPV_ARGS(&filter));}
+        if(own)return S_OK;
     }
     return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
 }
 static void resultFile(const fs::path& folder){
     const auto path=folder/L"install-result.json";if(fs::exists(path))secure(path);Local sd;auto sa=attributes(sd,false);Handle file;
     file.value=CreateFileW(path.c_str(),GENERIC_WRITE,0,&sa,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);win(file.value!=INVALID_HANDLE_VALUE);
-    constexpr char text[]="{\"elevated\":true,\"deviceEnumerated\":true,\"classBound\":true,\"architecture\":64}\n";DWORD written=0;win(WriteFile(file.value,text,DWORD(sizeof(text)-1),&written,nullptr));require(written==sizeof(text)-1,ERROR_WRITE_FAULT);win(FlushFileBuffers(file.value));
+    constexpr char text[]="{\"elevated\":true,\"deviceEnumerated\":true,\"machineRegistered\":true,\"architecture\":64}\n";DWORD written=0;win(WriteFile(file.value,text,DWORD(sizeof(text)-1),&written,nullptr));require(written==sizeof(text)-1,ERROR_WRITE_FAULT);win(FlushFileBuffers(file.value));
 }
 static void install(){
     const auto source=beside();require(hash(source/L"veyra-virtualcam64.dll")==CameraHash64&&hash(source/L"veyra-virtualcam32.dll")==CameraHash32,ERROR_CRC);
@@ -93,7 +104,7 @@ static void install(){
     auto b=SUCCEEDED(a)?veyra::virtualcam::registerModule((version/L"veyra-virtualcam32.dll").c_str(),true,true):a;
     if(SUCCEEDED(b)){
         veyra::virtualcam::unregisterModule(false);veyra::virtualcam::unregisterModule(true);
-        b=verifyDevice();
+        b=verifyDevice(version/L"veyra-virtualcam64.dll",version/L"veyra-virtualcam32.dll");
     }
     if(FAILED(b)){
         if(old64.empty())veyra::virtualcam::unregisterModule(false,true);else veyra::virtualcam::registerModule(old64.c_str(),false,true);
