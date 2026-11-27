@@ -35,6 +35,7 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(bool driving READ driving NOTIFY drivingChanged)
     Q_PROPERTY(QStringList profiles READ profiles NOTIFY mappingChanged)
     Q_PROPERTY(QString profile READ profile NOTIFY mappingChanged)
+    Q_PROPERTY(bool canRemoveProfile READ canRemoveProfile NOTIFY mappingChanged)
     Q_PROPERTY(QString unlockLabel READ unlockLabel NOTIFY mappingChanged)
     Q_PROPERTY(QString quickKeyLabel READ quickKeyLabel NOTIFY mappingChanged)
     Q_PROPERTY(bool quickReferenceEnabled MEMBER quickReferenceEnabled_)
@@ -44,6 +45,7 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(QVariantMap tuning READ tuning NOTIFY mappingChanged)
     Q_PROPERTY(int learning READ learning NOTIFY mappingChanged)
     Q_PROPERTY(int learningSlot READ learningSlot NOTIFY mappingChanged)
+    Q_PROPERTY(QVariantMap bindingConflict READ bindingConflict NOTIFY mappingChanged)
     Q_PROPERTY(QString feedback READ feedback NOTIFY mappingChanged)
     Q_PROPERTY(bool ps5Captured READ ps5Captured NOTIFY stateChanged)
     Q_PROPERTY(bool xboxCaptured READ xboxCaptured NOTIFY stateChanged)
@@ -63,7 +65,7 @@ public:
                                 std::function<uint64_t()> ps5Target, std::function<uint64_t()> xboxTarget = {});
     ~StreamInputCapture() override;
 
-    void setWindow(HWND topLevel);
+    void setWindow(HWND topLevel, HWND videoViewport = nullptr);
     bool captured() const { return route_ == Route::Moonlight; }
     bool capture(bool on);
     bool capturePs5(bool on);
@@ -102,6 +104,9 @@ public:
     QStringList actionNotes() const { return notes_[0]; }
     QStringList drivingActionNotes() const { return notes_[1]; }
     Q_INVOKABLE void selectProfile(const QString& name,bool create=false);
+    bool canRemoveProfile() const;
+    Q_INVOKABLE void renameProfile(const QString& name);
+    Q_INVOKABLE void removeProfile();
     Q_INVOKABLE void useTemplate(int index);
     Q_INVOKABLE bool toggleAction(int action) const;
     Q_INVOKABLE void setToggleAction(int action,bool on);
@@ -113,6 +118,9 @@ public:
     bool previewing() const { return route_ == Route::Preview; }
     QVariantMap padState() const;
     Q_INVOKABLE void learn(int action, QObject* learningControls = nullptr, bool drivingLayout = false, int slot = 0);
+    Q_INVOKABLE void learnPanelBinding(int action, QObject* learningControls, bool drivingLayout, int slot);
+    QVariantMap bindingConflict() const;
+    Q_INVOKABLE void resolveBindingConflict(bool move);
     Q_INVOKABLE void clearBinding(int action, bool drivingLayout = false, int slot = 0);
     Q_INVOKABLE void cancelLearning();
     Q_INVOKABLE void applyDefaults(bool drivingLayout = false);
@@ -161,12 +169,12 @@ private:
     bool unlockAvailable(int setting) const;
     int fallbackQuickKey() const;
     void applyMouseTuning(const Mapper::Tuning& tuning);
-    void suspendIme();
+    void suspendIme(HWND window);
     void restoreIme();
     QVariantList bindingLabels(bool driving, int slot) const;
     void readProfile(const QJsonObject& json);
     QJsonObject activeProfile() const;
-    void save();
+    bool save();
     void load();
 
     engine::EngineController& engine_;
@@ -174,7 +182,8 @@ private:
     QString profilePath_;
     std::function<uint64_t()> ps5Target_;
     std::function<uint64_t()> xboxTarget_;
-    HWND window_ = nullptr,imeWindow_=nullptr;
+    HWND window_ = nullptr, viewport_ = nullptr, previewWindow_ = nullptr, learningWindow_ = nullptr;
+    HWND imeWindow_ = nullptr;
     HIMC oldIme_=nullptr;
     POINT savedCursor_{};
     bool restoreCursor_=false;
@@ -208,6 +217,14 @@ private:
     int learningSlot_ = 0;
     int learningModifier_ = 0;
     bool learningDriving_ = false;
+    bool panelLearning_ = false;
+    struct BindingConflict {
+        int binding = 0;
+        int source = -1;
+        int action = -1;
+        int slot = 0;
+        bool driving = false;
+    } conflict_;
     remoteplay::MappedController::Diagnostics inputDiagnostics_;
     QString feedback_;
 };

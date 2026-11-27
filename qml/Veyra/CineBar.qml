@@ -21,6 +21,9 @@ Rectangle {
     signal requestMove()
     signal requestHide()
     signal requestPlaylist()
+    property bool controllerPanelAvailable: false
+    property bool controllerPanelOpen: false
+    signal requestControllerPanel()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
     property bool wideTimeline: false
@@ -33,6 +36,7 @@ Rectangle {
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
     readonly property bool compact: controlsWidth < 820
+    readonly property bool narrowWorkspace: controlsWidth < 680
     readonly property bool seekPreviewOpen: seekMouse.enabled && (seekMouse.containsMouse || seekArea.scrubbing)
     readonly property bool editing: volumeSlider.editing
     // Keep the control window active until a seek releases its mouse grab, too.
@@ -68,13 +72,16 @@ Rectangle {
 
         // --- left: artwork, title and playlist -----------------------
         RowLayout {
-            Layout.preferredWidth: 230; Layout.minimumWidth: 112; Layout.maximumWidth: 230
+            Layout.preferredWidth: bar.narrowWorkspace ? 42 : 230
+            Layout.minimumWidth: bar.narrowWorkspace ? 32 : 112
+            Layout.maximumWidth: bar.narrowWorkspace ? 42 : 230
             Layout.fillHeight: true
             spacing: 10
             // The file's own cover art when it carries one (MP4 covr, MKV image
             // attachment); otherwise the plate stays black - never a stand-in.
             Rectangle {
                 id: coverPlate
+                visible: !bar.narrowWorkspace
                 implicitWidth: 46; implicitHeight: 46; radius: 12
                 color: Theme.videoBlack
                 border.width: 1
@@ -98,13 +105,14 @@ Rectangle {
                 MultiEffect {
                     source: coverArt
                     anchors.fill: coverArt
-                    visible: coverArt.status === Image.Ready
+                    visible: coverPlate.visible && coverArt.status === Image.Ready
                     maskEnabled: true
                     maskSource: coverMask
                 }
                 Rectangle { id: coverMask; anchors.fill: coverArt; radius: 11; visible: false; layer.enabled: true }
             }
             ColumnLayout {
+                visible: !bar.narrowWorkspace
                 Layout.fillWidth: true
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 2
@@ -126,8 +134,18 @@ Rectangle {
                     elide: Text.ElideRight
                 }
             }
+            ControllerPanelButton {
+                objectName: "controller-panel-capsule"
+                visible: bar.controllerPanelAvailable
+                icon: true
+                iconName: "gamepad"
+                ghost: !bar.controllerPanelOpen
+                tip: qsTr("手柄映射")
+                onClicked: bar.requestControllerPanel()
+            }
             VButton {
                 objectName: "cine-playlist"
+                visible: !bar.narrowWorkspace || !bar.controllerPanelAvailable
                 icon: true; iconName: "list"; tip: qsTr("播放列表")
                 implicitWidth: 32; implicitHeight: 32
                 onClicked: bar.requestPlaylist()
@@ -180,7 +198,7 @@ Rectangle {
                 // 载入 (field request 2026-10-02): the home page's sources without leaving 极简.
                 CBtn { objectName: "cine-load"; glyph: "folder"; tip: qsTr("载入片源"); onTapped: loadMenu.openAt(this, "up") }
                 CBtn { glyph: "cc"; onTapped: ccMenu.openAt(this, "up") }
-                CBtn { glyph: "back10"; onTapped: veyra.seekBy(-10) }
+                CBtn { visible: !bar.narrowWorkspace; glyph: "back10"; onTapped: veyra.seekBy(-10) }
 
                 // .play: 40px white circle with the play/pause glyph.
                 Item {
@@ -203,7 +221,7 @@ Rectangle {
                     TapHandler { id: playTap; gesturePolicy: TapHandler.WithinBounds; onTapped: veyra.togglePlayPause() }
                 }
 
-                CBtn { glyph: "fwd10"; onTapped: veyra.seekBy(10) }
+                CBtn { visible: !bar.narrowWorkspace; glyph: "fwd10"; onTapped: veyra.seekBy(10) }
                 CBtn {
                     objectName: "cine-audio-tracks"
                     glyph: audioMenu.captureSource ? "vol" : "music"
@@ -447,6 +465,7 @@ Rectangle {
             // .pill with a status dot: the dot reports the engine's state, and
             // the label is the preset actually in use.
             VPill {
+                visible: bar.controlsWidth >= 510
                 key: ""
                 value: veyra.currentPresetName
                 maximumValueWidth: bar.compact ? 52 : 80
@@ -458,6 +477,7 @@ Rectangle {
             }
 
             RowLayout {
+                visible: !bar.narrowWorkspace
                 Layout.preferredHeight: 32
                 spacing: 6
                 VIcon { name: "vol"; color: Theme.t2 }
@@ -480,7 +500,7 @@ Rectangle {
                 }
             }
 
-            RotateButton { objectName: "cine-rotate" }
+            RotateButton { objectName: "cine-rotate"; visible: !bar.narrowWorkspace }
 
             Item {
                 implicitWidth: 32; implicitHeight: 32

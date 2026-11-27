@@ -65,15 +65,15 @@ Item {
             verify(overlay)
             const hint = findChild(overlay, "ps5-input-hint")
             overlay.active = true
-            expires(overlay, hint, "F2")
+            expires(overlay, hint, "F2 键位速查")
             wait(1000)
             compare(hint.visible, false)
             overlay.locked = true
-            expires(overlay, hint, "F1")
+            expires(overlay, hint, "F1 释放键鼠")
             mapper.driving = true
-            expires(overlay, hint, "Up")
+            expires(overlay, hint, "Up 油门")
             overlay.locked = false
-            expires(overlay, hint, "Ctrl+Alt+F1")
+            expires(overlay, hint, "Ctrl+Alt+F1 手柄面板")
         }
 
         function test_xbox_reference_uses_same_key_positions() {
@@ -81,7 +81,12 @@ Item {
             verify(overlay)
             mapper.quickReferenceRequested()
             compare(overlay.referenceOpen, true)
-            verify(overlay.row(3).includes("F / Ctrl+F  →  Y"))
+            const primary = findChild(overlay, "controller-panel-list-primary-3")
+            const alternate = findChild(overlay, "controller-panel-list-alternate-3")
+            verify(primary && alternate)
+            compare(primary.text, "F")
+            compare(alternate.text, "Ctrl+F")
+            verify(primary.accessibleText.includes("Y，主键 F，备用键 Ctrl+F"))
             mapper.quickReferenceRequested()
             compare(overlay.referenceOpen, false)
             compare(overlay.locked, true)
@@ -110,8 +115,12 @@ Item {
             verify(reference.x > data.width / 2)
             verify(reference.x + reference.width <= data.width)
             verify(reference.height <= data.height * 0.7)
-            verify(overlay.row(3).includes("F / Ctrl+F"))
-            verify(overlay.row(3).includes("Enter car"))
+            const primary = findChild(reference, "controller-panel-list-primary-3")
+            const alternate = findChild(reference, "controller-panel-list-alternate-3")
+            verify(primary && alternate)
+            compare(primary.text, "F")
+            compare(alternate.text, "Ctrl+F")
+            compare(primary.parent.parent.note, "Enter car")
             if (data.tag === "narrow") {
                 const list = findChild(reference, "console-keymap-bindings")
                 tryVerify(() => list.contentHeight > list.height)

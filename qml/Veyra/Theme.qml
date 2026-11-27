@@ -78,6 +78,17 @@ QtObject {
     readonly property color exp: "#B79BFF"
     readonly property color expSoft: Qt.rgba(0.718, 0.608, 1.0, 0.14)
 
+
+    // Platform face-button accents are shared by the diagram and key reference.
+    readonly property color padCross: "#6F9BE8"
+    readonly property color padCircle: "#E86A6F"
+    readonly property color padTriangle: "#4CC6A0"
+    readonly property color padSquare: "#D58BD1"
+    readonly property color padA: "#5CBF6A"
+    readonly property color padB: "#E35B50"
+    readonly property color padX: "#4C8DE6"
+    readonly property color padY: "#E9C341"
+
     // --- geometry (--r-win / --r-card / --r-ctl) --------------------------
     // The window radius is 8px, small, because Windows' own default is small.
     // The video surface is NEVER rounded: .video in the prototype carries

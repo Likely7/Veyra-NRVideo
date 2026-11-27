@@ -7,6 +7,7 @@ DialogLayer {
     readonly property var prompt: backend.ps5LoginPrompt || ({})
     readonly property string requestId: prompt.requestId || ""
     property string offeredRequestId: ""
+    property bool inlinePrompt: false
     objectName: "ps5-login-pin-dialog"
     key: "ps5-pin"
     title: qsTr("PS5 要求输入登录 PIN")
@@ -16,6 +17,10 @@ DialogLayer {
     minimumBodyWidth: 0
 
     function refreshPrompt() {
+        if (inlinePrompt) {
+            if (shown) dialogHost.close()
+            return
+        }
         if (!requestId.length) {
             if (shown) dialogHost.close()
             return
@@ -30,6 +35,7 @@ DialogLayer {
         }
     }
     onRequestIdChanged: Qt.callLater(refreshPrompt)
+    onInlinePromptChanged: Qt.callLater(refreshPrompt)
     Component.onCompleted: Qt.callLater(refreshPrompt)
     Connections {
         target: panel.dialogHost

@@ -55,6 +55,15 @@ DialogLayer {
         text: qsTr("非官方：使用与 Greenlight 等开源客户端相同的方式连接微软的串流服务，不隶属于微软，微软随时可能改动导致失效。仅限你自己的账号和主机。")
     }
     DialogSection { text: qsTr("账号") }
+    ControllerPanelButton {
+        objectName: "controller-panel-xbox-entry"
+        Layout.alignment: Qt.AlignLeft
+        visible: !!veyra.ps5Input
+        text: qsTr("手柄映射")
+        trailingIcon: "chevronRight"
+        onClicked: dialogHost.openPs5Mapping(true)
+    }
+
     DialogGroup {
         VRow {
             label: xbDialog.st.signedIn ? qsTr("已登录") : qsTr("未登录")
@@ -156,15 +165,6 @@ DialogLayer {
             label: qsTr("手柄")
             hint: qsTr("把电脑手柄当作主机上的手柄")
             VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: checked => xbDialog.xb.set("gamepad", checked) }
-        }
-        VRow {
-            visible: !xbDialog.chooseForCapture && !!veyra.ps5Input
-            label: qsTr("Xbox 键鼠映射")
-            VButton {
-                text: qsTr("键鼠设置")
-                ghost: true
-                onClicked: dialogHost.openPs5Mapping(true)
-            }
         }
         VRow {
             visible: !xbDialog.chooseForCapture

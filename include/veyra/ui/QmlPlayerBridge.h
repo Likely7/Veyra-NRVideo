@@ -1563,6 +1563,7 @@ signals:
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
+    void ps5PairSaved();
     void ps5LoginPromptChanged();
     void ps5ControlChanged();
     void xboxControlChanged();

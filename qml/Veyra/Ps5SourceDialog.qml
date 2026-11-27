@@ -119,11 +119,11 @@ DialogLayer {
         }
         VRow {
             visible: !!veyra.ps5Input
-            label: qsTr("控制方式")
-            VButton {
-                objectName: "open-ps5-mapping"
-                enabled: !veyra.ps5.viewOnly
-                text: (veyra.ps5Input?.keyboardEnabled ? qsTr("键鼠映射") : qsTr("实体手柄")) + " · " + (veyra.ps5Input?.profile || "Default")
+            label: qsTr("手柄控制")
+            ControllerPanelButton {
+                objectName: "controller-panel-ps5-entry"
+                text: qsTr("手柄映射")
+                trailingIcon: "chevronRight"
                 onClicked: dialogHost.openPs5Mapping()
             }
         }

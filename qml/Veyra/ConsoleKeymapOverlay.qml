@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-only
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -12,65 +13,68 @@ Item {
     property bool xbox: false
     property bool referenceOpen: false
     property bool showDriving: false
-    property string hintText: ""
+    property var hintParts: []
+    readonly property string hintText: hintParts.map(part => part.keys.concat([part.label]).join(" ")).join(" · ")
     readonly property real uiScale: Math.max(1, Math.min(1.65, height / 800))
     signal editRequested()
 
     ConsolePadLabels { id: labels; xbox: overlay.xbox }
 
-    function availableKeys(driving, action) {
-        const primary = driving ? input?.drivingBindings : input?.bindings
-        const alternate = driving ? input?.drivingAlternateBindings : input?.alternateBindings
-        return [primary?.[action], alternate?.[action]].filter(key => key && key !== "—").join(" / ")
+    function chords(driving, action) {
+        return [labels.binding(input, driving, action), labels.binding(input, driving, action, 1)]
+            .filter(key => key && key !== "—")
     }
-    function keysFor(driving, actions) {
-        return actions.map(action => availableKeys(driving, action)).filter(Boolean).join(" · ")
-    }
+    function groupChords(driving, actions) { return actions.reduce((keys, action) => keys.concat(chords(driving, action)), []) }
     function row(action) {
-        const keys = availableKeys(showDriving, action)
-        if (!keys) return ""
-        const notes = showDriving ? input?.drivingActionNotes : input?.actionNotes
-        const note = notes?.[action] || ""
-        return keys + "  →  " + labels.names[action] + (note ? " · " + note : "")
+        const keys = chords(showDriving, action)
+        if (!keys.length) return ""
+        const note = labels.actionNote(input, showDriving, action)
+        return keys.join(" / ") + "  →  " + labels.names[action] + (note ? " · " + note : "")
     }
     function showHint(reason) {
         if (!active || !input) return
-        const walk = qsTr("步行")
-        const drive = qsTr("驾驶")
-        const toggle = input.driveKeyLabel
-        const quick = input.quickKeyLabel
-        let parts = []
+        const walking = qsTr("步行")
+        const driving = qsTr("驾驶")
+        const other = input.driving ? walking : driving
+        const parts = []
+        const add = (label, keys = []) => {
+            parts.push({ label: label, keys: keys.filter(key => key && key !== "—") })
+        }
         if (reason === "locked") {
-            parts.push(qsTr("键鼠已接管"), input.driving ? drive : walk)
-            if (toggle && toggle !== "—")
-                parts.push(qsTr("%1 切到%2").arg(toggle).arg(input.driving ? walk : drive))
-            if (quick && quick !== "—") parts.push(qsTr("%1 查看键位").arg(quick))
-            parts.push(qsTr("%1 释放鼠标").arg(input.unlockLabel))
-            if (input.lowLatencyActive === true) parts.push(qsTr("低延迟模式 · 补帧暂停"))
+            add(qsTr("键鼠控制中 · %1").arg(input.driving ? driving : walking))
+            if (input.driveKeyLabel && input.driveKeyLabel !== "—")
+                add(qsTr("切到%1").arg(other), [input.driveKeyLabel])
+            if (input.quickKeyLabel && input.quickKeyLabel !== "—")
+                add(qsTr("键位速查"), [input.quickKeyLabel])
+            add(qsTr("释放键鼠"), [input.unlockLabel])
+            if (input.lowLatencyActive === true) add(qsTr("低延迟模式 · 补帧暂停"))
         } else if (reason === "layout") {
-            parts.push(qsTr("已切到%1").arg(input.driving ? drive : walk))
+            add(qsTr("已切到%1").arg(input.driving ? driving : walking))
             if (input.driving) {
-                const gas = availableKeys(true, 17)
-                const brake = availableKeys(true, 16)
-                const steer = keysFor(true, [20, 21])
-                if (gas) parts.push(qsTr("%1 油门").arg(gas))
-                if (brake) parts.push(qsTr("%1 刹车").arg(brake))
-                if (steer) parts.push(qsTr("%1 转向").arg(steer))
+                const gas = chords(true, 17)
+                const brake = chords(true, 16)
+                const steer = groupChords(true, [20, 21])
+                if (gas.length) add(qsTr("油门"), gas)
+                if (brake.length) add(qsTr("刹车"), brake)
+                if (steer.length) add(qsTr("转向"), steer)
             } else {
-                const move = keysFor(false, [18, 19, 20, 21])
-                if (move) parts.push(qsTr("%1 移动").arg(move))
+                const move = groupChords(false, [18, 19, 20, 21])
+                if (move.length) add(qsTr("移动"), move)
             }
-            if (toggle && toggle !== "—")
-                parts.push(qsTr("%1 切回%2").arg(toggle).arg(input.driving ? walk : drive))
+            if (input.driveKeyLabel && input.driveKeyLabel !== "—")
+                add(qsTr("切回%1").arg(other), [input.driveKeyLabel])
         } else if (reason === "released") {
-            parts.push(qsTr("已释放键鼠"), qsTr("点击画面重新接管"), "Ctrl+Alt+F1 " + qsTr("键鼠设置"))
+            add(qsTr("已释放键鼠"))
+            add(qsTr("点击画面开始键鼠控制"))
+            add(qsTr("手柄面板"), ["Ctrl+Alt+F1"])
         } else {
-            parts.push(qsTr("点击画面接管键鼠"))
-            if (quick && quick !== "—") parts.push(qsTr("%1 查看键位").arg(quick))
+            add(qsTr("点击画面开始键鼠控制"))
+            if (input.quickKeyLabel && input.quickKeyLabel !== "—")
+                add(qsTr("键位速查"), [input.quickKeyLabel])
         }
         hintFade.stop()
         hint.opacity = 1
-        hintText = parts.join(" · ")
+        hintParts = parts
         hintTimer.restart()
     }
     function toggleReference() {
@@ -83,7 +87,7 @@ Item {
 
     onActiveChanged: {
         if (active) showHint(locked ? "locked" : "ready")
-        else { hintText = ""; referenceOpen = false }
+        else { hintParts = []; referenceOpen = false }
     }
     onLockedChanged: showHint(locked ? "locked" : "released")
     onSuppressedChanged: if (suppressed) referenceOpen = false
@@ -110,37 +114,80 @@ Item {
         target: hint
         property: "opacity"
         to: 0
-        duration: 300
-        onFinished: overlay.hintText = ""
+        duration: Theme.d(300)
+        onFinished: overlay.hintParts = []
     }
     Timer { id: referenceTimer; interval: 15000; onTriggered: overlay.referenceOpen = false }
 
+    FontMetrics {
+        id: hintMetrics
+        font.family: Theme.fontUi
+        font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
+    }
     Rectangle {
         id: hint
         objectName: "ps5-input-hint"
         readonly property bool videoCover: visible
         readonly property real coverRadius: radius
+        readonly property bool calibrating: overlay.input?.aimTesting === true
         visible: overlay.active && !overlay.suppressed && !overlay.referenceOpen &&
-            (overlay.hintText.length > 0 || overlay.input?.aimTesting === true)
+            (overlay.hintParts.length > 0 || calibrating)
         anchors.top: parent.top
         anchors.topMargin: 55
         anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width - 24, hintLabel.implicitWidth + 24)
-        height: hintLabel.implicitHeight + 12
+        width: Math.max(1, Math.min(parent.width - 24, calibrating ? aimLabel.implicitWidth + 24
+            : hintMetrics.advanceWidth(overlay.hintText) + 18 + 18 * overlay.hintParts.reduce((sum, part) => sum + part.keys.length, 0)))
+        height: (calibrating ? aimLabel.implicitHeight : hintFlow.implicitHeight) + 12
         radius: 8
         color: Theme.dialog
         border.color: Theme.stroke2
-        TapHandler { enabled: !overlay.locked; onTapped: overlay.editRequested() }
+        TapHandler { enabled: !overlay.locked && !hint.calibrating; onTapped: overlay.editRequested() }
         Text {
-            id: hintLabel
+            id: aimLabel
             anchors.centerIn: parent
-            width: hint.width - 24
-            text: overlay.input?.aimTesting === true ? overlay.input.aimStatus : overlay.hintText
+            width: Math.max(0, hint.width - 24)
+            visible: hint.calibrating
+            text: overlay.input?.aimStatus || ""
             wrapMode: Text.Wrap
             horizontalAlignment: Text.AlignHCenter
             color: Theme.t1
-            font.family: Theme.fontUi
-            font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
+            font.family: hintMetrics.font.family
+            font.pixelSize: hintMetrics.font.pixelSize
+        }
+        Flow {
+            id: hintFlow
+            anchors.centerIn: parent
+            width: Math.max(0, hint.width - 18)
+            visible: !hint.calibrating
+            spacing: 6
+            Repeater {
+                model: overlay.hintParts
+                delegate: Flow {
+                    id: part
+                    required property var modelData
+                    width: Math.min(hintFlow.width, hintMetrics.advanceWidth(modelData.label) +
+                        modelData.keys.reduce((sum, chord) =>
+                            sum + Math.max(18, hintMetrics.advanceWidth(chord) + 8) + 3, 0))
+                    spacing: 3
+                    Repeater {
+                        model: part.modelData.keys
+                        delegate: KeyCap {
+                            required property string modelData
+                            size: "s"
+                            text: modelData
+                        }
+                    }
+                    Text {
+                        width: Math.min(implicitWidth, part.width)
+                        text: part.modelData.label
+                        color: Theme.t1
+                        font.family: hintMetrics.font.family
+                        font.pixelSize: hintMetrics.font.pixelSize
+                        wrapMode: Text.Wrap
+                        topPadding: part.modelData.keys.length ? 1 : 0
+                    }
+                }
+            }
         }
     }
 
@@ -150,7 +197,7 @@ Item {
         readonly property bool videoCover: visible
         readonly property real coverRadius: radius
         visible: overlay.active && !overlay.suppressed && overlay.referenceOpen
-        width: Math.min(parent.width * 0.5 - 18, 336 * overlay.uiScale)
+        width: Math.max(1, Math.min(parent.width * 0.5 - 18, 336 * overlay.uiScale))
         height: Math.min(parent.height * 0.7, 530 * overlay.uiScale)
         anchors.right: parent.right
         anchors.rightMargin: Math.max(12, parent.width * 0.022)
@@ -158,26 +205,60 @@ Item {
         radius: 12
         color: Qt.rgba(Theme.dialog.r, Theme.dialog.g, Theme.dialog.b, 0.96)
         border.color: Theme.stroke2
+
         ColumnLayout {
             anchors.fill: parent
             anchors.margins: 12
-            spacing: 8
+            spacing: 6
+            RowLayout {
+                Layout.fillWidth: true
+                Text {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 0
+                    text: qsTr("键位速查")
+                    color: Theme.t1
+                    wrapMode: Text.Wrap
+                    font.family: Theme.fontUi
+                    font.bold: true
+                    font.pixelSize: Math.round(Theme.fsBody * overlay.uiScale)
+                }
+                ControllerPanelButton {
+                    objectName: "controller-panel-reference-edit"
+                    text: qsTr("编辑")
+                    ghost: true
+                    maxTextWidth: 88
+                    enabled: !overlay.locked
+                    onClicked: {
+                        overlay.editRequested()
+                        overlay.referenceOpen = false
+                    }
+                }
+            }
             Text {
                 Layout.fillWidth: true
                 text: qsTr("当前：%1").arg(overlay.input?.driving ? qsTr("驾驶") : qsTr("步行"))
-                color: Theme.t1
+                color: Theme.t2
                 wrapMode: Text.Wrap
                 font.family: Theme.fontUi
-                font.bold: true
-                font.pixelSize: Math.round(Theme.fsBody * overlay.uiScale)
+                font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
             }
-            VSeg {
-                current: overlay.showDriving ? "drive" : "walk"
-                options: [{id:"walk", label:qsTr("步行")}, {id:"drive", label:qsTr("驾驶")}]
-                onPicked: mode => {
-                    overlay.showDriving = mode === "drive"
-                    rowsView.contentY = 0
-                    referenceTimer.restart()
+            RowLayout {
+                Layout.fillWidth: true
+                Repeater {
+                    model: [qsTr("步行"), qsTr("驾驶")]
+                    delegate: ControllerPanelButton {
+                        required property int index
+                        required property string modelData
+                        text: modelData
+                        primary: overlay.showDriving === (index === 1)
+                        maxTextWidth: 66
+                        fontSize: Theme.fsSmall
+                        onClicked: {
+                            overlay.showDriving = index === 1
+                            rowsView.contentY = 0
+                            referenceTimer.restart()
+                        }
+                    }
                 }
             }
             Flickable {
@@ -192,33 +273,20 @@ Item {
                 ScrollBar.vertical: ScrollBar { }
                 ColumnLayout {
                     id: rows
-                    width: rowsView.width - 8
+                    width: Math.max(0, rowsView.width - 8)
                     spacing: 6
                     Repeater {
-                        model: [
-                            { title: qsTr("移动"), actions: overlay.showDriving ? [18,19,26,10] : [18,19,20,21,26,10] },
-                            { title: qsTr("驾驶"), actions: overlay.showDriving ? [17,16,20,21,33] : [] },
-                            { title: qsTr("视角"), actions: [22,23,24,25], mouse: true },
-                            { title: qsTr("战斗"), actions: overlay.showDriving ? [8,9,11,32] : [17,16,8,9,11,32] },
-                            { title: qsTr("交互"), actions: [0,1,2,3] },
-                            { title: qsTr("菜单"), actions: overlay.xbox ? [4,5,6,7,12,13,15,27] : [4,5,6,7,12,13,14,15,27,28,29,30,31] }
-                        ]
+                        model: labels.groups(overlay.showDriving)
                         delegate: ColumnLayout {
                             id: group
+                            required property int index
                             required property var modelData
                             Layout.fillWidth: true
-                            spacing: 3
-                            readonly property var lines: {
-                                const result = modelData.actions.map(action => overlay.row(action)).filter(Boolean)
-                                const tune = overlay.input?.tuning
-                                if (modelData.mouse && tune?.mouseLook !== false) {
-                                    const ads = overlay.availableKeys(overlay.showDriving, Number(tune?.adsAction ?? 16))
-                                    result.unshift(qsTr("鼠标 → 右摇杆"))
-                                    if (ads) result.push(qsTr("%1 开镜 · %2×").arg(ads).arg(Number(tune?.adsScale ?? 1).toFixed(2)))
-                                }
-                                return result
-                            }
-                            visible: lines.length > 0
+                            spacing: 2
+                            readonly property var actions: modelData.actions.filter(action =>
+                                overlay.chords(overlay.showDriving, action).length)
+                            readonly property bool mouseLook: index === 1 && overlay.input?.tuning?.mouseLook !== false
+                            visible: actions.length > 0 || mouseLook
                             Text {
                                 Layout.fillWidth: true
                                 text: group.modelData.title
@@ -227,41 +295,71 @@ Item {
                                 font.bold: true
                                 font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
                             }
+                            Text {
+                                Layout.fillWidth: true
+                                visible: group.mouseLook
+                                text: qsTr("鼠标 → 右摇杆")
+                                wrapMode: Text.Wrap
+                                color: Theme.t2
+                                font.family: Theme.fontUi
+                                font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
+                            }
                             Repeater {
-                                model: group.lines
-                                delegate: Text {
-                                    required property string modelData
+                                model: group.actions
+                                delegate: BindingRow {
+                                    required property int modelData
                                     Layout.fillWidth: true
-                                    text: modelData
-                                    color: Theme.t1
-                                    wrapMode: Text.Wrap
-                                    font.family: Theme.fontUi
-                                    font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
+                                    compact: true
+                                    action: modelData
+                                    xbox: overlay.xbox
+                                    uiScale: overlay.uiScale
+                                    label: labels.names[action]
+                                    note: labels.actionNote(overlay.input, overlay.showDriving, action)
+                                    primary: labels.binding(overlay.input, overlay.showDriving, action)
+                                    alternate: labels.binding(overlay.input, overlay.showDriving, action, 1)
+                                    toggleBinding: labels.toggles(overlay.input, action, overlay.showDriving)
                                 }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                readonly property var ads: overlay.chords(overlay.showDriving,
+                                    Number(overlay.input?.tuning?.adsAction ?? 16))
+                                visible: group.mouseLook && ads.length > 0
+                                text: qsTr("%1 开镜 · %2×").arg(ads.join(" / ")).arg(Number(overlay.input?.tuning?.adsScale ?? 1).toFixed(2))
+                                color: Theme.t2
+                                wrapMode: Text.Wrap
+                                font.family: Theme.fontUi
+                                font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
                             }
                         }
                     }
                 }
             }
             Repeater {
-                model: {
-                    const entries = []
-                    if (overlay.input?.driveKeyLabel && overlay.input.driveKeyLabel !== "—")
-                        entries.push(qsTr("%1 切换步行／驾驶").arg(overlay.input.driveKeyLabel))
-                    if (overlay.input?.unlockLabel)
-                        entries.push(qsTr("%1 释放鼠标").arg(overlay.input.unlockLabel))
-                    if (overlay.input?.quickKeyLabel && overlay.input.quickKeyLabel !== "—")
-                        entries.push(qsTr("%1 关闭本面板").arg(overlay.input.quickKeyLabel))
-                    return entries
-                }
-                delegate: Text {
-                    required property string modelData
+                model: [
+                    { key: overlay.input?.driveKeyLabel, label: qsTr("切换步行／驾驶") },
+                    { key: overlay.input?.unlockLabel, label: qsTr("释放键鼠") },
+                    { key: overlay.input?.quickKeyLabel, label: qsTr("关闭本面板") }
+                ].filter(item => item.key && item.key !== "—")
+                delegate: RowLayout {
+                    id: help
+                    required property var modelData
                     Layout.fillWidth: true
-                    text: modelData
-                    color: Theme.t2
-                    wrapMode: Text.Wrap
-                    font.family: Theme.fontUi
-                    font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
+                    spacing: 5
+                    KeyCap {
+                        text: help.modelData.key
+                        size: "s"
+                        Layout.maximumWidth: Math.max(24, reference.width * 0.57)
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        Layout.minimumWidth: 0
+                        text: help.modelData.label
+                        color: Theme.t2
+                        wrapMode: Text.Wrap
+                        font.family: Theme.fontUi
+                        font.pixelSize: Math.round(Theme.fsSmall * overlay.uiScale)
+                    }
                 }
             }
         }

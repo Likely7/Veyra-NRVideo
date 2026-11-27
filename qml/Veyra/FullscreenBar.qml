@@ -25,6 +25,10 @@ Window {
     signal requestMove()
     signal requestHide()
     signal requestPlaylist()
+    property int rightInset: 0
+    property bool controllerPanelAvailable: false
+    property bool controllerPanelOpen: false
+    signal requestControllerPanel()
     // Pointer movement over the bar keeps the controls up (the main window cannot
     // see it here).
     signal activity()
@@ -65,14 +69,16 @@ Window {
     readonly property int menuRoom: 440
     // At least 760: the transport needs the middle column. A portrait film's narrow
     // window lets the pill reach past the picture's sides.
-    readonly property bool wideTimeline: !cinema && veyra.timelineSeekable && owner.width - 48 >= 760
-    readonly property int barWidth: wideTimeline ? owner.width - 48 : Math.min(860, Math.max(760, owner.width - 48))
+    readonly property int workspaceWidth: owner.width - rightInset
+    readonly property bool wideTimeline: !cinema && veyra.timelineSeekable && workspaceWidth - 48 >= 760
+    readonly property int barWidth: wideTimeline ? workspaceWidth - 48
+        : Math.min(860, Math.max(rightInset > 0 ? 1 : 760, workspaceWidth - 48))
     width: barWidth
     height: 92 + menuRoom
     // Centred; fullscreen: 24px above the screen's bottom edge (the design's 24px
     // side margin); cinema: .cine-bar top = --pic-h - 46. Kept on the owner's screen.
     x: {
-        const cx = owner.x + Math.round((owner.width - width) / 2)
+        const cx = owner.x + Math.round((workspaceWidth - width) / 2)
         const s = owner.screen
         return s ? Math.max(s.virtualX, Math.min(cx, s.virtualX + s.width - width)) : cx
     }
@@ -139,6 +145,9 @@ Window {
         onRequestMove: win.requestMove()
         onRequestHide: win.requestHide()
         onRequestPlaylist: win.requestPlaylist()
+        controllerPanelAvailable: win.controllerPanelAvailable
+        controllerPanelOpen: win.controllerPanelOpen
+        onRequestControllerPanel: win.requestControllerPanel()
         HoverHandler {
             // Real movement only: hover repeats while the bar animates.
             property point last: Qt.point(-1, -1)

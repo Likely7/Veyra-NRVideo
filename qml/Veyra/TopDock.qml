@@ -30,6 +30,9 @@ Item {
     property bool pillToggleVisible: false
     property bool pillHidden: false
     signal requestTogglePill()
+    property bool controllerPanelAvailable: false
+    property bool controllerPanelOpen: false
+    signal requestControllerPanel()
 
     property bool opened: false
     // Mirrors st.dockPinned in the design: pinned stays open regardless of hover.
@@ -281,6 +284,16 @@ Item {
                 }
                 HoverHandler { id: pillHover; cursorShape: Qt.PointingHandCursor }
                 TapHandler { id: pillTap; onTapped: dockRoot.requestTogglePill() }
+            }
+
+            ControllerPanelButton {
+                objectName: "controller-panel-dock"
+                visible: dockRoot.controllerPanelAvailable
+                icon: true
+                iconName: "gamepad"
+                ghost: !dockRoot.controllerPanelOpen
+                tip: qsTr("手柄映射")
+                onClicked: dockRoot.requestControllerPanel()
             }
 
             // .dock-live: the engine-running lamp. Lit only when the engine really

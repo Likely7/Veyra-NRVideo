@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-27 手柄控制侧边面板
+
+从本地 main `08d2e28a` 建立 `codex/controller-panel-20261127`。采集卡、PS5、Xbox 共用连接、方式、键位和手感页。首次选择键鼠会显示默认键位说明及档案选择。右侧工具窗口在宽窗让出视频区域，在窄窗以覆盖模式显示。F2 的编辑入口恢复正在查看的步行或驾驶布局。原 Windows 输入模块区分视频、录键与预览的窗口，档案继续使用原 JSON 格式。 [操作说明](CONTROLLER_PANEL.md)
+
+- 并发 2 运行 `py -3.11 -B -X utf8 E:/项目/Veyra/tmp/controller-panel-20261127/build-local.py E:/项目/Veyra/worktrees/controller-panel-20261127 veyra_qml_ui veyra_qml_quick_tests veyra_remoteplay_boundary_tests veyra_xbox_tests veyra_moonlight_protocol_tests veyra_ui_i18n_tests`。构建通过，后续 QML 调整同步到同一个构建目录。PS5 输入与重连边界通过，Xbox 137 项和 Moonlight 135 项通过。九种翻译均无缺失或占位符错误。 [构建日志](<E:/项目/Veyra/logs/codex-controller-panel-20261127/build-20261127-041202/compile.log>)
+- 程序目录内运行 `veyra_qml_quick_tests.exe -platform offscreen -input ./qml-tests`，297 项通过，1 项可选栅格对比跳过。原生 Windows 测试中的两例美颜按钮坐标测试在 `08d2e28a` 同样失败，使用离屏后通过。PS5 配对、登录 PIN 和 Xbox 登录、选主机通过测试夹具验证。实体主机未联机。 [全量界面日志](<E:/项目/Veyra/logs/codex-controller-panel-20261127/final-staged-quick-tests.log>) · [基线对照](<E:/项目/Veyra/logs/codex-controller-panel-20261127/baseline-native-beauty.log>)
+- 播放同一视频，展开及收回各调一次交换链，视频继续播放。Windows 录键和面板点击保护共通过 12 项。旧档案的 2449 DPI、横向灵敏度、未识别字段及新键位重启后保留。两种主题均检查了 100% 和 150% 缩放。试用入口使用单独的配置和现有程序依赖。 [原生录键与画面](<E:/项目/Veyra/logs/codex-controller-panel-20261127/shipped-keyboard-mouse/result.json>) · [重启](<E:/项目/Veyra/logs/codex-controller-panel-20261127/shipped-profile-reload/result.json>) · [试用入口](<E:/项目/Veyra/tests/codex-controller-panel-20261127/Open controller panel test.cmd>)
+
 ## 2026-11-26 实际回放与后续性能对照
 
 - 用原始 1440p H.264 码流循环构造同一段 GTA 实录对照。29.97 FPS 输入加 VFG 2×，旧版 P99 17.011–17.038 ms、提交 1% Low 58.69–58.78 FPS，候选 P99 17.023–17.025 ms、提交 1% Low 58.74 FPS。120 Hz 无损夹具中约 26.6 ms 的长尾可与一次 10.47 ms 软件解码阻塞对齐。用户确认本轮用视频，实体主机未开。 [逐帧对照](<E:/项目/Veyra/logs/codex-github-fixes-20261126/replay>)

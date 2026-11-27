@@ -36,6 +36,9 @@ Window {
     // app screenshot can be compared under the same name.
     property string page: "home"
     readonly property bool onboardingActive: onboarding.visible
+    readonly property int controllerInset: controllerPanel.rightInset
+    readonly property int videoAreaWidth: Math.max(0, width - controllerInset)
+    onControllerInsetChanged: Qt.callLater(videoHost.syncRect)
     // The node page splitter: height of its video card (picture + 40px bar).
     property real nodeVideoHeight: 330
     // Every navigation goes through here: "专业" means the node page while the
@@ -249,11 +252,11 @@ Window {
         // Fullscreen is a video-only viewport (AppShell): the picture is the screen
         // and the controls float above it in their own window (FullscreenBar).
         if ((fullscreen || (maximized && page === "min")) && page !== "home" && page !== "set")
-            return { x: 0, y: 0, width: width, height: height }
+            return { x: 0, y: 0, width: videoAreaWidth, height: height }
         switch (page) {
         case "min":
             // .min .stage: full width, height = the picture height.
-            return { x: 0, y: 0, width: width, height: Math.round(pictureHeight) }
+            return { x: 0, y: 0, width: videoAreaWidth, height: Math.round(pictureHeight) }
         case "pro":
             // Share the page's responsive header, transport and status dimensions.
             // A second fixed-height formula let the HWND cover the playback bar.
@@ -261,7 +264,7 @@ Window {
         case "node":
             return nodePage.videoViewport
         case "exp":
-            return ExportLayout.calculate(width, height, exportPage.compactTab).video
+            return ExportLayout.calculate(videoAreaWidth, height, exportPage.compactTab).video
         default:
             return { x: 0, y: 0, width: 0, height: 0 }
         }
@@ -272,6 +275,7 @@ Window {
     Item {
         id: pages
         anchors.fill: parent
+        anchors.rightMargin: root.controllerInset
         // In fullscreen the picture covers the page, and the native video window
         // passes the pointer through: a hidden page control must not take a click
         // meant for the picture.
@@ -346,6 +350,8 @@ Window {
     DialogHost {
         id: dialogs
         anchors.fill: parent
+        anchors.rightMargin: root.controllerInset
+        controllerPanel: controllerPanel
         onboardingActive: root.onboardingActive
         // The dialogs open the source through the bridge; show the picture.
         onStartPs5: if (root.page === "home") root.goPage("min")
@@ -403,7 +409,10 @@ Window {
     // The dock floats above every page and retracts on its own.
     TopDock {
         id: dock
-        anchors.horizontalCenter: parent.horizontalCenter
+        width: root.videoAreaWidth
+        controllerPanelAvailable: root.controllerEntryAvailable
+        controllerPanelOpen: controllerPanel.opened
+        onRequestControllerPanel: root.toggleControllerPanel()
         // The node page is the professional mode's node view.
         currentPage: root.page === "node" ? "pro" : root.page
         maximized: root.maximized || root.fullscreen
@@ -806,7 +815,21 @@ Window {
     readonly property bool xboxKeyboardReady: xboxMappingSource && veyra.ps5Input?.xboxKeyboardEnabled === true &&
         (veyra.sourceKind === "xbox" ? veyra.xbox?.state?.stream?.state === "streaming" && veyra.xbox.state.gamepad !== false
             : veyra.xboxControl?.state === "connected")
-    onXboxMappingSourceChanged: if (dialogs.dialog === "") veyra.ps5Input?.selectPlatform(xboxMappingSource)
+    readonly property bool controllerEntryAvailable: !!veyra.ps5Input
+        && (veyra.ps5Control?.available === true || veyra.xboxControl?.available === true)
+        && ["ps5", "xbox", "capture"].indexOf(veyra.sourceKind) >= 0
+        && !root.ps5InputLocked && !veyra.moonlightCaptured && !root.onboardingActive
+    function controllerOptions() {
+        if (dialogs.dialog === "ps5") return {platform: "ps5", captureOnly: false}
+        if (dialogs.dialog === "xbox") return {platform: "xbox", captureOnly: dialogs.xboxHostPicker}
+        const xbox = veyra.sourceKind === "xbox" || veyra.xboxControl?.state === "connected"
+            || (veyra.xboxControl?.enabled === true && veyra.ps5Control?.enabled !== true)
+        return {platform: xbox ? "xbox" : "ps5",
+            captureOnly: veyra.sourceKind !== "ps5" && veyra.sourceKind !== "xbox"}
+    }
+    function toggleControllerPanel() { controllerPanel.toggle(root.controllerOptions()) }
+    onXboxMappingSourceChanged: if (dialogs.dialog === "" && !controllerPanel.opened)
+        veyra.ps5Input?.selectPlatform(xboxMappingSource)
     readonly property bool consoleKeymapOnVideo: veyra.hasSource &&
         (root.page === "min" || root.page === "pro" || root.page === "node") &&
         (root.ps5KeyboardReady || root.xboxKeyboardReady || root.ps5InputLocked)
@@ -835,13 +858,14 @@ Window {
     ConsoleKeymapOverlay {
         id: consoleKeymap
         anchors.fill: parent
+        anchors.rightMargin: root.controllerInset
         z: 92
         input: veyra.ps5Input
         xbox: root.xboxMappingSource
         active: root.consoleKeymapOnVideo
         locked: root.ps5InputLocked
         suppressed: dialogs.dialog !== "" || veyra.moonlightCaptured
-        onEditRequested: dialogs.openPs5Mapping(root.xboxMappingSource)
+        onEditRequested: dialogs.openPs5Mapping(root.xboxMappingSource, "bindings", consoleKeymap.showDriving)
     }
     Connections {
         target: veyra.ps5Input
@@ -865,31 +889,54 @@ Window {
     Shortcut {
         sequence: "Ctrl+Alt+F1"
         enabled: !!veyra.ps5Input && !root.ps5InputLocked && !veyra.moonlightCaptured
-        onActivated: dialogs.openPs5Mapping(root.xboxMappingSource)
+        onActivated: root.toggleControllerPanel()
     }
-    VButton {
-        id: ps5QuickMapping
-        objectName: "ps5-quick-mapping"
-        readonly property bool videoCover: true
-        visible: root.quickPanelShown && !!veyra.ps5Input && !root.ps5InputLocked
-                 && (veyra.sourceKind==="ps5" || veyra.sourceKind==="capture" || veyra.sourceKind==="xbox") && dialogs.dialog===""
-        anchors.right: parent.right; anchors.bottom: parent.bottom
-        anchors.margins: 16
-        z: 91
-        text: qsTr("键鼠设置")
-        onClicked: dialogs.openPs5Mapping(root.xboxMappingSource)
+
+    ControllerPanelWindow {
+        id: controllerPanel
+        owner: root
+        bridge: veyra
+        onCaptureSettingsRequested: dialogs.open("capture")
+        onCaptureFocusRequested: {
+            if (dialogs.dialog !== "") dialogs.close()
+            root.requestActivate()
+        }
+        onStreamStarted: {
+            if (dialogs.dialog === "ps5" || dialogs.dialog === "xbox") dialogs.close()
+            if (root.page === "home") root.goPage("min")
+            else if (root.page === "set") root.goPage("pro")
+        }
+        onStartKeyboardRequested: xbox => {
+            consoleCaptureStart.xbox = xbox
+            consoleCaptureStart.attempts = 0
+            consoleCaptureStart.restart()
+        }
+        onOpenedChanged: if (!opened && !root.ps5InputLocked)
+            veyra.ps5Input?.selectPlatform(root.xboxMappingSource)
     }
-    VButton {
-        objectName: "console-keymap-quick-reference"
-        readonly property bool videoCover: visible
-        visible: ps5QuickMapping.visible && consoleKeymap.active
-        anchors.right: ps5QuickMapping.left
-        anchors.rightMargin: 8
-        anchors.bottom: ps5QuickMapping.bottom
-        z: 91
-        text: qsTr("查看键位")
-        onClicked: consoleKeymap.toggleReference()
+
+    // Windows hands focus back to the player after clicking a native tool
+    // window. The bridge still verifies foreground ownership before capture.
+    Timer {
+        id: consoleCaptureStart
+        interval: 20
+        repeat: true
+        property bool xbox: false
+        property int attempts: 0
+        onTriggered: {
+            if (!controllerPanel.opened || !controllerPanel.connected || controllerPanel.xbox !== xbox) {
+                stop()
+                return
+            }
+            const grabbed = xbox ? veyra.xboxCaptureKeyboard() : veyra.ps5CaptureKeyboard()
+            if (grabbed) stop()
+            else if (++attempts >= 10) {
+                stop()
+                toast.show(qsTr("点击画面开始键鼠控制"), false)
+            }
+        }
     }
+
     StreamHud {
         id: streamHud
         x: 16
@@ -908,6 +955,10 @@ Window {
     FullscreenBar {
         id: fullBar
         owner: root
+        rightInset: root.controllerInset
+        controllerPanelAvailable: root.controllerEntryAvailable
+        controllerPanelOpen: controllerPanel.opened
+        onRequestControllerPanel: Qt.callLater(root.toggleControllerPanel)
         // Windowed cinema: the pill straddles the picture edge (D1). It hides under
         // an open dialog, which lives in the main window below it.
         cinema: root.cinema && !root.fullscreen

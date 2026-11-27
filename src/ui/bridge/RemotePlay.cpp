@@ -17,9 +17,15 @@ QVariantMap QmlPlayerBridge::ps5() const {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     out["available"] = true;
     const auto& s = impl_->snapshot;
+    const bool opening = (s.remotePlay && s.transport == engine::TransportState::Opening) || (impl_->ps5Watching && impl_->openingSource);
     out["active"] = s.remotePlay && (s.running || s.transport == engine::TransportState::Opening || s.transport == engine::TransportState::Stopping);
+    out["state"] = s.remotePlay && s.failed ? QStringLiteral("failed")
+        : s.remotePlay && s.remoteRecovering ? QStringLiteral("recovering")
+        : opening ? QStringLiteral("starting")
+        : ps5VideoActive() ? QStringLiteral("connected") : QStringLiteral("off");
     const auto c = impl_->controller.capabilities();
     out["controller"] = c.connected;
+    out["pad"] = c.connected ? QString::fromStdString(c.name) : QString{};
     out["gyro"] = c.gyro && c.accel;
     out["calibrating"] = c.calibrating;
     out["touchpadPressOnly"] = impl_->prefBool("ps5TouchpadPressOnly",false);
@@ -127,7 +133,7 @@ bool QmlPlayerBridge::xboxCaptureKeyboard() {
 #ifdef VEYRA_ENABLE_XBOX
     auto& i = *impl_;
     if (i.streamInput && i.videoWindow && xboxInputTarget()) {
-        i.streamInput->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+        i.streamInput->setWindow(GetAncestor(i.videoWindow, GA_ROOT), i.videoWindow);
         return i.streamInput->captureXbox(true);
     }
 #endif
@@ -284,8 +290,10 @@ void QmlPlayerBridge::tickXbox() {
         i.xboxTimer->stop();
         i.releasePad(Impl::PadXbox);
     }
+    const auto c = i.controller.capabilities();
     const QVariantMap next{{"state", state}, {"keepaliveFps", control.stream.receivedFps},
-        {"message", i18n::text(control.stream.message)}};
+        {"message", i18n::text(control.stream.message)},
+        {"pad", (i.padUsers & Impl::PadXbox) && c.connected ? QString::fromStdString(c.name) : QString{}}};
     if (i.xboxControlState != next) {
         i.xboxControlState = next;
         emit xboxControlChanged();
@@ -321,7 +329,7 @@ bool QmlPlayerBridge::ps5CaptureKeyboard() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto& i = *impl_;
     if (i.streamInput && i.videoWindow && ps5InputTarget()) {
-        i.streamInput->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+        i.streamInput->setWindow(GetAncestor(i.videoWindow, GA_ROOT), i.videoWindow);
         return i.streamInput->capturePs5(true);
     }
 #endif
@@ -561,6 +569,8 @@ std::string asciiOnly(const QString& s) {
              { std::lock_guard lock(impl_->ps5Mutex); impl_->ps5Outcome = std::move(result); } impl_->ps5Done = true; }); } while (0)
 void QmlPlayerBridge::ps5Scan() {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
+    if (impl_->ps5Busy) return;
+    impl_->ps5Form.remove(QStringLiteral("discoveredHosts"));
     auto work = [](std::stop_token stop) {
         Impl::Ps5Outcome out; auto report = remoteplay::discoverLocalPs5(stop);
         for (const auto& line : report.diagnostics) veyra::log::info("remoteplay-discovery", line);
@@ -761,6 +771,7 @@ void QmlPlayerBridge::ps5Calibrate() {
 void QmlPlayerBridge::tickPs5() {
     auto& i = *impl_;
     bool changed = false;
+    bool pairSaved = false;
     if (i.ps5Busy && i.ps5Done.load()) {
         if (i.ps5Worker.joinable()) i.ps5Worker.join();
         i.ps5Busy = false;
@@ -771,8 +782,18 @@ void QmlPlayerBridge::tickPs5() {
             i.ps5Profile = r.savedPath;
             WritePrivateProfileStringW(L"RemotePlay", L"LastProfile", i.ps5Profile.c_str(), ps5Settings().c_str());
             const auto status = i.ps5Status; ps5Load(); i.ps5Status = status;
+            pairSaved = true;
         }
         if (!r.hosts.empty()) {
+            // Also offer discovery results when adding a second console. The existing
+            // selected profile still only changes address when its ID matches.
+            QStringList hosts;
+            for (const auto& entry : r.hosts) {
+                const auto address = QString::fromStdString(entry.first);
+                if (hosts.size() == 16) break;
+                if (!hosts.contains(address)) hosts.push_back(address);
+            }
+            i.ps5Form[QStringLiteral("discoveredHosts")] = hosts;
             // A found console updates the selected pairing's address only when its
             // id matches (or the legacy profile had no id and the same host).
             const auto path = i.ps5Profile.empty() ? std::filesystem::path{} : remoteplay::profileDirectory() / i.ps5Profile;
@@ -813,6 +834,7 @@ void QmlPlayerBridge::tickPs5() {
     }
 #endif
     if (changed) emit ps5Changed();
+    if (pairSaved) emit ps5PairSaved();
     tickPs5Control();
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     const auto& s=i.snapshot;
@@ -902,7 +924,7 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
         auto saved = i.ps5Profile.empty() ? std::nullopt : remoteplay::loadProfile(remoteplay::profileDirectory() / i.ps5Profile);
         if (!saved) {
             i.engine.stopRemoteControl();
-            if (!i.ps5ControlNoPair) emit notice(tr("PS5 手柄控制：还没有配对的 PS5，先在「PS5 串流」里配对一次"), true);
+            if (!i.ps5ControlNoPair) emit notice(tr("还没有配对的 PS5，请在手柄面板里配对。"), true);
             i.ps5ControlNoPair = true;
             tickPs5Control(true);
             return;
@@ -984,7 +1006,7 @@ void QmlPlayerBridge::tickPs5Control(bool force) {
     if (const QString forced = qEnvironmentVariable("VEYRA_TEST_PS5_CONTROL_STATE"); !forced.isEmpty() && st.requested) state = forced;
     QVariantMap next;
     next[QStringLiteral("state")] = state;
-    next[QStringLiteral("message")] = state == QLatin1String("nopair") ? tr("还没有配对的 PS5，先在「PS5 串流」里配对一次") : uiText(st.message);
+    next[QStringLiteral("message")] = state == QLatin1String("nopair") ? tr("还没有配对的 PS5，请在手柄面板里配对。") : uiText(st.message);
     next[QStringLiteral("keepaliveFps")] = st.keepaliveReady ? std::round(st.keepaliveFps) : -1.0;
     const auto c = i.controller.capabilities();
     next[QStringLiteral("pad")] = (i.padUsers & Impl::PadPs5Control) && c.connected ? QString::fromStdString(c.name) : QString();
@@ -994,7 +1016,7 @@ void QmlPlayerBridge::tickPs5Control(bool force) {
     i.ps5ControlState = next;
     if (state != i.ps5ControlNoticed) {
         if (state == QLatin1String("connected")) emit notice(tr("PS5 手柄控制已连接"), false);
-        else if (state == QLatin1String("pin")) emit notice(tr("PS5 要求输入登录 PIN：在采集卡面板「PS5 手柄控制」里填写"), false);
+        else if (state == QLatin1String("pin")) emit notice(tr("PS5 要求输入登录 PIN，请在手柄面板里填写。"), false);
         else if (state == QLatin1String("failed")) {
             const QString reason = next.value(QStringLiteral("message")).toString();
             emit notice(reason.isEmpty() ? tr("PS5 手柄控制已停止") : reason, true);

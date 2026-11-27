@@ -6,8 +6,9 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
-#include <QCursor>
 #include <QQuickItem>
+#include <QQuickWindow>
+#include <windowsx.h>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -28,7 +29,7 @@ using Mapper = remoteplay::KeyboardMousePad;
 
 bool clicksLearningControl(const QQuickItem* item, const QPointF& cursor) {
     if (!item || !item->isVisible() || !item->isEnabled()) return false;
-    const bool contains = item->contains(item->mapFromGlobal(cursor));
+    const bool contains = item->contains(item->mapFromScene(cursor));
     // Buttons in the dialog keep their normal click, including its Close and
     // Back buttons. Non-button targets such as the diagram opt in explicitly.
     if (contains && (item->metaObject()->indexOfSignal("clicked()") >= 0 ||
@@ -208,8 +209,9 @@ Mapper::Tuning newProfileTuning() {
 // keyboard messages on the editor path and never receives mapped game events.
 struct StreamInputCapture::ConsoleInputWorker {
     ConsoleInputWorker(StreamInputCapture& owner, HWND target, std::shared_ptr<remoteplay::MappedController> mapped,
-                       int unlock, int quick, uint64_t nativeTarget)
-        : owner(owner), target(target), mapped(std::move(mapped)), unlock(unlock), quick(quick), nativeTarget(nativeTarget) {}
+                       int unlock, int quick, uint64_t nativeTarget, bool preview)
+        : owner(owner), target(target), mapped(std::move(mapped)), unlock(unlock), quick(quick),
+          nativeTarget(nativeTarget), preview(preview) {}
 
     bool start() {
         std::promise<bool> ready;
@@ -227,7 +229,7 @@ struct StreamInputCapture::ConsoleInputWorker {
             if (!hwnd) { ready.set_value(false); return; }
             threadId = GetCurrentThreadId();
             RAWINPUTDEVICE devices[] = {
-                {0x01, 0x02, RIDEV_INPUTSINK | RIDEV_NOLEGACY, hwnd},
+                {0x01, 0x02, RIDEV_INPUTSINK | (preview ? 0u : RIDEV_NOLEGACY), hwnd},
                 {0x01, 0x06, RIDEV_INPUTSINK | RIDEV_NOLEGACY, hwnd}
             };
             const bool registered = RegisterRawInputDevices(devices, 2, sizeof(RAWINPUTDEVICE));
@@ -286,14 +288,14 @@ private:
         for (int k = VK_LSHIFT; k <= VK_RMENU; ++k)
             if (pressed[k]) mods |= Mapper::modifier(k);
         const int chord = Mapper::encode(key, mods);
-        if (down && unlockChord(chord, unlock)) { release(); return; }
+        if (down && ((preview && key == VK_ESCAPE) || unlockChord(chord, unlock))) { release(); return; }
         if (mapped->aimKey(key, down)) return;
-        if (key == quickDown || (down && chord == quick)) {
+        if (!preview && (key == quickDown || (down && chord == quick))) {
             quickDown = down ? key : 0;
             if (down) QMetaObject::invokeMethod(&owner, &StreamInputCapture::quickReferenceRequested, Qt::QueuedConnection);
             return;
         }
-        if (key >= VK_F7 && key <= VK_F10) {
+        if (!preview && key >= VK_F7 && key <= VK_F10) {
             if (down) QMetaObject::invokeMethod(&owner, [&capture = owner, chord] {
                 emit capture.applicationHotkeyRequested(bindingLabel(chord));
             }, Qt::QueuedConnection);
@@ -380,6 +382,7 @@ private:
     std::shared_ptr<remoteplay::MappedController> mapped;
     int unlock, quick, quickDown = 0;
     uint64_t nativeTarget = 0;
+    bool preview = false;
     uint8_t buttons = 0;
     bool active = true;
     std::array<bool, 256> pressed{};
@@ -415,9 +418,10 @@ StreamInputCapture::~StreamInputCapture() {
     if (auto* app = QCoreApplication::instance()) app->removeNativeEventFilter(this);
 }
 
-void StreamInputCapture::setWindow(HWND window) {
+void StreamInputCapture::setWindow(HWND window, HWND videoViewport) {
     if (window_ != window) { quickKeyDown_ = 0; end(); cancelLearning(); }
     window_ = window;
+    viewport_ = videoViewport;
 }
 
 bool StreamInputCapture::capture(bool on) {
@@ -446,23 +450,25 @@ bool StreamInputCapture::captureXbox(bool on) {
 
 bool StreamInputCapture::begin(Route route) {
     if (route_ == route) return true;
-    if (!window_ || GetForegroundWindow() != window_) return false;
+    const HWND window = route == Route::Preview ? previewWindow_ : window_;
+    if (!window || GetForegroundWindow() != window) return false;
     end();
     cancelLearning();
     const uint64_t destination = route == Route::Ps5 && ps5Target_ ? ps5Target_() :
         route == Route::Xbox && xboxTarget_ ? xboxTarget_() : 0;
     const bool native = route == Route::Xbox && nativeXbox_ && !armedAimMode_;
     if (route == Route::Moonlight) {
-        RAWINPUTDEVICE device{0x01, 0x02, 0, window_};
+        RAWINPUTDEVICE device{0x01, 0x02, 0, window};
         if (!RegisterRawInputDevices(&device, 1, sizeof(device))) {
             veyra::log::warn("stream-input", "RegisterRawInputDevices failed");
             return false;
         }
     } else {
-        auto mapped = std::make_shared<remoteplay::MappedController>(mapper_, [window = window_] {
+        auto mapped = std::make_shared<remoteplay::MappedController>(mapper_, [window] {
             return GetAncestor(GetForegroundWindow(), GA_ROOT) == window;
         });
-        auto worker = std::make_unique<ConsoleInputWorker>(*this, window_, mapped, mapper_.tuning().unlock, quickKey_, native ? destination : 0);
+        auto worker = std::make_unique<ConsoleInputWorker>(*this, window, mapped, mapper_.tuning().unlock,
+            quickKey_, native ? destination : 0, route == Route::Preview);
         if (!worker->start()) {
             veyra::log::warn("console-input", "Raw keyboard and mouse registration failed");
             return false;
@@ -504,12 +510,14 @@ bool StreamInputCapture::begin(Route route) {
             emit aimStatusChanged();
         }
     }
-    if(route_!=Route::Moonlight){
-        restoreCursor_=GetCursorPos(&savedCursor_)!=FALSE;
-        suspendIme();
+    if (route_ != Route::Moonlight) {
+        restoreCursor_ = route_ != Route::Preview && GetCursorPos(&savedCursor_) != FALSE;
+        suspendIme(window);
     }
-    clipToWindow();
-    SetCursor(nullptr);
+    if (route_ != Route::Preview) {
+        clipToWindow();
+        SetCursor(nullptr);
+    }
     if (route_ != Route::Moonlight) {
         inputDiagnostics_ = {};
         if (route_ == Route::Preview) {
@@ -543,6 +551,7 @@ void StreamInputCapture::end() {
     if (route_ == Route::None) return;
     const Route old = route_;
     route_ = Route::None;
+    if (old == Route::Preview) previewWindow_ = nullptr;
     timer_.stop();
     if (mapped_) mapped_->stop();
     if (aimTest_) {
@@ -598,11 +607,14 @@ void StreamInputCapture::end() {
 }
 
 void StreamInputCapture::clipToWindow() {
+    if (route_ == Route::Preview) return;
+    const bool console = route_ == Route::Ps5 || route_ == Route::Xbox;
+    const HWND window = console && IsWindowVisible(viewport_) ? viewport_ : window_;
     RECT client{};
-    if (!window_ || !GetClientRect(window_, &client)) return;
+    if (!window || !GetClientRect(window, &client)) return;
     POINT topLeft{client.left, client.top}, bottomRight{client.right, client.bottom};
-    ClientToScreen(window_, &topLeft);
-    ClientToScreen(window_, &bottomRight);
+    ClientToScreen(window, &topLeft);
+    ClientToScreen(window, &bottomRight);
     if(route_!=Route::Moonlight){
         POINT center{(topLeft.x+bottomRight.x)/2,(topLeft.y+bottomRight.y)/2};
         RECT point{center.x,center.y,center.x+1,center.y+1};
@@ -617,7 +629,9 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     if (eventType != "windows_generic_MSG") return false;
     if (route_ == Route::None && learning_ < 0 && !quickReferenceEnabled_ && !quickKeyDown_) return false;
     const MSG* msg = static_cast<const MSG*>(message);
-    if (!msg->hwnd || GetAncestor(msg->hwnd, GA_ROOT) != window_) return false;
+    const HWND window = learning_ >= 0 ? learningWindow_ :
+        route_ == Route::Preview ? previewWindow_ : window_;
+    if (!msg->hwnd || !window || GetAncestor(msg->hwnd, GA_ROOT) != window) return false;
     WPARAM keyParam=msg->wParam;
     const bool keyMessage = msg->message == WM_KEYDOWN || msg->message == WM_KEYUP ||
         msg->message == WM_SYSKEYDOWN || msg->message == WM_SYSKEYUP;
@@ -650,14 +664,30 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
             if (down && !repeat) end();
             return consume();
         }
-        if (learning_ >= 0 && repeat && down) return consume();
+        if (learning_ >= 0 && down) {
+            if (repeat) return consume();
+            if (key == VK_ESCAPE) {
+                cancelLearning();
+                return consume();
+            }
+            if (key == VK_BACK && !mapper_.modifiers() && learning_ < Mapper::ActionCount) {
+                clearBinding(learning_, learningDriving_, learningSlot_);
+                return consume();
+            }
+        }
     }
     if (route_ == Route::None && learning_ < 0) return false;
     if(learning_>=0 && (msg->message==WM_KILLFOCUS||(msg->message==WM_ACTIVATE&&LOWORD(msg->wParam)==WA_INACTIVE))){cancelLearning();return false;}
     if (learning_ >= 0) {
-        if (msg->message == WM_LBUTTONDOWN &&
-            clicksLearningControl(qobject_cast<QQuickItem*>(learningControls_.data()), QCursor::pos()))
-            return false;
+        if (msg->message == WM_LBUTTONDOWN) {
+            const auto* controls = qobject_cast<QQuickItem*>(learningControls_.data());
+            if (controls && controls->window()) {
+                POINT click{GET_X_LPARAM(msg->lParam), GET_Y_LPARAM(msg->lParam)};
+                MapWindowPoints(msg->hwnd, window, &click, 1);
+                const auto scale = controls->window()->devicePixelRatio();
+                if (clicksLearningControl(controls, QPointF(click.x / scale, click.y / scale))) return false;
+            }
+        }
         if (!keyMessage && msg->message != WM_MOUSEWHEEL && msg->message != WM_MOUSEHWHEEL &&
             msg->message != WM_LBUTTONDOWN && msg->message != WM_RBUTTONDOWN &&
             msg->message != WM_MBUTTONDOWN && msg->message != WM_XBUTTONDOWN) return false;
@@ -678,6 +708,7 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
         return false;
     }
     case WM_SETCURSOR:
+        if (route_ == Route::Preview) return false;
         SetCursor(nullptr);
         if (result) *result = TRUE;
         return true;
@@ -918,20 +949,44 @@ void StreamInputCapture::learn(int action, QObject* learningControls, bool drivi
     if (action < 0 || action > LearnQuickKey || slot < 0 || slot >= Mapper::SlotCount) return;
     end();
     cancelLearning();
-    // The editor can be opened from Home before any video HWND exists.
-    window_ = GetForegroundWindow();
+    // An owned editor window has its own keyboard focus. Keep the player's
+    // HWND for the quick reference and for capture after the editor closes.
+    const auto* item = qobject_cast<QQuickItem*>(learningControls);
+    auto* tool = item ? item->window() : nullptr;
+    const HWND editor = tool && tool->isVisible() ? reinterpret_cast<HWND>(tool->winId()) : GetForegroundWindow();
     DWORD pid = 0;
-    GetWindowThreadProcessId(window_, &pid);
+    GetWindowThreadProcessId(editor, &pid);
     if (pid != GetCurrentProcessId()) return;
+    learningWindow_ = editor;
     mapper_.reset();
     router_.reset();
-    suspendIme();
+    suspendIme(learningWindow_);
     learningControls_ = learningControls;
     learningDriving_ = drivingLayout;
     learningSlot_ = slot;
     learning_ = action;
     learningModifier_ = 0;
     feedback_.clear();
+    emit mappingChanged();
+}
+void StreamInputCapture::learnPanelBinding(int action, QObject* learningControls, bool drivingLayout, int slot) {
+    if (action < 0 || action >= Mapper::ActionCount) return;
+    learn(action, learningControls, drivingLayout, slot);
+    panelLearning_ = learning_ == action;
+}
+QVariantMap StreamInputCapture::bindingConflict() const {
+    if (!conflict_.binding) return {};
+    return {{QStringLiteral("key"), bindingLabel(conflict_.binding)},
+            {QStringLiteral("source"), conflict_.source}};
+}
+void StreamInputCapture::resolveBindingConflict(bool move) {
+    if (!conflict_.binding) return;
+    const auto conflict = conflict_;
+    conflict_ = {};
+    if (move && mapper_.setBinding(conflict.action, conflict.binding, conflict.driving, conflict.slot)) {
+        feedback_ = tr("已将 %1 从原按键移到此处。").arg(bindingLabel(conflict.binding));
+        save();
+    }
     emit mappingChanged();
 }
 void StreamInputCapture::bind(int key, int modifiers) {
@@ -962,6 +1017,24 @@ void StreamInputCapture::bind(int key, int modifiers) {
     const bool isDriveKey = learning_ == Mapper::ActionCount;
     const bool moved = !isDriveKey && mapper_.hasBinding(encoded, learningDriving_) &&
         mapper_.bindings(learningDriving_, learningSlot_)[learning_] != encoded;
+    if (panelLearning_ && moved) {
+        for (int slot = 0; slot < Mapper::SlotCount; ++slot) {
+            const auto& keys = mapper_.bindings(learningDriving_, slot);
+            const auto existing = std::find(keys.begin(), keys.end(), encoded);
+            if (existing == keys.end()) continue;
+            conflict_ = {encoded, int(existing - keys.begin()), learning_, learningSlot_, learningDriving_};
+            restoreIme();
+            learning_ = -1;
+            panelLearning_ = false;
+            learningControls_.clear();
+            learningWindow_ = nullptr;
+            feedback_.clear();
+            mapper_.reset();
+            router_.reset();
+            emit mappingChanged();
+            return;
+        }
+    }
     const bool assigned = isDriveKey ? mapper_.setDriveKey(encoded)
         : mapper_.setBinding(learning_, encoded, learningDriving_, learningSlot_);
     if (!assigned) {
@@ -973,6 +1046,7 @@ void StreamInputCapture::bind(int key, int modifiers) {
         tr("已将 %1 从原按键移到此处。").arg(bindingLabel(encoded)) : QString{};
     restoreIme();
     learning_ = -1;
+    panelLearning_ = false;
     save();
     emit mappingChanged();
 }
@@ -1015,9 +1089,11 @@ void StreamInputCapture::clearBinding(int action, bool drivingLayout, int slot) 
     if (mapper_.setBinding(action, 0, drivingLayout, slot)) { save(); emit mappingChanged(); }
 }
 void StreamInputCapture::cancelLearning() {
-    if (learning_ < 0) return;
+    if (learning_ < 0 && !conflict_.binding) return;
     restoreIme();
     learning_ = -1;
+    panelLearning_ = false;
+    conflict_ = {};
     mapper_.reset();
     router_.reset();
     emit mappingChanged();
@@ -1081,8 +1157,9 @@ void StreamInputCapture::preview(bool on) {
     DWORD pid = 0;
     GetWindowThreadProcessId(window, &pid);
     if (pid != GetCurrentProcessId()) return;
-    setWindow(window);
-    begin(Route::Preview);
+    if (previewing()) return;
+    previewWindow_ = window;
+    if (!begin(Route::Preview)) previewWindow_ = nullptr;
 }
 void StreamInputCapture::releasePs5() {
     if (ps5Captured() || xboxCaptured() || previewing()) end();
@@ -1112,14 +1189,13 @@ void StreamInputCapture::load() {
     profile_ = selected;
     readProfile(json);
 }
-void StreamInputCapture::suspendIme(){
-    if(!imeWindow_&&window_){
-        imeWindow_=window_;
-        oldIme_=ImmAssociateContext(window_,nullptr);
-        const auto current=ImmGetContext(window_);
-        veyra::log::info("ps5-input",std::format("ime suspended={} previousContext={}",current==nullptr,oldIme_!=nullptr));
-        if(current)ImmReleaseContext(window_,current);
-    }
+void StreamInputCapture::suspendIme(HWND window) {
+    if (imeWindow_ || !window) return;
+    imeWindow_ = window;
+    oldIme_ = ImmAssociateContext(window, nullptr);
+    const auto current = ImmGetContext(window);
+    veyra::log::info("ps5-input", std::format("ime suspended={} previousContext={}", current == nullptr, oldIme_ != nullptr));
+    if (current) ImmReleaseContext(window, current);
 }
 void StreamInputCapture::restoreIme(){
     if(imeWindow_&&IsWindow(imeWindow_)){
@@ -1192,13 +1268,26 @@ QJsonObject StreamInputCapture::activeProfile()const{
     };
     QJsonArray pedals;
     for (int slot = 0; slot < Mapper::SlotCount; ++slot) pedals.append(mapper_.bindings(true, slot)[Mapper::HalfPedal]);
-    return {{"bindings", keys(false, 0)}, {"drivingBindings", keys(true, 0)},
-            {"alternateBindings", keys(false, 1)}, {"drivingAlternateBindings", keys(true, 1)},
-            {"drivingLayoutVersion", 2}, {"driveKey", mapper_.driveKey()},
-            {"quickKey", quickKey_}, {"actionNotes", QJsonArray::fromStringList(notes_[0])},
-            {"drivingActionNotes", QJsonArray::fromStringList(notes_[1])},
-            {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())},
-            {"xboxOnly", xboxOnlyProfile_}, {"halfPedalBindings", pedals}};
+    auto profile = profiles_.value(profile_).toObject();
+    profile.remove("gtaVProfile");
+    auto options = profile.value("tuning").toObject();
+    const auto current = tuning();
+    for (auto it = current.cbegin(); it != current.cend(); ++it)
+        options[it.key()] = QJsonValue::fromVariant(it.value());
+    profile["bindings"] = keys(false, 0);
+    profile["drivingBindings"] = keys(true, 0);
+    profile["alternateBindings"] = keys(false, 1);
+    profile["drivingAlternateBindings"] = keys(true, 1);
+    profile["drivingLayoutVersion"] = 2;
+    profile["driveKey"] = mapper_.driveKey();
+    profile["quickKey"] = quickKey_;
+    profile["actionNotes"] = QJsonArray::fromStringList(notes_[0]);
+    profile["drivingActionNotes"] = QJsonArray::fromStringList(notes_[1]);
+    profile["tuning"] = options;
+    profile["toggles"] = qint64(mapper_.toggleMask());
+    profile["xboxOnly"] = xboxOnlyProfile_;
+    profile["halfPedalBindings"] = pedals;
+    return profile;
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}
 void StreamInputCapture::setToggleAction(int action,bool on){
@@ -1219,6 +1308,84 @@ void StreamInputCapture::selectProfile(const QString& value,bool create){
     }
     selectDriving(false);
     save();emit mappingChanged();
+}
+bool StreamInputCapture::canRemoveProfile() const {
+    if (profile_ == QStringLiteral("默认")) return false;
+    for (auto item = profiles_.constBegin(); item != profiles_.constEnd(); ++item) {
+        if (item.key() == profile_) continue;
+        if (!item.value().toObject().value("xboxOnly").toBool() || (xboxPlatform_ && profile_ != ps5Profile_))
+            return true;
+    }
+    return false;
+}
+void StreamInputCapture::renameProfile(const QString& value) {
+    const auto name = value.trimmed();
+    if (!canRemoveProfile() || name.isEmpty() || name.size() > 40 || name == profile_) return;
+    if (profiles_.contains(name)) {
+        feedback_ = tr("档案名称已存在。");
+        emit mappingChanged();
+        return;
+    }
+    releasePs5();
+    const auto previousProfiles = profiles_;
+    const auto previousPs5 = ps5Profile_;
+    const auto previousXbox = xboxProfile_;
+    const auto previousName = profile_;
+    const auto active = activeProfile();
+    profiles_.remove(previousName);
+    profiles_[name] = active;
+    profile_ = name;
+    if (ps5Profile_ == previousName) ps5Profile_ = name;
+    if (xboxProfile_ == previousName) xboxProfile_ = name;
+    feedback_.clear();
+    if (!save()) {
+        profiles_ = previousProfiles;
+        ps5Profile_ = previousPs5;
+        xboxProfile_ = previousXbox;
+        profile_ = previousName;
+    }
+    emit mappingChanged();
+}
+void StreamInputCapture::removeProfile() {
+    if (!canRemoveProfile()) return;
+    const auto removed = profile_;
+    const auto replacement = [&](bool xbox) {
+        QString firstMatching;
+        for (auto item = profiles_.constBegin(); item != profiles_.constEnd(); ++item) {
+            if (item.key() == removed || (!xbox && item.value().toObject().value("xboxOnly").toBool()))
+                continue;
+            if (item.key() == QStringLiteral("默认")) return item.key();
+            if (firstMatching.isEmpty()) firstMatching = item.key();
+        }
+        return firstMatching;
+    };
+    const auto next = replacement(xboxPlatform_);
+    if (next.isEmpty()) return;
+    const auto nextPs5 = ps5Profile_ == removed ? replacement(false) : ps5Profile_;
+    const auto nextXbox = xboxProfile_ == removed ? replacement(true) : xboxProfile_;
+    if (nextPs5.isEmpty()) return;
+
+    releasePs5();
+    const auto previousProfiles = profiles_;
+    const auto previousPs5 = ps5Profile_;
+    const auto previousXbox = xboxProfile_;
+    const auto previousActive = activeProfile();
+    profiles_.remove(removed);
+    ps5Profile_ = nextPs5;
+    xboxProfile_ = nextXbox;
+    profile_ = next;
+    readProfile(profiles_.value(next).toObject());
+    feedback_.clear();
+    if (save()) {
+        selectDriving(false);
+    } else {
+        profiles_ = previousProfiles;
+        ps5Profile_ = previousPs5;
+        xboxProfile_ = previousXbox;
+        profile_ = removed;
+        readProfile(previousActive);
+    }
+    emit mappingChanged();
 }
 QStringList StreamInputCapture::profiles() const {
     QStringList list;
@@ -1263,7 +1430,7 @@ void StreamInputCapture::useTemplate(int index){
     }
     applyMouseTuning(t);
 }
-void StreamInputCapture::save() {
+bool StreamInputCapture::save() {
     profiles_[profile_] = activeProfile();
     (xboxPlatform_ ? xboxProfile_ : ps5Profile_) = profile_;
     auto json = profiles_.value(ps5Profile_).toObject();
@@ -1277,7 +1444,9 @@ void StreamInputCapture::save() {
     if (!file.open(QIODevice::WriteOnly) || file.write(data) != data.size() || !file.commit()) {
         feedback_ = tr("无法保存键鼠映射。");
         veyra::log::warn("stream-input", "saving PS5 keyboard mapping failed");
+        return false;
     }
+    return true;
 }
 
 } // namespace veyra::ui

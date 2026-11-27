@@ -318,6 +318,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"liveSubtitleSize", {0, 56}}, {"liveSubtitleShadow", {-1, 8}}, {"liveSubtitleLines", {0, 3}},
         // 列表模式 parameter panel width (ProPage splitter); QML clamps it to the window.
         {"listInspectorWidth", {376, 4000}},
+        {"controllerPanelWidth", {380, 520}},
         // Network sources (#48): seconds to collect before the first picture; -1 follows the buffer level.
         {"networkPrebuffer", {-1, 60}},
         {"networkTimeshift", {0, 600}},

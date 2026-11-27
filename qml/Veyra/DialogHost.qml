@@ -11,9 +11,8 @@ Item {
     z: 100
 
     property string dialog: ""
-    property string ps5MappingReturn: "ps5"
+    property var controllerPanel: null
     property bool xboxHostPicker: false
-    property bool xboxMapping: false
     property bool onboardingActive: false
     readonly property alias captureSettings: captureDialog
     readonly property bool captureGuideOpen: captureGuide.visible
@@ -36,11 +35,10 @@ Item {
         host.dialog = key
     }
     function close() { host.dialog = ""; xboxHostPicker = false }
-    function openPs5Mapping(xbox = false) {
-        ps5MappingReturn = dialog
-        xboxMapping = xbox
-        veyra.ps5Input?.selectPlatform(xbox)
-        open("ps5-mapping")
+    function openPs5Mapping(xbox = false, page = "", driving = undefined) {
+        const captureOnly = dialog === "capture" || (dialog === "xbox" && xboxHostPicker)
+            || (dialog === "" && veyra.sourceKind === "capture")
+        controllerPanel?.open({platform: xbox ? "xbox" : "ps5", page, driving, captureOnly})
     }
     function pickXboxHost() {
         xboxHostPicker = true
@@ -121,9 +119,12 @@ Item {
         id: ps5Dialog
         dialogHost: host    }
 
-    Ps5LoginPinDialog { dialogHost: host; backend: veyra }
-
-    Ps5MappingDialog { dialogHost: host; xboxMode: host.xboxMapping }
+    Ps5LoginPinDialog {
+        dialogHost: host
+        backend: veyra
+        inlinePrompt: host.controllerPanel?.inlinePin === true
+            && host.controllerPanel.captureOnly === (veyra.ps5LoginPrompt?.controlOnly === true)
+    }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
     // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once
