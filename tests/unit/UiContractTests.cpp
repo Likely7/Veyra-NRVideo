@@ -13,10 +13,49 @@
 #include "veyra/source/CaptureAudioClock.h"
 #include "veyra/source/DeckLinkInputConnection.h"
 #include "veyra/ui/InterfaceRenderer.h"
+#include "../../src/ui/StartupFullscreenRequest.h"
 #include <iostream>
 #include <vector>
 #include <stdexcept>
 void require(bool value,const char* why){if(!value)throw std::runtime_error(why);}
+
+void startupFullscreenContracts() {
+    using veyra::ui::StartupFullscreenRequest;
+    StartupFullscreenRequest resume;
+    require(!resume.take(1, false, true, 1), "startup fullscreen defaults off");
+    require(resume.arm() && resume.awaitingSession(), "an automatic request can wait for async open");
+    require(!resume.take(1, false, true, 1), "a frame before the resume opens cannot satisfy it");
+    resume.bind(2);
+    resume.bind(3);
+    require(resume.hasSession() && !resume.awaitingSession(), "the request binds exactly one session");
+    require(!resume.take(1, true, true, 1), "late shutdown of the previous session is ignored");
+    require(!resume.take(2, false, true, 0), "playing without an actual present waits");
+    require(!resume.take(2, false, true, 1), "a cached present from another session cannot trigger fullscreen");
+    require(!resume.take(2, false, false, 2), "a paused source remains in its current view");
+    require(resume.take(2, false, true, 2), "first real present of the resumed session enters fullscreen");
+    require(!resume.take(2, false, true, 2) && !resume.arm(), "startup fullscreen is a one-shot request");
+
+    StartupFullscreenRequest stopped;
+    require(stopped.arm(), "arm a delayed source");
+    stopped.cancel();
+    stopped.bind(4);
+    require(!stopped.awaitingSession() && !stopped.take(4, false, true, 4), "stop before async completion bars a stale open");
+
+    StartupFullscreenRequest manual;
+    manual.cancel();
+    require(!manual.arm(), "a manual source selected before the startup timer wins");
+
+    StartupFullscreenRequest replaced;
+    require(replaced.arm(), "arm a source before it is replaced");
+    replaced.bind(5);
+    require(!replaced.take(6, false, true, 6) && !replaced.take(5, false, true, 5), "a newer session invalidates the request");
+
+    StartupFullscreenRequest failed;
+    require(failed.arm(), "arm a source before it fails");
+    failed.bind(7);
+    require(!failed.take(7, true, true, 7) && !failed.take(7, false, true, 7), "terminal state wins even if a frame was submitted");
+}
+
 // Judge intentional rate changes against policy, never against measured output.
 void outputRateContracts(){
     using namespace veyra;
@@ -138,6 +177,7 @@ static void interfaceRendererContracts(){
 int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
     outputRateContracts();
+    startupFullscreenContracts();
     interfaceRendererContracts();
     {
         engine::EnhancementSettings fresh;

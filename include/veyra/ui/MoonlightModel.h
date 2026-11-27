@@ -33,6 +33,7 @@ public:
         source::MoonlightConnectDesc desc;
         QString label;          // "host · app", for the source title
         bool captureInput = true;
+        bool startupFullscreen = false;
     };
     // Starts the stream (the bridge opens the engine session); false if it could not.
     using LaunchFn = std::function<bool(Launch)>;
@@ -60,6 +61,7 @@ public:
     Q_INVOKABLE void quitApp();
     Q_INVOKABLE bool connectStream(int appId);
     Q_INVOKABLE bool resumeLast();
+    bool resumeLast(bool startupFullscreen);
     Q_INVOKABLE bool set(const QString& key, const QVariant& value);
 
     // For "继续上次" and the home card.
@@ -68,6 +70,7 @@ public:
 
 signals:
     void changed();
+    void manualOpenRequested();
     void started();   // the stream was handed to the player; the dialog can close
     void notice(const QString& text, bool isError);
 
@@ -95,7 +98,7 @@ private:
     void applyInfo(Host& host, const moonlight::ServerInfo& info);
     void reloadApps();
     moonlight::Identity identity();
-    bool launchSelected(int appId);
+    bool launchSelected(int appId, bool startupFullscreen = false);
 
     LaunchFn launch_;
     std::vector<Host> hosts_;

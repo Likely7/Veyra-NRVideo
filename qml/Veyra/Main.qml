@@ -1101,6 +1101,12 @@ Window {
         function onNotice(text, isError) { toast.show(text, isError) }
         function onWarningNotice(text) { toast.show(text, false, true) }
         function onOverlayRestartSuggested(kind) { onboarding.close(); overlayRestart.kind = kind; overlayRestart.open() }
+        function onStartupFullscreenRequested() {
+            const picturePage = root.page === "pro" || root.page === "min" || root.page === "node"
+            if (picturePage && !root.fullscreen && root.visibility !== Window.Minimized &&
+                dialogs.dialog === "" && !root.onboardingActive && !overlayRestart.shown)
+                root.toggleFullscreen()
+        }
         function onNavigate(p) {
             onboarding.close()
             // A dialog key opens the dialog; anything else is a page.

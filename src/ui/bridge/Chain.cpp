@@ -370,15 +370,17 @@ QString QmlPlayerBridge::captureSessionSummary() const {
     return parts.join(QStringLiteral(" · "));
 }
 
-void QmlPlayerBridge::resumeCaptureSession() {
+void QmlPlayerBridge::resumeCaptureSession() { resumeCaptureSession(false); }
+
+void QmlPlayerBridge::resumeCaptureSession(bool startupFullscreen) {
+    if (!acceptSourceRequest(startupFullscreen)) return;
     // "Continue": the remembered device, format, audio and colour, re-checked
     // against what the machine reports now; nothing else is picked for the user.
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
     if (impl_->capturePrefs.videoPath.empty()) { emit notice(tr("还没有采集记录"), true); return; }
     impl_->captureDevice = impl_->capturePrefs.videoPath;
     impl_->captureColor = impl_->capturePrefs.colorForDevice(impl_->captureDevice);
-    impl_->captureResumePending = true;
-    queryCapture(2, impl_->captureDevice);
+    queryCapture(2, impl_->captureDevice, startupFullscreen);
 }
 
 QString QmlPlayerBridge::colorStatus() const { return uiText(impl_->snapshot.colorStatus); }

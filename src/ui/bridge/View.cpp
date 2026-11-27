@@ -427,22 +427,29 @@ void QmlPlayerBridge::autoResumeLastSource(bool allowCapture) {
         return;
     }
     veyra::log::info("ui-startup","automatically resuming the last source");
-    resumeLastSource();
+    // Screen resume only restores a selection and opens its dialog.
+    const bool startupFullscreen = impl_->prefBool("startFullscreen", false) &&
+        last.value(QStringLiteral("kind")).toString() != QLatin1String("screen");
+    if (startupFullscreen && !impl_->startupFullscreen.arm()) return;
+    resumeSource(last, startupFullscreen);
 }
 void QmlPlayerBridge::resumeLastSource() {
-    const auto last = lastSource();
+    impl_->startupFullscreen.cancel();
+    resumeSource(lastSource(), false);
+}
+void QmlPlayerBridge::resumeSource(const QVariantMap& last, bool startupFullscreen) {
     const QString kind = last.value(QStringLiteral("kind")).toString();
     veyra::log::info("ui-resume-source", "kind=" + kind.toStdString());
     if(kind==QLatin1String("file")){
         const QString path=last.value(QStringLiteral("label")).toString();
         if(!QFileInfo(path).isFile()){emit notice(tr("上次的视频文件不存在：%1").arg(path),true);return;}
-        openPath(path);return;
+        openPath(path, startupFullscreen);return;
     }
-    if (kind == QLatin1String("capture")) { resumeCaptureSession(); return; }
+    if (kind == QLatin1String("capture")) { resumeCaptureSession(startupFullscreen); return; }
     if (kind == QLatin1String("ps5")) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
         ps5Load();
-        if (!ps5Connect()) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
+        if (!ps5Connect(startupFullscreen)) emit notice(tr("没能继续上次的 PS5 串流：%1").arg(impl_->ps5Status), true);
 #else
         emit notice(tr("此版本不含 PS5 串流"), true);
 #endif
@@ -450,7 +457,7 @@ void QmlPlayerBridge::resumeLastSource() {
     }
     if (kind == QLatin1String("xbox")) {
 #ifdef VEYRA_ENABLE_XBOX
-        if (!impl_->xbox || !impl_->xbox->resumeLast()) {
+        if (!impl_->xbox || !impl_->xbox->resumeLast(startupFullscreen)) {
             emit notice(tr("没能继续上次的 Xbox 串流，请在 Xbox 串流窗口里重新选择"), true);
             emit navigate(QStringLiteral("xbox"));
         }
@@ -461,7 +468,7 @@ void QmlPlayerBridge::resumeLastSource() {
     }
     if (kind == QLatin1String("moonlight")) {
 #ifdef VEYRA_ENABLE_MOONLIGHT
-        if (!impl_->moonlight || !impl_->moonlight->resumeLast()) {
+        if (!impl_->moonlight || !impl_->moonlight->resumeLast(startupFullscreen)) {
             emit notice(tr("没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择"), true);
             emit navigate(QStringLiteral("moonlight"));
         }

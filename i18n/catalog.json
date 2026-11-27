@@ -35688,6 +35688,32 @@
    "ru": "Возобновить положение видео или снова открыть последнее устройство захвата и настройки"
   },
   {
+   "zh": "自动继续后进入全屏",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動繼續後進入全螢幕",
+   "en": "Go fullscreen after resuming",
+   "ja": "自動再開後に全画面表示",
+   "ko": "자동 재개 후 전체 화면",
+   "es": "Pantalla completa tras reanudar",
+   "fr": "Plein écran après la reprise",
+   "de": "Nach dem Fortsetzen im Vollbild",
+   "pt-BR": "Tela cheia após retomar",
+   "ru": "Полный экран после продолжения"
+  },
+  {
+   "zh": "自动继续的画面出现后直接全屏，无需按键；需开启上一项",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "自動繼續的畫面出現後直接全螢幕，無需按鍵；需開啟上一項",
+   "en": "Switches to fullscreen when the video appears. Requires automatically resuming the last source.",
+   "ja": "自動再開した映像が表示されたら、キー操作なしで全画面にします。上の項目をオンにする必要があります",
+   "ko": "자동 재개된 화면이 나타나면 키 입력 없이 전체 화면으로 전환합니다. 위 항목을 켜야 합니다.",
+   "es": "Pasa a pantalla completa en cuanto aparece la imagen reanudada, sin pulsar teclas; requiere la opción anterior",
+   "fr": "Passe en plein écran dès que l’image reprise s’affiche, sans touche ; nécessite l’option ci-dessus",
+   "de": "Wechselt ins Vollbild, sobald das fortgesetzte Bild erscheint – ohne Tastendruck; erfordert die Option darüber",
+   "pt-BR": "Entra em tela cheia assim que a imagem retomada aparece, sem pressionar teclas; requer a opção acima",
+   "ru": "Переходит в полный экран, как только появляется продолженное изображение, без нажатия клавиш; требуется параметр выше"
+  },
+  {
    "zh": "视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)",
    "src": "src/ui/bridge/Chain.cpp",
    "zh-TW": "影片檔案 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有檔案 (*)",

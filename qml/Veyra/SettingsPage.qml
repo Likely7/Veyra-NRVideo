@@ -416,6 +416,16 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("自动继续后进入全屏")
+                            hint: qsTr("自动继续的画面出现后直接全屏，无需按键；需开启上一项")
+                            VSwitch {
+                                objectName: "set-start-fullscreen"
+                                enabled: !!veyra.preferences.autoResume
+                                checked: !!veyra.preferences.startFullscreen
+                                onToggled: v => veyra.setPreference("startFullscreen", v)
+                            }
+                        }
+                        VRow {
                             label: qsTr("记住播放位置")
                             hint: qsTr("重新打开同一个文件时从上次位置继续")
                             VSwitch {

@@ -641,16 +641,24 @@ source::MoonlightStreamOptions MoonlightModel::optionsFor(const Host* host) cons
 
 // --- starting a stream ---------------------------------------------------------------------------------
 
-bool MoonlightModel::connectStream(int appId) { return launchSelected(appId); }
+bool MoonlightModel::connectStream(int appId) {
+    emit manualOpenRequested();
+    return launchSelected(appId);
+}
 
 bool MoonlightModel::resumeLast() {
+    emit manualOpenRequested();
+    return resumeLast(false);
+}
+
+bool MoonlightModel::resumeLast(bool startupFullscreen) {
     if (!loaded_) { loadStore(); loaded_ = true; }
     if (lastHost_.isEmpty() || lastApp_ < 0 || !find(lastHost_)) return false;
     selected_ = lastHost_;
-    return launchSelected(lastApp_);
+    return launchSelected(lastApp_, startupFullscreen);
 }
 
-bool MoonlightModel::launchSelected(int appId) {
+bool MoonlightModel::launchSelected(int appId, bool startupFullscreen) {
     const Host* host = find(selected_);
     if (!host || !host->paired) { status_ = tr("请先和这台主机配对。"); emit changed(); return false; }
     if (busy_ || !launch_) return false;
@@ -662,7 +670,7 @@ bool MoonlightModel::launchSelected(int appId) {
     const QString hostName = host->name.isEmpty() ? host->address : host->name;
     struct Copy { QString id, address, cert; int port, httpsPort; bool nvidia; };
     const Copy h{host->id, host->address, host->cert, host->port, host->httpsPort, host->nvidia};
-    startJob(tr("正在联系主机…"), [this, h, appId, options, captureInput, appName, hostName](const std::atomic<bool>& cancel) -> std::function<void()> {
+    startJob(tr("正在联系主机…"), [this, h, appId, options, captureInput, appName, hostName, startupFullscreen](const std::atomic<bool>& cancel) -> std::function<void()> {
         const moonlight::Identity id = identity();
         moonlight::ServerClient client(id, moonlight::HostAddress{utf8(h.address), uint16_t(h.port)}, utf8(h.cert), uint16_t(h.httpsPort), !h.nvidia);
         client.setCancel(&cancel);
@@ -681,6 +689,7 @@ bool MoonlightModel::launchSelected(int appId) {
             return [this, hdr = options.hdr] { status_ = hdr ? tr("这台主机没有 10 位（HDR）编码能力，或选择的编码不支持 HDR。请关闭 HDR，或换编码。")
                                                           : tr("主机不支持所选的编码，请改成「自动」。"); };
         auto launch = std::make_shared<Launch>();
+        launch->startupFullscreen = startupFullscreen;
         launch->desc.identity = id;
         launch->desc.address = moonlight::HostAddress{utf8(h.address), uint16_t(h.port)};
         launch->desc.httpsPort = info.httpsPort;

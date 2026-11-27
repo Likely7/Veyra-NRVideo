@@ -260,8 +260,21 @@ void QmlPlayerBridge::tickPlaylist() {
     });
 }
 
-void QmlPlayerBridge::openPath(const QString& path) {
-    if (path.isEmpty()) return;
+bool QmlPlayerBridge::acceptSourceRequest(bool startupFullscreen) {
+    if (startupFullscreen) return impl_->startupFullscreen.awaitingSession();
+    impl_->startupFullscreen.cancel();
+    return true;
+}
+
+void QmlPlayerBridge::bindOpeningSession(bool startupFullscreen) {
+    impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+    if (startupFullscreen) impl_->startupFullscreen.bind(impl_->openingSessionId);
+}
+
+void QmlPlayerBridge::openPath(const QString& path) { openPath(path, false); }
+
+void QmlPlayerBridge::openPath(const QString& path, bool startupFullscreen) {
+    if (path.isEmpty() || !acceptSourceRequest(startupFullscreen)) return;
     const std::wstring wide = wideOf(path);
     const bool network=media::networkMediaInput(wide);
     if (!network && QFileInfo(path).isDir()) {
@@ -312,7 +325,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.network.timeshiftSeconds=impl_->prefInt("networkTimeshift",0);
     options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
     impl_->engine.open(impl_->videoWindow, wide, options);
-    impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+    bindOpeningSession(startupFullscreen);
     impl_->playlistSession = impl_->openingSessionId;
     impl_->resumeSession = 0;
     if (!network && (impl_->prefBool("rememberPosition", true) || impl_->prefBool("autoResume", false))) {
@@ -413,6 +426,7 @@ void QmlPlayerBridge::togglePlayPause() {
     veyra::log::info("ui-transport", pause ? "pause" : "resume");
 }
 void QmlPlayerBridge::stopPlayback() {
+    impl_->startupFullscreen.cancel();
     impl_->screenCropPreview = false;
     flushHdrMemory();
     impl_->playlistSession = 0;

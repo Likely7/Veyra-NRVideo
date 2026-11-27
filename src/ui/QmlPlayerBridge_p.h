@@ -3,6 +3,7 @@
 // Public QML API, ownership, polling and settings contracts remain in QmlPlayerBridge.h.
 #include "veyra/media/FFmpegDeinterlacer.h"
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "StartupFullscreenRequest.h"
 #include "veyra/gfx/PresentSink.h"
 #include "veyra/gfx/NvidiaVrr.h"
 #include "veyra/media/NetworkInput.h"
@@ -234,6 +235,7 @@ struct QmlPlayerBridge::Impl {
     bool haveSnapshot = false;
     bool openingSource = false;
     uint64_t openingSessionId = 0;
+    ui::StartupFullscreenRequest startupFullscreen;
     uint64_t vramNoticeSession = 0;   // the session the video-memory warning was shown for
     uint64_t tearingNoticeSession = 0;
 
@@ -431,10 +433,17 @@ struct QmlPlayerBridge::Impl {
     double resumeAt = 0;
     std::vector<sink::RenderEndpoint> audioEndpoints;
     // --- capture connection (P4-e) ---
-    struct CaptureQuery { int kind = 0; std::wstring device,requestedResolution; std::vector<source::CaptureDevice> video, audio; std::vector<source::CaptureFormat> formats;source::CaptureFormatQueryInfo info; bool virtualAudioInstalled=false; };
+    struct CaptureQueryRequest { int kind = 0; std::wstring device; bool startupFullscreen = false; };
+    struct CaptureQuery : CaptureQueryRequest {
+        std::wstring requestedResolution;
+        std::vector<source::CaptureDevice> video, audio;
+        std::vector<source::CaptureFormat> formats;
+        source::CaptureFormatQueryInfo info;
+        bool virtualAudioInstalled = false;
+    };
     std::future<CaptureQuery> captureQuery;
-    std::optional<std::pair<int,std::wstring>> captureNextQuery;
-    bool captureBusy = false, captureListed = false, captureResumePending = false;
+    std::optional<CaptureQueryRequest> captureNextQuery;
+    bool captureBusy = false, captureListed = false;
     bool captureDriverSettingsOpen = false;
     bool captureQueryTimedOut = false;
     std::chrono::steady_clock::time_point captureQueryStarted{};
@@ -860,9 +869,21 @@ struct QmlPlayerBridge::Impl {
         return true;
     }
 
-    bool poll() {
+    bool poll(bool& enterStartupFullscreen) {
         const auto before=facade.pendingSettings();
         auto frame = facade.poll();
+        // Read the live presentation counter even when the facade coalesces
+        // this snapshot for the UI. A decoded frame is not necessarily drawn.
+        if (startupFullscreen.hasSession()) {
+            const auto& s = frame.snapshot;
+            const auto& flow = s.metrics.flow;
+            using T = engine::TransportState;
+            const bool terminal = s.failed || s.image || s.transport == T::Empty || s.transport == T::Failed ||
+                s.transport == T::Stopping || s.transport == T::Ended;
+            const auto presentedSession = flow.counters.realPresented ? flow.latest.sessionId : 0;
+            enterStartupFullscreen = startupFullscreen.take(s.sessionId, terminal,
+                s.running && s.transport == T::Playing, presentedSession);
+        }
         const auto restored=facade.pendingSettings();
         const bool fgRollback=before.frameGenerationBackend!=restored.frameGenerationBackend||before.multiplier!=restored.multiplier||before.vfgQuality!=restored.vfgQuality;
         const bool nrRollback=before.nrRuntime!=restored.nrRuntime;

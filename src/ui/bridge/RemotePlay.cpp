@@ -163,7 +163,8 @@ void QmlPlayerBridge::setupXbox() {
     });
     i.xbox->setLaunchHandler([this](ui::XboxModel::Launch launch) -> bool {
         auto& j = *impl_;
-        if (!j.videoWindow) return false;
+        const bool startupFullscreen = launch.startupFullscreen;
+        if (!acceptSourceRequest(startupFullscreen) || !j.videoWindow) return false;
         if (j.engine.xboxControlStatus().requested) {
             j.engine.stopXboxControl();
             emit notice(tr("已退出 Xbox 手柄控制，正在连接完整串流。"), false);
@@ -178,12 +179,12 @@ void QmlPlayerBridge::setupXbox() {
         const bool pad = launch.desc.gamepad;
         const QString label = launch.label;
         auto request = std::make_shared<source::XboxConnectDesc>(std::move(launch.desc));
-        openAfterLivePage(tr("正在连接 Xbox · %1").arg(label), [this, request, pad] {
+        openAfterLivePage(tr("正在连接 Xbox · %1").arg(label), [this, request, pad, startupFullscreen] {
             auto& k = *impl_;
             if (k.preOpen) k.preOpen();
             k.engine.previewView({});
             k.engine.openXbox(k.videoWindow, std::move(*request), k.options);
-            k.openingSessionId = k.engine.snapshot().sessionId;
+            bindOpeningSession(startupFullscreen);
             refreshSubtitles({});
             // The protocol sender is independent. The timer supplies the SDL state.
             if (pad) {
@@ -193,7 +194,7 @@ void QmlPlayerBridge::setupXbox() {
                 if (k.xboxTimer) k.xboxTimer->stop();
                 k.releasePad(Impl::PadXbox);
             }
-        });
+        }, QStringLiteral("min"), startupFullscreen);
         rememberSource(QStringLiteral("xbox"), label);
         return true;
     });
@@ -336,9 +337,11 @@ void QmlPlayerBridge::setupMoonlight() {
     connect(i.streamInput.get(), &ui::StreamInputCapture::quitRequested, this, [this] { moonlightDisconnect(); });
     connect(i.streamInput.get(), &ui::StreamInputCapture::statsRequested, this, [this] { setMoonlightStatsVisible(!moonlightStatsVisible()); });
     connect(i.moonlight.get(), &ui::MoonlightModel::notice, this, &QmlPlayerBridge::notice);
+    connect(i.moonlight.get(), &ui::MoonlightModel::manualOpenRequested, this, [this] { impl_->startupFullscreen.cancel(); });
     i.moonlight->setLaunchHandler([this](ui::MoonlightModel::Launch launch) -> bool {
         auto& j = *impl_;
-        if (!j.videoWindow) return false;
+        const bool startupFullscreen = launch.startupFullscreen;
+        if (!acceptSourceRequest(startupFullscreen) || !j.videoWindow) return false;
         rememberPosition(true);
         emit mediaOpenRequested();
         j.openingSource = true;
@@ -350,12 +353,12 @@ void QmlPlayerBridge::setupMoonlight() {
         j.moonlightWantCapture = launch.captureInput;
         const QString label = launch.label;
         auto request = std::make_shared<source::MoonlightConnectDesc>(std::move(launch.desc));
-        openAfterLivePage(tr("正在连接 %1").arg(label), [this, request, pad] {
+        openAfterLivePage(tr("正在连接 %1").arg(label), [this, request, pad, startupFullscreen] {
             auto& k = *impl_;
             if (k.preOpen) k.preOpen();
             k.engine.previewView({});
             k.engine.openMoonlight(k.videoWindow, std::move(*request), k.options);
-            k.openingSessionId = k.engine.snapshot().sessionId;
+            bindOpeningSession(startupFullscreen);
             refreshSubtitles({});
 #ifdef VEYRA_ENABLE_REMOTEPLAY
             // The pad is polled on the UI thread at 250 Hz and sent only when it changes.
@@ -380,7 +383,7 @@ void QmlPlayerBridge::setupMoonlight() {
 #else
             (void)pad;
 #endif
-        });
+        }, QStringLiteral("min"), startupFullscreen);
         rememberSource(QStringLiteral("moonlight"), label);
         return true;
     });
@@ -583,7 +586,10 @@ void QmlPlayerBridge::ps5Pair(const QString& pinText) {
     Q_UNUSED(pinText);
 #endif
 }
-bool QmlPlayerBridge::ps5Connect() {
+bool QmlPlayerBridge::ps5Connect() { return ps5Connect(false); }
+
+bool QmlPlayerBridge::ps5Connect(bool startupFullscreen) {
+    if (!acceptSourceRequest(startupFullscreen)) return false;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
     auto& i = *impl_;
     if (i.ps5Busy) return false;
@@ -608,12 +614,12 @@ bool QmlPlayerBridge::ps5Connect() {
     emit mediaOpenRequested();
     i.openingSource = true; i.openingSessionId = 0; i.sourceLabel = L"PS5 · " + std::wstring(host.begin(), host.end()); i.resumeSession = 0; i.screenFillActive = false;
     auto request = std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
-    openAfterLivePage(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly] {
+    openAfterLivePage(tr("正在连接 PS5 · %1").arg(QString::fromStdString(host)), [this, request, viewOnly, startupFullscreen] {
         auto& i = *impl_;
         if (i.preOpen) i.preOpen();
         i.engine.previewView({});
         i.engine.openRemotePlay(i.videoWindow, std::move(*request), i.options);
-        i.openingSessionId = i.engine.snapshot().sessionId;
+        bindOpeningSession(startupFullscreen);
         refreshSubtitles({});
         // Controller forwarding at 8 ms, as 1.4.4; view-only leaves the pad to the PS5.
         // Started with the session: the poll stops the pad when no session runs.
@@ -638,7 +644,7 @@ bool QmlPlayerBridge::ps5Connect() {
             if (i.controllerTimer) i.controllerTimer->stop();
             i.releasePad(Impl::PadPs5);
         }
-    });
+    }, QStringLiteral("min"), startupFullscreen);
     i.ps5Watching = true;
     rememberSource(QStringLiteral("ps5"), QString::fromStdString(host));
     i.ps5Status = tr("连接已开始。需要登录 PIN 时在下方提交。关闭面板不停止串流。");

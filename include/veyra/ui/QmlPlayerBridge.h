@@ -1536,6 +1536,7 @@ public:
 
 signals:
     void mediaOpenRequested(); // Synchronous intent, before opening or waiting for success.
+    void startupFullscreenRequested();
 
     void playlistRequested();
     void nodeAnchorsChanged();
@@ -1623,10 +1624,17 @@ private:
     QString vrrSummaryText(int level) const;
     void applyPresentation();
     void applyAspect(bool force);
+    void resumeSource(const QVariantMap& last, bool startupFullscreen);
+    void openPath(const QString& path, bool startupFullscreen);
+    void resumeCaptureSession(bool startupFullscreen);
+    bool startCaptureSession(bool startupFullscreen);
+    bool ps5Connect(bool startupFullscreen);
+    bool acceptSourceRequest(bool startupFullscreen);
+    void bindOpeningSession(bool startupFullscreen);
     // From Home, show the destination and connection note before opening the
     // live source so the video viewport has time to settle.
     void openAfterLivePage(const QString& pending, std::function<void()> open,
-                           const QString& homeTarget = QStringLiteral("min"));
+                           const QString& homeTarget = QStringLiteral("min"), bool startupFullscreen = false);
     void rememberSource(const QString& kind, const QString& label);
     // Edits either mask node in the active chain; rolls back when refused.
     void updateMaskOverlay();
@@ -1663,9 +1671,10 @@ private:
 #ifdef VEYRA_ENABLE_MOONLIGHT
     void setupMoonlight();
 #endif
-    void queryCapture(int kind, std::wstring device);
+    void queryCapture(int kind, std::wstring device, bool startupFullscreen = false);
     // Opens a device/stream URI (capture, screen) the way openPath opens a file.
-    void openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill = false);
+    void openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill = false,
+                       bool startupFullscreen = false);
 
     friend struct CaptureQueryBridgeTest;
     struct Impl;

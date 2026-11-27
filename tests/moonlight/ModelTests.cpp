@@ -60,7 +60,9 @@ int main(int argc, char** argv) {
         MoonlightModel model;
         std::optional<MoonlightModel::Launch> launched;
         int startedSignals = 0;
+        int manualRequests = 0;
         QObject::connect(&model, &MoonlightModel::started, [&] { ++startedSignals; });
+        QObject::connect(&model, &MoonlightModel::manualOpenRequested, [&] { ++manualRequests; });
         model.setLaunchHandler([&](MoonlightModel::Launch launch) { launched = std::move(launch); return true; });
 
         model.load();
@@ -133,6 +135,14 @@ int main(int argc, char** argv) {
         model.connectStream(881448767);
         check(waitFor([&] { return launched.has_value(); }), "resume launches");
         check(launched && launched->desc.resume, "launching the app that already runs is a resume");
+        check(launched && !launched->startupFullscreen && manualRequests == 4, "a manual resume does not carry startup fullscreen");
+
+        launched.reset();
+        check(waitFor([&] { return idle(model); }), "idle before automatic resume");
+        check(model.resumeLast(true), "automatic resume requests the saved host and app");
+        check(waitFor([&] { return launched.has_value(); }), "automatic resume reaches the async launch handler");
+        check(launched && launched->desc.resume && launched->startupFullscreen && manualRequests == 4,
+              "the async handoff preserves the startup origin without emitting a manual request");
     }
 
     progress("block 1 destroyed");

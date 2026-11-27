@@ -416,7 +416,13 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const auto wasTransport = impl_->snapshot.transport;
         const uint64_t wasSession = impl_->snapshot.sessionId;
         const auto oldSourceAspect=sourceAspect();
-        if(impl_->poll()){emit settingsChanged();emitChainChanged();}
+        bool enterStartupFullscreen = false;
+        const bool settingsRolledBack = impl_->poll(enterStartupFullscreen);
+        if (enterStartupFullscreen && impl_->prefBool("autoResume", false) && impl_->prefBool("startFullscreen", false)) {
+            veyra::log::info("ui-startup", std::format("fullscreen requested after first presentation session={}", impl_->snapshot.sessionId));
+            emit startupFullscreenRequested();
+        }
+        if (settingsRolledBack) { emit settingsChanged(); emitChainChanged(); }
         if(wasXeSSSrRestricted!=(impl_->snapshot.running&&(impl_->snapshot.image||impl_->snapshot.capture)))
             emit effectCapabilitiesChanged();
         if(wasSession!=impl_->snapshot.sessionId||oldSourceAspect!=sourceAspect())emit compareChanged();

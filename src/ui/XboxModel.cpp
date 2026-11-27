@@ -212,7 +212,7 @@ bool XboxModel::set(const QString& key, const QVariant& value) {
     return false;
 }
 
-bool XboxModel::launchConsole(const QString& id, const QString& name) {
+bool XboxModel::launchConsole(const QString& id, const QString& name, bool startupFullscreen) {
     if (!account_->signedIn()) { status_ = tr("请先登录 Xbox 账号。"); emit changed(); return false; }
     if (!launch_ || id.isEmpty()) return false;
     Launch launch;
@@ -222,6 +222,7 @@ bool XboxModel::launchConsole(const QString& id, const QString& name) {
     launch.desc.gamepad = gamepad_;
     launch.desc.softwareDecode = softwareDecode_;
     launch.label = name.isEmpty() ? QStringLiteral("Xbox") : name;
+    launch.startupFullscreen = startupFullscreen;
     if (!launch_(std::move(launch))) { status_ = tr("无法开始串流，请查看日志。"); emit changed(); return false; }
     lastId_ = id;
     lastName_ = name;
@@ -251,10 +252,12 @@ std::optional<source::XboxConnectDesc> XboxModel::controlRequest(const QString& 
     return request;
 }
 
-bool XboxModel::resumeLast() {
+bool XboxModel::resumeLast() { return resumeLast(false); }
+
+bool XboxModel::resumeLast(bool startupFullscreen) {
     if (!loaded_) { loadSettings(); loaded_ = true; }
     if (lastId_.isEmpty()) return false;
-    return launchConsole(lastId_, lastName_);
+    return launchConsole(lastId_, lastName_, startupFullscreen);
 }
 
 void XboxModel::updateStream(bool active, const source::XboxStats& s) {

@@ -358,9 +358,9 @@ void QmlPlayerBridge::refreshCaptureDevices() {
     impl_->capturePrefs = ui::CapturePreferenceStore(impl_->dataDir).load();
     queryCapture(0, {});
 }
-void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
+void QmlPlayerBridge::queryCapture(int kind, std::wstring device, bool startupFullscreen) {
     auto& i = *impl_;
-    if (captureQueryBusy()) { i.captureNextQuery=std::pair{kind,std::move(device)};return; }
+    if (captureQueryBusy()) { i.captureNextQuery=Impl::CaptureQueryRequest{kind,std::move(device),startupFullscreen};return; }
     i.captureBusy = true; i.captureQueryKind = kind;
     i.captureQueryTimedOut = false;
     i.captureQueryStarted = std::chrono::steady_clock::now();
@@ -372,8 +372,9 @@ void QmlPlayerBridge::queryCapture(int kind, std::wstring device) {
             wideOf(i.prefs.value("captureDraftResolution").toString()):std::wstring{};
     // A DirectShow enumeration can fail to return. A packaged task owns
     // only its argument values, and its future does not join on UI teardown.
-    std::packaged_task<Impl::CaptureQuery()> query([kind, device, preferred, requested] {
+    std::packaged_task<Impl::CaptureQuery()> query([kind, device, preferred, requested, startupFullscreen] {
         Impl::CaptureQuery q; q.kind = kind; q.device = device;q.requestedResolution=requested;
+        q.startupFullscreen = startupFullscreen;
         const auto initialized=CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         if(FAILED(initialized)){q.info.code=initialized;q.info.stage=L"COM initialization";return q;}
         try {
@@ -416,7 +417,15 @@ void QmlPlayerBridge::tickCapture() {
     auto q = i.captureQuery.get();
     const bool timedOut = std::exchange(i.captureQueryTimedOut, false);
     i.captureBusy = false;
-    if(i.captureNextQuery){auto next=std::move(*i.captureNextQuery);i.captureNextQuery.reset();queryCapture(next.first,std::move(next.second));return;}
+    if (i.captureNextQuery) {
+        auto next = std::move(*i.captureNextQuery);
+        i.captureNextQuery.reset();
+        if (!next.startupFullscreen || i.startupFullscreen.awaitingSession())
+            queryCapture(next.kind, std::move(next.device), next.startupFullscreen);
+        else emit captureChanged();
+        return;
+    }
+    if (q.startupFullscreen && !i.startupFullscreen.awaitingSession()) { emit captureChanged(); return; }
     if(FAILED(q.info.code)&&q.formats.empty()){
         if(q.kind!=0&&q.device!=i.captureDevice){emit captureChanged();return;}
         if(q.kind!=0&&q.kind!=4){i.captureFormatList.clear();++i.captureFormatGeneration;i.captureResolutionChoice.clear();i.captureRateChoice.clear();}
@@ -507,10 +516,13 @@ void QmlPlayerBridge::tickCapture() {
     emit captureChanged();
     if (q.kind == 2 && !timedOut) {
         if (i.captureFormatKey.empty()) emit notice(tr("上次的采集格式不可用，请在采集卡面板重新选择"), true);
-        else startCaptureSession();
+        else startCaptureSession(q.startupFullscreen);
     }
 }
-bool QmlPlayerBridge::startCaptureSession() {
+bool QmlPlayerBridge::startCaptureSession() { return startCaptureSession(false); }
+
+bool QmlPlayerBridge::startCaptureSession(bool startupFullscreen) {
+    if (!acceptSourceRequest(startupFullscreen)) return false;
     auto& i = *impl_;
     if (i.captureQueryTimedOut) { emit notice(i.captureStatus, true); return false; }
     if (captureQueryBusy()) { emit notice(tr("设备查询或驱动设置尚未完成"), true); return false; }
@@ -557,11 +569,13 @@ bool QmlPlayerBridge::startCaptureSession() {
     // holds the console's slot until the capture replaces it; the tick starts
     // PS5 手柄控制 once the capture card is live instead.
     if (i.prefBool("ps5CaptureControl", false) && !i.snapshot.remotePlay) startPs5Control(false);
-    openSourceUri(path, i.captureVideo[size_t(device)].name);
+    openSourceUri(path, i.captureVideo[size_t(device)].name, false, startupFullscreen);
     emit snapshotChanged();
     return true;
 }
-void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill) {
+void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring& label, bool screenFill,
+                                   bool startupFullscreen) {
+    if (!acceptSourceRequest(startupFullscreen)) return;
     impl_->screenCropPreview = false;
     rememberPosition(true);
     emit mediaOpenRequested();
@@ -572,16 +586,17 @@ void QmlPlayerBridge::openSourceUri(const std::wstring& uri, const std::wstring&
     impl_->screenFillActive = screenFill;
     const bool screen = uri.starts_with(L"screen:");
     veyra::log::info("capture-ui", "open uri " + QString::fromStdWString(uri).toStdString());
-    openAfterLivePage(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri] {
+    openAfterLivePage(screen ? tr("正在开始屏幕捕获…") : tr("正在打开采集设备 · %1").arg(utf8Of(label)), [this, uri, startupFullscreen] {
         if (impl_->preOpen) impl_->preOpen();
         impl_->engine.previewView({});
         impl_->engine.open(impl_->videoWindow, uri, impl_->options);
-        impl_->openingSessionId = impl_->engine.snapshot().sessionId;
+        bindOpeningSession(startupFullscreen);
         refreshSubtitles({});
-    }, screen ? QStringLiteral("min") : QStringLiteral("pro"));
+    }, screen ? QStringLiteral("min") : QStringLiteral("pro"), startupFullscreen);
 }
 
-void QmlPlayerBridge::openAfterLivePage(const QString& pending, std::function<void()> open, const QString& homeTarget) {
+void QmlPlayerBridge::openAfterLivePage(const QString& pending, std::function<void()> open, const QString& homeTarget,
+                                       bool startupFullscreen) {
     const int gen = ++impl_->liveOpenGen;
     const bool fromHome = impl_->currentPage.isEmpty() || impl_->currentPage == QLatin1String("home");
     if (fromHome) emit navigate(homeTarget);
@@ -594,11 +609,15 @@ void QmlPlayerBridge::openAfterLivePage(const QString& pending, std::function<vo
     emit snapshotChanged();
     const int delay = reducedMotion() ? 0 : 820;
     veyra::log::info("ui-live-open", std::format("deferred ms={} gen={}", delay, gen));
-    QTimer::singleShot(delay, this, [this, gen, open = std::move(open)] {
+    QTimer::singleShot(delay, this, [this, gen, startupFullscreen, open = std::move(open)] {
         if (gen != impl_->liveOpenGen) { veyra::log::info("ui-live-open", std::format("superseded gen={}", gen)); return; }
         impl_->pendingLiveText.clear();
-        veyra::log::info("ui-live-open", std::format("open gen={}", gen));
-        open();
+        if (startupFullscreen && !impl_->startupFullscreen.awaitingSession()) {
+            impl_->openingSource = false;
+        } else {
+            veyra::log::info("ui-live-open", std::format("open gen={}", gen));
+            open();
+        }
         emit snapshotChanged();
     });
 }

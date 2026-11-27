@@ -25,6 +25,7 @@ public:
     struct Launch {
         source::XboxConnectDesc desc;
         QString label;
+        bool startupFullscreen = false;
     };
     using LaunchFn = std::function<bool(Launch)>;
 
@@ -47,6 +48,7 @@ public:
     Q_INVOKABLE void cancel();
     Q_INVOKABLE bool connectStream();
     Q_INVOKABLE bool resumeLast();
+    bool resumeLast(bool startupFullscreen);
     Q_INVOKABLE bool set(const QString& key, const QVariant& value);
 
     QString lastLabel() const { return lastName_; }
@@ -60,7 +62,7 @@ private:
     void startJob(const QString& status, std::function<std::function<void()>(const std::atomic<bool>&)> work);
     void loadSettings();
     void saveSettings() const;
-    bool launchConsole(const QString& id, const QString& name);
+    bool launchConsole(const QString& id, const QString& name, bool startupFullscreen = false);
 
     LaunchFn launch_;
     std::shared_ptr<xbox::Account> account_;
