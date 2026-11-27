@@ -16,6 +16,7 @@
 
 #include "veyra/xbox/Protocol.h"
 #include "veyra/xbox/StreamApi.h"
+#include "veyra/xbox/VideoRtpReceive.h"
 
 namespace rtc {
 class PeerConnection;
@@ -24,6 +25,8 @@ class Track;
 }
 
 namespace veyra::xbox {
+
+class VideoReceivingSession;
 
 class Signaling {
 public:
@@ -47,6 +50,7 @@ struct WebRtcStats {
     uint64_t bytesReceived = 0;      // data channels (libdatachannel's count)
     uint64_t videoBytes = 0;         // access units handed to the decoder
     uint64_t videoUnits = 0, audioPackets = 0, keyframeRequests = 0;
+    VideoRtpStats videoRtp;
     double rttMs = 0;
     bool handshakeDone = false;
 };
@@ -96,6 +100,7 @@ private:
     uint32_t lastFeedbackRtp_=0;
     std::shared_ptr<rtc::PeerConnection> pc_;
     std::shared_ptr<rtc::Track> audio_, video_;
+    std::shared_ptr<VideoReceivingSession> videoReceiver_;
     std::shared_ptr<rtc::DataChannel> chat_, control_, input_, message_;
     std::mutex mutex_;
     std::condition_variable changed_;

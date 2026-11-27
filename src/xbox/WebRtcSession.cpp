@@ -14,6 +14,46 @@
 #include "veyra/Log.h"
 
 namespace veyra::xbox {
+
+class VideoReceivingSession final : public rtc::RtcpReceivingSession {
+public:
+    void incoming(rtc::message_vector& messages, const rtc::message_callback& send) override {
+        rtc::RtcpReceivingSession::incoming(messages, send);
+        // The base handler processed RTCP and validated these RTP headers.
+        // This runs on the same ingress lane, before H.264 depacketization.
+        const VideoRtpStats* current = nullptr;
+        for (const auto& message : messages) {
+            const auto* header = reinterpret_cast<const rtc::RtpHeader*>(message->data());
+            current = &window_.observe(header->ssrc(), header->seqNumber());
+        }
+        if (!current) return;
+        reordered_.store(current->recoveredReorder, std::memory_order_relaxed);
+        duplicates_.store(current->duplicate, std::memory_order_relaxed);
+        expired_.store(current->expiredMissing, std::memory_order_relaxed);
+        outside_.store(current->outsideWindow, std::memory_order_relaxed);
+        resets_.store(current->sequenceResets, std::memory_order_relaxed);
+        pending_.store(current->pendingMissing, std::memory_order_relaxed);
+        received_.store(current->received, std::memory_order_release);
+    }
+
+    VideoRtpStats stats() const {
+        return {
+            .received = received_.load(std::memory_order_acquire),
+            .recoveredReorder = reordered_.load(std::memory_order_relaxed),
+            .duplicate = duplicates_.load(std::memory_order_relaxed),
+            .expiredMissing = expired_.load(std::memory_order_relaxed),
+            .outsideWindow = outside_.load(std::memory_order_relaxed),
+            .sequenceResets = resets_.load(std::memory_order_relaxed),
+            .pendingMissing = pending_.load(std::memory_order_relaxed),
+        };
+    }
+
+private:
+    VideoRtpReceiveWindow window_;
+    std::atomic<uint64_t> received_{}, reordered_{}, duplicates_{}, expired_{}, outside_{}, resets_{};
+    std::atomic<unsigned> pending_{};
+};
+
 namespace {
 
 using json = nlohmann::json;
@@ -103,7 +143,8 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
     config.disableAutoNegotiation = true;
     config.maxMessageSize = 256 * 1024;
     if (!bindAddress_.empty()) config.bindAddress = bindAddress_;
-    pc_ = std::make_shared<rtc::PeerConnection>(config);
+    auto connection = std::make_shared<rtc::PeerConnection>(config);
+    { std::lock_guard lock(gate_->mutex); pc_ = std::move(connection); }
 
     pc_->onStateChange([this, gate=gate_](rtc::PeerConnection::State state) {
         std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
@@ -133,7 +174,9 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
 
     auto depacketizer = std::make_shared<rtc::H264RtpDepacketizer>(rtc::NalUnit::Separator::LongStartSequence);
     video_->setMediaHandler(depacketizer);
-    video_->chainMediaHandler(std::make_shared<rtc::RtcpReceivingSession>());
+    auto videoReceiver = std::make_shared<VideoReceivingSession>();
+    video_->chainMediaHandler(videoReceiver);
+    { std::lock_guard lock(gate_->mutex); videoReceiver_ = std::move(videoReceiver); }
     video_->onFrame([this, gate=gate_](rtc::binary data, rtc::FrameInfo info) {
         std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         ++videoUnits_;
@@ -397,6 +440,7 @@ WebRtcStats WebRtcSession::stats() const {
     s.audioPackets = audioPackets_.load();
     s.keyframeRequests = keyframeRequests_.load();
     s.videoBytes = videoBytes_.load();
+    if (videoReceiver_) s.videoRtp = videoReceiver_->stats();
     s.handshakeDone = handshakeDone_.load();
     if (const auto pc = gate_->open?pc_:nullptr) {
         s.bytesReceived = pc->bytesReceived();

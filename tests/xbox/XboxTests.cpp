@@ -399,6 +399,30 @@ std::vector<uint8_t> nal(uint8_t header, size_t size, uint8_t seed) {
     return out;
 }
 
+void videoRtpWindowTests() {
+    VideoRtpReceiveWindow window;
+    window.observe(42, 65534);
+    const auto gap = window.observe(42, 0);
+    check(gap.received == 2 && gap.pendingMissing == 1 && gap.expiredMissing == 0,
+          "video RTP treats a skipped packet across 16-bit wrap as pending");
+    const auto recovered = window.observe(42, 65535);
+    check(recovered.pendingMissing == 0 && recovered.recoveredReorder == 1 && recovered.expiredMissing == 0,
+          "a late packet can fill the wrapped sequence gap");
+    check(window.observe(42, 65535).duplicate == 1, "a repeated sequence does not create another recovery");
+    const auto aged = window.observe(42, 72);
+    check(aged.expiredMissing == 8 && aged.pendingMissing == 63,
+          "a jump past the observation window confirms only the aged-out holes");
+    const auto late = window.observe(42, 2);
+    check(late.outsideWindow == 1 && late.expiredMissing == 8 && late.recoveredReorder == 1,
+          "an arrival older than the tracked window does not rewrite the loss history");
+    check(window.observe(42, 4000).sequenceResets == 0, "one distant sequence does not create a discontinuity");
+    const auto restart = window.observe(42, 4001);
+    check(restart.sequenceResets == 1 && restart.pendingMissing == 0 && restart.expiredMissing == 8,
+          "two consecutive packets confirm a sequence restart without counting unknown loss");
+    check(window.observe(43, 500).sequenceResets == 1, "one other SSRC does not replace the current video sequence");
+    check(window.observe(43, 501).sequenceResets == 2, "a new consecutive SSRC closes the old sequence epoch");
+}
+
 void webrtcTests() {
     FakeConsole console;
     WebRtcSession session;
@@ -515,6 +539,36 @@ void webrtcTests() {
     if (!(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000))
         std::printf("stats: units=%llu audio=%llu handshake=%d bytes=%llu\n", (unsigned long long)stats.videoUnits, (unsigned long long)stats.audioPackets, int(stats.handshakeDone), (unsigned long long)stats.bytesReceived);
     check(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000, "statistics");
+    check(stats.videoRtp.received > stats.videoUnits && stats.videoRtp.pendingMissing == 0,
+          "native RTP counts fragments separately from depacketized pictures");
+    const auto rtpReady = [&](uint64_t packets) {
+        const auto limit = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (std::chrono::steady_clock::now() < limit) {
+            if (session.stats().videoRtp.received >= packets) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+        return false;
+    };
+    const auto sendVideo = [&] {
+        ts += 1500;
+        console.video->sendFrame(reinterpret_cast<const std::byte*>(p2.data()), p2.size(), rtc::FrameInfo(ts));
+    };
+    const uint16_t missingSequence = console.videoConfig->sequenceNumber++;
+    sendVideo();
+    check(rtpReady(stats.videoRtp.received + 1) && session.stats().videoRtp.pendingMissing == 1,
+          "one intentionally delayed local video RTP packet appears as a pending gap");
+    const uint16_t nextSequence = console.videoConfig->sequenceNumber;
+    console.videoConfig->sequenceNumber = missingSequence;
+    sendVideo();
+    console.videoConfig->sequenceNumber = nextSequence;
+    check(rtpReady(stats.videoRtp.received + 2) && session.stats().videoRtp.recoveredReorder == 1 &&
+          session.stats().videoRtp.pendingMissing == 0,
+          "the late SRTP packet reaches native receive diagnostics and recovers the gap");
+    ++console.videoConfig->sequenceNumber;
+    for (int count = 0; count < 64; ++count) sendVideo();
+    check(rtpReady(stats.videoRtp.received + 66) && session.stats().videoRtp.expiredMissing == 1 &&
+          session.stats().videoRtp.pendingMissing == 0,
+          "one omitted loopback packet ages into the expired sequence counter");
     // Malformed fields used to throw through the asynchronous callback.
     console.message->send(std::string("{\"type\":null}"));
     console.message->send(std::string("{\"type\":\"Message\",\"target\":null}"));
@@ -611,6 +665,7 @@ int main(int argc, char** argv) {
     protocolTests();
     apiTests();
     accountTests();
+    videoRtpWindowTests();
     webrtcTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
     rtc::Cleanup();
