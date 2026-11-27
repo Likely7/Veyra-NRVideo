@@ -3,6 +3,7 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/sink/ImageExportSink.h"
 #include <d3d12sdklayers.h>
+#include <array>
 #include <filesystem>
 #include <iostream>
 #include <vector>
@@ -16,8 +17,10 @@ extern "C" {
 int wmain(int argc, wchar_t** argv) {
     using namespace veyra;
     if(argc<2||FAILED(CoInitializeEx(nullptr,COINIT_MULTITHREADED)))return 2;
-    const bool amd=argc>2&&std::wstring_view(argv[2])==L"amd";
-    const bool localBackends=argc>2&&std::wstring_view(argv[2])==L"local-backends";
+    const std::wstring_view mode=argc>2?argv[2]:L"";
+    const bool srLifetime=mode==L"fsr-sr-lifetime"||mode==L"fsr-sr-lifetime-amd";
+    const bool amd=mode==L"amd"||mode==L"fsr-sr-lifetime-amd";
+    const bool localBackends=mode==L"local-backends";
     std::filesystem::create_directories(argv[1]);
     HWND window=CreateWindowExW(0,L"STATIC",L"Veyra FG switch acceptance",WS_POPUP,
         40,40,640,360,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
@@ -44,9 +47,14 @@ int wmain(int argc, wchar_t** argv) {
     frame->format=AV_PIX_FMT_RGBA;frame->width=640;frame->height=360;
     frame->color_range=AVCOL_RANGE_JPEG;frame->color_trc=AVCOL_TRC_IEC61966_2_1;
     ok=av_frame_get_buffer(frame,32)>=0;
-    struct Case{engine::FrameGenerationBackend backend;unsigned multiplier;};
+    struct Case{engine::FrameGenerationBackend backend;unsigned multiplier;bool sr=false;};
     std::vector<Case> cases;
-    if(localBackends){
+    if(srLifetime){
+        for(unsigned repeat=0;repeat<4;++repeat){
+            cases.push_back({engine::FrameGenerationBackend::Fsr,2,true});
+            cases.push_back({engine::FrameGenerationBackend::Fsr,2});
+        }
+    }else if(localBackends){
         cases={{engine::FrameGenerationBackend::Fsr,2},{engine::FrameGenerationBackend::Rife,2},
             {engine::FrameGenerationBackend::Rife,3}};
     }else for(unsigned repeat=0;repeat<3;++repeat){
@@ -57,6 +65,13 @@ int wmain(int argc, wchar_t** argv) {
         cases.push_back({engine::FrameGenerationBackend::Dlss,1});
         if(!amd)cases.push_back({engine::FrameGenerationBackend::Dlss,2});
     }
+    const auto fidelityFxModules=[]{
+        return std::array{
+            GetModuleHandleW(L"amd_fidelityfx_loader_dx12.dll"),
+            GetModuleHandleW(L"amd_fidelityfx_upscaler_dx12.dll"),
+            GetModuleHandleW(L"amd_fidelityfx_framegeneration_dx12.dll")};
+    };
+    std::array<HMODULE,3> resident{};
     uint64_t source=0;unsigned cycles=0,totalGenerated=0;
     for(const auto& c:cases){
         if(!ok)break;++cycles;
@@ -65,7 +80,13 @@ int wmain(int argc, wchar_t** argv) {
         desc.fgMultiplier=std::max(2u,c.multiplier);desc.frameGenerationBackend=c.backend;
         desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();desc.settingsRevision=cycles;
         desc.opticalFlowBackend=amd?engine::OpticalFlowBackend::AmdFidelityFx:engine::OpticalFlowBackend::Nvidia;
+        if(c.sr){
+            desc.enableSr=true;desc.videoSrQuality=engine::kVideoSrFsr;
+            desc.srMotion=engine::MotionSource::Zero;
+            desc.workWidth=1280;desc.workHeight=720;
+        }
         ok=graph.initialize(desc)&&presenter.open(ctx,window,graph)&&graph.createViews();
+        if(c.sr)ok=ok&&graph.fsrSrEnabled();
         if(!ok){std::cout<<"SWITCH_OPEN_FAIL backend="<<engine::frameGenerationBackendName(c.backend)<<" multiplier="<<c.multiplier<<std::endl;break;}
         for(unsigned slot=0;slot<2;++slot){
             graph.videoFrameResource(slot)->SetName(L"Veyra acceptance graph video");
@@ -125,13 +146,21 @@ int wmain(int argc, wchar_t** argv) {
         }
         const unsigned minGenerated=(c.multiplier-1)*25;
         ok=ok&&generated>=minGenerated&&nonblack>=2;
+        const auto srEvaluations=graph.metrics().srEvaluateCount;
+        if(srLifetime)ok=ok&&(c.sr?srEvaluations==40:srEvaluations==0);
         totalGenerated+=generated;
         std::cout<<"SWITCH_CASE cycle="<<cycles<<" pid="<<GetCurrentProcessId()<<" hwnd="<<window
             <<" backend="<<engine::frameGenerationBackendName(c.backend)<<" multiplier="<<c.multiplier
-            <<" generated="<<generated<<" nonblack="<<nonblack<<" pass="<<ok<<std::endl;
+            <<" generated="<<generated<<" srEvaluations="<<srEvaluations<<" nonblack="<<nonblack<<" pass="<<ok<<std::endl;
+        if(srLifetime&&cycles==1)resident=fidelityFxModules();
         ok=ring.drainQueue()&&ok;presenter.close();graph.shutdown();
+        if(srLifetime){
+            const bool allResident=resident[0]&&resident[1]&&resident[2]&&fidelityFxModules()==resident;
+            std::cout<<"FSR_MODULE_LIFETIME cycle="<<cycles<<" resident="<<allResident<<std::endl;
+            ok=ok&&allResident;
+        }
     }
-    if(ok&&!localBackends){
+    if(ok&&!localBackends&&!srLifetime){
         // Unsupported FSR 4 must fail before a swapchain is touched. The same
         // HWND must subsequently reopen, with no FSR 3.1 mislabeled as ML.
         pipeline::EnhanceGraphDesc ml;ml.sourceWidth=ml.workWidth=640;ml.sourceHeight=ml.workHeight=360;

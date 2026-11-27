@@ -6,12 +6,11 @@
 #include <algorithm>
 #include <cmath>
 #include <filesystem>
-#include <map>
-#include <mutex>
 #include <string>
 #include <vector>
 
 #ifdef VEYRA_HAS_FSR
+#include "FidelityFxModule.h"
 #include <ffx_api_loader.h>
 #include <ffx_framegeneration.h>
 #include <dx12/ffx_api_framegeneration_dx12.h>
@@ -21,21 +20,6 @@ namespace veyra::gfx {
 
 #ifdef VEYRA_HAS_FSR
 namespace {
-
-HMODULE loadResidentModule(const std::filesystem::path& path) {
-    // One retained reference per absolute module path, even when graph rebuilds
-    // or independent export workers create many short-lived contexts.
-    static std::mutex mutex;
-    static std::map<std::wstring, HMODULE> modules;
-    std::lock_guard lock(mutex);
-    const auto key = path.wstring();
-    if (const auto found = modules.find(key); found != modules.end()) return found->second;
-    const auto module = LoadLibraryExW(path.c_str(), nullptr,
-        LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (module) modules.emplace(key, module);
-    else log::error("fsr-fg", std::format("runtime load failed path={} win32={}", path.string(), GetLastError()));
-    return module;
-}
 
 FfxApiSurfaceFormat surfaceFormatFromDxgi(DXGI_FORMAT format) {
     switch (format) {
@@ -110,10 +94,10 @@ bool FsrFgPresenter::initializeIndependent(ID3D12Device* device, uint32_t width,
     const auto providerPath = root / "amd_fidelityfx_framegeneration_dx12.dll";
     // Absolute preloading makes provider discovery deterministic. Modules stay
     // resident, as in the existing integration; contexts are independently freed.
-    p.loader = loadResidentModule(loaderPath);
-    const auto provider = loadResidentModule(providerPath);
+    p.loader = loadResidentFidelityFxModule(loaderPath, "fsr-fg");
+    const auto provider = loadResidentFidelityFxModule(providerPath, "fsr-fg");
     if (!p.loader || !provider) {
-        log::error("fsr-fg", std::format("independent runtime load failed root={} win32={}", root.string(), GetLastError()));
+        log::error("fsr-fg", std::format("independent runtime load failed root={}", root.string()));
         p.failed = true; return false;
     }
     ffxLoadFunctions(&p.functions, p.loader);

@@ -7,6 +7,7 @@
 #include <string>
 
 #ifdef VEYRA_HAS_FSR
+#include "FidelityFxModule.h"
 #include <ffx_api_loader.h>
 #include <ffx_upscale.h>
 #include <dx12/ffx_api_dx12.h>
@@ -95,8 +96,6 @@ struct FsrSrBackend::Impl {
     uint64_t failureCount = 0;
     std::string providerVersion;
 #ifdef VEYRA_HAS_FSR
-    HMODULE loader = nullptr;
-    HMODULE provider = nullptr;
     ffxFunctions functions{};
     ffxContext context = nullptr;
     uint32_t maxRenderWidth = 0, maxRenderHeight = 0;
@@ -113,26 +112,25 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
 #ifdef VEYRA_HAS_FSR
     auto& p = *p_;
     if (p.available) return true;
-    const auto root = runtime::localDataDirectory() / "amd" / "fidelityfx";
-    const auto loaderPath = std::filesystem::absolute(root / "amd_fidelityfx_loader_dx12.dll");
-    const auto providerPath = std::filesystem::absolute(root / "amd_fidelityfx_upscaler_dx12.dll");
+    if (p.context) release();
+    p.providerVersion.clear();
+    const auto root = std::filesystem::absolute(runtime::localDataDirectory() / "amd" / "fidelityfx");
+    const auto loaderPath = root / "amd_fidelityfx_loader_dx12.dll";
+    const auto providerPath = root / "amd_fidelityfx_upscaler_dx12.dll";
     if (!std::filesystem::exists(loaderPath)) {
         log::warn("fsr-sr", std::format("loader missing at {}", loaderPath.string()));
         return false;
     }
     DirectoryGuard guard(root);
-    p.loader = LoadLibraryExW(loaderPath.c_str(), nullptr,
-                              LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-    if (p.loader == nullptr) {
-        log::error("fsr-sr", std::format("loader load failed win32={}", GetLastError()));
+    const auto loader = loadResidentFidelityFxModule(loaderPath, "fsr-sr");
+    if (loader == nullptr) {
+        log::error("fsr-sr", "FidelityFX loader could not be loaded");
         return false;
     }
     if (std::filesystem::exists(providerPath)) {
-        p.provider=LoadLibraryExW(providerPath.c_str(), nullptr,
-                       LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
-        if(!p.provider)log::warn("fsr-sr", std::format("provider preload failed win32={}", GetLastError()));
+        (void)loadResidentFidelityFxModule(providerPath, "fsr-sr");
     }
-    ffxLoadFunctions(&p.functions, p.loader);
+    ffxLoadFunctions(&p.functions, loader);
     if (p.functions.CreateContext == nullptr || p.functions.DestroyContext == nullptr ||
         p.functions.Dispatch == nullptr || p.functions.Query == nullptr) {
         log::error("fsr-sr", "loader is missing the FidelityFX API entry points");
@@ -293,14 +291,6 @@ void FsrSrBackend::release() {
         log::info("fsr-sr", std::format("context destroyed result={} evaluations={} failures={}", returnName(result),
                                         p.evaluateCount, p.failureCount));
         p.context = nullptr;
-    }
-    if (p.loader != nullptr) {
-        FreeLibrary(p.loader);
-        p.loader = nullptr;
-    }
-    if (p.provider != nullptr) {
-        FreeLibrary(p.provider);
-        p.provider = nullptr;
     }
     p.available = false;
 #endif
