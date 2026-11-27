@@ -113,6 +113,7 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
         {"YUY2",AV_PIX_FMT_YUYV422,SourcePixelFormat::Yuy2},
         {"UYVY",AV_PIX_FMT_UYVY422,SourcePixelFormat::Uyvy},
         {"YVYU",AV_PIX_FMT_YVYU422,SourcePixelFormat::Yvyu},
+        {"v210",AV_PIX_FMT_BGRA,SourcePixelFormat::V210},
         {"NV12",AV_PIX_FMT_NV12,SourcePixelFormat::NV12},
         {"P010",AV_PIX_FMT_P010,SourcePixelFormat::P010}
     };
@@ -120,6 +121,7 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
     for(const auto& spec:formats){
         const bool planar=spec.input==AV_PIX_FMT_NV12||spec.input==AV_PIX_FMT_P010;
         const bool p010=spec.input==AV_PIX_FMT_P010;
+        const bool v210=spec.color==SourcePixelFormat::V210;
         AVFrame* frame=av_frame_alloc();
         if(!frame)return false;
         frame->format=spec.input;frame->width=w;frame->height=h;
@@ -139,6 +141,21 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
                     words[0]=uint16_t(u(x,y))*256;words[1]=uint16_t(v(x,y))*256;
                 }else{line[2*x]=u(x,y);line[2*x+1]=v(x,y);}
             }
+        }else if(v210){
+            constexpr uint32_t luma=126*4;
+            const auto pack=[](uint32_t a,uint32_t b,uint32_t c){return a|(b<<10)|(c<<20);};
+            for(unsigned y=0;y<h;++y){
+                auto* words=reinterpret_cast<uint32_t*>(frame->data[0]+y*frame->linesize[0]);
+                for(unsigned x=0;x<w;x+=6,words+=4){
+                    const unsigned col=x/2;
+                    const auto cb=[&](unsigned pair){return pair<w/2?uint32_t(u(pair,y))*4:64u;};
+                    const auto cr=[&](unsigned pair){return pair<w/2?uint32_t(v(pair,y))*4:960u;};
+                    words[0]=pack(cb(col),luma,cr(col));
+                    words[1]=pack(luma,cb(col+1),luma);
+                    words[2]=pack(cr(col+1),luma,cb(col+2));
+                    words[3]=pack(luma,cr(col+2),luma);
+                }
+            }
         }else{
             for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w/2;++x){
                 auto* pair=frame->data[0]+y*frame->linesize[0]+4*x;
@@ -154,7 +171,7 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
         EnhanceGraphDesc desc;
         desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;desc.noFeatures=true;
         desc.yuy2Input=spec.color==SourcePixelFormat::Yuy2;
-        desc.packedInput=packedInputCode(spec.color);desc.captureBitDepth=p010?10:8;
+        desc.packedInput=packedInputCode(spec.color);desc.captureBitDepth=p010||v210?10:8;
         ColorDescription color;
         color.pixelFormat=spec.color;color.range=ColorRange::Limited;color.matrix=YuvMatrix::BT709;
         color.transfer=TransferFunction::SRGB;
