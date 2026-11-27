@@ -857,7 +857,7 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     ui::PlaybackServer playbackServer([&bridge](const QString& url){
         bridge.bringToFront();bridge.openNetworkAddress(url);
     });
-    if (!updateProbe) playbackServer.listen(18765);
+    if (!updateProbe && playbackServer.listen(18765)) bridge.attachLocalCaptureControl(playbackServer);
 
     // Qt reports QML failures through its own message handler. Routing them to
     // the log is the difference between "it did not load" and why.

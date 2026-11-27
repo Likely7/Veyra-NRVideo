@@ -37,11 +37,15 @@
 #include "veyra/ui/PlayerUiFacade.h"
 
 class QQmlEngine;
+class QJsonObject;
 namespace veyra::ui {
 
 class MoonlightModel;
 class XboxModel;
 class LiveTranslation;
+class PlaybackServer;
+enum class CaptureControlAction;
+enum class CaptureControlResult;
 
 class QmlPlayerBridge : public QObject {
     Q_OBJECT
@@ -235,6 +239,8 @@ class QmlPlayerBridge : public QObject {
     // Live recording of the processed picture: the engine owns the encoder and
     // the file, the interface shows the state and starts or stops it.
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool localCaptureControlAvailable READ localCaptureControlAvailable NOTIFY localCaptureControlChanged)
+    Q_PROPERTY(bool localCaptureControlEnabled READ localCaptureControlEnabled NOTIFY localCaptureControlChanged)
     Q_PROPERTY(bool virtualCameraEnabled READ virtualCameraEnabled NOTIFY virtualCameraChanged)
     Q_PROPERTY(QVariantMap virtualCameraState READ virtualCameraState NOTIFY virtualCameraChanged)
     Q_PROPERTY(int virtualCameraFps READ virtualCameraFps NOTIFY preferencesChanged)
@@ -1441,11 +1447,11 @@ public:
     // fullscreen bar window uses it so only its pill takes the pointer.
     Q_INVOKABLE void setWindowMask(QObject* window, const QRectF& rect);
     Q_INVOKABLE void stepFrame(int direction);
-    Q_INVOKABLE void takeScreenshot();
+    Q_INVOKABLE bool takeScreenshot();
     // Recording: the 3 second countdown lives in the interface, the engine
     // only opens the file when the request reaches it.
     // source names the trigger in the log ("shortcut", "pro-button", "game-hotkey").
-    Q_INVOKABLE void startRecording(const QString& source = QString());
+    Q_INVOKABLE bool startRecording(const QString& source = QString());
     Q_INVOKABLE void setVirtualCameraEnabled(bool enabled);
     Q_INVOKABLE void uninstallVirtualCamera();
     Q_INVOKABLE void installVirtualCamera();
@@ -1453,12 +1459,17 @@ public:
     QVariantMap virtualCameraState()const;
     int virtualCameraFps()const;
     void pollVirtualCamera();
-    Q_INVOKABLE void stopRecording(const QString& source = QString());
+    Q_INVOKABLE bool stopRecording(const QString& source = QString());
     Q_INVOKABLE void toggleRecording(const QString& source = QString());
     Q_INVOKABLE void chooseRecordingDirectory();
     Q_INVOKABLE void openRecordingDirectory();
     // Writes what the replay buffer holds now (source as for recording).
-    Q_INVOKABLE void saveReplay(const QString& source = QString());
+    Q_INVOKABLE bool saveReplay(const QString& source = QString());
+    void attachLocalCaptureControl(PlaybackServer& server);
+    bool localCaptureControlAvailable() const;
+    bool localCaptureControlEnabled() const;
+    Q_INVOKABLE void setLocalCaptureControlEnabled(bool enabled);
+    Q_INVOKABLE void copyLocalCaptureConnection();
     // Lists the recording endpoints for the microphone choice.
     Q_INVOKABLE void refreshMicrophones();
     bool recording() const;
@@ -1560,6 +1571,7 @@ signals:
     void preferencesChanged();
     void launchAtLoginChanged();
     void recordingChanged();
+    void localCaptureControlChanged();
     void virtualCameraChanged();
     void replayChanged();
     void microphoneDevicesChanged();
@@ -1615,6 +1627,9 @@ private:
     // The recording settings both recorders follow, and the replay buffer
     // armed (or not) with them; its state for the interface.
     engine::RecordingSettings recordingOptions() const;
+    bool screenshotBusy() const;
+    CaptureControlResult dispatchLocalCaptureControl(CaptureControlAction action);
+    QJsonObject localCaptureControlState() const;
     void syncReplay();
     void pollReplay();
     // DLAA anti-aliasing needs the DLSS SR runtime and adapter; false (with a notice) otherwise.

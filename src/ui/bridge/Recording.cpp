@@ -1,6 +1,7 @@
 // QML bridge: Recording responsibilities.
 #include "../QmlPlayerBridge_p.h"
 #include "veyra/engine/MicrophoneCapture.h"
+#include "veyra/ui/PlaybackServer.h"
 
 namespace veyra::ui {
 // --- live recording of the processed picture --------------------------------
@@ -71,25 +72,27 @@ static void logRecordingRequest(const char* what, const QString& source, const Q
     }
     veyra::log::info("ui-record", std::format("{} source={}{} {}", what, source.isEmpty() ? std::string("unnamed") : source.toStdString(), detail, outcome));
 }
-void QmlPlayerBridge::startRecording(const QString& source) {
+bool QmlPlayerBridge::startRecording(const QString& source) {
     const QString binding=source==QLatin1String("shortcut")?shortcuts().value("record").toString():QString();
-    if (recording()) { logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "refused=already-recording"); emit notice(tr("录制已在进行中"), true); return; }
-    if (!hasSource()) { logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "refused=no-source"); emit notice(tr("没有正在播放的画面，无法录制"), true); return; }
+    if (recording()) { logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "refused=already-recording"); emit notice(tr("录制已在进行中"), true); return false; }
+    if (!hasSource()) { logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "refused=no-source"); emit notice(tr("没有正在播放的画面，无法录制"), true); return false; }
     logRecordingRequest("start", source, binding, impl_->lastShortcutKey, "requested");
     std::wstring error;
-    if (!impl_->engine.requestRecording(recordingOptions(), error)) { emit notice(uiText(error), true); return; }
+    if (!impl_->engine.requestRecording(recordingOptions(), error)) { emit notice(uiText(error), true); return false; }
     // Shown at once; the poll fills in the file and the counters.
     impl_->recordingState["active"] = true;
     impl_->recordingState["failed"] = false;
     emit recordingChanged();
+    return true;
 }
-void QmlPlayerBridge::stopRecording(const QString& source) {
+bool QmlPlayerBridge::stopRecording(const QString& source) {
     const QString binding=source==QLatin1String("shortcut")?shortcuts().value("record").toString():QString();
-    if (!recording()) { logRecordingRequest("stop", source, binding, impl_->lastShortcutKey, "refused=not-recording"); return; }
+    if (!recording()) { logRecordingRequest("stop", source, binding, impl_->lastShortcutKey, "refused=not-recording"); return false; }
     logRecordingRequest("stop", source, binding, impl_->lastShortcutKey, "requested");
     impl_->engine.stopRecording();
     impl_->recordingState["active"] = false;
     emit recordingChanged();
+    return true;
 }
 void QmlPlayerBridge::toggleRecording(const QString& source) { if (recording()) stopRecording(source); else startRecording(source); }
 // --- instant replay (#103) -----------------------------------------------------
@@ -103,21 +106,81 @@ void QmlPlayerBridge::syncReplay() {
                                               recordingMicrophone() ? (recordingMicrophoneTrack() ? "track" : "mixed") : "off"));
     pollReplay();
 }
-void QmlPlayerBridge::saveReplay(const QString& source) {
+bool QmlPlayerBridge::saveReplay(const QString& source) {
     const QString binding = source.startsWith(QStringLiteral("shortcut")) ? shortcuts().value("replay").toString() : QString();
     if (!replayEnabled()) {
         logRecordingRequest("replay-save", source, binding, impl_->lastShortcutKey, "refused=off");
         emit notice(tr("即时回放未开启：设置 → 播放 → 即时回放"), true);
-        return;
+        return false;
     }
     std::wstring error;
     if (!impl_->engine.saveReplay(wideOf(recordingDirectory()), error)) {
         logRecordingRequest("replay-save", source, binding, impl_->lastShortcutKey, "refused");
         emit notice(uiText(error), true);
-        return;
+        return false;
     }
     logRecordingRequest("replay-save", source, binding, impl_->lastShortcutKey, "requested");
     pollReplay();
+    return true;
+}
+
+void QmlPlayerBridge::attachLocalCaptureControl(PlaybackServer& server) {
+    impl_->localCaptureServer = &server;
+    const QPointer<QmlPlayerBridge> bridge(this);
+    server.setControlHandlers([bridge](CaptureControlAction action) {
+        return bridge ? bridge->dispatchLocalCaptureControl(action) : CaptureControlResult::Unavailable;
+    }, [bridge] { return bridge ? bridge->localCaptureControlState() : QJsonObject{}; });
+    connect(&server, &PlaybackServer::controlChanged, this, &QmlPlayerBridge::localCaptureControlChanged);
+    emit localCaptureControlChanged();
+}
+
+bool QmlPlayerBridge::localCaptureControlAvailable() const {
+    return impl_->localCaptureServer && impl_->localCaptureServer->controlAvailable();
+}
+
+bool QmlPlayerBridge::localCaptureControlEnabled() const {
+    return impl_->localCaptureServer && impl_->localCaptureServer->controlEnabled();
+}
+
+void QmlPlayerBridge::setLocalCaptureControlEnabled(bool enabled) {
+    if (impl_->localCaptureServer) impl_->localCaptureServer->setControlEnabled(enabled);
+}
+
+void QmlPlayerBridge::copyLocalCaptureConnection() {
+    if (!localCaptureControlEnabled()) return;
+    if (auto* clipboard = QGuiApplication::clipboard()) {
+        const auto* server = impl_->localCaptureServer.data();
+        clipboard->setText(QStringLiteral("http://127.0.0.1:%1/control/\nAuthorization: Bearer %2")
+            .arg(server->serverPort()).arg(QString::fromLatin1(server->controlToken())));
+        emit notice(tr("已复制本次本机控制连接"), false);
+    }
+}
+
+CaptureControlResult QmlPlayerBridge::dispatchLocalCaptureControl(CaptureControlAction action) {
+    using Action = CaptureControlAction;
+    using Result = CaptureControlResult;
+    const QString source = QStringLiteral("http");
+    if (impl_->openingSource && action != Action::RecordStop) return Result::Busy;
+    switch (action) {
+    case Action::Screenshot:
+        if (screenshotBusy()) return Result::Busy;
+        return takeScreenshot() ? Result::Accepted : Result::Unavailable;
+    case Action::RecordStart:
+        if (recording()) return Result::Unchanged;
+        return startRecording(source) ? Result::Accepted : Result::Unavailable;
+    case Action::RecordStop:
+        return stopRecording(source) ? Result::Accepted : Result::Unchanged;
+    case Action::ReplaySave:
+        if (impl_->replayState.value("saving").toBool()) return Result::Busy;
+        return saveReplay(source) ? Result::Accepted : Result::Unavailable;
+    }
+    return Result::Unavailable;
+}
+
+QJsonObject QmlPlayerBridge::localCaptureControlState() const {
+    return {{"recording", recording()}, {"recordingFailed", impl_->recordingState.value("failed").toBool()},
+            {"replayEnabled", replayEnabled()}, {"replaySaving", impl_->replayState.value("saving").toBool()},
+            {"screenshotBusy", screenshotBusy()}, {"screenshotSaved", !impl_->lastScreenshot.isEmpty()}};
 }
 // Whole seconds and 10 MB steps: the state changes about once a second, not
 // at the poll rate.

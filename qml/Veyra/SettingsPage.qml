@@ -700,6 +700,25 @@ VPage {
                     VGroup {
                         objectName: "set-recording"
                         VRow {
+                            visible: !!veyra.localCaptureControlAvailable
+                            label: qsTr("允许本机控制录制和截图")
+                            hint: qsTr("仅本次运行有效。将连接信息提供给信任的本机工具。")
+                            VSwitch {
+                                objectName: "set-local-capture-control"
+                                checked: !!veyra.localCaptureControlEnabled
+                                onToggled: v => veyra.setLocalCaptureControlEnabled(v)
+                            }
+                        }
+                        VRow {
+                            visible: !!veyra.localCaptureControlEnabled
+                            label: qsTr("本机控制连接")
+                            VButton {
+                                objectName: "copy-local-capture-connection"
+                                text: qsTr("复制连接信息")
+                                onClicked: veyra.copyLocalCaptureConnection()
+                            }
+                        }
+                        VRow {
                             label: qsTr("录制保存位置")
                             hint: veyra.recordingDirectory + qsTr("（MP4，录下处理后的画面和正在播放的声音）")
                             RowLayout {

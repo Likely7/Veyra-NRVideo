@@ -478,11 +478,15 @@ void QmlPlayerBridge::stepFrame(int direction) {
     impl_->engine.seek(std::max(0.0, impl_->snapshot.position + (direction > 0 ? 1.0 / 60.0 : -1.0 / 60.0)));
 }
 
-void QmlPlayerBridge::takeScreenshot() {
-    if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法截图"), true); return; }
-    if(!impl_->pendingScreenshot.isEmpty()||!impl_->pendingFrameExport.isEmpty()||imageBatchActive()){emit notice(tr("请等待当前图片导出完成"),true);return;}
+bool QmlPlayerBridge::screenshotBusy() const {
+    return !impl_->pendingScreenshot.isEmpty() || !impl_->pendingFrameExport.isEmpty() || imageBatchActive();
+}
+
+bool QmlPlayerBridge::takeScreenshot() {
+    if (!hasSource()) { emit notice(tr("没有正在播放的画面，无法截图"), true); return false; }
+    if (screenshotBusy()) { emit notice(tr("请等待当前图片导出完成"), true); return false; }
     const QString folder = screenshotDirectory();
-    if (!QDir().mkpath(folder)) { emit notice(tr("截图目录不可用：%1").arg(folder), true); return; }
+    if (!QDir().mkpath(folder)) { emit notice(tr("截图目录不可用：%1").arg(folder), true); return false; }
     const QString name = QStringLiteral("veyra-%1.png")
                              .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss-zzz")));
     const QString path = QDir(folder).filePath(name);
@@ -492,6 +496,7 @@ void QmlPlayerBridge::takeScreenshot() {
     impl_->lastScreenshot.clear();
     veyra::log::info("ui-screenshot", "requested path=" + path.toStdString());
     emit preferencesChanged();
+    return true;
 }
 
 // ---- network / server playback (#48) ------------------------------------------------

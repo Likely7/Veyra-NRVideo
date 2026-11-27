@@ -46,6 +46,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonArray>
+#include <QPointer>
 #include <QHash>
 #include <QFile>
 #include <QSaveFile>
@@ -222,6 +223,7 @@ struct QmlPlayerBridge::Impl {
     QQmlEngine* qmlEngine = nullptr;
     engine::EngineController& engine;
     PlayerUiFacade facade;
+    QPointer<PlaybackServer> localCaptureServer;
 
     // Announce the effective format on the first picture and on format changes.
     std::unique_ptr<media::FormatBadgeWindow> formatBadge;
