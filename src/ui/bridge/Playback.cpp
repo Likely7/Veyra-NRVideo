@@ -303,7 +303,7 @@ void QmlPlayerBridge::openPath(const QString& path) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }
-    refreshSubtitles(!network||engine::subtitleHttpContainer(wide)?wide:std::wstring());
+    refreshSubtitles(network ? std::wstring{} : wide);
 }
 
 bool QmlPlayerBridge::deinterlaceAvailable() const { return media::FFmpegDeinterlacer::available(); }

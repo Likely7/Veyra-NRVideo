@@ -26,6 +26,11 @@ inline bool datagramMediaInput(std::wstring_view path) {
                                _wcsnicmp(path.data(), L"udp:", 4) == 0);
 }
 
+inline bool httpMediaInput(std::wstring_view path) {
+    return (path.size() >= 7 && _wcsnicmp(path.data(), L"http://", 7) == 0) ||
+           (path.size() >= 8 && _wcsnicmp(path.data(), L"https://", 8) == 0);
+}
+
 inline bool networkMediaInput(std::wstring_view path) {
     const auto colon=path.find(L':');
     if(colon==std::wstring_view::npos||colon>5)return false;

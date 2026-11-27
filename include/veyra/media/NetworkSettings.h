@@ -106,6 +106,7 @@ struct NetworkStats {
     enum class State : uint8_t { Idle = 0, Prebuffering, Playing, Buffering, Reconnecting, Failed, Ended };
     bool active = false;          // the source goes through the shared demux session
     bool live = false;            // not seekable: no resume position
+    bool httpMatroskaSubtitles = false;  // finite HTTP Matroska/WebM with embedded subtitles
     State state = State::Idle;
     double bufferedSeconds = 0;   // content queued ahead of the playback position
     double targetSeconds = 0;     // what the current wait is collecting

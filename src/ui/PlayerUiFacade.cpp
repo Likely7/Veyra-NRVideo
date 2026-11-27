@@ -34,6 +34,7 @@ std::wstring wide(const std::string& s) {
 // refresh does not repaint on every poll.
 bool sameNetwork(const veyra::media::NetworkStats& a, const veyra::media::NetworkStats& b) {
     return a.active == b.active && a.live == b.live && a.state == b.state && a.bandwidthLow == b.bandwidthLow &&
+        a.httpMatroskaSubtitles == b.httpMatroskaSubtitles &&
         a.reconnects == b.reconnects && a.reconnectAttempt == b.reconnectAttempt && a.stalls == b.stalls &&
         a.corruptPackets == b.corruptPackets && a.corruptFrames == b.corruptFrames && a.skippedFrames == b.skippedFrames &&
         a.message == b.message &&

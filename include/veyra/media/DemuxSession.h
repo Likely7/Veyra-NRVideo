@@ -185,6 +185,7 @@ private:
     int videoIndex_ = -1;
     std::atomic<int> audioIndex_{-1};
     bool live_ = true;
+    bool httpMatroskaSubtitles_ = false;
     int64_t durationUs_ = 0, containerBitRate_ = 0;
     std::string formatName_;
     std::wstring path_;

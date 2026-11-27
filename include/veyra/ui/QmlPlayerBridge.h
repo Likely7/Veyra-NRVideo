@@ -1633,6 +1633,7 @@ private:
     bool eventFilter(QObject* watched, QEvent* event) override;
     void rememberPosition(bool flush);
     void refreshSubtitles(const std::wstring& media);
+    void requestSubtitleScan(const std::wstring& path);
     void tickSubtitles();
     void tickImageBatch();
     void tickCapture();

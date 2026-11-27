@@ -231,6 +231,7 @@ int sourceTest(const std::wstring& path, const std::filesystem::path& out, const
          << ",\"discontinuities\":" << discontinuities << ",\"hash\":\"" << std::hex << overall << std::dec << "\""
          << ",\"deinterlaced\":" << (input.info().deinterlaced ? "true" : "false")
          << ",\"session\":" << (stats.active ? "true" : "false") << ",\"live\":" << (stats.live ? "true" : "false")
+         << ",\"httpMatroskaSubtitles\":" << (stats.httpMatroskaSubtitles ? "true" : "false")
          << ",\"corruptPackets\":" << stats.corruptPackets << ",\"corruptFrames\":" << stats.corruptFrames << ",\"skippedFrames\":" << stats.skippedFrames
          << ",\"reconnects\":" << stats.reconnects << ",\"connections\":" << stats.connections << ",\"stalls\":" << stats.stalls
          << ",\"sessionBytes\":" << stats.sessionBytes << ",\"bandwidthLow\":" << (stats.bandwidthLow ? "true" : "false")

@@ -87,16 +87,15 @@ std::vector<SubtitleTrack> loadExternalSubtitleTracks(const std::wstring& path,s
     const std::function<void(const std::vector<SubtitleTrack>&)>& metadata={});
 
 // Subtitle tracks inside the container (Matroska/MP4/...). `serverGate` is for a
-// file on a server (NAS) that playback is reading too (#48): the scan opens it only
-// once the gate is true, reads it at a bounded rate and stops reading while the gate
-// is false. Null reads the file straight away, as before.
+// server files and HTTP Matroska/WebM sources that playback is reading too (#48).
+// The scan opens only once the gate is true. Server file reads also pause while
+// the gate is false. Null starts the scan immediately.
 std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,std::stop_token stop={},
     const std::function<void(const std::vector<SubtitleTrack>&)>& metadata={},const std::atomic<bool>* serverGate=nullptr);
 
 // True for a file on a server: a UNC path or a drive mapped to a share (media::remoteMediaPath),
 // or any file when VEYRA_TEST_FORCE_REMOTE_PATH is set (tests).
 bool subtitleServerFile(const std::wstring& path);
-bool subtitleHttpContainer(std::wstring_view path);
 // Bytes the server-file subtitle scan has read so far (diagnostics and tests).
 uint64_t subtitleServerScanBytes();
 
@@ -107,8 +106,8 @@ public:
     struct Result {uint64_t generation=0;bool complete=false;std::vector<SubtitleTrack> tracks;};
     SubtitleLoader();
     ~SubtitleLoader();
-    // Set before request(). Applies only to files on a server (UNC / mapped drive);
-    // the owner flips it with the state of playback's own buffer. See loadEmbeddedSubtitleTracks.
+    // Set before request(). The owner flips it with the state of playback's
+    // own buffer. See loadEmbeddedSubtitleTracks.
     void setReadGate(std::shared_ptr<const std::atomic<bool>> gate);
     uint64_t request(std::wstring path);
     uint64_t requestFile(std::wstring path);

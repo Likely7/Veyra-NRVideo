@@ -505,7 +505,7 @@ static std::vector<SubtitleTrack> loadDemuxedSubtitleTracks(const std::wstring& 
     std::vector<SubtitleTrack> tracks;
     if(stop.stop_requested())return tracks;
     const auto started=std::chrono::steady_clock::now();
-    const bool http=subtitleHttpContainer(path);
+    const bool http=media::httpMediaInput(path);
     const bool gatedFile=serverGate&&!http;
     const std::string sourceLabel=http?"HTTP Matroska":utf8(std::filesystem::path(path).filename().wstring());
     ScanAvio serverFile;   // outlives the demuxer below (members are released in reverse order)
@@ -786,12 +786,6 @@ std::vector<SubtitleTrack> loadEmbeddedSubtitleTracks(const std::wstring& path,s
 }
 
 bool subtitleServerFile(const std::wstring& path){return serverFilePath(path);}
-bool subtitleHttpContainer(std::wstring_view path){
-    std::wstring url(path.substr(0,path.find_first_of(L"?#")));
-    std::transform(url.begin(),url.end(),url.begin(),[](wchar_t c){return wchar_t(towlower(c));});
-    return (url.starts_with(L"http://")||url.starts_with(L"https://"))
-        &&(url.ends_with(L".mkv")||url.ends_with(L".webm"));
-}
 uint64_t subtitleServerScanBytes(){return g_serverScanBytes.load();}
 
 std::vector<SubtitleTrack> loadExternalSubtitleTracks(const std::wstring& path,std::stop_token stop,
@@ -885,7 +879,8 @@ struct SubtitleLoader::Impl {
                     auto tracks=loadExternalSubtitleTracks(path,stop,[&](const auto& listing){publish(listing,false);});
                     publish(std::move(tracks),true);continue;
                 }
-                if(!subtitleHttpContainer(path))for(const wchar_t* extension:{L".srt",L".ass",L".ssa",L".vtt",L".sup",L".pgs",L".idx",L".sub",L".smi",L".sami",L".mpl",L".sbv",L".stl"}){
+                const bool http=media::httpMediaInput(path);
+                if(!http)for(const wchar_t* extension:{L".srt",L".ass",L".ssa",L".vtt",L".sup",L".pgs",L".idx",L".sub",L".smi",L".sami",L".mpl",L".sbv",L".stl"}){
                     if(stop.stop_requested())break;
                     auto candidate=std::filesystem::path(path);candidate.replace_extension(extension);
                     std::error_code ec;if(!std::filesystem::exists(candidate,ec))continue;
@@ -895,7 +890,7 @@ struct SubtitleLoader::Impl {
                 }
                 if(!external.empty())publish(external,false);
                 // A file on a server that playback is reading too: deferred and paced (#48 C5).
-                const std::atomic<bool>* serverGate=readGate&&(serverFilePath(path)||subtitleHttpContainer(path))?readGate.get():nullptr;
+                const std::atomic<bool>* serverGate=readGate&&(http||serverFilePath(path))?readGate.get():nullptr;
                 auto embedded=loadEmbeddedSubtitleTracks(path,stop,[&](const auto& tracks){auto listing=external;listing.insert(listing.end(),tracks.begin(),tracks.end());publish(std::move(listing),false);},serverGate);
                 for(auto& track:embedded)external.push_back(std::move(track));
                 publish(std::move(external),true);

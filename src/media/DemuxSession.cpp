@@ -534,6 +534,11 @@ std::shared_ptr<DemuxSession> DemuxSession::open(const OpenParams& params, std::
     s.durationUs_ = context->duration == AV_NOPTS_VALUE ? 0 : context->duration;
     s.containerBitRate_ = context->bit_rate;
     s.formatName_ = context->iformat && context->iformat->name ? context->iformat->name : "";
+    s.httpMatroskaSubtitles_ = s.durationUs_ > 0 && httpMediaInput(s.path_) &&
+        context->iformat == av_find_input_format("matroska") &&
+        std::any_of(s.streams_.begin(), s.streams_.end(), [](const auto& stream) {
+            return stream.type == AVMEDIA_TYPE_SUBTITLE;
+        });
     const bool byteSeekable = context->pb && (context->pb->seekable & AVIO_SEEKABLE_NORMAL);
     const bool hls = s.formatName_.find("hls") != std::string::npos || s.formatName_.find("applehttp") != std::string::npos;
     // A source with a known length that can be repositioned is on demand; anything
@@ -879,6 +884,7 @@ NetworkStats DemuxSession::stats() const {
     NetworkStats out;
     out.active = true;
     out.live = live_;
+    out.httpMatroskaSubtitles = httpMatroskaSubtitles_;
     out.bufferedSeconds = leadSecondsLocked();
     out.targetSeconds = targetSeconds_;
     out.bufferedBytes = video_.bytes + audio_.bytes;
