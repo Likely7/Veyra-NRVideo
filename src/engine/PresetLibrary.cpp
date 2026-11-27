@@ -15,7 +15,7 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool smart=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool smart=false,bool reservedSharpness=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
     // Static HDR output tuning: library v11 / session v6.
     // Older mainline versions keep their original NR/Flow layout.
     if(tuning)out<<' '<<g.hdrCurve.shadowLiftEv100<<' '<<g.hdrCurve.shadowRangeNits<<' '<<g.hdrCurve.midGrayNits<<' '
@@ -27,9 +27,11 @@ void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=fals
     // Three-step SR prescale / output: library v16, session v11.
     if(srStage)out<<' '<<uint32_t(g.srPrescale)<<' '<<uint32_t(g.srOutput);
     if(dual)out<<' '<<g.dualSrEnabled<<' '<<uint32_t(g.dualSrTarget)<<' '<<g.dualSrQuality;
-    // Smart SR switch: library v27, session v22.
+    // Match the integrated formats (library v29, session v24). This
+    // branch stores the default in the FSR sharpness slot.
+    if(reservedSharpness)out<<" 0";
     if(smart)out<<' '<<g.smartSr;}
-bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool smart=false){
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool smart=false,bool reservedSharpness=false){
     int hdr,fg,sr,nr;
     if(!(in>>hdr>>fg>>sr>>nr))return false;
     g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
@@ -46,6 +48,7 @@ bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool t
     if(dlss&&(!(in>>g.dlssSrModel)||g.dlssSrModel>=kDlssSrModelCount))return false;
     if(srStage){uint32_t prescale=0,output=0;if(!(in>>prescale>>output))return false;g.srPrescale=pipeline::SrPrescale(prescale);g.srOutput=pipeline::SrOutput(output);}
     if(dual){int enabled=0;uint32_t target=0;if(!(in>>enabled>>target>>g.dualSrQuality)||enabled<0||enabled>1)return false;g.dualSrEnabled=enabled!=0;g.dualSrTarget=pipeline::SrTarget(target);}
+    if(reservedSharpness){int sharpness;if(!(in>>sharpness)||sharpness!=0)return false;}
     if(smart){int enabled=0;if(!(in>>enabled)||enabled<0||enabled>1)return false;g.smartSr=enabled!=0;}
     EnhancementSettings s;g.apply(s);return s.validate().empty();
 }
@@ -125,7 +128,6 @@ bool PresetLibrary::load() {
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
     const auto directVideoAi=std::filesystem::path(path_).concat(L".video-ai");
     const auto directAutoFg=std::filesystem::path(path_).concat(L".auto-fg");
-    const auto directSmartSr=std::filesystem::path(path_).concat(L".smart-sr");
     const auto directDual=std::filesystem::path(path_).concat(L".dual-sr");
     const auto directSrStage=std::filesystem::path(path_).concat(L".sr-stage");
     const auto directBeauty=std::filesystem::path(path_).concat(L".beauty");
@@ -199,9 +201,9 @@ bool PresetLibrary::load() {
     const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
     if(std::filesystem::exists(directDenoise))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath))path_=denoisePath;
-    // v27: the smart SR switch; its own file keeps every older library intact.
+    // Smart SR uses a sidecar so older apps can still open the original library.
     const auto smartSrPath=std::filesystem::path(path_).concat(L".smart-sr");
-    if(std::filesystem::exists(directSmartSr))path_=directSmartSr;
+    if(std::filesystem::exists(smartSrPath_))path_=smartSrPath_;
     else if(std::filesystem::exists(smartSrPath))path_=smartSrPath;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
@@ -295,10 +297,10 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
-    // v27 (smart SR switch) gets its own .smart-sr file and keeps it, as
+    // Smart SR gets its own .smart-sr file and keeps it, as
     // .video-denoise does; the file it starts from keeps its bytes.
     const bool smartSidecar=path_.wstring().ends_with(L".smart-sr");
-    const bool upgradeSmart=!smartSidecar && data.starts_with("VEYRA_PRESET_LIBRARY 27\n");
+    const bool upgradeSmart=path_!=smartSrPath_&&data.starts_with("VEYRA_PRESET_LIBRARY 29\n");
     const bool denoiseSidecar=smartSidecar||path_.wstring().ends_with(L".video-denoise");
     const bool upgradeDenoise=!denoiseSidecar && !upgradeSmart && data.starts_with("VEYRA_PRESET_LIBRARY 26\n");
     const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
@@ -353,7 +355,7 @@ bool PresetLibrary::save() {
     } // .auto-fg / .output-controls own subsequent edits.
     }
     auto destination=path_;
-    if(upgradeSmart)destination+=L".smart-sr";
+    if(upgradeSmart)destination=smartSrPath_;
     else if(upgradeDenoise)destination+=L".video-denoise";
     else if(upgrade)destination+=L".fg-options";
     std::error_code ec;
@@ -885,10 +887,10 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         return e.chain.firstOf(EffectType::VideoDenoise) ||
             (e.nodeConfiguration && hasVideoDenoise(*e.nodeConfiguration));
     });
-    // v27: the smart SR switch in any stored globals.
+    // v29: the smart SR switch in any stored globals.
     const auto smartOf=[](const ChainGlobalSettings& g){return g.smartSr;};
     const bool smart=std::any_of(entries_.begin(),entries_.end(),[&](const auto& e){return (e.globals&&smartOf(*e.globals))||(e.nodeConfiguration&&(smartOf(*e.nodeConfiguration)||(e.nodeConfiguration->editor&&e.nodeConfiguration->editor->globals&&smartOf(*e.nodeConfiguration->editor->globals))));});
-    const int version=std::max(minimumVersion, smart?27:denoise?26:(individualModes||originalHalfRate||rife)?25:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const int version=std::max(minimumVersion, smart?29:denoise?26:(individualModes||originalHalfRate||rife)?25:autoFg?22:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -947,7 +949,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=27);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17,version==27||version>=29,version>=28);}
         }
         if(version>=10){
             o<<' '<<e.flow.has_value();
@@ -969,8 +971,8 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     size_t count = 0;
     // v23 adds region modes and the standalone v24 adds cadence value 6.
     // v25 combines both layouts and adds RIFE as a provider; v26 video denoise.
-    // v27 appends the smart SR switch to the rendering globals.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,27):27;
+    // v27 is the original Smart SR preview; v29 includes the FSR slot.
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,29):29;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) {
         error = L"预设库格式或版本不支持"; return false;
     }
@@ -1102,7 +1104,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=27))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17,version==27||version>=29,version>=28))return false;e.globals=g;
             }
         }
         if(version>=10){
@@ -1189,10 +1191,10 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         return usesRife(c)||(c.editor&&c.editor->globals&&usesRife(*c.editor->globals));
     });
     const bool denoise=std::any_of(session.configurations.begin(),session.configurations.end(),hasVideoDenoise);
-    // v22: the smart SR switch.
+    // v24: the smart SR switch with the FSR slot.
     const bool smart=std::any_of(session.configurations.begin(),session.configurations.end(),[](const auto& c){
         return c.smartSr||(c.editor&&c.editor->globals&&c.editor->globals->smartSr);});
-    const int version = smart?22:denoise?21:(individualModes||session.originalHalfRate||rife)?20:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const int version = smart?24:denoise?21:(individualModes||session.originalHalfRate||rife)?20:autoFg?17:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);
     if(version>=20)out<<' '<<session.originalHalfRate;
@@ -1203,7 +1205,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12,version==22||version>=24,version>=23);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -1221,7 +1223,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12,version==22||version>=24,version>=23);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -1248,14 +1250,14 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 22) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;   // v22 = smart SR
+        (version < 1 || version > 24) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
     int original=version==19;
     if(version>=20&&(!(in>>original)||original<0||original>1))return false;
     parsed.originalHalfRate=original!=0;
-    const int presetVersion=version>=22?27:version>=21?26:version>=20?25:version==18?23:version>=17?22:
+    const int presetVersion=version>=24?29:version>=23?28:version>=22?27:version>=21?26:version>=20?25:version==18?23:version>=17?22:
         version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11;
     for (auto& c : parsed.configurations) {
         int target, backend, flow, optical, half, policy;
@@ -1264,7 +1266,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12,version==22||version>=24,version>=23))return false;
     }
     if (!(in >> std::quoted(body))) return false;
     std::vector<PresetEntry> entries; std::wstring def, error;
@@ -1287,7 +1289,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=22))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12,version==22||version>=24,version>=23))return false;
             editor->globals = g;
         }
         uint32_t count = 0;
@@ -1327,7 +1329,6 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto directAnySr=std::filesystem::path(path_).concat(L".dual-sr-any");
     const auto directVideoAi=std::filesystem::path(path_).concat(L".video-ai");
     const auto directAutoFg=std::filesystem::path(path_).concat(L".auto-fg");
-    const auto directSmartSr=std::filesystem::path(path_).concat(L".smart-sr");
     const auto directDual=std::filesystem::path(path_).concat(L".dual-sr");
     const auto directSrStage=std::filesystem::path(path_).concat(L".sr-stage");
     const auto directBeauty=std::filesystem::path(path_).concat(L".beauty");
@@ -1399,9 +1400,9 @@ bool ChainSessionStore::load(ChainSession& session) {
     const auto denoisePath=std::filesystem::path(path_).concat(L".video-denoise");
     if(std::filesystem::exists(directDenoise,ec))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath,ec))path_=denoisePath;
-    // v22: the smart SR switch in its own file.
+    // Smart SR uses a sidecar so older apps can still open the original session.
     const auto smartSrPath=std::filesystem::path(path_).concat(L".smart-sr");
-    if(std::filesystem::exists(directSmartSr,ec))path_=directSmartSr;
+    if(std::filesystem::exists(smartSrPath_,ec))path_=smartSrPath_;
     else if(std::filesystem::exists(smartSrPath,ec))path_=smartSrPath;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
@@ -1427,10 +1428,10 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
-    // v22 (smart SR switch) gets its own .smart-sr file and keeps it, as
+    // Smart SR gets its own .smart-sr file and keeps it, as
     // .video-denoise does; the file it starts from keeps its bytes.
     const bool smartSidecar=path_.wstring().ends_with(L".smart-sr");
-    const bool upgradeSmart=!smartSidecar && data.starts_with("VEYRA_CHAIN_SESSION 22\n");
+    const bool upgradeSmart=path_!=smartSrPath_&&data.starts_with("VEYRA_CHAIN_SESSION 24\n");
     const bool denoiseSidecar=smartSidecar||path_.wstring().ends_with(L".video-denoise");
     const bool upgradeDenoise=!denoiseSidecar && !upgradeSmart && data.starts_with("VEYRA_CHAIN_SESSION 21\n");
     const bool separate=denoiseSidecar||path_.wstring().ends_with(L".fg-options");
@@ -1486,7 +1487,7 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
 
     auto destination=path_;
-    if(upgradeSmart)destination+=L".smart-sr";
+    if(upgradeSmart)destination=smartSrPath_;
     else if(upgradeDenoise)destination+=L".video-denoise";
     else if(upgrade)destination+=L".fg-options";
     std::error_code ec;

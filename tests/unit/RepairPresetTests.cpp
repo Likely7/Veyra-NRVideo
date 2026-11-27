@@ -374,15 +374,20 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
       updated.entries()[0].settings.exclusion.regions[0].content==ExclusionContent::All;
   ok&=pass;std::cout<<"exclusion schema38 per-region modes and legacy defaults="<<pass<<'\n';
  }
- // Smart SR (v40): written only when a preset turns it on, after the v38 layout;
+ // Smart SR (v42): opt-in, backwards-compatible sidecar.
  // a value other than 0/1 fails the file, which is then kept.
  {
   EnhancementSettings smart;smart.sr=true;smart.videoSrQuality=4;smart.smartSr=true;
   auto path=p;path+=L"-smart-sr";std::error_code ec;std::filesystem::remove(path,ec);
-  PresetStore writer(path);bool pass=writer.load()&&writer.put(L"smart",smart);PresetStore reader(path);
+  auto sidecar=path;sidecar+=L".smart-sr";std::filesystem::remove(sidecar,ec);
+  EnhancementSettings base;
+  PresetStore writer(path);bool pass=writer.load()&&writer.put(L"smart",base);
+  std::ifstream original(path,std::ios::binary);const std::string rollback((std::istreambuf_iterator<char>(original)),{});original.close();
+  pass=pass&&writer.put(L"smart",smart,true);PresetStore reader(path);
   pass=pass&&reader.load()&&reader.entries().size()==1&&reader.entries()[0].settings==smart;
-  std::ifstream header(path);std::string magic;int version=0;header>>magic>>version;header.close();pass=pass&&version==40;
-  std::ifstream in(path,std::ios::binary);std::string text((std::istreambuf_iterator<char>(in)),{});in.close();
+  std::ifstream header(sidecar);std::string magic;int version=0;header>>magic>>version;header.close();pass=pass&&version==42&&!rollback.empty();
+  std::ifstream preserved(path,std::ios::binary);pass=pass&&std::string((std::istreambuf_iterator<char>(preserved)),{})==rollback;preserved.close();
+  std::ifstream in(sidecar,std::ios::binary);std::string text((std::istreambuf_iterator<char>(in)),{});in.close();
   const auto end=text.find_last_not_of("\r\n");pass=pass&&end!=std::string::npos&&text[end]=='1';
   if(pass){
    text[end]='2';auto broken=p;broken+=L"-smart-sr-invalid";std::ofstream(broken,std::ios::binary)<<text;
@@ -393,6 +398,6 @@ ok=ok&&b.entries().size()==1&&b.defaultSettings()==s;
   auto plainPath=p;plainPath+=L"-smart-sr-off";std::filesystem::remove(plainPath,ec);
   PresetStore off(plainPath);pass=pass&&off.load()&&off.put(L"plain",plain);
   std::ifstream offHeader(plainPath);offHeader>>magic>>version;pass=pass&&version==21;
-  ok&=pass;std::cout<<"smart SR schema40 roundtrip, invalid value kept, off stays v21="<<pass<<'\n';
+  ok&=pass;std::cout<<"smart SR schema42 roundtrip, invalid value kept, off stays v21="<<pass<<'\n';
  }
  std::cout<<"preset roundtrip, all fields, duplicate, rename-default, delete, validation, unknown schema, corrupt-preservation="<<ok<<'\n';return ok?0:1;}

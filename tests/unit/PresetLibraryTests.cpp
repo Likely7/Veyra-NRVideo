@@ -1133,7 +1133,7 @@ __declspec(noinline) void testDualSrStorage() {
     auto back=std::make_unique<ChainSession>();ChainSessionStore reload(sessionPath);
     check(reload.load(*back)&&back->configurations[0].dualSrEnabled&&back->configurations[0].dualSrQuality==2&&back->configurations[0].dualSrTarget==s.dualSrTarget,"session reload preserves independent second target and quality");
 }
-// Smart SR (2026-11-22): library v27 / session v22 in .smart-sr files; every
+// Smart SR (2026-11-22): library v29 / session v24 in .smart-sr files; every
 // older file keeps its bytes, and the sidecar keeps owning later saves.
 __declspec(noinline) void testSmartSrStorage() {
     EnhancementSettings source;source.nr=false;source.sr=true;source.videoSrQuality=4;
@@ -1146,16 +1146,16 @@ __declspec(noinline) void testSmartSrStorage() {
     check(writer.load()&&writer.put(entry),"smart SR presets: save a library without it");
     const auto legacyLibrary=std::filesystem::path(libraryPath).concat(L".field-render");
     const auto rollback=readBytes(legacyLibrary);
-    check(!rollback.empty()&&!rollback.starts_with("VEYRA_PRESET_LIBRARY 27"),"smart SR presets: off keeps the older format");
+    check(!rollback.empty()&&!rollback.starts_with("VEYRA_PRESET_LIBRARY 29"),"smart SR presets: off keeps the older format");
     entry.globals->smartSr=true;
     check(writer.put(entry,true)&&readBytes(legacyLibrary)==rollback,"smart SR presets: the older library keeps its bytes");
-    check(readBytes(std::filesystem::path(legacyLibrary).concat(L".smart-sr")).starts_with("VEYRA_PRESET_LIBRARY 27"),"smart SR presets: v27 sidecar");
+    check(readBytes(std::filesystem::path(libraryPath).concat(L".smart-sr")).starts_with("VEYRA_PRESET_LIBRARY 29"),"smart SR presets: v29 sidecar");
     PresetLibrary reader(libraryPath);reader.setIncludeBuiltins(false);
     check(reader.load()&&reader.entries().size()==1&&reader.entries()[0].globals&&reader.entries()[0].globals->smartSr,"smart SR presets: a fresh reader finds the sidecar");
     auto applied=source;if(!reader.entries().empty())PresetLibrary::apply(reader.entries()[0],applied);
     check(applied.smartSr,"smart SR presets: applying the chain restores the switch");
-    const auto exported=scratch(L"smart-sr-export.v27");
-    check(writer.exportEntry(0,exported)&&readBytes(exported).starts_with("VEYRA_PRESET_LIBRARY 27"),"smart SR presets: export declares v27");
+    const auto exported=scratch(L"smart-sr-export.v29");
+    check(writer.exportEntry(0,exported)&&readBytes(exported).starts_with("VEYRA_PRESET_LIBRARY 29"),"smart SR presets: export declares v29");
     entry.globals->smartSr=false;
     check(writer.put(entry,true)&&readBytes(legacyLibrary)==rollback,"smart SR presets: turning it off stays in the sidecar");
 
@@ -1168,7 +1168,7 @@ __declspec(noinline) void testSmartSrStorage() {
     const auto sessionRollback=readBytes(sessionPath);
     session->configurations[0].smartSr=true;
     check(sessions.save(*session)&&readBytes(sessionPath)==sessionRollback,"smart SR session: the older session keeps its bytes");
-    check(readBytes(std::filesystem::path(sessionPath).concat(L".smart-sr")).starts_with("VEYRA_CHAIN_SESSION 22"),"smart SR session: v22 sidecar");
+    check(readBytes(std::filesystem::path(sessionPath).concat(L".smart-sr")).starts_with("VEYRA_CHAIN_SESSION 24"),"smart SR session: v24 sidecar");
     auto restored=std::make_unique<ChainSession>();ChainSessionStore reopened(sessionPath);
     check(reopened.load(*restored)&&*restored==*session&&restored->configurations[0].smartSr&&!restored->configurations[1].smartSr,
           "smart SR session: List and Node values round-trip independently");
