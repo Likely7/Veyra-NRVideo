@@ -704,6 +704,12 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     }
     void discardPending(){
         if(pending<0)return;
+        // A submitted conversion leaves both textures in COPY_SOURCE. If the
+        // first recorded list was never submitted, both are still in COMMON.
+        if(frames.load(std::memory_order_relaxed)==0){
+            states.set(y.Get(),D3D12_RESOURCE_STATE_COMMON);
+            states.set(uv.Get(),D3D12_RESOURCE_STATE_COMMON);
+        }
         slots[size_t(pending)].state=0;pending=-1;
         if(closing.load())closeJobs();
     }
