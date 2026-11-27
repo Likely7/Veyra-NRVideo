@@ -12,6 +12,8 @@ RTX 5070 的 HDR10 测试两种放大方式均从 4K 识别到 1920×1080。亮�
 
 回放用 `tmp/codex-smart-sr-258-20261127/qa.py` 的 `baseline`、`local`、`exact` 模式，测试进程使用私有配置。素材源为 `tests/codex-github-fixes-20261126/media/gta-native-2997.mp4`。无损样片去饱和后分别缩到 1080p 和 1440p，用双线性放大到 4K，60 FPS，libx264 QP 0。复用 `tests/runtime-dependency-refresh-20261127/app` 的测试程序。性能数据覆盖本机文件回放和测试图案，主机实卡以及高负载 HDR 组合沿用作者的测试记录作为参考。
 
+GitHub PR 的兼容提交为 `e38da465`，合并提交为 `55ebc7b0`。PR 分支用独立构建验证 Windows 主程序、效果链 573 项、预设库 674 项、预设往返及两种 HDR 反推。旧分支的链接器无法解析中文 Qt 路径，改用指向同一 E 盘依赖的既有 Qt 兼容入口。两边生成的 v42 预设字段顺序和字节一致，只有代表本地锐化值的字段从默认 0 变为 35。与 GitHub 主线同步时，本地继续使用已实测的兼容实现。 [GitHub 分支构建](<E:/项目/Veyra/logs/codex-smart-sr-258-upstream-20261127/build-20261127-120441/compile.log>) · [预设比对](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/preset-wire-check.log>) · [GitHub 分支 HDR](<E:/项目/Veyra/logs/codex-smart-sr-258-20261127/upstream-hdr/result.log>)
+
 ## 2026-11-27 采集卡自动去重与补帧节奏
 
 基线是本地 main `4b0312ca`。来源为用户提供的 @George Discord 投稿，面向 2.2.1 的 UGREEN CM630 + PS5 Pro 报告和 `veyra-2.2.1-capture-fixes.zip`。报告记录了 60.01 Hz 采样与 59.94 Hz 主机约每 14 秒发生一次错位，以及静止地图开关时出现的额外停顿。
