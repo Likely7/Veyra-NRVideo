@@ -184,6 +184,102 @@ int main(int argc,char** argv){
         std::cout<<(pass?"PASS ":"FAIL ")<<"Xbox float/independent RTP origins: running="<<s.running<<" blocks="<<s.inputBlocks<<" bufferedMs="<<s.bufferedMs<<" compensationMs="<<s.compensationMs<<" fallback="<<s.syncClockFallback<<'\n';
         return pass?0:1;
     }
+    if(mode=="--ps5-audio-startup"){
+        if(enumerateRenderEndpoints().empty()){
+            std::cout<<"SKIP PS5 audio startup: no active render endpoint\n";
+            return 77;
+        }
+        // Mark the fresh PCM with a distinct amplitude in each channel. The
+        // pre-gain tap verifies the first buffer of the muted WASAPI renderer.
+        struct StartupTap final : RecordingAudioSink {
+            size_t frames=0,pairedMarkers=0;
+            bool stereo=true;
+            void renderedPcm(const float* pcm,size_t count,const AudioFormat& format,int64_t,const void*)override{
+                stereo=stereo&&format==AudioFormat{};
+                constexpr size_t startupFrames=960;
+                const size_t inspect=std::min(count,startupFrames-std::min(frames,startupFrames));
+                if(stereo){
+                    for(size_t i=0;i<inspect;++i)
+                        if(pcm[2*i]>.16f&&pcm[2*i+1]<-.26f)++pairedMarkers;
+                }
+                frames+=count;
+            }
+        };
+        struct StartupResult {
+            bool valid=false;
+            unsigned startBlock=0;
+            double targetMs=0,settledMs=0;
+            size_t pairedMarkers=0;
+        };
+        constexpr unsigned freshBlock=100;
+        auto run=[&](std::string_view name,CaptureVideoSyncClock clock,bool stale,unsigned syncMode,int offset){
+            CaptureAudioSession output;
+            const auto wave=floatWave(AudioFormat{});
+            output.setGain(0);
+            output.setSync(syncMode,offset);
+            if(!output.configure(wave.Format,sizeof(wave))||!output.start({},clock))return StartupResult{};
+            const auto tap=std::make_shared<StartupTap>();
+            addRecordingAudioSink(tap);
+            const auto begin=Clock::now();
+            const unsigned firstPicture=stale?85:0;
+            const unsigned blocks=stale?freshBlock+54:54;
+            StartupResult result;
+            result.startBlock=blocks;
+            std::vector<float> pcm(480*2);
+            bool fed=true;
+            for(unsigned i=0;i<blocks&&fed;++i){
+                pacer.until(begin+std::chrono::milliseconds(i*10));
+                // PS5 gives the audio thread two 10 ms pieces per callback.
+                if(i%2==0){
+                    for(unsigned block=i;block<i+2&&fed;++block){
+                        const bool marker=!stale||block>=freshBlock-6;
+                        for(size_t frame=0;frame<480;++frame){
+                            pcm[2*frame]=marker?.25f:.0125f;
+                            pcm[2*frame+1]=marker?-.38f:-.02f;
+                        }
+                        fed=output.push(pcm.data(),pcm.size()*sizeof(float),double(block)*10,block==0);
+                    }
+                }
+                if(i>=firstPicture&&(i-firstPicture)%3==0){
+                    const bool old=stale&&i<freshBlock;
+                    const int64_t delayMs=old?739:39;
+                    const double biasMs=old?0:39;
+                    const auto host=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;
+                    output.videoPresented(double(i)*10-double(delayMs)-biasMs,host,host-delayMs*10000);
+                }
+                const auto state=output.snapshot();
+                if(state.running&&result.startBlock==blocks){
+                    result.startBlock=i;
+                    result.targetMs=state.compensationMs;
+                }
+                result.settledMs=state.compensationMs;
+            }
+            const auto state=output.snapshot();
+            output.stop();
+            removeRecordingAudioSink(tap.get());
+            result.valid=fed&&state.inputBlocks==blocks&&state.overflows==0&&tap->stereo&&tap->frames>10000;
+            result.pairedMarkers=tap->pairedMarkers;
+            std::cout<<name<<" valid="<<result.valid<<" startMs="<<result.startBlock*10
+                <<" firstTargetMs="<<result.targetMs<<" settledMs="<<result.settledMs
+                <<" pairedMarkers="<<result.pairedMarkers<<" tapFrames="<<tap->frames
+                <<" discardedFrames="<<state.recoveryDiscardedFrames<<"\n";
+            return result;
+        };
+        const auto legacy=run("Shared PTS / stale",CaptureVideoSyncClock::StreamPts,true,0,0);
+        const auto guarded=run("PS5 / stale",CaptureVideoSyncClock::RemotePlayArrival,true,0,0);
+        const auto healthy=run("PS5 / healthy",CaptureVideoSyncClock::RemotePlayArrival,false,0,0);
+        const auto manual=run("PS5 / manual",CaptureVideoSyncClock::RemotePlayArrival,false,1,55);
+        const auto off=run("PS5 / off",CaptureVideoSyncClock::RemotePlayArrival,false,2,0);
+        const auto expected=[](double actual,double target){return std::abs(actual-target)<.1;};
+        const bool pass=legacy.valid&&legacy.startBlock<freshBlock&&legacy.targetMs>650&&legacy.pairedMarkers==0
+            &&guarded.valid&&guarded.startBlock>=freshBlock&&guarded.startBlock<freshBlock+16
+            &&expected(guarded.targetMs,39)&&expected(guarded.settledMs,39)&&guarded.pairedMarkers>=480
+            &&healthy.valid&&healthy.startBlock<16&&expected(healthy.targetMs,39)&&healthy.pairedMarkers>=480
+            &&manual.valid&&manual.startBlock<16&&expected(manual.targetMs,55)
+            &&off.valid&&off.startBlock<16&&expected(off.targetMs,0);
+        std::cout<<(pass?"PASS ":"FAIL ")<<"PS5 audio startup timing and stereo PCM\n";
+        return pass?0:1;
+    }
     const bool longOutage=argc>=2&&std::string_view(argv[1])=="--long-endpoint-loss";
     const bool endpointTest=longOutage||(argc>=2&&std::string_view(argv[1])=="--endpoint-loss");
     if(longOutage)SetEnvironmentVariableW(L"VEYRA_TEST_CAPTURE_AUDIO_LONG_OUTAGE",L"1");
