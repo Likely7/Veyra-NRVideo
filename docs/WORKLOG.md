@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-27 紧凑手柄图和实际键位
+
+参考原版手柄图，把手柄键与实际键鼠映射放在同一个键帽上。图示在 380 px 侧栏中为 296 px，最大 356 px。左右摇杆的按下及四个方向均在图上录键，当前步行或驾驶布局决定显示的映射。通过编辑卡设置备用键，长组合可悬停查看。L3 + R3／LS + RS 留在图示右上，触摸板手势、慢走、菜单摇杆和半油门在列表。
+
+复现 380 × 840 窗口改键后 UI 不再处理事件。键位已经保存，线程栈显示 Flickable 内容高度变化触发宽度调整，重新排列又改变了图和内容的高度。固定留出滚动条位置后，用同一窗口尺寸复测，PS5 与 Xbox 图示的摇杆按下、方向键、备用键和组合键均写入测试档案，并核对了图示即时更新。 [复现线程栈](<E:/项目/Veyra/logs/codex-controller-panel-20261127/compact-ui-marked-ps5-isolated/ui-thread.txt>) · [PS5 100%](<E:/项目/Veyra/logs/codex-controller-panel-20261127/panel-compact-gutter-ps5-default/result.json>) · [Xbox 150%](<E:/项目/Veyra/logs/codex-controller-panel-20261127/panel-compact-gutter-xbox-isolated/result.json>)
+
+复用测试程序，仅同步三个 QML 文件。Qt Quick 通过 302 项，跳过 1 项可选栅格对比，覆盖图上键位、不同平台和宽度、紧凑布局以及滚动条出现前后图宽一致。 [界面回归](<E:/项目/Veyra/logs/codex-controller-panel-20261127/compact-diagram-and-gutter-quick.log>)
+
 ## 2026-11-27 手柄图点选和侧栏拖动复修
 
 旧图示的左右标签各占一段宽度，L3 + R3 只在列表。新版手柄图使用内容全宽，实体按键直接开始录入主键，备用键显示在同页的编辑卡。L3 + R3／LS + RS 在图示右上角，步行和驾驶各自保存。手柄壳用普通图像节点绘制，软件模式的未绑定键帽用矩形边框。键位、档案与 F2 速查改用 Veyra 的细滚动条，避免 Windows 默认白条盖住按钮。

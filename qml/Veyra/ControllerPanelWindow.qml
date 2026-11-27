@@ -343,7 +343,10 @@ Window {
                         ScrollBar.vertical: VScrollBar { policy: ScrollBar.AsNeeded }
                         ColumnLayout {
                             id: pages
-                            width: body.width - (body.contentHeight > body.height ? 10 : 0)
+                            objectName: "controller-panel-pages"
+                            // The board height depends on this width. Show the scrollbar
+                            // without changing the width or crossing the overflow threshold again.
+                            width: Math.max(0, body.width - 10)
                             spacing: 12
                             ControllerConnectionPage {
                                 id: connection

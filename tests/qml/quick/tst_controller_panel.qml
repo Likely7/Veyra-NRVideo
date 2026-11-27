@@ -385,15 +385,16 @@ Item {
             tryCompare(editor, "showList", false)
             const diagram = find(panel, "controller-panel-diagram")
             const art = find(panel, "controller-panel-controller-art")
-            verify(art.width >= diagram.width - 16, "Silhouette must use the actual panel width")
+            verify(art.width >= 270 && art.width <= 356 && art.width <= diagram.width - 36,
+                "The controller should be compact with room around the silhouette")
             tryCompare(find(panel, "controller-panel-silhouette"), "status", Image.Ready)
 
             const targets = []
-            for (let action = 0; action <= 32; ++action) {
-                if (data.xbox && (action === 14 || action >= 28 && action <= 31)) continue
+            for (let action = 0; action <= 25; ++action) {
+                if (data.xbox && action === 14) continue
                 const target = find(panel, "controller-panel-diagram-key-" + action)
-                verify(target.visible && target.width >= 28 && target.height >= 28, "Hit area " + action)
-                if (action >= 18) continue
+                verify(target.visible && target.width >= 21 && target.height >= 21, "Hit area " + action)
+                verify(find(panel, "controller-panel-diagram-value-" + action).visible)
                 const corner = target.mapToItem(art, 0, 0)
                 const rect = Qt.rect(corner.x, corner.y, target.width, target.height)
                 verify(rect.x >= 0 && rect.x + rect.width <= art.width &&
@@ -405,9 +406,31 @@ Item {
                 }
                 targets.push(rect)
             }
+            for (const action of [26, 27, 28, 29, 30, 31, 33])
+                compare(findChild(diagram, "controller-panel-diagram-key-" + action), null)
+            const input = owner.mapper
+            const walking = input.bindings.slice()
+            walking[10] = "LShift"
+            walking[13] = "BackSpace"
+            walking[18] = "W"
+            walking[25] = "F4"
+            input.bindings = walking
+            const backup = input.alternateBindings.slice()
+            backup[16] = "Q"
+            backup[17] = "K"
+            backup[19] = "S"
+            input.alternateBindings = backup
+            compare(find(panel, "controller-panel-diagram-value-0").text, "空格")
+            compare(find(panel, "controller-panel-diagram-value-10").text, "L⇧")
+            compare(find(panel, "controller-panel-diagram-value-13").text, "Bksp")
+            compare(find(panel, "controller-panel-diagram-value-16").text, "Q")
+            compare(find(panel, "controller-panel-diagram-value-17").text, "M1/K")
+            compare(find(panel, "controller-panel-diagram-value-18").text, "W")
+            compare(find(panel, "controller-panel-diagram-value-19").text, "S")
+            compare(find(panel, "controller-panel-diagram-value-25").text, "F4")
             mouseClick(art, 2, 2)
             compare(owner.mapper.learning, -1)
-            for (const action of [16, 9, 17, 0, 6, 10, 11, 19, 25]) {
+            for (const action of [16, 9, 17, 0, 6, 10, 11, 18, 19, 20, 21, 22, 23, 24, 25]) {
                 click(panel, "controller-panel-diagram-key-" + action)
                 compare(editor.selected, action)
                 compare(owner.mapper.learning, action)
@@ -415,7 +438,7 @@ Item {
             }
 
             const combination = find(panel, "controller-panel-diagram-key-32")
-            compare(combination.text, data.xbox ? "LS + RS" : "L3 + R3")
+            compare(combination.text, data.xbox ? "LS + RS · V" : "L3 + R3 · V")
             click(panel, "controller-panel-diagram-key-32")
             compare(editor.selected, 32)
             compare(owner.mapper.learning, 32)
@@ -437,8 +460,10 @@ Item {
             compare(owner.mapper.learningSlot, 1)
             compare(owner.mapper.learningDriving, true)
 
-            click(panel, "controller-panel-diagram-key-33")
-            compare(owner.mapper.learning, 33)
+            compare(find(panel, "controller-panel-diagram-value-17").text, "W")
+            compare(find(panel, "controller-panel-diagram-value-18").text, "—")
+            click(panel, "controller-panel-diagram-key-23")
+            compare(owner.mapper.learning, 23)
             compare(owner.mapper.learningDriving, true)
             const body = find(panel, "controller-panel-body")
             const slot = find(panel, "controller-panel-edit-slot-1")
@@ -450,11 +475,39 @@ Item {
             click(panel, "controller-panel-binding-view-1")
             tryCompare(editor, "showList", true)
             const list = find(panel, "controller-panel-binding-list")
+            for (const action of data.xbox ? [26, 27, 33] : [26, 27, 28, 29, 30, 31, 33])
+                verify(find(panel, "controller-panel-list-primary-" + action))
+            click(panel, "controller-panel-list-primary-33")
+            compare(editor.selected, 33)
             const alternate = find(panel, "controller-panel-list-alternate-0")
             const end = alternate.mapToItem(list, alternate.width, 0)
             verify(end.x <= list.width + 1)
             click(panel, "controller-panel-binding-view-0")
             tryCompare(editor, "showList", false)
+        }
+
+        function test_scrollbarDoesNotChangeDiagramWidth() {
+            const owner = createPlayer()
+            owner.height = 1000
+            owner.mapper.ps5KeyboardEnabled = true
+            const panel = open(owner, {platform: "ps5", page: "bindings"})
+            const body = find(panel, "controller-panel-body")
+            const pages = find(panel, "controller-panel-pages")
+            const art = find(panel, "controller-panel-controller-art")
+            tryVerify(() => body.contentHeight < body.height)
+            const width = pages.width
+            const artWidth = art.width
+            compare(body.width - width, 10)
+
+            owner.height = 460
+            tryVerify(() => body.contentHeight > body.height)
+            compare(pages.width, width)
+            compare(art.width, artWidth)
+            click(panel, "controller-panel-diagram-key-18")
+            compare(owner.mapper.learning, 18)
+            owner.mapper.cancelLearning()
+            compare(pages.width, width)
+            compare(art.width, artWidth)
         }
 
         function test_editorPreviewAndEscape() {

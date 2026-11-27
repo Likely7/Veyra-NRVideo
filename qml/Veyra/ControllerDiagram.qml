@@ -15,18 +15,26 @@ Rectangle {
     property var live: ({})
     property bool editable: true
     readonly property bool xbox: platform === "xbox"
+    // Physical controls, followed by the four left and four right stick directions.
     readonly property var locations: [
-        [442, 236], [495, 184], [389, 184], [442, 135],
-        xbox ? [161, 219] : [64, 183], xbox ? [267, 219] : [172, 183],
-        xbox ? [214, 175] : [118, 135], xbox ? [214, 273] : [118, 236],
-        [110, 81], [450, 81],
-        xbox ? [112, 141] : [228, 242], xbox ? [333, 235] : [333, 242],
-        xbox ? [331, 120] : [373, 84], xbox ? [229, 120] : [187, 84],
-        [280, 82], xbox ? [280, 61] : [280, 154], [110, 27], [450, 27]
+        [455,224], [500,176], [410,176], [455,128],
+        xbox ? [166,232] : [62,176], xbox ? [258,232] : [154,176],
+        xbox ? [212,184] : [108,128], xbox ? [212,280] : [108,224],
+        [112,74], [448,74], xbox ? [117,166] : [205,242], [355,242],
+        xbox ? [333,113] : [370,83], xbox ? [228,113] : [190,83], [280,78],
+        [280,xbox ? 64 : 148], [112,25], [448,25],
+        xbox ? [117,119] : [205,195], xbox ? [117,213] : [205,289],
+        xbox ? [68,166] : [156,242], xbox ? [166,166] : [254,242],
+        [355,195], [355,289], [306,242], [404,242]
     ]
-    readonly property var extraActions: (
-        xbox ? [26, 27] : [26, 27, 28, 29, 30, 31]
-    ).concat(driving ? [33] : [])
+    readonly property var shortNames: ({
+        [qsTr("鼠标左键")]: "M1", [qsTr("鼠标中键")]: "M3", [qsTr("鼠标右键")]: "M2",
+        [qsTr("鼠标侧键 1")]: "M4", [qsTr("鼠标侧键 2")]: "M5",
+        [qsTr("滚轮向上")]: "W↑", [qsTr("滚轮向下")]: "W↓",
+        [qsTr("滚轮向左")]: "W←", [qsTr("滚轮向右")]: "W→",
+        "space": qsTr("空格"), "enter": "↵", "return": "↵", "backspace": "Bksp",
+        "lshift": "L⇧", "rshift": "R⇧"
+    })
     signal picked(int action)
 
     implicitWidth: 388
@@ -36,6 +44,21 @@ Rectangle {
     border.color: Theme.stroke2
 
     ConsolePadLabels { id: labels; xbox: diagram.xbox }
+
+    function shortBinding(value) {
+        const keyStart = value.lastIndexOf("+") + 1
+        const key = value.slice(keyStart)
+        return value.slice(0, keyStart) + (shortNames[key] ?? shortNames[key.toLowerCase()] ?? key)
+    }
+
+    function nameOnBoard(action) {
+        if (action >= 18) return ["↑", "↓", "←", "→"][(action - 18) % 4]
+        if (action >= 4 && action <= 7) return ["←", "→", "↑", "↓"][action - 4]
+        if (action === 12) return "≡"
+        if (action === 13) return xbox ? "⧉" : "↗"
+        if (action === 14) return qsTr("触摸板")
+        return labels.names[action]
+    }
 
     function keyDescription(action) {
         return qsTr("%1，主键 %2，备用键 %3").arg(labels.names[action])
@@ -55,7 +78,7 @@ Rectangle {
         return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg)
     }
 
-    component OnPadTarget: Item {
+    component OnPadTarget: Rectangle {
         id: target
         required property int action
         required property var point
@@ -64,23 +87,38 @@ Rectangle {
         readonly property bool pressed: labels.pressed(diagram.live, action)
         readonly property bool shoulder: action === 8 || action === 9 || action === 16 || action === 17
         readonly property bool stick: action === 10 || action === 11
-        readonly property bool direction: action >= 4 && action <= 7
+        readonly property bool stickDirection: action >= 18
         readonly property bool touchpad: action === 14
-        readonly property bool marked: action === diagram.selected || activeFocus || pointer.hovered
-        readonly property color edge: marked ? Theme.accent : pressed ? Theme.ok : Theme.stroke2
+        readonly property bool marked: action === diagram.selected || activeFocus
+        readonly property string primaryBinding: labels.binding(diagram.input, diagram.driving, action)
+        readonly property string alternateBinding: labels.binding(diagram.input, diagram.driving, action, 1)
+        readonly property string primaryShort: diagram.shortBinding(primaryBinding)
+        readonly property string alternateShort: diagram.shortBinding(alternateBinding)
+        readonly property bool hasBoth: primaryBinding !== "—" && alternateBinding !== "—"
+        readonly property string pair: primaryShort + "/" + alternateShort
+        readonly property bool pairFits: hasBoth && valueMetrics.advanceWidth(pair) <= keyValue.width
+        readonly property color labelInk: action < 4
+            ? (diagram.xbox ? [Theme.padA, Theme.padB, Theme.padX, Theme.padY]
+                            : [Theme.padCross, Theme.padCircle, Theme.padSquare, Theme.padTriangle])[action]
+            : Theme.t1
 
         objectName: "controller-panel-diagram-key-" + action
         enabled: diagram.editable
         activeFocusOnTab: enabled
         x: Math.round(point[0] * unit - width / 2)
         y: Math.round(point[1] * unit - height / 2)
-        width: shoulder ? Math.max(44, Math.round(100 * unit))
-            : touchpad ? Math.max(48, Math.round(124 * unit))
-            : Math.max(30, Math.round((stick ? 58 : 46) * unit))
-        height: Math.max(30, Math.round((stick ? 58 : touchpad ? 54 : 44) * unit))
+        width: Math.max(shoulder ? 42 : touchpad ? 54 : stickDirection ? 21 : 22,
+            Math.round((shoulder ? 103 : touchpad ? 118 : stick ? 52
+                : action === 13 || action === 15 ? 53 : action < 4 ? 50 : 44) * unit))
+        height: Math.max(21, Math.round((stick ? 52 : touchpad ? 46 : stickDirection ? 39 : 44) * unit))
+        radius: action < 4 || stick ? Math.min(width, height) / 2 : touchpad ? 7 : 5
+        color: pressed ? Theme.ok : marked || pointer.hovered ? Theme.accentSoft : Theme.card3
+        border.color: marked ? Theme.accent : Theme.stroke2
+        border.width: marked ? 2 : 1
 
         Accessible.role: Accessible.Button
         Accessible.name: diagram.keyDescription(action)
+        Accessible.description: stick ? (action === 10 ? qsTr("左摇杆") : qsTr("右摇杆")) : ""
         Accessible.onPressAction: if (enabled) diagram.picked(action)
         Keys.onReturnPressed: diagram.picked(action)
         Keys.onSpacePressed: diagram.picked(action)
@@ -90,61 +128,53 @@ Rectangle {
         ToolTip.delay: 450
         ToolTip.text: Accessible.name
 
-        ConsoleGlyph {
-            anchors.fill: parent
-            visible: !target.stick && !target.direction && !target.touchpad
-            platform: diagram.platform
-            action: target.action
-            visualState: target.pressed ? "pressed" : target.marked ? "selected" : "normal"
-        }
-        Rectangle {
-            anchors.fill: parent
-            visible: target.stick || target.direction || target.touchpad
-            radius: target.stick ? height / 2 : 7
-            color: target.pressed ? Theme.ok : target.marked ? Theme.accentSoft : Theme.card3
-            border.color: target.edge
-            border.width: target.marked ? 2 : 1
-        }
-        Rectangle {
-            readonly property bool leftStick: target.action === 10
-            readonly property real dx: Number((leftStick ? diagram.live?.leftX : diagram.live?.rightX) ?? 0)
-            readonly property real dy: Number((leftStick ? diagram.live?.leftY : diagram.live?.rightY) ?? 0)
-            visible: target.stick && (Math.abs(dx) > 0.01 || Math.abs(dy) > 0.01)
-            width: 6
-            height: width
-            x: (parent.width - width) / 2 + Math.max(-1, Math.min(1, dx)) * parent.width * 0.29
-            y: (parent.height - height) / 2 + Math.max(-1, Math.min(1, dy)) * parent.height * 0.29
-            radius: width / 2
-            color: target.pressed ? Theme.accentInk : Theme.accent
-        }
         Text {
-            anchors.centerIn: parent
-            width: Math.max(0, parent.width - 8)
-            visible: target.direction || target.touchpad || target.stick
-            text: target.direction ? ["←", "→", "↑", "↓"][target.action - 4]
-                : target.touchpad ? qsTr("触摸板") : labels.names[target.action]
+            anchors.top: parent.top
+            anchors.topMargin: 1
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width - 4
+            height: Math.floor((parent.height - 2) / 2)
+            text: diagram.nameOnBoard(target.action)
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter
             elide: Text.ElideRight
-            color: target.pressed ? Theme.accentInk : Theme.t1
+            color: target.pressed ? Theme.accentInk : target.labelInk
             font.family: Theme.fontUi
-            font.pixelSize: target.direction ? Theme.fsH3 : Theme.fsSmall
+            font.pixelSize: target.action < 4 ? Theme.fsSmall : Theme.fsSmall - 1
             font.weight: Font.DemiBold
         }
-    }
-
-    component ActionTarget: ControllerPanelButton {
-        id: button
-        required property int action
-        readonly property bool ps5LearningControl: true
-        objectName: "controller-panel-diagram-key-" + action
-        enabled: diagram.editable
-        text: labels.names[action]
-        tip: diagram.keyDescription(action)
-        Accessible.name: tip
-        primary: diagram.selected === action
-        onClicked: diagram.picked(action)
-        fontSize: Theme.fsSmall
+        Text {
+            id: keyValue
+            objectName: "controller-panel-diagram-value-" + target.action
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 1
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: parent.width - 2
+            height: Math.ceil((parent.height - 2) / 2)
+            text: target.pairFits ? target.pair
+                : target.primaryBinding === "—" ? target.alternateShort : target.primaryShort
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideLeft
+            color: target.pressed ? Theme.accentInk : text === "—" ? Theme.t3 : Theme.t1
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsSmall - 2
+        }
+        FontMetrics {
+            id: valueMetrics
+            font: keyValue.font
+        }
+        Rectangle {
+            visible: target.hasBoth && !target.pairFits
+            anchors.right: parent.right
+            anchors.rightMargin: 3
+            anchors.top: parent.top
+            anchors.topMargin: 3
+            width: 3
+            height: 3
+            radius: 2
+            color: target.pressed ? Theme.accentInk : Theme.accent
+        }
     }
 
     ColumnLayout {
@@ -166,16 +196,32 @@ Rectangle {
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsSmall
             }
-            ActionTarget {
-                action: 32
-                iconName: "gamepad"
+            ControllerPanelButton {
+                readonly property bool ps5LearningControl: true
+                readonly property string primaryBinding: labels.binding(diagram.input, diagram.driving, 32)
+                readonly property string alternateBinding: labels.binding(diagram.input, diagram.driving, 32, 1)
+                objectName: "controller-panel-diagram-key-32"
+                enabled: diagram.editable
+                text: {
+                    const main = diagram.shortBinding(primaryBinding)
+                    const backup = diagram.shortBinding(alternateBinding)
+                    const shown = main === "—" ? backup : backup === "—" ? main : main + "/" + backup
+                    return labels.names[32] + " · " + shown
+                }
+                maxTextWidth: 130
+                tip: diagram.keyDescription(32)
+                Accessible.name: tip
+                primary: diagram.selected === 32
+                onClicked: diagram.picked(32)
+                fontSize: Theme.fsSmall
             }
         }
 
         Item {
             id: art
             objectName: "controller-panel-controller-art"
-            Layout.fillWidth: true
+            Layout.preferredWidth: Math.min(356, Math.max(0, content.width - 28))
+            Layout.alignment: Qt.AlignHCenter
             implicitHeight: Math.round(320 * unit)
             readonly property real unit: width / 560
             // A cached image respects the panel's scroll clip in the software renderer.
@@ -207,6 +253,33 @@ Rectangle {
                 radius: width / 2
             }
             Repeater {
+                model: [10, 11]
+                delegate: Rectangle {
+                    required property int modelData
+                    id: stickBase
+                    readonly property var center: diagram.locations[modelData]
+                    readonly property real dx: Number((modelData === 10 ? diagram.live?.leftX : diagram.live?.rightX) ?? 0)
+                    readonly property real dy: Number((modelData === 10 ? diagram.live?.leftY : diagram.live?.rightY) ?? 0)
+                    x: center[0] * art.unit - width / 2
+                    y: center[1] * art.unit - height / 2
+                    width: 113 * art.unit
+                    height: width
+                    radius: width / 2
+                    color: Theme.card2
+                    border.color: Theme.stroke2
+
+                    Rectangle {
+                        visible: Math.abs(stickBase.dx) > 0.01 || Math.abs(stickBase.dy) > 0.01
+                        width: 5
+                        height: width
+                        radius: width / 2
+                        color: Theme.ok
+                        x: (parent.width - width) / 2 + stickBase.dx * parent.width * 0.39
+                        y: (parent.height - height) / 2 + stickBase.dy * parent.height * 0.39
+                    }
+                }
+            }
+            Repeater {
                 model: diagram.locations.length
                 delegate: OnPadTarget {
                     required property int index
@@ -214,59 +287,6 @@ Rectangle {
                     point: diagram.locations[index]
                     unit: art.unit
                     visible: !diagram.xbox || index !== 14
-                }
-            }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 8
-            Repeater {
-                model: [{ label: qsTr("左摇杆"), first: 18 }, { label: qsTr("右摇杆"), first: 22 }]
-                delegate: ColumnLayout {
-                    id: axes
-                    required property var modelData
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
-                    spacing: 3
-                    Text {
-                        Layout.fillWidth: true
-                        text: axes.modelData.label
-                        wrapMode: Text.Wrap
-                        color: Theme.t2
-                        font.family: Theme.fontUi
-                        font.pixelSize: Theme.fsSmall
-                    }
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 3
-                        Repeater {
-                            model: ["↑", "↓", "←", "→"]
-                            delegate: ActionTarget {
-                                required property int index
-                                required property string modelData
-                                action: axes.modelData.first + index
-                                text: modelData
-                                Layout.fillWidth: true
-                                Layout.minimumWidth: 30
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: 5
-            rowSpacing: 3
-            Repeater {
-                model: diagram.extraActions
-                delegate: ActionTarget {
-                    required property int modelData
-                    action: modelData
-                    Layout.fillWidth: true
-                    Layout.minimumWidth: 0
                 }
             }
         }

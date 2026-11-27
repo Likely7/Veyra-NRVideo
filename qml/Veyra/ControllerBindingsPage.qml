@@ -441,13 +441,6 @@ ColumnLayout {
         }
     }
     Loader {
-        id: diagramInspector
-        Layout.fillWidth: true
-        active: !page.showList && page.selected >= 0
-        visible: active
-        sourceComponent: bindingEditor
-    }
-    Loader {
         Layout.fillWidth: true
         active: !page.showList
         visible: active
@@ -460,6 +453,13 @@ ColumnLayout {
             live: page.live
             onPicked: action => page.pickFromDiagram(action)
         }
+    }
+    Loader {
+        id: diagramInspector
+        Layout.fillWidth: true
+        active: !page.showList && page.selected >= 0
+        visible: active
+        sourceComponent: bindingEditor
     }
     Loader {
         Layout.fillWidth: true
