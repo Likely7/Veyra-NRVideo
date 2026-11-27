@@ -35,7 +35,7 @@ bool TiledImageProcessor::process(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotR
     // and at source size otherwise.
     desc.fixedExecutionPlan.reset();desc.fixedExecutionPlanError.clear();desc.runtimeNodeOrder=false;
     pipeline::EnhanceGraph graph(ctx,ring);
-    if(!graph.initialize(desc)||!graph.createViews())return false;
+    if(!graph.initialize(desc,&cancel)||cancel||!graph.createViews())return false;
     AVFrame* raw=av_frame_alloc();
     const auto freeFrame=[](AVFrame* p){av_frame_free(&p);};
     std::unique_ptr<AVFrame,decltype(freeFrame)> frame(raw,freeFrame);

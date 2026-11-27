@@ -24,6 +24,8 @@ template<size_t N> bool pathTo(std::array<wchar_t,N>& dest,const std::filesystem
 constexpr auto kCommon=D3D12_RESOURCE_STATE_COMMON;
 constexpr auto kRead=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 constexpr auto kUav=D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+constexpr DWORD kSynchronousStartupMs=180000;
+constexpr DWORD kBackgroundStartupMs=900000;
 }
 struct Rdna3NrBackend::Impl {
     ComPtr<ID3D12Device> device;ComPtr<ID3D12CommandQueue> queue;
@@ -97,15 +99,21 @@ bool Rdna3NrBackend::hipRuntimeAvailable(){
     const std::filesystem::path root=sdk;
     return n&&n<std::size(sdk)&&root.is_absolute()&&std::filesystem::is_regular_file(root/L"bin"/L"amdhip64_7.dll",ec);
 }
-bool Rdna3NrBackend::open(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){return start(p,d,q,w,h,smallModel,false,0);}
+bool Rdna3NrBackend::open(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,
+                         uint32_t w,uint32_t h,bool smallModel,const std::atomic<bool>* startupCancel){
+    return start(p,d,q,w,h,smallModel,false,kSynchronousStartupMs)&&waitForPreparation(startupCancel);
+}
 bool Rdna3NrBackend::openAsync(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){
-    return start(p,d,q,w,h,smallModel,false,180000);
+    return start(p,d,q,w,h,smallModel,false,kBackgroundStartupMs);
 }
 bool Rdna3NrBackend::openContractTestAsync(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel,uint32_t timeoutMs){
     return start(p,d,q,w,h,smallModel,true,timeoutMs);
 }
-bool Rdna3NrBackend::openContractTest(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,uint32_t w,uint32_t h,bool smallModel){return start(p,d,q,w,h,smallModel,true,0);}
-bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* device,ID3D12CommandQueue* queue,uint32_t w,uint32_t h,bool smallModel,bool test,uint32_t asyncTimeoutMs){
+bool Rdna3NrBackend::openContractTest(const std::filesystem::path& p,ID3D12Device* d,ID3D12CommandQueue* q,
+                                    uint32_t w,uint32_t h,bool smallModel,const std::atomic<bool>* startupCancel){
+    return start(p,d,q,w,h,smallModel,true,kSynchronousStartupMs)&&waitForPreparation(startupCancel);
+}
+bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* device,ID3D12CommandQueue* queue,uint32_t w,uint32_t h,bool smallModel,bool test,uint32_t startupTimeoutMs){
     close();impl_=std::make_unique<Impl>();auto& s=*impl_;
     if(!device||!queue||!directory.is_absolute()||!validExtent(w,h))return s.fail("invalid RDNA3 device, queue, absolute runtime path or internal size");
     if(!test&&!runtimeAvailable(directory))return s.fail("RX7000 NR runtime is incomplete; install the RDNA3 worker, original NR network, kernels and translation cache");
@@ -164,10 +172,28 @@ bool Rdna3NrBackend::start(const std::filesystem::path& directory,ID3D12Device* 
     ResumeThread(process.hThread);drop(process.hThread);
     if(!send(s.toWorker,&init,sizeof(init)))return s.fail("RDNA3 worker initialization send failed");
     s.contractTest=test;s.smallModel=smallModel;
-    if(!asyncTimeoutMs)return s.reply(0,180000)&&finishPreparation();
-    s.pendingInit=true;s.initDeadline=GetTickCount64()+asyncTimeoutMs;
-    log::info("amd-nr-rdna3",std::format("worker preparing pid={} deadlineMs={} internal={}x{}",process.dwProcessId,asyncTimeoutMs,w,h));
+    s.pendingInit=true;s.initDeadline=GetTickCount64()+startupTimeoutMs;
+    log::info("amd-nr-rdna3",std::format("worker preparing pid={} deadlineMs={} internal={}x{}",process.dwProcessId,startupTimeoutMs,w,h));
     return true;
+}
+bool Rdna3NrBackend::waitForPreparation(const std::atomic<bool>* startupCancel){
+    const auto began=GetTickCount64();
+    for(;;){
+        if(startupCancel&&startupCancel->load(std::memory_order_relaxed)){
+            impl_->error="RDNA3 worker initialization cancelled";
+            log::info("amd-nr-rdna3",impl_->error);
+            close();
+            return false;
+        }
+        switch(pollPreparation()){
+        case NrPreparation::Ready:return true;
+        case NrPreparation::Failed:close();return false;
+        case NrPreparation::Pending:break;
+        }
+        // Keep the existing warm-start polling latency. A cold translation can
+        // take several minutes, so reduce polling once past a normal warm start.
+        Sleep(GetTickCount64()-began<2000?2:50);
+    }
 }
 bool Rdna3NrBackend::finishPreparation(){
     auto& s=*impl_;
@@ -273,6 +299,7 @@ void Rdna3NrBackend::close()noexcept{
     if(s.process&&WaitForSingleObject(s.process,0)==WAIT_TIMEOUT&&!s.opened){
         // No frame has used these handles or queued a completion wait yet.
         if(s.job)TerminateJobObject(s.job,125);
+        WaitForSingleObject(s.process,1000);
     }else if(s.process&&WaitForSingleObject(s.process,0)==WAIT_TIMEOUT){
         // This signal follows the last output consumer on the actual graph queue.
         Header end{kMagic,kVersion,sizeof(Header),Op::Stop,s.queued.load()+1};

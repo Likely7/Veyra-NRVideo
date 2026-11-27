@@ -144,12 +144,13 @@ bool exportVideo(const std::wstring& input,const std::wstring& output,PlayerOpti
         bool graphReady=false,fgFailure=false;
         auto startGraph=[&](bool fg,uint32_t multiplier){
             gd.enableFg=fg;gd.fgMultiplier=fg?multiplier:1;
-            if(graph.initialize(gd)&&graph.createViews()){graphReady=true;return;}
+            if(graph.initialize(gd,&cancel)&&!cancel&&graph.createViews()){graphReady=true;return;}
+            if(cancel){graph.shutdown();return;}
             if(graph.failedBackend()==FailedBackend::VideoHdr||(gd.convertVideoHdr()&&!gd.enableNr&&!gd.enableSr&&!gd.enableFg&&graph.failedBackend()==FailedBackend::NgxCore)){
                 graph.shutdown();
                 gd.videoHdr.enabled=false;gd.hdrOutput=gd.hdrInput;
                 fgNote+=L"；RTX Video HDR 初始化失败，本次保留 SDR（错误码见日志）";
-                if(graph.initialize(gd)&&graph.createViews()){graphReady=true;return;}
+                if(graph.initialize(gd,&cancel)&&!cancel&&graph.createViews()){graphReady=true;return;}
             }
             fgFailure=graph.failedBackend()==FailedBackend::Fg;
             graph.shutdown();

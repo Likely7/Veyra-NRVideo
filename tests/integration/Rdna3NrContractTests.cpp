@@ -6,12 +6,14 @@
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/parity/RenoDxParityCodec.h"
+#include <tlhelp32.h>
 #include <cstdio>
 #include <vector>
 #include <array>
 #include <fstream>
 #include <chrono>
 #include <cmath>
+#include <thread>
 using namespace veyra;
 namespace {
 int checks=0,failures=0;
@@ -19,6 +21,19 @@ void check(bool ok,const char* name){++checks;if(!ok)++failures;printf("%s %s\n"
 void transition(ID3D12GraphicsCommandList* l,ID3D12Resource* r,D3D12_RESOURCE_STATES a,D3D12_RESOURCE_STATES b){D3D12_RESOURCE_BARRIER v{};v.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;v.Transition={r,D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,a,b};l->ResourceBarrier(1,&v);}
 double halfValue(uint16_t h){const auto exponent=(h>>10)&31;const double v=exponent?std::ldexp(1.+(h&1023)/1024.,int(exponent)-15):std::ldexp(double(h&1023),-24);return h&0x8000?-v:v;}
 double halfQuantise(double value){if(value==0)return 0;const int scale=std::min(24,10-std::ilogb(std::abs(value)));return std::ldexp(std::nearbyint(std::ldexp(value,scale)),-scale);}
+bool workerExited(){
+    const auto snapshot=CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS,0);
+    if(snapshot==INVALID_HANDLE_VALUE)return false;
+    PROCESSENTRY32W entry{};entry.dwSize=sizeof(entry);
+    bool clean=Process32FirstW(snapshot,&entry)!=FALSE;
+    if(clean)do{
+        if(entry.th32ParentProcessID==GetCurrentProcessId()&&_wcsicmp(entry.szExeFile,L"veyra_amd_nr_test_worker.exe")==0){
+            clean=false;break;
+        }
+    }while(Process32NextW(snapshot,&entry));
+    CloseHandle(snapshot);
+    return clean;
+}
 }
 int wmain(int argc,wchar_t** argv){
     if(argc!=3)return 2;
@@ -131,6 +146,24 @@ int wmain(int argc,wchar_t** argv){
           "unresponsive startup reaches a bounded, diagnosed failure");
     check(std::chrono::steady_clock::now()-requestAt<std::chrono::seconds(5)&&ring.drainQueue(),
           "timeout does not block the preview GPU queue");
+    smallNr.close();
+    for(const bool background:{false,true}){
+        std::atomic<bool> cancel=false;
+        if(background)check(smallNr.openContractTestAsync(stalledDir,ctx.device(),ctx.directQueue(),w,h,true,30000)&&
+                            smallNr.pollPreparation()==pipeline::NrPreparation::Pending,
+                            "background capture preparation starts without waiting for the worker reply");
+        const auto cancelStart=std::chrono::steady_clock::now();
+        std::jthread canceller([&]{Sleep(120);cancel.store(true,std::memory_order_relaxed);});
+        const bool started=background?smallNr.waitForPreparation(&cancel):
+            smallNr.openContractTest(stalledDir,ctx.device(),ctx.directQueue(),w,h,true,&cancel);
+        const auto cancelMs=std::chrono::duration<double,std::milli>(std::chrono::steady_clock::now()-cancelStart).count();
+        printf("startup cancellation background=%d elapsedMs=%.3f\n",int(background),cancelMs);
+        check(!started&&!smallNr.ready()&&cancelMs<2000&&smallNr.error().find("cancelled")!=std::string::npos,
+              "superseded or stopped initialization returns promptly as cancelled");
+        check(workerExited()&&ring.drainQueue(),"cancellation reaps the owned child and leaves the preview GPU queue usable");
+    }
+    check(smallNr.openContractTest(smallDir,ctx.device(),ctx.directQueue(),w,h,true),
+          "a new capture preparation starts cleanly after cancellation");
     smallNr.close();
     printf("%d checks %d failures (GPU protocol/parity only; no NR inference)\n",checks,failures);return failures?1:0;
 }

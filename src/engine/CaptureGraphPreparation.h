@@ -25,9 +25,11 @@ private:
 // the source graph is live, this worker is the only user of the NGX core.
 class CaptureGraphPreparation {
 public:
+    ~CaptureGraphPreparation(){cancel();}
     struct Result {
         ~Result();
         bool ready=false;
+        bool cancelled=false;
         bool retiringPreview=false;
         bool vfgMediumFault=false;
         int maxGeneratedFrames=0;
@@ -45,11 +47,14 @@ public:
                ngx::NgxCoreCache&,pipeline::EnhanceGraphDesc,const std::atomic<bool>& stop,
                HWND finalWindow,bool captureCompatible);
     bool pending() const {return future_.valid();}
+    void cancel(){cancelled_.store(true,std::memory_order_relaxed);}
     std::unique_ptr<Result> takeReady();
     void discard(std::unique_ptr<Result>);
     void finish(const CapturePreviewWindow&);
 
 private:
+    // The future may still be running when this object tears down.
+    std::atomic<bool> cancelled_{false};
     std::future<std::unique_ptr<Result>> future_;
 };
 }

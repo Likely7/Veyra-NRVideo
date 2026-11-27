@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-only
 #pragma once
 #include "veyra/pipeline/AmdNrBackend.h"
+#include <atomic>
 #include <filesystem>
 #include <memory>
 namespace veyra::pipeline {
@@ -10,11 +11,14 @@ public:
     ~Rdna3NrBackend() override;
     Rdna3NrBackend(const Rdna3NrBackend&)=delete;
     Rdna3NrBackend& operator=(const Rdna3NrBackend&)=delete;
-    bool open(const std::filesystem::path&,ID3D12Device*,ID3D12CommandQueue*,uint32_t,uint32_t,bool);
+    bool open(const std::filesystem::path&,ID3D12Device*,ID3D12CommandQueue*,uint32_t,uint32_t,bool,
+              const std::atomic<bool>* startupCancel=nullptr);
     bool openAsync(const std::filesystem::path&,ID3D12Device*,ID3D12CommandQueue*,uint32_t,uint32_t,bool);
+    bool waitForPreparation(const std::atomic<bool>* startupCancel);
     NrPreparation pollPreparation() override;
     // Explicit test binary; the product never calls this or loads it by fallback.
-    bool openContractTest(const std::filesystem::path&,ID3D12Device*,ID3D12CommandQueue*,uint32_t,uint32_t,bool);
+    bool openContractTest(const std::filesystem::path&,ID3D12Device*,ID3D12CommandQueue*,uint32_t,uint32_t,bool,
+                          const std::atomic<bool>* startupCancel=nullptr);
     bool openContractTestAsync(const std::filesystem::path&,ID3D12Device*,ID3D12CommandQueue*,uint32_t,uint32_t,bool,uint32_t timeoutMs);
     void close() noexcept;
     bool ready()const override;

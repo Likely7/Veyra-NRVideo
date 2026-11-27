@@ -1,5 +1,6 @@
 #pragma once
 #include "veyra/engine/EffectChain.h"
+#include <atomic>
 #include <optional>
 #include "veyra/engine/BackendRecovery.h"
 #include "veyra/pipeline/ColorGradeTables.h"
@@ -105,6 +106,7 @@ struct EnhanceGraphDesc {
     bool validateMotion = true; // disable only in isolated legacy A/B diagnostics
     bool enableNvofStandalone = false; // run NVOF+densify per frame without FG (quality core)
     bool deferRdna3Init = false;  // Real-time previews can send base frames during worker startup.
+    bool backgroundRdna3Init = false;  // Capture preparation may wait longer off the presentation thread.
     bool noFeatures = false;     // VEYRA_NO_FEATURES: NVOF/NGX objects skipped
     bool noNgx = false;          // VEYRA_NO_NGX: core/features skipped, NVOF only
     bool hdrInput = false;       // PQ/HLG YUV ingress; SDR tone mapping unless hdrOutput.
@@ -604,7 +606,7 @@ public:
     // Two-phase initialization: the sink (swapchain allocations) must be
     // created between the two phases - static descriptor views are only
     // safe after every allocation in the process has happened.
-    bool initialize(const EnhanceGraphDesc& desc);
+    bool initialize(const EnhanceGraphDesc& desc, const std::atomic<bool>* rdna3StartupCancel=nullptr);
     // Startup preparation can use a separate allocator/fence ring on the same
     // queue. Transfer only a prepared graph whose private ring has drained.
     bool warmCapture();
@@ -931,7 +933,7 @@ private:
     bool initZeroAndDepthTextures();
     bool initNvof();
     Extent firstSrMotionExtent() const;
-    bool initNgxFeatures();
+    bool initNgxFeatures(const std::atomic<bool>* rdna3StartupCancel);
     bool initFsrSr();
     bool initSpatialSr();
     bool initFsrFg();

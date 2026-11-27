@@ -765,7 +765,7 @@ bool EnhanceGraph::dispatchSlotPasses(ID3D12GraphicsCommandList* list,const std:
     return true;
 }
 
-bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
+bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc, const std::atomic<bool>* rdna3StartupCancel)
 {
     fgInitResult_=0;
     driverRequirementNotice_.clear();
@@ -1042,7 +1042,7 @@ bool EnhanceGraph::initialize(const EnhanceGraphDesc& desc)
         failedBackend_=engine::FailedBackend::Nr;
         veyra::log::error("backend-recovery-test","test-only NR initialization rejection before SDK call; not a hardware failure");return false;
     }
-    if (!initNgxFeatures()) return false;
+    if (!initNgxFeatures(rdna3StartupCancel)) return false;
     failedBackend_=engine::FailedBackend::Infrastructure;
     if(desc_.hdrWorking()){
         const bool finalTemporal=fsrSrBackend_||(srBackend_&&srBackend_->created());
@@ -1866,7 +1866,7 @@ bool EnhanceGraph::initRife()
     return true;
 }
 
-bool EnhanceGraph::initNgxFeatures()
+bool EnhanceGraph::initNgxFeatures(const std::atomic<bool>* rdna3StartupCancel)
 {
     const bool anr=fgEnabled_&&desc_.frameGenerationBackend==engine::FrameGenerationBackend::Anr;
     if(anr){
@@ -2122,9 +2122,11 @@ bool EnhanceGraph::initNgxFeatures()
                     const auto directory=std::filesystem::path(desc_.runtimeAbsPath)/L".."/L"amd-nr-rdna3";
                     const auto runtime=directory.lexically_normal();
                     const bool deferred=desc_.deferRdna3Init;
-                    const bool open=deferred?backend->openAsync(runtime,context_.device(),ring_->queue(),extent.width,extent.height,instance->model.performance):
-                        backend->open(runtime,context_.device(),ring_->queue(),extent.width,extent.height,instance->model.performance);
-                    if(!open)return false;
+                    const bool background=desc_.backgroundRdna3Init&&rdna3StartupCancel&&!deferred;
+                    const bool opened=deferred||background?
+                        backend->openAsync(runtime,context_.device(),ring_->queue(),extent.width,extent.height,instance->model.performance):
+                        backend->open(runtime,context_.device(),ring_->queue(),extent.width,extent.height,instance->model.performance,rdna3StartupCancel);
+                    if(!opened||(background&&!backend->waitForPreparation(rdna3StartupCancel)))return false;
                     nrPreparing_=deferred;
                     pendingNrEnabled_=deferred;
                     instance->amd=std::move(backend);

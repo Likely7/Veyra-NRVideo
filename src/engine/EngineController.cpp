@@ -1021,7 +1021,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     uint64_t buildBudget=0,buildUsage=0;const bool measuredBefore=ctx.videoMemoryInfo(buildBudget,buildUsage);
                     const bool adopted=gpu->adopt(selected.snapshot(),desc);
                     if(!adopted&&!gpu->configureQueue(desc,!isCapture&&!isImage))return false;
-                    bool opened=adopted||graph->initialize(desc);
+                    bool opened=adopted||graph->initialize(desc,&stop_);
                     if(stop_){veyra::log::info("engine","preview initialization cancelled after graph creation");return false;}
                     auto failure=graph->failedBackend();
                     if(opened){
@@ -2364,6 +2364,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     // Audio settings may be edited while the model is loading.
                     // Route the video request to the background graph below,
                     // rather than rebuilding it in the synchronous settings path.
+                    if(startupRequest&&startupRequest->settings.revision!=requested.revision)
+                        capturePreparation.cancel();
                     options.settings.audioSync=requested.audioSync;
                     options.settings.audioOffsetMs=requested.audioOffsetMs;
                     options.settings.captureFlipVertical=requested.captureFlipVertical;
@@ -2495,7 +2497,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             if(!presenter->prepareGraphChange()){status(L"设置恢复呈现排空失败，已停止",true);break;}
                             graph->shutdown();recentGraphCache.evict("build-rollback");
                             graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;
-                            if(!gpu->configureQueue(gd,!isCapture&&!isImage)||!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"设置失败且旧资源恢复失败，已停止",true);break;}
+                            if(!gpu->configureQueue(gd,!isCapture&&!isImage)||!graph->initialize(gd,&stop_)||!openPreparedPresenter(options)){if(!stop_)status(L"设置失败且旧资源恢复失败，已停止",true);break;}
                         }
                     }else if(accepted)accepted=graph->applySettings(requested);
                     if(rebuild)publishFrameGenerationCapabilities();
@@ -2842,6 +2844,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const bool nativeCapture=physicalCapture&&activeSource->info().videoDecodePath=="decklink";
                 if((isStream||isScreen||nativeCapture)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath())||
                     (nativeCapture&&!source::decklink::sameColor(captureGraphColor,activeSource->info().color)))){
+                    if(captureStarting)capturePreparation.cancel();
                     drainLivePresentation();if(!ring.drainQueue()){status(L"串流尺寸切换排空失败",true);break;}
                     width=uint32_t(frame->width);height=uint32_t(frame->height);
                     describeStages(stageRequest(options),options.snapshot(),gd);
@@ -2862,7 +2865,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(!presenter->prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}
                     graph->shutdown();recentGraphCache.evict("source-resize");
                     graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,captureStarting?nullptr:&coreCache);graphBytes=0;out={};hasOutput=false;
-                    if(!graph->initialize(gd)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}
+                    if(!graph->initialize(gd,&stop_)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
                 }
                 if(captureStarting&&rawFirstPresent&&!paused_){
@@ -2915,7 +2918,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     };
                     if(auto prepared=capturePreparation.takeReady()){
                         const auto& desc=startupRequest->desc;
-                        const bool current=startupRequest->settings==target&&startupRequest->order==order&&
+                        const bool current=!prepared->cancelled&&startupRequest->settings==target&&startupRequest->order==order&&
                             desc.sourceWidth==width&&desc.sourceHeight==height&&desc.hdrInput==gd.hdrInput&&
                             desc.captureBitDepth==gd.captureBitDepth&&desc.packedInput==gd.packedInput&&
                             desc.rgbInput==gd.rgbInput&&desc.yuy2Input==gd.yuy2Input&&
@@ -3006,7 +3009,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     presenter->close();
                     if(step==2){graph->shutdown();graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;out={};hasOutput=false;}
                     if(step==1&&testLeakReleases)testLeak.clear();
-                    if((step==2&&!graph->initialize(gd))||!openPreparedPresenter(options,step==2)){if(!stop_)status(L"显存回收后重建失败，请重新打开片源",true);break;}
+                    if((step==2&&!graph->initialize(gd,&stop_))||!openPreparedPresenter(options,step==2)){if(!stop_)status(L"显存回收后重建失败，请重新打开片源",true);break;}
                     reset=true;pendingResetCause=pipeline::ResetReason::Resize;
                     vramRecoverDone=step;vramRecoverCheckAt=Clock::now()+std::chrono::seconds(3);
                 }
@@ -3601,7 +3604,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         out={};graph->shutdown();recentGraphCache.evict("process-rollback");
                         graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,&coreCache);graphBytes=0;options=PlayerOptions::from(previous,previousOrder);
                         gd=previousDesc;
-                        if(graph->initialize(gd)&&openPreparedPresenter(options)&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0,{},0,false,{},pkt.doviEl,&pkt.doviP7)){
+                        if(graph->initialize(gd,&stop_)&&openPreparedPresenter(options)&&graph->process(frame,pts,true,out,pkt.sequence,&pkt.colorInfo,&pkt.hardwareSurface,comparisonMode_!=0,{},0,false,{},pkt.doviEl,&pkt.doviP7)){
                             publishFrameGenerationCapabilities();
                             finishReset(diagnostics::ResetOutcome::RolledBack);
                             std::lock_guard lock(mutex_);if(desired_.revision==requested.revision)desiredNodeOrder_=previousOrder;desired_.rejectVideoRequest(requested,previous);snapshot_.desired=desired_;snapshot_.rejectedRevision=requested.revision;snapshot_.applying=desired_!=previous;snapshot_.status=L"参数执行失败，已整套回滚";transaction=false;
@@ -4341,6 +4344,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #endif
     // Each step is logged: a session that stopped responding after a remote
     // play failure left "graph shutdown complete" as its last line.
+    capturePreparation.cancel();
     audioPipe.stopThread();audio.shutdown();veyra::log::info("engine","teardown: audio stopped");
     ring.drainQueue();presenter->close();
     if (auto result = liveScreenshot.finish()) publishScreenshot(*result);

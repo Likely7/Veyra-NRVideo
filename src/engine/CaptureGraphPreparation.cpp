@@ -54,13 +54,16 @@ bool CaptureGraphPreparation::start(gfx::D3D12DeviceContext& ctx,const gfx::Comm
                                     ngx::NgxCoreCache& core,pipeline::EnhanceGraphDesc desc,
                                     const std::atomic<bool>& stop,HWND finalWindow,bool captureCompatible){
     if(pending())return false;
+    cancelled_.store(false,std::memory_order_relaxed);
+    desc.backgroundRdna3Init=true;
     try{
         // Keep the exact queue used by the live graph for provider binding.
         // Each ring has its own allocators and is the only signaler of its fence.
         auto* queue=render.queue();
         const auto slots=render.slotCount();
-        future_=std::async(std::launch::async,[&ctx,&core,&stop,queue,slots,finalWindow,captureCompatible,desc=std::move(desc)]{
+        future_=std::async(std::launch::async,[this,&ctx,&core,&stop,queue,slots,finalWindow,captureCompatible,desc=std::move(desc)]{
             using Clock=std::chrono::steady_clock;
+            const auto cancelled=[&]{return stop.load(std::memory_order_relaxed)||cancelled_.load(std::memory_order_relaxed);};
             ComApartment com;
             const auto start=Clock::now();
             auto r=std::make_unique<Result>();
@@ -73,20 +76,20 @@ bool CaptureGraphPreparation::start(gfx::D3D12DeviceContext& ctx,const gfx::Comm
                 if(SUCCEEDED(hr))r->event=CreateEventW(nullptr,FALSE,FALSE,nullptr);
                 if(r->event&&r->ring.initialize(ctx.device(),queue,r->fence.Get(),r->event,slots,status)){
                     r->graph=std::make_unique<pipeline::EnhanceGraph>(ctx,r->ring,&core);
-                    if(stop||!r->graph->initialize(desc))r->failure=r->graph->failedBackend();
+                    if(cancelled()||!r->graph->initialize(desc,&cancelled_))r->failure=r->graph->failedBackend();
                     else if(r->graph->fsrSrRequested()&&!r->graph->fsrSrEnabled())r->failure=FailedBackend::Sr;
                     else if(r->graph->fsrEnabled()&&!r->graph->fsrActive())r->failure=FailedBackend::Fg;
-                    else if(!stop&&r->graph->createViews()){
+                    else if(!cancelled()&&r->graph->createViews()){
                         const auto warmup=Clock::now();
                         const bool warmed=r->graph->warmCapture()&&r->ring.waitIdle();
                         r->failure=warmed?FailedBackend::None:r->graph->failedBackend();
                         log::info("capture-startup",std::format("event=warm-finish revision={} ready={} ms={:.3f}",
                             desc.settingsRevision,warmed,std::chrono::duration<double,std::milli>(Clock::now()-warmup).count()));
-                        if(warmed&&!stop){
+                        if(warmed&&!cancelled()){
                             r->opening=std::make_unique<VideoPresenter::PreparedOpening>();
                             r->ready=VideoPresenter::prepareOpening(ctx,*r->graph,*r->opening);
                             if(r->opening->xess)r->maxGeneratedFrames=int(r->opening->xess->maxInterpolatedFrames());
-                            if(r->ready&&finalWindow&&!stop){
+                            if(r->ready&&finalWindow&&!cancelled()){
                                 log::info("capture-startup","event=prepare-final-surface");
                                 r->presenter=std::make_unique<VideoPresenter>();
                                 r->ready=r->presenter->open(ctx,finalWindow,*r->graph,captureCompatible,false,std::move(r->opening))&&
@@ -101,9 +104,11 @@ bool CaptureGraphPreparation::start(gfx::D3D12DeviceContext& ctx,const gfx::Comm
                     if(r->ready&&measured&&ctx.videoMemoryInfo(budget,after)&&after>before)r->bytes=after-before;
                 }else log::warn("capture-startup",std::format("preparation ring failed hr=0x{:X} status={}",unsigned(hr),unsigned(status)));
             }catch(const std::exception& e){log::error("capture-startup",std::format("preparation failed: {}",e.what()));}
+            r->cancelled=cancelled();
+            if(r->cancelled)r->ready=false;
             if(!r->ready){r->presenter.reset();r->opening.reset();r->graph.reset();}
-            log::info("capture-startup",std::format("event=load-finish revision={} ready={} failure={} ms={:.3f}",
-                desc.settingsRevision,r->ready,unsigned(r->failure),std::chrono::duration<double,std::milli>(Clock::now()-start).count()));
+            log::info("capture-startup",std::format("event=load-finish revision={} ready={} cancelled={} failure={} ms={:.3f}",
+                desc.settingsRevision,r->ready,r->cancelled,unsigned(r->failure),std::chrono::duration<double,std::milli>(Clock::now()-start).count()));
             return r;
         });
         return true;
@@ -115,11 +120,14 @@ bool CaptureGraphPreparation::start(gfx::D3D12DeviceContext& ctx,const gfx::Comm
 
 std::unique_ptr<CaptureGraphPreparation::Result> CaptureGraphPreparation::takeReady(){
     if(!pending()||future_.wait_for(std::chrono::seconds(0))!=std::future_status::ready)return {};
-    try{return future_.get();}
+    std::unique_ptr<Result> r;
+    try{r=future_.get();}
     catch(const std::exception& e){
         log::error("capture-startup",std::format("preparation worker failed: {}",e.what()));
-        return std::make_unique<Result>();
+        r=std::make_unique<Result>();
     }
+    if(r&&cancelled_.load(std::memory_order_relaxed))r->cancelled=true;
+    return r;
 }
 
 void CaptureGraphPreparation::discard(std::unique_ptr<Result> r){
@@ -136,6 +144,7 @@ void CaptureGraphPreparation::discard(std::unique_ptr<Result> r){
 }
 
 void CaptureGraphPreparation::finish(const CapturePreviewWindow& window){
+    cancel();
     while(pending()&&future_.wait_for(std::chrono::milliseconds(10))==std::future_status::timeout)
         window.dispatchMessages();
     future_={};
