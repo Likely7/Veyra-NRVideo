@@ -435,7 +435,6 @@ veyra_add_compute_shader(veyra_shader_rife_unpack RifeUnpack)
 veyra_add_compute_shader(veyra_shader_rife_shot_change RifeShotChange)
 veyra_add_compute_shader(veyra_shader_rgb_nv12 RgbToNv12)
 veyra_add_compute_shader(veyra_shader_virtual_camera_nv12 VirtualCameraNv12)
-veyra_add_compute_shader_variant(veyra_shader_virtual_camera_nv12_cubic VirtualCameraNv12 VirtualCameraNv12Cubic VEYRA_CAMERA_TILED_CUBIC=1)
 
 # ---------------------------------------------------------------------------
 # veyra_parity: RenoDX-equivalent codec reference (CPU golden + shaders later).
@@ -1841,7 +1840,7 @@ add_executable(veyra_sr_reconstruction_tests tests/integration/SrReconstructionT
   # VI Translator, MIT) and the Windows OCR reader of the presented picture.
   target_sources(veyra_engine PRIVATE src/engine/ScreenText.cpp src/engine/ScreenTextCapture.cpp)
   target_link_libraries(veyra_engine PRIVATE windowsapp)
-  add_dependencies(veyra_engine veyra_shader_virtual_camera_nv12 veyra_shader_virtual_camera_nv12_cubic)
+  add_dependencies(veyra_engine veyra_shader_virtual_camera_nv12)
   target_compile_options(veyra_engine PRIVATE /utf-8)
   target_compile_definitions(veyra_engine PUBLIC VEYRA_PROJECT_ROOT="${CMAKE_CURRENT_SOURCE_DIR}" VEYRA_SHADER_DIR="${CMAKE_BINARY_DIR}/shaders")
   target_link_libraries(veyra_engine PUBLIC veyra_pipeline veyra_sources veyra_sinks veyra_ngx veyra_nvof)

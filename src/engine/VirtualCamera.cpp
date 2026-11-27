@@ -1,7 +1,6 @@
 #include "veyra/engine/VirtualCamera.h"
 #include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/Log.h"
-#include "veyra/RuntimePaths.h"
 #include "../virtualcam/CameraRegistration.h"
 #include "shared-memory-queue.h"
 #include "veyra/engine/CameraGrid.h"
@@ -69,8 +68,7 @@ struct Surfaces {
     unsigned width=0,height=0,inputWidth=0,inputHeight=0,hdrMode=0;
     unsigned contentWidth=0,contentHeight=0;
     uint64_t epoch=0;
-    pipeline::ComputePass convert, cubicConvert;
-    bool cubicAttempted = false;
+    pipeline::ComputePass convert;
     pipeline::DescriptorStager staging;
     pipeline::StateTracker states;
     ComPtr<ID3D12Resource> y,uv;
@@ -116,43 +114,18 @@ struct Surfaces {
         }
         return true;
     }
-    const pipeline::ComputePass& conversion(bool highQuality){
-        if(!highQuality||(inputWidth==contentWidth&&inputHeight==contentHeight))return convert;
-        if(!cubicAttempted){
-            cubicAttempted=true;
-            constexpr const char* name="VirtualCameraNv12Cubic.dxil";
-            std::error_code ec;
-            std::vector<uint8_t> shader;
-            if(std::filesystem::is_regular_file(runtime::shaderDirectory()/name,ec)&&convert.loadShader(name,shader)){
-                D3D12_COMPUTE_PIPELINE_STATE_DESC desc{};
-                desc.pRootSignature=convert.rootSig.Get();
-                desc.CS={shader.data(),shader.size()};
-                ComPtr<ID3D12PipelineState> variant;
-                const auto hr=device->CreateComputePipelineState(&desc,IID_PPV_ARGS(&variant));
-                if(SUCCEEDED(hr)){
-                    cubicConvert=convert; // Reuse the base root signature and descriptor heap.
-                    cubicConvert.pso=std::move(variant);
-                    log::info("virtual-camera","using tiled cubic NV12 resize");
-                }else{
-                    log::warn("virtual-camera",std::format("tiled cubic NV12 pipeline initialization failed hr=0x{:X}",unsigned(hr)));
-                }
-            }
-        }
-        return cubicConvert.pso?cubicConvert:convert;
-    }
     void record(ID3D12GraphicsCommandList* list,const PresentCapture::Frame& frame,unsigned index){
         auto& b=buffers[index];
-        const auto& pass=conversion(frame.highQuality);
         D3D12_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=frame.format;srv.ViewDimension=D3D12_SRV_DIMENSION_TEXTURE2D;
         srv.Shader4ComponentMapping=D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;srv.Texture2D.MipLevels=1;
-        staging.stageSrv(frame.texture,&srv,pass.heap.Get(),index);
+        staging.stageSrv(frame.texture,&srv,convert.heap.Get(),index);
         D3D12_RESOURCE_BARRIER source{};source.Type=D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         source.Transition.pResource=frame.texture;source.Transition.Subresource=D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
         source.Transition.StateBefore=D3D12_RESOURCE_STATE_COMMON;source.Transition.StateAfter=D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         list->ResourceBarrier(1,&source);
         states.transition(list,y.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);states.transition(list,uv.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         const float constants[8]={std::bit_cast<float>(width),std::bit_cast<float>(height),std::bit_cast<float>(inputWidth),std::bit_cast<float>(inputHeight),std::bit_cast<float>(hdrMode),std::bit_cast<float>(unsigned(frame.highQuality)),std::bit_cast<float>(contentWidth),std::bit_cast<float>(contentHeight)};
-        pass.bind(list,constants,pipeline::gpuHandleOf(pass,index).ptr,pipeline::gpuHandleOf(pass,count).ptr);
+        convert.bind(list,constants,pipeline::gpuHandleOf(convert,index).ptr,pipeline::gpuHandleOf(convert,count).ptr);
         list->Dispatch((width+15)/16,(height+15)/16,1);
         states.uavBarrier(list,y.Get());states.uavBarrier(list,uv.Get());
         states.transition(list,y.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);states.transition(list,uv.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);

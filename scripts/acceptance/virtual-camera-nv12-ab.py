@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare the original NV12 path with the optional tiled cubic shader in DirectShow."""
+"""Compare two NV12 shaders in the same isolated DirectShow producer."""
 
 import argparse
 import csv
@@ -18,9 +18,9 @@ CASES = {
     "native4k": (3840, 2160, 3840, 2160, 0, 0),
     "linear4k": (3840, 2160, 2560, 1440, 0, 0),
     "cubic4k": (3840, 2160, 2560, 1440, 0, 1),
+    "pq-linear4k": (3840, 2160, 2560, 1440, 2, 0),
     "pq-cubic4k": (3840, 2160, 2560, 1440, 2, 1),
 }
-TILED_RESIZE = "using tiled cubic NV12 resize"
 
 
 def run_logged(argv, env, output):
@@ -79,7 +79,6 @@ def measure(args, case, folder, env):
     return {
         "gpu_conversion_and_copy": fields(stdout, "PULL_GPU"),
         "producer_frames": fields(stdout, "CADENCE"),
-        "tiled_cubic": TILED_RESIZE in stdout.read_text(encoding="utf-8", errors="replace"),
         "consumer_samples": len(window),
         "consumer_bytes_per_sample": sorted({int(sample["bytes"]) for sample in window}),
         "sample_timestamp_backsteps": sum(b <= a for a, b in zip(timestamps, timestamps[1:])),
@@ -107,7 +106,7 @@ def main():
     parser.add_argument("--consumer", required=True, type=Path, help="veyra_virtualcam_cadence.exe")
     parser.add_argument("--module", required=True, type=Path, help="trusted x64 camera module loaded directly")
     parser.add_argument("--baseline", required=True, type=Path, help="original base NV12 DXIL")
-    parser.add_argument("--candidate", required=True, type=Path, help="optional tiled cubic NV12 DXIL")
+    parser.add_argument("--candidate", required=True, type=Path, help="candidate NV12 DXIL")
     parser.add_argument("--results", required=True, type=Path, help="new directory under the test task")
     parser.add_argument("--seconds", default=8, type=int, choices=range(3, 31))
     parser.add_argument("--case", action="append", choices=CASES)
@@ -117,36 +116,31 @@ def main():
     args.producer = args.producer.resolve(strict=True)
     producer_image = args.producer.read_bytes()
     if not all(marker in producer_image for marker in
-               (b"RegOverridePredefKey", "--pixel-fixtures".encode("utf-16le"), b"PULL_READY", TILED_RESIZE.encode())):
-        parser.error("Rebuild the producer with the private registry, DirectShow benchmark, and tiled cubic variant.")
+               (b"RegOverridePredefKey", "--pixel-fixtures".encode("utf-16le"), b"PULL_READY")):
+        parser.error("Rebuild the producer with the private registry and DirectShow benchmark.")
     args.consumer = args.consumer.resolve(strict=True)
     args.module = args.module.resolve(strict=True)
     args.baseline = args.baseline.resolve(strict=True)
     args.candidate = args.candidate.resolve(strict=True)
     args.results = args.results.resolve()
     shader = args.producer.parent / "shaders" / "VirtualCameraNv12.dxil"
-    variant = shader.with_name("VirtualCameraNv12Cubic.dxil")
-    saved = variant.with_name(f"{variant.name}.ab-{os.getpid()}.original")
-    if not shader.is_file() or shader.resolve() != shader or variant.resolve() != variant or saved.exists():
+    saved = shader.with_name(f"{shader.name}.ab-{os.getpid()}.original")
+    if not shader.is_file() or shader.resolve() != shader or saved.exists():
         parser.error("Use an isolated test stage with its own shader path.")
-    if shader in (args.baseline, args.candidate) or variant in (args.baseline, args.candidate):
+    if shader in (args.baseline, args.candidate):
         parser.error("Store the comparison shaders outside the producer shader path.")
-    if shader.read_bytes() != args.baseline.read_bytes():
-        parser.error("The test stage base shader must match the original DXIL byte for byte.")
+    if args.baseline.read_bytes() == args.candidate.read_bytes():
+        parser.error("The comparison shaders must be different.")
     args.results.mkdir()
     env = {name: value for name, value in os.environ.items()
            if not name.upper().startswith(("VEYRA_TEST_VIRTUALCAM_", "VEYRA_LOG_FILE"))}
     env["TEMP"] = env["TMP"] = str(args.results)
     env["VEYRA_TEST_VIRTUALCAM_MODULE_DIR"] = str(args.module.parent)
     report = {}
-    if variant.exists():
-        os.replace(variant, saved)
+    os.replace(shader, saved)
     try:
         for label in (("candidate", "baseline") if args.candidate_first else ("baseline", "candidate")):
-            if label == "candidate":
-                install_shader(args.candidate, variant)
-            else:
-                variant.unlink(missing_ok=True)
+            install_shader(getattr(args, label), shader)
             folder = args.results / label
             folder.mkdir()
             env["VEYRA_TEST_VIRTUALCAM_NAMESPACE"] = f"nv12ab-{os.getpid()}-{time.perf_counter_ns()}"
@@ -157,28 +151,18 @@ def main():
                 test.mkdir()
                 report[label][case] = measure(args, case, test, env)
     finally:
-        variant.unlink(missing_ok=True)
-        if saved.exists():
-            os.replace(saved, variant)
+        os.replace(saved, shader)
     baseline = args.results / "baseline" / "pixels"
     candidate = args.results / "candidate" / "pixels"
     names = sorted(path.name for path in baseline.glob("*.nv12"))
     report["pixel_cases"] = names
     report["pixel_differences"] = [name for name in names
                                    if (baseline / name).read_bytes() != (candidate / name).read_bytes()]
-    report["routing_differences"] = [f"{label}/{case}" for label in ("baseline", "candidate")
-                                     for case, measurements in report[label].items()
-                                     if measurements["tiled_cubic"] != (label == "candidate" and CASES[case][-1] == 1)]
-    for label in ("baseline", "candidate"):
-        pixels_log = (args.results / label / "pixels.log").read_text(encoding="utf-8", errors="replace")
-        if (TILED_RESIZE in pixels_log) != (label == "candidate"):
-            report["routing_differences"].append(f"{label}/pixels")
     result = args.results / "result.json"
     result.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     print(result)
     candidate_names = sorted(path.name for path in candidate.glob("*.nv12"))
-    return 0 if (len(names) == 12 and candidate_names == names and not report["pixel_differences"]
-                 and not report["routing_differences"]) else 1
+    return 0 if len(names) == 12 and candidate_names == names and not report["pixel_differences"] else 1
 
 
 if __name__ == "__main__":

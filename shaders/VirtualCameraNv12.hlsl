@@ -37,32 +37,18 @@ float3 convert(float3 c){
     float y=dot(c,float3(.2126,.7152,.0722));
     return float3((16+219*y)/255.0,(128+224*(c.b-y)/1.8556)/255.0,(128+224*(c.r-y)/1.5748)/255.0);
 }
-#if defined(VEYRA_CAMERA_TILED_CUBIC)
-groupshared float3 cubicTile[16][16];
-[numthreads(16,16,1)]
-void main(uint3 id:SV_DispatchThreadID, uint3 local:SV_GroupThreadID){
-    // A 2x2 chroma block stays inside the 16x16 tile, including inside the padded content edges.
-    const uint2 padded=uint2(width+(width&1u),height+(height&1u));
-    const float3 col=all(id.xy<padded)?inputColor(id.xy):0;
-    cubicTile[local.y][local.x]=col;
-    GroupMemoryBarrierWithGroupSync();
-    if(id.x>=width||id.y>=height)return;
-    yPlane[id.xy]=convert(col).x;
-    if((id.x&1)==0&&(id.y&1)==0){
-        const float3 a=cubicTile[local.y][local.x+1];
-        const float3 b=cubicTile[local.y+1][local.x];
-        const float3 c=cubicTile[local.y+1][local.x+1];
-        uvPlane[id.xy/2]=convert((col+a+b+c)*.25).yz;
-    }
-}
-#else
-[numthreads(16,16,1)]
+// The camera rounds the surface extent up to even dimensions. One thread
+// owns all four luma values and the chroma value of that NV12 block.
+[numthreads(8,8,1)]
 void main(uint3 id:SV_DispatchThreadID){
-    if(id.x>=width||id.y>=height)return;
-    yPlane[id.xy]=convert(inputColor(id.xy)).x;
-    if((id.x&1)==0&&(id.y&1)==0){
-        float3 c=(inputColor(id.xy)+inputColor(id.xy+uint2(1,0))+inputColor(id.xy+uint2(0,1))+inputColor(id.xy+uint2(1,1)))*.25;
-        uvPlane[id.xy/2]=convert(c).yz;
-    }
+    const uint2 p=id.xy*2;
+    if(p.x>=width||p.y>=height)return;
+    const uint2 right=uint2(1,0),down=uint2(0,1);
+    const float3 a=inputColor(p),b=inputColor(p+right);
+    const float3 c=inputColor(p+down),d=inputColor(p+right+down);
+    yPlane[p]=convert(a).x;
+    yPlane[p+right]=convert(b).x;
+    yPlane[p+down]=convert(c).x;
+    yPlane[p+right+down]=convert(d).x;
+    uvPlane[id.xy]=convert((a+b+c+d)*.25).yz;
 }
-#endif
