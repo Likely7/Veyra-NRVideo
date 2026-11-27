@@ -111,10 +111,12 @@ int wmain(int argc,wchar_t** argv){
         if(overBudgetVfg)effects.vfgQuality=2;
         // replay-vfg-low|medium|high: a clip through the live scheduler (with VEYRA_TEST_REPLAY_AS_CARD, paced like a capture card).
         const bool replayVfg=scenario.starts_with(L"replay-vfg-");
+        const bool replayRife=scenario==L"replay-rife";
         if(replayVfg){effects.frameGenerationBackend=FrameGenerationBackend::Vfg;effects.vfgQuality=scenario==L"replay-vfg-high"||scenario==L"replay-vfg-toggle"?2:scenario==L"replay-vfg-medium"?1:0;}
+        if(replayRife)effects.frameGenerationBackend=FrameGenerationBackend::Rife;
         if(GetEnvironmentVariableW(L"VEYRA_TEST_VFG_NO_AUTO_REGULATE",nullptr,0)>0)effects.vfgAutoRegulate=false;
         if(physical){effects.nr=true;effects.sr=false;}
-        auto options=PlayerOptions::from(effects);options.captureReplayForTest=scenario==L"replay"||replayVfg;
+        auto options=PlayerOptions::from(effects);options.captureReplayForTest=scenario==L"replay"||replayVfg||replayRife;
         engine.open(window,sourcePath,options);
         auto pump=[] {MSG msg;while(PeekMessageW(&msg,nullptr,0,0,PM_REMOVE)){TranslateMessage(&msg);DispatchMessageW(&msg);}};
         auto wait=[&](auto predicate,int ms=15000){auto end=Clock::now()+std::chrono::milliseconds(ms);while(Clock::now()<end){pump();auto s=engine.snapshot();if(s.failed)return false;if(predicate(s))return true;std::this_thread::sleep_for(std::chrono::milliseconds(2));}return false;};
@@ -134,6 +136,21 @@ int wmain(int argc,wchar_t** argv){
         const auto speed=(last.position-first.position)/std::chrono::duration<double>(Clock::now()-start).count();
         std::cout<<"measurementEnd="<<host()<<" elapsedSeconds="<<std::chrono::duration<double>(Clock::now()-start).count()<<std::endl;
         if(physical){check(last.nrActive&&last.fgActive&&last.nrEvaluated>first.nrEvaluated,"real capture NR and DLSS remain active");std::cout<<"captureReceivedDelta="<<last.captureReceived-first.captureReceived<<" captureDroppedDelta="<<last.captureDropped-first.captureDropped<<" generatedDelta="<<last.generated-first.generated<<" requested="<<mode<<" effective="<<(last.presentationEffective.enabled?int(last.presentationEffective.mode):-1)<<std::endl;}
+        if(replayRife){
+            const auto& flow=last.metrics.flow;
+            const auto& after=flow.counters;
+            const auto& before=first.metrics.flow.counters;
+            check(last.fgActive&&last.applied.frameGenerationBackend==FrameGenerationBackend::Rife&&
+                last.applied.multiplier==unsigned(multiplier),"RIFE stays active on the requested configuration");
+            std::cout<<"RIFE_REPLAY multiplier="<<multiplier<<" real="<<after.realPresented-before.realPresented
+                <<" generated="<<after.generatedPresented-before.generatedPresented<<" reduced="<<after.fgReduced-before.fgReduced
+                <<" skipped="<<after.fgSkippedBeforeEval-before.fgSkippedBeforeEval<<" expired="<<after.generatedExpiredAfterEval-before.generatedExpiredAfterEval
+                <<" overwritten="<<after.mailboxOverwritten-before.mailboxOverwritten<<" submit="<<flow.presentSubmitFps
+                <<" submitLow1="<<flow.presentLow1Fps.value_or(-1)<<" captureAgeP95Ms="<<last.captureAgeP95Ms
+                <<" firstGpuP95Ms="<<flow.gpuTiming[size_t(veyra::diagnostics::GpuStage::Fg1)].p95.value_or(-1)
+                <<" groupGpuP95Ms="<<flow.gpuTiming[size_t(veyra::diagnostics::GpuStage::FgBatch)].p95.value_or(-1)
+                <<" engineSpeed="<<speed<<std::endl;
+        }
         std::cout<<"mediaSpeed="<<speed<<" processedDelta="<<last.frames-first.frames<<std::endl;
         {std::string status(4096,char(0));status.resize(std::max(0,WideCharToMultiByte(CP_UTF8,0,last.presentationStatus.c_str(),-1,status.data(),int(status.size()),nullptr,nullptr)-1));std::cout<<"presentationStatus="<<status<<std::endl;}
         check(!last.failed&&last.frames>first.frames+10&&speed>.8&&speed<1.2,"sustained playback at media speed");
@@ -144,7 +161,7 @@ int wmain(int argc,wchar_t** argv){
             const auto changed=Clock::now();
             check(wait([&](auto& s){return Clock::now()-changed>std::chrono::seconds(3)&&s.applied.vfgAutoRegulate==on&&s.fgActive;},20000),"VFG auto regulation change applied with VFG still running");
         }
-        if(multiplier>1&&!overBudgetVfg)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
+        if(multiplier>1&&!overBudgetVfg&&!replayRife)check(last.fgActive&&last.generated>first.generated,"real provider generated frames during measurement");
         if(scenario==L"effects"||scenario==L"native-effects")check(last.nrActive&&last.srActive&&last.nrEvaluated>first.nrEvaluated,"NR and SR remain active with pacing");
         if(mode>=0&&!xess)check(last.presentationEffective.enabled,"optional pacing active");
         if((native||latency)&&mode>=0&&!xess)check(last.presentationEffective.nvidiaLowLatency==p.nvidiaLowLatency,"requested native NVIDIA low latency mode actually active with or without FG");
