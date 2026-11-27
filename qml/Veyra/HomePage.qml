@@ -445,7 +445,7 @@ VPage {
                     delegate: Rectangle {
                         id: chip
                         required property var modelData
-                        readonly property bool isImage: /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
+                        readonly property bool isImage: !modelData.network && /\.(png|jpe?g|bmp|webp|tiff?)$/i.test(modelData.path)
                     width: Math.min(recent.width, chipRow.implicitWidth + 22)
                     height: 28
                     radius: 99

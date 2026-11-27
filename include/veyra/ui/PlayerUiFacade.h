@@ -7,6 +7,7 @@
 #include <vector>
 
 namespace veyra::ui {
+class ProtectedNetworkAddress;
 // The interface the user interface talks to.
 //
 // The QML front end must not hold EngineController, D3D12 objects, decoded
@@ -69,9 +70,12 @@ public:
         std::wstring path;
         std::wstring label;
         bool exists = false;
+        std::string protectedAddress;
+        bool isNetwork() const { return !protectedAddress.empty(); }
         bool operator==(const RecentEntry&) const = default;
     };
     void noteRecentFile(const std::wstring& path);
+    void noteRecentNetwork(const ProtectedNetworkAddress& address);
     const std::vector<RecentEntry>& recentFiles() const { return recent_; }
     // Drops entries whose file no longer exists (checked lazily, not on every
     // poll: the list is short and the check is a filesystem call).
@@ -133,6 +137,7 @@ private:
     std::wstring defaultPage_ = L"home";
     std::wstring error_;
     std::filesystem::path preferencesPath() const;
+    void noteRecent(RecentEntry entry);
     bool savePreferencesLocked();
 };
 }

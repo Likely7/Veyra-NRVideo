@@ -115,6 +115,7 @@ add_library(veyra_base STATIC
   src/base/LauncherInstance.cpp
   src/base/InstanceWindow.cpp
   src/base/RuntimePaths.cpp
+  src/base/NetworkHistory.cpp
   src/base/ThunkHook.cpp
   # .cube parsing, the runtime LUT store and named colour looks: low level, no
   # D3D12, shared by the ingest pipeline and the settings/import paths.
@@ -1524,7 +1525,7 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_features(veyra_playlist_tests PRIVATE cxx_std_20)
   target_compile_options(veyra_playlist_tests PRIVATE /utf-8)
   target_include_directories(veyra_playlist_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
-  target_link_libraries(veyra_playlist_tests PRIVATE Qt6::Core)
+  target_link_libraries(veyra_playlist_tests PRIVATE Qt6::Core veyra_base)
   find_package(Qt6 COMPONENTS Test)
   if(TARGET Qt6::Test)
     add_executable(veyra_live_translation_tests tests/integration/LiveTranslationTests.cpp)

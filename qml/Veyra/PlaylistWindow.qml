@@ -176,6 +176,7 @@ Window {
                         required property string entryPath
                         required property string entrySize
                         required property string entryModified
+                        required property bool entryNetwork
                         required property bool entryCurrent
                         required property string entryState
                         objectName: "playlist-row-" + index
@@ -192,7 +193,7 @@ Window {
                             onDoubleClicked: win.playlist.play(row.index)
                             ToolTip.visible: containsMouse && !win.dragging
                             ToolTip.delay: 900
-                            ToolTip.text: row.entryPath
+                            ToolTip.text: row.entryNetwork ? row.entryName : row.entryPath
                         }
                         Item {
                             width: 32; height: parent.height
@@ -244,7 +245,14 @@ Window {
                                     font.pixelSize: 10
                                 }
                             }
-                            Text { Layout.fillWidth: true; text: row.entrySize + " · " + row.entryModified; color: Theme.t3; elide: Text.ElideRight; font.pixelSize: 10 }
+                            Text {
+                                Layout.fillWidth: true
+                                visible: !row.entryNetwork
+                                text: row.entrySize + " · " + row.entryModified
+                                color: Theme.t3
+                                elide: Text.ElideRight
+                                font.pixelSize: 10
+                            }
                         }
                         VButton {
                             objectName: "playlist-remove-" + row.index

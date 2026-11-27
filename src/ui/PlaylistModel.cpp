@@ -1,4 +1,6 @@
 #include "veyra/ui/PlaylistModel.h"
+#include "veyra/media/NetworkScheme.h"
+#include "veyra/ui/NetworkHistory.h"
 #include <QCollator>
 #include <QDateTime>
 #include <QDir>
@@ -26,6 +28,12 @@
 namespace veyra::ui {
 namespace {
 constexpr int maxEntries = 10000, maxJobs = 16, maxVisited = 100000;
+constexpr qint64 maxStorageSize = 16 * 1024 * 1024;
+
+bool isNetworkPath(const QString& path) {
+    const auto colon = path.indexOf(u':');
+    return colon >= 3 && colon <= 5 && media::networkMediaInput(path.first(colon + 1).toStdWString());
+}
 bool reparse(const QFileInfo& info) {
     if (info.isSymLink()) return true;
 #ifdef Q_OS_WIN
@@ -56,11 +64,33 @@ QString PlaylistModel::normalizedPath(const QString& path) {
     return QDir::cleanPath(QFileInfo(QDir::fromNativeSeparators(path)).absoluteFilePath());
 }
 QString PlaylistModel::keyOf(const QString& path) {
+    if (isNetworkPath(path)) return path;
     auto value = normalizedPath(path);
 #ifdef Q_OS_WIN
     value = value.toCaseFolded();
 #endif
     return value;
+}
+QString PlaylistModel::networkLabel(const QString& address) {
+    // Paths may carry credentials too. Show only the endpoint in UI and tooltips.
+    return QUrl(address).toDisplayString(QUrl::RemoveUserInfo | QUrl::RemovePath |
+                                         QUrl::RemoveQuery | QUrl::RemoveFragment);
+}
+PlaylistModel::Entry PlaylistModel::networkEntry(const ProtectedNetworkAddress& address) {
+    const auto path = QString::fromStdWString(address.address());
+    return {path, networkLabel(path), path, 0, 0, address.storage()};
+}
+void PlaylistModel::noteNetworkAddress(const ProtectedNetworkAddress& address) {
+    auto entry = networkEntry(address);
+    if (count() >= maxEntries || keys_.contains(entry.key)) return;
+    beginInsertRows({}, count(), count());
+    keys_.insert(entry.key);
+    entries_.push_back(std::move(entry));
+    endInsertRows();
+    emit countChanged();
+    emit currentChanged();
+    if (sort_ != Manual) sortBy(sort_);
+    else saveTimer_.start();
 }
 bool PlaylistModel::supported(const QString& path) {
     static const QSet<QString> suffixes{
@@ -74,17 +104,19 @@ QVariant PlaylistModel::data(const QModelIndex& index, int role) const {
     const auto& entry = entries_[index.row()];
     switch (role) {
     case Qt::DisplayRole: case NameRole: return entry.name;
-    case PathRole: return QDir::toNativeSeparators(entry.path);
-    case SizeRole: return QLocale().formattedDataSize(entry.size);
-    case ModifiedRole: return QDateTime::fromMSecsSinceEpoch(entry.modified).toString("yyyy-MM-dd HH:mm");
+    case PathRole: return entry.isNetwork() ? entry.path : QDir::toNativeSeparators(entry.path);
+    case SizeRole: return entry.isNetwork() ? QString() : QLocale().formattedDataSize(entry.size);
+    case ModifiedRole: return entry.isNetwork() ? QString() : QDateTime::fromMSecsSinceEpoch(entry.modified).toString("yyyy-MM-dd HH:mm");
     case CurrentRole: return entry.key == currentKey_;
     case StateRole: return entry.key == currentKey_ ? state_ : QString();
+    case NetworkRole: return entry.isNetwork();
     default: return {};
     }
 }
 QHash<int, QByteArray> PlaylistModel::roleNames() const {
     return {{NameRole, "entryName"}, {PathRole, "entryPath"}, {SizeRole, "entrySize"},
-            {ModifiedRole, "entryModified"}, {CurrentRole, "entryCurrent"}, {StateRole, "entryState"}};
+            {ModifiedRole, "entryModified"}, {CurrentRole, "entryCurrent"}, {StateRole, "entryState"},
+            {NetworkRole, "entryNetwork"}};
 }
 int PlaylistModel::currentIndex() const {
     if (!currentKey_.isEmpty())
@@ -92,7 +124,9 @@ int PlaylistModel::currentIndex() const {
     return -1;
 }
 void PlaylistModel::setPlayback(const QString& path, const QString& state) {
+    if (path == currentPath_ && state == state_) return;
     const QString key = path.isEmpty() ? QString() : keyOf(path);
+    currentPath_ = path;
     if (key == currentKey_ && state == state_) return;
     const int before = currentIndex();
     currentKey_ = key; state_ = state;
@@ -124,7 +158,8 @@ void PlaylistModel::addPaths(const QStringList& paths) {
     // No directory/file existence checks here: a network folder can be slow.
     Job job; job.generation = generation_.load();
     for (const auto& path : paths) {
-        if (!path.trimmed().isEmpty() && job.paths.size() < maxEntries) job.paths << normalizedPath(path);
+        if (!path.trimmed().isEmpty() && job.paths.size() < maxEntries && !isNetworkPath(path))
+            job.paths << normalizedPath(path);
     }
     if (job.paths.isEmpty()) return;
     const bool wasBusy = busy(); ++pending_;
@@ -156,7 +191,7 @@ PlaylistModel::Result PlaylistModel::scan(const Job& job, std::stop_token stop) 
         const auto path = normalizedPath(info.absoluteFilePath()), key = keyOf(path);
         if (found.contains(key)) return;
         found.insert(key);
-        result.entries.push_back({path, info.fileName(), key, info.size(), info.lastModified().toMSecsSinceEpoch()});
+        result.entries.push_back({path, info.fileName(), key, info.size(), info.lastModified().toMSecsSinceEpoch(), {}});
     };
     for (const auto& path : job.paths) {
         if (cancelled()) return {};
@@ -227,20 +262,28 @@ int PlaylistModel::indexOfPath(const QString& path) const {
 }
 bool PlaylistModel::play(int row) {
     if (row < 0 || row >= count()) return false;
-    const QString path = entries_[row].path;
+    const auto& entry = entries_[row];
+    const QString path = entry.path;
+    if (entry.isNetwork()) {
+        emit playRequested(path);
+        return true;
+    }
     if (!QFileInfo(path).isFile()) { emit error(tr("文件不存在或已移动：%1").arg(QDir::toNativeSeparators(path))); return false; }
     emit playRequested(QDir::toNativeSeparators(path)); return true;
 }
 bool PlaylistModel::playFrom(int row, int direction) {
     for (; row >= 0 && row < count(); row += direction) {
         // Skip missing entries without opening a failed engine session for each.
-        if (QFileInfo(entries_[row].path).isFile()) return play(row);
+        if (!entries_[row].isNetwork() && QFileInfo(entries_[row].path).isFile()) return play(row);
     }
     return false;
 }
 bool PlaylistModel::next() { const int at = currentIndex(); return playFrom(at < 0 ? 0 : at + 1, 1); }
 bool PlaylistModel::previous() { const int at = currentIndex(); return playFrom(at < 0 ? count() - 1 : at - 1, -1); }
-bool PlaylistModel::advanceAfterEnd() { return autoAdvance_ && currentIndex() >= 0 && next(); }
+bool PlaylistModel::advanceAfterEnd() {
+    const int row = currentIndex();
+    return autoAdvance_ && row >= 0 && !entries_[row].isNetwork() && playFrom(row + 1, 1);
+}
 bool PlaylistModel::move(int from, int to) {
     if (from < 0 || to < 0 || from >= count() || to >= count() || from == to) return false;
     beginMoveRows({}, from, from, {}, to > from ? to + 1 : to);
@@ -286,9 +329,19 @@ bool PlaylistModel::save() {
     if (storage_.isEmpty()) return true;
     if (unreadable_) return false;   // status_ already tells the user the file was not loaded
     QJsonArray array;
-    for (const auto& entry : entries_) array.append(QJsonObject{{"path", entry.path}, {"size", double(entry.size)}, {"modified", double(entry.modified)}});
-    QSaveFile file(storage_);
+    for (const auto& entry : entries_) {
+        if (entry.isNetwork()) {
+            array.append(QJsonObject{{"protectedAddress", QString::fromStdString(entry.protectedAddress)}});
+        } else {
+            array.append(QJsonObject{{"path", entry.path}, {"size", double(entry.size)}, {"modified", double(entry.modified)}});
+        }
+    }
     const auto bytes = QJsonDocument(QJsonObject{{"version", 1}, {"sort", sort_}, {"autoAdvance", autoAdvance_}, {"entries", array}}).toJson(QJsonDocument::Compact);
+    if (bytes.size() > maxStorageSize) {
+        emit error(tr("播放列表保存失败：%1").arg(QStringLiteral("%1 > %2 bytes").arg(bytes.size()).arg(maxStorageSize)));
+        return false;
+    }
+    QSaveFile file(storage_);
     if (!file.open(QIODevice::WriteOnly) || file.write(bytes) != bytes.size() || !file.commit()) {
         emit error(tr("播放列表保存失败：%1").arg(file.errorString())); return false;
     }
@@ -298,7 +351,7 @@ void PlaylistModel::load() {
     if (storage_.isEmpty()) return;
     QFile file(storage_);
     if (!file.exists()) return;
-    if (!file.open(QIODevice::ReadOnly) || file.size() > 16 * 1024 * 1024) {
+    if (!file.open(QIODevice::ReadOnly) || file.size() > maxStorageSize) {
         unreadable_ = true; status_ = tr("播放列表文件无法读取，已使用空列表"); return;
     }
     QJsonParseError error;
@@ -310,14 +363,23 @@ void PlaylistModel::load() {
     sort_ = std::clamp(object.value("sort").toInt(), int(Manual), int(SmallestFirst));
     autoAdvance_ = object.value("autoAdvance").toBool(true);
     for (const auto& value : object.value("entries").toArray()) {
-        const auto entry = value.toObject(); const auto path = entry.value("path").toString();
-        if (path.isEmpty() || !QDir::isAbsolutePath(path) || !supported(path)) continue;
-        const auto normalized = normalizedPath(path), key = keyOf(normalized);
-        if (keys_.contains(key)) continue;
-        keys_.insert(key);
-        entries_.push_back({normalized, QFileInfo(normalized).fileName(), key,
-                           std::max(qint64(0), entry.value("size").toInteger()),
-                           entry.value("modified").toInteger()});
+        const auto stored = value.toObject();
+        Entry entry;
+        if (stored.contains("protectedAddress")) {
+            const auto network = ProtectedNetworkAddress::restore(stored.value("protectedAddress").toString().toStdString());
+            if (!network) continue;
+            entry = networkEntry(*network);
+        } else {
+            const auto path = stored.value("path").toString();
+            if (path.isEmpty() || !QDir::isAbsolutePath(path) || isNetworkPath(path) || !supported(path)) continue;
+            const auto normalized = normalizedPath(path);
+            entry = {normalized, QFileInfo(normalized).fileName(), keyOf(normalized),
+                     std::max(qint64(0), stored.value("size").toInteger()),
+                     stored.value("modified").toInteger(), {}};
+        }
+        if (keys_.contains(entry.key)) continue;
+        keys_.insert(entry.key);
+        entries_.push_back(std::move(entry));
         if (count() >= maxEntries) break;
     }
 }

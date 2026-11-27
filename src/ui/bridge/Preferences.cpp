@@ -800,7 +800,8 @@ bool QmlPlayerBridge::eventFilter(QObject* watched, QEvent* event) {
 void QmlPlayerBridge::rememberPosition(bool flush) {
     const auto& s = impl_->snapshot;
     const QString file = QString::fromStdWString(impl_->sourceLabel);
-    if (s.running && !s.image && !s.capture && s.duration > 0 && !file.isEmpty() && QFileInfo(file).isFile()) {
+    if (impl_->liveKind.isEmpty() && s.running && !s.image && !s.capture && s.duration > 0 &&
+        !file.isEmpty() && QFileInfo(file).isFile()) {
         auto positions = impl_->prefs.value("positions").toMap();
         const double at = s.position;
         if (at >= 0.5 && at < s.duration - 0.5) positions[file] = QVariantMap{{"at", at}, {"t", QDateTime::currentSecsSinceEpoch()}};

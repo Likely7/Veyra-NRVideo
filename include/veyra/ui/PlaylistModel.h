@@ -9,10 +9,12 @@
 #include <condition_variable>
 #include <deque>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
 namespace veyra::ui {
+class ProtectedNetworkAddress;
 // UI-owned metadata only. Directory enumeration runs on one cancellable worker;
 // playback continues through QmlPlayerBridge's existing openPath/transport.
 class PlaylistModel final : public QAbstractListModel {
@@ -24,7 +26,7 @@ class PlaylistModel final : public QAbstractListModel {
     Q_PROPERTY(int sortMode READ sortMode NOTIFY sortModeChanged)
     Q_PROPERTY(bool autoAdvance READ autoAdvance WRITE setAutoAdvance NOTIFY autoAdvanceChanged)
 public:
-    enum Role { NameRole = Qt::UserRole + 1, PathRole, SizeRole, ModifiedRole, CurrentRole, StateRole };
+    enum Role { NameRole = Qt::UserRole + 1, PathRole, SizeRole, ModifiedRole, CurrentRole, StateRole, NetworkRole };
     enum Sort { Manual, NameAscending, NameDescending, NewestFirst, OldestFirst, LargestFirst, SmallestFirst };
     Q_ENUM(Sort)
     explicit PlaylistModel(QString storageFile = {}, QObject* parent = nullptr);
@@ -41,6 +43,8 @@ public:
     void setAutoAdvance(bool enabled);
     static bool supported(const QString& path);
     static QString normalizedPath(const QString& path);
+    static QString networkLabel(const QString& address);
+    void noteNetworkAddress(const ProtectedNetworkAddress& address);
     bool containsPath(const QString& path) const { return keys_.contains(keyOf(path)); }
     void setPlayback(const QString& path, const QString& state);
     // Returns false at the ends: never silently wraps or restarts the same file.
@@ -67,10 +71,16 @@ signals:
     void playRequested(const QString& path);
     void error(const QString& text);
 private:
-    struct Entry { QString path, name, key; qint64 size = 0, modified = 0; };
+    struct Entry {
+        QString path, name, key;
+        qint64 size = 0, modified = 0;
+        std::string protectedAddress;
+        bool isNetwork() const { return !protectedAddress.empty(); }
+    };
     struct Job { QStringList paths; uint64_t generation = 0; };
     struct Result { std::vector<Entry> entries; int skipped = 0; bool limited = false; };
     static QString keyOf(const QString& path);
+    static Entry networkEntry(const ProtectedNetworkAddress& address);
     static void order(std::vector<Entry>& entries, int mode);
     Result scan(const Job& job, std::stop_token stop) const;
     void workerLoop(std::stop_token stop);
@@ -78,7 +88,7 @@ private:
     void setStatus(QString text);
     void load();
     bool playFrom(int row, int direction);
-    QString storage_, status_, currentKey_, state_;
+    QString storage_, status_, currentPath_, currentKey_, state_;
     std::vector<Entry> entries_;
     QSet<QString> keys_;
     QTimer saveTimer_;

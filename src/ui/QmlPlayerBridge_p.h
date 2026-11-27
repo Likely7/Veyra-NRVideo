@@ -358,7 +358,7 @@ struct QmlPlayerBridge::Impl {
     std::filesystem::path dataDir;
     PlaylistModel* playlist = nullptr;
     QString playlistPath;
-    uint64_t playlistSession = 0, playlistCompletedSession = 0;
+    uint64_t playlistSession = 0, playlistCompletedSession = 0, networkHistorySession = 0;
     // --- subtitles (ported from the Win32 shell, same semantics) ---
     std::unique_ptr<engine::SubtitleLoader> subLoader;
     // Embedded-subtitle scan of a file on a server (#48): reads only while playback has its own

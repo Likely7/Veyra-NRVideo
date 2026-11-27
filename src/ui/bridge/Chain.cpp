@@ -277,8 +277,10 @@ QVariantList QmlPlayerBridge::recentFiles() const {
     QVariantList out;
     for (const auto& entry : impl_->facade.recentFiles()) {
         QVariantMap item;
-        item["path"] = utf8Of(entry.path);
-        item["label"] = utf8Of(entry.label);
+        const QString path = utf8Of(entry.path);
+        item["path"] = path;
+        item["label"] = entry.isNetwork() ? PlaylistModel::networkLabel(path) : utf8Of(entry.label);
+        item["network"] = entry.isNetwork();
         item["exists"] = entry.exists;
         out << item;
     }

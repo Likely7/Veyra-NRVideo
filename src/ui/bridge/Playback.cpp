@@ -4,6 +4,7 @@
 
 #include <regex>
 #include "veyra/pipeline/NrReuse.h"
+#include "veyra/ui/NetworkHistory.h"
 
 namespace veyra::ui {
 // --- playback ---------------------------------------------------------------
@@ -217,7 +218,8 @@ void QmlPlayerBridge::tickPlaylist() {
     const auto& s = impl_->snapshot;
     using T = engine::TransportState;
     if (!impl_->playlistSession) return;
-    if (!impl_->liveKind.isEmpty() || utf8Of(impl_->sourceLabel) != impl_->playlistPath) {
+    const bool network = impl_->liveKind == QLatin1String("url");
+    if (!network && (!impl_->liveKind.isEmpty() || utf8Of(impl_->sourceLabel) != impl_->playlistPath)) {
         impl_->playlistSession = 0; impl_->playlist->setPlayback({}, {}); return;
     }
     if (s.sessionId != impl_->playlistSession) return; // Ignore old session snapshots after open.
@@ -232,6 +234,19 @@ void QmlPlayerBridge::tickPlaylist() {
     default: break;
     }
     impl_->playlist->setPlayback(impl_->playlistPath, state);
+    if (network) {
+        if (!s.failed && s.frames > 0 && impl_->networkHistorySession != s.sessionId) {
+            impl_->networkHistorySession = s.sessionId;
+            if (const auto address = ProtectedNetworkAddress::protect(impl_->sourceLabel)) {
+                impl_->facade.noteRecentNetwork(*address);
+                impl_->playlist->noteNetworkAddress(*address);
+                emit recentFilesChanged();
+            } else {
+                veyra::log::warn("playlist", "network playback address could not be protected");
+            }
+        }
+        return; // Network playback never triggers local automatic advance.
+    }
     if (s.transport != T::Ended || s.failed || s.image || impl_->openingSource ||
         impl_->playlistCompletedSession == s.sessionId) return;
     impl_->playlistCompletedSession = s.sessionId;
@@ -274,8 +289,10 @@ void QmlPlayerBridge::openPath(const QString& path) {
     ++impl_->thumbnailGeneration;
     emit thumbnailSourceChanged(network?QString():path);
     emit thumbnailGenerationChanged();
-    if(!network)impl_->facade.noteRecentFile(wide);
-    emit recentFilesChanged();
+    if (!network) {
+        impl_->facade.noteRecentFile(wide);
+        emit recentFilesChanged();
+    }
     // Switch to a page with a video area, then settle the native window's
     // geometry, and only then open. The presenter samples the window's client
     // size once at initialisation; opening before that point is what produced a
@@ -296,9 +313,9 @@ void QmlPlayerBridge::openPath(const QString& path) {
     options.network.corrupt=media::corruptPolicyFromId(impl_->prefString("networkCorrupt").toStdString());
     impl_->engine.open(impl_->videoWindow, wide, options);
     impl_->openingSessionId = impl_->engine.snapshot().sessionId;
-    impl_->playlistSession = network?0:impl_->openingSessionId;
+    impl_->playlistSession = impl_->openingSessionId;
     impl_->resumeSession = 0;
-    if ((impl_->prefBool("rememberPosition", true)||impl_->prefBool("autoResume",false))) {
+    if (!network && (impl_->prefBool("rememberPosition", true) || impl_->prefBool("autoResume", false))) {
         const auto saved = impl_->prefs.value("positions").toMap().value(path).toMap();
         if (!saved.isEmpty()) { impl_->resumeSession = impl_->openingSessionId; impl_->resumeAt = saved.value("at").toDouble(); }
     }

@@ -1,4 +1,5 @@
 #include "veyra/ui/PlaylistModel.h"
+#include "veyra/ui/NetworkHistory.h"
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
@@ -109,6 +110,78 @@ int main(int argc, char** argv) {
     PlaylistModel absent(missing);
     QObject::connect(&absent, &PlaylistModel::error, [&](const auto& text) { error = text; });
     check(absent.count() == 1 && !absent.play(0) && !error.isEmpty(), "missing media is explicit, retained, and never played");
+    const QString address = QStringLiteral("https://synthetic-user:synthetic-password@history.example:8443/"
+                                           "synthetic-path/index.m3u8?token=MiXeD%2B%2F%3D&selection=2");
+    auto otherAddress = address;
+    otherAddress.replace("MiXeD", "mixed");
+    const auto network = veyra::ui::ProtectedNetworkAddress::protect(address.toStdWString());
+    const auto other = veyra::ui::ProtectedNetworkAddress::protect(otherAddress.toStdWString());
+    check(network && other, "Windows protects synthetic URLs");
+    if (!network || !other) return 1;
+    check(!veyra::ui::ProtectedNetworkAddress::protect(L"C:\\movie.mp4") &&
+          !veyra::ui::ProtectedNetworkAddress::restore("not a protected address"),
+          "storage rejects local paths and invalid blobs");
+
+    const auto sequenceStore = root + "/network.json";
+    const auto first = PlaylistModel::normalizedPath(folder + "/movie1.MKV");
+    const auto second = PlaylistModel::normalizedPath(folder + "/movie2.MKV");
+    {
+        PlaylistModel sequence(sequenceStore);
+        sequence.addPaths({first});
+        check(wait([&] { return !sequence.busy(); }), "first local item available");
+        sequence.noteNetworkAddress(*network);
+        sequence.noteNetworkAddress(*network);
+        sequence.noteNetworkAddress(*other);
+        sequence.addPaths({second, address});
+        check(wait([&] { return !sequence.busy(); }) && sequence.count() == 4, "network dedup keeps case-sensitive query variants and directory jobs stay local");
+        check(sequence.pathAt(1) == address && sequence.pathAt(2) == otherAddress,
+              "network identity excludes neither credentials nor signed query");
+        check(name(sequence, 1) == "https://history.example:8443" &&
+              sequence.data(sequence.index(1), PlaylistModel::NetworkRole).toBool() &&
+              sequence.data(sequence.index(1), PlaylistModel::SizeRole).toString().isEmpty(),
+              "visible network metadata shows the endpoint only");
+        check(sequence.save(), "mixed playlist saves atomically");
+    }
+    QJsonObject store;
+    {
+        QFile stored(sequenceStore);
+        check(stored.open(QIODevice::ReadOnly), "read stored mixed playlist");
+        const auto bytes = stored.readAll();
+        check(!bytes.contains("synthetic-") && !bytes.contains("MiXeD") && !bytes.contains("history.example") &&
+              bytes.contains("protectedAddress") && bytes.contains("movie1.MKV"),
+              "stored playlist encrypts the network address and preserves legacy local paths");
+        store = QJsonDocument::fromJson(bytes).object();
+        const auto entries = store.value("entries").toArray();
+        check(entries.size() == 4 && entries.at(1).toObject().value("path").isUndefined(),
+              "legacy reader skips protected network entries");
+    }
+    {
+        PlaylistModel sequence(sequenceStore);
+        QString requested;
+        QObject::connect(&sequence, &PlaylistModel::playRequested, [&](const auto& path) { requested = path; });
+        check(sequence.count() == 4 && sequence.play(1) && requested == address, "restored network row opens the exact address");
+        sequence.setPlayback(address, "ended");
+        requested.clear();
+        check(!sequence.advanceAfterEnd() && requested.isEmpty(), "ending a network item keeps the queue stopped");
+        sequence.setPlayback(first, "ended");
+        check(sequence.advanceAfterEnd() && PlaylistModel::normalizedPath(requested) == second,
+              "automatic advance skips both network rows");
+    }
+    auto entries = store.value("entries").toArray();
+    entries[1] = QJsonObject{{"protectedAddress", "AA=="}};
+    store["entries"] = entries;
+    QFile corruptEntry(sequenceStore);
+    check(corruptEntry.open(QIODevice::WriteOnly | QIODevice::Truncate), "create unreadable network row fixture");
+    corruptEntry.write(QJsonDocument(store).toJson());
+    corruptEntry.close();
+    {
+        PlaylistModel sequence(sequenceStore);
+        check(sequence.count() == 3 && sequence.pathAt(0) == first && sequence.pathAt(1) == otherAddress &&
+              sequence.pathAt(2) == second, "unreadable protected address leaves the other entries intact");
+        sequence.clear();
+        check(sequence.save(), "mixed playlist can be cleared on disk");
+    }
+    check(PlaylistModel(sequenceStore).count() == 0, "cleared network and file rows stay cleared after restart");
     QFile damaged(root + "/bad.json"); damaged.open(QIODevice::WriteOnly); damaged.write("{broken"); damaged.close();
     PlaylistModel invalid(root + "/bad.json"); check(invalid.count() == 0 && !invalid.status().isEmpty(), "invalid JSON handled");
     check(!invalid.save(), "a playlist that did not load is never overwritten");

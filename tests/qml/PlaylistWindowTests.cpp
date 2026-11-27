@@ -1,5 +1,6 @@
 #include "veyra/engine/EngineController.h"
 #include "veyra/ui/PlaylistModel.h"
+#include "veyra/ui/NetworkHistory.h"
 #include "veyra/ui/PlayerUiFacade.h"
 #include "veyra/ui/QmlPlayerBridge.h"
 #include <QApplication>
@@ -18,6 +19,7 @@
 #include <QSignalSpy>
 #include <QTest>
 #include <QUrl>
+#include <QWindow>
 #include <cstdio>
 #include <filesystem>
 #include <memory>
@@ -58,9 +60,49 @@ void dropUrls(QQuickWindow* win, const QList<QUrl>& urls) {
     check(event.isAccepted(), "native URL drop accepted");
 }
 void drop(QQuickWindow* win, const QString& path) { dropUrls(win, {QUrl::fromLocalFile(path)}); }
+
+int replayNetworkHistory(const QString& profile, const QString& address) {
+    if (!QDir::isAbsolutePath(profile) || !QFile::exists(profile + "/ui-session.v1")) return 2;
+    QWindow video;
+    video.resize(320, 180);
+    video.show();
+    check(QTest::qWaitForWindowExposed(&video), "test video surface is presentable");
+    veyra::engine::EngineController engine;
+    veyra::ui::QmlPlayerBridge bridge(engine, std::filesystem::path(profile.toStdWString()));
+    bridge.attachVideoWindow(video.winId());
+    bridge.setMuted(true);
+    bridge.setPreference("decode", "software");
+    const auto framesAfter = [&](uint64_t previous) {
+        return QTest::qWaitFor([&] {
+            const auto snapshot = engine.snapshot();
+            return snapshot.sessionId != previous && snapshot.frames >= 10 && !snapshot.failed;
+        }, 12000);
+    };
+
+    const auto recent = bridge.recentFiles();
+    auto* playlist = qobject_cast<veyra::ui::PlaylistModel*>(bridge.playlist());
+    check(recent.size() == 1 && playlist && playlist->count() == 1, "fresh bridge restores the successful address only");
+    if (recent.size() != 1 || !playlist || playlist->count() != 1) return 1;
+    const auto recentRow = recent.front().toMap();
+    check(recentRow.value("path").toString() == address && recentRow.value("exists").toBool(),
+          "Recent restores the signed address");
+    if (recentRow.value("path").toString() != address) return 1;
+    auto session = engine.snapshot().sessionId;
+    bridge.openPath(recentRow.value("path").toString());
+    check(framesAfter(session), "Recent reopens the authenticated server and presents video");
+    session = engine.snapshot().sessionId;
+    bridge.stopPlayback();
+    check(playlist->play(playlist->indexOfPath(address)) && framesAfter(session),
+          "playlist entry reopens the authenticated server and presents video");
+    bridge.stopPlayback();
+    check(playlist->count() == 1 && bridge.recentFiles().size() == 1, "replaying the same address leaves a single row");
+    std::printf("%s network replay checks=%d failures=%d\n", failures ? "FAIL" : "PASS", assertions, failures);
+    return failures ? 1 : 0;
+}
 }
 int main(int argc, char** argv) {
-    if (argc != 2) return 2;
+    const bool replay = argc == 4 && QByteArray(argv[2]) == "--network-replay";
+    if (argc != 2 && !replay) return 2;
     // Disable the application's background update poll for the isolated test.
     char disableUpdate[] = "--portable-update-probe";
     char* appArgs[] = {argv[0], argv[1], disableUpdate, nullptr};
@@ -68,6 +110,7 @@ int main(int argc, char** argv) {
     QApplication app(appArgCount, appArgs);
     qInstallMessageHandler(messages);
     const auto path = QString::fromLocal8Bit(argv[1]);
+    if (replay) return replayNetworkHistory(path, QString::fromLocal8Bit(argv[3]));
     if (!QDir::isAbsolutePath(path) || QFileInfo::exists(path)) return 2;
     QDir().mkpath(path);
     for (int i = 1; i <= 12; ++i) { QFile f(path + QString("/file%1.mp4").arg(i)); f.open(QIODevice::WriteOnly); f.write("metadata fixture"); }
@@ -80,13 +123,37 @@ int main(int argc, char** argv) {
     if (!QDir().mkpath(profile)) return 2;
     const std::filesystem::path dataDirectory(profile.toStdWString());
     veyra::engine::EngineController playbackEngine;
+    const QString address = QStringLiteral("https://synthetic-user:synthetic-password@history.example:8443/"
+                                           "synthetic-path/video?token=MiXeD%2B");
+    const auto network = veyra::ui::ProtectedNetworkAddress::protect(address.toStdWString());
+    check(network.has_value(), "protect network history");
+    if (!network) return 1;
     {
         veyra::ui::PlayerUiFacade history(playbackEngine, dataDirectory);
         history.noteRecentFile(playing.toStdWString());
         history.noteRecentFile((path + "/missing.mp4").toStdWString());
+        history.noteRecentNetwork(*network);
+        history.setReducedMotion(true);
+        history.setDefaultPage(L"pro");
+    }
+    {
+        QFile file(profile + "/ui-session.v1");
+        check(file.open(QIODevice::ReadOnly), "read recent history storage");
+        const auto bytes = file.readAll();
+        check(bytes.contains("dpapi:") && bytes.contains("missing.mp4") && !bytes.contains("synthetic-") &&
+              !bytes.contains("history.example") && !bytes.contains("MiXeD"), "stored Recent uses protected addresses");
     }
     veyra::ui::QmlPlayerBridge historyBridge(playbackEngine, dataDirectory);
-    check(historyBridge.recentFiles().size() == 2, "saved history loads existing and missing files");
+    const auto recent = historyBridge.recentFiles();
+    check(recent.size() == 3, "saved history loads a network address plus existing and missing files");
+    if (recent.size() == 3) {
+        const auto entry = recent.front().toMap();
+        check(entry.value("path").toString() == address && entry.value("exists").toBool() &&
+              entry.value("network").toBool() && entry.value("label").toString() == "https://history.example:8443",
+              "restored Recent label hides signed URL details while keeping the exact playable address");
+        check(!recent.at(1).toMap().value("exists").toBool() && recent.at(2).toMap().value("exists").toBool(),
+              "legacy local presence checks are unchanged");
+    }
     model.setPlayback(playing, "playing");
     QString requested;
     QObject::connect(&model, &veyra::ui::PlaylistModel::playRequested, [&](const auto& selected) { requested = selected; });
@@ -177,7 +244,7 @@ Window {
           "clear history is available at the minimum window size");
     const auto queuedItems = model.count();
     click(win, "playlist-clear-history");
-    check(historyDialog && historyDialog->property("shown").toBool() && historyBridge.recentFiles().size() == 2,
+    check(historyDialog && historyDialog->property("shown").toBool() && historyBridge.recentFiles().size() == 3,
           "opening confirmation leaves the history intact");
     QTest::keyClick(win, Qt::Key_Delete);
     QTest::keyClick(win, Qt::Key_Return);
@@ -185,7 +252,7 @@ Window {
     QTest::keyClick(win, Qt::Key_Escape);
     QTest::qWait(250);
     check(historyDialog && !historyDialog->property("shown").toBool() && win->isVisible() &&
-          historyBridge.recentFiles().size() == 2, "Escape cancels without closing the playlist");
+          historyBridge.recentFiles().size() == 3, "Escape cancels without closing the playlist");
 
     auto confirmClear = [&] {
         click(win, "playlist-clear-history");
@@ -198,7 +265,7 @@ Window {
     QSignalSpy notices(&historyBridge, &veyra::ui::QmlPlayerBridge::notice);
     check(QDir(profile).mkdir(blocker), "write failure fixture created");
     confirmClear();
-    check(historyBridge.recentFiles().size() == 2 && !notices.isEmpty() && notices.last().at(1).toBool(),
+    check(historyBridge.recentFiles().size() == 3 && !notices.isEmpty() && notices.last().at(1).toBool(),
           "a failed save reports the error and keeps history available");
     check(QDir(profile).rmdir(blocker), "write failure fixture removed");
     confirmClear();
