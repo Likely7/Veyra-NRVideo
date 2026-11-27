@@ -13,16 +13,22 @@ namespace {
 using Clock = std::chrono::steady_clock;
 using namespace std::chrono_literals;
 
-int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::path& dir, bool capture) {
+int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::path& dir,
+                   bool capture, bool vfg, bool hdr) {
     EngineController engine;
     engine.setVolume(0, true);
     PresentationSettings presentation;
     presentation.display = DisplaySync::Tearing;
     engine.requestPresentation(presentation);
     PlayerOptions options;
-    options.nr = options.sr = options.fg = false;
+    options.fg = vfg;
     options.captureReplayForTest = true;
     options.settings.content = ContentRate::Transport;
+    if (vfg) {
+        options.settings.frameGenerationBackend = FrameGenerationBackend::Vfg;
+        options.settings.vfgQuality = 1;
+        options.settings.vfgAutoRegulate = false;
+    }
     RecordingSettings replay;
     replay.directory = dir.wstring();
     replay.audio = false;
@@ -52,23 +58,29 @@ int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::pat
         return false;
     };
     const auto path = dir / L"live.png";
-    bool ok = wait([](const auto& status, const auto& buffer) {
-        return status.frames >= 120 && buffer.frames >= 90;
+    auto actual = path;
+    if (hdr) actual.replace_extension(L".jxr");
+    bool ok = wait([&](const auto& status, const auto& buffer) {
+        return status.frames >= 120 && buffer.frames >= 90 &&
+               (!vfg || status.metrics.flow.counters.generatedPresented >= 20);
     }, 10s);
     if (ok) {
         const auto head = engine.snapshot();
-        ok = head.sourceWidth == 3840 && head.sourceHeight == 2160 && !head.nrActive && !head.srActive && !head.fgActive;
+        ok = head.sourceWidth == 3840 && head.sourceHeight == 2160 &&
+             !head.nrActive && !head.srActive && head.fgActive == vfg && head.sourceHdr == hdr;
         const auto replayBefore = engine.replaySnapshot();
         const auto mark = Clock::now();
         const auto mark100ns = std::chrono::duration_cast<std::chrono::nanoseconds>(mark.time_since_epoch()).count() / 100;
         if (capture) engine.saveFrame(path.wstring());
         std::cout << "SCREENSHOT_BEGIN capture=" << capture << " host100ns=" << mark100ns
                   << " source=" << head.sourceWidth << 'x' << head.sourceHeight
+                  << " vfg=" << vfg << " hdr=" << hdr
+                  << " generated=" << head.metrics.flow.counters.generatedPresented
                   << " replayFrames=" << replayBefore.frames << std::endl;
         if (capture) {
             uint64_t framesWhileSaving = 0;
             const bool saved = wait([&](const auto& status, const auto&) {
-                if (status.savedFramePath == path.wstring()) return true;
+                if (status.savedFramePath == actual.wstring()) return true;
                 framesWhileSaving = status.frames - head.frames;
                 return false;
             }, 6s);
@@ -91,14 +103,21 @@ int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::pat
     const bool stopped = wait([&](const auto&, const auto&) { return engine.idle(); }, 6s);
     if (ok && capture) {
         veyra::sink::RgbaImage image;
-        ok = veyra::sink::loadImage(path.wstring(), image) && image.width == 3840 && image.height == 2160;
+        ok = veyra::sink::loadImage(actual.wstring(), image) && image.width == 3840 && image.height == 2160;
     }
     return ok && stopped ? 0 : 1;
 }
 }
 
 int wmain(int argc,wchar_t** argv){
-    const bool live=argc==4&&(std::wstring_view(argv[3])==L"--live-screenshot"||std::wstring_view(argv[3])==L"--live-control");
+    constexpr std::wstring_view screenshotMode = L"--live-screenshot";
+    constexpr std::wstring_view controlMode = L"--live-control";
+    const auto mode = argc == 4 ? std::wstring_view(argv[3]) : std::wstring_view{};
+    const bool screenshot = mode.starts_with(screenshotMode);
+    const bool control = mode.starts_with(controlMode);
+    const auto suffix = mode.substr(screenshot ? screenshotMode.size() : control ? controlMode.size() : 0);
+    const bool live = (screenshot || control) &&
+                      (suffix.empty() || suffix == L"-vfg" || suffix == L"-vfg-hdr");
     if(argc!=3&&!live)return 2;
     const std::filesystem::path dir=argv[2];std::filesystem::create_directories(dir);
     if(live)veyra::Logger::instance().startAsync();
@@ -107,7 +126,8 @@ int wmain(int argc,wchar_t** argv){
     HWND window=CreateWindowExW(0,L"STATIC",L"Screenshot combination regression",WS_OVERLAPPEDWINDOW|WS_VISIBLE,80,80,960,600,nullptr,nullptr,GetModuleHandleW(nullptr),nullptr);
     if(!window){CoUninitialize();return 2;}
     if(live){
-        const int result=liveScreenshot(window,argv[1],dir,std::wstring_view(argv[3])==L"--live-screenshot");
+        const int result=liveScreenshot(window, argv[1], dir, screenshot,
+                                        !suffix.empty(), suffix == L"-vfg-hdr");
         DestroyWindow(window);CoUninitialize();return result;
     }
     int failures=0;

@@ -243,6 +243,11 @@ Window {
     shell->resize(1280, 800);
     activate();
     check(shell->property("page").toString() == "pro", "production shell starts in Professional view");
+    check(QTest::qWaitFor([&] {
+        const auto* transport = find(shell->contentItem(), "pro-transport");
+        return transport && !transport->property("compact").toBool() &&
+               find(shell->contentItem(), "pro-playlist");
+    }), "wide Professional transport is laid out");
     if (click(shell, "pro-playlist"))
         check(shellPlaylist->isVisible() && shellPlaylist->transientParent() == shell,
               "Professional button opens the owned playlist");
@@ -262,7 +267,10 @@ Window {
           "fullscreen lock blocks the playlist shortcut");
     shell->setProperty("fullLocked", false);
     shell->resize(720, 560);
-    QTest::qWait(150);
+    check(QTest::qWaitFor([&] {
+        const auto* transport = find(shell->contentItem(), "pro-transport");
+        return transport && transport->property("compact").toBool();
+    }), "compact Professional transport is laid out");
     if (click(shell, "pro-playlist"))
         check(shellPlaylist->isVisible(), "Professional button opens the playlist in compact transport");
     shell->close();
