@@ -1449,7 +1449,9 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
     if(!s.armed)return false;
     const int64_t now=sink::recordingClockUs();
     if(s.replayMode&&!s.current&&now<s.retryAfterUs)return false;
-    if(s.settings.fpsLimit&&!s.settings.cfr){
+    // Respect an explicit cap before recording NV12/P010 conversion work.
+    // CFR still emits every output tick and holds a picture across gaps.
+    if(s.settings.fpsLimit){
         const int64_t interval=1000000/int64_t(s.settings.fpsLimit);
         if(s.nextDueUs&&now+interval/4<s.nextDueUs)return false;
         s.nextDueUs=(s.nextDueUs&&now-s.nextDueUs<interval)?s.nextDueUs+interval:now+interval;
