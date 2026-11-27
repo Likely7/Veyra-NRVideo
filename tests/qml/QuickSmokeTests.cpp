@@ -71,6 +71,11 @@ QtObject {
         property int recognitionThreads: 0
         property int recognitionEffectiveThreads: 3
         property string recognitionStatus: ""
+        property string recognitionDirectory: "test/live-asr"
+        property string recognitionInstallLayout: recognitionModel === 0
+            ? "models/parakeet-tdt-0.6b-v2-int8/encoder.int8.onnx"
+            : "models/whisper-large-v3-turbo-int8/turbo-tokens.txt"
+        property int recognitionOpenCount: 0
         property bool recognitionInstalled: false
         property bool recognitionDownloading: false
         property real recognitionProgress: 0
@@ -79,6 +84,7 @@ QtObject {
         property real averageTranslationMs: 0
         property int skippedSentences: 0
         function downloadRecognitionModel() { recognitionDownloading = true }
+        function openRecognitionDirectory() { recognitionOpenCount += 1; return true }
         function cancelRecognitionDownload() { recognitionDownloading = false }
         function deleteRecognitionModel() { recognitionInstalled = false }
         function openWindowsCaptions() {}

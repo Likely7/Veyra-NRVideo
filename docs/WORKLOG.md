@@ -10,6 +10,11 @@
 
 测试复现原 v210 打包色度最大误差 68，跨组插值调通后六种采集格式均为 0。4K v210 色彩转换实跑按基线、候选、候选、基线四轮，每轮 160 个 GPU 计时。基线中位数 0.247–0.249 ms、P95 0.377–0.460 ms，候选中位数 0.241 ms、P95 0.248–0.249 ms。完整证据 [回执](<E:/项目/Veyra/reports/codex-github-fixes-20261126/RESULTS.md>)。
 
+## 2026-11-26 实时翻译 ASR 模型安装（#369、#341）
+
+- Windows 旧版 bsdtar 可能把命令行里的非 ANSI 路径转成其他字符。本地源码调用系统 tar 时改用宽字符工作目录及相对归档、输出路径，继续按固定成员提取；归档字节数、SHA-256、落盘提交与成员校验依序完成。区分大小、摘要、工具启动、解压和成员失败；日志记录资产、退出值及有界 stderr，解压可取消且最多等待 10 分钟。无法回退置换时保留旧目录备份。 [上游 bsdtar 报告](https://github.com/libarchive/libarchive/issues/2092)
+- 「实时翻译 → Veyra 音频 → 手动安装」从当前数据目录与选中的模型清单生成实际位置，可打开目录。Whisper 模型放在 live-asr/models/whisper-large-v3-turbo-int8 下；共享运行库目录 runtime-2.0.2 仅放列出的三件 DLL，共用 VAD 放在 live-asr 根。放好后点击「下载模型」检查，已有完整文件可就地采用。
+- 用 E:/项目/Veyra/tmp/github-asr-20261126/probe/run.py 在 Qt 6.8.3/MSVC 上编译产品组件和独立夹具，复用先前核验的上游 6,071,299 字节运行库包。环回 HTTP 与 Windows 11 本机 bsdtar 3.8.9 共通过 12 项，覆盖含中英文与特殊字符的路径、严格成员校验、镜像回退、失败保留、截断、取消和重试。Qt Quick 窄窗专项通过，九语缺译和占位符差异均为零。未取得报告者的 Windows 10/bsdtar 3.5.2 环境，本轮未下载大模型或运行 ASR DLL。 [下载夹具](<E:/项目/Veyra/logs/github-asr-20261126/asset-probe-run.log>) · [Qt Quick](<E:/项目/Veyra/logs/github-asr-20261126/qml-asr-result.log>)
 
 ## 2026-11-26 2.2.2 主线整合
 

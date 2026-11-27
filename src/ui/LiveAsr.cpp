@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
 #include <algorithm>
 #include <format>
 #include <utility>
@@ -111,6 +112,17 @@ void LiveAsr::setPlayback(bool active, bool discontinuity) {
 QString LiveAsr::status() const {
     if (assets_.downloading() || (!assets_.installed() && !assets_.status().isEmpty())) return assets_.status();
     return status_;
+}
+
+QString LiveAsr::installLayout() const {
+    QStringList paths;
+    for (const auto& asset : asr::assets(model_)) {
+        const auto destination = QString::fromLatin1(asset.destination);
+        if (asset.members.empty()) paths.append(destination);
+        for (const auto& member : asset.members)
+            paths.append(destination + QLatin1Char('/') + QString::fromLatin1(member.name));
+    }
+    return paths.join(QLatin1Char('\n'));
 }
 
 void LiveAsr::download() {

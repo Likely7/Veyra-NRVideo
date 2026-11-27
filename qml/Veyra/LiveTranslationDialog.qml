@@ -31,6 +31,8 @@ DialogLayer {
 
     readonly property bool useVeyraAudio: translation !== null && translation.recognitionSource === 0
     readonly property bool englishOnly: useVeyraAudio && translation.recognitionModel === 0
+    property bool showRecognitionFiles: false
+    property bool recognitionDirectoryOpenFailed: false
     readonly property var recognitionSources: [
         {id: "0", label: qsTr("Veyra 音频")},
         {id: "1", label: qsTr("Windows 实时字幕（旧方式）"), disabled: !translation || !translation.windowsCaptionsSupported},
@@ -298,6 +300,35 @@ DialogLayer {
                     onClicked: root.translation.deleteRecognitionModel()
                 }
             }
+        }
+        VRow {
+            objectName: "live-translation-recognition-install"
+            label: qsTr("手动安装")
+            hintBelow: true
+            hint: root.showRecognitionFiles && root.translation
+                ? qsTr("按下列结构放入文件，再点「下载模型」检查。") + "\n"
+                    + root.translation.recognitionDirectory + "\n" + root.translation.recognitionInstallLayout
+                : ""
+            RowLayout {
+                VButton {
+                    objectName: "live-translation-recognition-install-toggle"
+                    text: root.showRecognitionFiles ? qsTr("收起") : qsTr("显示")
+                    onClicked: root.showRecognitionFiles = !root.showRecognitionFiles
+                }
+                VButton {
+                    objectName: "live-translation-recognition-install-open"
+                    visible: root.showRecognitionFiles
+                    text: qsTr("打开目录")
+                    onClicked: root.recognitionDirectoryOpenFailed = !root.translation.openRecognitionDirectory()
+                }
+            }
+        }
+        Text {
+            visible: root.showRecognitionFiles && root.recognitionDirectoryOpenFailed
+            Layout.fillWidth: true
+            color: Theme.t2
+            wrapMode: Text.Wrap
+            text: root.translation ? qsTr("无法打开目录：%1").arg(root.translation.recognitionDirectory) : ""
         }
         ProgressBar {
             objectName: "live-translation-recognition-progress"

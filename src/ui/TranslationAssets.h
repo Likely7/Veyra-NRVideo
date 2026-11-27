@@ -5,6 +5,7 @@
 #include <QNetworkAccessManager>
 #include <QObject>
 #include <QProcess>
+#include <QTimer>
 #include <memory>
 #include <span>
 
@@ -72,6 +73,7 @@ private:
     void readFile();
     void finishFile();
     void extractArchive();
+    void readExtractError();
     void finishArchive(int code, QProcess::ExitStatus status);
     void finish(QString status);
 
@@ -80,11 +82,13 @@ private:
     QNetworkAccessManager network_;
     QNetworkReply* reply_ = nullptr;
     QProcess extract_;
+    QTimer extractDeadline_;
+    QByteArray extractError_;
     std::unique_ptr<QLockFile> lock_;
     std::unique_ptr<QTemporaryDir> stage_, transfer_;
     std::unique_ptr<QSaveFile> file_;
     QCryptographicHash hash_{QCryptographicHash::Sha256};
-    bool installed_ = false, cancelled_ = false;
+    bool installed_ = false, cancelled_ = false, extractTimedOut_ = false;
     size_t asset_ = 0, source_ = 0, member_ = 0;
     qint64 expectedBytes_ = 0, sourceBytes_ = 0, verifiedBytes_ = 0;
     const char* expectedSha_ = "";

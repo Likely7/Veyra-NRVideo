@@ -209,6 +209,22 @@ Item {
             compare(power.checked, false)
             const threads = findChild(dialog, "live-translation-recognition-threads")
             verify(threads !== null)
+            const install = findChild(dialog, "live-translation-recognition-install")
+            const manual = findChild(dialog, "live-translation-recognition-install-toggle")
+            const open = findChild(dialog, "live-translation-recognition-install-open")
+            compare(install.hint, "")
+            compare(open.visible, false)
+            manual.clicked()
+            tryCompare(open, "visible", true)
+            verify(install.hint.includes(dialog.translation.recognitionDirectory))
+            verify(install.hint.includes("parakeet-tdt-0.6b-v2-int8"))
+            dialog.translation.recognitionModel = 1
+            tryVerify(() => install.hint.includes("whisper-large-v3-turbo-int8"))
+            open.clicked()
+            compare(dialog.translation.recognitionOpenCount, 1)
+            dialog.translation.recognitionModel = 0
+            manual.clicked()
+            tryCompare(install, "hint", "")
             dialog.translation.recognitionThreads = 4
             tryCompare(threads, "hint", "实际使用 3 个线程")
             dialog.translation.recognitionEffectiveThreads = 4

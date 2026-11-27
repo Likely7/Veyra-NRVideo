@@ -70,29 +70,42 @@ bool regularPath(const QString& path, bool directory) {
         && bool(attributes & FILE_ATTRIBUTE_DIRECTORY) == directory;
 }
 
-bool verifyFile(const QString& path, qint64 bytes, const char* sha256, bool contents) {
-    if (!regularPath(path, false) || (bytes >= 0 && QFileInfo(path).size() != bytes)) return false;
-    if (!contents) return true;
+const char* fileProblem(const QString& path, qint64 bytes, const char* sha256, bool contents) {
+    if (!regularPath(path, false)) return "missing-or-not-regular";
+    if (bytes >= 0 && QFileInfo(path).size() != bytes) return "unexpected-size";
+    if (!contents) return nullptr;
     std::string hash;
     uint64_t hashedBytes = 0;
-    return computeFileSha256(QDir::toNativeSeparators(path).toStdWString(), hash, hashedBytes)
-        && (bytes < 0 || hashedBytes == uint64_t(bytes))
-        && QByteArray::fromStdString(hash).toLower() == sha256;
+    if (!computeFileSha256(QDir::toNativeSeparators(path).toStdWString(), hash, hashedBytes))
+        return "unreadable";
+    if (bytes >= 0 && hashedBytes != uint64_t(bytes)) return "unexpected-size";
+    return QByteArray::fromStdString(hash).toLower() == sha256 ? nullptr : "sha256-mismatch";
 }
 
-bool verifyMembers(const QString& directory, const ModelAsset& asset, bool contents) {
-    if (!regularPath(directory, true)) return false;
+bool verifyFile(const QString& path, qint64 bytes, const char* sha256, bool contents) {
+    return !fileProblem(path, bytes, sha256, contents);
+}
+
+bool verifyMembers(const QString& directory, const ModelAsset& asset, bool contents, QString* problem = nullptr) {
+    const auto fail = [&](const QString& member, const char* reason) {
+        if (problem) *problem = member + QStringLiteral(": ") + QString::fromLatin1(reason);
+        return false;
+    };
+    if (!regularPath(directory, true)) return fail(QStringLiteral("model"), "missing-or-not-regular-directory");
     const QDir dir(directory);
-    if (!asset.allowAdditionalFiles &&
-        dir.entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot).size()
-        != qsizetype(asset.members.size())) return false;
-    return std::ranges::all_of(asset.members, [&](const ModelFile& file) {
+    for (const auto& file : asset.members) {
         const auto name = QString::fromLatin1(file.name);
         for (auto parent = name.lastIndexOf(u'/'); parent >= 0; parent = name.lastIndexOf(u'/', parent - 1)) {
-            if (!parent || !regularPath(dir.filePath(name.left(parent)), true)) return false;
+            if (!parent || !regularPath(dir.filePath(name.left(parent)), true))
+                return fail(name, "missing-or-not-regular-parent");
         }
-        return verifyFile(dir.filePath(name), file.bytes, file.sha256, contents);
-    });
+        if (const auto* reason = fileProblem(dir.filePath(name), file.bytes, file.sha256, contents))
+            return fail(name, reason);
+    }
+    if (!asset.allowAdditionalFiles &&
+        dir.entryList(QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot).size()
+        != qsizetype(asset.members.size())) return fail(QStringLiteral("model"), "unexpected-directory-entries");
+    return true;
 }
 
 std::unique_ptr<QLockFile> tryModelLock(const QString& root) {
@@ -106,12 +119,24 @@ std::unique_ptr<QLockFile> tryModelLock(const QString& root) {
 ModelAssets::ModelAssets(QString root, std::span<const ModelAsset> assets)
     : root_(std::move(root)), assets_(assets) {
     extract_.setStandardOutputFile(QProcess::nullDevice());
-    extract_.setStandardErrorFile(QProcess::nullDevice());
+    extractDeadline_.setSingleShot(true);
+    extractDeadline_.setInterval(10 * 60 * 1000);
+    connect(&extractDeadline_, &QTimer::timeout, this, [this] {
+        if (extract_.state() == QProcess::NotRunning) return;
+        extractTimedOut_ = true;
+        extract_.kill();
+    });
+    connect(&extract_, &QProcess::readyReadStandardError, this, &ModelAssets::readExtractError);
     extract_.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments* args) {
         args->flags |= CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS;
     });
     connect(&extract_, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
-        if (downloading() && error == QProcess::FailedToStart) retry(tr("无法解压模型文件"));
+        if (!downloading() || error != QProcess::FailedToStart) return;
+        extractDeadline_.stop();
+        if (cancelled_) { finish(tr("模型下载已取消")); return; }
+        log::warn("model-assets", std::format("extract start failed asset={} error={}",
+            assets_[asset_].destination, extract_.errorString().toStdString()));
+        retry(tr("无法启动 Windows 解压工具"));
     });
     connect(&extract_, &QProcess::finished, this, &ModelAssets::finishArchive);
     refreshInstalled();
@@ -269,7 +294,8 @@ void ModelAssets::startFile() {
     reply_->setReadBufferSize(1024 * 1024);
     connect(reply_, &QNetworkReply::readyRead, this, &ModelAssets::readFile);
     connect(reply_, &QNetworkReply::finished, this, &ModelAssets::finishFile);
-    status_ = tr("正在下载模型与运行库…") + QStringLiteral(" · ") + request.url().host();
+    status_ = tr("正在下载模型与运行库…") + QStringLiteral(" · ")
+        + QString::fromLatin1(asset.destination) + QStringLiteral(" · ") + request.url().host();
     emit changed();
 }
 
@@ -277,6 +303,8 @@ void ModelAssets::readFile() {
     if (!reply_ || !file_) return;
     const auto data = reply_->readAll();
     if (data.size() > expectedBytes_ - bytes_) {
+        log::warn("model-assets", std::format("download size mismatch asset={} expected={} receivedAtLeast={}",
+            assets_[asset_].destination, expectedBytes_, bytes_ + data.size()));
         retry(tr("下载文件的大小与预期不符"));
         return;
     }
@@ -304,13 +332,24 @@ void ModelAssets::finishFile() {
         retry(tr("模型下载失败，请检查网络后重试"));
         return;
     }
-    if (bytes_ != expectedBytes_ || hash_.result().toHex() != expectedSha_) {
+    if (bytes_ != expectedBytes_) {
+        log::warn("model-assets", std::format("download size mismatch asset={} expected={} received={}",
+            assets_[asset_].destination, expectedBytes_, bytes_));
+        retry(tr("下载文件的大小与预期不符"));
+        return;
+    }
+    const auto actualSha = hash_.result().toHex();
+    if (actualSha != expectedSha_) {
+        log::warn("model-assets", std::format("download SHA-256 mismatch asset={} expected={} actual={}",
+            assets_[asset_].destination, expectedSha_, actualSha.toStdString()));
         retry(tr("下载文件校验失败，请重新下载"));
         return;
     }
     clearReply();
     if (!file_->commit()) {
-        finish(tr("无法保存模型下载文件"));
+        log::warn("model-assets", std::format("download commit failed asset={} error={}",
+            assets_[asset_].destination, int(file_->error())));
+        finish(tr("无法保存模型下载文件") + QStringLiteral(" · ") + QString::fromLatin1(assets_[asset_].destination));
         return;
     }
     file_.reset();
@@ -330,7 +369,7 @@ void ModelAssets::finishFile() {
 
 void ModelAssets::retry(QString reason) {
     if (source_ >= assets_[asset_].fallbacks.size()) {
-        finish(std::move(reason));
+        finish(reason + QStringLiteral(" · ") + QString::fromLatin1(assets_[asset_].destination));
         return;
     }
     clearReply();
@@ -347,23 +386,41 @@ void ModelAssets::extractArchive() {
         return;
     }
     const auto& asset = assets_[asset_];
-    QStringList arguments{QStringLiteral("-xf"), transfer_->filePath(QStringLiteral("archive")),
-                          QStringLiteral("-C"), target};
+    // Older Windows bsdtar converts command-line paths through the active
+    // code page. QProcess passes the working directory to CreateProcessW.
+    extract_.setWorkingDirectory(transfer_->path());
+    QStringList arguments{QStringLiteral("-xf"), QStringLiteral("archive"),
+                          QStringLiteral("-C"), QStringLiteral("model"),
+                          QStringLiteral("--no-same-owner"), QStringLiteral("--no-same-permissions")};
     if (asset.stripComponents)
         arguments << QStringLiteral("--strip-components") << QString::number(asset.stripComponents);
     for (const auto& member : asset.members)
         arguments << QString::fromLatin1(asset.archivePrefix) + QString::fromLatin1(member.name);
     received_ = complete_ + asset.bytes;
-    status_ = tr("正在解压并验证模型…");
+    status_ = tr("正在解压并验证模型…") + QStringLiteral(" · ") + QString::fromLatin1(asset.destination);
+    extractError_.clear();
+    extractTimedOut_ = false;
+    log::info("model-assets", std::format("verified archive committed asset={} bytes={}", asset.destination, bytes_));
+    extractDeadline_.start();
     extract_.start(windowsSystemExecutable(L"tar.exe"), arguments);
     emit changed();
 }
 
+void ModelAssets::readExtractError() {
+    constexpr qsizetype maxErrorBytes = 512;
+    extractError_ += extract_.readAllStandardError().left(maxErrorBytes - extractError_.size());
+}
+
 void ModelAssets::finishArchive(int code, QProcess::ExitStatus exit) {
+    extractDeadline_.stop();
+    readExtractError();
     if (!downloading() || !stage_) return;
     if (cancelled_) { finish(tr("模型下载已取消")); return; }
-    if (exit != QProcess::NormalExit || code != 0) {
-        retry(tr("解压后的模型文件校验失败"));
+    if (extractTimedOut_ || exit != QProcess::NormalExit || code != 0) {
+        log::warn("model-assets", std::format("extract failed asset={} code={} status={} timeout={} stderr={}",
+            assets_[asset_].destination, code, int(exit), extractTimedOut_,
+            QString::fromLocal8Bit(extractError_).simplified().toStdString()));
+        retry(extractTimedOut_ ? tr("模型解压超时，请重试") : tr("无法解压模型文件"));
         return;
     }
     installDirectory();
@@ -372,8 +429,11 @@ void ModelAssets::finishArchive(int code, QProcess::ExitStatus exit) {
 void ModelAssets::installDirectory() {
     const auto& asset = assets_[asset_];
     const QString unpacked = transfer_->filePath(QStringLiteral("model"));
-    if (!verifyMembers(unpacked, asset, asset.verifyExisting)) {
-        retry(tr("解压后的模型文件校验失败"));
+    QString problem;
+    if (!verifyMembers(unpacked, asset, asset.verifyExisting, &problem)) {
+        log::warn("model-assets", std::format("install member verification failed asset={} detail={}",
+            asset.destination, problem.toStdString()));
+        retry(tr("模型成员文件校验失败") + QStringLiteral(" · ") + problem.section(QStringLiteral(": "), 0, 0));
         return;
     }
     const QString previous = stage_->filePath(QStringLiteral("previous-%1").arg(asset_));
@@ -388,8 +448,10 @@ void ModelAssets::installDirectory() {
         return;
     }
     if (!QDir().rename(unpacked, target)) {
-        if (replacing) QDir().rename(previous, target);
-        finish(tr("无法保存模型下载文件"));
+        if (replacing && !QDir().rename(previous, target)) {
+            stage_->setAutoRemove(false);
+            finish(tr("无法恢复现有模型，备份保留在 %1").arg(QDir::toNativeSeparators(previous)));
+        } else finish(tr("无法保存模型下载文件") + QStringLiteral(" · ") + QString::fromLatin1(asset.destination));
         return;
     }
     transfer_.reset();
@@ -406,6 +468,7 @@ void ModelAssets::clearReply() {
 }
 
 void ModelAssets::finish(QString status) {
+    extractDeadline_.stop();
     clearReply();
     file_.reset();
     transfer_.reset();

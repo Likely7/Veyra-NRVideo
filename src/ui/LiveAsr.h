@@ -23,6 +23,8 @@ public:
     bool installed() const { return assets_.installed(); }
     bool downloading() const { return assets_.downloading(); }
     qint64 downloadBytes() const { return assets_.totalBytes(); }
+    const QString& directory() const { return root_; }
+    QString installLayout() const;
     double progress() const { return double(assets_.received()) / double(assets_.totalBytes()); }
     void download();
     void cancel() { assets_.cancel(); }

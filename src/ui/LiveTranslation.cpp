@@ -9,6 +9,7 @@
 #include "veyra/ui/LiveTranslationPrompt.h"
 
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -586,6 +587,11 @@ void LiveTranslation::downloadModel() {
 }
 void LiveTranslation::cancelModelDownload() { assets_.downloads.cancel(); }
 void LiveTranslation::downloadRecognitionModel() { asr_.download(); }
+
+bool LiveTranslation::openRecognitionDirectory() const {
+    const auto path = asr_.directory();
+    return QDir().mkpath(path) && QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
 void LiveTranslation::deleteRecognitionModel() { asr_.removeModel(); }
 
 void LiveTranslation::setPlayback(quint64 session, bool active, bool discontinuity) {

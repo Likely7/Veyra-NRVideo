@@ -20763,6 +20763,19 @@
    "ru": "Ручное смещение · применяется к живому входу"
   },
   {
+   "zh": "手动安装",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "手動安裝",
+   "en": "Manual installation",
+   "ja": "手動インストール",
+   "ko": "수동 설치",
+   "es": "Instalación manual",
+   "fr": "Installation manuelle",
+   "de": "Manuelle Installation",
+   "pt-BR": "Instalação manual",
+   "ru": "Ручная установка"
+  },
+  {
    "zh": "手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "手動比例以最高 1080p 預算內的輸入為基準；適用於預覽與影片匯出，輸出尺寸不變。",
@@ -21567,6 +21580,19 @@
    "de": "Ziehe die Ränder oder verschiebe den Zuschneiderahmen · %1 × %2",
    "pt-BR": "Arraste as bordas ou mova o quadro de recorte · %1 × %2",
    "ru": "Перетащите края или переместите рамку обрезки · %1 × %2"
+  },
+  {
+   "zh": "按下列结构放入文件，再点「下载模型」检查。",
+   "src": "qml/LiveTranslationDialog.qml",
+   "zh-TW": "請依下列結構放入檔案，再點選「下載模型」檢查。",
+   "en": "Place the files as shown, then select Download Model to check them.",
+   "ja": "以下の構成でファイルを配置し、「モデルをダウンロード」で確認してください。",
+   "ko": "아래 구조에 맞게 파일을 배치한 다음 ‘모델 다운로드’를 눌러 확인하세요.",
+   "es": "Coloca los archivos como se muestra y selecciona «Descargar modelo» para comprobarlos.",
+   "fr": "Placez les fichiers comme indiqué, puis cliquez sur « Télécharger le modèle » pour les vérifier.",
+   "de": "Legen Sie die Dateien wie gezeigt ab und prüfen Sie sie über „Modell herunterladen“.",
+   "pt-BR": "Coloque os arquivos conforme indicado e selecione “Baixar modelo” para verificá-los.",
+   "ru": "Разместите файлы, как показано ниже, и нажмите «Скачать модель», чтобы проверить их."
   },
   {
    "zh": "按下新按键…",
@@ -23804,6 +23830,19 @@
    "de": "Konnte nicht anfangen, die Wiederholung zu speichern",
    "pt-BR": "Não foi possível começar a gravar a repetição",
    "ru": "Не смог начать спасать переигровку"
+  },
+  {
+   "zh": "无法恢复现有模型，备份保留在 %1",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "無法復原現有模型，備份保留在 %1",
+   "en": "Could not restore the existing model. Its backup is at %1",
+   "ja": "既存のモデルを復元できません。バックアップは %1 にあります",
+   "ko": "기존 모델을 복원할 수 없습니다. 백업은 %1에 있습니다",
+   "es": "No se pudo restaurar el modelo existente. Su copia de seguridad está en %1",
+   "fr": "Impossible de restaurer le modèle existant. Sa sauvegarde se trouve dans %1",
+   "de": "Das vorhandene Modell konnte nicht wiederhergestellt werden. Die Sicherung liegt unter %1",
+   "pt-BR": "Não foi possível restaurar o modelo existente. O backup está em %1",
+   "ru": "Не удалось восстановить существующую модель. Резервная копия находится в %1"
   },
   {
    "zh": "无法打开",
@@ -27004,6 +27043,19 @@
    "ru": "Сила модели"
   },
   {
+   "zh": "模型成员文件校验失败",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "模型成員檔案驗證失敗",
+   "en": "A model component file failed verification",
+   "ja": "モデル構成ファイルの検証に失敗しました",
+   "ko": "모델 구성 파일 검증에 실패했습니다",
+   "es": "No se pudo verificar un archivo del modelo",
+   "fr": "Échec de la vérification d’un fichier du modèle",
+   "de": "Eine Modelldatei konnte nicht verifiziert werden",
+   "pt-BR": "Falha na verificação de um arquivo do modelo",
+   "ru": "Не удалось проверить файл модели"
+  },
+  {
    "zh": "模型文件正在使用，请稍后重试",
    "src": "src/ui/TranslationAssets.cpp",
    "zh-TW": "模型檔案使用中，請稍後再試",
@@ -27015,6 +27067,19 @@
    "de": "Modelldateien werden verwendet. Versuche es später erneut.",
    "pt-BR": "Os arquivos do modelo estão em uso. Tente novamente mais tarde.",
    "ru": "Файлы модели используются. Повторите попытку позже."
+  },
+  {
+   "zh": "模型解压超时，请重试",
+   "src": "src/ui/TranslationAssets.cpp",
+   "zh-TW": "模型解壓縮逾時，請重試",
+   "en": "Model extraction timed out. Try again.",
+   "ja": "モデルの展開が時間切れになりました。再試行してください",
+   "ko": "모델 압축 해제 시간이 초과되었습니다. 다시 시도하세요.",
+   "es": "Se agotó el tiempo de extracción del modelo. Inténtalo de nuevo.",
+   "fr": "L’extraction du modèle a pris trop de temps. Réessayez.",
+   "de": "Zeitüberschreitung beim Entpacken des Modells. Bitte erneut versuchen.",
+   "pt-BR": "A extração do modelo excedeu o tempo limite. Tente novamente.",
+   "ru": "Истекло время распаковки модели. Повторите попытку."
   },
   {
    "zh": "模式",
@@ -35296,19 +35361,6 @@
    "de": "Konnte den ersten Videorahmen nicht lesen",
    "pt-BR": "Não foi possível ler o primeiro quadro de vídeo",
    "ru": "Не удалось прочесть первый видеокадр"
-  },
-  {
-   "zh": "解压后的模型文件校验失败",
-   "src": "src/ui/TranslationAssets.cpp",
-   "zh-TW": "解壓縮後的模型檔案驗證失敗",
-   "en": "Extracted model files failed verification",
-   "ja": "展開したモデルファイルの検証に失敗しました",
-   "ko": "압축 해제한 모델 파일 검증 실패",
-   "es": "Falló la verificación de los archivos extraídos",
-   "fr": "Échec de la vérification des fichiers extraits",
-   "de": "Die entpackten Modelldateien konnten nicht geprüft werden",
-   "pt-BR": "Falha na verificação dos arquivos extraídos",
-   "ru": "Проверка распакованных файлов модели не пройдена"
   },
   {
    "zh": "解压更新包",
