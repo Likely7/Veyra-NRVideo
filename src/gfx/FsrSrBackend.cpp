@@ -152,11 +152,9 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
         versions.versionNames = names;
         const auto listResult = countResult == FFX_API_RETURN_OK
             ? p.functions.Query(nullptr, &versions.header) : countResult;
-        if (listResult == FFX_API_RETURN_OK && capacity > 0 && names[0] != nullptr) {
-            p.providerVersion = names[0];
-        }
-        log::info("fsr-sr", std::format("providers count={} selected={}", capacity,
-                                        p.providerVersion.empty() ? "none" : p.providerVersion));
+        const bool listed = listResult == FFX_API_RETURN_OK && capacity > 0;
+        log::info("fsr-sr", std::format("provider inventory query={} count={} firstAdvertised={}",
+            returnName(listResult), listed ? capacity : 0, listed && names[0] ? names[0] : "none"));
     }
 
     ffxCreateBackendDX12Desc backendDesc{};
@@ -190,13 +188,21 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
                                          unsigned(result)));
         return false;
     }
+    // The inventory describes candidates. Read the version from the context
+    // the SDK actually selected, keeping older SDKs without readback usable.
+    ffxQueryGetProviderVersion actual{};
+    actual.header.type = FFX_API_QUERY_DESC_TYPE_GET_PROVIDER_VERSION;
+    const auto versionResult = p.functions.Query(&p.context, &actual.header);
+    const bool reported = versionResult == FFX_API_RETURN_OK && actual.versionId != 0 &&
+        actual.versionName && *actual.versionName;
+    p.providerVersion = reported ? actual.versionName : "unknown";
     p.maxRenderWidth = maxRenderWidth;
     p.maxRenderHeight = maxRenderHeight;
     p.maxUpscaleWidth = maxUpscaleWidth;
     p.maxUpscaleHeight = maxUpscaleHeight;
     p.available = true;
-    log::info("fsr-sr", std::format("provider={} maxRender={}x{} maxUpscale={}x{} hdr={}",
-                                    p.providerVersion.empty() ? "unknown" : p.providerVersion,
+    log::info("fsr-sr", std::format("actualProvider={} providerId=0x{:X} versionQuery={} maxRender={}x{} maxUpscale={}x{} hdr={}",
+                                    p.providerVersion, reported ? actual.versionId : 0, returnName(versionResult),
                                     maxRenderWidth, maxRenderHeight, maxUpscaleWidth, maxUpscaleHeight, hdr));
     return true;
 #else
@@ -293,6 +299,7 @@ void FsrSrBackend::release() {
         p.context = nullptr;
     }
     p.available = false;
+    p.providerVersion.clear();
 #endif
 }
 
