@@ -15888,6 +15888,19 @@
    "ru": "Используется потоков: %1"
   },
   {
+   "zh": "运行中的超分：%1",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "執行中的超解析度：%1",
+   "en": "Active super resolution: %1",
+   "ja": "動作中の超解像：%1",
+   "ko": "실행 중인 초해상도: %1",
+   "es": "Superresolución activa: %1",
+   "fr": "Super-résolution active : %1",
+   "de": "Aktive Superauflösung: %1",
+   "pt-BR": "Super-resolução ativa: %1",
+   "ru": "Активное сверхразрешение: %1"
+  },
+  {
    "zh": "实际运行：FSR %1 · 2X",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "實際執行：FSR %1 · 2X",

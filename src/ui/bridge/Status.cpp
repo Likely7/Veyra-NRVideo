@@ -34,6 +34,8 @@ QString QmlPlayerBridge::srStageNote() const {
     const auto& plan = s.metrics.resolution;
     if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
     QStringList notes;
+    if (plan.srApplied && !s.fsrSrProviderVersion.empty() && s.fsrSrProviderVersion != "unknown")
+        notes << tr("运行中的超分：%1").arg(QString::fromStdString(s.fsrSrProviderVersion));
     if(s.applied.sr&&(!engine::videoSrAvailableForSource(s.applied.videoSrQuality,s.image,s.capture)||
         (s.applied.dualSrEnabled&&!engine::videoSrAvailableForSource(s.applied.dualSrQuality,s.image,s.capture))))
         notes << tr("Intel XeSS 超分当前仅用于视频播放");

@@ -224,6 +224,7 @@ struct PlayerSnapshot {
     // 1 = 2X). 0 = no FSR session has reported yet.
     int fsrMaxGeneratedFrames=0;
     std::string fsrProviderVersion;
+    std::string fsrSrProviderVersion;
     bool running=false,failed=false,image=false,capture=false,remotePlay=false;
     // The session ended because the GPU stopped completing work (frame-ready timeout or a
     // removed device / driver reset), not because the source failed.

@@ -820,6 +820,7 @@ public:
     bool rifeEnabled() const { return desc_.enableFg && !desc_.noFeatures && !desc_.stillImage && desc_.frameGenerationBackend==engine::FrameGenerationBackend::Rife; }
     bool rifeActive() const;
     const char* fsrProviderVersion() const;
+    const char* fsrSrProviderVersion() const;
     // XeSS generates in the present sink; FSR and DLSSG generate in the graph.
     // All backends consume the same guidance motion texture.
     bool presentSinkFg() const { return xessEnabled(); }

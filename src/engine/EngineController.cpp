@@ -1287,6 +1287,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 fsrMaxGeneratedFramesCap_=graph->fsrEnabled()&&graph->fsrActive()?int((graph->fsrActive()?1u:0u)):0;
                 snapshot_.fsrMaxGeneratedFrames=fsrMaxGeneratedFramesCap_;
                 snapshot_.fsrProviderVersion=graph->fsrProviderVersion();
+                snapshot_.fsrSrProviderVersion=graph->fsrSrProviderVersion();
                 snapshot_.hudLockState=graph->hudLockState();
                 snapshot_.dynamicHudState=graph->dynamicHudState();
                 if(fgMultiFrameMaxCap_>0)veyra::log::info("settings",std::format("frame-generation capability: maxGeneratedFrames={} maxMultiplier={}",fgMultiFrameMaxCap_,fgMultiFrameMaxCap_+1));

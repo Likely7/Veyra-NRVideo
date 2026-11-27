@@ -1783,6 +1783,11 @@ bool EnhanceGraph::initXessSr()
 
 bool EnhanceGraph::fsrActive() const { return fsrFgBackend_&&fsrFgBackend_->available(); }
 const char* EnhanceGraph::fsrProviderVersion() const { return fsrFgBackend_?fsrFgBackend_->providerVersion():""; }
+const char* EnhanceGraph::fsrSrProviderVersion() const {
+    if (fsrSrBackend_ && fsrSrBackend_->created()) return fsrSrBackend_->providerVersion();
+    if (firstFsrSrBackend_ && firstFsrSrBackend_->created()) return firstFsrSrBackend_->providerVersion();
+    return "";
+}
 bool EnhanceGraph::initFsrFg() {
     if(!fsrEnabled()||!fgEnabled_)return true;
     failedBackend_=engine::FailedBackend::Fg;
