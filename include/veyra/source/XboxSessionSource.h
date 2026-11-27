@@ -17,6 +17,7 @@
 #include "veyra/remoteplay/Types.h"
 #include "veyra/sink/CaptureAudioSession.h"
 #include "veyra/source/IFrameSource.h"
+#include "veyra/xbox/VideoRtpReceive.h"
 
 struct AVFrame;
 struct ID3D12Device;
@@ -47,8 +48,11 @@ struct XboxStats {
     uint32_t width = 0, height = 0;
     bool hardwareDecode = false;
     uint64_t units = 0, decoded = 0, dropped = 0, decodeErrors = 0, keyframeRequests = 0;
+    uint64_t ingressEvicted = 0, waitingKeyframeDropped = 0, mailboxOverwritten = 0;
+    unsigned decodeQueueDepth = 0, decodeQueueHighWater = 0;
+    xbox::VideoRtpStats videoRtp;
     double receivedFps = 0, decodedFps = 0, videoMbps = 0;
-    double decodeMs = 0, rttMs = 0;
+    double decodeMs = 0, decodeQueueMs = 0, rttMs = 0;
 };
 
 class XboxSessionSource final : public IFrameSource {
@@ -89,7 +93,7 @@ private:
     void publish(std::shared_ptr<AVFrame> frame, const pipeline::FramePacket& packet, const SourceInfo& info);
     void setState(XboxStats::State state, std::wstring message);
 
-    std::unique_ptr<Impl> p_;
+    std::atomic<std::shared_ptr<Impl>> p_;
     mutable std::mutex mutex_;
     std::condition_variable ready_;
     std::atomic<bool> cancel_{false};
