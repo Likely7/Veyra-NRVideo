@@ -296,7 +296,7 @@ void WebRtcSession::onMessageChannel(const std::string& text) {
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", false}}.dump());
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
         if (input_ && input_->isOpen()) {
-            const auto report = clientMetadataReport(0, nowMs(), 1);
+            const auto report = clientMetadataReport(0, nowMs(), 0);
             initialized &= sendBinary(input_,report.data(),report.size());
         }
         initialized &= sendClientConfig();
@@ -308,7 +308,11 @@ void WebRtcSession::onMessageChannel(const std::string& text) {
         const std::string target = j.value("target", "");
         const std::string id = j.value("id", "");
         log::info("xbox-message", target + " " + j.value("content", std::string()).substr(0, 300));
-        if (target == "/streaming/sessionLifetimeManagement/serverInitiatedDisconnect") {
+        if (target.rfind("/streaming/touchcontrols", 0) == 0) {
+            // No touch input here: decline touch layouts so the title keeps reading the gamepad.
+            if (type == "TransactionStart")
+                sendMessageJson(json{{"type", "ReceiverCancel"}, {"id", id}, {"cv", ""}}.dump());
+        } else if (target == "/streaming/sessionLifetimeManagement/serverInitiatedDisconnect") {
             sendMessageJson(json{{"type", "TransactionComplete"}, {"content", "\"\""}, {"id", id}, {"cv", ""}}.dump());
             const auto content = json::parse(j.value("content", std::string()), nullptr, false);
             const std::string reason = content.is_object() && content.contains("reason") && content["reason"].is_string()

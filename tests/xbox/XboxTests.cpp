@@ -83,8 +83,13 @@ void protocolTests() {
     check(r[16] == uint8_t((BtnA | BtnMenu | BtnNexus) & 0xFF) && r[17] == 0, "button mask little-endian");
     check(r[18] == 0xE8 && r[19] == 0x03 && r[20] == 0xFE && r[21] == 0xFF, "left stick X/Y as signed little-endian");
     check(r[26] == 0xFF && r[27] == 0xFF && r[28] == 0x01 && r[29] == 0x01, "triggers 0..65535");
-    check(r[30] == 1 && r[31] == 0 && r[32] == 0 && r[33] == 0 && r[34] == 0 && r[35] == 0 && r[36] == 0 && r[37] == 1,
-          "physicality LE 1 then virtual physicality written big-endian, as the reference client");
+    const uint32_t phys = PhysA | PhysMenu | PhysNexus | PhysLeftTrigger | PhysRightTrigger |
+                          PhysLeftThumbX | PhysLeftThumbY | PhysRightThumbX | PhysRightThumbY;
+    check(r[30] == uint8_t(phys) && r[31] == uint8_t(phys >> 8) && r[32] == uint8_t(phys >> 16) && r[33] == uint8_t(phys >> 24),
+          "physicality: little-endian bits for every button, trigger and stick in use");
+    check(r[34] == 0 && r[35] == 0 && r[36] == 0 && r[37] == 0, "virtual physicality 0");
+    check(gamepadPhysicality(GamepadFrame{}) == 0, "an idle pad reports no physicality");
+    check(clientMetadataReport(0, 0)[14] == 0, "client metadata defaults to no touch points");
 
     veyra::remoteplay::ControllerState s;
     s.inputActive = true;
@@ -316,6 +321,7 @@ public:
                     const json j = json::parse(text);
                     std::lock_guard l(mutex);
                     messages.push_back(j.value("type", "") + " " + j.value("target", ""));
+                    if (j.value("type", "") == "ReceiverCancel") cancelledTouchId = j.value("id", "");
                     if (j.value("type", "") == "Handshake") {
                         const std::string ack = json{{"type", "HandshakeAck"}, {"id", j.value("id", "")}, {"cv", ""}}.dump();
                         message->send(ack);
@@ -384,6 +390,7 @@ public:
     std::vector<std::string> labels, messages, control;
     std::vector<std::vector<uint8_t>> reports;
     std::string offerSdp;
+    std::string cancelledTouchId;
 };
 
 std::vector<uint8_t> nal(uint8_t header, size_t size, uint8_t seed) {
@@ -433,12 +440,17 @@ void webrtcTests() {
     check(console.waitFor([&] { return !console.reports.empty(); }), "the input channel receives the client metadata report");
     {
         std::lock_guard l(console.mutex);
-        check(!console.reports.empty() && console.reports[0].size() == 15 && console.reports[0][0] == 8, "first input report is client metadata");
+        check(!console.reports.empty() && console.reports[0].size() == 15 && console.reports[0][0] == 8 && console.reports[0][14] == 0,
+              "first input report advertises no touch points");
     }
     check(console.waitFor([&] {
         for (const auto& s : console.messages) if (s.find("/streaming/characteristics/dimensionschanged") != std::string::npos) return true;
         return false;
     }), "the client sends its configuration messages");
+    console.message->send(json{{"type", "TransactionStart"}, {"target", "/streaming/touchcontrols/showlayoutv2"},
+                               {"id", "touch-layout"}, {"content", "{}"}}.dump());
+    check(console.waitFor([&] { return console.cancelledTouchId == "touch-layout"; }),
+          "a console touch layout is declined on the message channel");
 
     GamepadFrame pad;
     pad.buttons = BtnA;
