@@ -2508,16 +2508,17 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const auto state=xb->audioState();
                     std::lock_guard lock(mutex_);snapshot_.audioAvailable=state.available;snapshot_.captureAudio=state;}
 #endif
-                if (isCapture && liveScreenshot.active()) {
+                if (liveScreenshot.active()) {
                     if (auto result = liveScreenshot.poll()) publishScreenshot(*result);
                     presenter->setCapture(liveScreenshot.needsFrame() ? &capturesWithScreenshot : &captures_);
                 }
-                // A live shot copies the next real presented frame using the
-                // same command list and frame lease as recording and replay.
+                // Playing video and capture share the presenter's asynchronous
+                // readback. Paused file frames and still-image export use the
+                // current graph output, including the still image's alpha.
                 std::wstring save;EnhancementSettings requested;std::optional<ChainRuntimeOrder> requestedOrder;
                 {std::lock_guard lock(mutex_);requested=desired_;requestedOrder=desiredNodeOrder_;
                  if(hasOutput&&!liveScreenshot.active())save.swap(savePath_);}
-                if (!save.empty() && isCapture) {
+                if (!save.empty() && (isCapture || (!isImage && !paused_))) {
                     liveScreenshot.request(std::move(save));
                     presenter->setCapture(&capturesWithScreenshot);
                 } else if(!save.empty()){try{sink::RgbaImage result;const auto e=std::filesystem::path(save).extension().wstring();

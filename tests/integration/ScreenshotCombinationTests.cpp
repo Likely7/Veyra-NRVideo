@@ -14,7 +14,7 @@ using Clock = std::chrono::steady_clock;
 using namespace std::chrono_literals;
 
 int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::path& dir,
-                   bool capture, bool vfg, bool hdr) {
+                   bool capture, bool vfg, bool hdr, bool simulateCapture) {
     EngineController engine;
     engine.setVolume(0, true);
     PresentationSettings presentation;
@@ -22,7 +22,7 @@ int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::pat
     engine.requestPresentation(presentation);
     PlayerOptions options;
     options.fg = vfg;
-    options.captureReplayForTest = true;
+    options.captureReplayForTest = simulateCapture;
     options.settings.content = ContentRate::Transport;
     if (vfg) {
         options.settings.frameGenerationBackend = FrameGenerationBackend::Vfg;
@@ -112,12 +112,16 @@ int liveScreenshot(HWND window, const wchar_t* input, const std::filesystem::pat
 int wmain(int argc,wchar_t** argv){
     constexpr std::wstring_view screenshotMode = L"--live-screenshot";
     constexpr std::wstring_view controlMode = L"--live-control";
+    constexpr std::wstring_view fileScreenshotMode = L"--file-screenshot";
+    constexpr std::wstring_view fileControlMode = L"--file-control";
     const auto mode = argc == 4 ? std::wstring_view(argv[3]) : std::wstring_view{};
-    const bool screenshot = mode.starts_with(screenshotMode);
-    const bool control = mode.starts_with(controlMode);
-    const auto suffix = mode.substr(screenshot ? screenshotMode.size() : control ? controlMode.size() : 0);
-    const bool live = (screenshot || control) &&
-                      (suffix.empty() || suffix == L"-vfg" || suffix == L"-vfg-hdr");
+    const bool file = mode.starts_with(fileScreenshotMode) || mode.starts_with(fileControlMode);
+    const auto shot = file ? fileScreenshotMode : screenshotMode;
+    const auto control = file ? fileControlMode : controlMode;
+    const bool screenshot = mode.starts_with(shot);
+    const size_t prefix = screenshot ? shot.size() : mode.starts_with(control) ? control.size() : 0;
+    const auto suffix = mode.substr(prefix);
+    const bool live = prefix && (suffix.empty() || suffix == L"-hdr" || suffix == L"-vfg" || suffix == L"-vfg-hdr");
     if(argc!=3&&!live)return 2;
     const std::filesystem::path dir=argv[2];std::filesystem::create_directories(dir);
     if(live)veyra::Logger::instance().startAsync();
@@ -127,7 +131,7 @@ int wmain(int argc,wchar_t** argv){
     if(!window){CoUninitialize();return 2;}
     if(live){
         const int result=liveScreenshot(window, argv[1], dir, screenshot,
-                                        !suffix.empty(), suffix == L"-vfg-hdr");
+                                        suffix.starts_with(L"-vfg"), suffix.ends_with(L"-hdr"), !file);
         DestroyWindow(window);CoUninitialize();return result;
     }
     int failures=0;

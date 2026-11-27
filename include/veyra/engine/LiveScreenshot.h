@@ -8,7 +8,7 @@
 
 namespace veyra::engine {
 
-// One explicit screenshot of a real live frame. The presenter records the
+// One explicit screenshot of a real video frame. The presenter records the
 // copy before releasing the frame lease. Only the writer maps CPU pixels.
 class LiveScreenshot final : public PresentCapture {
 public:
