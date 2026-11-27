@@ -62,6 +62,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
     liveTranslation_ = new LiveTranslation(QString::fromStdWString(impl_->dataDir.wstring()), this);
     connect(this,&QmlPlayerBridge::mediaOpenRequested,this,[this]{
+        flushHdrMemory();
+        impl_->hdrTitleApplied.clear();
         liveTranslation_->setPlayback(impl_->snapshot.sessionId, false, true);
         endExclusionMove(false);impl_->exclusionSelected=-1;beginProtectionDraw(QString{});
         emit protectionChanged();

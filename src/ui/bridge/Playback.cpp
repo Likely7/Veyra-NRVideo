@@ -247,14 +247,14 @@ void QmlPlayerBridge::tickPlaylist() {
 
 void QmlPlayerBridge::openPath(const QString& path) {
     if (path.isEmpty()) return;
+    const std::wstring wide = wideOf(path);
+    const bool network=media::networkMediaInput(wide);
+    if (!network && QFileInfo(path).isDir()) {
+        impl_->playlist->addPaths({path}); emit playlistRequested(); return;
+    }
     impl_->screenCropPreview = false;
     endExclusionMove(false);
     impl_->exclusionSelected=-1;
-    flushHdrMemory();impl_->hdrTitleApplied.clear();
-    const bool network=media::networkMediaInput(wideOf(path));
-    if (QFileInfo(path).isDir()) {
-        impl_->playlist->addPaths({path}); emit playlistRequested(); return;
-    }
     if (!network&&PlaylistModel::supported(path) && !impl_->playlist->containsPath(path)) impl_->playlist->addPaths({path});
     impl_->playlistPath = path;
     impl_->playlist->setPlayback(path, QStringLiteral("opening"));
@@ -267,7 +267,6 @@ void QmlPlayerBridge::openPath(const QString& path) {
     emit mediaOpenRequested();
     impl_->openingSource = true;
     impl_->openingSessionId = 0;
-    const std::wstring wide = wideOf(path);
     impl_->sourceLabel = wide;
     impl_->liveKind.clear();
     impl_->liveLabel.clear();

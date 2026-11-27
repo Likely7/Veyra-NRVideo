@@ -402,6 +402,7 @@ struct QmlPlayerBridge::Impl {
   QString hdrProfileDisplay;
   // Custom: the title whose curve is currently applied (see syncHdrTitleProfile).
   QString hdrTitleApplied;
+  uint64_t hdrTitleLookupSession=0;
   HMONITOR hdrIdentityMonitor=nullptr;
   QString hdrIdentityKey;
   bool hdrRestoring=false,hdrCoverageObserved=false,hdrMemoryDirty=false;
