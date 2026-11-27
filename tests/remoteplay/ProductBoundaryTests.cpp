@@ -100,6 +100,8 @@ static void mailbox(){
     packet.flags=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity);
     s.publishDecoded(raw,packet,info);packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);av_frame_free(&raw);
     if(s.read(out,&frame)!=SourceReadStatus::Frame||out.sequence!=4||out.sourceEpoch!=(uint64_t(1)<<32)||!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("reconnect keeps application sequence and pending clock reset across mailbox overwrite");
+    s.publishDecoded(frame,packet,info);
+    if(WaitForSingleObject(event,0)!=WAIT_OBJECT_0)throw std::runtime_error("mailbox event must be set before close");
     s.close();
     if(WaitForSingleObject(event,0)!=WAIT_TIMEOUT)throw std::runtime_error("closed mailbox event");
 }
