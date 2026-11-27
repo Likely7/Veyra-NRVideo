@@ -1,10 +1,13 @@
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/pipeline/GpuPassUtils.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/sink/ImageExportSink.h"
 #include <iostream>
 #include <cmath>
+#include <fstream>
+#include <iterator>
 extern "C" {
 #include <libavutil/frame.h>
 #include <libavutil/hwcontext_d3d12va.h>
@@ -15,6 +18,18 @@ using namespace veyra;
 // Explicit diagnostic readback. Compare the entire GPU-converted image, not
 // merely successful decode/evaluate return codes or one non-black pixel.
 int wmain(int argc,wchar_t** argv){
+ if(argc==3&&std::wstring_view(argv[1])==L"--shader-paths"){
+  constexpr auto shader="VirtualCameraNv12.dxil";
+  std::ifstream source(std::filesystem::path(argv[2]),std::ios::binary);
+  const std::vector<uint8_t> expected((std::istreambuf_iterator<char>(source)),{});
+  if(expected.empty())return 2;
+  std::vector<uint8_t> bytes;
+  const bool direct=pipeline::loadShaderBytes(shader,bytes)&&bytes==expected;
+  const bool compute=pipeline::ComputePass{}.loadShader(shader,bytes)&&bytes==expected;
+  const bool missing=!pipeline::loadShaderBytes("missing-fixture.dxil",bytes)&&bytes.empty();
+  std::cout<<"SHADER_PATHS direct="<<direct<<" compute="<<compute<<" missing="<<missing<<" bytes="<<expected.size()<<'\n';
+  return direct&&compute&&missing?0:12;
+ }
  const bool lease=argc==4&&std::wstring_view(argv[3])==L"--d3d11-lease";
  if(argc!=3&&!lease)return 2;
  CoInitializeEx(nullptr,COINIT_MULTITHREADED);

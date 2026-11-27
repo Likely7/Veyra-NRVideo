@@ -12,6 +12,7 @@
 
 #include <cstdint>
 #include <format>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -98,6 +99,35 @@ private:
     std::unordered_map<ID3D12Resource*, D3D12_RESOURCE_STATES> states_;
 };
 
+inline bool loadShaderBytes(const char* name, std::vector<uint8_t>& bytes)
+{
+    const auto path = runtime::shaderDirectory() / name;
+    const HANDLE opened = CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
+        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (opened == INVALID_HANDLE_VALUE) {
+        const DWORD error = GetLastError();
+        bytes.clear();
+        veyra::log::error("gfx-util", std::format("cannot open shader {} (Win32 {})", name, error));
+        return false;
+    }
+    const std::unique_ptr<void, decltype(&CloseHandle)> file(opened, CloseHandle);
+    LARGE_INTEGER length{};
+    if (!GetFileSizeEx(file.get(), &length) || length.QuadPart <= 0 || length.QuadPart > MAXDWORD) {
+        bytes.clear();
+        veyra::log::error("gfx-util", std::format("invalid length for shader {}", name));
+        return false;
+    }
+    const auto size = static_cast<DWORD>(length.QuadPart);
+    bytes.resize(size);
+    DWORD read = 0;
+    const bool complete = ReadFile(file.get(), bytes.data(), size, &read, nullptr) && read == size;
+    if (!complete) {
+        bytes.clear();
+        veyra::log::error("gfx-util", std::format("short read for shader {} ({}/{})", name, read, size));
+    }
+    return complete;
+}
+
 // Compute pass helper (8 constants + SRV table + UAV table; single heap).
 struct ComputePass {
     ComPtr<ID3D12RootSignature> rootSig;
@@ -108,20 +138,7 @@ struct ComputePass {
 
     bool loadShader(const char* name, std::vector<uint8_t>& bytes) const
     {
-        const std::string path = (runtime::shaderDirectory() / name).string();
-        HANDLE f = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-            OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-        if (f == INVALID_HANDLE_VALUE) {
-            veyra::log::error("gfx-util", std::format("shader missing: {}", path));
-            return false;
-        }
-        LARGE_INTEGER sz{};
-        GetFileSizeEx(f, &sz);
-        bytes.resize(static_cast<size_t>(sz.QuadPart));
-        DWORD read = 0;
-        ReadFile(f, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr);
-        CloseHandle(f);
-        return !bytes.empty();
+        return loadShaderBytes(name, bytes);
     }
 
     // extraSrvCount adds a second SRV table at a fixed register base (8): the
@@ -222,24 +239,6 @@ struct ComputePass {
         }
     }
 };
-
-inline bool loadShaderBytes(const char* name, std::vector<uint8_t>& bytes)
-{
-    const std::string path = (runtime::shaderDirectory() / name).string();
-    HANDLE f = CreateFileA(path.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr,
-        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
-    if (f == INVALID_HANDLE_VALUE) {
-        veyra::log::error("gfx-util", std::format("shader missing: {}", path));
-        return false;
-    }
-    LARGE_INTEGER sz{};
-    GetFileSizeEx(f, &sz);
-    bytes.resize(static_cast<size_t>(sz.QuadPart));
-    DWORD read = 0;
-    ReadFile(f, bytes.data(), static_cast<DWORD>(bytes.size()), &read, nullptr);
-    CloseHandle(f);
-    return !bytes.empty();
-}
 
 inline void makeSrv(ID3D12Device* device, ID3D12Resource* resource, DXGI_FORMAT fmt,
                     const D3D12_CPU_DESCRIPTOR_HANDLE& handle)
