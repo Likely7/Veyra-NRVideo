@@ -69,6 +69,14 @@ struct FakeTransport final : HttpsTransport {
 // ---------------------------------------------------------------- protocol
 
 void protocolTests() {
+    const auto mouse = mouseReport(9, 20., {-17, 65, 120, -240, 5, true});
+    check(mouse.size() == 33 && mouse[0] == ReportMouse && mouse[14] == 1 &&
+          detail::get32(mouse.data() + 15) == uint32_t(-17) && detail::get32(mouse.data() + 19) == 65 &&
+          detail::get32(mouse.data() + 23) == 120 && detail::get32(mouse.data() + 27) == uint32_t(-240) &&
+          mouse[31] == 5 && mouse[32] == 0, "native mouse report preserves signed motion, wheel, buttons and relative flag");
+    const auto keyboard = keyboardReport(10, 20., {'W', true});
+    check(keyboard.size() == 18 && keyboard[0] == ReportKeyboard && keyboard[14] == 1 &&
+          keyboard[15] == 2 && keyboard[16] == 1 && keyboard[17] == 'W', "native keyboard report marks a VKey press");
     const auto meta = clientMetadataReport(0, 12.5, 1);
     check(meta.size() == 15 && meta[0] == 8 && meta[1] == 0 && meta[14] == 1, "client metadata report: type 8, 15 bytes, touch points last");
     double t = 0;
@@ -144,6 +152,12 @@ void apiTests() {
         check(body["serverId"] == "F1" && body["settings"]["nanoVersion"] == "V3;WebrtcTransport.dll" && !http->seen.back().headers["X-MS-Device-Info"].empty(),
               "play sends the server id, nano V3 and the device info header");
     }
+    check(json::parse(http->seen.back().headers["X-MS-Device-Info"])["dev"]["os"]["name"] == "Windows 11",
+          "full Xbox streaming keeps the existing device profile");
+    http->add(host, "/v5/sessions/home/play", 200, R"({"sessionPath":"v5/sessions/home/CONTROLLER"})");
+    check(api.play("F1", "en-US", true) == "CONTROLLER" &&
+          json::parse(http->seen.back().headers["X-MS-Device-Info"])["dev"]["os"]["name"] == "android",
+          "controller-only Xbox requests the low-bandwidth device profile");
     http->add(host, "/v5/sessions/home/ABC-123/state", 200, R"({"state":"Failed","errorDetails":{"code":"WNSError","message":"WaitingForServerToRegister"}})");
     const auto st = api.state("ABC-123");
     check(st.state == "Failed" && st.errorCode == "WNSError" && st.errorMessage == "WaitingForServerToRegister", "state with error details");
@@ -552,6 +566,22 @@ void webrtcTests() {
         const auto expected = gamepadReport(1, 0, {pad});
         check(r.size() == expected.size() && std::equal(r.begin() + 14, r.end(), expected.begin() + 14) && r[0] == 2, "gamepad report bytes as built");
     }
+    session.sendKeyboard({'W', true});
+    session.sendMouse({-22, 5, 0, 120, 1, true});
+    session.sendKeyboard({'W', false});
+    check(console.waitFor([&] { return console.reports.size() >= 5; }), "native keyboard and mouse reports reach the peer");
+    {
+        std::lock_guard lock(console.mutex);
+        if (console.reports.size() >= 5) {
+            const auto& down = console.reports[2];
+            const auto& mouse = console.reports[3];
+            const auto& up = console.reports[4];
+            check(down.size() == 18 && down[0] == ReportKeyboard && down[16] == 1 &&
+                  mouse.size() == 33 && mouse[0] == ReportMouse && detail::get32(mouse.data() + 15) == uint32_t(-22) &&
+                  up.size() == 18 && up[0] == ReportKeyboard && up[16] == 0,
+                  "native key edge order and relative motion on WebRTC");
+        }
+    }
 
     // Console -> client: a vibration report and the server's video size on the input channel.
     const uint8_t vib[] = {128, 0, 0, 0, 60, 40, 0, 0, 100, 0, 0, 0, 0};
@@ -651,6 +681,17 @@ void webrtcTests() {
           detail::get32(encoded.data()+23)==102&&detail::get32(encoded.data()+27)==103&&
           detail::get32(encoded.data()+31)==104&&detail::get32(encoded.data()+35)==1234&&
           detail::get32(encoded.data()+39)==1234,"frame feedback matches Greenlight's seven-field wire format");
+    const auto arrival=std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count()/100;
+    session.videoPresented(42,arrival,arrival,arrival,arrival);
+    check(console.waitFor([&]{
+        for(const auto& report:console.reports)
+            if(report.size()==43&&report[0]==ReportMetadata&&detail::get32(report.data()+15)==42) {
+                const auto t=detail::get32(report.data()+19);
+                return t==detail::get32(report.data()+23)&&t==detail::get32(report.data()+27)&&t==detail::get32(report.data()+31);
+            }
+        return false;
+    }),"discarded keepalive frame reports arrival for all four timestamps");
     // Exercise real transport shutdown while the caller sends input/keyframe
     console.message->send(json{{"type","TransactionStart"},{"target","/streaming/sessionLifetimeManagement/serverInitiatedDisconnect"},{"id","shutdown-test"},{"content",json{{"reason","KickForServerShutdown"}}.dump()}}.dump());
     for(unsigned i=0;i<100;++i){ {std::lock_guard l(m);if(!endedReason.empty())break;} std::this_thread::sleep_for(std::chrono::milliseconds(10)); }

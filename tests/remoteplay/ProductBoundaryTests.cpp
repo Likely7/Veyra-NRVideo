@@ -3,8 +3,13 @@
 #include "veyra/remoteplay/ControllerInput.h"
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/KeyboardMousePad.h"
+#include "veyra/remoteplay/MappedController.h"
 #include <array>
 #include <chrono>
+#include <random>
+#ifdef VEYRA_ENABLE_XBOX
+#include "veyra/engine/XboxControllerSession.h"
+#endif
 #include <string_view>
 #include <thread>
 #include <vector>
@@ -19,6 +24,84 @@ extern "C" {
 #include <algorithm>
 namespace veyra::source {
 struct RemotePlaySessionSourceTestAccess {
+#ifdef VEYRA_ENABLE_XBOX
+static void xboxControllerLifetime() {
+    engine::XboxControllerSession control;
+    source::XboxConnectDesc request;
+    request.serverId = "fixture";
+    // An unsigned-in request fails before contacting the service. Exercise
+    // the real owner thread and replacement/stop path around that failure.
+    control.start(request);
+    const auto stopAt = std::chrono::steady_clock::now() + std::chrono::seconds(3);
+    while (control.status().stream.state != source::XboxStats::State::Failed &&
+           std::chrono::steady_clock::now() < stopAt) std::this_thread::sleep_for(std::chrono::milliseconds(4));
+    const auto failed = control.status();
+    if (!failed.requested || failed.stream.state != source::XboxStats::State::Failed ||
+        !failed.stream.controlOnly || control.inputTarget())
+        throw std::runtime_error("controller-only session keeps a visible failure and no input target");
+    control.start(request);
+    control.stop();
+    const std::atomic<bool> cancel{false};
+    if (!control.waitIdle(cancel) || control.status().requested || control.inputTarget())
+        throw std::runtime_error("replacement followed by stop must leave no controller-only session");
+    std::cout << "XBOX_CONTROLLER_LIFETIME unsigned_in_failure=1 replacement_stop=1\n";
+}
+#endif
+static void aimCalibrationModel() {
+    using namespace remoteplay;
+    constexpr double deadzone = .18, exponent = 2., maximum = 220.;
+    const auto rate = [](double x) { return std::pow(std::max(0., (x - deadzone) / (1. - deadzone)), exponent); };
+    std::array<double, 41> stick{}, velocity{};
+    for (size_t i = 0; i < stick.size(); ++i) {
+        stick[i] = i / 40.;
+        velocity[i] = rate(stick[i]);
+    }
+    const auto fit = AimCurve::fit(stick, velocity);
+    AimCurve curve{fit.deadzone, fit.exponent, maximum, 1.5};
+    for (size_t i = 0; i < curve.rates.size(); ++i)
+        curve.rates[i] = rate(std::lerp(curve.deadzone, 1., curve.points[i]));
+    double maxError = 0.;
+    for (int i = 1; i <= 100; ++i) {
+        const double requested = i / 100.;
+        const double recovered = rate(curve.deflection(requested));
+        maxError = std::max(maxError, std::abs(recovered / requested - 1.));
+    }
+    if (!curve.valid() || std::abs(curve.deadzone - deadzone) > .01 || maxError > .05)
+        throw std::runtime_error("game curve calibration and inverse error");
+
+    AimImage previous, translated;
+    std::mt19937 rng(911);
+    for (auto& cell : previous.luma) cell = uint8_t(40 + rng() % 170);
+    constexpr double shift = 2.3;
+    for (int y = 0; y < AimImage::height; ++y)
+        for (int x = 0; x < AimImage::width; ++x) {
+            const int source = (x + AimImage::width - 3) % AimImage::width;
+            const auto a = previous.luma[y * AimImage::width + source];
+            const auto b = previous.luma[y * AimImage::width + (source + 1) % AimImage::width];
+            translated.luma[y * AimImage::width + x] = uint8_t(std::lround(std::lerp(double(a), double(b), .7)));
+        }
+    const auto detected = aimImageShift(previous, translated);
+    if (aimImageShift(previous, previous) || !detected || std::abs(*detected - shift) > .35)
+        throw std::runtime_error("background image shift test");
+
+    constexpr int64_t start = 1000000;
+    AimTest manual(AimTest::Mode::Vertical);
+    manual.ready(true);
+    manual.sample(start);
+    if (manual.sample(start + 5400000).rightY != 5898) throw std::runtime_error("vertical deadzone ramp");
+    manual.key(0x20, true);
+    if (std::abs(manual.status().manualDeadzone - .19) > .001 || manual.sample(start + 5404000) != ControllerState{})
+        throw std::runtime_error("manual calibration must save and neutralize input");
+    AimTest automatic(AimTest::Mode::Automatic);
+    automatic.ready(true);
+    automatic.sample(start);
+    automatic.key('A', true);
+    if (automatic.status().state != AimTest::State::Cancelled || automatic.sample(start + 4000) != ControllerState{})
+        throw std::runtime_error("automatic calibration must abort to neutral");
+    std::cout << "AIM_CALIBRATION_MODEL deadzone=" << curve.deadzone << " exponent=" << curve.exponent
+              << " worst_relative_error=" << maxError << " phase_shift_expected=" << shift
+              << " phase_shift_measured=" << *detected << '\n';
+}
 static bool keyboardMouseMapping() {
     using Pad = remoteplay::KeyboardMousePad;
     using State = remoteplay::ControllerState;
@@ -84,28 +167,28 @@ static bool keyboardMouseMapping() {
     return source.takeControllerLocked(comboNow) == State{};
 }
 static bool mouseStickPacing() {
+    using Input = remoteplay::MappedController;
+    using Layout = remoteplay::KeyboardMousePad;
     using Stick = remoteplay::MouseStick;
     using State = remoteplay::ControllerState;
     RemotePlaySessionSource source;
     source.started_ = true;
-    State mapped;
-    mapped.inputActive = true;
-    auto lowPoll = std::make_shared<Stick>(Stick::Tuning{});
+    bool focused = true;
+    Layout layout;
+    layout.setTuning(Stick::Tuning{});
+    layout.setBinding(Layout::RightLeft, 'H');
+    auto lowPoll = std::make_shared<Input>(layout, [&focused] { return focused; });
+    source.setMappedController(lowPoll, false);
     Stick highPoll(Stick::Tuning{});
     const auto base = remoteplay::monotonic100ns() / 10;
     int16_t lowMin = 32767, lowMax = 0;
     unsigned samples = 0, mismatches = 0;
-    // Real queue and sampler with a 4 ms consumer. UI heartbeats are uneven
-    // and miss 40 ms, while relative input keeps a constant 1,000 counts/s.
+    // Use the production sender sampler with no UI calls for a full second.
+    // A 125 Hz and a 1 kHz mouse deliver the same 1,000 counts/s movement.
     for (int ms = 0; ms <= 1000; ++ms) {
         const auto now = base + ms * 1000;
         highPoll.move(1, 0, now);
         if (ms % 8 == 1) lowPoll->move(8, 0, now);
-        if ((ms % 18 == 0 || ms % 18 == 7) && (ms < 370 || ms > 410)) {
-            source.controller(mapped, lowPoll);
-            source.controllerStamp_ = now * 10;
-            source.pendingControllers_.back().stamp = now * 10;
-        }
         if (ms >= 32 && ms % 4 == 0) {
             const auto pad = source.takeControllerLocked(now * 10);
             const auto [x, y] = highPoll.sample(now);
@@ -130,20 +213,14 @@ static bool mouseStickPacing() {
     const auto restart = source.takeControllerLocked(resumed * 10).rightX;
     if (held != lowMax || fading <= 0 || fading >= held || stopped || restart != held) return false;
 
-    const auto send = [&](const State& state, std::weak_ptr<Stick> mouse, int64_t nowUs) {
-        source.controller(state, std::move(mouse));
-        source.controllerStamp_ = nowUs * 10;
-        source.pendingControllers_.back().stamp = nowUs * 10;
-        return source.takeControllerLocked(nowUs * 10);
-    };
-    auto keys = mapped;
-    keys.rightX = -32767;
-    if (send(keys, {}, resumed + 1000) != keys) return false;
-    if (send(mapped, lowPoll, resumed + 2000).rightX != held) return false;
-    if (send({}, lowPoll, resumed + 3000) != State{}) return false;
-    if (send(mapped, lowPoll, resumed + 4000).rightX != held) return false;
+    lowPoll->press('H', true, resumed + 1000);
+    if (source.takeControllerLocked((resumed + 2000) * 10).rightX != -32767) return false;
+    lowPoll->press('H', false, resumed + 3000);
+    if (source.takeControllerLocked((resumed + 4000) * 10).rightX != held) return false;
+    focused = false;
+    if (source.takeControllerLocked((resumed + 4500) * 10) != State{}) return false;
     lowPoll.reset();
-    if (source.takeControllerLocked((resumed + 5000) * 10) != mapped) return false;
+    if (source.takeControllerLocked((resumed + 5000) * 10) != State{}) return false;
     if (source.takeControllerLocked((resumed + 106000) * 10) != State{}) return false;
 
     Stick batched(Stick::Tuning{}), unbatched(Stick::Tuning{});
@@ -166,6 +243,75 @@ static bool mouseStickPacing() {
         second.second >= first.second || std::abs(second.first + 2 * second.second) > 1) return false;
     if (batched.sample(base + 32000) != std::pair<int16_t, int16_t>{}) return false;
     return true;
+}
+static void mappedControllerSender() {
+    using Pad = remoteplay::KeyboardMousePad;
+    using State = remoteplay::ControllerState;
+    using Input = remoteplay::MappedController;
+    const auto expect = [](bool condition, const char* message) {
+        if (!condition) throw std::runtime_error(message);
+    };
+    Pad layout;
+    auto tuning = layout.tuning();
+    tuning.physicalAim = true;
+    tuning.graduatedSteering = true;
+    layout.setTuning(tuning);
+    layout.setBinding(Pad::HalfPedal, 'H', true);
+    bool focused = true;
+    auto input = std::make_shared<Input>(layout, [&focused] { return focused; });
+    RemotePlaySessionSource source;
+    source.setMappedController(input, false);
+    const auto base = remoteplay::monotonic100ns() / 10;
+    const auto sample = [&](int64_t elapsedUs) { return source.takeControllerLocked((base + elapsedUs) * 10); };
+    // Only producer and sender run here. No expiry or step is driven by the UI.
+    for (int ms = 0; ms <= 10200; ms += 4) {
+        if (ms % 20 == 0) input->press('W', true, base + ms * 1000 - 2500);
+        if (ms % 20 == 12) input->press('W', false, base + ms * 1000 - 1500);
+        input->move(3, 0, base + ms * 1000 - 1000);
+        const auto state = sample(ms * 1000);
+        expect(state.rightX > 0, "mouse must keep moving while there is no GUI heartbeat");
+        expect((state.leftY < 0) == (ms % 20 < 12), "key edges must follow raw input");
+    }
+    const auto timing = input->preview().diagnostics;
+    expect(timing.keys.events >= 900 && timing.keys.p95 <= 5. && timing.sends.p95 <= 4.,
+           "independent sender should sample a press during a GUI stall");
+    std::cout << "CONSOLE_INPUT_SIM no_gui_ms=10200 key_count=" << timing.keys.events
+              << " p50_ms=" << timing.keys.p50 << " p95_ms=" << timing.keys.p95
+              << " max_ms=" << timing.keys.maximum << " mouse_p95_ms=" << timing.mouse.p95
+              << " send_p95_ms=" << timing.sends.p95 << '\n';
+
+    input->selectDriving(true, base + 10203000);
+    expect(sample(10204000) == State{}, "layout switch must send neutral");
+    expect(sample(10208000).r2 == 255, "held W must become throttle without re-pressing it");
+    input->press('H', true, base + 10211000);
+    expect(sample(10212000).r2 == 128, "half pedal modifier");
+    input->press('D', true, base + 10215000);
+    sample(10216000);
+    const auto initial = sample(10252000).leftX;
+    expect(initial >= 13000 && initial <= 13200, "steering should obtain its initial deflection after 40 ms");
+    expect(sample(10492000).leftX == 32767, "steering should ramp from initial deflection to full lock");
+    input->press('D', false, base + 10495000);
+    expect(sample(10552000).leftX == 0, "released steering should recenter");
+
+    tuning.pedalRiseMs = 100;
+    Input mixed(layout, [&focused] { return focused; });
+    mixed.setTuning(tuning);
+    State physical;
+    physical.inputActive = true;
+    physical.leftX = 23000;
+    physical.rightX = -30000;
+    physical.l2 = 200;
+    physical.buttons = State::Triangle;
+    mixed.press(0x20, true, base + 20001);
+    mixed.press(0x20, false, base + 20002);
+    mixed.move(4, 0, base + 20003);
+    const auto both = mixed.sample(base + 24000, physical);
+    expect(both.buttons == (State::Cross | State::Triangle) && both.leftX == physical.leftX &&
+           both.l2 == physical.l2 && both.rightX > 0, "combine buttons, strongest axes and recent mouse");
+    expect(mixed.sample(base + 28000, physical).buttons == State::Triangle, "a sub-tick key release must be sent");
+    expect(mixed.sample(base + 124000, physical).rightX == physical.rightX, "physical aim resumes when mouse is idle");
+    focused = false;
+    expect(mixed.sample(base + 128000, physical) == State{}, "release both input paths on focus loss");
 }
 static bool calibratedMouse(){
     using Pad=remoteplay::KeyboardMousePad;using Stick=remoteplay::MouseStick;
@@ -246,7 +392,7 @@ static bool calibratedMouse(){
     driving.setToggleMask(uint64_t{1}<<Pad::L2);
     driving.digital('W', true);
     if (driving.state().leftY != -32767 || !driving.digital(toggle, true)) return false;
-    if (!driving.driving() || driving.state().leftY || driving.state().r2) return false;
+    if (!driving.driving() || driving.state().leftY || driving.state().r2 != 255) return false;
     if (driving.digital('W', true)) return false;
     driving.digital('W', false); driving.digital('W', true); driving.digital('S', true);
     if (!driving.state().r2 || !driving.state().l2 || (driving.state().buttons & remoteplay::ControllerState::R1)) return false;
@@ -258,7 +404,8 @@ static bool calibratedMouse(){
     const auto steering = driving.state(nullptr, origin + 40000).leftX;
     if (steering < 15000 || steering > 18000) return false;
     driving.digital(toggle, false); driving.digital(toggle, true);
-    if (driving.driving() || driving.state().r2 || driving.state().leftX || driving.state().buttons) return false;
+    if (driving.driving() || driving.state().r2 || driving.state().leftX != 32767 ||
+        driving.state().leftY || driving.state().buttons) return false;
     if (driving.setDriveKey('A') || driving.setDriveKey('V') || !driving.setDriveKey('K')) return false;
     if (!driving.setBinding(Pad::R1, 'N', true) || driving.bindings()[Pad::R1] != 'Q') return false;
 
@@ -732,6 +879,11 @@ int main(int argc,char** argv){
         std::cerr << "PS5 mouse pacing regression\n";
         return 46;
     }
+    veyra::source::RemotePlaySessionSourceTestAccess::mappedControllerSender();
+    veyra::source::RemotePlaySessionSourceTestAccess::aimCalibrationModel();
+#ifdef VEYRA_ENABLE_XBOX
+    veyra::source::RemotePlaySessionSourceTestAccess::xboxControllerLifetime();
+#endif
     if(!veyra::source::RemotePlaySessionSourceTestAccess::calibratedMouse())return 79;
     if(!veyra::source::RemotePlaySessionSourceTestAccess::mouseTurnCurve()) {
         std::cerr << "PS5 mouse turn response regression\n";

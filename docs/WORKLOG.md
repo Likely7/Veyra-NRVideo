@@ -33,6 +33,26 @@
 - 「实时翻译 → Veyra 音频 → 手动安装」从当前数据目录与选中的模型清单生成实际位置，可打开目录。Whisper 模型放在 live-asr/models/whisper-large-v3-turbo-int8 下；共享运行库目录 runtime-2.0.2 仅放列出的三件 DLL，共用 VAD 放在 live-asr 根。放好后点击「下载模型」检查，已有完整文件可就地采用。
 - 用 E:/项目/Veyra/tmp/github-asr-20261126/probe/run.py 在 Qt 6.8.3/MSVC 上编译产品组件和独立夹具，复用先前核验的上游 6,071,299 字节运行库包。环回 HTTP 与 Windows 11 本机 bsdtar 3.8.9 共通过 12 项，覆盖含中英文与特殊字符的路径、严格成员校验、镜像回退、失败保留、截断、取消和重试。Qt Quick 窄窗专项通过，九语缺译和占位符差异均为零。未取得报告者的 Windows 10/bsdtar 3.5.2 环境，本轮未下载大模型或运行 ASR DLL。 [下载夹具](<E:/项目/Veyra/logs/github-asr-20261126/asset-probe-run.log>) · [Qt Quick](<E:/项目/Veyra/logs/github-asr-20261126/qml-asr-result.log>)
 
+## 2026-11-26 主机键鼠映射第一批试用
+
+从本地 main `9d7e1e44` 建立 `codex/keymap-feel-xbox-20261126`。PS5 画面提示限时五秒，增加 F2 速查、按实际键位显示切换操作、释放键与速查键冲突检查、动作备注。旧档案保留手感与键位，速查遇到已占用的 F2 选未绑定的备用功能键。
+
+本轮构建命令为 `py -3.11 -B -X utf8 scripts/acceptance/build-recording-handoff.py --task codex-keymap-feel-xbox-20261126 --root "E:/项目/Veyra/worktrees/keymap-feel-xbox-20261126" --jobs 2 --timeout 880 veyra_qml_ui veyra_qml_quick_tests veyra_ui_i18n_tests`。MSVC 链接和 pkg-config 对 E 盘 Unicode 参数出现编码问题，采用现有 `C:/veyra-deps` 兼容连接后通过。产物为 `E:/项目/Veyra/build/codex-keymap-feel-xbox-20261126`，私有试用为 `E:/项目/Veyra/tests/codex-keymap-feel-xbox-20261126`，日志为 `E:/项目/Veyra/logs/codex-keymap-feel-xbox-20261126`。同步 111 个着色器并复核一致。
+
+QML 提示、速查、窄窗与 4K 几何及编辑器验证通过。九种语言缺译与占位符错误均为零。Moonlight 135 项及 PS5 输入边界通过。用户确认切换前台后，真实 2560×1440 全屏验证 F2 开关速查时 W 仍生效，F1 释放锁定，提示超时后视频窗口恢复矩形。记录与中英截图见 `E:/项目/Veyra/reports/codex-keymap-feel-xbox-20261126/FIRST-BATCH.md`。
+
+第二批将键鼠捕获与状态采样移出 Qt 线程。旧档案维持旧曲线和转向设置，新建和重置瞄准按 800 DPI 和游戏曲线补偿初始化。回放 100,000 次采样与旧算法逐样本一致。30 FPS 的模拟跟枪波动由 0.408 降至 0.029，满杆占比由 61.1% 降至 0%。PS5 发包采样夹具在无界面心跳的 10.2 秒内测了 1,000 个按键边沿，按键 P50/P95/最大值为 2/2.5/2.5 ms。输入、转向与混合验证使用软件夹具。
+
+同目录构建 `build-20261126-200610` 通过，PS5 边界复测记录在 `stage2-input-boundary.log`。旧测试对切换布局后清空 W 的期望随行为更新。Qt Quick、Moonlight 和翻译的第二批日志在 `stage2-*.log`，鼠标回放数据见 `mouse-replay.json`。
+
+第三批在映射内提供手动死区、自动校准、甩枪补偿和低延迟开关。自动校准及延迟诊断启用时才在呈现命令中生成 256×144 亮度图，使用三槽异步读回，CPU 工作线程估算画面位移。临时补帧、低队列、同步设置使用播放设置事务，不写用户首选项。构建 `build-20261126-201954` 通过并生成 `ConsoleAimLuma.dxil`。合成曲线还原 18% 死区、2.0 响应曲线，100 个速度点误差在浮点舍入范围，2.3 px 水平位移测得 2.112 px，重复图像丢弃，手动确认和取消回中通过。见 `stage3-input-boundary.log`、`stage3-quick-*.log` 和 `stage3-i18n.log`。曲线模型和测时夹具不代替实体游戏校准。
+
+第四批把完整 Xbox 串流和采集卡的 Xbox 手柄控制接到同一发送线程。手柄控制请求 720p 保活档，收到的音视频立即丢弃并以抵达时间回报保活画面，采集卡负责实际音画。账号和主机选择复用 Xbox 页，后台转发为单独设置。采集卡与完整 Xbox 串流切换时，连接线程等待手柄会话关闭。Xbox 使用自己的按键图示，支持通用档案和 Xbox 专用档案。原生键鼠是默认关闭的实验选项。
+
+`veyra_xbox_tests` 以脚本 HTTPS 和本机 WebRTC 对端验证设备档、原生键鼠、保活反馈和并发关闭。104 项通过。无账号夹具验证了手柄会话失败显示、替换后停止和目标释放。Qt Quick 全量 279 项通过、1 项跳过，Moonlight 135 项通过，3527 条词条的九语缺译和占位符错误都是零。日志为 `stage4-*.log`。私有 Xbox 界面夹具新建 800 DPI 档案后，复核 PS5 旧档的按键和灵敏度字段相同。
+
+用 `veyra_fg_settings_tests.exe console-probe-60.mp4 <输出目录> console-scope` 运行 960×540、60 FPS 视频，亮度采样取得 5 个运动样本。真实 VFG 2× 正常生成，进入低延迟时暂停，释放后恢复原 VSync 和 VFG 2×，补帧开关两阶段均应用并正常退出。日志为 `console-gpu/assertions.log` 和 `console-gpu/engine.log`。尚需实机验证 PS5 和 Xbox 手感、Xbox 保活分辨率及长连、HDMI 音画、实体手柄分配和原生键鼠响应。
+
 ## 2026-11-26 2.2.2 主线整合
 
 盘点 52 个工作树和 84 个本地与远端引用。Antigravity 的 `72cc0161` 已直接提交到本地 main。同步当前发布仓库的远端 `c4c4be1f`。Claude 光流 `7bacdb02`、回放与麦克风 `6061d901`、低延迟 `d4be12d2` 及后续缩放、国际化和虚拟摄像机均已进入主线。准星单独分支和 HUD 单独分支的产品改动已经由 PS5 稳定分支携带，采集音频旧 PR 的等价修复为 `51591bc8`。保留 11 个有本地改动的工作树、原分支和暂停的实验。分支清单为 `E:/项目/Veyra/reports/codex-main-integration-20261126/branch-inventory.json`。

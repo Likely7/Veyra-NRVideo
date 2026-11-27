@@ -1,6 +1,6 @@
 #include "veyra/source/RemotePlaySessionSource.h"
 #include "veyra/Log.h"
-#include "veyra/remoteplay/MouseStick.h"
+#include "veyra/remoteplay/MappedController.h"
 #include "veyra/remoteplay/StreamRecovery.h"
 #include <cmath>
 #include <format>
@@ -44,7 +44,7 @@ RemotePlaySessionSource::RemotePlaySessionSource(bool wakeOnFrame) {
 
 bool RemotePlaySessionSource::connect(RemotePlayConnectDesc desc) {
     close();
-    { std::lock_guard lock(mutex_); initialized_=started_=failed_=false; skipped_=publishedSequence_=0; recovery_={}; rates_={}; feedback_={}; controller_={}; controllerMouse_.reset(); pendingControllers_.clear(); snapshot_={}; }
+    { std::lock_guard lock(mutex_); initialized_=started_=failed_=false; skipped_=publishedSequence_=0; recovery_={}; rates_={}; feedback_={}; controller_={}; mappedController_.reset(); pendingControllers_.clear(); snapshot_={}; }
     owner_=std::jthread([this, request=std::move(desc)](std::stop_token stop) mutable { run(stop,std::move(request)); });
     std::unique_lock lock(mutex_);
     ready_.wait(lock,[&]{return initialized_;});
@@ -268,7 +268,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             ?std::format(L"PS5 正在释放上一个串流会话，等待后自动重试（{}/3）…",recovery.episodeRetries())
             :desc.controlOnly?std::format(L"PS5 手柄控制中断，正在重新连接（{}/3）…",recovery.episodeRetries())
             :std::format(L"串流中断，正在重新连接（{}/3）…",recovery.episodeRetries())};
-        latest_.reset();pendingControllers_.clear();controller_={};controllerMouse_.reset();feedback_={};
+        latest_.reset();pendingControllers_.clear();controller_={};mappedController_.reset();feedback_={};
         if (frameEvent_) ResetEvent(frameEvent_.get());
     }
     log::info("remoteplay-recovery",std::format("teardown begin attempt={} retry={} cancelled={}",recovery.reconnects(),retry,stop.stop_requested()));
@@ -331,13 +331,11 @@ void RemotePlaySessionSource::close() noexcept {
     if (frameEvent_) ResetEvent(frameEvent_.get());
     SecureZeroMemory(pin_.data(),pin_.size());pin_.clear();
 }
-void RemotePlaySessionSource::controller(remoteplay::ControllerState state,
-                                         std::weak_ptr<remoteplay::MouseStick> mouse){
+void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
     std::lock_guard lock(mutex_);controllerStamp_=remoteplay::monotonic100ns();
     // A neutral input (focus/device loss) cancels queued actions immediately.
     if(!state.inputActive){
         pendingControllers_.clear();
-        mouse.reset();
     }
     if(!pendingControllers_.empty()){
         auto& last=pendingControllers_.back();
@@ -361,21 +359,26 @@ void RemotePlaySessionSource::controller(remoteplay::ControllerState state,
                 for(size_t i=0;i<std::min(size_t(state.motionSampleCount),state.motionSamples.size());++i)append(state.motionSamples[i]);
                 state.motionSamples=samples;state.motionSampleCount=count;
             }
-            last={controllerStamp_,std::move(state),std::move(mouse)};return;
+            last={controllerStamp_,std::move(state)};return;
         }
     }
     if(pendingControllers_.size()>=16){
         pendingControllers_.clear();pendingControllers_.push_back({controllerStamp_,{}});
         log::warn("remoteplay-input","Controller queue overflow; releasing before latest state");
     }
-    pendingControllers_.push_back({controllerStamp_,std::move(state),std::move(mouse)});
+    pendingControllers_.push_back({controllerStamp_,std::move(state)});
 }
+
+void RemotePlaySessionSource::setMappedController(std::weak_ptr<remoteplay::MappedController> input, bool touchpadPressOnly) {
+    std::lock_guard lock(mutex_);
+    mappedController_ = std::move(input);
+    mappedPressOnly_ = touchpadPressOnly;
+}
+
 remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remoteplay::HostTime now){
     if(now-controllerStamp_>1000000){
         pendingControllers_.clear();
         controller_={};
-        controllerMouse_.reset();
-        return controller_;
     }
     // Remove only expired states so a fresh press and release still reach the
     // console in order, even when the decoder owner has stalled.
@@ -383,14 +386,13 @@ remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remote
         pendingControllers_.pop_front();
     if(!pendingControllers_.empty()){
         controller_=std::move(pendingControllers_.front().state);
-        controllerMouse_=std::move(pendingControllers_.front().mouse);
         pendingControllers_.pop_front();
     }
-    auto pad=controller_;
-    if(const auto mouse=controllerMouse_.lock()){
-        mouse->apply(pad,now/10);
+    if (const auto mapped = mappedController_.lock()) {
+        auto pad = mapped->sample(now / 10, controller_);
+        return mappedPressOnly_ ? remoteplay::touchpadPressOnly(pad) : pad;
     }
-    return pad;
+    return controller_;
 }
 void RemotePlaySessionSource::loginPin(std::string pin){std::lock_guard lock(mutex_);SecureZeroMemory(pin_.data(),pin_.size());pin_=std::move(pin);}
 remoteplay::SessionInbox::Snapshot RemotePlaySessionSource::sessionSnapshot()const{
