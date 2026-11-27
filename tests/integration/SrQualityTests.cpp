@@ -177,6 +177,7 @@ struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=
 Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* frame,bool hdr,const engine::EnhancementSettings& settings,
         bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false){
     engine::StageRequest request;request.width=unsigned(frame->width);request.height=unsigned(frame->height);request.sr=settings.sr;
+    request.nvidiaAdapter=ctx.adapter().isNvidia;request.amdAdapter=ctx.adapter().vendorId==0x1002;
     request.stillImage=still;request.uncompressedSource=uncompressed;request.nr=settings.nr;
     pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
     desc.rgbInput=!hdr;desc.hdrInput=hdr;desc.hdrOutput=hdr;desc.outputDitherStep=0;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
@@ -608,13 +609,16 @@ pipeline::SrOutput shrinkArg(std::wstring_view v){
 }
 // One A/B picture: <dir> sr-image <input.png> <name> <quality 0..4> <target> <shrink off|source|2k..7k>
 //   <reduce off|720|900|1080|1440|NN%> <second-target> <second-quality> [video|still|capture]
+// Prefix the mode (e.g. amd-still) to select an AMD adapter on a dual-GPU machine.
 // Quality 0 leaves SR off; a shrink supersamples one pass; reduce "off" keeps a single pass.
 int image(const std::filesystem::path& directory,const std::wstring& input,const std::wstring& name,unsigned quality,std::wstring_view target,
           std::wstring_view shrinkTo,std::wstring_view reduce,std::wstring_view second,unsigned secondQuality,std::wstring_view mode){
     std::filesystem::create_directories(directory);Logger::instance().openFile((directory/(name+L".log")).wstring());
     sink::RgbaImage source;if(!sink::loadImage(input,source))return 2;
     gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
-    if(!ctx.initialize({},status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    gfx::DeviceContextDesc device;
+    if(mode.starts_with(L"amd-")){device.requiredVendorId=0x1002;mode.remove_prefix(4);}
+    if(!ctx.initialize(device,status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
     const auto frame=sdrFrame(source);if(!frame)return 2;
     auto settings=quality&&reduce!=L"off"?twoPass(quality,targetArg(target),reduceArg(reduce),targetArg(second),secondQuality):vsr(quality,targetArg(target));
     settings.srOutput=shrinkArg(shrinkTo);
