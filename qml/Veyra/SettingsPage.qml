@@ -25,11 +25,12 @@ VPage {
         capturingKey = ""
         if (settingsBodyScroll) settingsBodyScroll.contentY = settingsBodyScroll.originY
         if (section === "ps5") veyra.ps5Load()
+        if (section === "xbox") veyra.xbox?.load()
         // M32: the section's groups redraw one after another (pages-b.js
         // render(true): 480 ms, i*40 ms, y 12).
         Qt.callLater(() => stagger(sectionColumns[section] || null))
     }
-    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
+    readonly property var sectionColumns: ({ look: secLook, window: secWindow, play: secPlay, audio: secAudio, perf: secPerf, compat: secCompat, ps5: secPs5, xbox: secXbox, keys: secKeys, comp: secComp, about: secAbout, sponsor: secSponsor })
     readonly property var portableUpdate: veyra.updates.portable
     Component { id: staggerComp; VRise.Stagger {} }
     function stagger(col) {
@@ -51,12 +52,13 @@ VPage {
         { id: "perf",   label: qsTr("性能"), icon: "gauge" },
         { id: "compat", label: qsTr("兼容"), icon: "monitor" },
         { id: "ps5",   label: qsTr("PS5 串流"), icon: "gamepad" },
+        { id: "xbox",  label: qsTr("Xbox 串流"), icon: "gamepad" },
         { id: "keys",  label: qsTr("快捷键"), icon: "zap" },
         { id: "comp",  label: qsTr("组件与许可"), icon: "box" },
         { id: "about", label: qsTr("关于"), icon: "info" },
         // The one entry with a coloured icon, so it can be found.
         { id: "sponsor", label: qsTr("赞助作者"), icon: "heart", tint: "#FF6B81" }
-    ]
+    ].filter(entry => entry.id !== "xbox" || !!veyra.xbox)
 
     // --- nav ---------------------------------------------------------------
     Rectangle {
@@ -1267,6 +1269,49 @@ VPage {
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSmall
                             wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    id: secXbox
+                    Layout.fillWidth: true
+                    spacing: 12
+                    visible: root.section === "xbox"
+                    readonly property var model: veyra.xbox
+                    readonly property var state: model ? model.state : ({})
+                    VH1 { text: qsTr("Xbox 串流") }
+                    VGroup {
+                        VRow {
+                            label: qsTr("账号")
+                            hint: secXbox.state.signedIn ? qsTr("已登录") : qsTr("未登录")
+                            VButton {
+                                objectName: "set-xbox-manage"
+                                text: qsTr("管理")
+                                onClicked: root.requestPage("xbox")
+                            }
+                        }
+                        VRow {
+                            label: qsTr("Xbox 主机")
+                            hint: secXbox.state.lastLabel || qsTr("请选择 Xbox 主机。")
+                        }
+                        VRow {
+                            label: qsTr("手柄")
+                            hint: qsTr("把电脑手柄当作主机上的手柄")
+                            VSwitch {
+                                objectName: "set-xbox-gamepad"
+                                checked: secXbox.state.gamepad !== false
+                                onToggled: enabled => secXbox.model?.set("gamepad", enabled)
+                            }
+                        }
+                        VRow {
+                            label: qsTr("软件视频解码")
+                            hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
+                            VSwitch {
+                                objectName: "set-xbox-software-decode"
+                                checked: secXbox.state.softwareDecode === true
+                                onToggled: enabled => secXbox.model?.set("softwareDecode", enabled)
+                            }
                         }
                     }
                 }

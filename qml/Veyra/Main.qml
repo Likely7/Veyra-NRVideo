@@ -336,7 +336,7 @@ Window {
             fullscreenBackground: ultrawideBackground
             fullscreenDisplays: root.fullscreenDisplays
             onRequestPage: p => {
-                if (p === "translation" || p === "update") dialogs.open(p)
+                if (p === "translation" || p === "update" || p === "xbox") dialogs.open(p)
                 else root.goPage(p)
             }
         }
@@ -350,7 +350,10 @@ Window {
         // The dialogs open the source through the bridge; show the picture.
         onStartPs5: if (root.page === "home") root.goPage("min")
         onStartMoonlight: if (root.page === "home") root.goPage("min")
-        onStartXbox: if (root.page === "home") root.goPage("min")
+        onStartXbox: {
+            if (root.page === "set") root.goPage("pro")
+            else if (root.page === "home") root.goPage("min")
+        }
         onStartScreen: if (root.page === "home") root.goPage("min")
         onStartScreenCrop: {
             root.goPage("min")
