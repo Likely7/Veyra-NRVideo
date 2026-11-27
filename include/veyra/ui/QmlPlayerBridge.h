@@ -426,6 +426,7 @@ class QmlPlayerBridge : public QObject {
     Q_PROPERTY(bool nrUiCorrection READ nrUiCorrection WRITE setNrUiCorrection NOTIFY settingsChanged)
     Q_PROPERTY(int videoSrQuality READ videoSrQuality WRITE setVideoSrQuality NOTIFY settingsChanged)
     Q_PROPERTY(int dlssSrModel READ dlssSrModel WRITE setDlssSrModel NOTIFY settingsChanged)
+    Q_PROPERTY(int fsrSrSharpness READ fsrSrSharpness WRITE setFsrSrSharpness NOTIFY settingsChanged)
     Q_PROPERTY(QVariantList dlssSrModelChoices READ dlssSrModelChoices CONSTANT)
     // Three-step SR (RTX Video SR). srPrescale: 0 off, 1..4 720p/900p/1080p/1440p,
     // 150..190 a manual 50..90 %. srOutput: 0 keep the SR result, 1 source size, 2..6 2K/4K/5K/6K/7K.
@@ -1128,6 +1129,8 @@ public:
     void setVideoSrQuality(int value);
     int dlssSrModel() const;
     void setDlssSrModel(int value);
+    int fsrSrSharpness() const;
+    void setFsrSrSharpness(int value);
     QVariantList dlssSrModelChoices() const;
     int srPrescale() const;
     bool dualSrEnabled() const;

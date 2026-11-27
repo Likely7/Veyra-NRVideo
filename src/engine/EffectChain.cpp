@@ -676,6 +676,7 @@ ChainValidation compileChainExecutionPlan(const EffectChain& chain, const ChainE
 ChainGlobalSettings ChainGlobalSettings::capture(const EnhancementSettings& s) {
     ChainGlobalSettings c;
     c.srTarget = s.srTarget; c.videoSrQuality = s.videoSrQuality; c.dlssSrModel = s.dlssSrModel;
+    c.fsrSrSharpness=s.fsrSrSharpness;
     c.srPrescale = s.srPrescale; c.srOutput = s.srOutput;
     c.dualSrEnabled=s.dualSrEnabled;c.dualSrTarget=s.dualSrTarget;c.dualSrQuality=s.dualSrQuality;
     c.fgBackend = s.frameGenerationBackend; c.flow = s.flow;
@@ -692,6 +693,7 @@ void ChainGlobalSettings::apply(EnhancementSettings& s) const {
     s.hdrOutputMode=hdrOutputMode;s.fgMotion=fgMotion;s.srMotion=srMotion;s.nrMotion=nrMotion;
     s.hdrCurve=hdrCurve;s.hdrMetadata=hdrMetadata;
     s.srTarget = srTarget; s.videoSrQuality = videoSrQuality; s.dlssSrModel = dlssSrModel;
+    s.fsrSrSharpness=fsrSrSharpness;
     s.srPrescale = srPrescale; s.srOutput = srOutput;
     s.dualSrEnabled=dualSrEnabled;s.dualSrTarget=dualSrTarget;s.dualSrQuality=dualSrQuality;
     s.frameGenerationBackend = fgBackend; s.flow = flow;
@@ -714,7 +716,7 @@ void ChainConfiguration::apply(EnhancementSettings& s) const {
 
 bool ChainConfiguration::operator==(const ChainConfiguration& other) const {
     return chain == other.chain && srTarget == other.srTarget && videoSrQuality == other.videoSrQuality && dlssSrModel == other.dlssSrModel &&
-        srPrescale == other.srPrescale && srOutput == other.srOutput &&
+        fsrSrSharpness==other.fsrSrSharpness && srPrescale == other.srPrescale && srOutput == other.srOutput &&
         dualSrEnabled==other.dualSrEnabled&&dualSrTarget==other.dualSrTarget&&dualSrQuality==other.dualSrQuality&&
         fgBackend == other.fgBackend && vfgQuality == other.vfgQuality && flow == other.flow && opticalFlowBackend == other.opticalFlowBackend &&
         amdFlowHalfResolution == other.amdFlowHalfResolution && nrPolicy == other.nrPolicy &&

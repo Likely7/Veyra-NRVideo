@@ -2757,6 +2757,19 @@
    "ru": "FSR 4 ML нуждается в поддерживаемом RX 9000 и драйвере и переключается на FSR 3.1, когда он недоступен; еще не проверен на фактическом RX 9000"
   },
   {
+   "zh": "FSR 锐化",
+   "src": "qml/Veyra/SrStageEditor.qml",
+   "zh-TW": "FSR 銳化",
+   "en": "FSR sharpening",
+   "ja": "FSR シャープ化",
+   "ko": "FSR 선명화",
+   "es": "Nitidez de FSR",
+   "fr": "Netteté FSR",
+   "de": "FSR-Schärfung",
+   "pt-BR": "Nitidez do FSR",
+   "ru": "Резкость FSR"
+  },
+  {
    "zh": "FXAA：最快，整体略柔",
    "src": "qml/AntiAliasEditor.qml",
    "zh-TW": "FXAA：最快，整體略柔",
@@ -8631,6 +8644,19 @@
    "de": "Suche das PSN-Konto des zu koppelnden PS5-Benutzers. Gib hier die numerische ID oder den 8-Byte-Base64-Wert ein.",
    "pt-BR": "Consulte a conta PSN do usuário do PS5 que deseja parear. Insira aqui o ID numérico ou o valor Base64 de 8 bytes.",
    "ru": "Найдите учётную запись PSN пользователя PS5 для сопряжения. Введите числовой ID или значение Base64 из 8 байтов."
+  },
+  {
+   "zh": "使用最终超分阶段的 FSR 内置 RCAS。0 为关闭。",
+   "src": "qml/Veyra/SrStageEditor.qml",
+   "zh-TW": "使用最終超解析度階段的 FSR 內建 RCAS。0 為關閉。",
+   "en": "Uses FSR’s built-in RCAS in the final upscaling pass. Set to 0 to turn it off.",
+   "ja": "最終アップスケール工程で FSR 内蔵の RCAS を使用します。0 で無効になります。",
+   "ko": "마지막 업스케일 단계에서 FSR 내장 RCAS를 사용합니다. 0으로 설정하면 꺼집니다.",
+   "es": "Usa RCAS integrado en FSR durante el último paso de escalado. El valor 0 lo desactiva.",
+   "fr": "Utilise le RCAS intégré à FSR lors de la dernière passe de mise à l’échelle. La valeur 0 le désactive.",
+   "de": "Verwendet das integrierte FSR-RCAS im letzten Skalierungsschritt. 0 schaltet es aus.",
+   "pt-BR": "Usa o RCAS integrado do FSR na última etapa de ampliação. O valor 0 desativa o efeito.",
+   "ru": "Использует встроенный фильтр RCAS FSR на последнем этапе масштабирования. Значение 0 отключает эффект."
   },
   {
    "zh": "使用说明",

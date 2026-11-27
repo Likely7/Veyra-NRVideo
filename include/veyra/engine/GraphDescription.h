@@ -169,6 +169,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     desc.fgMultiplier=request.fgMultiplier;
     desc.videoSrQuality=currentVideoSrQuality(settings.videoSrQuality);
     desc.dlssSrModel=settings.dlssSrModel;
+    desc.fsrSrSharpness=float(settings.fsrSrSharpness)*0.01f;
     describeNrLayers(settings,desc);
     desc.frameGenerationBackend=settings.frameGenerationBackend;
     desc.vfgQuality=settings.vfgQuality;

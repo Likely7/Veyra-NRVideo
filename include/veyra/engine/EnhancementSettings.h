@@ -474,6 +474,7 @@ struct EnhancementSettings {
     pipeline::SrTarget srTarget=pipeline::SrTarget::Uhd4K;
     uint32_t videoSrQuality=kDefaultVideoSrQuality; // 0 DLSS SR; 5 FSR; RTX Video SR family/tier values (videoSrFamily)
     uint32_t dlssSrModel=0;    // DLSS SR only; see kDlssSrModelCount
+    uint32_t fsrSrSharpness=0;  // Percentage for the final FSR pass, 0 disables RCAS.
     // Base SR uses srTarget; the optional second SR has its own target/quality.
     // srPrescale now lowers the first AI result only when dualSrEnabled.
     // srOutput shrinks a single RTX Video SR result (supersampling); double SR
@@ -600,6 +601,8 @@ struct EnhancementSettings {
         if(!sr){active.srTarget=defaults.srTarget;active.videoSrQuality=defaults.videoSrQuality;active.srMotion=defaults.srMotion;}
         // The DLSS SR model serves every DLSS SR pass, the second of a double SR too.
         if(!usesDlaa()&&(!sr||(videoSrQuality!=0&&!(dualSrEnabled&&dualSrQuality==0))))active.dlssSrModel=defaults.dlssSrModel;
+        if(!sr||(videoSrQuality!=kVideoSrFsr&&!(dualSrEnabled&&dualSrQuality==kVideoSrFsr)))
+            active.fsrSrSharpness=0;
         if(!sr||!dualSrEnabled){
             active.srPrescale=defaults.srPrescale;
             active.dualSrEnabled=false;active.dualSrTarget=defaults.dualSrTarget;active.dualSrQuality=defaults.dualSrQuality;
@@ -770,6 +773,7 @@ struct EnhancementSettings {
         if(frameGenerationBackend==FrameGenerationBackend::Rife&&multiplier>3)return "RIFE supports 2X and 3X";
         if(!validVideoSrQuality(videoSrQuality))return "invalid video SR quality";
         if(dlssSrModel>=kDlssSrModelCount)return "invalid DLSS SR model";
+        if(fsrSrSharpness>100)return "invalid FSR sharpness";
         if(!pipeline::validSrTarget(srTarget))return "invalid SR target";
         if(!pipeline::validSrPrescale(srPrescale))return "invalid SR prescale";
         if(!pipeline::validSrOutput(srOutput))return "invalid SR output";

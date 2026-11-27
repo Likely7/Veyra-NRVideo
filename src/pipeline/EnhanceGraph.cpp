@@ -5147,6 +5147,7 @@ bool EnhanceGraph::applySettings(const engine::EnhancementSettings& s){
     desc_.antiAlias=nextNr.antiAlias;
     for(size_t i=0;i<antiAliasPasses_.size();++i)if(antiAliasPasses_[i])antiAliasPasses_[i]->refresh(desc_.antiAlias[i]);
     desc_.videoDenoise=s.videoDenoise;
+    desc_.fsrSrSharpness=float(s.fsrSrSharpness)*0.01f;
     desc_.beauty=nextNr.beauty;desc_.beautyDetection=nextNr.beautyDetection;
     for(size_t i=0;i<beautyPasses_.size();++i)if(beautyPasses_[i])beautyPasses_[i]->refresh(desc_.beauty[i]);
     if(faceTracker_)faceTracker_->configure(desc_.beautyDetection,beautyMinConfidence());

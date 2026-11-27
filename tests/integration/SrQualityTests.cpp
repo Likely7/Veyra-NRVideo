@@ -2,6 +2,7 @@
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
+#include "veyra/gfx/XessSrBackend.h"
 #include "veyra/sink/ImageExportSink.h"
 #include "veyra/source/MediaFileSource.h"
 #include "veyra/RuntimePaths.h"
@@ -177,12 +178,11 @@ Frame hdrFrame(const sink::RgbaImage& img){
 }
 struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1,srP95Ms=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{},first{};bool enabled=false;};
 Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* frame,bool hdr,const engine::EnhancementSettings& settings,
-        bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false,float fsrSharpness=0.0f){
+        bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false,uint32_t liveSharpness=0){
     engine::StageRequest request;request.width=unsigned(frame->width);request.height=unsigned(frame->height);request.sr=settings.sr;
     request.nvidiaAdapter=ctx.adapter().isNvidia;request.amdAdapter=ctx.adapter().vendorId==0x1002;
     request.stillImage=still;request.uncompressedSource=uncompressed;request.nr=settings.nr;
     pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
-    desc.fsrSrSharpness=fsrSharpness;
     desc.rgbInput=!hdr;desc.hdrInput=hdr;desc.hdrOutput=hdr;desc.outputDitherStep=0;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
     Run r;r.srIn={desc.srInputWidth,desc.srInputHeight};r.srOut={desc.srOutputWidth,desc.srOutputHeight};r.work={desc.workWidth,desc.workHeight};r.first={desc.firstSrWidth,desc.firstSrHeight};
     if(!desc.fixedExecutionPlanError.empty()){std::cout<<"plan error: "<<desc.fixedExecutionPlanError<<std::endl;return r;}
@@ -190,6 +190,10 @@ Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* f
     if(!graph.initialize(desc)||!graph.createViews()){graph.shutdown();return r;}
     graph.recordGpuTimings();std::vector<double> ms;pipeline::EnhanceGraph::FrameOutputs out;bool ok=true;
     for(unsigned i=0;i<frames&&ok;++i){
+        if(i==2&&liveSharpness){
+            auto edited=settings;edited.fsrSrSharpness=liveSharpness;
+            if(engine::requiresGraphRebuild(settings,edited)||!graph.applySettings(edited)){ok=false;break;}
+        }
         out={};ok=graph.process(frame,i*33.333333,i==0,out,i+1)&&ring.waitIdle();
         for(const auto& t:graph.takeGpuTimings()){const auto& v=t.gpu[size_t(diagnostics::GpuStage::Sr)];if(v.milliseconds&&t.identity.sourceFrameId>2)ms.push_back(*v.milliseconds);}
     }
@@ -700,18 +704,23 @@ int fsrRcas(const std::filesystem::path& directory,bool amd,const wchar_t* input
         engine::EnhancementSettings settings;
         bool sharpenFinal;
     };
-    const Case cases[]{
+    std::vector<Case> cases{
         {"fsr",vsr(fsr,SrTarget::Qhd),true},
         {"fsr-fsr",twoPass(fsr,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,fsr),true},
         {"fsr-nis",twoPass(fsr,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,nis),false},
         {"nis-fsr",twoPass(nis,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,fsr),true}
     };
+    if(gfx::XessSrBackend::runtimeAvailable()){
+        constexpr auto xess=engine::kVideoSrXess;
+        cases.push_back({"xess-fsr",twoPass(xess,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,fsr),true});
+        cases.push_back({"fsr-xess",twoPass(fsr,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,xess),false});
+    }
     constexpr unsigned frames=12;
     bool ok=true;
     for(const auto& test:cases){
         const bool dual=test.settings.dualSrEnabled;
         const auto off=run(ctx,ring,frame.get(),false,test.settings,false,false,false,frames,dual);
-        const auto on=run(ctx,ring,frame.get(),false,test.settings,false,false,false,frames,dual,0.6f);
+        const auto on=run(ctx,ring,frame.get(),false,test.settings,false,false,false,frames,dual,60);
         const bool firstIdentical=!dual||(!off.firstLinear.pixels.empty()&&off.firstLinear.pixels==on.firstLinear.pixels);
         const bool outputsChanged=off.output.pixels!=on.output.pixels;
         const uint64_t evaluations=frames*(dual?2u:1u);

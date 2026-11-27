@@ -238,6 +238,112 @@ int wmain(int argc,wchar_t** argv){
             imported.entries()[0]==*draft,"standalone XeSS import restores the editor preset");
     }
 
+    {
+        EnhancementSettings defaults;defaults.sr=true;defaults.videoSrQuality=kVideoSrFsr;
+        auto sharp=defaults;sharp.fsrSrSharpness=60;
+        check(defaults.fsrSrSharpness==0&&!requiresGraphRebuild(defaults,sharp)&&
+            !defaults.sameActiveVideoParameters(sharp),"RCAS is off by default and changes only a live SR parameter");
+        const auto graph=describe(sharp,1280,720);
+        check(graph.enableSr&&graph.fsrSrSharpness>0.59f&&graph.fsrSrSharpness<0.61f,"graph forwards the FSR sharpening percentage");
+        auto invalid=sharp;invalid.fsrSrSharpness=101;
+        check(!invalid.validate().empty(),"FSR sharpening is limited to 0 to 100 percent");
+        auto inactive=sharp;inactive.videoSrQuality=kVideoSrNis;
+        check(inactive.activeVideoSettings().fsrSrSharpness==0,"inactive RCAS does not change the other SR path");
+
+        const auto flatPath=root/L"rcas.txt";
+        PresetStore flat(flatPath);
+        check(flat.put(L"neutral",defaults),"save the original-format neutral FSR preset");
+        const auto flatOld=files(flatPath);
+        check(flat.put(L"sharp",sharp)&&kept(flatOld,files(flatPath))&&
+            bytes(sidecar(flatPath,L".fsr-rcas")).starts_with("VEYRA_PRESETS 41\n"),"RCAS flat presets have their own version and file");
+        PresetStore flatReader(flatPath);
+        check(flatReader.load()&&flatReader.entries().size()==2&&flatReader.entries()[0].settings.fsrSrSharpness==0&&
+            flatReader.entries()[1].settings.fsrSrSharpness==60,"flat preset retains RCAS on and off values");
+
+        const auto path=root/L"rcas.library";
+        PresetLibrary library(path);library.setIncludeBuiltins(false);
+        auto entry=std::make_unique<PresetEntry>();
+        entry->name=L"neutral";entry->chain=toChain(defaults);entry->globals=ChainGlobalSettings::capture(defaults);
+        check(library.put(*entry),"default RCAS uses the existing library format");
+        const auto libraryOld=files(path);
+        entry->name=L"sharp";entry->globals=ChainGlobalSettings::capture(sharp);
+        check(library.put(*entry)&&kept(libraryOld,files(path))&&
+            bytes(sidecar(path,L".fsr-rcas")).starts_with("VEYRA_PRESET_LIBRARY 28\n"),"RCAS library preserves the older file");
+        const auto exported=root/L"sharp.vpreset";
+        check(library.exportEntry(1,exported)&&bytes(exported).starts_with("VEYRA_PRESET_LIBRARY 28\n"),"standalone RCAS export is versioned");
+        PresetLibrary imported(root/L"rcas-imported.library");imported.setIncludeBuiltins(false);
+        std::wstring importedName;
+        check(imported.importFile(exported,importedName)&&imported.entries().size()==1&&
+            imported.entries()[0]==*entry,"standalone RCAS restores its stored value");
+
+        const auto sessionPath=root/L"rcas.session";
+        ChainSessionStore writer(sessionPath);
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(defaults));
+        check(session->select(ChainMode::Node)&&writer.save(*session),"save the neutral list and node session");
+        const auto sessionOld=files(sessionPath);
+        session->configurations[0].fsrSrSharpness=60;
+        auto editor=std::make_shared<NodeEditorDocument>();editor->nodes=session->configurations[1].chain;
+        editor->globals=ChainGlobalSettings::capture(sharp);
+        editor->globals->fsrSrSharpness=35;
+        check(editor->layout.initialize(editor->nodes).accepted,"initialize the RCAS node editor");
+        session->configurations[1].editor=editor;
+        check(writer.save(*session)&&kept(sessionOld,files(sessionPath))&&
+            bytes(sidecar(sessionPath,L".fsr-rcas")).starts_with("VEYRA_CHAIN_SESSION 23\n"),"RCAS session preserves the earlier file");
+        ChainSessionStore reader(sessionPath);
+        auto restored=std::make_unique<ChainSession>();
+        check(reader.load(*restored)&&*restored==*session,"RCAS persists for both list and node editor sessions");
+    }
+
+    {
+        EnhancementSettings xess;
+        xess.sr=true;xess.videoSrQuality=kVideoSrXess;xess.dualSrEnabled=true;
+        xess.dualSrQuality=kVideoSrFsr;xess.srPrescale=SrPrescale::P720;
+        auto both=xess;both.fsrSrSharpness=55;
+        const auto graph=describe(both,1280,720);
+        check(graph.dualSr&&graph.videoSrQuality==kVideoSrXess&&graph.dualSrQuality==kVideoSrFsr&&
+            graph.fsrSrSharpness>0.54f&&graph.fsrSrSharpness<0.56f,"XeSS to FSR preserves both stage parameters");
+
+        const auto flatPath=root/L"combined.txt";
+        PresetStore flat(flatPath);
+        check(flat.put(L"neutral",EnhancementSettings{})&&flat.put(L"XeSS",xess),"flat presets can first select XeSS");
+        const auto flatOld=files(flatPath);
+        check(flat.put(L"both",both)&&kept(flatOld,files(flatPath))&&
+            bytes(sidecar(flatPath,L".fsr-rcas")).starts_with("VEYRA_PRESETS 41\n"),"combined flat presets preserve the v40 file");
+        PresetStore flatReader(flatPath);
+        check(flatReader.load()&&flatReader.entries().size()==3&&flatReader.entries().back().settings==both,
+            "combined flat preset restores XeSS plus RCAS");
+
+        const auto libraryPath=root/L"combined.library";
+        PresetLibrary library(libraryPath);library.setIncludeBuiltins(false);
+        auto entry=std::make_unique<PresetEntry>();entry->name=L"XeSS";entry->chain=toChain(xess);
+        entry->globals=ChainGlobalSettings::capture(xess);
+        check(library.put(*entry),"write XeSS library before adding RCAS");
+        const auto libraryOld=files(libraryPath);
+        entry->name=L"both";entry->globals=ChainGlobalSettings::capture(both);
+        check(library.put(*entry)&&kept(libraryOld,files(libraryPath))&&
+            bytes(sidecar(libraryPath,L".fsr-rcas")).starts_with("VEYRA_PRESET_LIBRARY 28\n"),"combined library keeps its v27 counterpart");
+        PresetLibrary libraryReader(libraryPath);libraryReader.setIncludeBuiltins(false);
+        check(libraryReader.load()&&libraryReader.entries().size()==2&&libraryReader.entries().back()==*entry,
+            "combined library reloads the XeSS to FSR preset");
+
+        const auto sessionPath=root/L"combined.session";
+        ChainSessionStore writer(sessionPath);
+        auto session=std::make_unique<ChainSession>(ChainSession::initial(xess));
+        check(writer.save(*session),"write the XeSS session before adding RCAS");
+        const auto sessionOld=files(sessionPath);
+        session->configurations[0].fsrSrSharpness=55;
+        check(writer.save(*session)&&kept(sessionOld,files(sessionPath))&&
+            bytes(sidecar(sessionPath,L".fsr-rcas")).starts_with("VEYRA_CHAIN_SESSION 23\n"),"combined session preserves v22 and stores both controls");
+        ChainSessionStore reader(sessionPath);
+        auto restored=std::make_unique<ChainSession>();
+        check(reader.load(*restored)&&*restored==*session,"combined session restores both settings");
+        session->configurations[0].fsrSrSharpness=0;
+        session->configurations[0].srTarget=SrTarget::Qhd;
+        check(writer.save(*session)&&kept(sessionOld,files(sessionPath)),"turning RCAS off preserves the older XeSS session");
+        ChainSessionStore afterOff(sessionPath);
+        check(afterOff.load(*restored)&&*restored==*session,"restarting after RCAS off restores the newest XeSS settings");
+    }
+
     // Settings presets: v35 only when a Video Effects value is stored.
     {
         PresetStore plain(root/L"plain.txt");check(plain.load()&&plain.put(L"plain",EnhancementSettings{}),"plain settings preset");

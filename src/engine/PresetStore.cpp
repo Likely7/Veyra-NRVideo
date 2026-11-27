@@ -68,7 +68,8 @@ std::string PresetStore::serialize()const{
         return p.settings.content==ContentRate::Capture60To30Original||
             p.settings.frameGenerationBackend==FrameGenerationBackend::Rife;
     });
-    const bool individualModes=xessSr||newFrameOptions||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
+    const bool rcas=std::any_of(entries_.begin(),entries_.end(),[](const auto& p){return p.settings.fsrSrSharpness!=0;});
+    const bool individualModes=rcas||xessSr||newFrameOptions||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
         return exclusionModes(p.settings.exclusion)!=0;
     });
     const bool exclusion=individualModes||std::any_of(entries_.begin(),entries_.end(),[](const auto& p){
@@ -84,7 +85,7 @@ std::string PresetStore::serialize()const{
         for(unsigned i=0;i<p.settings.nrLayerCount;++i)if(p.settings.nrLayers[i].residual.correction.extendedControls())return true;
         return false;});
     // v26 introduces appended resolution IDs; old readers reject this schema.
-    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(xessSr?40:newFrameOptions?39:individualModes?38:exclusion?37:anySr?36:videoAi?35:dual?34:srStage?33:nrModel?32:dlss?31:correctionExtended?30:correction?29:vfg?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
+    std::ostringstream o;o.imbue(std::locale::classic());o<<std::setprecision(std::numeric_limits<float>::max_digits10)<<"VEYRA_PRESETS "<<(rcas?41:xessSr?40:newFrameOptions?39:individualModes?38:exclusion?37:anySr?36:videoAi?35:dual?34:srStage?33:nrModel?32:dlss?31:correctionExtended?30:correction?29:vfg?28:rendering?27:higher?26:fsr4?25:hold?24:stack?23:multi?22:21)<<'\n'<<std::quoted(utf8(default_))<<' '<<entries_.size()<<'\n';
     for(auto& p:entries_){const auto& s=p.settings;const auto& m=s.model;const auto& r=s.residual;o<<std::quoted(utf8(p.name))<<' '<<m.intensity<<' '<<m.tone<<' '<<m.structure<<' '<<m.skin<<' '<<m.style<<' '<<m.autoMask<<' '<<m.uiCorrection<<' '<<r.total<<' '<<r.darken<<' '<<r.brighten<<' '<<r.color<<' '<<r.luminance<<' '<<s.nr<<' '<<s.sr<<' '<<s.multiplier<<' '<<int(s.nrPolicy)<<' '<<int(s.flow)<<' '<<int(s.content)<<' '<<s.protection.enabled<<' '<<s.protection.featherPixels;for(auto q:s.protection.regions){const auto box=protectionConstants(q);for(float coordinate:box)o<<' '<<coordinate;}o<<' '<<s.videoSrQuality<<' '<<int(s.frameGenerationBackend)<<' '<<int(s.srTarget)<<' '<<int(s.opticalFlowBackend)<<' '<<s.amdFlowHalfResolution<<' '<<int(s.audioSync)<<' '<<s.audioOffsetMs<<' '<<int(s.nrRuntime)<<' '<<s.captureCompatible<<' '<<s.lowLatency<<' '<<s.forceSdrPreview<<' '<<int(s.captureAudio)<<' '<<s.exportBitrateMbps<<' '<<s.captureFlipVertical<<' '<<int(s.captureBuffer)<<' ';writeColorSettings(o,s.color,utf8(s.color.lutNameString()));o<<' '<<s.videoHdr.enabled<<' '<<s.videoHdr.contrast<<' '<<s.videoHdr.saturation<<' '<<s.videoHdr.middleGray<<' '<<s.videoHdr.peakNits<<' '<<s.nrTemporal;
         if(multi||fullSchema){o<<' '<<s.additionalColorCount;for(unsigned i=0;i<s.additionalColorCount;++i){o<<' ';writeColorSettings(o,s.additionalColors[i],utf8(s.additionalColors[i].lutNameString()));}}
         if(stack||fullSchema){
@@ -116,12 +117,13 @@ std::string PresetStore::serialize()const{
         if(dual||exclusion)o<<' '<<s.dualSrEnabled<<' '<<uint32_t(s.dualSrTarget)<<' '<<s.dualSrQuality;
         if(exclusion){o<<' ';writeProtection(o,s.exclusion);}
         if(individualModes)o<<' '<<exclusionModes(s.exclusion);
+        if(rcas)o<<' '<<s.fsrSrSharpness;
         o<<'\n';
     }return o.str();
 }
 bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std::wstring& def){
     if(data.size()>kMaxPresetBytes)return false;std::istringstream in(data);in.imbue(std::locale::classic());std::string magic,d;int version=0;size_t count=0;
-    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>40)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
+    if(!(in>>magic>>version)||magic!="VEYRA_PRESETS"||(version<1||version>41)||!(in>>std::quoted(d)>>count)||count>64)return false;def=wide(d);if(!d.empty()&&def.empty())return false;
     for(size_t i=0;i<count;++i){UserPreset p;std::string n;int policy,flow,content,nr,sr;auto& s=p.settings;auto& m=s.model;auto& r=s.residual;
         if(!(in>>std::quoted(n)>>m.intensity>>m.tone>>m.structure>>m.skin>>m.style>>m.autoMask>>m.uiCorrection>>r.total>>r.darken>>r.brighten>>r.color>>r.luminance>>nr>>sr>>s.multiplier>>policy>>flow>>content))return false;
         if(version>=2){int enabled;if(!(in>>enabled>>s.protection.featherPixels)||enabled<0||enabled>1)return false;s.protection.enabled=enabled!=0;
@@ -202,16 +204,15 @@ bool PresetStore::parse(const std::string& data,std::vector<UserPreset>& out,std
         if(version>=37&&!readProtection(in,s.exclusion))return false;
         if(version>=38&&!readExclusionModes(in,s.exclusion))return false;
         if(version<40&&(s.videoSrQuality==kVideoSrXess||s.dualSrQuality==kVideoSrXess))return false;
+        if(version>=41&&!(in>>s.fsrSrSharpness))return false;
         if(!s.validate().empty())return false;out.push_back(std::move(p));
     }
     in>>std::ws;if(!in.eof())return false;
     return def.empty()||std::any_of(out.begin(),out.end(),[&](auto& a){return a.name==def;});
 }
 bool PresetStore::load(){
-    if(!path_.wstring().ends_with(L".xess-sr")){
-        const auto extended=std::filesystem::path(path_).concat(L".xess-sr");
-        if(std::filesystem::exists(extended))path_=extended;
-    }
+    if(std::filesystem::exists(fsrRcasPath_))path_=fsrRcasPath_;
+    else if(std::filesystem::exists(xessSrPath_))path_=xessSrPath_;
     error_.clear();if(!std::filesystem::exists(path_))return true;if(std::filesystem::file_size(path_)>kMaxPresetBytes){corrupt_=true;error_=L"预设文件超过2MiB，原文件保留";return false;}std::ifstream f(path_,std::ios::binary);std::string data((std::istreambuf_iterator<char>(f)),{});std::vector<UserPreset> loaded;std::wstring def;
     if(!f||!parse(data,loaded,def)){corrupt_=true;error_=L"预设文件损坏或版本不支持；原文件已保留，禁止覆盖。当前使用内建设置。";return false;}
     entries_=std::move(loaded);default_=std::move(def);corrupt_=false;return true;
@@ -220,7 +221,8 @@ bool PresetStore::save(){
     if(corrupt_){error_=L"损坏原文件受保护，未写入任何设置；请先备份并移走该文件";return false;}
     const auto data=serialize();std::vector<UserPreset> check;std::wstring def;if(!parse(data,check,def)){error_=L"预设校验失败";return false;}
     auto destination=path_;
-    if(data.starts_with("VEYRA_PRESETS 40\n")&&!destination.wstring().ends_with(L".xess-sr"))destination+=L".xess-sr";
+    if(data.starts_with("VEYRA_PRESETS 41\n"))destination=fsrRcasPath_;
+    else if(destination!=fsrRcasPath_&&data.starts_with("VEYRA_PRESETS 40\n"))destination=xessSrPath_;
     std::error_code ec;std::filesystem::create_directories(destination.parent_path(),ec);if(ec){error_=L"无法创建预设目录";return false;}
     auto tmp=destination;tmp+=L".tmp-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64());
     HANDLE h=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);if(h==INVALID_HANDLE_VALUE){error_=L"无法创建预设临时文件";return false;}

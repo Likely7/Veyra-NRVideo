@@ -15,7 +15,7 @@ namespace {
 // Six full grades per entry (plus the legacy first-grade field), up to 64
 // entries. Never remove the file-size guard as LUT names are external input.
 constexpr size_t kMaxPresetBytes = 2u * 1024u * 1024u;
-void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
+void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool rcas=false){out<<' '<<int(g.hdrOutputMode)<<' '<<int(g.fgMotion)<<' '<<int(g.srMotion)<<' '<<int(g.nrMotion);if(vfg)out<<' '<<g.vfgQuality;
     // Static HDR output tuning: library v11 / session v6.
     // Older mainline versions keep their original NR/Flow layout.
     if(tuning)out<<' '<<g.hdrCurve.shadowLiftEv100<<' '<<g.hdrCurve.shadowRangeNits<<' '<<g.hdrCurve.midGrayNits<<' '
@@ -26,8 +26,10 @@ void writeRendering(std::ostream& out,const ChainGlobalSettings& g,bool vfg=fals
     if(dlss)out<<' '<<g.dlssSrModel;
     // Three-step SR prescale / output: library v16, session v11.
     if(srStage)out<<' '<<uint32_t(g.srPrescale)<<' '<<uint32_t(g.srOutput);
-    if(dual)out<<' '<<g.dualSrEnabled<<' '<<uint32_t(g.dualSrTarget)<<' '<<g.dualSrQuality;}
-bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false){
+    if(dual)out<<' '<<g.dualSrEnabled<<' '<<uint32_t(g.dualSrTarget)<<' '<<g.dualSrQuality;
+    if(rcas)out<<' '<<g.fsrSrSharpness;
+}
+bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool tuning=false,bool dlss=false,bool srStage=false,bool dual=false,bool rcas=false){
     int hdr,fg,sr,nr;
     if(!(in>>hdr>>fg>>sr>>nr))return false;
     g.hdrOutputMode=HdrOutputMode(hdr);g.fgMotion=MotionSource(fg);g.srMotion=MotionSource(sr);g.nrMotion=MotionSource(nr);
@@ -44,6 +46,7 @@ bool readRendering(std::istream& in,ChainGlobalSettings& g,bool vfg=false,bool t
     if(dlss&&(!(in>>g.dlssSrModel)||g.dlssSrModel>=kDlssSrModelCount))return false;
     if(srStage){uint32_t prescale=0,output=0;if(!(in>>prescale>>output))return false;g.srPrescale=pipeline::SrPrescale(prescale);g.srOutput=pipeline::SrOutput(output);}
     if(dual){int enabled=0;uint32_t target=0;if(!(in>>enabled>>target>>g.dualSrQuality)||enabled<0||enabled>1)return false;g.dualSrEnabled=enabled!=0;g.dualSrTarget=pipeline::SrTarget(target);}
+    if(rcas&&!(in>>g.fsrSrSharpness))return false;
     EnhancementSettings s;g.apply(s);return s.validate().empty();
 }
 void applyRenderingPreset(const PresetEntry& e,EnhancementSettings& s){
@@ -116,6 +119,11 @@ static bool hasXessSr(const ChainGlobalSettings& settings) {
 
 static bool configurationHasXessSr(const ChainConfiguration& config) {
     return hasXessSr(config)||(config.editor&&config.editor->globals&&hasXessSr(*config.editor->globals));
+}
+
+static bool configurationHasRcas(const ChainConfiguration& config) {
+    return config.fsrSrSharpness!=0||
+        (config.editor&&config.editor->globals&&config.editor->globals->fsrSrSharpness!=0);
 }
 
 bool PresetLibrary::load() {
@@ -204,6 +212,7 @@ bool PresetLibrary::load() {
     if(std::filesystem::exists(directDenoise))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath))path_=denoisePath;
     if(std::filesystem::exists(xessSrPath_))path_=xessSrPath_;
+    if(std::filesystem::exists(fsrRcasPath_))path_=fsrRcasPath_;
     if (!std::filesystem::exists(path_)) return true;
     std::error_code ec;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -296,13 +305,15 @@ bool PresetLibrary::save() {
     // v14 (anti-aliasing nodes, chains past 16 nodes) and v15 (beauty nodes) get their own files too.
     // v16 (three-step SR) as well.
     // v22 (「自动」倍率标记, local) gets its own file; v21 is upstream's output-controls.
-    const bool xessSrSidecar=path_.wstring().ends_with(L".xess-sr");
-    const bool upgradeXessSr=!xessSrSidecar&&data.starts_with("VEYRA_PRESET_LIBRARY 27\n");
+    const bool rcasSidecar=path_==fsrRcasPath_;
+    const bool srSidecar=rcasSidecar||path_==xessSrPath_;
+    const bool upgradeRcas=!rcasSidecar&&data.starts_with("VEYRA_PRESET_LIBRARY 28\n");
+    const bool upgradeXessSr=!srSidecar&&data.starts_with("VEYRA_PRESET_LIBRARY 27\n");
     const bool denoiseSidecar=path_.wstring().ends_with(L".video-denoise");
-    const bool upgradeDenoise=!xessSrSidecar&&!denoiseSidecar&&data.starts_with("VEYRA_PRESET_LIBRARY 26\n");
-    const bool separate=xessSrSidecar||denoiseSidecar||path_.wstring().ends_with(L".fg-options");
+    const bool upgradeDenoise=!srSidecar&&!denoiseSidecar&&data.starts_with("VEYRA_PRESET_LIBRARY 26\n");
+    const bool separate=srSidecar||denoiseSidecar||path_.wstring().ends_with(L".fg-options");
     const bool upgrade=!separate && data.starts_with("VEYRA_PRESET_LIBRARY 25\n");
-    if(!separate&&!upgrade&&!upgradeDenoise&&!upgradeXessSr&&!path_.wstring().ends_with(L".exclusion-modes")&&
+    if(!separate&&!upgrade&&!upgradeDenoise&&!upgradeXessSr&&!upgradeRcas&&!path_.wstring().ends_with(L".exclusion-modes")&&
        !path_.wstring().ends_with(L".half-rate-variants")){
     if(data.starts_with("VEYRA_PRESET_LIBRARY 22")&&!path_.wstring().ends_with(L".auto-fg"))path_=std::filesystem::path(path_).concat(L".auto-fg");
     if(data.starts_with("VEYRA_PRESET_LIBRARY 21")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
@@ -352,7 +363,8 @@ bool PresetLibrary::save() {
     } // .auto-fg / .output-controls own subsequent edits.
     }
     auto destination=path_;
-    if(upgradeXessSr)destination=xessSrPath_;
+    if(upgradeRcas)destination=fsrRcasPath_;
+    else if(upgradeXessSr)destination=xessSrPath_;
     else if(upgradeDenoise)destination+=L".video-denoise";
     else if(upgrade)destination+=L".fg-options";
     std::error_code ec;
@@ -892,7 +904,10 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
     const bool xessSr=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
         return (e.globals&&hasXessSr(*e.globals))||(e.nodeConfiguration&&configurationHasXessSr(*e.nodeConfiguration));
     });
-    const int version=std::max(minimumVersion, xessSr?27:denoise?26:(individualModes||originalHalfRate||rife)?25:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
+    const bool rcas=std::any_of(entries_.begin(),entries_.end(),[](const auto& e){
+        return (e.globals&&e.globals->fsrSrSharpness!=0)||(e.nodeConfiguration&&configurationHasRcas(*e.nodeConfiguration));
+    });
+    const int version=std::max(minimumVersion, rcas?28:xessSr?27:denoise?26:(individualModes||originalHalfRate||rife)?25:outputControls?21:dlaa?20:anySr?19:videoAi?18:dual?17:srStage?16:beauty?15:effects?14:nrModel?13:dlss?12:tuning?11:flow?10:correctionExtended?9:correction?8:vfg?7:rendering?6:globals?5:editor?4:layerSizes?3:multi?2:1);
     o << "VEYRA_PRESET_LIBRARY " << version << '\n' << std::quoted(utf8(defaultName_)) << ' ' << entries_.size() << '\n';
     for (const auto& e : entries_) {
         o << std::quoted(utf8(e.name)) << ' ' << std::quoted(utf8(e.note)) << ' '
@@ -951,7 +966,7 @@ std::string PresetLibrary::encodeEntries(const std::vector<PresetEntry>& entries
         }
         if(version>=6){
             o<<' '<<e.globals.has_value();
-            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17);}
+            if(e.globals){const auto& g=*e.globals;o<<' '<<int(g.srTarget)<<' '<<g.videoSrQuality<<' '<<int(g.fgBackend)<<' '<<int(g.flow)<<' '<<int(g.opticalFlowBackend)<<' '<<g.amdFlowHalfResolution<<' '<<int(g.nrPolicy);writeRendering(o,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=28);}
         }
         if(version>=10){
             o<<' '<<e.flow.has_value();
@@ -973,7 +988,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
     size_t count = 0;
     // v23 adds region modes and the standalone v24 adds cadence value 6.
     // v25 combines both layouts and adds RIFE as a provider.
-    const int allowedVersion=maxVersion>0?std::min(maxVersion,27):27;
+    const int allowedVersion=maxVersion>0?std::min(maxVersion,28):28;
     if (!(in >> magic >> version) || magic != "VEYRA_PRESET_LIBRARY" || version < 1 || version > allowedVersion) {
         error = L"预设库格式或版本不支持"; return false;
     }
@@ -1104,7 +1119,7 @@ bool PresetLibrary::parse(const std::string& data, std::vector<PresetEntry>& out
             if(present){ChainGlobalSettings g;int target,backend,flow,optical,half,policy;
                 if(!(in>>target>>g.videoSrQuality>>backend>>flow>>optical>>half>>policy)||half<0||half>1)return false;
                 g.srTarget=pipeline::SrTarget(target);g.fgBackend=FrameGenerationBackend(backend);g.flow=FlowQuality(flow);g.opticalFlowBackend=OpticalFlowBackend(optical);g.amdFlowHalfResolution=half!=0;g.nrPolicy=pipeline::NrSizePolicy(policy);
-                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17))return false;e.globals=g;
+                if(!readRendering(in,g,version>=7,version>=11,version>=12,version>=16,version>=17,version>=28))return false;e.globals=g;
             }
         }
         if(version>=10){
@@ -1192,7 +1207,8 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
     });
     const bool denoise=std::any_of(session.configurations.begin(),session.configurations.end(),hasVideoDenoise);
     const bool xessSr=std::any_of(session.configurations.begin(),session.configurations.end(),configurationHasXessSr);
-    const int version = xessSr?22:denoise?21:(individualModes||session.originalHalfRate||rife)?20:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
+    const bool rcas=std::any_of(session.configurations.begin(),session.configurations.end(),configurationHasRcas);
+    const int version = rcas?23:xessSr?22:denoise?21:(individualModes||session.originalHalfRate||rife)?20:outputControls?16:dlaa?15:anySr?14:videoAi?13:dual?12:srStage?11:beauty?10:effects?9:nrModel?8:dlss?7:tuning?6:vfg?5:rendering?4:editor ? (editor->globals ? 3 : 2) : 1;
     out << "VEYRA_CHAIN_SESSION " << version << '\n' << int(session.active) << ' ' << session.initialized[0] << ' ' << session.initialized[1];
     if(version>=4)out<<' '<<bool(editor);
     if(version>=20)out<<' '<<session.originalHalfRate;
@@ -1203,7 +1219,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
         out << int(c.srTarget) << ' ' << c.videoSrQuality << ' ' << int(c.fgBackend) << ' '
             << int(c.flow) << ' ' << int(c.opticalFlowBackend) << ' ' << c.amdFlowHalfResolution << ' '
             << int(c.nrPolicy) << ' ' << c.selectedNr << ' ' << c.selectedColour;
-        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12);out<<'\n';
+        if(version>=4)writeRendering(out,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=23);out<<'\n';
         PresetEntry entry;
         entry.name = i == 0 ? L"list" : L"node";
         entry.kind = ChainMode(i); entry.chain = c.chain;
@@ -1221,7 +1237,7 @@ std::string ChainSessionStore::encode(const ChainSession& session) {
             const auto& g = *document.globals;
             out << int(g.srTarget) << ' ' << g.videoSrQuality << ' ' << int(g.fgBackend) << ' '
                 << int(g.flow) << ' ' << int(g.opticalFlowBackend) << ' ' << g.amdFlowHalfResolution << ' '
-                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12);out<<'\n';
+                << int(g.nrPolicy);if(version>=4)writeRendering(out,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=23);out<<'\n';
         }
         out << graph.nextId << ' ' << graph.inputNext << ' ' << document.nodes.nodeCount << '\n';
         // The ordinary preset codec validates a linear runtime chain. Use a
@@ -1248,14 +1264,14 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
     std::istringstream in(data); in.imbue(std::locale::classic());
     std::string magic, body; int version = 0, active = 0, list = 0, node = 0;
     if (!(in >> magic >> version >> active >> list >> node) || magic != "VEYRA_CHAIN_SESSION" ||
-        (version < 1 || version > 22) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
+        (version < 1 || version > 23) || active < 0 || active > 1 || list != 1 || node < 0 || node > 1) return false;
     int hasEditor=version>=2?1:0;
     if(version>=4&&(!(in>>hasEditor)||hasEditor<0||hasEditor>1))return false;
     ChainSession parsed; parsed.active = ChainMode(active); parsed.initialized = {true, node != 0};
     int original=version==19;
     if(version>=20&&(!(in>>original)||original<0||original>1))return false;
     parsed.originalHalfRate=original!=0;
-    const int presetVersion=version>=22?27:version>=21?26:version>=20?25:version==18?23:version>=17?22:
+    const int presetVersion=version>=23?28:version>=22?27:version>=21?26:version>=20?25:version==18?23:version>=17?22:
         version>=16?21:version>=15?20:version>=13?18:version>=10?15:version>=9?14:version>=8?13:11;
     for (auto& c : parsed.configurations) {
         int target, backend, flow, optical, half, policy;
@@ -1264,7 +1280,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
         c.srTarget = pipeline::SrTarget(target); c.fgBackend = FrameGenerationBackend(backend);
         c.flow = FlowQuality(flow); c.opticalFlowBackend = OpticalFlowBackend(optical);
         c.amdFlowHalfResolution = half != 0; c.nrPolicy = pipeline::NrSizePolicy(policy);
-        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12))return false;
+        if(version>=4&&!readRendering(in,c,version>=5,version>=6,version>=7,version>=11,version>=12,version>=23))return false;
         if(version<22&&hasXessSr(c))return false;
     }
     if (!(in >> std::quoted(body))) return false;
@@ -1288,7 +1304,7 @@ bool ChainSessionStore::decode(const std::string& data, ChainSession& session, b
             g.srTarget = pipeline::SrTarget(target); g.fgBackend = FrameGenerationBackend(backend);
             g.flow = FlowQuality(flow); g.opticalFlowBackend = OpticalFlowBackend(optical);
             g.amdFlowHalfResolution = half != 0; g.nrPolicy = pipeline::NrSizePolicy(policy);
-            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12))return false;
+            if(version>=4&&!readRendering(in,g,version>=5,version>=6,version>=7,version>=11,version>=12,version>=23))return false;
             if(version<22&&hasXessSr(g))return false;
             editor->globals = g;
         }
@@ -1401,6 +1417,7 @@ bool ChainSessionStore::load(ChainSession& session) {
     if(std::filesystem::exists(directDenoise,ec))path_=directDenoise;
     else if(std::filesystem::exists(denoisePath,ec))path_=denoisePath;
     if(std::filesystem::exists(xessSrPath_,ec))path_=xessSrPath_;
+    if(std::filesystem::exists(fsrRcasPath_,ec))path_=fsrRcasPath_;
     const bool exists = std::filesystem::exists(path_, ec);
     if (!exists && !ec) return true;
     const auto size = std::filesystem::file_size(path_, ec);
@@ -1425,13 +1442,15 @@ bool ChainSessionStore::save(const ChainSession& session) {
     const auto data = encode(session);
     ChainSession checked;
     if (!decode(data, checked)) { error_ = L"模式会话编码校验失败，未保存"; return false; }
-    const bool xessSrSidecar=path_.wstring().ends_with(L".xess-sr");
-    const bool upgradeXessSr=!xessSrSidecar&&data.starts_with("VEYRA_CHAIN_SESSION 22\n");
+    const bool rcasSidecar=path_==fsrRcasPath_;
+    const bool srSidecar=rcasSidecar||path_==xessSrPath_;
+    const bool upgradeRcas=!rcasSidecar&&data.starts_with("VEYRA_CHAIN_SESSION 23\n");
+    const bool upgradeXessSr=!srSidecar&&data.starts_with("VEYRA_CHAIN_SESSION 22\n");
     const bool denoiseSidecar=path_.wstring().ends_with(L".video-denoise");
-    const bool upgradeDenoise=!xessSrSidecar&&!denoiseSidecar&&data.starts_with("VEYRA_CHAIN_SESSION 21\n");
-    const bool separate=xessSrSidecar||denoiseSidecar||path_.wstring().ends_with(L".fg-options");
+    const bool upgradeDenoise=!srSidecar&&!denoiseSidecar&&data.starts_with("VEYRA_CHAIN_SESSION 21\n");
+    const bool separate=srSidecar||denoiseSidecar||path_.wstring().ends_with(L".fg-options");
     const bool upgrade=!separate && data.starts_with("VEYRA_CHAIN_SESSION 20\n");
-    if(!separate&&!upgrade&&!upgradeDenoise&&!upgradeXessSr&&!path_.wstring().ends_with(L".exclusion-modes")&&
+    if(!separate&&!upgrade&&!upgradeDenoise&&!upgradeXessSr&&!upgradeRcas&&!path_.wstring().ends_with(L".exclusion-modes")&&
        !path_.wstring().ends_with(L".half-rate-variants")){
     if(data.starts_with("VEYRA_CHAIN_SESSION 16")&&!path_.wstring().ends_with(L".output-controls"))path_=std::filesystem::path(path_).concat(L".output-controls");
     if(!path_.wstring().ends_with(L".output-controls")){
@@ -1482,7 +1501,8 @@ bool ChainSessionStore::save(const ChainSession& session) {
     }
 
     auto destination=path_;
-    if(upgradeXessSr)destination=xessSrPath_;
+    if(upgradeRcas)destination=fsrRcasPath_;
+    else if(upgradeXessSr)destination=xessSrPath_;
     else if(upgradeDenoise)destination+=L".video-denoise";
     else if(upgrade)destination+=L".fg-options";
     std::error_code ec;

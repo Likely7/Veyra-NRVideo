@@ -11,6 +11,7 @@ ColumnLayout {
     readonly property bool srAvailable: Support.available(veyra,"sr")
     readonly property bool supported: veyra.srAlgorithmOf(veyra.videoSrQuality).startsWith("rtx") && srAvailable
     readonly property bool secondRtx: veyra.srAlgorithmOf(veyra.dualSrQuality).startsWith("rtx")
+    readonly property bool finalFsr: veyra.srAlgorithmOf(veyra.dualSrEnabled ? veyra.dualSrQuality : veyra.videoSrQuality) === "5"
     readonly property bool manual: veyra.srPrescale >= 150 && veyra.srPrescale <= 190
     readonly property var targets: [{id:"1",label:"2K"},{id:"2",label:"4K"},{id:"4",label:"5K"},{id:"5",label:"6K"},{id:"6",label:"7K"},{id:"3",label:"8K"}]
     VRow {
@@ -108,6 +109,21 @@ ColumnLayout {
                 current: String(veyra.srTierOf(veyra.dualSrQuality))
                 onPicked: id => veyra.dualSrQuality = veyra.srQualityFor(veyra.srAlgorithmOf(veyra.dualSrQuality), Number(id))
             }
+        }
+    }
+    VRow {
+        visible: editor.finalFsr
+        enabled: Support.available(veyra, "sr5")
+        opacity: enabled ? 1 : 0.4
+        label: qsTr("FSR 锐化")
+        hint: qsTr("使用最终超分阶段的 FSR 内置 RCAS。0 为关闭。")
+        value: Math.round(sharpness.displayedValue) + "%"
+        VSlider {
+            id: sharpness
+            objectName: editor.namePrefix + "-fsr-sr-sharpness"
+            from: 0; to: 100; stepSize: 1; live: false; valueFromModel: true
+            value: veyra.fsrSrSharpness
+            onMoved: value => veyra.fsrSrSharpness = Math.round(value)
         }
     }
     // Running sizes of double SR or supersampling, and why a choice did not apply.

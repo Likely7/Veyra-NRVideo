@@ -27,6 +27,14 @@ namespace veyra::ui {
 
 int QmlPlayerBridge::videoSrQuality() const { return int(engine::currentVideoSrQuality(settings().videoSrQuality)); }
 int QmlPlayerBridge::dlssSrModel() const { return int(settings().dlssSrModel); }
+int QmlPlayerBridge::fsrSrSharpness() const { return int(settings().fsrSrSharpness); }
+void QmlPlayerBridge::setFsrSrSharpness(int value) {
+    if(value<0||value>100)return;
+    auto s=settings();
+    if(s.fsrSrSharpness==unsigned(value))return;
+    s.fsrSrSharpness=unsigned(value);
+    if(impl_->commit(s))emit settingsChanged();
+}
 QVariantList QmlPlayerBridge::dlssSrModelChoices() const {
     return {QVariantMap{{"id", "0"}, {"label", "DLSS 4 · K"}},
             QVariantMap{{"id", "1"}, {"label", "DLSS 4.5 · M"}},
