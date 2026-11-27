@@ -19,6 +19,7 @@
 #include <sstream>
 #include <filesystem>
 #include <functional>
+#include <future>
 #include <map>
 #include <mutex>
 #include <nlohmann/json.hpp>
@@ -51,6 +52,7 @@ struct FakeTransport final : HttpsTransport {
     std::deque<Reply> script;
     std::vector<HttpsRequest> seen;
     std::mutex mutex;
+    std::function<void()> beforeReply;
     HttpsResponse send(const HttpsRequest& r) override {
         std::lock_guard lock(mutex);
         seen.push_back(r);
@@ -58,6 +60,7 @@ struct FakeTransport final : HttpsTransport {
         Reply reply = script.front();
         if (reply.host != r.host || reply.path != r.path) return {598, "unexpected request " + r.method + " " + r.host + r.path + " (wanted " + reply.host + reply.path + ")"};
         script.pop_front();
+        if (beforeReply) beforeReply();
         return {reply.status, reply.body};
     }
     void add(std::string host, std::string path, int status, std::string body) { script.push_back({std::move(host), std::move(path), status, std::move(body)}); }
@@ -161,6 +164,34 @@ void apiTests() {
     try { api.connect("ABC-123", "LPT"); } catch (const ServiceError& e) { threw = e.status == 401; }
     check(threw, "a refused connect is a ServiceError with the status");
 
+    const std::string keepalive = "/v5/sessions/home/ABC-123/keepalive";
+    int renewals = 0;
+    http->add(host, keepalive, 401, "{}");
+    http->add(host, keepalive, 200, "{}");
+    api.keepalive("ABC-123", [&] { ++renewals; return std::string("RENEWED"); });
+    check(renewals == 1 && http->seen.back().headers.at("Authorization") == "Bearer RENEWED",
+          "an expired keepalive lease is renewed and retried once");
+    http->add(host, keepalive, 401, "{}");
+    http->add(host, keepalive, 401, "{}");
+    threw = false;
+    try { api.keepalive("ABC-123", [&] { ++renewals; return std::string("REJECTED"); }); }
+    catch (const ServiceError& e) { threw = e.status == 401; }
+    check(threw && renewals == 2 && http->script.empty(), "a second 401 is reported without another renewal");
+    http->add(host, keepalive, 401, "original service error");
+    threw = false;
+    try { api.keepalive("ABC-123", []() -> std::string { throw NetworkError("simulated renewal timeout"); }); }
+    catch (const ServiceError& e) { threw = e.status == 401 && e.body == "original service error"; }
+    check(threw, "a renewal timeout retains the original keepalive failure");
+    http->add(host, keepalive, 404, "{}");
+    threw = false;
+    try { api.keepalive("ABC-123", [&] { ++renewals; return std::string("UNUSED"); }); }
+    catch (const ServiceError& e) { threw = e.status == 404; }
+    check(threw && renewals == 2, "an ended session is not renewed");
+    api.setToken("PROACTIVE");
+    http->add(host, keepalive, 200, "{}");
+    api.keepalive("ABC-123");
+    check(http->seen.back().headers.at("Authorization") == "Bearer PROACTIVE", "an early renewal is used on the next keepalive");
+
     // The xHome wrapper is nullable even on success (Greenlight's SDPResponse).
     // A pending wrapper is different from a console error; neither may be turned
     // into a json type exception or mistaken for a completed negotiation.
@@ -238,7 +269,7 @@ void accountTests() {
         Account account(http, file);
         account.setClock([&] { return now; });
         check(account.signedIn(), "the sign-in survives a restart");
-        http->add("user.auth.xboxlive.com", "/user/authenticate", 200, R"({"Token":"UT","NotAfter":"2027-01-01T00:00:00.0000000Z","DisplayClaims":{"xui":[{"uhs":"123"}]}})");
+        http->add("user.auth.xboxlive.com", "/user/authenticate", 200, R"({"Token":"UT","NotAfter":"2032-01-01T00:00:00.0000000Z","DisplayClaims":{"xui":[{"uhs":"123"}]}})");
         http->add("xsts.auth.xboxlive.com", "/xsts/authorize", 200, R"({"Token":"GSSV","NotAfter":"2027-01-01T00:00:00Z","DisplayClaims":{"xui":[{"uhs":"123"}]}})");
         http->add("xhome.gssv-play-prod.xboxlive.com", "/v2/login/user", 200,
                   R"({"offeringSettings":{"regions":[{"name":"WestEurope","baseUri":"https://weu.core.gssv-play-prodxhome.xboxlive.com","isDefault":false},{"name":"EastAsia","baseUri":"https://eas.core.gssv-play-prodxhome.xboxlive.com/","isDefault":true}]},"market":"CN","gsToken":"GS","tokenType":"bearer","durationInSeconds":14400})");
@@ -252,6 +283,34 @@ void accountTests() {
         const size_t before = http->seen.size();
         account.streamingAccess();
         check(http->seen.size() == before, "a valid streaming token is reused");
+
+        auto renewal = std::make_shared<FakeTransport>();
+        renewal->add("xsts.auth.xboxlive.com", "/xsts/authorize", 503, "{}");
+        std::promise<void> requestEntered, releaseRequest;
+        auto requestPending = requestEntered.get_future();
+        auto release = releaseRequest.get_future();
+        renewal->beforeReply = [&] { requestEntered.set_value(); release.wait(); };
+        auto failedRenewal = std::async(std::launch::async, [&] {
+            try { account.renewStreamingAccess("GS", *renewal); }
+            catch (const ServiceError& e) { return e.status == 503; }
+            return false;
+        });
+        const bool pending = requestPending.wait_for(std::chrono::seconds(1)) == std::future_status::ready;
+        auto signedIn = std::async(std::launch::async, [&] { return account.signedIn(); });
+        const bool statusReady = signedIn.wait_for(std::chrono::milliseconds(200)) == std::future_status::ready;
+        releaseRequest.set_value();
+        check(pending && statusReady && signedIn.get(), "UI sign-in status is available while token renewal blocks in HTTP");
+        check(failedRenewal.get() && account.signedIn() && account.streamingAccess().gsToken == "GS",
+              "an unavailable renewal endpoint preserves the valid lease and sign-in");
+        renewal->beforeReply = {};
+        renewal->add("xsts.auth.xboxlive.com", "/xsts/authorize", 200, R"({"Token":"GSSV2"})");
+        renewal->add("xhome.gssv-play-prod.xboxlive.com", "/v2/login/user", 200,
+                     R"({"offeringSettings":{"regions":[{"name":"EastAsia","baseUri":"https://eas.core.gssv-play-prodxhome.xboxlive.com/","isDefault":true}]},"gsToken":"GS2","durationInSeconds":14400})");
+        const auto access2 = account.renewStreamingAccess("GS", *renewal);
+        check(access2.gsToken == "GS2" && access2.expiresAt == now + 14400 && account.streamingAccess().gsToken == "GS2",
+              "forced renewal uses the session transport and publishes the replacement lease");
+        check(account.renewStreamingAccess("GS", *renewal).gsToken == "GS2" && renewal->seen.size() == 3,
+              "a caller holding a stale lease reuses the already renewed one");
 
         http->add("login.live.com", "/oauth20_token.srf", 200, R"({"access_token":"LPT","refresh_token":"RT-X"})");
         check(account.transferToken() == "LPT", "console transfer token");

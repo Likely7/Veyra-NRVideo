@@ -16,6 +16,7 @@
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "veyra/xbox/Https.h"
@@ -70,6 +71,9 @@ public:
     // A streaming token for the home (console) offering. Refreshes everything that has expired.
     // Throws ServiceError / NetworkError / std::runtime_error.
     StreamingAccess streamingAccess();
+    // Refresh the lease used by a session through that session's cancellable transport.
+    // Another caller's live replacement can be reused. A failed refresh keeps a valid lease.
+    StreamingAccess renewStreamingAccess(std::string_view previousToken, HttpsTransport& transport);
     // The token the session's /connect step wants (MSAL "console transfer" token).
     std::string transferToken();
 
@@ -77,14 +81,16 @@ public:
     void setClock(std::function<int64_t()> clock) { clock_ = std::move(clock); }
 
 private:
-    std::string userAccessToken();
-    std::string xstsUserToken();
+    std::string userAccessToken(HttpsTransport& transport);
+    std::string xstsUserToken(HttpsTransport& transport);
+    StreamingAccess fetchStreamingAccess(HttpsTransport& transport);
     void store();
 
     std::shared_ptr<HttpsTransport> http_;
     std::filesystem::path file_;
     mutable std::mutex mutex_;
     std::optional<SavedTokens> tokens_;
+    std::atomic<bool> signedIn_{false};
     std::string userToken_;          // user.auth.xboxlive.com
     int64_t userTokenExpiresAt_ = 0;
     std::optional<StreamingAccess> streaming_;

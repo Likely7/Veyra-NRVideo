@@ -4,6 +4,7 @@
 // goes through Microsoft's servers even when the console is on the same network; the media then flows
 // over WebRTC (see XboxSessionSource).
 #pragma once
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -44,7 +45,10 @@ public:
     std::string exchangeSdp(const std::string& sessionId, const std::string& offerSdp);
     // Sends local candidates, returns the console's (plus the IPv4 ones hidden in Teredo addresses).
     std::vector<IceCandidate> exchangeIce(const std::string& sessionId, const std::vector<IceCandidate>& local);
-    void keepalive(const std::string& sessionId);
+    using RenewToken = std::function<std::string()>;
+    void keepalive(const std::string& sessionId, const RenewToken& renew = {});
+    // The owner hands this API to the keepalive thread after negotiation.
+    void setToken(std::string token) { token_ = std::move(token); }
     void stop(const std::string& sessionId);
 
     // Exposed for tests.

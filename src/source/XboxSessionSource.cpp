@@ -377,15 +377,38 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         // Decode and keepalive.
         p.stopDecode = false;
         p.decodeThread = std::thread([this] { decodeLoop(); });
-        p.keepaliveThread = std::thread([this, &p] {
+        p.keepaliveThread = std::thread([this, &p, expiresAt = access.expiresAt]() mutable {
             auto& q = p;
             auto next = Clock::now() + std::chrono::seconds(30);
+            auto nextRenewal = Clock::time_point::min();
+            const auto nowUnix = [] {
+                return std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::system_clock::now().time_since_epoch()).count();
+            };
+            const xbox::StreamApi::RenewToken renew = [&]() -> std::string {
+                if (cancelled() || q.ended.load() || Clock::now() < nextRenewal) return {};
+                nextRenewal = Clock::now() + std::chrono::minutes(2);
+                try {
+                    auto renewed = q.desc.account->renewStreamingAccess(q.gsToken, *q.http);
+                    expiresAt = renewed.expiresAt;
+                    q.gsToken = std::move(renewed.gsToken);
+                    log::info("xbox", std::format("streaming lease refreshed; valid for {} s", expiresAt - nowUnix()));
+                    return q.gsToken;
+                } catch (const std::exception& e) {
+                    if (!cancelled()) log::warn("xbox", std::string("streaming lease renewal failed: ") + e.what());
+                    return {};
+                }
+            };
             while (!cancel_.load() && !q.ended.load()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
+                if (cancelled() || q.ended.load()) break;
                 if (Clock::now() < next) continue;
                 next = Clock::now() + std::chrono::seconds(30);
                 try {
-                    q.api->keepalive(q.sessionId);
+                    if (expiresAt > 0 && nowUnix() >= expiresAt - 300) {
+                        if (auto token = renew(); !token.empty()) q.api->setToken(std::move(token));
+                    }
+                    q.api->keepalive(q.sessionId, renew);
                 } catch (const xbox::ServiceError& e) {
                     log::warn("xbox", std::format("keepalive HTTP {}", e.status));
                     if (e.status == 404) {

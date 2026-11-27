@@ -243,8 +243,18 @@ std::vector<IceCandidate> StreamApi::exchangeIce(const std::string& sessionId, c
     }
 }
 
-void StreamApi::keepalive(const std::string& sessionId) {
-    call("POST", "/v5/sessions/home/" + sessionId + "/keepalive", "{}");
+void StreamApi::keepalive(const std::string& sessionId, const RenewToken& renew) {
+    const std::string path = "/v5/sessions/home/" + sessionId + "/keepalive";
+    try {
+        call("POST", path, "{}");
+    } catch (const ServiceError& error) {
+        if (error.status != 401 || !renew) throw;
+        std::string replacement;
+        try { replacement = renew(); } catch (const std::exception&) {}
+        if (replacement.empty() || replacement == token_) throw;
+        setToken(std::move(replacement));
+        call("POST", path, "{}");
+    }
 }
 
 void StreamApi::stop(const std::string& sessionId) {

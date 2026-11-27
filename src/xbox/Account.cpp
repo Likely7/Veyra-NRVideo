@@ -171,16 +171,17 @@ std::wstring describeXboxError(const std::string& responseBody) {
 Account::Account(std::shared_ptr<HttpsTransport> transport, std::filesystem::path tokenFile)
     : http_(std::move(transport)), file_(std::move(tokenFile)), clock_(systemNow) {
     tokens_ = loadTokens(file_);
+    signedIn_ = tokens_.has_value();
 }
 
 bool Account::signedIn() const {
-    std::lock_guard lock(mutex_);
-    return tokens_.has_value();
+    return signedIn_.load();
 }
 
 void Account::signOut() {
     std::lock_guard lock(mutex_);
     tokens_.reset();
+    signedIn_ = false;
     userToken_.clear();
     streaming_.reset();
     std::error_code ec;
@@ -217,6 +218,7 @@ SignInPoll Account::pollSignIn(const DeviceCode& code, std::string* detail) {
         if (t.refreshToken.empty() || t.accessToken.empty()) return SignInPoll::Failed;
         std::lock_guard lock(mutex_);
         tokens_ = std::move(t);
+        signedIn_ = true;
         userToken_.clear();
         streaming_.reset();
         store();
@@ -232,14 +234,17 @@ SignInPoll Account::pollSignIn(const DeviceCode& code, std::string* detail) {
 }
 
 // Caller holds mutex_.
-std::string Account::userAccessToken() {
+std::string Account::userAccessToken(HttpsTransport& transport) {
     if (!tokens_) throw std::runtime_error("not signed in");
     if (!tokens_->accessToken.empty() && tokens_->accessExpiresAt - 60 > clock_()) return tokens_->accessToken;
-    const HttpsResponse response = http_->send(formPost("login.microsoftonline.com", "/consumers/oauth2/v2.0/token",
+    const HttpsResponse response = transport.send(formPost("login.microsoftonline.com", "/consumers/oauth2/v2.0/token",
         form({{"client_id", kMsalClientId}, {"grant_type", "refresh_token"}, {"refresh_token", tokens_->refreshToken}, {"scope", kScope}})));
     if (response.status == 400 || response.status == 401) {
         // The refresh token is no longer accepted (password changed, signed out elsewhere, 90 days unused).
         tokens_.reset();
+        signedIn_ = false;
+        userToken_.clear();
+        streaming_.reset();
         std::error_code ec;
         std::filesystem::remove(file_, ec);
         throw ServiceError(response.status, response.body, "sign-in expired");
@@ -254,12 +259,12 @@ std::string Account::userAccessToken() {
 }
 
 // Caller holds mutex_.
-std::string Account::xstsUserToken() {
+std::string Account::xstsUserToken(HttpsTransport& transport) {
     if (!userToken_.empty() && userTokenExpiresAt_ - 60 > clock_()) return userToken_;
-    const std::string access = userAccessToken();
+    const std::string access = userAccessToken(transport);
     const json body = {{"Properties", {{"AuthMethod", "RPS"}, {"RpsTicket", "d=" + access}, {"SiteName", "user.auth.xboxlive.com"}}},
                        {"RelyingParty", "http://auth.xboxlive.com"}, {"TokenType", "JWT"}};
-    const json j = parse(http_->send(xblPost("user.auth.xboxlive.com", "/user/authenticate", body)), "Xbox Live user authentication");
+    const json j = parse(transport.send(xblPost("user.auth.xboxlive.com", "/user/authenticate", body)), "Xbox Live user authentication");
     userToken_ = j.value("Token", "");
     userTokenExpiresAt_ = parseTime(j.value("NotAfter", ""));
     if (userTokenExpiresAt_ == 0) userTokenExpiresAt_ = clock_() + 3600;
@@ -271,10 +276,21 @@ std::string Account::xstsUserToken() {
 StreamingAccess Account::streamingAccess() {
     std::lock_guard lock(mutex_);
     if (streaming_ && streaming_->expiresAt - 120 > clock_()) return *streaming_;
-    const std::string user = xstsUserToken();
+    return fetchStreamingAccess(*http_);
+}
+
+StreamingAccess Account::renewStreamingAccess(std::string_view previousToken, HttpsTransport& transport) {
+    std::lock_guard lock(mutex_);
+    if (streaming_ && streaming_->gsToken != previousToken && streaming_->expiresAt - 120 > clock_()) return *streaming_;
+    return fetchStreamingAccess(transport);
+}
+
+// Caller holds mutex_.
+StreamingAccess Account::fetchStreamingAccess(HttpsTransport& transport) {
+    const std::string user = xstsUserToken(transport);
     const json authorize = {{"Properties", {{"SandboxId", "RETAIL"}, {"UserTokens", json::array({user})}}},
                             {"RelyingParty", "http://gssv.xboxlive.com/"}, {"TokenType", "JWT"}};
-    const json xsts = parse(http_->send(xblPost("xsts.auth.xboxlive.com", "/xsts/authorize", authorize)), "Xbox Live authorization");
+    const json xsts = parse(transport.send(xblPost("xsts.auth.xboxlive.com", "/xsts/authorize", authorize)), "Xbox Live authorization");
     const std::string gssv = xsts.value("Token", "");
     if (gssv.empty()) throw std::runtime_error("Xbox Live authorization returned no token");
 
@@ -286,7 +302,7 @@ StreamingAccess Account::streamingAccess() {
     request.headers["Cache-Control"] = "no-store, must-revalidate, no-cache";
     request.headers["x-gssv-client"] = "XboxComBrowser";
     request.body = json{{"token", gssv}, {"offeringId", "xhome"}}.dump();
-    const json j = parse(http_->send(request), "streaming sign-in");
+    const json j = parse(transport.send(request), "streaming sign-in");
 
     StreamingAccess access;
     access.gsToken = j.value("gsToken", "");
@@ -310,7 +326,7 @@ StreamingAccess Account::streamingAccess() {
 std::string Account::transferToken() {
     std::lock_guard lock(mutex_);
     if (!tokens_) throw std::runtime_error("not signed in");
-    userAccessToken();   // keeps the refresh token current
+    userAccessToken(*http_);   // keeps the refresh token current
     const json j = parse(http_->send(formPost("login.live.com", "/oauth20_token.srf",
         form({{"client_id", kMsalClientId}, {"scope", "service::http://Passport.NET/purpose::PURPOSE_XBOX_CLOUD_CONSOLE_TRANSFER_TOKEN"},
               {"grant_type", "refresh_token"}, {"refresh_token", tokens_->refreshToken}}))), "console transfer token");

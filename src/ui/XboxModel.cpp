@@ -172,11 +172,14 @@ void XboxModel::openSignInPage() {
 
 void XboxModel::signOut() {
     if (busy_) return;
-    account_->signOut();
-    consoles_.clear();
-    selected_.clear();
-    status_ = tr("已退出登录，本机保存的登录信息已删除。");
-    emit changed();
+    startJob(tr("退出登录"), [this](const std::atomic<bool>&) -> std::function<void()> {
+        account_->signOut();
+        return [this] {
+            consoles_.clear();
+            selected_.clear();
+            status_ = tr("已退出登录，本机保存的登录信息已删除。");
+        };
+    });
 }
 
 void XboxModel::refresh() {
