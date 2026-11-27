@@ -105,6 +105,61 @@ bool captureNearBlack(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,bo
     return ok;
 }
 
+bool v210ConversionTiming(gfx::D3D12DeviceContext& ctx, gfx::CommandSlotRing& ring) {
+    using namespace pipeline;
+    constexpr unsigned width = 3840, height = 2160;
+    AVFrame* frame = av_frame_alloc();
+    if (!frame) return false;
+    struct ReleaseFrame { AVFrame*& frame; ~ReleaseFrame() { av_frame_free(&frame); } } release{frame};
+    frame->format = AV_PIX_FMT_BGRA;
+    frame->width = width;
+    frame->height = height;
+    if (av_frame_get_buffer(frame, 32) < 0) return false;
+    const auto pack = [](uint32_t a, uint32_t b, uint32_t c) { return a | (b << 10) | (c << 20); };
+    for (unsigned y = 0; y < height; ++y) {
+        auto* words = reinterpret_cast<uint32_t*>(frame->data[0] + size_t(y) * frame->linesize[0]);
+        for (unsigned x = 0; x < width; x += 6) {
+            const uint32_t u = 384 + (x + y) % 200;
+            const uint32_t v = 400 + (x ^ y) % 200;
+            const uint32_t luma = 128 + (x + 2 * y) % 512;
+            *words++ = pack(u, luma, v);
+            *words++ = pack(luma + 1, u + 1, luma + 2);
+            *words++ = pack(v + 1, luma + 3, u + 2);
+            *words++ = pack(luma + 4, v + 2, luma + 5);
+        }
+    }
+    EnhanceGraphDesc desc;
+    desc.sourceWidth = desc.workWidth = width;
+    desc.sourceHeight = desc.workHeight = height;
+    desc.noFeatures = true;
+    desc.packedInput = packedInputCode(SourcePixelFormat::V210);
+    desc.captureBitDepth = 10;
+    ColorDescription color;
+    color.pixelFormat = SourcePixelFormat::V210;
+    color.range = ColorRange::Limited;
+    color.matrix = YuvMatrix::BT709;
+    color.transfer = TransferFunction::SRGB;
+    EnhanceGraph graph(ctx, ring);
+    EnhanceGraph::FrameOutputs out;
+    if (!graph.initialize(desc) || !graph.createViews()) return false;
+    graph.recordGpuTimings();
+    constexpr uint64_t warmup = 24, frames = 160;
+    std::vector<double> timings;
+    for (uint64_t i = 0; i < warmup + frames; ++i) {
+        if (!graph.process(frame, double(i) * 1000 / 60, i == 0, out, i + 1, &color) || !ring.waitIdle())
+            return false;
+        for (const auto& timing : graph.takeGpuTimings()) {
+            const auto& conversion = timing.gpu[size_t(veyra::diagnostics::GpuStage::Color)];
+            if (i >= warmup && conversion.milliseconds) timings.push_back(*conversion.milliseconds);
+        }
+    }
+    if (timings.size() != frames) return false;
+    std::sort(timings.begin(), timings.end());
+    std::cout << "V210_TIMING count=" << timings.size() << " medianMs=" << timings[timings.size() / 2]
+              << " p95Ms=" << timings[(timings.size() * 95 + 99) / 100 - 1] << std::endl;
+    return true;
+}
+
 bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring) {
     using namespace pipeline;
     constexpr unsigned w=64,h=32;
@@ -342,6 +397,8 @@ int wmain(int argc,wchar_t**argv){
         return captureNearBlack(ctx,ring,false)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-near-black-vfg")
         return captureNearBlack(ctx,ring,true)?0:1;
+    if(argc==2&&std::wstring_view(argv[1])==L"--v210-timing")
+        return v210ConversionTiming(ctx,ring)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-chroma")
         return reconstructedCaptureChroma(ctx,ring)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-hdr-chroma")
