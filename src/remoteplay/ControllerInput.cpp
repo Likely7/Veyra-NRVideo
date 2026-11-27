@@ -22,7 +22,8 @@ void ControllerInput::stop(){
     for(auto* pad:others_)SDL_CloseGamepad(pad);
     others_.clear();follow_=false;
     releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}
-    if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}hapticAttempted_=false;
+    if(audioInitialized_){SDL_QuitSubSystem(SDL_INIT_AUDIO);audioInitialized_=false;}
+    hapticAttempted_=false;hapticWarned_=false;hapticRetryAt_=0;hapticEndpoint_=0;
     touchQueue_.clear();touchState_={};haveGyro_=haveAccel_=false;calibrating_=false;gyroBias_={};enumerateAt_=0;
     if(gamepad_){SDL_CloseGamepad(gamepad_);gamepad_=nullptr;}
     if(initialized_){SDL_QuitSubSystem(SDL_INIT_GAMEPAD);initialized_=false;}
@@ -47,7 +48,8 @@ void ControllerInput::activate(SDL_Gamepad* pad){
 }
 // The pad stops being read: its rumble/trigger effects and haptic stream end.
 void ControllerInput::deactivate(){
-    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}hapticAttempted_=false;
+    releaseEffects();if(hapticStream_){SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;}
+    hapticAttempted_=false;hapticWarned_=false;hapticRetryAt_=0;hapticEndpoint_=0;
     if(gamepad_&&SDL_GamepadConnected(gamepad_)){
         if(gyro_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_GYRO,false);
         if(accel_)SDL_SetGamepadSensorEnabled(gamepad_,SDL_SENSOR_ACCEL,false);
@@ -82,6 +84,15 @@ ControllerState ControllerInput::poll(bool focused){
     }
     SDL_Event event;
     while(SDL_PollEvent(&event)){
+        if (event.type==SDL_EVENT_AUDIO_DEVICE_REMOVED && !event.adevice.recording &&
+            hapticStream_ && event.adevice.which==hapticEndpoint_) {
+            SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;hapticEndpoint_=0;
+        }
+        // Retry a failed lookup after a topology change. The input loop does
+        // not periodically enumerate or reopen audio on a stable system.
+        if (!hapticStream_ && (event.type==SDL_EVENT_GAMEPAD_ADDED || event.type==SDL_EVENT_GAMEPAD_REMOVED ||
+            ((event.type==SDL_EVENT_AUDIO_DEVICE_ADDED || event.type==SDL_EVENT_AUDIO_DEVICE_REMOVED) && !event.adevice.recording)))
+            hapticAttempted_=false;
         if(follow_&&focused&&gamepad_&&event.type==SDL_EVENT_GAMEPAD_BUTTON_DOWN&&event.gbutton.which!=SDL_GetGamepadID(gamepad_)){
             const auto it=std::find_if(others_.begin(),others_.end(),[&](SDL_Gamepad* pad){return SDL_GetGamepadID(pad)==event.gbutton.which;});
             if(it!=others_.end()){auto* next=*it;others_.erase(it);deactivate();others_.push_back(gamepad_);activate(next);}
@@ -187,29 +198,46 @@ void ControllerInput::feedback(ControllerFeedback f,bool focused){
         if(!SDL_SendGamepadEffect(gamepad_,effect.data(),int(effect.size())))veyra::log::warn("remoteplay-feedback",SDL_GetError());
     }
     if(f.haptics.empty()||SDL_GetGamepadType(gamepad_)!=SDL_GAMEPAD_TYPE_PS5)return;
-    if(!hapticAttempted_){
+    if(!hapticStream_){
+        if(hapticAttempted_)return;
+        const auto now=monotonic100ns();
+        if(now<hapticRetryAt_)return;
+        hapticRetryAt_=now+20000000;
         hapticAttempted_=true;
         if(!audioInitialized_)audioInitialized_=SDL_InitSubSystem(SDL_INIT_AUDIO);
-        if(!audioInitialized_){veyra::log::error("remoteplay-haptics",SDL_GetError());return;}
+        if(!audioInitialized_){if(!hapticWarned_){hapticWarned_=true;veyra::log::error("remoteplay-haptics",SDL_GetError());}return;}
         // Never use the default speakers or a stereo endpoint. Ambiguity fails closed.
         int count=0;auto* devices=SDL_GetAudioPlaybackDevices(&count);SDL_AudioDeviceID selected=0;int matches=0;
         for(int i=0;i<count;++i){const auto* name=SDL_GetAudioDeviceName(devices[i]);SDL_AudioSpec spec{};
             if(name&&(std::strstr(name,"Wireless Controller")||std::strstr(name,"DualSense"))&&SDL_GetAudioDeviceFormat(devices[i],&spec,nullptr)&&spec.channels==4){selected=devices[i];++matches;}
         }
         SDL_free(devices);
-        int gamepadCount=0;auto* gamepads=SDL_GetGamepads(&gamepadCount);SDL_free(gamepads);
-        if(matches!=1||gamepadCount!=1){veyra::log::warn("remoteplay-haptics","No unique four-channel DualSense endpoint/controller pair; haptics not routed");return;}
+        int gamepadCount=0,dualSenses=0;auto* gamepads=SDL_GetGamepads(&gamepadCount);
+        for(int i=0;i<gamepadCount;++i)if(SDL_GetGamepadTypeForID(gamepads[i])==SDL_GAMEPAD_TYPE_PS5)++dualSenses;
+        SDL_free(gamepads);
+        if(matches!=1||dualSenses!=1){
+            if(!hapticWarned_){hapticWarned_=true;veyra::log::warn("remoteplay-haptics","No unique four-channel DualSense endpoint/controller pair; haptics not routed");}
+            return;
+        }
         SDL_AudioSpec input{SDL_AUDIO_S16,4,3000};
         hapticStream_=SDL_OpenAudioDeviceStream(selected,&input,nullptr,nullptr);
-        if(!hapticStream_||!SDL_ResumeAudioStreamDevice(hapticStream_)){veyra::log::error("remoteplay-haptics",SDL_GetError());if(hapticStream_)SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;return;}
+        if(!hapticStream_||!SDL_ResumeAudioStreamDevice(hapticStream_)){
+            if(!hapticWarned_){hapticWarned_=true;veyra::log::error("remoteplay-haptics",SDL_GetError());}
+            if(hapticStream_)SDL_DestroyAudioStream(hapticStream_);hapticStream_=nullptr;return;
+        }
+        hapticEndpoint_=selected;
+        hapticWarned_=false;
         veyra::log::info("remoteplay-haptics","Dedicated four-channel endpoint opened; speaker channels silent");
     }
-    if(!hapticStream_)return;
-    std::vector<int16_t> quad;quad.reserve(f.haptics.size()*2);
-    for(size_t i=0;i+1<f.haptics.size();i+=2){quad.push_back(0);quad.push_back(0);quad.push_back(f.haptics[i]);quad.push_back(f.haptics[i+1]);}
+    const auto frames=f.haptics.size()/2;
+    hapticPcm_.resize(frames*4);
+    for(size_t i=0;i<frames;++i){
+        hapticPcm_[i*4]=hapticPcm_[i*4+1]=0;
+        hapticPcm_[i*4+2]=f.haptics[i*2];hapticPcm_[i*4+3]=f.haptics[i*2+1];
+    }
     if(SDL_GetAudioStreamQueued(hapticStream_)>2400)SDL_ClearAudioStream(hapticStream_);
     effectsActive_=true;
-    if(!SDL_PutAudioStreamData(hapticStream_,quad.data(),int(quad.size()*sizeof(int16_t))))veyra::log::warn("remoteplay-haptics",SDL_GetError());
+    if(!SDL_PutAudioStreamData(hapticStream_,hapticPcm_.data(),int(hapticPcm_.size()*sizeof(int16_t))))veyra::log::warn("remoteplay-haptics",SDL_GetError());
 }
 
 bool ControllerInput::calibrate(){
