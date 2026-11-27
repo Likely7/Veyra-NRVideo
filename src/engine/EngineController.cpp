@@ -265,7 +265,12 @@ bool EngineController::remotePlayInputActive() const {
     std::lock_guard lock(mutex_);
     return snapshot_.remotePlay && (snapshot_.running || snapshot_.transport == TransportState::Opening);
 }
-void EngineController::remotePlayLoginPin(std::string pin){std::lock_guard lock(mutex_);if(activeRemote_)activeRemote_->loginPin(std::move(pin));else if(controlRemote_)controlRemote_->loginPin(std::move(pin));}
+bool EngineController::remotePlayLoginPin(uint64_t requestId,std::string_view pin){
+    std::lock_guard lock(mutex_);
+    if(snapshot_.transport==TransportState::Stopping)return false;
+    const auto& target=snapshot_.remotePlay?activeRemote_:controlRemote_;
+    return target&&target->loginPin(requestId,pin);
+}
 void EngineController::startRemoteControl(source::RemotePlayConnectDesc desc){
     desc.controlOnly=true;desc.request.viewOnly=false;
     auto request=std::make_shared<source::RemotePlayConnectDesc>(std::move(desc));
@@ -325,6 +330,7 @@ EngineController::RemoteControlStatus EngineController::remoteControlStatus()con
     const auto s=session->sessionSnapshot();
     out.connected=s.state==remoteplay::SessionState::WaitingFirstFrame||s.state==remoteplay::SessionState::Streaming;
     out.pinRequired=s.state==remoteplay::SessionState::LoginPinRequired;
+    if(out.alive&&!out.failed)out.loginPin=s.loginPin;
     const auto recovery=session->recoveryStatus();out.recovering=recovery.active;out.message=recovery.message;
     const auto rates=session->rates();out.keepaliveReady=rates.ready;out.keepaliveFps=rates.receivedFps;
     return out;

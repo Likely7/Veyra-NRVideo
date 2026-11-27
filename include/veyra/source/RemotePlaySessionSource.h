@@ -31,7 +31,7 @@ public:
     void close() noexcept override;
     void controller(remoteplay::ControllerState state);
     void setMappedController(std::weak_ptr<remoteplay::MappedController>, bool touchpadPressOnly);
-    void loginPin(std::string pin);
+    bool loginPin(uint64_t requestId,std::string_view pin);
     remoteplay::ControllerFeedback takeFeedback();
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;
     uint64_t skipped() const;
@@ -66,13 +66,12 @@ private:
     std::shared_ptr<AVFrame> view_;
     SourceInfo info_, publishedInfo_;
     remoteplay::SessionInbox::Snapshot snapshot_;
-    std::shared_ptr<const remoteplay::SessionInbox> telemetryInbox_;
+    std::shared_ptr<remoteplay::SessionInbox> sessionInbox_;
     remoteplay::ControllerState controller_;
     std::weak_ptr<remoteplay::MappedController> mappedController_;
     bool mappedPressOnly_ = false;
     std::deque<ControllerUpdate> pendingControllers_;
     remoteplay::HostTime controllerStamp_=0;
-    std::string pin_;
     uint64_t skipped_=0;
     Rates rates_;
     RecoveryStatus recovery_;

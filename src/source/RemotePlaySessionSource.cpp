@@ -75,7 +75,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
     try {
         const bool ok=source.connect(desc);
         if(!ok){retryWasRpInUse=source.nativeSnapshot().startupRetryAllowed;retryAfterLiveSession=false;retry=recovery.poll(milliseconds(),false,true)==remoteplay::StreamRecovery::Action::Reconnect;}
-        {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;telemetryInbox_=source.telemetryInbox();snapshot_.packetWindow.reset();
+        {std::lock_guard lock(mutex_);publishedInfo_=source.info();if(!initialized_)started_=ok;failed_=!ok&&!retry;initialized_=true;sessionInbox_=source.sessionInbox();snapshot_.packetWindow.reset();
             if(failed_)recovery_.message=desc.controlOnly?L"PS5 手柄控制连接失败，请检查主机及网络；已保存的配对无需重输。":L"PS5 串流连接失败，请检查主机及网络；已保存的配对无需重输。";}
         ready_.notify_all();
         if(ok&&desc.controlOnly) {
@@ -91,12 +91,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             uint64_t previousReceived=receivedBase,lastVideo=0;
             bool connectedLogged=false;
             while(!stop.stop_requested()) {
-                std::string pin;
-                {std::lock_guard lock(mutex_);pin.swap(pin_);}
-                if(!pin.empty()) {
-                    const auto r=source.submitLoginPin(pin);SecureZeroMemory(pin.data(),pin.size());
-                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
-                }
+                source.submitPendingLoginPin();
                 auto now=std::chrono::steady_clock::now();
                 if(now>=nextController) {
                     remoteplay::ControllerState controller;
@@ -136,7 +131,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
                 else Sleep(1);
             }
         } else if(ok) {
-            monitor=std::jthread([inbox=source.telemetryInbox()](std::stop_token cancel){
+            monitor=std::jthread([inbox=source.sessionInbox()](std::stop_token cancel){
                 while(!cancel.stop_requested()){
                     const auto s=inbox->snapshot();const auto now=remoteplay::monotonic100ns();
                     const auto age=[&](auto stamp){return stamp>0?double(now-stamp)/10000:-1.0;};
@@ -191,12 +186,7 @@ void RemotePlaySessionSource::run(std::stop_token stop, RemotePlayConnectDesc de
             wchar_t disconnectAfter[24]{};uint64_t testDisconnectFrames=0;bool testDisconnected=false;
             if(!recovery.reconnects()&&GetEnvironmentVariableW(L"VEYRA_TEST_REMOTEPLAY_DISCONNECT_AFTER_FRAMES",disconnectAfter,24))testDisconnectFrames=std::clamp<uint64_t>(_wtoi64(disconnectAfter),60,3600);
             while(!stop.stop_requested()) {
-                std::string pin;
-                {std::lock_guard lock(mutex_);pin.swap(pin_);}
-                if(!pin.empty()) {
-                    const auto r=source.submitLoginPin(pin);SecureZeroMemory(pin.data(),pin.size());
-                    if(!r.ok)log::warn("remoteplay",std::format("{} code={}",r.operation,r.code));
-                }
+                source.submitPendingLoginPin();
                 const auto now=std::chrono::steady_clock::now();
 
                 pipeline::FramePacket packet; const AVFrame* frame=nullptr;
@@ -331,7 +321,7 @@ void RemotePlaySessionSource::close() noexcept {
     if(owner_.joinable()){owner_.request_stop();owner_.join();}
     std::lock_guard lock(mutex_);latest_.reset();view_.reset();info_={};started_=false;
     if (frameEvent_) ResetEvent(frameEvent_.get());
-    SecureZeroMemory(pin_.data(),pin_.size());pin_.clear();
+    sessionInbox_.reset();
 }
 void RemotePlaySessionSource::controller(remoteplay::ControllerState state){
     std::lock_guard lock(mutex_);controllerStamp_=remoteplay::monotonic100ns();
@@ -396,13 +386,16 @@ remoteplay::ControllerState RemotePlaySessionSource::takeControllerLocked(remote
     }
     return controller_;
 }
-void RemotePlaySessionSource::loginPin(std::string pin){std::lock_guard lock(mutex_);SecureZeroMemory(pin_.data(),pin_.size());pin_=std::move(pin);}
+bool RemotePlaySessionSource::loginPin(uint64_t requestId,std::string_view pin){
+    std::lock_guard lock(mutex_);
+    return alive_&&!failed_&&sessionInbox_&&sessionInbox_->queueLoginPin(requestId,pin);
+}
 remoteplay::SessionInbox::Snapshot RemotePlaySessionSource::sessionSnapshot()const{
     std::shared_ptr<const remoteplay::SessionInbox> inbox;
     std::optional<remoteplay::SessionInbox::PacketWindow> packetWindow;
     {
         std::lock_guard lock(mutex_);
-        inbox=telemetryInbox_;
+        inbox=sessionInbox_;
         if(!inbox)return snapshot_;
         packetWindow=snapshot_.packetWindow;
     }

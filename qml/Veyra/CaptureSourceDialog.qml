@@ -533,11 +533,13 @@ DialogLayer {
         VRow {
             visible: captureDialog.pcOn && captureDialog.pc.state === "pin"
             label: qsTr("登录 PIN")
-            hint: qsTr("PS5 提示时填写，不是 8 位配对码")
-            RowLayout {
-                spacing: 6
-                DialogTextField { id: controlPin; objectName: "capture-ps5-pin"; implicitWidth: 120 }
-                VButton { text: qsTr("提交"); ghost: true; onClicked: { veyra.ps5SendLoginPin(controlPin.text); controlPin.text = "" } }
+            hint: controlPin.feedback || qsTr("PS5 提示时填写，不是 8 位配对码")
+            Ps5LoginPinField {
+                id: controlPin
+                objectName: "capture-ps5-pin"
+                backend: veyra
+                prompt: veyra.ps5LoginPrompt?.controlOnly ? veyra.ps5LoginPrompt : ({})
+                active: captureDialog.shown && captureDialog.pcOn && captureDialog.pc.state === "pin"
             }
         }
         VRow {

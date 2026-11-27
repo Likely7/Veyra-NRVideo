@@ -28,6 +28,7 @@ std::optional<AccountId> accountIdFromBase64(std::string_view);
 std::optional<AccountId> accountIdFromDecimal(std::string_view);
 std::string accountIdToBase64(const AccountId&);
 std::optional<std::uint32_t> parsePairingPin(std::string_view);
+bool validLoginPin(std::string_view) noexcept;
 bool validHost(std::string_view) noexcept; // IPv4 or DNS hostname; no URL/userinfo/path/port.
 bool validProfileId(std::string_view) noexcept;
 

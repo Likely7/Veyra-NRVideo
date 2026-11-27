@@ -269,6 +269,58 @@ TEST(inbox_failure_closes_media){SessionInbox q;auto t=q.begin(monotonic100ns())
 TEST(inbox_begin_and_stop_guards){SessionInbox q;THROWS(q.begin(-1));auto t=q.begin(monotonic100ns());THROWS(q.begin(monotonic100ns()));THROWS(q.finishStop());q.invalidate();THROWS(q.begin(monotonic100ns()));q.finishStop();CHECK(q.begin(monotonic100ns()).generation()>t.generation());}
 TEST(inbox_callbacks_race_invalidate){SessionInbox q;auto t=q.begin(monotonic100ns());std::atomic<bool> finish=false;std::thread worker([&]{while(!finish){t.connected();(void)t.audio(audio(0,480,t.generation()));}});q.invalidate();finish=true;worker.join();CHECK(!q.isCurrent(t.generation()));CHECK(!q.tryAudio());q.finishStop();CHECK(q.snapshot().state==SessionState::Idle);}
 TEST(inbox_failed_requires_backend_join){SessionInbox q;auto t=q.begin(monotonic100ns());t.failed(42);THROWS(q.begin(monotonic100ns()));q.invalidate();q.finishStop();CHECK(q.begin(monotonic100ns()).generation()>t.generation());}
+TEST(inbox_login_pin_only_once_per_request){
+    SessionInbox inbox;
+    auto native=inbox.begin(monotonic100ns());
+    CHECK(!inbox.queueLoginPin(1,"0123"));
+    native.loginPinRequired(false);
+    const auto first=inbox.snapshot().loginPin.requestId;
+    CHECK(first&&!inbox.snapshot().loginPin.incorrect);
+    for(const auto* invalid:{"", "123", "12345", "12345678", " 123", "01a3", "０１２３"})
+        CHECK(!inbox.queueLoginPin(first,invalid));
+    CHECK(inbox.queueLoginPin(first,"0123"));
+    CHECK(inbox.snapshot().loginPin.pending&&!inbox.queueLoginPin(first,"9876"));
+    std::array<char,4> transport{};
+    CHECK(inbox.takeLoginPin(transport)==first);
+    CHECK(std::string_view(transport.data(),transport.size())=="0123");
+    CHECK(!inbox.takeLoginPin(transport));
+    inbox.loginPinSubmitFailed(first);
+    CHECK(inbox.snapshot().loginPin.submitFailed&&inbox.queueLoginPin(first,"9876"));
+    native.loginPinRequired(true);
+    const auto retry=inbox.snapshot().loginPin;
+    CHECK(retry.requestId!=first&&retry.incorrect&&!retry.pending);
+    CHECK(!inbox.takeLoginPin(transport)&&!inbox.queueLoginPin(first,"1234"));
+    CHECK(inbox.queueLoginPin(retry.requestId,"2345"));
+    CHECK(inbox.takeLoginPin(transport)==retry.requestId);
+    native.connected();
+    native.loginPinRequired(false);
+    CHECK(!inbox.snapshot().loginPin.requestId&&!inbox.queueLoginPin(retry.requestId,"1234"));
+    CHECK(inbox.snapshot().state==SessionState::WaitingFirstFrame);
+}
+TEST(inbox_login_pin_isolated_across_reconnect_and_input_modes){
+    SessionInbox video,control;
+    auto old=video.begin(monotonic100ns());
+    auto other=control.begin(monotonic100ns());
+    CHECK(old.generation()==other.generation());
+    old.loginPinRequired(false);other.loginPinRequired(false);
+    const auto oldId=video.snapshot().loginPin.requestId;
+    const auto otherId=control.snapshot().loginPin.requestId;
+    CHECK(oldId!=otherId&&!control.queueLoginPin(oldId,"1234"));
+    CHECK(video.queueLoginPin(oldId,"1234"));
+    video.invalidate();video.finishStop();
+    auto current=video.begin(monotonic100ns());
+    old.loginPinRequired(true);
+    CHECK(!video.snapshot().loginPin.requestId);
+    current.loginPinRequired(false);
+    const auto currentId=video.snapshot().loginPin.requestId;
+    std::array<char,4> transport{};
+    CHECK(currentId!=oldId&&currentId!=otherId&&!video.takeLoginPin(transport));
+    CHECK(!video.queueLoginPin(oldId,"4567")&&!video.queueLoginPin(otherId,"4567"));
+    CHECK(video.queueLoginPin(currentId,"4567"));
+    current.failed(42);
+    CHECK(!video.snapshot().loginPin.requestId&&!video.takeLoginPin(transport));
+    CHECK(control.queueLoginPin(otherId,"7890")&&control.takeLoginPin(transport)==otherId);
+}
 TEST(input_and_mailbox_zero_generation){InputGate g;THROWS(g.begin(0));LatestMailbox<int> m;THROWS(m.begin(0));VideoIngress v;THROWS(v.begin(0));AudioIngress a;THROWS(a.begin(0));}
 TEST(inbox_frame_stamped_after_reader_clock){
     // The same through the session boundary, in the product's order: the reader's clock

@@ -11,6 +11,11 @@ class SessionInbox {
     struct Shared;
 public:
     struct PacketWindow { uint64_t received=0, lost=0; };
+    struct LoginPinPrompt {
+        uint64_t requestId=0;
+        bool incorrect=false, pending=false, submitFailed=false;
+        bool operator==(const LoginPinPrompt&) const = default;
+    };
     struct Snapshot {
         Generation generation=0;SessionState state=SessionState::Idle;HostTime commonOrigin100ns=0;
         std::uint64_t staleCallbacks=0;int errorCode=0;
@@ -24,13 +29,14 @@ public:
         VideoProfile requestedProfile;
         // Populated by the stream owner from its existing Chiaki telemetry.
         std::optional<PacketWindow> packetWindow;
+        LoginPinPrompt loginPin;
     };
     class Token {
     public:
         bool video(VideoSample sample) const noexcept;
         bool audio(PcmBlock block) const noexcept;
         void connected() const noexcept;
-        void loginPinRequired() const noexcept;
+        void loginPinRequired(bool incorrect) const noexcept;
         void failed(int code) const noexcept;
         Generation generation()const noexcept{return generation_;}
     private:
@@ -46,6 +52,9 @@ public:
     bool decodedFrameReady(Generation);
     std::optional<QueuedVideo> tryVideo(HostTime now);
     std::optional<PcmBlock> tryAudio();
+    bool queueLoginPin(uint64_t requestId,std::string_view pin);
+    uint64_t takeLoginPin(std::array<char,4>& pin);
+    void loginPinSubmitFailed(uint64_t requestId);
     bool takeIdrRequest(HostTime now);
     void decodeFailed(Generation);
     bool isCurrent(Generation)const;

@@ -51,13 +51,13 @@ public:
     bool open(const SourceOpenDesc& desc) override;
     bool connect(const RemotePlayConnectDesc& desc);
     remoteplay::BackendResult submitController(const remoteplay::ControllerState& state) { return backend_.submitController(state); }
-    remoteplay::BackendResult submitLoginPin(std::string_view pin) { return backend_.submitLoginPin(pin); }
+    void submitPendingLoginPin();
     remoteplay::ControllerFeedback takeFeedback(){return backend_.takeFeedback();}
     remoteplay::NativeSnapshot nativeSnapshot()const{return backend_.snapshot();} // session owner only
     remoteplay::BackendResult disconnectTransportForTest(){return backend_.stop();}
     bool connected() const noexcept { return connected_; }
     remoteplay::SessionInbox::Snapshot sessionSnapshot() const;
-    std::shared_ptr<const remoteplay::SessionInbox> telemetryInbox()const{return inbox_;}
+    std::shared_ptr<remoteplay::SessionInbox> sessionInbox()const{return inbox_;}
     void recoverVideo(){flushDecoder();if(token_)inbox_->decodeFailed(token_->generation());}
 
     const SourceInfo& info() const override { return info_; }

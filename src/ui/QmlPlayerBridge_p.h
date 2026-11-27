@@ -505,6 +505,8 @@ struct QmlPlayerBridge::Impl {
     std::wstring ps5Profile;                 // file name inside profileDirectory()
     QVariantList ps5ProfileList;
     bool ps5Watching = false;
+    remoteplay::SessionInbox::LoginPinPrompt ps5Prompt,ps5ControlPrompt;
+    bool ps5PromptControlOnly=false;
     struct Ps5Outcome { std::wstring message; std::vector<std::pair<std::string, std::string>> hosts; std::wstring savedPath; bool refreshProfiles = false; };
     std::mutex ps5Mutex;
     Ps5Outcome ps5Outcome;

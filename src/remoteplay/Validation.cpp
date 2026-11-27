@@ -56,6 +56,9 @@ std::optional<std::uint32_t> parsePairingPin(std::string_view text) {
     if(text.size()!=8 || !std::all_of(text.begin(),text.end(),digit))return {};
     std::uint32_t pin=0;for(char c:text)pin=pin*10+static_cast<unsigned>(c-'0');return pin;
 }
+bool validLoginPin(std::string_view pin) noexcept {
+    return pin.size() == 4 && std::all_of(pin.begin(), pin.end(), [](char c) { return c >= '0' && c <= '9'; });
+}
 bool validHost(std::string_view host) noexcept {
     if(host.empty() || host.size()>253 || host.front()=='.' || host.back()=='.')return false;
     bool numeric=true;

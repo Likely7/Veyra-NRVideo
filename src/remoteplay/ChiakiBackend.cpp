@@ -103,7 +103,7 @@ struct ChiakiBackend::Impl {
         if(!event||!self.active.load())return;
         switch(event->type){
         case CHIAKI_EVENT_CONNECTED:self.connected=true;self.token.connected();break;
-        case CHIAKI_EVENT_LOGIN_PIN_REQUEST:self.token.loginPinRequired();break;
+        case CHIAKI_EVENT_LOGIN_PIN_REQUEST:self.token.loginPinRequired(event->login_pin_request.pin_incorrect);break;
         case CHIAKI_EVENT_QUIT:
             self.connected=false;self.quitReason=static_cast<int>(event->quit.reason);
             // A remote termination is not a successful decoded EOF.
@@ -258,7 +258,7 @@ BackendResult ChiakiBackend::requestIdr(){
 }
 BackendResult ChiakiBackend::submitLoginPin(std::string_view pin){
     if(!p_||!p_->onOwner()||!p_->started)return {false,-1104,"pin_without_session"};
-    if(pin.empty()||pin.size()>8||!std::all_of(pin.begin(),pin.end(),[](char c){return c>='0'&&c<='9';}))return {false,-1105,"invalid_login_pin"};
+    if(!validLoginPin(pin))return {false,-1105,"invalid_login_pin"};
     return p_->record(chiaki_session_set_login_pin(&p_->session,reinterpret_cast<const std::uint8_t*>(pin.data()),pin.size()),"chiaki_session_set_login_pin");
 }
 BackendResult ChiakiBackend::submitController(const ControllerState& state){

@@ -4109,6 +4109,32 @@
    "ru": "Изображение PNG (*.png); изображение JPEG (*.jpg)"
   },
   {
+   "zh": "PIN 不正确，请重新输入。",
+   "src": "qml/Ps5LoginPinField.qml",
+   "zh-TW": "PIN 不正確，請重新輸入。",
+   "en": "Incorrect PIN. Try again.",
+   "ja": "PIN が違います。もう一度入力してください。",
+   "ko": "PIN이 올바르지 않습니다. 다시 입력하세요.",
+   "es": "PIN incorrecto. Introdúcelo de nuevo.",
+   "fr": "PIN incorrect. Saisissez-le de nouveau.",
+   "de": "Falsche PIN. Bitte erneut eingeben.",
+   "pt-BR": "PIN incorreto. Digite-o novamente.",
+   "ru": "Неверный PIN-код. Введите его ещё раз."
+  },
+  {
+   "zh": "PIN 提交失败，请重试。",
+   "src": "qml/Ps5LoginPinField.qml",
+   "zh-TW": "PIN 送出失敗，請重試。",
+   "en": "Could not submit the PIN. Try again.",
+   "ja": "PIN を送信できませんでした。もう一度お試しください。",
+   "ko": "PIN을 보내지 못했습니다. 다시 시도하세요.",
+   "es": "No se pudo enviar el PIN. Inténtalo de nuevo.",
+   "fr": "Impossible d’envoyer le PIN. Réessayez.",
+   "de": "Die PIN konnte nicht gesendet werden. Bitte erneut versuchen.",
+   "pt-BR": "Não foi possível enviar o PIN. Tente novamente.",
+   "ru": "Не удалось отправить PIN-код. Повторите попытку."
+  },
+  {
    "zh": "PS5 串流",
    "src": "qml/CineBar.qml",
    "zh-TW": "PS5 串流",
@@ -28486,6 +28512,19 @@
    "ru": "Вход в стриминговый сервис Xbox..."
   },
   {
+   "zh": "正在等待 PS5 验证…",
+   "src": "qml/Ps5LoginPinField.qml",
+   "zh-TW": "正在等待 PS5 驗證…",
+   "en": "Waiting for the PS5 to verify the PIN…",
+   "ja": "PS5 での PIN 確認を待っています…",
+   "ko": "PS5가 PIN을 확인하는 중…",
+   "es": "Esperando a que la PS5 verifique el PIN…",
+   "fr": "Vérification du PIN sur la PS5…",
+   "de": "Warte auf die PIN-Prüfung durch die PS5…",
+   "pt-BR": "Aguardando o PS5 confirmar o PIN…",
+   "ru": "Ожидание проверки PIN-кода на PS5…"
+  },
+  {
    "zh": "正在等待 Windows 字幕响应…",
    "src": "src/ui/LiveTranslation.cpp",
    "zh-TW": "正在等待 Windows 字幕回應…",
@@ -31110,19 +31149,6 @@
    "de": "Anmelde-PIN",
    "pt-BR": "PIN de login",
    "ru": "PIN-код входа"
-  },
-  {
-   "zh": "登录 PIN 必须为数字。",
-   "src": "src/ui/bridge/RemotePlay.cpp",
-   "zh-TW": "登入 PIN 必須為數字。",
-   "en": "The sign-in PIN must be digits.",
-   "ja": "サインイン PIN は数字で入力してください。",
-   "ko": "로그인 PIN은 숫자여야 합니다.",
-   "es": "El PIN de inicio de sesión debe tener solo dígitos.",
-   "fr": "Le PIN de connexion doit contenir des chiffres.",
-   "de": "Die Anmelde-PIN darf nur Ziffern enthalten.",
-   "pt-BR": "O PIN de login deve ter só dígitos.",
-   "ru": "PIN-код входа должен состоять из цифр."
   },
   {
    "zh": "登录信息加密保存在本机；退出会删除它",
@@ -37558,6 +37584,19 @@
    "de": "Enter eine Geschwindigkeit zwischen 0,25 und 4,00",
    "pt-BR": "Enter velocidade entre 0,25 e 4,00",
    "ru": "Enter скорость между 0,25 и 4,00"
+  },
+  {
+   "zh": "请输入 PS5 主机的 4 位登录 PIN。",
+   "src": "qml/Ps5LoginPinDialog.qml",
+   "zh-TW": "請輸入 PS5 主機的 4 位登入 PIN。",
+   "en": "Enter the 4-digit sign-in PIN for your PS5.",
+   "ja": "PS5 の 4 桁のサインイン PIN を入力してください。",
+   "ko": "PS5의 4자리 로그인 PIN을 입력하세요.",
+   "es": "Introduce el PIN de inicio de sesión de 4 dígitos de la PS5.",
+   "fr": "Saisissez le PIN de connexion à 4 chiffres de votre PS5.",
+   "de": "Gib die vierstellige Anmelde-PIN deiner PS5 ein.",
+   "pt-BR": "Digite o PIN de login de 4 dígitos do PS5.",
+   "ru": "Введите четырёхзначный PIN-код входа на PS5."
   },
   {
    "zh": "请输入有效的 HTTP、HTTPS、RTSP、RTP 或 UDP 视频地址",

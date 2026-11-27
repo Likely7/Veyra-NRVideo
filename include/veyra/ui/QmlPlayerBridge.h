@@ -207,6 +207,7 @@ class QmlPlayerBridge : public QObject {
     // wake, stream profile, decode/sampling, view-only, login PIN, controller
     // forwarding and gyro calibration. `ps5` carries the form state.
     Q_PROPERTY(QVariantMap ps5 READ ps5 NOTIFY ps5Changed)
+    Q_PROPERTY(QVariantMap ps5LoginPrompt READ ps5LoginPrompt NOTIFY ps5LoginPromptChanged)
     Q_PROPERTY(bool ps5VideoActive READ ps5VideoActive NOTIFY snapshotChanged)
     Q_PROPERTY(QVariantList ps5Profiles READ ps5Profiles NOTIFY ps5Changed)
     // PS5 手柄控制 (采集卡对话框): a controller-only Remote Play session beside the
@@ -881,7 +882,8 @@ public:
     Q_INVOKABLE void ps5Wake();
     Q_INVOKABLE void ps5Forget();
     Q_INVOKABLE void ps5OpenAccountChecker();
-    Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
+    QVariantMap ps5LoginPrompt() const;
+    Q_INVOKABLE bool ps5SendLoginPin(const QString& requestId,const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
     // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).
@@ -1561,6 +1563,7 @@ signals:
     void playlistRequested();
     void nodeAnchorsChanged();
     void ps5Changed();
+    void ps5LoginPromptChanged();
     void ps5ControlChanged();
     void xboxControlChanged();
     void moonlightUiChanged();

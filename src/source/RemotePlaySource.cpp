@@ -165,6 +165,18 @@ remoteplay::SessionInbox::Snapshot RemotePlaySource::sessionSnapshot() const
     return inbox_->snapshot();
 }
 
+void RemotePlaySource::submitPendingLoginPin(){
+    std::array<char,4> pin{};
+    const auto requestId=inbox_->takeLoginPin(pin);
+    if(!requestId)return;
+    const auto result=backend_.submitLoginPin({pin.data(),pin.size()});
+    for(auto& digit:pin)static_cast<volatile char&>(digit)=0;
+    if(!result.ok){
+        inbox_->loginPinSubmitFailed(requestId);
+        veyra::log::warn("remoteplay",std::format("{} code={}",result.operation,result.code));
+    }
+}
+
 bool RemotePlaySource::openDecoder(remoteplay::Codec codec, std::uint32_t width, std::uint32_t height)
 {
     if(decodeMode_==RemotePlayConnectDesc::DecodeMode::Hardware&&!decodeDevice_){

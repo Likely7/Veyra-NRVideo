@@ -121,6 +121,8 @@ Item {
         id: ps5Dialog
         dialogHost: host    }
 
+    Ps5LoginPinDialog { dialogHost: host; backend: veyra }
+
     Ps5MappingDialog { dialogHost: host; xboxMode: host.xboxMapping }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------

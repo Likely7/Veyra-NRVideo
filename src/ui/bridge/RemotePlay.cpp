@@ -718,15 +718,33 @@ void QmlPlayerBridge::ps5OpenAccountChecker() {
         : tr("无法打开浏览器，请检查默认浏览器设置。");
     emit ps5Changed();
 }
-void QmlPlayerBridge::ps5SendLoginPin(const QString& pin) {
+QVariantMap QmlPlayerBridge::ps5LoginPrompt() const {
+    const auto& prompt=impl_->ps5Prompt;
+    if(!prompt.requestId)return {};
+    return {{"requestId",QString::number(qulonglong(prompt.requestId))},
+            {"incorrect",prompt.incorrect},{"pending",prompt.pending},
+            {"submitFailed",prompt.submitFailed},{"controlOnly",impl_->ps5PromptControlOnly}};
+}
+bool QmlPlayerBridge::ps5SendLoginPin(const QString& requestId,const QString& pin) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-    const auto text = pin.trimmed();
-    if (text.isEmpty() || !std::all_of(text.begin(), text.end(), [](QChar c) { return c.isDigit(); })) {
-        impl_->ps5Status = tr("登录 PIN 必须为数字。"); emit ps5Changed(); return;
+    auto& i=*impl_;
+    bool valid=false;
+    const auto id=requestId.toULongLong(&valid);
+    if(!valid||!id||id!=i.ps5Prompt.requestId||pin.size()!=4||
+       !std::all_of(pin.begin(),pin.end(),[](QChar c){return c.unicode()>='0'&&c.unicode()<='9';}))return false;
+    std::array<char,4> digits;
+    std::transform(pin.begin(),pin.end(),digits.begin(),[](QChar c){return char(c.unicode());});
+    const bool queued=i.engine.remotePlayLoginPin(id,{digits.data(),digits.size()});
+    SecureZeroMemory(digits.data(),digits.size());
+    if(queued){
+        i.ps5Prompt.pending=true;i.ps5Prompt.submitFailed=false;
+        if(i.ps5PromptControlOnly)i.ps5ControlPrompt=i.ps5Prompt;
+        emit ps5LoginPromptChanged();
     }
-    impl_->engine.remotePlayLoginPin(text.toStdString());
+    return queued;
 #else
-    (void)pin; // RemotePlay disabled: keep the QML-callable symbol but no backend.
+    (void)requestId;(void)pin;
+    return false;
 #endif
 }
 void QmlPlayerBridge::ps5Cancel() {
@@ -796,6 +814,21 @@ void QmlPlayerBridge::tickPs5() {
 #endif
     if (changed) emit ps5Changed();
     tickPs5Control();
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+    const auto& s=i.snapshot;
+    remoteplay::SessionInbox::LoginPinPrompt prompt;
+    bool controlOnly=false;
+    if(!s.failed&&s.transport!=engine::TransportState::Stopping){
+        if(s.remotePlay)prompt=s.remoteStream.loginPin;
+        else if(i.ps5ControlPrompt.requestId&&captureCardLive()&&i.prefBool("ps5CaptureControl",false)){
+            prompt=i.ps5ControlPrompt;controlOnly=true;
+        }
+    }
+    if(prompt!=i.ps5Prompt||controlOnly!=i.ps5PromptControlOnly){
+        i.ps5Prompt=prompt;i.ps5PromptControlOnly=controlOnly;
+        emit ps5LoginPromptChanged();
+    }
+#endif
 }
 
 // --- PS5 手柄控制 (capture card dialog) ----------------------------------------
@@ -937,6 +970,7 @@ void QmlPlayerBridge::tickPs5Control(bool force) {
     if (!force && !i.ps5ControlNoPair && i.prefBool("ps5CaptureControl", false) && captureCardLive() && !i.engine.remoteControlRequested())
         startPs5Control(false);
     const auto st = i.engine.remoteControlStatus();
+    i.ps5ControlPrompt=st.loginPin;
     QString state = QStringLiteral("off");
     if (i.ps5ControlNoPair && !st.requested) state = QStringLiteral("nopair");
     else if (st.requested) {

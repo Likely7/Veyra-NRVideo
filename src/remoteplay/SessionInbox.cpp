@@ -2,8 +2,14 @@
 #include "veyra/remoteplay/SessionInbox.h"
 #include <limits>
 #include <algorithm>
+#include <atomic>
 #include <vector>
 namespace veyra::remoteplay {
+namespace {
+// A reconnect creates a new inbox whose generation can start again at one.
+// A UI response must identify the native request across all inboxes.
+std::atomic<uint64_t> nextLoginPinRequest=1;
+}
 struct SessionInbox::Shared {
     explicit Shared(QueueLimits limits):video(limits){}
     mutable std::mutex mutex;Generation generation=0;SessionState state=SessionState::Idle;
@@ -13,6 +19,14 @@ struct SessionInbox::Shared {
     uint64_t decodedFrames=0,receivedBytes=0,framesLost=0,referenceRecoveryEvents=0;
     bool hardwareDecode=false,decodeFallback=false,decodeConfirmed=false;
     VideoProfile requestedProfile;
+    LoginPinPrompt loginPin;
+    std::atomic<bool> pinQueued=false;
+    std::array<char,4> pin{};
+    void clearPin(){
+        for(auto& digit:pin)static_cast<volatile char&>(digit)=0;
+        pinQueued.store(false,std::memory_order_relaxed);
+    }
+    void resetLoginPin(){clearPin();loginPin={};}
     struct Sample {HostTime time;double value;};
     std::deque<Sample> received,decoded,decodeTimes,ingressWait;
     static void add(std::deque<Sample>& q,HostTime now,double value){
@@ -33,7 +47,7 @@ SessionInbox::Token SessionInbox::begin(HostTime origin){
     s.received.clear();s.decoded.clear();s.decodeTimes.clear();s.ingressWait.clear();
     return Token{shared_,s.generation};
 }
-void SessionInbox::invalidate(){auto& s=*shared_;std::lock_guard l(s.mutex);s.accepting=false;if(s.state!=SessionState::Idle)s.state=SessionState::Stopping;s.video.close();s.audio.close();}
+void SessionInbox::invalidate(){auto& s=*shared_;std::lock_guard l(s.mutex);s.accepting=false;s.resetLoginPin();if(s.state!=SessionState::Idle)s.state=SessionState::Stopping;s.video.close();s.audio.close();}
 void SessionInbox::finishStop(){auto& s=*shared_;std::lock_guard l(s.mutex);if(s.accepting)throw std::logic_error("Invalidate before join/finishStop");s.state=SessionState::Idle;}
 bool SessionInbox::isCurrent(Generation g)const{auto& s=*shared_;std::lock_guard l(s.mutex);return s.accepting&&s.generation==g;}
 bool SessionInbox::decodedFrameReady(Generation g){
@@ -43,6 +57,28 @@ bool SessionInbox::decodedFrameReady(Generation g){
 }
 std::optional<QueuedVideo> SessionInbox::tryVideo(HostTime now){auto& s=*shared_;std::lock_guard l(s.mutex);if(!s.accepting)return {};return s.video.tryPop(now);}
 std::optional<PcmBlock> SessionInbox::tryAudio(){auto& s=*shared_;std::lock_guard l(s.mutex);if(!s.accepting)return {};return s.audio.tryPop();}
+bool SessionInbox::queueLoginPin(uint64_t requestId,std::string_view pin){
+    if(!requestId||!validLoginPin(pin))return false;
+    auto& s=*shared_;std::lock_guard l(s.mutex);
+    if(!s.accepting||s.loginPin.requestId!=requestId||s.loginPin.pending)return false;
+    std::copy(pin.begin(),pin.end(),s.pin.begin());
+    s.loginPin.pending=true;s.loginPin.submitFailed=false;
+    s.pinQueued.store(true,std::memory_order_relaxed);
+    return true;
+}
+uint64_t SessionInbox::takeLoginPin(std::array<char,4>& pin){
+    auto& s=*shared_;
+    if(!s.pinQueued.load(std::memory_order_relaxed))return 0;
+    std::lock_guard l(s.mutex);
+    if(!s.pinQueued.load(std::memory_order_relaxed))return 0;
+    pin=s.pin;s.clearPin();
+    return s.loginPin.requestId;
+}
+void SessionInbox::loginPinSubmitFailed(uint64_t requestId){
+    auto& s=*shared_;std::lock_guard l(s.mutex);
+    if(!s.accepting||s.loginPin.requestId!=requestId)return;
+    s.loginPin.pending=false;s.loginPin.submitFailed=true;
+}
 bool SessionInbox::takeIdrRequest(HostTime now){auto& s=*shared_;std::lock_guard l(s.mutex);return s.accepting&&s.video.takeIdrRequest(now);}
 void SessionInbox::decodeFailed(Generation g){auto& s=*shared_;std::lock_guard l(s.mutex);if(s.accepting&&s.generation==g)s.video.requireKeyframe();}
 SessionInbox::Snapshot SessionInbox::snapshot()const{
@@ -52,6 +88,7 @@ SessionInbox::Snapshot SessionInbox::snapshot()const{
     result.decodedFrames=s.decodedFrames;result.receivedBytes=s.receivedBytes;result.framesLost=s.framesLost;result.referenceRecoveryEvents=s.referenceRecoveryEvents;
     result.hardwareDecode=s.hardwareDecode;result.decodeFallback=s.decodeFallback;result.decodeConfirmed=s.decodeConfirmed;
     result.requestedProfile=s.requestedProfile;
+    result.loginPin=s.loginPin;
     result.ratesReady=now-s.origin>=10000000;
     for(const auto& v:s.received)if(v.time>now-10000000){++result.receivedFps;result.videoMbps+=v.value*8/1000000;}
     for(const auto& v:s.decoded)if(v.time>now-10000000)++result.decodedFps;
@@ -77,15 +114,21 @@ bool SessionInbox::Token::audio(PcmBlock block)const noexcept{
 }
 void SessionInbox::Token::connected()const noexcept{
     try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
-        if(s->state==SessionState::Connecting||s->state==SessionState::LoginPinRequired)s->state=SessionState::WaitingFirstFrame;
+        if(s->state==SessionState::Connecting||s->state==SessionState::LoginPinRequired){
+            s->resetLoginPin();s->state=SessionState::WaitingFirstFrame;
+        }
     }catch(...){}
 }
-void SessionInbox::Token::loginPinRequired()const noexcept{
-    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(s->current(generation_))s->state=SessionState::LoginPinRequired;}catch(...){}
+void SessionInbox::Token::loginPinRequired(bool incorrect)const noexcept{
+    try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
+        if(s->state!=SessionState::Connecting&&s->state!=SessionState::LoginPinRequired)return;
+        s->resetLoginPin();s->state=SessionState::LoginPinRequired;
+        s->loginPin={nextLoginPinRequest.fetch_add(1,std::memory_order_relaxed),incorrect};
+    }catch(...){}
 }
 void SessionInbox::Token::failed(int code)const noexcept{
     try{auto s=shared_.lock();if(!s)return;std::lock_guard l(s->mutex);if(!s->current(generation_))return;
-        s->error=code;s->state=SessionState::Failed;s->accepting=false;s->video.close();s->audio.close();
+        s->error=code;s->state=SessionState::Failed;s->accepting=false;s->resetLoginPin();s->video.close();s->audio.close();
     }catch(...){}
 }
 void SessionInbox::decoderBackend(bool hardware,bool fallback){

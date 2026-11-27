@@ -4,6 +4,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <condition_variable>
 #include <functional>
@@ -262,7 +263,7 @@ public:
     bool remotePlayMappedController(uint64_t destination, std::weak_ptr<remoteplay::MappedController>);
     bool remotePlayInputActive() const;
     void setRemotePlayTouchpadPressOnly(bool enabled){remotePlayTouchpadPressOnly_=enabled;}
-    void remotePlayLoginPin(std::string);
+    bool remotePlayLoginPin(uint64_t requestId,std::string_view pin);
     // PS5 手柄控制 beside a capture card: a controller-only Remote Play session
     // (the console's keepalive video and audio are dropped on receipt). Start and
     // stop are queued to a dedicated thread, so callers never wait for the
@@ -277,6 +278,7 @@ public:
         bool starting=false,alive=false,connected=false,pinRequired=false,recovering=false,failed=false;
         bool keepaliveReady=false;double keepaliveFps=0; // console video samples dropped per second
         std::wstring message;
+        remoteplay::SessionInbox::LoginPinPrompt loginPin;
     };
     RemoteControlStatus remoteControlStatus()const;
     bool remoteControlRequested()const; // cheap: a start is queued or a session exists
