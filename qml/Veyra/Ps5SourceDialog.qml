@@ -131,6 +131,25 @@ DialogLayer {
                 onToggled: checked => veyra.ps5Set("touchpadPressOnly", checked)
             }
         }
+        VRow {
+            visible: veyra.ps5.keyboardMouse !== undefined
+            label: qsTr("键盘鼠标模拟手柄")
+            hint: qsTr("串流时点击画面接管，Ctrl+Alt+Shift+Z 释放。WASD 左摇杆，鼠标右摇杆，左键 R2，右键 L2")
+            VSwitch {
+                checked: veyra.ps5.keyboardMouse === true
+                enabled: veyra.ps5.viewOnly !== true
+                onToggled: checked => veyra.ps5Set("keyboardMouse", checked)
+            }
+        }
+        VRow {
+            visible: veyra.ps5.keyboardMouse === true
+            label: qsTr("鼠标灵敏度")
+            VSeg {
+                options: [{ id: "1", label: "1" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" }, { id: "5", label: "5" }]
+                current: String(veyra.ps5.mouseSensitivity)
+                onPicked: id => veyra.ps5Set("mouseSensitivity", Number(id))
+            }
+        }
         // The mirror of 仅观看: only the pad, the picture from a capture card.
         VRow {
             visible: veyra.ps5Control.available === true

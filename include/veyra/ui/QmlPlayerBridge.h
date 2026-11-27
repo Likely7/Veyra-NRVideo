@@ -870,6 +870,9 @@ public:
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
+    // A PS5 stream with 键盘鼠标模拟手柄 on: the keyboard and mouse become the pad until
+    // Ctrl+Alt+Shift+Z or a focus loss. Off releases them.
+    Q_INVOKABLE void ps5KeyboardMouse(bool on);
     // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).
     Q_INVOKABLE void ps5ControlSet(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5ControlRestart();

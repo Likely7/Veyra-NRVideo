@@ -85,6 +85,7 @@
 #pragma comment(lib, "setupapi.lib")
 #pragma comment(lib, "dinput8.lib")
 #include "veyra/remoteplay/ControllerInput.h"
+#include "veyra/remoteplay/KeyboardMousePad.h"
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/ProfileStore.h"
 #include "veyra/source/RemotePlaySource.h"
@@ -95,6 +96,12 @@
 #ifdef VEYRA_ENABLE_MOONLIGHT
 #include "veyra/ui/MoonlightInputCapture.h"
 #include "veyra/ui/MoonlightModel.h"
+#ifdef VEYRA_ENABLE_REMOTEPLAY
+// Keyboard and mouse as the PS5 pad.
+// shortcut: the raw capture is the PC streaming one, so this needs VEYRA_ENABLE_MOONLIGHT too
+// (every product build has both); build the capture outside that option if a PS5-only build needs it.
+#define VEYRA_PS5_KEYBOARD_MOUSE 1
+#endif
 #endif
 #include <future>
 #include <functional>
@@ -993,6 +1000,17 @@ struct QmlPlayerBridge::Impl {
     int moonlightStatsTicks = 0;
     std::unique_ptr<ui::MoonlightInputCapture> moonlightCapture;
     std::unique_ptr<ui::MoonlightModel> moonlight;
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+    // PS5 stream: the captured keyboard and mouse are added to the pad state by the pad timer.
+    struct Ps5KeyboardMouse final : moonlight::InputSink {
+        remoteplay::KeyboardMousePad pad;
+        void key(uint32_t, uint32_t scanCode, bool extended, bool down) override { pad.key(scanCode, extended, down); }
+        void mouseMove(int dx, int dy) override { pad.mouseMove(dx, dy); }
+        void mouseButton(int button, bool down) override { pad.mouseButton(button, down); }
+        void scroll(int, bool) override {}
+    } ps5KeyboardMouse;
+    std::unique_ptr<ui::MoonlightInputCapture> ps5KeyboardMouseCapture;   // after its target: destroyed first
+#endif
 #endif
 #ifdef VEYRA_ENABLE_XBOX
     QTimer* xboxTimer = nullptr;

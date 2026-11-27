@@ -8,6 +8,10 @@ constexpr uint32_t kPs5Bitrates[] = {5000, 10000, 15000, 20000, 30000, 50000, 80
 #ifdef VEYRA_ENABLE_REMOTEPLAY
 std::filesystem::path ps5Settings() { return remoteplay::profileDirectory() / L"settings.ini"; }
 #endif
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+// 鼠标灵敏度 1..5 as the factor on the mouse speed.
+constexpr double kPs5MouseGain[] = {0.5, 0.75, 1.0, 1.5, 2.25};
+#endif
 }
 QVariantMap QmlPlayerBridge::ps5() const {
     QVariantMap out = impl_->ps5Form;
@@ -23,6 +27,10 @@ QVariantMap QmlPlayerBridge::ps5() const {
     out["gyro"] = c.gyro && c.accel;
     out["calibrating"] = c.calibrating;
     out["touchpadPressOnly"] = impl_->prefBool("ps5TouchpadPressOnly",false);
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+    out["keyboardMouse"] = impl_->prefBool("ps5KeyboardMouse", false);
+    out["mouseSensitivity"] = std::clamp(impl_->prefInt("ps5MouseSensitivity", 3), 1, 5);
+#endif
 #else
     out["available"] = false;
 #endif
@@ -337,11 +345,46 @@ bool QmlPlayerBridge::ps5Set(const QString& key, const QVariant& value) {
         }
         impl_->engine.setRemotePlayTouchpadPressOnly(enabled);
 #endif
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+    } else if (key == QLatin1String("keyboardMouse") || key == QLatin1String("mouseSensitivity")) {
+        const auto before = impl_->prefs;
+        if (key == QLatin1String("keyboardMouse")) impl_->prefs[QStringLiteral("ps5KeyboardMouse")] = value.toBool();
+        else impl_->prefs[QStringLiteral("ps5MouseSensitivity")] = std::clamp(value.toInt(), 1, 5);
+        if (!impl_->savePrefs()) {
+            impl_->prefs = before;
+            emit notice(tr("设置保存失败，请查看日志"), true);
+            return false;
+        }
+        if (!impl_->prefBool("ps5KeyboardMouse", false)) ps5KeyboardMouse(false);
+        impl_->ps5KeyboardMouse.pad.setSensitivity(kPs5MouseGain[std::clamp(impl_->prefInt("ps5MouseSensitivity", 3), 1, 5) - 1]);
+#endif
     } else if (key == QLatin1String("viewOnly")) impl_->ps5Form[key] = value.toBool();
     else if (key == QLatin1String("host") || key == QLatin1String("account")) impl_->ps5Form[key] = value.toString().trimmed();
     else return false;
     emit ps5Changed();
     return true;
+}
+void QmlPlayerBridge::ps5KeyboardMouse(bool on) {
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+    auto& i = *impl_;
+    if (!on) { if (i.ps5KeyboardMouseCapture) i.ps5KeyboardMouseCapture->capture(false); return; }
+    // Only with the setting on, for a running stream whose pad timer forwards input (not 仅观看).
+    if (!i.prefBool("ps5KeyboardMouse", false) || !i.snapshot.remotePlay || !i.snapshot.running || !i.videoWindow
+        || !i.controllerTimer || !i.controllerTimer->isActive()) return;
+    if (!i.ps5KeyboardMouseCapture) {
+        i.ps5KeyboardMouseCapture = std::make_unique<ui::MoonlightInputCapture>(i.engine);
+        i.ps5KeyboardMouseCapture->setTarget(&i.ps5KeyboardMouse);
+        connect(i.ps5KeyboardMouseCapture.get(), &ui::MoonlightInputCapture::releaseRequested, this, [this] {
+            emit notice(tr("已释放键盘和鼠标（点击画面重新捕获）"), false);
+        });
+    }
+    i.ps5KeyboardMouse.pad.reset();
+    i.ps5KeyboardMouse.pad.setSensitivity(kPs5MouseGain[std::clamp(i.prefInt("ps5MouseSensitivity", 3), 1, 5) - 1]);
+    i.ps5KeyboardMouseCapture->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
+    if (i.ps5KeyboardMouseCapture->capture(true)) emit notice(tr("键盘鼠标已模拟手柄 · Ctrl+Alt+Shift+Z 释放"), false);
+#else
+    (void)on;
+#endif
 }
 void QmlPlayerBridge::ps5SelectProfile(const QString& id) {
 #ifdef VEYRA_ENABLE_REMOTEPLAY
@@ -477,9 +520,15 @@ bool QmlPlayerBridge::ps5Connect() {
                     const auto s = j.engine.snapshot();
                     if (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening)) {
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
-                        j.engine.remotePlayController(j.controller.poll(focused));
+                        auto state = j.controller.poll(focused);
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+                        if (j.ps5KeyboardMouseCapture && j.ps5KeyboardMouseCapture->captured())
+                            j.ps5KeyboardMouse.pad.apply(state, remoteplay::monotonic100ns());
+#endif
+                        j.engine.remotePlayController(state);
                         j.controller.feedback(j.engine.remotePlayFeedback(), focused);
                     } else {
+                        ps5KeyboardMouse(false);
                         j.engine.remotePlayController({}); j.releasePad(Impl::PadPs5); j.controllerTimer->stop();
                     }
                 });

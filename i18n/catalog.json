@@ -7034,6 +7034,19 @@
    "ru": "Не удалось слить перед переключением размера потока"
   },
   {
+   "zh": "串流时点击画面接管，Ctrl+Alt+Shift+Z 释放。WASD 左摇杆，鼠标右摇杆，左键 R2，右键 L2",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "串流時點擊畫面接管，Ctrl+Alt+Shift+Z 釋放。WASD 左搖桿，滑鼠右搖桿，左鍵 R2，右鍵 L2",
+   "en": "While streaming, click the picture to take control; Ctrl+Alt+Shift+Z releases. WASD: left stick, mouse: right stick, left click: R2, right click: L2",
+   "ja": "ストリーミング中に画面をクリックすると操作を開始、Ctrl+Alt+Shift+Z で解放。WASD：左スティック、マウス：右スティック、左クリック：R2、右クリック：L2",
+   "ko": "스트리밍 중 화면을 클릭하면 조작을 시작하고 Ctrl+Alt+Shift+Z로 해제합니다. WASD: 왼쪽 스틱, 마우스: 오른쪽 스틱, 왼쪽 클릭: R2, 오른쪽 클릭: L2",
+   "es": "Durante la transmisión, haz clic en la imagen para tomar el control; Ctrl+Alt+Shift+Z lo libera. WASD: stick izquierdo, ratón: stick derecho, clic izquierdo: R2, clic derecho: L2",
+   "fr": "Pendant le streaming, cliquez sur l'image pour prendre la main ; Ctrl+Alt+Shift+Z la rend. WASD (ZQSD en AZERTY) : stick gauche, souris : stick droit, clic gauche : R2, clic droit : L2",
+   "de": "Beim Streaming ins Bild klicken, um die Steuerung zu übernehmen; Ctrl+Alt+Shift+Z gibt sie frei. WASD: linker Stick, Maus: rechter Stick, Linksklick: R2, Rechtsklick: L2",
+   "pt-BR": "Durante a transmissão, clique na imagem para assumir o controle; Ctrl+Alt+Shift+Z libera. WASD: analógico esquerdo, mouse: analógico direito, clique esquerdo: R2, clique direito: L2",
+   "ru": "Во время трансляции щёлкните по изображению, чтобы взять управление; Ctrl+Alt+Shift+Z возвращает его. WASD — левый стик, мышь — правый стик, левая кнопка — R2, правая — L2"
+  },
+  {
    "zh": "串流设置（只影响串流本身，按主机保存）",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "串流設定（只影響串流本身，按主機儲存）",
@@ -39926,6 +39939,19 @@
    "ru": "Клавиатура и мышь переданы хосту · Ctrl + Alt + Shift + Z релизы · + Q отключается"
   },
   {
+   "zh": "键盘鼠标已模拟手柄 · Ctrl+Alt+Shift+Z 释放",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "鍵盤滑鼠已模擬手把 · Ctrl+Alt+Shift+Z 釋放",
+   "en": "Keyboard and mouse now act as the controller · Ctrl+Alt+Shift+Z to release",
+   "ja": "キーボードとマウスがコントローラーになりました · Ctrl+Alt+Shift+Z で解放",
+   "ko": "키보드와 마우스가 컨트롤러로 동작합니다 · Ctrl+Alt+Shift+Z로 해제",
+   "es": "El teclado y el ratón actúan como mando · Ctrl+Alt+Shift+Z para liberar",
+   "fr": "Le clavier et la souris font office de manette · Ctrl+Alt+Shift+Z pour les libérer",
+   "de": "Tastatur und Maus arbeiten jetzt als Controller · Ctrl+Alt+Shift+Z gibt sie frei",
+   "pt-BR": "Teclado e mouse agora funcionam como controle · Ctrl+Alt+Shift+Z para liberar",
+   "ru": "Клавиатура и мышь работают как контроллер · Ctrl+Alt+Shift+Z — освободить"
+  },
+  {
    "zh": "键盘鼠标未捕获 · 点击画面捕获",
    "src": "qml/StreamHud.qml",
    "zh-TW": "鍵盤滑鼠未擷取 · 點擊畫面擷取",
@@ -39937,6 +39963,19 @@
    "de": "Tastatur und Maus nicht erfasst · Klicken Sie auf das Bild",
    "pt-BR": "Teclado e mouse não capturado · clique na imagem para capturar",
    "ru": "Клавиатура и мышь не захвачены · щелкните картинку для захвата"
+  },
+  {
+   "zh": "键盘鼠标模拟手柄",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "鍵盤滑鼠模擬手把",
+   "en": "Keyboard and mouse as controller",
+   "ja": "キーボードとマウスをコントローラーとして使う",
+   "ko": "키보드와 마우스를 컨트롤러로 사용",
+   "es": "Teclado y ratón como mando",
+   "fr": "Clavier et souris comme manette",
+   "de": "Tastatur und Maus als Controller",
+   "pt-BR": "Teclado e mouse como controle",
+   "ru": "Клавиатура и мышь как контроллер"
   },
   {
    "zh": "镜像失败时自动改用 GitHub 直连。",
@@ -42966,6 +43005,19 @@
    "de": "Der voreingestellte Bearbeitungsmodus ist ungültig",
    "pt-BR": "O modo de edição predefinido é inválido",
    "ru": "Режим редактирования по умолчанию является недействительным"
+  },
+  {
+   "zh": "鼠标灵敏度",
+   "src": "qml/Ps5SourceDialog.qml",
+   "zh-TW": "滑鼠靈敏度",
+   "en": "Mouse sensitivity",
+   "ja": "マウス感度",
+   "ko": "마우스 감도",
+   "es": "Sensibilidad del ratón",
+   "fr": "Sensibilité de la souris",
+   "de": "Mausempfindlichkeit",
+   "pt-BR": "Sensibilidade do mouse",
+   "ru": "Чувствительность мыши"
   },
   {
    "zh": "（MP4，录下处理后的画面和正在播放的声音）",
