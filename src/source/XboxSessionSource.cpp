@@ -260,7 +260,13 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
     const auto session = p_.load();
     auto& p = *session;
     p.desc = std::move(desc);
-    if (p.desc.controlOnly) p.rtc.preferVideoSize(1280, 720);
+    if (p.desc.controlOnly) {
+        p.rtc.preferVideoSize(1280, 720);
+    } else if (p.desc.resolution != xbox::StreamResolution::Auto) {
+        const auto [width, height] = xbox::streamExtent(p.desc.resolution);
+        p.rtc.preferVideoSize(width, height, true);
+        log::info("xbox", std::format("requested stream resolution {}x{}", width, height));
+    }
     const auto fail = [&](std::wstring message) {
         log::error("xbox", "connect failed");
         std::lock_guard lock(mutex_);
@@ -283,7 +289,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         log::info("xbox", "streaming region " + access.regionName + " host " + access.host);
 
         setState(XboxStats::State::Starting, L"正在唤醒主机并准备串流…");
-        p.sessionId = p.api->play(p.desc.serverId, p.desc.locale, p.desc.controlOnly);
+        p.sessionId = p.api->play(p.desc.serverId, p.desc.locale, p.desc.controlOnly, p.desc.resolution);
         log::info("xbox", "session " + p.sessionId);
         bool connectSent = false;
         const auto deadline = Clock::now() + std::chrono::seconds(120);

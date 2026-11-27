@@ -96,7 +96,7 @@ std::vector<Console> StreamApi::consoles() {
     }
 }
 
-std::string StreamApi::play(const std::string& serverId, const std::string& locale, bool controlOnly) {
+std::string StreamApi::play(const std::string& serverId, const std::string& locale, bool controlOnly, StreamResolution resolution) {
     const json body = {
         {"titleId", ""}, {"systemUpdateGroup", ""}, {"clientSessionId", ""},
         {"settings", {{"nanoVersion", "V3;WebrtcTransport.dll"}, {"enableTextToSpeech", false}, {"highContrast", 0},
@@ -109,6 +109,11 @@ std::string StreamApi::play(const std::string& serverId, const std::string& loca
         // Greenlight 58e832a1 requests the 720p profile with this OS name.
         auto device = json::parse(deviceInfo);
         device["dev"]["os"]["name"] = "android";
+        deviceInfo = device.dump();
+    } else if (resolution == StreamResolution::QuadHd) {
+        auto device = json::parse(deviceInfo);
+        const auto [width, height] = streamExtent(resolution);
+        device["dev"]["displayInfo"]["dimensions"] = {{"widthInPixels", width}, {"heightInPixels", height}};
         deviceInfo = device.dump();
     }
     const json j = parse(call("POST", "/v5/sessions/home/play", body.dump(), {{"X-MS-Device-Info", deviceInfo}}), "play");

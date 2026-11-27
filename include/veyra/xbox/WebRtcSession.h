@@ -66,7 +66,12 @@ public:
     WebRtcSession& operator=(const WebRtcSession&) = delete;
 
     void setCallbacks(WebRtcCallbacks callbacks) { callbacks_ = std::move(callbacks); }
-    void preferVideoSize(unsigned width, unsigned height) { videoWidth_ = width; videoHeight_ = height; }
+    // Session setup only. A size hint can also request a specific profile from the console.
+    void preferVideoSize(unsigned width, unsigned height, bool requestResolution = false) {
+        videoWidth_ = width;
+        videoHeight_ = height;
+        requestResolution_ = requestResolution;
+    }
     // Tests: gather candidates on this address only (e.g. "127.0.0.1"). Empty: every interface.
     void setBindAddress(std::string address) { bindAddress_ = std::move(address); }
 
@@ -117,6 +122,7 @@ private:
     std::string failure_;
     std::string bindAddress_;
     unsigned videoWidth_ = 1920, videoHeight_ = 1080;
+    bool requestResolution_ = false;
 };
 
 } // namespace veyra::xbox

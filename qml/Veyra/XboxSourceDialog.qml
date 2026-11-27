@@ -166,6 +166,10 @@ DialogLayer {
             hint: qsTr("把电脑手柄当作主机上的手柄")
             VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: checked => xbDialog.xb.set("gamepad", checked) }
         }
+        XboxResolutionRow {
+            visible: !xbDialog.chooseForCapture
+            xboxModel: xbDialog.xb
+        }
         VRow {
             visible: !xbDialog.chooseForCapture
             label: qsTr("软件视频解码")

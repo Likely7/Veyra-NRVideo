@@ -19,6 +19,7 @@
 #include "veyra/source/IFrameSource.h"
 #include "veyra/xbox/VideoRtpReceive.h"
 #include "veyra/xbox/Protocol.h"
+#include "veyra/xbox/StreamResolution.h"
 
 struct AVFrame;
 struct ID3D12Device;
@@ -41,6 +42,7 @@ struct XboxConnectDesc {
     std::shared_ptr<ID3D12Device> decodeDevice;
     std::shared_ptr<ID3D12CommandQueue> decodeQueue;
     const std::atomic<bool>* stopRequested = nullptr; // engine owner outlives the source
+    xbox::StreamResolution resolution = xbox::StreamResolution::Auto;
 };
 
 struct XboxStats {

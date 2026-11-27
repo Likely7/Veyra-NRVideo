@@ -158,6 +158,19 @@ void apiTests() {
     check(api.play("F1", "en-US", true) == "CONTROLLER" &&
           json::parse(http->seen.back().headers["X-MS-Device-Info"])["dev"]["os"]["name"] == "android",
           "controller-only Xbox requests the low-bandwidth device profile");
+    const auto controllerProfile = http->seen.back().headers.at("X-MS-Device-Info");
+    for (const auto resolution : {StreamResolution::FullHd, StreamResolution::QuadHd}) {
+        http->add(host, "/v5/sessions/home/play", 200, R"({"sessionPath":"v5/sessions/home/EXPLICIT"})");
+        check(api.play("F1", "en-US", false, resolution) == "EXPLICIT", "play accepts an explicit stream resolution");
+        const auto [width, height] = streamExtent(resolution);
+        const auto device = json::parse(http->seen.back().headers.at("X-MS-Device-Info"));
+        check(device["dev"]["displayInfo"]["dimensions"] == json{{"widthInPixels", width}, {"heightInPixels", height}},
+              "full Xbox stream advertises the requested display dimensions");
+    }
+    http->add(host, "/v5/sessions/home/play", 200, R"({"sessionPath":"v5/sessions/home/CONTROLLER"})");
+    check(api.play("F1", "en-US", true, StreamResolution::QuadHd) == "CONTROLLER" &&
+          http->seen.back().headers.at("X-MS-Device-Info") == controllerProfile,
+          "controller-only Xbox keeps its device profile when a video resolution is supplied");
     http->add(host, "/v5/sessions/home/ABC-123/state", 200, R"({"state":"Failed","errorDetails":{"code":"WNSError","message":"WaitingForServerToRegister"}})");
     const auto st = api.state("ABC-123");
     check(st.state == "Failed" && st.errorCode == "WNSError" && st.errorMessage == "WaitingForServerToRegister", "state with error details");
@@ -399,7 +412,7 @@ public:
                     else text = std::get<std::string>(data);
                     const json j = json::parse(text);
                     std::lock_guard l(mutex);
-                    messages.push_back(j.value("type", "") + " " + j.value("target", ""));
+                    messages.push_back(j);
                     if (j.value("type", "") == "ReceiverCancel") cancelledTouchId = j.value("id", "");
                     if (j.value("type", "") == "Handshake") {
                         const std::string ack = json{{"type", "HandshakeAck"}, {"id", j.value("id", "")}, {"cv", ""}}.dump();
@@ -413,7 +426,7 @@ public:
                     if (auto* b = std::get_if<rtc::binary>(&data)) text.assign(reinterpret_cast<const char*>(b->data()), b->size());
                     else text = std::get<std::string>(data);
                     std::lock_guard l(mutex);
-                    control.push_back(json::parse(text).value("message", ""));
+                    control.push_back(json::parse(text));
                     cv.notify_all();
                 });
             } else if (dc->label() == "input") {
@@ -466,7 +479,8 @@ public:
     std::vector<std::shared_ptr<rtc::DataChannel>> channels;
     std::mutex mutex;
     std::condition_variable cv;
-    std::vector<std::string> labels, messages, control;
+    std::vector<std::string> labels;
+    std::vector<json> messages, control;
     std::vector<std::vector<uint8_t>> reports;
     std::string offerSdp;
     std::string cancelledTouchId;
@@ -538,7 +552,8 @@ void webrtcTests() {
     check(console.waitFor([&] { return console.control.size() >= 4; }), "control messages arrive");
     {
         std::lock_guard l(console.mutex);
-        check(console.control.size() >= 2 && console.control[0] == "authorizationRequest" && console.control[1] == "gamepadChanged", "control: authorization, then the pad");
+        check(console.control.size() >= 2 && console.control[0].value("message", "") == "authorizationRequest" &&
+              console.control[1].value("message", "") == "gamepadChanged", "control: authorization, then the pad");
     }
     check(console.waitFor([&] { return !console.reports.empty(); }), "the input channel receives the client metadata report");
     {
@@ -547,7 +562,8 @@ void webrtcTests() {
               "first input report advertises no touch points");
     }
     check(console.waitFor([&] {
-        for (const auto& s : console.messages) if (s.find("/streaming/characteristics/dimensionschanged") != std::string::npos) return true;
+        for (const auto& packet : console.messages)
+            if (packet.value("target", "") == "/streaming/characteristics/dimensionschanged") return true;
         return false;
     }), "the client sends its configuration messages");
     console.message->send(json{{"type", "TransactionStart"}, {"target", "/streaming/touchcontrols/showlayoutv2"},
@@ -629,7 +645,7 @@ void webrtcTests() {
         check(serverW == 1920 && serverH == 1080, "server video size reaches the callback");
     }
     session.requestKeyframe();
-    check(console.waitFor([&] { for (const auto& c : console.control) if (c == "videoKeyframeRequested") return true; return false; }), "a keyframe request goes out on the control channel");
+    check(console.waitFor([&] { for (const auto& c : console.control) if (c.value("message", "") == "videoKeyframeRequested") return true; return false; }), "a keyframe request goes out on the control channel");
     const auto stats = session.stats();
     if (!(stats.videoUnits >= 2 && stats.audioPackets >= 2 && stats.handshakeDone && stats.videoBytes > 5000))
         std::printf("stats: units=%llu audio=%llu handshake=%d bytes=%llu\n", (unsigned long long)stats.videoUnits, (unsigned long long)stats.audioPackets, int(stats.handshakeDone), (unsigned long long)stats.bytesReceived);
@@ -707,6 +723,48 @@ void webrtcTests() {
     session.close();stopped=true;sender.join();
     session.sendGamepad(pad);session.requestKeyframe();session.close();
     check(!session.ready(), "remote/local close with active sends is contained and clears readiness");
+}
+
+void videoPreferenceTests(unsigned width, unsigned height, bool explicitRequest) {
+    FakeConsole console;
+    WebRtcSession session;
+    session.setBindAddress("127.0.0.1");
+    if (height != 1080 || explicitRequest) session.preferVideoSize(width, height, explicitRequest);
+    std::string error;
+    const bool connected = session.start(console, &error, std::chrono::seconds(15)) &&
+                           session.waitReady(std::chrono::seconds(5));
+    check(connected, ("video preference connects to local peer: " + error).c_str());
+    if (!connected) return;
+    const auto* dimensionsTarget = "/streaming/characteristics/dimensionschanged";
+    const size_t controlCount = explicitRequest ? 6 : 4;
+    const auto isDimensions = [dimensionsTarget](const json& packet) {
+        return packet.value("target", "") == dimensionsTarget;
+    };
+    check(console.waitFor([&] {
+        return console.control.size() >= controlCount &&
+               std::any_of(console.messages.begin(), console.messages.end(), isDimensions);
+    }), "local console receives the expected setup messages");
+    {
+        std::lock_guard lock(console.mutex);
+        const auto dimensions = std::find_if(console.messages.begin(), console.messages.end(), isDimensions);
+        check(dimensions != console.messages.end() &&
+              json::parse(dimensions->at("content").get<std::string>()) ==
+                json{{"horizontal", width}, {"vertical", height}, {"preferredWidth", width}, {"preferredHeight", height},
+                     {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", width}, {"safeAreaBottom", height},
+                     {"supportsCustomResolution", true}},
+              "console receives matching display, preference and safe-area dimensions");
+        check(console.control.size() == controlCount, "only explicit preferences add control messages");
+        if (explicitRequest) {
+            const json extent = {{"width", width}, {"height", height}};
+            check(console.control.size() == 6 &&
+                  console.control[4] == json{{"message", "VideoPreference"}, {"type", "VideoPreference"},
+                      {"resolution", extent}, {"dimensions", extent}, {"maxFPS", 60}} &&
+                  console.control[5] == json{{"message", "userRequestedResolutionUpdate"},
+                      {"resolutionAlias", std::to_string(height)}},
+                  "both explicit resolution messages match the requested stream profile");
+        }
+    }
+    session.close();
 }
 
 void controlVideoFeedbackTests() {
@@ -828,6 +886,10 @@ int main(int argc, char** argv) {
     accountTests();
     videoRtpWindowTests();
     webrtcTests();
+    videoPreferenceTests(1920, 1080, false); // Auto
+    videoPreferenceTests(1920, 1080, true);
+    videoPreferenceTests(2560, 1440, true);
+    videoPreferenceTests(1280, 720, false);  // Controller-only
     controlVideoFeedbackTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
     rtc::Cleanup();

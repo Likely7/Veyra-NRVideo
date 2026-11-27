@@ -1355,6 +1355,7 @@ VPage {
                                 onToggled: enabled => secXbox.model?.set("gamepad", enabled)
                             }
                         }
+                        XboxResolutionRow { xboxModel: secXbox.model }
                         VRow {
                             label: qsTr("软件视频解码")
                             hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")

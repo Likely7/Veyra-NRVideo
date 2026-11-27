@@ -341,6 +341,15 @@ void WebRtcSession::onMessageChannel(const std::string& text) {
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", false}}.dump());
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
+        if (requestResolution_) {
+            // Greenlight PR #1752 and Veyra PR #274 send both messages to request a home-stream profile.
+            const json extent = {{"width", videoWidth_}, {"height", videoHeight_}};
+            const bool sentPreference = sendControl(json{{"message", "VideoPreference"}, {"type", "VideoPreference"},
+                {"resolution", extent}, {"dimensions", extent}, {"maxFPS", 60}}.dump());
+            const bool sentAlias = sendControl(json{{"message", "userRequestedResolutionUpdate"},
+                {"resolutionAlias", std::to_string(videoHeight_)}}.dump());
+            if (!sentPreference || !sentAlias) log::warn("xbox", "could not send the requested stream resolution");
+        }
         if (input_ && input_->isOpen()) {
             const auto report = clientMetadataReport(0, nowMs(), 0);
             initialized &= sendBinary(input_,report.data(),report.size());
