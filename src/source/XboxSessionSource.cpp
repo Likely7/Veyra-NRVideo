@@ -377,7 +377,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         // Decode and keepalive.
         p.stopDecode = false;
         p.decodeThread = std::thread([this] { decodeLoop(); });
-        p.keepaliveThread = std::thread([this, &p, expiresAt = access.expiresAt]() mutable {
+        p.keepaliveThread = std::thread([this, &p, cancelled, expiresAt = access.expiresAt]() mutable {
             auto& q = p;
             auto next = Clock::now() + std::chrono::seconds(30);
             auto nextRenewal = Clock::time_point::min();
@@ -404,7 +404,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
                     return {};
                 }
             };
-            while (!cancel_.load() && !q.ended.load()) {
+            while (!cancelled() && !q.ended.load()) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(200));
                 if (cancelled() || q.ended.load()) break;
                 if (Clock::now() < next) continue;
