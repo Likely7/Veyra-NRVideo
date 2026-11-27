@@ -235,7 +235,7 @@ void QmlPlayerBridge::tickPlaylist() {
     }
     impl_->playlist->setPlayback(impl_->playlistPath, state);
     if (network) {
-        if (!s.failed && s.frames > 0 && impl_->networkHistorySession != s.sessionId) {
+        if (!s.failed && s.metrics.flow.counters.realPresented > 0 && impl_->networkHistorySession != s.sessionId) {
             impl_->networkHistorySession = s.sessionId;
             if (const auto address = ProtectedNetworkAddress::protect(impl_->sourceLabel)) {
                 impl_->facade.noteRecentNetwork(*address);

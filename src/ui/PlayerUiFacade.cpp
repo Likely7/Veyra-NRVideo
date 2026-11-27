@@ -50,6 +50,7 @@ bool sameNetwork(const veyra::media::NetworkStats& a, const veyra::media::Networ
 // makes the UI repaint.
 bool sameSnapshot(const veyra::engine::PlayerSnapshot& a, const veyra::engine::PlayerSnapshot& b) {
     return sameNetwork(a.network, b.network) &&
+        (!a.network.active || (a.metrics.flow.counters.realPresented > 0) == (b.metrics.flow.counters.realPresented > 0)) &&
         a.displayVrrMinimumHz==b.displayVrrMinimumHz&&a.displayCompositionMode==b.displayCompositionMode&&
         a.presentationStatus==b.presentationStatus&&a.presentationEffective==b.presentationEffective&&
         a.presentationRevision==b.presentationRevision&&a.presentationProviderOwned==b.presentationProviderOwned&&

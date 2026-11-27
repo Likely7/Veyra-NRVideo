@@ -75,7 +75,7 @@ int replayNetworkHistory(const QString& profile, const QString& address) {
     const auto framesAfter = [&](uint64_t previous) {
         return QTest::qWaitFor([&] {
             const auto snapshot = engine.snapshot();
-            return snapshot.sessionId != previous && snapshot.frames >= 10 && !snapshot.failed;
+            return snapshot.sessionId != previous && snapshot.metrics.flow.counters.realPresented >= 10 && !snapshot.failed;
         }, 12000);
     };
 
