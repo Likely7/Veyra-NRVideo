@@ -58,6 +58,15 @@ QtObject {
     property string nrAutoStatus: ""
     property var nodeTimings: ({})
     property var preferences: ({exportStopsPlayback:false})
+    property bool hasCaptureSession: false
+    property string captureSessionSummary: ""
+    property string remotePlayHost: ""
+    property var ps5Control: ({enabled:false})
+    property var lastSource: ({})
+    property var recentFiles: []
+    property string homeOpenAction: ""
+    function openCaptureDialog() { homeOpenAction = "capture" }
+    function openXboxDialog() { homeOpenAction = "xbox" }
     property QtObject liveTranslation: QtObject {
         property bool supported: true
         property bool screenTextSupported: true
@@ -156,6 +165,8 @@ QtObject {
         // by Veyra/qmldir. Register it only here to test its real inline controls.
         qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(
             QStringLiteral("qml/Veyra/ProPage.qml"))), "VeyraTest", 1, 0, "ProPage");
+        qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(
+            QStringLiteral("qml/Veyra/HomePage.qml"))), "VeyraTest", 1, 0, "HomePage");
         qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(
             QStringLiteral("qml/Veyra/Ps5SourceDialog.qml"))), "VeyraTest", 1, 0, "Ps5SourceDialog");
         qmlRegisterType(QUrl::fromLocalFile(QDir(QCoreApplication::applicationDirPath()).filePath(

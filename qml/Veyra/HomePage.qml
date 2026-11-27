@@ -253,6 +253,7 @@ VPage {
                     VRise { page: root; target: slot; d: 2 + slot.index }
                   Rectangle {
                     id: srcCard
+                    objectName: "home-source-" + modelData.act
                     readonly property var modelData: slot.modelData
                     // .srccard: 164x124, radius 14, content pinned top and bottom.
                     width: slot.width
@@ -260,7 +261,42 @@ VPage {
                     radius: Theme.rCard
                     color: cardHover.hovered ? Theme.card2 : Theme.card
                     border.width: 1
-                    border.color: cardHover.hovered ? Theme.stroke2 : Theme.stroke
+                    border.color: activeFocus ? Theme.accent : cardHover.hovered ? Theme.stroke2 : Theme.stroke
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: sourceTitle.text
+                    Accessible.description: sourceSubtitle.text
+                    Accessible.onPressAction: activate()
+                    function activationKey(key) {
+                        return key === Qt.Key_Return || key === Qt.Key_Enter || key === Qt.Key_Space
+                    }
+                    Keys.onShortcutOverride: event => {
+                        if (activationKey(event.key)) event.accepted = true
+                    }
+                    Keys.onPressed: event => {
+                        if (!activationKey(event.key)) return
+                        event.accepted = true
+                        if (!event.isAutoRepeat) activate()
+                    }
+                    onActiveFocusChanged: {
+                        if (!activeFocus) return
+                        const top = mapToItem(homeScroll.contentItem, 0, 0).y
+                        const bottom = top + height
+                        const offset = bottom > homeScroll.contentY + homeScroll.height
+                            ? bottom - homeScroll.height : Math.min(top, homeScroll.contentY)
+                        homeScroll.contentY = Math.max(0, Math.min(offset, homeScroll.contentHeight - homeScroll.height))
+                    }
+                    function activate() {
+                        veyra.logUi("ui-source", "home card act=" + modelData.act)
+                        switch (modelData.act) {
+                        case "file": veyra.openFileDialog(); break
+                        case "capture": veyra.openCaptureDialog(); break
+                        case "ps5": veyra.openPs5Dialog(); break
+                        case "moonlight": veyra.openMoonlightDialog(); break
+                        case "xbox": veyra.openXboxDialog(); break
+                        case "screen": veyra.openScreenCaptureDialog(); break
+                        }
+                    }
                     // .srccard:hover { transform: translateY(-4px) }
                     y: cardHover.hovered ? -4 : 0
                     Behavior on y { NumberAnimation { duration: Theme.d(500); easing.bezierCurve: Theme.spring } }
@@ -322,17 +358,7 @@ VPage {
                     ToolTip.text: sourceTitle.text + " · " + sourceSubtitle.text
                     TapHandler {
                         id: cardTap
-                        onTapped: {
-                            veyra.logUi("ui-source", "home card act=" + modelData.act)
-                            switch (modelData.act) {
-                            case "file": veyra.openFileDialog(); break
-                            case "capture": veyra.openCaptureDialog(); break
-                            case "ps5": veyra.openPs5Dialog(); break
-                            case "moonlight": veyra.openMoonlightDialog(); break
-                            case "xbox": veyra.openXboxDialog(); break
-                            case "screen": veyra.openScreenCaptureDialog(); break
-                            }
-                        }
+                        onTapped: srcCard.activate()
                     }
                   }
                 }
