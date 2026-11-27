@@ -214,6 +214,8 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         {"recordFps", {0, 240}},
         {"recordSplitSeconds", {0, 86400}},
         {"recordSplitMiB", {0, 1048576}},
+        // 设置 → 播放 → 二次编码: 0 off, 1 quarter-resolution first pass, 2 full.
+        {"recordMultipass", {0, 2}},
         {"virtualCameraFps", {0, 120}},
         {"fullscreenFrameStatsCorner", {0, 3}},
         // Instant replay (#103): seconds the buffer keeps.
@@ -363,7 +365,7 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
         impl_->engine.setCaptureAudioMonitoring(impl_->prefBool("captureAudioMonitor",true));
     // The replay buffer re-arms with what a recording would use.
     static const QStringList replayKeys{"replayEnabled", "replaySeconds", "recordBitrateMbps", "recordFps", "recordHevc",
-                                        "recordAudio", "recordMic", "recordMicDevice", "recordMicTrack"};
+                                        "recordAudio", "recordMic", "recordMicDevice", "recordMicTrack", "recordMultipass"};
     if (replayKeys.contains(key)) syncReplay();
     if(key==QLatin1String("hdrFgCompatibility")){
         impl_->presentation.hdrFgCompatibility=impl_->prefBool("hdrFgCompatibility",false);
