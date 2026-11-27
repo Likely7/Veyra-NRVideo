@@ -14,10 +14,80 @@
 #include "veyra/source/DeckLinkInputConnection.h"
 #include "veyra/ui/InterfaceRenderer.h"
 #include "../../src/ui/StartupFullscreenRequest.h"
+#include "../../src/ui/LoginStartup.h"
 #include <iostream>
 #include <vector>
 #include <stdexcept>
 void require(bool value,const char* why){if(!value)throw std::runtime_error(why);}
+
+void loginStartupContracts(const std::filesystem::path& output) {
+    namespace fs = std::filesystem;
+    namespace startup = veyra::ui::login_startup;
+    using namespace veyra::portable;
+
+    const auto dir = fs::absolute(output).lexically_normal().make_preferred() /
+        (L"login-startup-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(GetTickCount64()));
+    const auto package = dir / L"Veyra 便携版";
+    const auto version = package / versionsFolder / L"2.2.1" / playerName;
+    const auto nextVersion = package / versionsFolder / L"2.2.2-012345abcdef" / playerName;
+    const auto launcher = package / launcherName;
+    const auto standalone = dir / L"Standalone" / playerName;
+    fs::create_directories(version.parent_path());
+    fs::create_directories(nextVersion.parent_path());
+    fs::create_directories(standalone.parent_path());
+    std::ofstream(package / packageMarker, std::ios::binary) << "VEYRA_PORTABLE_V1\nNVIDIA\n";
+    std::ofstream(launcher, std::ios::binary).put('v');
+    std::ofstream(standalone, std::ios::binary).put('v');
+
+    require(startup::executableForPlayer(version) == launcher && startup::executableForPlayer(nextVersion) == launcher,
+            "update or rollback keeps the same root launcher");
+    require(startup::executableForPlayer(standalone) == standalone, "standalone resolves its actual player");
+    const auto command = startup::commandFor(launcher);
+    const auto standaloneCommand = startup::commandFor(standalone);
+    require(command == L"\"" + launcher.wstring() + L"\"", "the command quotes the Unicode path and contains no arguments");
+    require(startup::commandFor(playerName).empty(), "do not register a path that depends on the login working directory");
+
+    struct PrivateHive {
+        HKEY handle = nullptr;
+        ~PrivateHive() { if (handle) RegCloseKey(handle); }
+    } hive;
+    require(RegLoadAppKeyW((dir / L"private.hiv").c_str(), &hive.handle, KEY_ALL_ACCESS, REG_PROCESS_APPKEY, 0) == ERROR_SUCCESS,
+            "open a process-private test hive on disk");
+    const auto key = hive.handle;
+    const auto entry = [&] { return startup::entryStatus(key, command); };
+    const auto toggle = [&](bool enabled) { return startup::setEnabled(key, launcher, enabled); };
+    require(entry() == ERROR_FILE_NOT_FOUND && toggle(false) == ERROR_SUCCESS && entry() == ERROR_FILE_NOT_FOUND,
+            "a fresh login setting is off and turning it off is a no-op");
+    require(toggle(true) == ERROR_SUCCESS && toggle(true) == ERROR_SUCCESS && entry() == ERROR_SUCCESS,
+            "enable registers the exact command and is idempotent");
+    require(startup::entryStatus(key, standaloneCommand) == ERROR_ALREADY_EXISTS &&
+            startup::setEnabled(key, standalone, true) == ERROR_ALREADY_EXISTS &&
+            startup::setEnabled(key, standalone, false) == ERROR_SUCCESS && entry() == ERROR_SUCCESS,
+            "another copy cannot replace or remove the owner");
+
+    constexpr DWORD extra = 42;
+    require(RegSetKeyValueW(key, startup::runKey, L"Other app", REG_DWORD, &extra, sizeof(extra)) == ERROR_SUCCESS,
+            "seed an unrelated startup entry in the private hive");
+    require(toggle(false) == ERROR_SUCCESS && toggle(false) == ERROR_SUCCESS && entry() == ERROR_FILE_NOT_FOUND,
+            "disable removes the owner's command and is idempotent");
+    DWORD unchanged = 0, bytes = sizeof(unchanged);
+    require(RegGetValueW(key, startup::runKey, L"Other app", RRF_RT_REG_DWORD, nullptr, &unchanged, &bytes) == ERROR_SUCCESS &&
+            unchanged == extra, "other startup entries are left alone");
+
+    require(RegSetKeyValueW(key, startup::runKey, startup::valueName, REG_EXPAND_SZ, command.c_str(),
+                            static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t))) == ERROR_SUCCESS,
+            "seed a value not created by Veyra");
+    require(entry() == ERROR_ALREADY_EXISTS && toggle(true) == ERROR_ALREADY_EXISTS &&
+            toggle(false) == ERROR_SUCCESS && entry() == ERROR_ALREADY_EXISTS,
+            "a value of a different type stays intact");
+    require(RegDeleteKeyValueW(key, startup::runKey, startup::valueName) == ERROR_SUCCESS, "reset the private fixture");
+    require(startup::setEnabled(key, package / L"missing.exe", true) == ERROR_FILE_NOT_FOUND && entry() == ERROR_FILE_NOT_FOUND,
+            "missing launcher cannot create an unusable entry");
+    const auto longPath = package / (std::wstring(245, L'a') + L".exe");
+    require(startup::setEnabled(key, longPath, true) == ERROR_FILENAME_EXCED_RANGE && entry() == ERROR_FILE_NOT_FOUND,
+            "commands beyond the Windows Run limit are reported and never saved");
+    std::cout << "PASS login startup: process-private hive, Unicode launcher, ownership, on/off, missing file and path limit\n";
+}
 
 void startupFullscreenContracts() {
     using veyra::ui::StartupFullscreenRequest;
@@ -178,6 +248,7 @@ int wmain(int argc,wchar_t** argv){try{
     using namespace veyra;
     outputRateContracts();
     startupFullscreenContracts();
+    if (argc > 1) loginStartupContracts(argv[1]);
     interfaceRendererContracts();
     {
         engine::EnhancementSettings fresh;

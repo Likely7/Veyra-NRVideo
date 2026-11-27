@@ -151,6 +151,7 @@ Filename: "{app}\Veyra.exe"; Description: "{cm:LaunchProgram,Veyra}"; WorkingDir
 [Code]
 const
   UninstallKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{#InstallId}_is1';
+  LoginRunKey = 'Software\Microsoft\Windows\CurrentVersion\Run';
   ReparsePoint = $400;
   MoveReplaceExisting = $1;
   MoveWriteThrough = $8;
@@ -345,13 +346,19 @@ end;
 
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
-  Root: String;
+  Root, Command: String;
 begin
   if (CurUninstallStep <> usPostUninstall) or not ManagedInstall then
     Exit;
   Root := LocalPath(ExpandConstant('{app}'));
   if not PlainPath(Root) then
     Exit;
+  { Match only the startup command created for this folder. }
+  if RegQueryStringValue(HKCU64, LoginRunKey, 'Veyra', Command) and
+     (CompareText(Command, '"' + AddBackslash(Root) + 'Veyra.exe"') = 0) then begin
+    if not RegDeleteValue(HKCU64, LoginRunKey, 'Veyra') then
+      Log('Could not remove the Veyra login startup entry.');
+  end;
   Log('Removing managed application versions and update cache.');
   DeleteFile(Root + '\current-version.txt');
   DeleteFile(Root + '\current-version.txt.new');

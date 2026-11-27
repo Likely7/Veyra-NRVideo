@@ -1,5 +1,6 @@
 // QML bridge: Preferences responsibilities.
 #include "../QmlPlayerBridge_p.h"
+#include "../LoginStartup.h"
 #include <QColor>
 #include <QWindow>
 #include "veyra/ngx/AnrProvider.h"
@@ -151,6 +152,26 @@ void QmlPlayerBridge::copyDiagnostics() {
 
 // --- shell preferences (P4-f / P4-c / P4-d) --------------------------------
 QVariantMap QmlPlayerBridge::preferences() const { return impl_->prefs; }
+namespace {
+const std::filesystem::path& loginStartupExecutable() {
+    static const auto target = login_startup::executableForPlayer(wideOf(QCoreApplication::applicationFilePath()));
+    return target;
+}
+} // namespace
+
+bool QmlPlayerBridge::launchAtLogin() const {
+    const auto command = login_startup::commandFor(loginStartupExecutable());
+    return login_startup::entryStatus(HKEY_CURRENT_USER, command) == ERROR_SUCCESS;
+}
+void QmlPlayerBridge::setLaunchAtLogin(bool enabled) {
+    const auto status = login_startup::setEnabled(HKEY_CURRENT_USER, loginStartupExecutable(), enabled);
+    veyra::log::info("ui-startup", std::format("launch at login={} status={}", enabled, status));
+    if (status == ERROR_ALREADY_EXISTS)
+        emit notice(tr("Veyra 启动项已指向其他位置。请先移除原来的启动项。"), true);
+    else if (status != ERROR_SUCCESS)
+        emit notice(tr("没能更改 Windows 启动项（错误 %1）").arg(status), true);
+    emit launchAtLoginChanged();
+}
 QString QmlPlayerBridge::gpuPriorityStatus() const {
     const auto status=gfx::gpuPriorityStatus();
     const auto name=[](int priority){return priority==5?tr("实时"):priority==4?tr("高"):tr("普通");};

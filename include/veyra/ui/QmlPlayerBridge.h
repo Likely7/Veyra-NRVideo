@@ -223,6 +223,7 @@ class QmlPlayerBridge : public QObject {
     // subtitle look, audio output. Stored in <data>/qml-preferences.v1.json and
     // validated key by key in setPreference(); anything unknown is refused.
     Q_PROPERTY(QVariantMap preferences READ preferences NOTIFY preferencesChanged)
+    Q_PROPERTY(bool launchAtLogin READ launchAtLogin NOTIFY launchAtLoginChanged)
     Q_PROPERTY(QString gpuPriorityStatus READ gpuPriorityStatus NOTIFY preferencesChanged)
     Q_PROPERTY(bool enhancementPrewarmAvailable READ enhancementPrewarmAvailable CONSTANT)
     // The interface language in use after "auto" is resolved;
@@ -883,6 +884,8 @@ public:
     void setRemotePlayPin(const QString& value);
 
     QVariantMap preferences() const;
+    bool launchAtLogin() const;
+    Q_INVOKABLE void setLaunchAtLogin(bool enabled);
     QString gpuPriorityStatus() const;
     bool enhancementPrewarmAvailable() const;
     QString uiLanguage() const;
@@ -1552,6 +1555,7 @@ signals:
     void subtitlesChanged();
     void subtitleTextChanged();
     void preferencesChanged();
+    void launchAtLoginChanged();
     void recordingChanged();
     void virtualCameraChanged();
     void replayChanged();

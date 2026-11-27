@@ -426,6 +426,15 @@ VPage {
                             }
                         }
                         VRow {
+                            label: qsTr("登录 Windows 时启动 Veyra")
+                            hint: qsTr("为当前 Windows 账户添加启动项，是否运行也受 Windows 启动应用设置控制")
+                            VSwitch {
+                                objectName: "set-launch-at-login"
+                                checked: veyra.launchAtLogin
+                                onToggled: v => veyra.setLaunchAtLogin(v)
+                            }
+                        }
+                        VRow {
                             label: qsTr("记住播放位置")
                             hint: qsTr("重新打开同一个文件时从上次位置继续")
                             VSwitch {

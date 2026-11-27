@@ -29370,6 +29370,32 @@
    "ru": "Нет частей, чтобы присоединиться"
   },
   {
+   "zh": "没能更改 Windows 启动项（错误 %1）",
+   "src": "src/ui/bridge/Preferences.cpp",
+   "zh-TW": "沒能變更 Windows 啟動項目（錯誤 %1）",
+   "en": "Could not change the Windows startup entry (error %1)",
+   "ja": "Windows のスタートアップ項目を変更できませんでした（エラー %1）",
+   "ko": "Windows 시작 항목을 변경하지 못했습니다(오류 %1).",
+   "es": "No se pudo cambiar la entrada de inicio de Windows (error %1)",
+   "fr": "Impossible de modifier l’entrée de démarrage de Windows (erreur %1)",
+   "de": "Der Windows-Autostart-Eintrag konnte nicht geändert werden (Fehler %1)",
+   "pt-BR": "Não foi possível alterar a entrada de inicialização do Windows (erro %1)",
+   "ru": "Не удалось изменить элемент автозагрузки Windows (ошибка %1)"
+  },
+  {
+   "zh": "Veyra 启动项已指向其他位置。请先移除原来的启动项。",
+   "src": "src/ui/bridge/Preferences.cpp",
+   "zh-TW": "Veyra 啟動項目已指向其他位置。請先移除原來的啟動項目。",
+   "en": "The Veyra startup entry already points to a different location. Remove the existing entry first.",
+   "ja": "Veyra のスタートアップ項目は別の場所を指しています。既存の項目を先に削除してください。",
+   "ko": "Veyra 시작 항목이 이미 다른 위치를 가리킵니다. 기존 항목을 먼저 제거하세요.",
+   "es": "La entrada de inicio de Veyra ya apunta a otra ubicación. Elimina primero la entrada existente.",
+   "fr": "L’entrée de démarrage de Veyra pointe déjà vers un autre emplacement. Supprimez d’abord l’entrée existante.",
+   "de": "Der Veyra-Autostart verweist bereits auf einen anderen Speicherort. Entfernen Sie zuerst den vorhandenen Eintrag.",
+   "pt-BR": "A entrada de inicialização do Veyra já aponta para outro local. Remova primeiro a entrada existente.",
+   "ru": "Запись автозагрузки Veyra уже указывает на другое расположение. Сначала удалите существующую запись."
+  },
+  {
    "zh": "没能继续上次的 PC 串流，请在 PC 串流窗口里重新选择",
    "src": "src/ui/bridge/View.cpp",
    "zh-TW": "沒能繼續上次的 PC 串流，請在 PC 串流視窗裡重新選擇",
@@ -35803,6 +35829,32 @@
    "de": "Wechselt ins Vollbild, sobald das fortgesetzte Bild erscheint – ohne Tastendruck; erfordert die Option darüber",
    "pt-BR": "Entra em tela cheia assim que a imagem retomada aparece, sem pressionar teclas; requer a opção acima",
    "ru": "Переходит в полный экран, как только появляется продолженное изображение, без нажатия клавиш; требуется параметр выше"
+  },
+  {
+   "zh": "登录 Windows 时启动 Veyra",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "登入 Windows 時啟動 Veyra",
+   "en": "Start Veyra when signing in to Windows",
+   "ja": "Windows へのサインイン時に Veyra を起動",
+   "ko": "Windows 로그인 시 Veyra 시작",
+   "es": "Abrir Veyra al iniciar sesión en Windows",
+   "fr": "Lancer Veyra à l’ouverture de session Windows",
+   "de": "Veyra bei der Windows-Anmeldung starten",
+   "pt-BR": "Iniciar o Veyra ao entrar no Windows",
+   "ru": "Запускать Veyra при входе в Windows"
+  },
+  {
+   "zh": "为当前 Windows 账户添加启动项，是否运行也受 Windows 启动应用设置控制",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "為目前的 Windows 帳戶新增啟動項目，是否執行也受 Windows 啟動應用程式設定控制。",
+   "en": "Adds a startup entry for this Windows account. Windows Startup apps settings also control whether it runs.",
+   "ja": "現在の Windows アカウントにスタートアップ項目を追加します。起動するかどうかは Windows のスタートアップ アプリ設定にも従います。",
+   "ko": "현재 Windows 계정에 시작 항목을 추가합니다. 실행 여부는 Windows 시작 앱 설정에도 따릅니다.",
+   "es": "Añade una entrada de inicio para esta cuenta de Windows. La configuración de aplicaciones de inicio de Windows también controla si se abre.",
+   "fr": "Ajoute une entrée de démarrage pour ce compte Windows. Les paramètres des applications de démarrage de Windows s’appliquent également.",
+   "de": "Fügt für dieses Windows-Konto einen Autostarteintrag hinzu. Ob Veyra startet, hängt auch von den Windows-Autostarteinstellungen ab.",
+   "pt-BR": "Adiciona uma entrada de inicialização para esta conta do Windows. As configurações de aplicativos de inicialização do Windows também controlam a execução.",
+   "ru": "Добавляет запись автозагрузки для этой учётной записи Windows. Запуск также зависит от настроек автозагрузки Windows."
   },
   {
    "zh": "视频文件 (*.mp4 *.mkv *.mov *.avi *.webm *.ts *.m2ts);;所有文件 (*)",

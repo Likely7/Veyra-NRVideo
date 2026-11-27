@@ -60,6 +60,11 @@ namespace {bool prepareStartupPreset(const engine::PresetEntry& entry, engine::C
 QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesystem::path dataDirectory,
                                 QObject* parent)
     : QObject(parent), impl_(std::make_unique<Impl>(engine, std::move(dataDirectory))) {
+    if (auto* app = qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
+        connect(app, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+            if (state == Qt::ApplicationActive) emit launchAtLoginChanged();
+        });
+    }
     liveTranslation_ = new LiveTranslation(QString::fromStdWString(impl_->dataDir.wstring()), this);
     connect(this,&QmlPlayerBridge::mediaOpenRequested,this,[this]{
         flushHdrMemory();
