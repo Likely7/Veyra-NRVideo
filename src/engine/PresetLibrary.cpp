@@ -566,15 +566,19 @@ ChainValidation PresetLibrary::applyToChain(const PresetEntry& entry, EffectChai
         next = arranged;
     }
     if (hasChain || hasFg) {
-        if (!hasFg) next.fgMultiplier = chain.fgMultiplier;
         auto* fg = next.firstOf(EffectType::FrameGeneration);
-        if (!fg && nextSettings.multiplier > 1) {
-            if (next.nodeCount == kMaxChainNodes) return {false, "合并后无法添加补帧节点"};
-            fg = &next.nodes[next.nodeCount++];
-            *fg = {}; fg->type = EffectType::FrameGeneration;
+        // A saved disabled node is an explicit off state even when the
+        // preset omits the optional frame generation settings.
+        if (hasFg || !fg || fg->enabled) {
+            if (!hasFg) next.fgMultiplier = chain.fgMultiplier;
+            if (!fg && nextSettings.multiplier > 1) {
+                if (next.nodeCount == kMaxChainNodes) return {false, "合并后无法添加补帧节点"};
+                fg = &next.nodes[next.nodeCount++];
+                *fg = {}; fg->type = EffectType::FrameGeneration;
+            }
+            if (fg) fg->enabled = nextSettings.multiplier > 1;
+            if (nextSettings.multiplier > 1) next.fgMultiplier = nextSettings.multiplier;
         }
-        if (fg) fg->enabled = nextSettings.multiplier > 1;
-        if (nextSettings.multiplier > 1) next.fgMultiplier = nextSettings.multiplier;
     }
     if (const auto v = validateChain(next); !v.accepted) return v;
     if (hasChain || hasColor) fromChain(next, nextSettings);
@@ -619,11 +623,17 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
             }
         }
         if (!(entry.contents & presetContentMask(PresetContent::FrameGeneration))) {
-            PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
-            keep.contents = presetContentMask(PresetContent::FrameGeneration);
-            const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
-            keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
-            if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
+            const auto* savedFg = nodes.firstOf(EffectType::FrameGeneration);
+            if (!savedFg || savedFg->enabled) {
+                PresetEntry keep; keep.kind = ChainMode::Node; keep.chain.mode = ChainMode::Node;
+                keep.contents = presetContentMask(PresetContent::FrameGeneration);
+                const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
+                keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, settings.frameGenerationBackend, settings.vfgQuality};
+                if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
+            } else {
+                values.frameGenerationBackend = settings.frameGenerationBackend;
+                values.vfgQuality = settings.vfgQuality;
+            }
             nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
         }
         if (entry.contents & presetContentMask(PresetContent::Audio)) {
