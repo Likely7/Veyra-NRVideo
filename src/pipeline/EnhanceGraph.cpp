@@ -4130,7 +4130,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             auto* target=restore.raw?restore.raw.Get():output;
             const bool fsrReset=reset||(desc_.srUsesFlow()&&motion==fsrSrZeroMotion_.Get());
             readable({color,motion,fsrSrDepth_.Get()});tracker_.transition(list,target,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-            if(!backend.evaluate(list,color,motion,fsrSrDepth_.Get(),target,inW,inH,outW,outH,fsrReset,float(deltaMs))){
+            // Sharpening an intermediate SR result changes the next pass's input.
+            const float sharpness=first?0.0f:desc_.fsrSrSharpness;
+            if(!backend.evaluate(list,color,motion,fsrSrDepth_.Get(),target,inW,inH,outW,outH,fsrReset,float(deltaMs),sharpness)){
                 failedBackend_=engine::FailedBackend::Sr;veyra::log::error("dual-sr","FSR evaluate failed");return false;
             }
             finishTemporalOutput(list,restore,output);
@@ -4212,7 +4214,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         auto* fsrTarget=srHdrRestore_.raw?srHdrRestore_.raw.Get():workRgba_.Get();
         tracker_.transition(list,fsrTarget,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         if(!fsrSrBackend_->evaluate(list,srInput,srMotion,fsrSrDepth_.Get(),fsrTarget,
-                                    srcW_,srcH_,workW_,workH_,reset||(desc_.srUsesFlow()&&!renderSrMotion),float(deltaMs))){
+                                    srcW_,srcH_,workW_,workH_,reset||(desc_.srUsesFlow()&&!renderSrMotion),float(deltaMs),desc_.fsrSrSharpness)){
             failedBackend_=engine::FailedBackend::Sr;
             return false;
         }

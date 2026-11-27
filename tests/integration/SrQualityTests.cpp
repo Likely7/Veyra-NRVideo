@@ -177,11 +177,12 @@ Frame hdrFrame(const sink::RgbaImage& img){
 }
 struct Run{bool ok=false;sink::RgbaImage output,srInput,firstLinear;double srMs=-1,srP95Ms=-1;uint64_t evaluations=0;pipeline::Extent srIn{},srOut{},work{},first{};bool enabled=false;};
 Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* frame,bool hdr,const engine::EnhancementSettings& settings,
-        bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false){
+        bool readSrInput,bool still=false,bool uncompressed=false,unsigned frames=6,bool readFirst=false,float fsrSharpness=0.0f){
     engine::StageRequest request;request.width=unsigned(frame->width);request.height=unsigned(frame->height);request.sr=settings.sr;
     request.nvidiaAdapter=ctx.adapter().isNvidia;request.amdAdapter=ctx.adapter().vendorId==0x1002;
     request.stillImage=still;request.uncompressedSource=uncompressed;request.nr=settings.nr;
     pipeline::EnhanceGraphDesc desc;engine::describeStages(request,settings,desc);
+    desc.fsrSrSharpness=fsrSharpness;
     desc.rgbInput=!hdr;desc.hdrInput=hdr;desc.hdrOutput=hdr;desc.outputDitherStep=0;desc.runtimeAbsPath=runtime::localRuntimeDirectory().wstring();
     Run r;r.srIn={desc.srInputWidth,desc.srInputHeight};r.srOut={desc.srOutputWidth,desc.srOutputHeight};r.work={desc.workWidth,desc.workHeight};r.first={desc.firstSrWidth,desc.firstSrHeight};
     if(!desc.fixedExecutionPlanError.empty()){std::cout<<"plan error: "<<desc.fixedExecutionPlanError<<std::endl;return r;}
@@ -198,7 +199,10 @@ Run run(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const AVFrame* f
     if(ok&&readSrInput)ok=read(ctx,ring,graph.diagnosticVideoSrInput(),hdr?D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE:D3D12_RESOURCE_STATE_COMMON,4,r.srInput);
     if(ok&&readFirst)ok=read(ctx,ring,graph.diagnosticFirstSrLinear(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,8,r.firstLinear);
     r.evaluations=graph.metrics().srEvaluateCount;r.enabled=graph.srEnabled();
-    if(!ms.empty()){std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];r.srP95Ms=ms[(ms.size()-1)*95/100];}
+    if(!ms.empty()){
+        std::sort(ms.begin(),ms.end());r.srMs=ms[ms.size()/2];
+        r.srP95Ms=ms[(ms.size()*95+99)/100-1];
+    }
     r.ok=ok;out={};ring.drainQueue();graph.shutdown();return r;
 }
 engine::EnhancementSettings vsr(unsigned quality,pipeline::SrTarget target){
@@ -677,6 +681,63 @@ int image(const std::filesystem::path& directory,const std::wstring& input,const
              <<" srActive="<<r.enabled<<" evaluations="<<r.evaluations<<" srMs="<<r.srMs<<" passed="<<saved<<std::endl;
     ring.shutdown();ctx.shutdown();return saved?0:1;
 }
+
+int fsrRcas(const std::filesystem::path& directory,bool amd,const wchar_t* input){
+    std::filesystem::create_directories(directory);
+    Logger::instance().openFile((directory/L"engine.log").wstring());
+    gfx::DeviceContextDesc device;device.enableDebugLayer=true;device.requiredVendorId=amd?0x1002:0;
+    gfx::D3D12DeviceContext ctx;gfx::CommandSlotRing ring;Status status;
+    if(!ctx.initialize(device,status)||!ring.initialize(ctx.device(),ctx.directQueue(),ctx.fence(),ctx.fenceEvent(),4,status))return 2;
+    sink::RgbaImage source;
+    if(input){if(!sink::loadImage(input,source))return 2;}
+    else source=pattern(960,540);
+    auto frame=sdrFrame(source);
+    if(!frame)return 2;
+    constexpr auto fsr=engine::kVideoSrFsr,nis=engine::kVideoSrNis;
+    using pipeline::SrTarget;using pipeline::SrPrescale;
+    struct Case{
+        const char* name;
+        engine::EnhancementSettings settings;
+        bool sharpenFinal;
+    };
+    const Case cases[]{
+        {"fsr",vsr(fsr,SrTarget::Qhd),true},
+        {"fsr-fsr",twoPass(fsr,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,fsr),true},
+        {"fsr-nis",twoPass(fsr,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,nis),false},
+        {"nis-fsr",twoPass(nis,SrTarget::Qhd,SrPrescale::P720,SrTarget::Qhd,fsr),true}
+    };
+    constexpr unsigned frames=12;
+    bool ok=true;
+    for(const auto& test:cases){
+        const bool dual=test.settings.dualSrEnabled;
+        const auto off=run(ctx,ring,frame.get(),false,test.settings,false,false,false,frames,dual);
+        const auto on=run(ctx,ring,frame.get(),false,test.settings,false,false,false,frames,dual,0.6f);
+        const bool firstIdentical=!dual||(!off.firstLinear.pixels.empty()&&off.firstLinear.pixels==on.firstLinear.pixels);
+        const bool outputsChanged=off.output.pixels!=on.output.pixels;
+        const uint64_t evaluations=frames*(dual?2u:1u);
+        const auto name=std::string(test.name);
+        const bool passed=off.ok&&on.ok&&off.enabled&&on.enabled&&firstIdentical&&
+            outputsChanged==test.sharpenFinal&&off.evaluations==evaluations&&on.evaluations==evaluations&&
+            sink::saveImage((directory/(name+"-off.png")).wstring(),off.output,false)&&
+            sink::saveImage((directory/(name+"-on.png")).wstring(),on.output,false);
+        ok=ok&&passed;
+        std::cout<<"FSR_RCAS case="<<name<<" firstIdentical="<<firstIdentical<<" outputsChanged="<<outputsChanged
+                 <<" offP50Ms="<<off.srMs<<" offP95Ms="<<off.srP95Ms
+                 <<" onP50Ms="<<on.srMs<<" onP95Ms="<<on.srP95Ms<<" passed="<<passed<<std::endl;
+    }
+    Microsoft::WRL::ComPtr<ID3D12InfoQueue> info;
+    unsigned errors=0;
+    if(SUCCEEDED(ctx.device()->QueryInterface(IID_PPV_ARGS(&info)))){
+        for(UINT64 n=0;n<info->GetNumStoredMessagesAllowedByRetrievalFilter();++n){
+            SIZE_T size=0;info->GetMessage(n,nullptr,&size);
+            std::vector<uint8_t> bytes(size);
+            auto* message=reinterpret_cast<D3D12_MESSAGE*>(bytes.data());
+            if(SUCCEEDED(info->GetMessage(n,message,&size))&&message->Severity<=D3D12_MESSAGE_SEVERITY_ERROR)++errors;
+        }
+    }
+    std::cout<<"FSR_RCAS debugErrors="<<errors<<std::endl;
+    ring.shutdown();ctx.shutdown();return ok&&errors==0?0:1;
+}
 }
 
 int wmain(int argc,wchar_t** argv){
@@ -684,6 +745,10 @@ int wmain(int argc,wchar_t** argv){
     if(argc<2)return 2;
     const HRESULT com=CoInitializeEx(nullptr,COINIT_MULTITHREADED);
     if(FAILED(com))return 2;
+    if((argc==3||argc==4)&&(std::wstring_view(argv[2])==L"fsr-rcas"||std::wstring_view(argv[2])==L"fsr-rcas-amd")){
+        const int result=stage::fsrRcas(argv[1],std::wstring_view(argv[2])==L"fsr-rcas-amd",argc==4?argv[3]:nullptr);
+        CoUninitialize();return result;
+    }
     if(argc==3&&std::wstring_view(argv[2])==L"dual"){const int result=stage::dual(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-restore"){const int result=stage::restore(argv[1]);CoUninitialize();return result;}
     if(argc==3&&std::wstring_view(argv[2])==L"dual-boundaries"){const int result=stage::boundaries(argv[1]);CoUninitialize();return result;}

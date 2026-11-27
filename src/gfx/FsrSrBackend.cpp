@@ -3,6 +3,8 @@
 #include "veyra/Log.h"
 #include "veyra/RuntimePaths.h"
 
+#include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <string>
 
@@ -214,7 +216,8 @@ bool FsrSrBackend::initialize(ID3D12Device* device, uint32_t maxRenderWidth, uin
 
 bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* color, ID3D12Resource* motion,
                             ID3D12Resource* depth, ID3D12Resource* output, uint32_t renderWidth, uint32_t renderHeight,
-                            uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs) {
+                            uint32_t upscaleWidth, uint32_t upscaleHeight, bool reset, float frameTimeMs,
+                            float sharpness) {
 #ifdef VEYRA_HAS_FSR
     auto& p = *p_;
     if (!p.available || !list) return false;
@@ -263,8 +266,8 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
     dispatch.motionVectorScale = {1.0f, 1.0f};
     dispatch.renderSize = {renderWidth, renderHeight};
     dispatch.upscaleSize = {upscaleWidth, upscaleHeight};
-    dispatch.enableSharpening = false;
-    dispatch.sharpness = 0.0f;
+    dispatch.sharpness = std::isfinite(sharpness) ? std::clamp(sharpness, 0.0f, 1.0f) : 0.0f;
+    dispatch.enableSharpening = dispatch.sharpness > 0.0f;
     dispatch.frameTimeDelta = frameTimeMs > 0.0f ? frameTimeMs : 16.6f;
     dispatch.preExposure = 1.0f;
     dispatch.reset = reset;
@@ -284,7 +287,7 @@ bool FsrSrBackend::evaluate(ID3D12GraphicsCommandList* list, ID3D12Resource* col
     return true;
 #else
     (void)list; (void)color; (void)motion; (void)depth; (void)output; (void)renderWidth; (void)renderHeight;
-    (void)upscaleWidth; (void)upscaleHeight; (void)reset; (void)frameTimeMs;
+    (void)upscaleWidth; (void)upscaleHeight; (void)reset; (void)frameTimeMs; (void)sharpness;
     return false;
 #endif
 }
