@@ -40,28 +40,85 @@ Item {
         }
         function returnToLive() { seekTo(liveTimeshift.end) }
         function seekTo(seconds) { seeks = seeks.concat([seconds]) }
+        function seekBy(seconds) { seekTo(duration * progress + seconds) }
         function formatTime(seconds) { return String(Math.floor(seconds)) }
         function logUi(category, text) {}
         function setWindowMask(window, rect) {}
     }
     CineBar { id: bar; x: 50; y: 220; width: 860; height: 92 }
+    Window { id: wideHost; width: 1920; height: 1080 }
+    FullscreenBar { id: fullscreenBar; owner: wideHost; shown: false }
+    Shortcut { sequence: "Right"; onActivated: veyra.seekBy(5) }
     SignalSpy { id: moveSpy; target: bar; signalName: "requestMove" }
     SignalSpy { id: hideSpy; target: bar; signalName: "requestHide" }
     TestCase {
         name: "CinemaSeek"
         when: windowShown
         function init() {
+            root.width = 1000
             root.Window.window.width = 1000
             root.Window.window.height = 650
             root.Window.window.requestActivate()
             veyra.seeks = []; veyra.duration = 100; veyra.isCapture = false
             veyra.hasSource = false
             veyra.currentPresetName = ""
+            veyra.positionText = "0:30"
+            veyra.durationText = "1:40"
             veyra.liveTimeshift = {enabled: false, available: false, start: 0, end: 0}
             bar.width = 860
             bar.fullscreen = true
+            bar.wideTimeline = false
+            fullscreenBar.cinema = false
+            wideHost.width = 1920
             moveSpy.clear()
             hideSpy.clear()
+        }
+        function test_fullscreen_timeline_uses_wide_layout_data() {
+            return [
+                {tag: "file-1920", width: 1920, capture:false, timeshift:false, cinema:false, wide:true, expected:1872},
+                {tag: "file-1280", width: 1280, capture:false, timeshift:false, cinema:false, wide:true, expected:1232},
+                {tag: "file-768", width: 768, capture:false, timeshift:false, cinema:false, wide:false, expected:760},
+                {tag: "capture", width: 1920, capture:true, timeshift:false, cinema:false, wide:false, expected:860},
+                {tag: "timeshift", width: 1920, capture:false, timeshift:true, cinema:false, wide:true, expected:1872},
+                {tag: "cinema", width: 1920, capture:false, timeshift:false, cinema:true, wide:false, expected:860}
+            ]
+        }
+        function test_fullscreen_timeline_uses_wide_layout(data) {
+            wideHost.width = data.width
+            veyra.isCapture = data.capture
+            veyra.duration = data.timeshift ? 0 : 100
+            veyra.liveTimeshift = {enabled:data.timeshift, available:data.timeshift, start:10, end:70}
+            fullscreenBar.cinema = data.cinema
+            compare(fullscreenBar.wideTimeline, data.wide)
+            compare(fullscreenBar.width, data.expected)
+            compare(fullscreenBar.visible, false, "The hidden bar must not place an overlay over video")
+        }
+        function test_wide_timeline_seeks_precisely_and_keeps_keyboard_shortcut() {
+            root.width = 1680
+            root.Window.window.width = 1680
+            root.Window.window.requestActivate()
+            bar.width = 1550
+            bar.wideTimeline = true
+            veyra.duration = 3 * 3600
+            veyra.positionText = "0:54:00"
+            veyra.durationText = "3:00:00"
+            verify(waitForRendering(bar))
+            const rail = findChild(bar, "cine-seek")
+            tryVerify(function() { return rail.width > bar.width * .85 }, 500,
+                      "Seek rail uses " + rail.width + " of " + bar.width + " pixels")
+            console.log("Wide timeline spans " + rail.width + " of " + bar.width + " pixels")
+            compare(bar.height, 92)
+            const y = rail.height / 2
+            mousePress(rail, rail.width * .15, y)
+            verify(bar.interacting)
+            mouseMove(rail, rail.width * .75, y, 20)
+            mouseRelease(rail, rail.width * .75, y)
+            verify(!bar.interacting)
+            fuzzyCompare(veyra.seeks[veyra.seeks.length - 1], 8100, veyra.duration / rail.width)
+            const count = veyra.seeks.length
+            keyClick(Qt.Key_Right)
+            tryVerify(function() { return veyra.seeks.length === count + 1 })
+            compare(veyra.seeks[veyra.seeks.length - 1], 3245)
         }
         function test_hide_fits_data() {
             const longPreset = "Long custom preset name ".repeat(8)
@@ -127,9 +184,13 @@ Item {
             fuzzyCompare(veyra.seeks[veyra.seeks.length-1], 60, 1)
             compare(bar.interacting, false)
         }
-        function test_live_seek_and_return() {
+        function test_live_seek_and_return_data() {
+            return [{tag:"cinema",wide:false},{tag:"fullscreen-wide",wide:true}]
+        }
+        function test_live_seek_and_return(data) {
             veyra.duration = 0
             veyra.liveTimeshift = {enabled: true, available: true, start: 10, end: 70}
+            bar.wideTimeline = data.wide
             const rail = findChild(bar, "cine-seek")
             mouseClick(rail, rail.width * .5, 7)
             fuzzyCompare(veyra.seeks[0], 40, 0.5)

@@ -23,13 +23,16 @@ Rectangle {
     signal requestPlaylist()
     // Set on the fullscreen bar: shows the lock button.
     property bool fullscreen: false
+    property bool wideTimeline: false
+    readonly property int timelineHeight: wideTimeline ? 24 : 0
+    readonly property real controlsWidth: wideTimeline ? Math.min(width, 860) : width
     // Set by FullscreenBar so upward menus stop above the playback pill.
     property real menuBottomLimit: -1
     // Any popover needs the owner window's full mask, not just the preset menu.
     readonly property bool menuOpen: presetMenu.visible || ccMenu.visible || audioMenu.visible || loadMenu.visible || playbackRate.menuOpen
     // The pointer is over the pill.
     readonly property bool hovered: barHover.hovered
-    readonly property bool compact: width < 820
+    readonly property bool compact: controlsWidth < 820
     readonly property bool seekPreviewOpen: seekMouse.enabled && (seekMouse.containsMouse || seekArea.scrubbing)
     readonly property bool editing: volumeSlider.editing
     // Keep the control window active until a seek releases its mouse grab, too.
@@ -56,9 +59,11 @@ Rectangle {
     border.color: Qt.rgba(1, 1, 1, 0.1)
 
     RowLayout {
-        anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: bar.timelineHeight
+        anchors.horizontalCenter: parent.horizontalCenter
+        width: bar.controlsWidth - 32
         spacing: 12
 
         // --- left: artwork, title and playlist -----------------------
@@ -131,6 +136,7 @@ Rectangle {
 
         // --- middle: transport + seek --------------------------------
         ColumnLayout {
+            id: transportColumn
             Layout.fillWidth: true
             Layout.minimumWidth: transport.implicitWidth
             Layout.alignment: Qt.AlignVCenter
@@ -210,6 +216,7 @@ Rectangle {
 
             // .seekrow: mono times either side of the rail.
             RowLayout {
+                parent: bar.wideTimeline ? timelineSlot : transportColumn
                 Layout.fillWidth: true
                 spacing: 10
                 Text {
@@ -499,6 +506,17 @@ Rectangle {
                 TapHandler { onTapped: bar.requestHide() }
             }
         }
+    }
+
+    RowLayout {
+        id: timelineSlot
+        visible: bar.wideTimeline
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 16
+        anchors.rightMargin: 16
+        height: bar.timelineHeight
     }
 
     // The preset menu: list presets and node presets in one menu, as designed.
