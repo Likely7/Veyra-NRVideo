@@ -34,6 +34,11 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(QStringList profiles READ profiles NOTIFY mappingChanged)
     Q_PROPERTY(QString profile READ profile NOTIFY mappingChanged)
     Q_PROPERTY(QString unlockLabel READ unlockLabel NOTIFY mappingChanged)
+    Q_PROPERTY(QString quickKeyLabel READ quickKeyLabel NOTIFY mappingChanged)
+    Q_PROPERTY(bool quickReferenceEnabled MEMBER quickReferenceEnabled_)
+    Q_PROPERTY(bool quickReferenceOpen MEMBER quickReferenceOpen_)
+    Q_PROPERTY(QStringList actionNotes READ actionNotes NOTIFY mappingChanged)
+    Q_PROPERTY(QStringList drivingActionNotes READ drivingActionNotes NOTIFY mappingChanged)
     Q_PROPERTY(QVariantMap tuning READ tuning NOTIFY mappingChanged)
     Q_PROPERTY(int learning READ learning NOTIFY mappingChanged)
     Q_PROPERTY(int learningSlot READ learningSlot NOTIFY mappingChanged)
@@ -62,10 +67,15 @@ public:
     bool driving() const { return mapper_.driving(); }
     Q_INVOKABLE void selectDriving(bool on);
     Q_INVOKABLE void learnDriveKey(QObject* learningControls);
+    Q_INVOKABLE void learnQuickKey(QObject* learningControls);
+    Q_INVOKABLE void setActionNote(int action, bool driving, const QString& note);
     QVariantMap tuning() const;
     QStringList profiles() const {return profiles_.keys();}
     QString profile() const {return profile_;}
     QString unlockLabel() const;
+    QString quickKeyLabel() const;
+    QStringList actionNotes() const { return notes_[0]; }
+    QStringList drivingActionNotes() const { return notes_[1]; }
     Q_INVOKABLE void selectProfile(const QString& name,bool create=false);
     Q_INVOKABLE void useTemplate(int index);
     Q_INVOKABLE bool toggleAction(int action) const;
@@ -97,9 +107,13 @@ signals:
     void stateChanged();
     void padStateChanged();
     void drivingChanged();
+    void quickReferenceRequested();
+    void quickReferenceScrolled(int delta);
 
 private:
     using Mapper = remoteplay::KeyboardMousePad;
+    static constexpr int LearnQuickKey = Mapper::ActionCount + 1;
+    static constexpr int DefaultQuickKey = VK_F2;
     enum class Route { None, Moonlight, Ps5, Preview };
     void key(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) override;
     void mouseMove(int dx, int dy) override;
@@ -112,6 +126,9 @@ private:
     void emitPad();
     void digital(int key, bool down);
     void bind(int key, int modifiers);
+    bool quickKeyAvailable(int chord) const;
+    bool unlockAvailable(int setting) const;
+    int fallbackQuickKey() const;
     void applyMouseTuning(const Mapper::Tuning& tuning);
     void suspendIme();
     void restoreIme();
@@ -143,6 +160,11 @@ private:
     remoteplay::ControllerState previewState_{};
     uint64_t target_ = 0;
     bool keyboardEnabled_ = false;
+    bool quickReferenceEnabled_ = false;
+    bool quickReferenceOpen_ = false;
+    int quickKey_ = DefaultQuickKey;
+    int quickKeyDown_ = 0;
+    std::array<QStringList, 2> notes_;
     QPointer<QObject> learningControls_;
     int learning_ = -1;
     int learningSlot_ = 0;

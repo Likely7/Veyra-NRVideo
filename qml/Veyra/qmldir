@@ -88,6 +88,8 @@ OnboardingGuide 1.0 OnboardingGuide.qml
 DynamicHudRow 1.0 DynamicHudRow.qml
 Ps5SourceDialog 1.0 Ps5SourceDialog.qml
 Ps5MappingDialog 1.0 Ps5MappingDialog.qml
+ConsolePadLabels 1.0 ConsolePadLabels.qml
+ConsoleKeymapOverlay 1.0 ConsoleKeymapOverlay.qml
 PcSourceDialog 1.0 PcSourceDialog.qml
 XboxSourceDialog 1.0 XboxSourceDialog.qml
 ScreenSourceDialog 1.0 ScreenSourceDialog.qml

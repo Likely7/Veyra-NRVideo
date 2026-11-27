@@ -745,6 +745,21 @@ Window {
     readonly property bool ps5KeyboardReady: !!veyra.ps5Input && veyra.ps5Input.keyboardEnabled &&
         ((veyra.ps5.active === true && veyra.ps5.viewOnly !== true) ||
          (veyra.ps5Control.state === "connected" && veyra.isCapture))
+    readonly property bool consoleKeymapOnVideo: veyra.hasSource &&
+        (root.page === "min" || root.page === "pro" || root.page === "node") &&
+        (root.ps5KeyboardReady || root.ps5InputLocked)
+    Binding {
+        target: veyra.ps5Input
+        property: "quickReferenceEnabled"
+        value: root.consoleKeymapOnVideo && !veyra.moonlightCaptured && dialogs.dialog === ""
+        when: !!veyra.ps5Input
+    }
+    Binding {
+        target: veyra.ps5Input
+        property: "quickReferenceOpen"
+        value: consoleKeymap.referenceOpen && !consoleKeymap.suppressed
+        when: !!veyra.ps5Input
+    }
     TapHandler {
         enabled: root.ps5KeyboardReady && !veyra.ps5Input.ps5Captured && dialogs.dialog === ""
         onTapped: eventPoint => {
@@ -754,38 +769,15 @@ Window {
             veyra.ps5CaptureKeyboard()
         }
     }
-    Rectangle {
-        objectName: "ps5-input-hint"
-        property bool capturedNow: root.ps5InputLocked
-        onCapturedNowChanged: { if(capturedNow)hintTimer.restart();else hintTimer.stop() }
-        Timer {id: hintTimer;interval:1800}
-        Connections {
-            target: veyra.ps5Input
-            function onDrivingChanged() { if (root.ps5InputLocked) hintTimer.restart() }
-        }
-        readonly property bool videoCover: true
-        readonly property real coverRadius: radius
-        visible: (root.ps5KeyboardReady || capturedNow) && (!capturedNow || hintTimer.running) && dialogs.dialog === "" && veyra.hasSource
-                 && (root.page === "min" || root.page === "pro" || root.page === "node")
-        anchors.top: parent.top
-        anchors.topMargin: 55
-        anchors.horizontalCenter: parent.horizontalCenter
-        width: Math.min(parent.width - 16, ps5InputHint.implicitWidth + 24)
-        height: 28
-        radius: 8
-        color: Theme.dialog
-        border.color: Theme.stroke2
-        z: 62
-        Text {
-            id: ps5InputHint
-            TapHandler {enabled: !veyra.ps5Input?.ps5Captured; onTapped: dialogs.openPs5Mapping()}
-            anchors.centerIn: parent
-            text: parent.capturedNow
-                ? ((veyra.ps5Input.driving ? qsTr("驾驶") : qsTr("步行")) + " · " + veyra.ps5Input.driveKeyLabel + " · " + veyra.ps5Input.unlockLabel) : (qsTr("点击画面锁定键鼠")+"  ·  "+qsTr("键鼠设置"))
-            color: Theme.t1
-            font.family: Theme.fontUi
-            font.pixelSize: Theme.fsSmall
-        }
+    ConsoleKeymapOverlay {
+        id: consoleKeymap
+        anchors.fill: parent
+        z: 92
+        input: veyra.ps5Input
+        active: root.consoleKeymapOnVideo
+        locked: root.ps5InputLocked
+        suppressed: dialogs.dialog !== "" || veyra.moonlightCaptured
+        onEditRequested: dialogs.openPs5Mapping()
     }
 
     // Stream statistics on and off. While a PC stream has the keyboard, the capture filter sees the keys
@@ -801,6 +793,7 @@ Window {
         onActivated: dialogs.openPs5Mapping()
     }
     VButton {
+        id: ps5QuickMapping
         objectName: "ps5-quick-mapping"
         readonly property bool videoCover: true
         visible: root.quickPanelShown && !!veyra.ps5Input && !veyra.ps5Input.ps5Captured
@@ -810,6 +803,17 @@ Window {
         z: 91
         text: qsTr("键鼠设置")
         onClicked: dialogs.openPs5Mapping()
+    }
+    VButton {
+        objectName: "console-keymap-quick-reference"
+        readonly property bool videoCover: visible
+        visible: ps5QuickMapping.visible && consoleKeymap.active
+        anchors.right: ps5QuickMapping.left
+        anchors.rightMargin: 8
+        anchors.bottom: ps5QuickMapping.bottom
+        z: 91
+        text: qsTr("查看键位")
+        onClicked: consoleKeymap.toggleReference()
     }
     StreamHud {
         id: streamHud

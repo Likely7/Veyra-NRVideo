@@ -34,13 +34,9 @@ DialogLayer {
     Timer { interval: 3000; running: panel.confirmReset; onTriggered: panel.confirmReset=false }
     readonly property var pad: input ? input.padState : ({})
     readonly property var tune: input ? input.tuning : ({})
-    readonly property var names: [
-        "×", "○", "□", "△", qsTr("方向键 左"), qsTr("方向键 右"), qsTr("方向键 上"), qsTr("方向键 下"),
-        "L1", "R1", "L3", "R3", qsTr("选项键"), qsTr("创建键"), qsTr("触摸板按下"), "PS", "L2", "R2",
-        qsTr("左摇杆 上"), qsTr("左摇杆 下"), qsTr("左摇杆 左"), qsTr("左摇杆 右"),
-        qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"), qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"), qsTr("触摸板左滑"), qsTr("触摸板右滑"),
-        "L3 + R3"
-    ]
+    ConsolePadLabels { id: labels }
+    readonly property var names: labels.names
+    readonly property int quickLearningAction: names.length + 1
 
     onActionTriggered: dialogHost.ps5MappingReturn ? dialogHost.open(dialogHost.ps5MappingReturn) : dialogHost.close()
     Connections {
@@ -154,9 +150,10 @@ DialogLayer {
     }
     VRow {
         label: qsTr("切换步行／驾驶")
-        hint: panel.input?.learning === panel.names.length
+        hint: panel.input?.learning === panel.names.length || panel.input?.learning === panel.quickLearningAction
               ? (panel.input.feedback || qsTr("正在录键"))
-              : qsTr("锁定键鼠后即可切换。默认 W（R2）加速、S（L2）刹车／倒车，A/D 转向。")
+              : qsTr("%1 切换步行／驾驶").arg(panel.input?.driveKeyLabel ?? "F6") + " · " +
+                qsTr("%1 查看键位").arg(panel.input?.quickKeyLabel ?? "F2")
         hintBelow: true
         RowLayout {
             VButton {
@@ -168,6 +165,19 @@ DialogLayer {
                 onClicked: {
                     if (panel.input.learning === panel.names.length) panel.input.cancelLearning()
                     else panel.input.learnDriveKey(panel)
+                }
+            }
+            VButton {
+                objectName: "console-keymap-shortcut"
+                primary: panel.input?.learning === panel.quickLearningAction
+                text: primary ? qsTr("取消") : (panel.input?.quickKeyLabel ?? "F2")
+                tip: qsTr("查看键位")
+                Accessible.name: tip + " · " + text
+                maxTextWidth: panel.bodyWidth < 500 ? 68 : 0
+                enabled: panel.input !== null && !panel.input.previewing
+                onClicked: {
+                    if (primary) panel.input.cancelLearning()
+                    else panel.input.learnQuickKey(panel)
                 }
             }
             VButton {
@@ -466,6 +476,18 @@ DialogLayer {
                     }
                 }
             }
+            VRow {
+                visible: panel.selected >= 0
+                label: qsTr("动作备注")
+                TextField {
+                    objectName: "console-keymap-action-note"
+                    Layout.preferredWidth: panel.bodyWidth < 500 ? 128 : 160
+                    maximumLength: 12
+                    enabled: panel.input !== null && !panel.learningSelected && !panel.input.previewing
+                    text: (panel.editDriving ? panel.input?.drivingActionNotes : panel.input?.actionNotes)?.[panel.selected] ?? ""
+                    onTextEdited: panel.input?.setActionNote(panel.selected, panel.editDriving, text)
+                }
+            }
         }
 
         ColumnLayout {
@@ -542,6 +564,8 @@ DialogLayer {
                 VSwitch { checked: panel.tune.invertY === true; onToggled: on => panel.input?.setTuning("invertY", on) }
             }
             VRow { visible: panel.advanced; label: qsTr("解锁快捷键")
+                hint: panel.input?.learning < 0 ? (panel.input.feedback || "") : ""
+                hintBelow: true
                 VSelect { title: qsTr("解锁快捷键"); value: panel.input?.unlockLabel || "Esc"
                     options: ["Esc","Ctrl+Alt+Z","Alt+Q","F1","~"].map((n,i)=>({id:String(i),label:n}))
                     onPicked: id=>panel.input.setTuning("unlock",Number(id)) }

@@ -44,6 +44,30 @@ int64_t nowUs() {
         std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
+bool unlockChord(int chord, int setting) {
+    const int key = chord & Mapper::KeyMask;
+    const int mods = chord >> 9;
+    switch (setting) {
+    case 0: return key == VK_ESCAPE;
+    case 1: return key == 'Z' && (mods & (Mapper::Ctrl | Mapper::Alt)) == (Mapper::Ctrl | Mapper::Alt);
+    case 2: return key == 'Q' && (mods & Mapper::Alt);
+    case 3: return key == VK_F1;
+    case 4: return key == VK_OEM_3;
+    default: return false;
+    }
+}
+
+int windowModifiers() {
+    return ((GetKeyState(VK_SHIFT) & 0x8000) ? Mapper::Shift : 0) |
+           ((GetKeyState(VK_CONTROL) & 0x8000) ? Mapper::Ctrl : 0) |
+           ((GetKeyState(VK_MENU) & 0x8000) ? Mapper::Alt : 0);
+}
+
+QString shortNote(const QString& text) {
+    const auto codepoints = text.trimmed().toUcs4();
+    return QString::fromUcs4(codepoints.constData(), std::min<qsizetype>(12, codepoints.size()));
+}
+
 QString bindingLabel(int binding) {
     if (!binding) return QStringLiteral("—");
     QString text;
@@ -52,6 +76,8 @@ QString bindingLabel(int binding) {
     if (mods & Mapper::Alt) text += QStringLiteral("Alt+");
     if (mods & Mapper::Shift) text += QStringLiteral("Shift+");
     const int key = binding & Mapper::KeyMask;
+    if (key >= VK_F1 && key <= VK_F24)
+        return text + QStringLiteral("F%1").arg(key - VK_F1 + 1);
     using T = StreamInputCapture;
     switch (key) {
     case VK_LEFT:return text+QStringLiteral("←");
@@ -218,6 +244,7 @@ StreamInputCapture::StreamInputCapture(engine::EngineController& engine, QString
     QCoreApplication::instance()->installNativeEventFilter(this);
     connect(qGuiApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
         if (state == Qt::ApplicationActive) return;
+        quickKeyDown_ = 0;
         end();
         cancelLearning();
     });
@@ -230,7 +257,7 @@ StreamInputCapture::~StreamInputCapture() {
 }
 
 void StreamInputCapture::setWindow(HWND window) {
-    if (window_ != window) {end();cancelLearning();}
+    if (window_ != window) { quickKeyDown_ = 0; end(); cancelLearning(); }
     window_ = window;
 }
 
@@ -343,29 +370,45 @@ void StreamInputCapture::clipToWindow() {
 }
 
 bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* message, qintptr* result) {
-    if ((route_ == Route::None && learning_ < 0) || eventType != "windows_generic_MSG") return false;
+    if (eventType != "windows_generic_MSG") return false;
+    if (route_ == Route::None && learning_ < 0 && !quickReferenceEnabled_ && !quickKeyDown_) return false;
     const MSG* msg = static_cast<const MSG*>(message);
     if (!msg->hwnd || GetAncestor(msg->hwnd, GA_ROOT) != window_) return false;
     WPARAM keyParam=msg->wParam;
     const bool keyMessage = msg->message == WM_KEYDOWN || msg->message == WM_KEYUP ||
         msg->message == WM_SYSKEYDOWN || msg->message == WM_SYSKEYUP;
     const auto consume = [result] { if (result) *result = 0; return true; };
-    if(!captured() && keyMessage){
+    if (!captured() && keyMessage) {
         if(keyParam==VK_PROCESSKEY){
             UINT sc=(msg->lParam>>16)&0xff;
             if(msg->lParam&(1<<24))sc|=0xe000;
             keyParam=MapVirtualKeyW(sc,MAPVK_VSC_TO_VK_EX);
-            if(!keyParam || keyParam==VK_PROCESSKEY)return consume();
+            if (!keyParam || keyParam == VK_PROCESSKEY)
+                return (route_ != Route::None || learning_ >= 0) && consume();
         }
-        const int setting=mapper_.tuning().unlock;
-        const auto mods=mapper_.modifiers();
-        const bool unlock=setting==0?keyParam==VK_ESCAPE:setting==1?keyParam=='Z'&&(mods&6)==6:
-                          setting==2?keyParam=='Q'&&(mods&4):setting==3?keyParam==VK_F1:keyParam==VK_OEM_3;
-        if(unlock){
-            if(learning_>=0)cancelLearning();else end();
+        const bool down = msg->message == WM_KEYDOWN || msg->message == WM_SYSKEYDOWN;
+        const bool repeat = (msg->lParam & (1L << 30)) != 0;
+        const int key = uint16_t(moonlight::hostKey(uint32_t(keyParam), uint32_t(msg->lParam >> 16) & 255,
+                                                  (msg->lParam & (1L << 24)) != 0).code) & 255;
+        const int chord = Mapper::encode(key, route_ == Route::None && learning_ < 0 ? windowModifiers() : mapper_.modifiers());
+        if (quickKeyDown_ == key && key) {
+            if (!down) quickKeyDown_ = 0;
             return consume();
         }
+        if (learning_ < 0 && quickReferenceEnabled_ && quickKey_ && chord == quickKey_) {
+            if (down && !repeat) {
+                quickKeyDown_ = key;
+                emit quickReferenceRequested();
+            }
+            return consume();
+        }
+        if (route_ != Route::None && learning_ < 0 && unlockChord(chord, mapper_.tuning().unlock)) {
+            if (down && !repeat) end();
+            return consume();
+        }
+        if (learning_ >= 0 && repeat && down) return consume();
     }
+    if (route_ == Route::None && learning_ < 0) return false;
     if(learning_>=0 && (msg->message==WM_KILLFOCUS||(msg->message==WM_ACTIVATE&&LOWORD(msg->wParam)==WA_INACTIVE))){cancelLearning();return false;}
     if (learning_ >= 0) {
         if (msg->message == WM_LBUTTONDOWN &&
@@ -447,6 +490,10 @@ void StreamInputCapture::scroll(int delta, bool horizontal) {
 #endif
         return;
     }
+    if (!horizontal && quickReferenceOpen_ && (ps5Captured() || previewing())) {
+        emit quickReferenceScrolled(delta);
+        return;
+    }
     const int key = horizontal ? (delta > 0 ? Mapper::WheelRight : Mapper::WheelLeft) :
         (delta > 0 ? Mapper::WheelUp : Mapper::WheelDown);
     if (learning_ >= 0) { bind(key, mapper_.modifiers()); return; }
@@ -522,6 +569,7 @@ QVariantList StreamInputCapture::drivingBindings() const { return bindingLabels(
 QVariantList StreamInputCapture::alternateBindings() const { return bindingLabels(false, 1); }
 QVariantList StreamInputCapture::drivingAlternateBindings() const { return bindingLabels(true, 1); }
 QString StreamInputCapture::driveKeyLabel() const { return bindingLabel(mapper_.driveKey()); }
+QString StreamInputCapture::quickKeyLabel() const { return bindingLabel(quickKey_); }
 void StreamInputCapture::selectDriving(bool on) {
     if (driving() == on) return;
     mapper_.selectDriving(on);
@@ -530,6 +578,7 @@ void StreamInputCapture::selectDriving(bool on) {
     if (ps5Captured() || previewing()) emitPad();
 }
 void StreamInputCapture::learnDriveKey(QObject* learningControls) { learn(Mapper::ActionCount, learningControls); }
+void StreamInputCapture::learnQuickKey(QObject* learningControls) { learn(LearnQuickKey, learningControls); }
 QVariantMap StreamInputCapture::tuning() const { return tuningMap(mapper_.tuning()); }
 QVariantMap StreamInputCapture::padState() const {
     const int a=mapper_.tuning().adsAction;
@@ -550,7 +599,7 @@ void StreamInputCapture::setKeyboardEnabled(bool enabled) {
     emit mappingChanged();
 }
 void StreamInputCapture::learn(int action, QObject* learningControls, bool drivingLayout, int slot) {
-    if (action < 0 || action > Mapper::ActionCount || slot < 0 || slot >= Mapper::SlotCount) return;
+    if (action < 0 || action > LearnQuickKey || slot < 0 || slot >= Mapper::SlotCount) return;
     end();
     cancelLearning();
     // The editor can be opened from Home before any video HWND exists.
@@ -571,6 +620,24 @@ void StreamInputCapture::learn(int action, QObject* learningControls, bool drivi
 }
 void StreamInputCapture::bind(int key, int modifiers) {
     const int encoded = Mapper::encode(key, modifiers);
+    if (unlockChord(encoded, mapper_.tuning().unlock) ||
+        (learning_ != LearnQuickKey && encoded == quickKey_)) {
+        feedback_ = tr("此键用于释放鼠标或查看键位，请换一个键。");
+        emit mappingChanged();
+        return;
+    }
+    if (learning_ == LearnQuickKey) {
+        if (!quickKeyAvailable(encoded)) {
+            feedback_ = tr("该快捷键已被占用，或不是可用的键盘组合。");
+            emit mappingChanged();
+            return;
+        }
+        quickKey_ = encoded;
+        feedback_.clear();
+        cancelLearning();
+        save();
+        return;
+    }
     if (!Mapper::validBinding(encoded,mapper_.tuning().unlock!=0)) {
         feedback_ = tr("此键用于系统或 Veyra 快捷键，请换一个键。");
         emit mappingChanged();
@@ -593,6 +660,40 @@ void StreamInputCapture::bind(int key, int modifiers) {
     save();
     emit mappingChanged();
 }
+bool StreamInputCapture::quickKeyAvailable(int chord) const {
+    const int key = chord & Mapper::KeyMask;
+    return key > 0 && key < Mapper::MouseLeft && !Mapper::modifier(key) &&
+           Mapper::validBinding(chord, mapper_.tuning().unlock != 0) &&
+           chord != Mapper::encode(VK_F1, Mapper::Ctrl | Mapper::Alt) &&
+           !unlockChord(chord, mapper_.tuning().unlock) &&
+           chord != mapper_.driveKey() && !mapper_.hasBinding(chord, false) && !mapper_.hasBinding(chord, true);
+}
+
+bool StreamInputCapture::unlockAvailable(int setting) const {
+    if (unlockChord(quickKey_, setting) || unlockChord(mapper_.driveKey(), setting)) return false;
+    for (bool driving : {false, true})
+        for (int slot = 0; slot < Mapper::SlotCount; ++slot)
+            for (const int chord : mapper_.bindings(driving, slot))
+                if (unlockChord(chord, setting)) return false;
+    return true;
+}
+
+int StreamInputCapture::fallbackQuickKey() const {
+    for (const int key : {VK_F2, VK_F3, VK_F4, VK_F5, VK_F6, VK_F11, VK_F12})
+        if (quickKeyAvailable(key)) return key;
+    return 0;
+}
+
+void StreamInputCapture::setActionNote(int action, bool driving, const QString& text) {
+    if (action < 0 || action >= Mapper::ActionCount) return;
+    auto& notes = notes_[driving];
+    const auto note = shortNote(text);
+    if (notes.value(action) == note) return;
+    notes.resize(Mapper::ActionCount);
+    notes[action] = note;
+    save();
+    emit mappingChanged();
+}
 void StreamInputCapture::clearBinding(int action, bool drivingLayout, int slot) {
     releasePs5();
     if (mapper_.setBinding(action, 0, drivingLayout, slot)) { save(); emit mappingChanged(); }
@@ -608,6 +709,11 @@ void StreamInputCapture::cancelLearning() {
 void StreamInputCapture::applyDefaults(bool drivingLayout) {
     releasePs5();
     mapper_.resetBindings(drivingLayout);
+    for (int action = 0; action < Mapper::ActionCount; ++action) {
+        const int chord = mapper_.bindings(drivingLayout)[action];
+        if ((chord && chord == quickKey_) || unlockChord(chord, mapper_.tuning().unlock))
+            mapper_.setBinding(action, 0, drivingLayout);
+    }
     if (!drivingLayout) mapper_.setToggleMask(0);
     const auto toggle = mapper_.driveKey();
     if (!mapper_.setDriveKey(toggle)) mapper_.setDriveKey(0);
@@ -618,6 +724,7 @@ void StreamInputCapture::applyDefaults(bool drivingLayout) {
 void StreamInputCapture::resetMouseTuning() {
     auto defaults = Mapper::defaultTuning();
     defaults.mouseLook = mapper_.tuning().mouseLook;
+    defaults.unlock = mapper_.tuning().unlock;
     applyMouseTuning(defaults);
 }
 void StreamInputCapture::setTuning(const QString& key, const QVariant& value) {
@@ -628,6 +735,12 @@ void StreamInputCapture::setTuning(const QString& key, const QVariant& value) {
 }
 void StreamInputCapture::applyMouseTuning(const Mapper::Tuning& next) {
     if (next == mapper_.tuning()) return;
+    if (next.unlock != mapper_.tuning().unlock && !unlockAvailable(next.unlock)) {
+        feedback_ = tr("此快捷键已绑给手柄动作或其他功能，请先解绑。");
+        emit mappingChanged();
+        return;
+    }
+    feedback_.clear();
     mapper_.setTuning(next);
     if (mouse_) mouse_->setTuning(next);
     save();
@@ -648,7 +761,7 @@ void StreamInputCapture::releasePs5() {
 }
 void StreamInputCapture::load() {
     QFile file(profilePath_);
-    if (!file.open(QIODevice::ReadOnly) || file.size() > 64 * 1024) return;
+    if (!file.open(QIODevice::ReadOnly) || file.size() > 128 * 1024) return;
     const auto json = QJsonDocument::fromJson(file.readAll()).object();
     if (json.value(QStringLiteral("version")).toInt() != 1) return;
     profiles_ = json.value("profiles").toObject();
@@ -724,6 +837,15 @@ void StreamInputCapture::readProfile(const QJsonObject& json){
             mapper_.setBinding(Mapper::StickClickBoth, 'V', true);
     }
     mapper_.setToggleMask(uint64_t(json.value("toggles").toInteger()));
+    const int quickKey = json.value("quickKey").toInt(DefaultQuickKey);
+    quickKey_ = quickKeyAvailable(quickKey) ? quickKey : fallbackQuickKey();
+    for (bool drivingLayout : {false, true}) {
+        auto& notes = notes_[drivingLayout];
+        notes.clear();
+        const auto saved = json.value(drivingLayout ? "drivingActionNotes" : "actionNotes").toArray();
+        for (int i = 0; i < std::min<qsizetype>(saved.size(), Mapper::ActionCount); ++i)
+            notes.push_back(shortNote(saved[i].toString()));
+    }
 }
 QJsonObject StreamInputCapture::activeProfile()const{
     const auto keys = [this](bool driving, int slot) {
@@ -734,6 +856,8 @@ QJsonObject StreamInputCapture::activeProfile()const{
     return {{"bindings", keys(false, 0)}, {"drivingBindings", keys(true, 0)},
             {"alternateBindings", keys(false, 1)}, {"drivingAlternateBindings", keys(true, 1)},
             {"drivingLayoutVersion", 2}, {"driveKey", mapper_.driveKey()},
+            {"quickKey", quickKey_}, {"actionNotes", QJsonArray::fromStringList(notes_[0])},
+            {"drivingActionNotes", QJsonArray::fromStringList(notes_[1])},
             {"tuning",QJsonObject::fromVariantMap(tuning())},{"toggles",qint64(mapper_.toggleMask())}};
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}

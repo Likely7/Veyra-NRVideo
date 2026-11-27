@@ -1,5 +1,13 @@
 # 当前工作日志
 
+## 2026-11-26 主机键鼠映射第一批试用
+
+从本地 main `9d7e1e44` 建立 `codex/keymap-feel-xbox-20261126`。PS5 画面提示限时五秒，增加 F2 速查、按实际键位显示切换操作、释放键与速查键冲突检查、动作备注。旧档案保留手感与键位，速查遇到已占用的 F2 选未绑定的备用功能键。
+
+本轮构建命令为 `py -3.11 -B -X utf8 scripts/acceptance/build-recording-handoff.py --task codex-keymap-feel-xbox-20261126 --root "E:/项目/Veyra/worktrees/keymap-feel-xbox-20261126" --jobs 2 --timeout 880 veyra_qml_ui veyra_qml_quick_tests veyra_ui_i18n_tests`。MSVC 链接和 pkg-config 对 E 盘 Unicode 参数出现编码问题，采用现有 `C:/veyra-deps` 兼容连接后通过。产物为 `E:/项目/Veyra/build/codex-keymap-feel-xbox-20261126`，私有试用为 `E:/项目/Veyra/tests/codex-keymap-feel-xbox-20261126`，日志为 `E:/项目/Veyra/logs/codex-keymap-feel-xbox-20261126`。同步 111 个着色器并复核一致。
+
+QML 提示、速查、窄窗与 4K 几何及编辑器验证通过。九种语言缺译与占位符错误均为零。Moonlight 135 项及 PS5 输入边界通过。实窗测试因前台为其他应用被输入锁定检查拒绝，记录与中英截图见 `E:/项目/Veyra/reports/codex-keymap-feel-xbox-20261126/FIRST-BATCH.md`。
+
 ## 2026-11-26 2.2.2 主线整合
 
 盘点 52 个工作树和 84 个本地与远端引用。Antigravity 的 `72cc0161` 已直接提交到本地 main。同步当前发布仓库的远端 `c4c4be1f`。Claude 光流 `7bacdb02`、回放与麦克风 `6061d901`、低延迟 `d4be12d2` 及后续缩放、国际化和虚拟摄像机均已进入主线。准星单独分支和 HUD 单独分支的产品改动已经由 PS5 稳定分支携带，采集音频旧 PR 的等价修复为 `51591bc8`。保留 11 个有本地改动的工作树、原分支和暂停的实验。分支清单为 `E:/项目/Veyra/reports/codex-main-integration-20261126/branch-inventory.json`。

@@ -976,6 +976,71 @@
    "ru": "%1 Закрыть"
   },
   {
+   "zh": "%1 关闭本面板",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 關閉此面板",
+   "en": "%1 Close this panel",
+   "ja": "%1 でパネルを閉じる",
+   "ko": "%1 이 패널 닫기",
+   "es": "%1 Cerrar este panel",
+   "fr": "%1 Fermer ce panneau",
+   "de": "%1 Dieses Panel schließen",
+   "pt-BR": "%1 Fechar este painel",
+   "ru": "%1 Закрыть панель"
+  },
+  {
+   "zh": "%1 切到%2",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 切換至%2",
+   "en": "%1 Switch to %2",
+   "ja": "%1 で%2に切り替え",
+   "ko": "%1 %2 모드로 전환",
+   "es": "%1 Cambiar a %2",
+   "fr": "%1 Passer à %2",
+   "de": "%1 Zu %2 wechseln",
+   "pt-BR": "%1 Alternar para %2",
+   "ru": "%1 Перейти в режим «%2»"
+  },
+  {
+   "zh": "%1 切回%2",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 切回%2",
+   "en": "%1 Return to %2",
+   "ja": "%1 で%2に戻る",
+   "ko": "%1 %2 모드로 복귀",
+   "es": "%1 Volver a %2",
+   "fr": "%1 Revenir à %2",
+   "de": "%1 Zurück zu %2",
+   "pt-BR": "%1 Voltar para %2",
+   "ru": "%1 Вернуться в режим «%2»"
+  },
+  {
+   "zh": "%1 切换步行／驾驶",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 切換步行／駕駛",
+   "en": "%1 Switch walking / driving",
+   "ja": "%1 で徒歩／運転切替",
+   "ko": "%1 도보/운전 전환",
+   "es": "%1 Alternar a pie / conducción",
+   "fr": "%1 Basculer à pied / conduite",
+   "de": "%1 Zu Fuß / Fahren wechseln",
+   "pt-BR": "%1 Alternar a pé / direção",
+   "ru": "%1 Пешком / за рулём"
+  },
+  {
+   "zh": "%1 刹车",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 煞車",
+   "en": "%1 Brake",
+   "ja": "%1 ブレーキ",
+   "ko": "%1 제동",
+   "es": "%1 Frenar",
+   "fr": "%1 Freiner",
+   "de": "%1 Bremsen",
+   "pt-BR": "%1 Frear",
+   "ru": "%1 Тормоз"
+  },
+  {
    "zh": "%1 已用于其他操作",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "%1 已用於其他操作",
@@ -1002,6 +1067,19 @@
    "ru": "%1 зарезервировано для фиксированной функции"
   },
   {
+   "zh": "%1 开镜 · %2×",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 瞄準 · %2×",
+   "en": "%1 Aim down sights · %2×",
+   "ja": "%1 エイム · %2×",
+   "ko": "%1 조준 · %2×",
+   "es": "%1 Apuntar · %2×",
+   "fr": "%1 Viser · %2×",
+   "de": "%1 Zielen · %2×",
+   "pt-BR": "%1 Mirar · %2×",
+   "ru": "%1 Прицеливание · %2×"
+  },
+  {
    "zh": "%1 最多 %2 个",
    "src": "src/ui/bridge/Chain.cpp",
    "zh-TW": "%1 最多 %2 個",
@@ -1015,6 +1093,19 @@
    "ru": "Максимально %2 × %1"
   },
   {
+   "zh": "%1 查看键位",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 查看按鍵配置",
+   "en": "%1 View bindings",
+   "ja": "%1 でキー割り当てを表示",
+   "ko": "%1 키 배치 보기",
+   "es": "%1 Ver asignaciones",
+   "fr": "%1 Voir les attributions",
+   "de": "%1 Tastenbelegung anzeigen",
+   "pt-BR": "%1 Ver atalhos",
+   "ru": "%1 Показать назначение клавиш"
+  },
+  {
    "zh": "%1 正在运行。它会同时挂接界面和视频两个画面，可能让 Veyra 卡死；开启兼容绘制需重启 Veyra，重启后界面改用软件绘制，它只作用在视频上。现在重启吗？当前播放或串流将停止。",
    "src": "qml/Main.qml",
    "zh-TW": "%1 正在執行。它會同時掛接介面和影片兩個畫面，可能讓 Veyra 卡死；啟用相容繪製需重新啟動 Veyra，重新啟動後介面改用軟體繪製，它只作用在影片上。現在重新啟動嗎？目前的播放或串流將停止。",
@@ -1026,6 +1117,19 @@
    "de": "Es läuft %1. Es verbindet sowohl die Schnittstelle als auch das Video, was Veyra einfrieren kann. Veyra neu starten, um kompatibles Rendering zu ermöglichen: Die Schnittstelle wird dann in Software gezeichnet und %1 wirkt sich nur auf das Video aus. Jetzt neu starten? Aktuelle Wiedergabe oder Streaming wird gestoppt.",
    "pt-BR": "%1  está a correr. Liga tanto a interface como o vídeo, que pode congelar Veyra. Reiniciar Veyra para permitir renderização compatível: a interface é então desenhada em software e %1  Só afecta o vídeo. Reinicie agora? A reprodução ou transmissão actual irá parar.",
    "ru": "%1 работает. Он подключает как интерфейс, так и видео, что может заморозить Veyra. Перезагрузите Veyra для обеспечения совместимого рендеринга: интерфейс затем рисуется в программном обеспечении и %1 влияет только на видео. Перезагрузите сейчас? Текущее воспроизведение или потоковая передача прекратится."
+  },
+  {
+   "zh": "%1 油门",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 油門",
+   "en": "%1 Accelerate",
+   "ja": "%1 アクセル",
+   "ko": "%1 가속",
+   "es": "%1 Acelerar",
+   "fr": "%1 Accélérer",
+   "de": "%1 Gas geben",
+   "pt-BR": "%1 Acelerar",
+   "ru": "%1 Газ"
   },
   {
    "zh": "%1 码流直通",
@@ -1052,6 +1156,45 @@
    "de": "%1 s",
    "pt-BR": "%1 s",
    "ru": "%1 s"
+  },
+  {
+   "zh": "%1 移动",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 移動",
+   "en": "%1 Move",
+   "ja": "%1 移動",
+   "ko": "%1 이동",
+   "es": "%1 Moverse",
+   "fr": "%1 Se déplacer",
+   "de": "%1 Bewegen",
+   "pt-BR": "%1 Mover",
+   "ru": "%1 Движение"
+  },
+  {
+   "zh": "%1 转向",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 轉向",
+   "en": "%1 Steer",
+   "ja": "%1 ステアリング",
+   "ko": "%1 조향",
+   "es": "%1 Girar",
+   "fr": "%1 Tourner",
+   "de": "%1 Lenken",
+   "pt-BR": "%1 Virar",
+   "ru": "%1 Руль"
+  },
+  {
+   "zh": "%1 释放鼠标",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "%1 釋放滑鼠",
+   "en": "%1 Release mouse",
+   "ja": "%1 でマウスを解放",
+   "ko": "%1 마우스 해제",
+   "es": "%1 Liberar ratón",
+   "fr": "%1 Libérer la souris",
+   "de": "%1 Maus freigeben",
+   "pt-BR": "%1 Liberar mouse",
+   "ru": "%1 Освободить мышь"
   },
   {
    "zh": "%1 项",
@@ -7736,6 +7879,19 @@
    "ru": "Двухпропускная кодировка"
   },
   {
+   "zh": "交互",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "互動",
+   "en": "Interaction",
+   "ja": "操作",
+   "ko": "상호작용",
+   "es": "Interacción",
+   "fr": "Interaction",
+   "de": "Interaktion",
+   "pt-BR": "Interação",
+   "ru": "Взаимодействие"
+  },
+  {
    "zh": "交流群",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "交流群",
@@ -10559,7 +10715,7 @@
   },
   {
    "zh": "创建键",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "建立鍵",
    "en": "Create button",
    "ja": "クリエイトボタン",
@@ -10946,6 +11102,19 @@
    "de": "Datei laden…",
    "pt-BR": "Carregar arquivo…",
    "ru": "Загрузить файл…"
+  },
+  {
+   "zh": "动作备注",
+   "src": "qml/Ps5MappingDialog.qml",
+   "zh-TW": "動作備註",
+   "en": "Action note",
+   "ja": "操作メモ",
+   "ko": "동작 메모",
+   "es": "Nota de la acción",
+   "fr": "Note de l’action",
+   "de": "Aktionsnotiz",
+   "pt-BR": "Nota da ação",
+   "ru": "Заметка о действии"
   },
   {
    "zh": "动态 HUD 保护",
@@ -12561,7 +12730,7 @@
   },
   {
    "zh": "右摇杆 上",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "右搖桿 上",
    "en": "Right stick up",
    "ja": "右スティック 上",
@@ -12574,7 +12743,7 @@
   },
   {
    "zh": "右摇杆 下",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "右搖桿 下",
    "en": "Right stick down",
    "ja": "右スティック 下",
@@ -12587,7 +12756,7 @@
   },
   {
    "zh": "右摇杆 右",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "右搖桿 右",
    "en": "Right stick right",
    "ja": "右スティック 右",
@@ -12600,7 +12769,7 @@
   },
   {
    "zh": "右摇杆 左",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "右搖桿 左",
    "en": "Right stick left",
    "ja": "右スティック 左",
@@ -16903,7 +17072,7 @@
   },
   {
    "zh": "左摇杆 上",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "左搖桿 上",
    "en": "Left stick up",
    "ja": "左スティック 上",
@@ -16916,7 +17085,7 @@
   },
   {
    "zh": "左摇杆 下",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "左搖桿 下",
    "en": "Left stick down",
    "ja": "左スティック 下",
@@ -16929,7 +17098,7 @@
   },
   {
    "zh": "左摇杆 右",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "左搖桿 右",
    "en": "Left stick right",
    "ja": "左スティック 右",
@@ -16942,7 +17111,7 @@
   },
   {
    "zh": "左摇杆 左",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "左搖桿 左",
    "en": "Left stick left",
    "ja": "左スティック 左",
@@ -17160,6 +17329,19 @@
    "de": "Ausschalten. Nach jedem App-Start manuell aktivieren.",
    "pt-BR": "Desligar. Habilitar manualmente após cada lançamento de aplicativo.",
    "ru": "Включите вручную после каждого запуска приложения."
+  },
+  {
+   "zh": "已切到%1",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "已切換至%1",
+   "en": "Switched to %1",
+   "ja": "%1に切り替えました",
+   "ko": "%1 모드로 전환됨",
+   "es": "Modo %1 activado",
+   "fr": "Mode %1 activé",
+   "de": "%1 aktiviert",
+   "pt-BR": "Modo %1 ativado",
+   "ru": "Включён режим «%1»"
   },
   {
    "zh": "已切换播放内容，录制已保存",
@@ -18265,6 +18447,19 @@
    "de": "Tastatur und Maus freigegeben (klicken Sie auf das Bild, um es erneut aufzunehmen)",
    "pt-BR": "Teclado e mouse liberados (clique na imagem para capturar novamente)",
    "ru": "Выпущена клавиатура и мышь (нажмите на картинку, чтобы снова захватить)"
+  },
+  {
+   "zh": "已释放键鼠",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "已釋放鍵盤滑鼠",
+   "en": "Keyboard and mouse released",
+   "ja": "キーボードとマウスを解放しました",
+   "ko": "키보드와 마우스 해제됨",
+   "es": "Teclado y ratón liberados",
+   "fr": "Clavier et souris libérés",
+   "de": "Tastatur und Maus freigegeben",
+   "pt-BR": "Teclado e mouse liberados",
+   "ru": "Клавиатура и мышь освобождены"
   },
   {
    "zh": "已锁定全屏 · Ctrl+L 解锁，Esc 退出全屏",
@@ -19762,6 +19957,19 @@
    "ru": "Не адаптер NVIDIA: NR, супер разрешение NVIDIA и DLSS отключены; XeSS предварительный просмотр и оптический поток AMD доступны"
   },
   {
+   "zh": "当前：%1",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "目前：%1",
+   "en": "Current: %1",
+   "ja": "現在：%1",
+   "ko": "현재: %1",
+   "es": "Actual: %1",
+   "fr": "Actuel : %1",
+   "de": "Aktuell: %1",
+   "pt-BR": "Atual: %1",
+   "ru": "Текущий режим: %1"
+  },
+  {
    "zh": "录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "錄入所選音訊輸入，不受音量、靜音和本機音訊監聽開關影響；擷取卡需選擇音訊輸入",
@@ -20400,7 +20608,7 @@
   },
   {
    "zh": "慢走",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "慢走",
    "en": "Walk slowly",
    "ja": "ゆっくり歩く",
@@ -20488,6 +20696,19 @@
    "de": "Ich prüfe zuerst, in welchen Formaten die Karte tatsächlich Bilder an den PC liefert. Die Angaben für HDMI-Passthrough und Aufnahme stehen getrennt.",
    "pt-BR": "Primeiro vejo o que a placa consegue enviar para o computador. Confira as especificações de passagem HDMI e de captura separadamente.",
    "ru": "Сначала смотрю, какое изображение карта может передать на компьютер. Характеристики сквозного HDMI и захвата нужно смотреть отдельно."
+  },
+  {
+   "zh": "战斗",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "戰鬥",
+   "en": "Combat",
+   "ja": "戦闘",
+   "ko": "전투",
+   "es": "Combate",
+   "fr": "Combat",
+   "de": "Kampf",
+   "pt-BR": "Combate",
+   "ru": "Бой"
   },
   {
    "zh": "截图",
@@ -23027,7 +23248,7 @@
   },
   {
    "zh": "方向键 上",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "方向鍵 上",
    "en": "D-pad up",
    "ja": "方向キー 上",
@@ -23040,7 +23261,7 @@
   },
   {
    "zh": "方向键 下",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "方向鍵 下",
    "en": "D-pad down",
    "ja": "方向キー 下",
@@ -23053,7 +23274,7 @@
   },
   {
    "zh": "方向键 右",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "方向鍵 右",
    "en": "D-pad right",
    "ja": "方向キー 右",
@@ -23066,7 +23287,7 @@
   },
   {
    "zh": "方向键 左",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "方向鍵 左",
    "en": "D-pad left",
    "ja": "方向キー 左",
@@ -26562,6 +26783,19 @@
    "ru": "Ход обновления"
   },
   {
+   "zh": "查看键位",
+   "src": "qml/Main.qml",
+   "zh-TW": "查看按鍵配置",
+   "en": "View bindings",
+   "ja": "キー割り当てを表示",
+   "ko": "키 배치 보기",
+   "es": "Ver asignaciones",
+   "fr": "Voir les attributions",
+   "de": "Tastenbelegung anzeigen",
+   "pt-BR": "Ver atalhos",
+   "ru": "Назначение клавиш"
+  },
+  {
    "zh": "标准",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "標準",
@@ -28213,6 +28447,19 @@
    "ru": "Эта функция используется VB-CABLE VB-Audio (donationware). Установите его в автономном режиме из пакета. Первая установка требует одобрения администратора. Перезагрузка Windows по запросу.\n\n1. В настройках записи Windows откройте свойства звука карты захвата, включите прослушивание этого устройства и выберите ввод CABLE. Если вы переименовали его, выберите новое имя."
   },
   {
+   "zh": "此快捷键已绑给手柄动作或其他功能，请先解绑。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "此快捷鍵已用於手把動作或其他功能，請先解除綁定。",
+   "en": "Remove the controller or feature binding before using this shortcut.",
+   "ja": "先にコントローラー操作または機能への割り当てを解除してください。",
+   "ko": "이 단축키를 쓰려면 기존 컨트롤러 동작이나 기능의 할당을 먼저 해제하세요.",
+   "es": "Quita la asignación al mando o a otra función antes de usar este atajo.",
+   "fr": "Retirez l’attribution à la manette ou à une autre fonction avant d’utiliser ce raccourci.",
+   "de": "Entferne zuerst die Zuweisung zur Controlleraktion oder Funktion.",
+   "pt-BR": "Remova a associação ao controle ou a outro recurso antes de usar este atalho.",
+   "ru": "Сначала удалите назначение на действие геймпада или другую функцию."
+  },
+  {
    "zh": "此显卡最多支持 {}X 帧生成；请求未应用",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "此顯示卡最多支援 {}X 幀生成；請求未應用",
@@ -28369,8 +28616,21 @@
    "ru": "Эта клавиша зарезервирована системой или Veyra. Выберите другую."
   },
   {
+   "zh": "此键用于释放鼠标或查看键位，请换一个键。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "此鍵用於釋放滑鼠或查看按鍵配置，請改用其他鍵。",
+   "en": "This key releases the mouse or opens the bindings panel. Choose another key.",
+   "ja": "マウスの解放または割り当て表示に使用中です。別のキーを選んでください。",
+   "ko": "마우스 해제 또는 키 배치 보기에 사용 중입니다. 다른 키를 선택하세요.",
+   "es": "Esta tecla libera el ratón o abre las asignaciones. Elige otra tecla.",
+   "fr": "Cette touche libère la souris ou affiche les attributions. Choisissez une autre touche.",
+   "de": "Diese Taste gibt die Maus frei oder öffnet die Tastenbelegung. Wähle eine andere Taste.",
+   "pt-BR": "Essa tecla libera o mouse ou abre os atalhos. Escolha outra tecla.",
+   "ru": "Эта клавиша освобождает мышь или показывает назначения. Выберите другую клавишу."
+  },
+  {
    "zh": "步行",
-   "src": "qml/Main.qml",
+   "src": "qml/ConsoleKeymapOverlay.qml",
    "zh-TW": "步行",
    "en": "On foot",
    "ja": "徒歩",
@@ -29474,6 +29734,19 @@
    "ru": "Clicking Start замораживает настройки этой партии. "
   },
   {
+   "zh": "点击画面接管键鼠",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "點擊畫面接管鍵盤滑鼠",
+   "en": "Click the picture to capture input",
+   "ja": "画面をクリックして操作を開始",
+   "ko": "화면을 클릭해 입력 캡처",
+   "es": "Haz clic en la imagen para capturar el teclado y el ratón",
+   "fr": "Cliquez sur l’image pour capturer les entrées",
+   "de": "Zur Eingabeerfassung ins Bild klicken",
+   "pt-BR": "Clique na imagem para capturar a entrada",
+   "ru": "Нажмите на изображение для захвата ввода"
+  },
+  {
    "zh": "点击画面选择片源",
    "src": "qml/MinimalPage.qml",
    "zh-TW": "點擊畫面選擇片源",
@@ -29487,17 +29760,17 @@
    "ru": "Нажмите на картинку, чтобы выбрать источник"
   },
   {
-   "zh": "点击画面锁定键鼠",
-   "src": "qml/Main.qml",
-   "zh-TW": "點擊畫面鎖定鍵鼠",
-   "en": "Click the picture to capture input",
-   "ja": "映像をクリックして入力をキャプチャ",
-   "ko": "화면을 클릭해 키보드와 마우스 잠금",
-   "es": "Haz clic en la imagen para capturar la entrada",
-   "fr": "Cliquez sur l’image pour capturer les commandes",
-   "de": "Ins Bild klicken, um die Eingabe zu erfassen",
-   "pt-BR": "Clique na imagem para capturar a entrada",
-   "ru": "Щёлкните по изображению для захвата ввода"
+   "zh": "点击画面重新接管",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "點擊畫面再次接管",
+   "en": "Click the picture to recapture",
+   "ja": "画面をクリックして再開",
+   "ko": "화면을 클릭해 다시 캡처",
+   "es": "Haz clic en la imagen para volver a capturarlos",
+   "fr": "Cliquez sur l’image pour les recapturer",
+   "de": "Zur erneuten Erfassung ins Bild klicken",
+   "pt-BR": "Clique na imagem para capturar novamente",
+   "ru": "Нажмите на изображение для повторного захвата"
   },
   {
    "zh": "点左侧文件可重新预览（会和导出抢显卡）",
@@ -31084,6 +31357,19 @@
    "de": "s",
    "pt-BR": "s",
    "ru": "с"
+  },
+  {
+   "zh": "移动",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "移動",
+   "en": "Movement",
+   "ja": "移動",
+   "ko": "이동",
+   "es": "Movimiento",
+   "fr": "Déplacements",
+   "de": "Bewegung",
+   "pt-BR": "Movimento",
+   "ru": "Движение"
   },
   {
    "zh": "程序启动时的页面、窗口和恢复行为。",
@@ -34401,8 +34687,21 @@
    "ru": "Получить ID учётной записи"
   },
   {
+   "zh": "菜单",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "選單",
+   "en": "Menus",
+   "ja": "メニュー",
+   "ko": "메뉴",
+   "es": "Menús",
+   "fr": "Menus",
+   "de": "Menüs",
+   "pt-BR": "Menus",
+   "ru": "Меню"
+  },
+  {
    "zh": "菜单摇杆",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "選單搖桿",
    "en": "Menu stick",
    "ja": "メニュー用スティック",
@@ -34986,6 +35285,19 @@
    "ru": "Обрезка (пиксели)"
   },
   {
+   "zh": "视角",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "視角",
+   "en": "Camera",
+   "ja": "視点",
+   "ko": "시점",
+   "es": "Cámara",
+   "fr": "Caméra",
+   "de": "Kamera",
+   "pt-BR": "Câmera",
+   "ru": "Камера"
+  },
+  {
    "zh": "视频",
    "src": "qml/ExportPage.qml",
    "zh-TW": "影片",
@@ -35377,7 +35689,7 @@
   },
   {
    "zh": "触摸板上滑",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "觸控板上滑",
    "en": "Swipe up",
    "ja": "上にスワイプ",
@@ -35390,7 +35702,7 @@
   },
   {
    "zh": "触摸板下滑",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "觸控板下滑",
    "en": "Swipe down",
    "ja": "下にスワイプ",
@@ -35416,7 +35728,7 @@
   },
   {
    "zh": "触摸板右滑",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "觸控板右滑",
    "en": "Swipe right",
    "ja": "右にスワイプ",
@@ -35429,7 +35741,7 @@
   },
   {
    "zh": "触摸板左滑",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "觸控板左滑",
    "en": "Swipe left",
    "ja": "左にスワイプ",
@@ -35442,7 +35754,7 @@
   },
   {
    "zh": "触摸板按下",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "觸控板按下",
    "en": "Touchpad click",
    "ja": "タッチパッド押し込み",
@@ -36115,6 +36427,19 @@
    "de": "Dieser Untertiteltrack hat nichts zu zeigen",
    "pt-BR": "Esta faixa de legendas não tem nada para mostrar",
    "ru": "Этот трек с подзаголовком нечего показать"
+  },
+  {
+   "zh": "该快捷键已被占用，或不是可用的键盘组合。",
+   "src": "src/ui/StreamInputCapture.cpp",
+   "zh-TW": "此快捷鍵已被使用，或不是有效的鍵盤組合。",
+   "en": "This shortcut is in use or is not a supported key combination.",
+   "ja": "使用中または未対応のキーの組み合わせです。",
+   "ko": "이미 사용 중이거나 지원되지 않는 키 조합입니다.",
+   "es": "El atajo está en uso o la combinación no es compatible.",
+   "fr": "Ce raccourci est déjà utilisé ou la combinaison n’est pas prise en charge.",
+   "de": "Dieses Kürzel ist belegt oder die Tastenkombination wird nicht unterstützt.",
+   "pt-BR": "O atalho já está em uso ou a combinação não é compatível.",
+   "ru": "Сочетание уже занято или не поддерживается."
   },
   {
    "zh": "该效果数量超出上限",
@@ -39771,7 +40096,7 @@
   },
   {
    "zh": "选项键",
-   "src": "qml/Ps5MappingDialog.qml",
+   "src": "qml/ConsolePadLabels.qml",
    "zh-TW": "選項鍵",
    "en": "Options button",
    "ja": "オプションボタン",
@@ -40940,19 +41265,6 @@
    "ru": "Закрепить панель управления в полноэкранном режиме"
   },
   {
-   "zh": "锁定键鼠后即可切换。默认 W（R2）加速、S（L2）刹车／倒车，A/D 转向。",
-   "src": "qml/Ps5MappingDialog.qml",
-   "zh-TW": "鎖定鍵鼠後即可切換。預設 W（R2）加速、S（L2）煞車／倒車，A/D 轉向。",
-   "en": "Switch while input is captured. W (R2) accelerates, S (L2) brakes or reverses, and A/D steer by default.",
-   "ja": "入力のロック中に切り替えます。既定では W（R2）で加速、S（L2）でブレーキ・後退、A/D で操舵します。",
-   "ko": "입력을 잠근 상태에서 전환하세요. 기본값은 W(R2) 가속, S(L2) 제동·후진, A/D 조향입니다.",
-   "es": "Cambia mientras la entrada esté capturada. Por defecto, W (R2) acelera, S (L2) frena o da marcha atrás y A/D giran.",
-   "fr": "Basculez pendant la capture de la saisie. Par défaut, W (R2) accélère, S (L2) freine ou recule et A/D dirigent.",
-   "de": "Bei erfasster Eingabe umschalten. Standardmäßig beschleunigt W (R2), S (L2) bremst oder fährt rückwärts und A/D lenken.",
-   "pt-BR": "Alterne com a entrada capturada. Por padrão, W (R2) acelera, S (L2) freia ou dá ré e A/D esterçam.",
-   "ru": "Переключайте при захвате ввода. По умолчанию W (R2) — газ, S (L2) — тормоз или задний ход, A/D — поворот."
-  },
-  {
    "zh": "错误",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "錯誤",
@@ -41031,6 +41343,19 @@
    "ru": "Клавиатура и мышь не захвачены · щелкните картинку для захвата"
   },
   {
+   "zh": "键鼠已接管",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "已接管鍵盤滑鼠",
+   "en": "Keyboard and mouse captured",
+   "ja": "キーボードとマウスを操作中",
+   "ko": "키보드와 마우스 캡처됨",
+   "es": "Teclado y ratón capturados",
+   "fr": "Clavier et souris capturés",
+   "de": "Tastatur und Maus erfasst",
+   "pt-BR": "Teclado e mouse capturados",
+   "ru": "Клавиатура и мышь захвачены"
+  },
+  {
    "zh": "键鼠映射",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "鍵鼠映射",
@@ -41045,7 +41370,7 @@
   },
   {
    "zh": "键鼠设置",
-   "src": "qml/Main.qml",
+   "src": "qml/ConsoleKeymapOverlay.qml",
    "zh-TW": "鍵鼠設定",
    "en": "Keyboard and mouse settings",
    "ja": "キーボードとマウスの設定",
@@ -43580,7 +43905,7 @@
   },
   {
    "zh": "驾驶",
-   "src": "qml/Main.qml",
+   "src": "qml/ConsoleKeymapOverlay.qml",
    "zh-TW": "駕駛",
    "en": "Driving",
    "ja": "運転",
@@ -44136,6 +44461,19 @@
    "de": "Der voreingestellte Bearbeitungsmodus ist ungültig",
    "pt-BR": "O modo de edição predefinido é inválido",
    "ru": "Режим редактирования по умолчанию является недействительным"
+  },
+  {
+   "zh": "鼠标 → 右摇杆",
+   "src": "qml/ConsoleKeymapOverlay.qml",
+   "zh-TW": "滑鼠 → 右搖桿",
+   "en": "Mouse → Right stick",
+   "ja": "マウス → 右スティック",
+   "ko": "마우스 → 오른쪽 스틱",
+   "es": "Ratón → Stick derecho",
+   "fr": "Souris → Stick droit",
+   "de": "Maus → Rechter Stick",
+   "pt-BR": "Mouse → Analógico direito",
+   "ru": "Мышь → правый стик"
   },
   {
    "zh": "鼠标中键",
