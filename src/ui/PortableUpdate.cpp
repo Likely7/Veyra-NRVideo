@@ -2,7 +2,6 @@
 #include "veyra/base/PortableFiles.h"
 
 #include <QCoreApplication>
-#include <QCryptographicHash>
 #include <QDir>
 #include <QEventLoop>
 #include <QLocale>
@@ -13,7 +12,9 @@
 #include <QStorageInfo>
 #include <QThread>
 #include <algorithm>
+#include <array>
 #include <memory>
+#include <openssl/evp.h>
 
 namespace veyra::ui {
 using namespace veyra::portable;
@@ -45,7 +46,8 @@ ArchiveResult fetchArchive(QNetworkAccessManager& network, QUrl url, const Updat
     QSaveFile archive(pathString(directory / L"download.zip"));
     if (!archive.open(QIODevice::WriteOnly)) return ArchiveResult::WriteFailed;
 
-    QCryptographicHash hash(QCryptographicHash::Sha256);
+    const std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)> hash(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+    if (!hash || EVP_DigestInit_ex(hash.get(), EVP_sha256(), nullptr) != 1) return ArchiveResult::Invalid;
     qint64 received = 0;
     for (int redirects = 0; ; ++redirects) {
         if (thread->isInterruptionRequested()) return ArchiveResult::Cancelled;
@@ -74,7 +76,7 @@ ArchiveResult fetchArchive(QNetworkAccessManager& network, QUrl url, const Updat
                 return false;
             }
             received += chunk.size();
-            hash.addData(chunk);
+            if (EVP_DigestUpdate(hash.get(), chunk.constData(), static_cast<size_t>(chunk.size())) != 1) return false;
             progress(int(std::min(qint64(99), received * 100 / package.archiveBytes)));
             return true;
         };
@@ -106,7 +108,12 @@ ArchiveResult fetchArchive(QNetworkAccessManager& network, QUrl url, const Updat
         break;
     }
 
-    if (received != package.archiveBytes || hash.result() != package.digest) return ArchiveResult::Invalid;
+    if (received != package.archiveBytes) return ArchiveResult::Invalid;
+    std::array<unsigned char, EVP_MAX_MD_SIZE> digest{};
+    unsigned int digestSize = 0;
+    if (EVP_DigestFinal_ex(hash.get(), digest.data(), &digestSize) != 1
+        || QByteArrayView(reinterpret_cast<const char*>(digest.data()), digestSize) != QByteArrayView(package.digest))
+        return ArchiveResult::Invalid;
     if (!archive.commit()) return ArchiveResult::WriteFailed;
     if (thread->isInterruptionRequested()) return ArchiveResult::Cancelled;
     QSaveFile pending(pathString(directory / L"pending.json"));

@@ -2181,3 +2181,7 @@ e68c597e 缩减稠密光流搜索的粗排采样，保留完整颜色验证。�
 `E:/项目/Veyra/tmp/github-update-20261126/bench/build.py` 以 `-j1` 编译实际 Qt 更新逻辑和现有更新程序，`serve.py` 运行私有签名夹具。12 路回归通过，覆盖签名和 SHA-256 拒绝、截断、镜像回退、取消、重复启动、退出、三跳限制及准备后显式激活。实际 `UpdateWorker` 的夹具保留上一版本和独立预设。公网、完整播放器的重启窗口及管理员安装未参与。 [回归与性能数据](<E:/项目/Veyra/reports/codex-github-review-20261126/UPDATE-FOLLOWUP.md>)
 
 `compare.ps1` 对照同机回环的 74.1 MB 和 296.4 MB 归档，直连和 302 分别各跑两轮。296.4 MB 经 302 时界面最大事件间隔从 840–1108 ms 降至 21–24 ms，峰值工作集从 264–315 MiB 降至约 21 MiB。下载至进入安装从约 1.35–1.39 秒到 1.55–1.61 秒。直连两档内存差均小于 0.4 MiB。 [原始对照日志](<E:/项目/Veyra/logs/github-update-20261126/final-ab-performance.log>)
+
+对比后保留 512 KiB，归档校验采用 Veyra 已有 OpenSSL Crypto 的 EVP SHA-256。签名清单与安装子进程的独立复验沿用原实现。`compare-tuning.ps1 -Copies 4` 在同机 296.4 MB 回环测得，1 MiB 和 2 MiB 缓冲的 302 下载约 1.39–1.45 秒，工作集升到约 22 或 24 MiB。512 KiB 加 EVP 时，经 302 从基线的 1.382–1.403 秒降至 0.408–0.430 秒，界面最大间隔从 890–1081 ms 降至约 24 ms，工作集约 21 MiB。直连从 1.423–1.517 秒降至 0.442–0.454 秒。模拟 100 Mbps 的直连及 302 在 74.1 MB 下约 5.94–5.96 秒，两版本 P95 均约 4.6 ms。 [缓冲和 SHA-256 对照](<E:/项目/Veyra/logs/github-update-20261126/tuning-buffer.log>) · [100 Mbps 原始日志](<E:/项目/Veyra/logs/github-update-20261126/tuning-limited.log>)
+
+最终源码独立编译，12 路下载、失败与实际更新器用例重跑全过。以 `compare-tuning.ps1 -Limited -OpenSsl -RedirectOnly -Copies 1 -PairCount 2` 复查同一 100 Mbps 302，流式下载期间最大心跳间隔从 5.45–5.95 ms 到 5.21–5.66 ms，进入安装的交接间隔从 32.15–33.83 ms 到 22.40–22.44 ms，首次的单次 57 ms 峰值未复现。 [最终功能回归](<E:/项目/Veyra/logs/github-update-20261126/evp-archive-regressions.log>) · [交接相位对照](<E:/项目/Veyra/logs/github-update-20261126/tuning-limited-recheck.log>)

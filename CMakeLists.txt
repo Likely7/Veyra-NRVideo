@@ -1413,7 +1413,9 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   target_compile_features(veyra_update_checker PUBLIC cxx_std_20)
   target_compile_options(veyra_update_checker PRIVATE /utf-8)
   target_include_directories(veyra_update_checker PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
-  target_link_libraries(veyra_update_checker PUBLIC Qt6::Core Qt6::Gui Qt6::Network veyra_portable_manifest)
+  target_link_libraries(veyra_update_checker
+    PUBLIC Qt6::Core Qt6::Gui Qt6::Network veyra_portable_manifest
+    PRIVATE OpenSSL::Crypto)
   add_library(veyra_qml_bridge STATIC src/ui/QmlExportQueueModel.cpp include/veyra/ui/QmlExportQueueModel.h src/ui/QmlPlayerBridge.cpp src/ui/ThumbnailProvider.cpp
     src/ui/PlaylistModel.cpp include/veyra/ui/PlaylistModel.h
     src/ui/LiveTranslation.cpp src/ui/LiveTranslation.h
