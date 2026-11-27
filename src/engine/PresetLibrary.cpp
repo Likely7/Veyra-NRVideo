@@ -656,11 +656,9 @@ ChainValidation PresetLibrary::applyToEditor(const PresetEntry& entry, NodeEdito
                 const auto* old = document.nodes.firstOf(EffectType::FrameGeneration);
                 keep.fg = {old && old->enabled ? document.nodes.fgMultiplier : 1, keepFgBackend, keepVfgQuality};
                 if (auto v = applyToEditor(keep, *next, values); !v.accepted) return v;
-                nodes.fgAutoMultiplier = old && old->enabled && document.nodes.fgAutoMultiplier;
             } else {
                 values.frameGenerationBackend = keepFgBackend;
                 values.vfgQuality = keepVfgQuality;
-                nodes.fgAutoMultiplier = false;
             }
             nodes.fgStrictAdmission = document.nodes.fgStrictAdmission;
         }

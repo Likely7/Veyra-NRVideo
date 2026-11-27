@@ -830,15 +830,14 @@ __declspec(noinline) void testEditorGlobalSettings() {
     nodeSettings.vfgQuality = 2;
     target->nodes = toChain(nodeSettings);
     target->nodes.mode = ChainMode::Node;
-    target->nodes.fgAutoMultiplier = true;
     target->layout.initialize(target->nodes);
     target->globals = ChainGlobalSettings::capture(nodeSettings);
     entry->nodeConfiguration = ChainConfiguration::capture(entry->chain, initial);
     entry->contents = presetContentMask(PresetContent::Chain);
     values = initial;
-    check(PresetLibrary::applyToEditor(*entry, *target, values).accepted && target->nodes.fgAutoMultiplier &&
+    check(PresetLibrary::applyToEditor(*entry, *target, values).accepted &&
           target->nodes.fgMultiplier == 4 && target->globals->fgBackend == FrameGenerationBackend::Vfg &&
-          target->globals->vfgQuality == 2, "globals: partial chain keeps the draft's VFG settings and automatic multiplier");
+          target->globals->vfgQuality == 2, "globals: partial chain keeps the draft's VFG settings and multiplier");
     auto invalid = std::make_unique<ChainSession>(*restored);
     const auto retained = std::make_unique<ChainSession>(*invalid);
     { std::ofstream file(draftPath, std::ios::binary | std::ios::trunc); file << bytes << "garbage"; }
