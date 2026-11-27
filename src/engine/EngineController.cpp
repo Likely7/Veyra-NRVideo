@@ -686,7 +686,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             if(GetEnvironmentVariableW(L"VEYRA_TEST_COMMAND_SLOTS",testSlots,16))commandSlots=std::clamp(unsigned(_wtoi(testSlots)),6u,24u);
             if(!gpu->initialize(commandSlots)){status(L"D3D12初始化失败，请查看诊断",true);break;}
             auto ext=std::filesystem::path(path).extension().wstring();for(auto& c:ext)c=towlower(c);
-            const bool isImage=!media::networkMediaInput(path)&&(ext==L".png"||ext==L".jpg"||ext==L".jpeg");
+            const bool networkMedia=media::networkMediaInput(path);
+            const bool isImage=!networkMedia&&(ext==L".png"||ext==L".jpg"||ext==L".jpeg");
             sink::RgbaImage image;
             uint32_t width=0,height=0;double duration=0;
             if(isImage){
@@ -2857,14 +2858,18 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 }
                 if(isScreen){std::lock_guard lock(mutex_);snapshot_.sourceNotice=screenSource.status();}
                 const bool nativeCapture=physicalCapture&&activeSource->info().videoDecodePath=="decklink";
-                if((isStream||isScreen||nativeCapture)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||(isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath())||
-                    (nativeCapture&&!source::decklink::sameColor(captureGraphColor,activeSource->info().color)))){
+                // An IPTV channel can insert an SDR segment before its HLG
+                // program. A later HEVC VUI may change without a new extent.
+                const bool networkHdrChanged=networkMedia&&!isCapture&&!isStream&&frame&&pkt.colorInfo.isHdrPath()!=gd.hdrInput;
+                if(networkHdrChanged||((isStream||isScreen||nativeCapture)&&frame&&(uint32_t(frame->width)!=width||uint32_t(frame->height)!=height||
+                    (isScreen&&gd.hdrInput!=activeSource->info().color.isHdrPath())||
+                    (nativeCapture&&!source::decklink::sameColor(captureGraphColor,activeSource->info().color))))){
                     if(captureStarting)capturePreparation.cancel();
                     drainLivePresentation();if(!ring.drainQueue()){status(L"串流尺寸切换排空失败",true);break;}
                     width=uint32_t(frame->width);height=uint32_t(frame->height);
                     describeStages(stageRequest(options),options.snapshot(),gd);
-                    gd.hdrInput=!isImage&&activeSource->info().color.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
-                    const auto resizeSourceColor=activeSource->info().color;
+                    const auto resizeSourceColor=networkHdrChanged?pkt.colorInfo:activeSource->info().color;
+                    gd.hdrInput=!isImage&&resizeSourceColor.isHdrPath();gd.hdrOutput=options.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
                     const unsigned resizeMastering=hdrMetadataNits(resizeSourceColor.hdrMasteringPeakNits);
                     const unsigned resizeCll=hdrMetadataNits(resizeSourceColor.hdrMaxCllNits);
                     const unsigned resizeFall=hdrMetadataNits(resizeSourceColor.hdrMaxFallNits);
@@ -2874,14 +2879,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     // Window capture publishes the same geometry used to rebuild
                     // the graph, rather than retaining its opening DAR.
-                    if(isScreen||nativeCapture){
+                    if(isScreen||nativeCapture||networkHdrChanged){
                         std::lock_guard lock(mutex_);snapshot_.sourceWidth=width;snapshot_.sourceHeight=height;snapshot_.sourceHdr=gd.hdrInput;snapshot_.sourceMasteringPeakNits=resizeMastering;snapshot_.sourceMaxCllNits=resizeCll;snapshot_.sourceMaxFallNits=resizeFall;snapshot_.sourceDisplayAspect=activeSource->info().displayAspect;
                     }
                     if(!presenter->prepareGraphChange()){status(L"输入尺寸切换呈现排空失败",true);break;}
-                    graph->shutdown();recentGraphCache.evict("source-resize");
+                    graph->shutdown();recentGraphCache.evict(networkHdrChanged?"source-color":"source-resize");
                     graph=std::make_unique<pipeline::EnhanceGraph>(ctx,ring,captureStarting?nullptr:&coreCache);graphBytes=0;out={};hasOutput=false;
                     if(!graph->initialize(gd,&stop_)||!openPreparedPresenter(options)){if(!stop_)status(L"串流尺寸切换失败",true);break;}
-                    reset=true;pendingResetCause=pipeline::ResetReason::Resize;
+                    if(networkHdrChanged)log::info("display-color",std::format("network color change frame={} transfer={} hdrInput={} hdrOutput={}",
+                        pkt.sequence,int(resizeSourceColor.transfer),gd.hdrInput,gd.hdrOutput));
+                    reset=true;pendingResetCause=networkHdrChanged?pipeline::ResetReason::SourceSwitch:pipeline::ResetReason::Resize;
                 }
                 if(captureStarting&&rawFirstPresent&&!paused_){
                     EnhancementSettings target;
