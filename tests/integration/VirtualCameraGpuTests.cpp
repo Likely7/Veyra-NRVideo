@@ -27,7 +27,7 @@ static double pq(double x){const auto p=std::pow(x*.008,2610./16384);return std:
 static double proxy(double x){const auto c=std::max(x*80/203,0.);const auto v=c<=.75?c:.75+.25*(1-std::exp(-5.778*(c-.75)));return v<=.0031308?12.92*v:1.055*std::pow(v,1/2.4)-.055;}
 static std::array<double,3> yuv(std::array<double,3> c){const auto y=c[0]*.2126+c[1]*.7152+c[2]*.0722;return {16+219*y,128+224*(c[2]-y)/1.8556,128+224*(c[0]-y)/1.5748};}
 static bool startCamera(engine::VirtualCamera& camera,unsigned fps,std::wstring& error){
-    // Use the ordinary producer with a private volatile registration root.
+    // Use the ordinary producer with a private registration root.
     // A DirectShow test consumer binds the module by path and needs no registry edits.
     struct Registry {
         std::wstring keyName=L"VeyraCameraTest-"+std::to_wstring(GetCurrentProcessId())+L"-"+std::to_wstring(GetTickCount64());
@@ -40,7 +40,7 @@ static bool startCamera(engine::VirtualCamera& camera,unsigned fps,std::wstring&
         }
     } registry;
     DWORD disposition=0;
-    const auto hr=RegCreateKeyExW(HKEY_CURRENT_USER,registry.keyName.c_str(),0,nullptr,REG_OPTION_VOLATILE,
+    const auto hr=RegCreateKeyExW(HKEY_CURRENT_USER,registry.keyName.c_str(),0,nullptr,REG_OPTION_NON_VOLATILE,
                                 KEY_ALL_ACCESS,nullptr,&registry.key,&disposition);
     registry.isNew=hr==ERROR_SUCCESS&&disposition==REG_CREATED_NEW_KEY;
     require(registry.isNew,"private camera registration root");
