@@ -464,11 +464,15 @@ static void mailbox(){
     if(av_frame_get_buffer(raw,32)<0)throw std::bad_alloc();
     packet.sequence=1;packet.sourceEpoch=uint64_t(1)<<32;
     packet.flags=static_cast<pipeline::FrameFlags>(pipeline::FrameFlagBits::Discontinuity);
-    DWORD wakeResult=WAIT_FAILED;
-    std::jthread reader([&]{wakeResult=WaitForSingleObject(event,1000);});
+    bool woken=false;
+    std::jthread reader([&]{
+        engine::DeadlineWait waiter;
+        const auto limit=engine::DeadlineWait::now100ns()+10000000;
+        while(!woken&&engine::DeadlineWait::now100ns()<limit)woken=waiter.waitForIdleSource(event);
+    });
     s.publishDecoded(raw,packet,info);packet.sequence=2;packet.flags=0;s.publishDecoded(raw,packet,info);
     reader.join();
-    if(wakeResult!=WAIT_OBJECT_0)throw std::runtime_error("real mailbox waiter did not wake on republish");
+    if(!woken)throw std::runtime_error("real mailbox waiter did not wake on republish");
     if(s.read(out,&frame)!=SourceReadStatus::Frame||out.sequence!=4||out.sourceEpoch!=(uint64_t(1)<<32)||!pipeline::hasFrameFlag(out.flags,pipeline::FrameFlagBits::Discontinuity))throw std::runtime_error("reconnect keeps application sequence and pending clock reset across mailbox overwrite");
     s.publishDecoded(raw,packet,info);av_frame_free(&raw);
     s.close();
@@ -491,16 +495,23 @@ static bool compareFrameWake() {
         if (av_frame_get_buffer(raw.get(), 32) < 0) throw std::bad_alloc();
 
         Wait waiter;
+        std::unique_ptr<void, decltype(&CloseHandle)> producerTimer(
+            CreateWaitableTimerExW(nullptr, nullptr, CREATE_WAITABLE_TIMER_HIGH_RESOLUTION, TIMER_ALL_ACCESS), &CloseHandle);
+        if (!producerTimer) throw std::runtime_error("high resolution source pacing timer unavailable");
         const auto start = Wait::now100ns();
         ULONG64 cyclesBefore = 0, cyclesAfter = 0;
         if (!QueryThreadCycleTime(GetCurrentThread(), &cyclesBefore)) throw std::runtime_error("cannot sample consumer CPU cycles");
         std::jthread producer([&] {
-            using namespace std::chrono;
             constexpr std::array cadence{16667, 13334, 19999, 16667};
             SourceInfo info;
             pipeline::FramePacket packet;
+            auto next=Wait::now100ns();
             for (uint64_t index = 0; index < frames; ++index) {
-                std::this_thread::sleep_for(microseconds(cadence[index % cadence.size()]));
+                next+=int64_t(cadence[index % cadence.size()])*10;
+                LARGE_INTEGER due;
+                due.QuadPart=-std::max<LONGLONG>(1,next-Wait::now100ns());
+                if(!SetWaitableTimer(producerTimer.get(),&due,0,nullptr,nullptr,FALSE)||
+                   WaitForSingleObject(producerTimer.get(),250)!=WAIT_OBJECT_0)return;
                 packet.decodedHost100ns = Wait::now100ns();
                 source.publishDecoded(raw.get(), packet, info);
             }
@@ -509,15 +520,15 @@ static bool compareFrameWake() {
         std::vector<int64_t> latencies;
         latencies.reserve(frames);
         uint64_t polls = 0;
-        // Keep the previous scheduler's exact 1 ms timer. Only the job
-        // waiting for another source frame subscribes to the new mailbox.
+        // Compare the original 1 ms timer with the real PS5 idle-frame wait.
         while (packet.sequence < frames && Wait::now100ns() - start < 90000000) {
             if (source.read(packet, nullptr) == SourceReadStatus::Frame) {
                 latencies.push_back(Wait::now100ns() - packet.decodedHost100ns);
                 continue;
             }
             ++polls;
-            waiter.slice(1.0, source.frameEvent());
+            if(useEvent)waiter.waitForIdleSource(source.frameEvent());
+            else waiter.slice(1.0);
         }
         const double elapsedMs = double(Wait::now100ns() - start) / 10000.0;
         if (!QueryThreadCycleTime(GetCurrentThread(), &cyclesAfter)) throw std::runtime_error("cannot sample consumer CPU cycles");
@@ -536,6 +547,18 @@ static bool compareFrameWake() {
     };
     bool ok = true;
     for (const bool event : {false, true, true, false}) ok &= measure(event);
+    RemotePlaySessionSource idle(true);
+    if(!idle.frameEvent())return false;
+    Wait waiter;
+    double largestIdleWaitMs=0;
+    for(unsigned attempt=0;attempt<16;++attempt){
+        // A stop without another frame is noticed on this bounded timer.
+        const auto before=Wait::now100ns();
+        ok&=!waiter.waitForIdleSource(idle.frameEvent());
+        largestIdleWaitMs=std::max(largestIdleWaitMs,double(Wait::now100ns()-before)/10000.0);
+    }
+    std::cout<<"FRAME_WAKE_IDLE_NO_FRAME waits=16 maxMs="<<largestIdleWaitMs<<'\n';
+    ok&=largestIdleWaitMs<30.0;
     return ok;
 }
 // PS5 手柄控制 (from PR #7): the same local validation boundary as a stream, an

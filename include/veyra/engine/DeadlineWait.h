@@ -45,9 +45,20 @@ public:
     // A second event (GPU fence completion) also ends the wait; only the first
     // event decides the return value.
     bool slice(double milliseconds=1,HANDLE wakeEvent=nullptr,HANDLE secondEvent=nullptr){
+        return timerWait(std::clamp(milliseconds,0.05,2.0),wakeEvent,secondEvent);
+    }
+    // The owner has no pending GPU or presentation work. An arriving source
+    // frame wakes immediately, and the timer bounds time spent waiting for control.
+    bool waitForIdleSource(HANDLE sourceEvent){
+        if(!sourceEvent)return slice();
+        if(!timer_){eventWoke_=WaitForSingleObject(sourceEvent,1)==WAIT_OBJECT_0;return eventWoke_;}
+        return timerWait(4.0,sourceEvent,nullptr);
+    }
+private:
+    bool timerWait(double milliseconds,HANDLE wakeEvent,HANDLE secondEvent){
         eventWoke_=false;
         if(!timer_){Sleep(1);return false;}
-        LARGE_INTEGER due;due.QuadPart=-std::max<LONGLONG>(1,static_cast<LONGLONG>(std::clamp(milliseconds,0.05,2.0)*10000));
+        LARGE_INTEGER due;due.QuadPart=-std::max<LONGLONG>(1,static_cast<LONGLONG>(milliseconds*10000));
         if(!SetWaitableTimer(timer_,&due,0,nullptr,nullptr,FALSE)){log::error("scheduler","SetWaitableTimer error="+std::to_string(GetLastError()));return false;}
         if(wakeEvent&&secondEvent){
             HANDLE handles[3]={wakeEvent,secondEvent,timer_};
@@ -69,6 +80,6 @@ public:
         if(result!=WAIT_OBJECT_0)log::warn("scheduler","wait timer result="+std::to_string(result));
         return false;
     }
-private:HANDLE timer_=nullptr;bool eventWoke_=false;
+    HANDLE timer_=nullptr;bool eventWoke_=false;
 };
 }

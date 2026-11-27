@@ -1787,21 +1787,21 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             bool processingGraph=false;
             auto waitLive=[&](bool waitingForSource = false){
                 const auto due=liveScheduler?liveScheduler->wakeAt():0;
-                auto arrivalEvent=physicalCapture?captureSource.frameEvent():nullptr;
-                bool remoteIdle=false;
 #ifdef VEYRA_ENABLE_REMOTEPLAY
-                // A pending decoded frame cannot clear a full GPU/presentation queue.
-                if (waitingForSource && remote) {
-                    arrivalEvent=remote->frameEvent();
-                    // A precise wait with no deadline returns immediately. Use a
-                    // bounded wait on the decoder event instead of busy polling.
-                    remoteIdle=due<=0;
+                // Subscribe only while read() is waiting and older work has drained.
+                if (waitingForSource && remote && due<=0 && pendingCompletions.empty() &&
+                    (!liveScheduler || liveScheduler->occupancy()==0)) {
+                    if(const auto sourceEvent=remote->frameEvent()){
+                        if(!stop_)deadlineWait.waitForIdleSource(sourceEvent);
+                        return;
+                    }
                 }
 #else
                 (void)waitingForSource;
 #endif
+                const auto arrivalEvent=physicalCapture?captureSource.frameEvent():nullptr;
                 const auto readyEvent=physicalCapture?gpuReadyEvent.handle:nullptr;
-                if(!remoteIdle&&preciseDeadlines&&liveScheduler&&liveScheduler->preciseWake()){
+                if(preciseDeadlines&&liveScheduler&&liveScheduler->preciseWake()){
                     deadlineWait.until(due,arrivalEvent,readyEvent,[&]{return stop_||(paused_&&!seekPreviewPending)||seekSeconds_>=0;});
                 }else deadlineWait.slice(due>host100ns()?std::min(1.0,double(due-host100ns())/10000):1.0,arrivalEvent,readyEvent);
             };
