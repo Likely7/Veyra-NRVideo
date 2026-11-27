@@ -94,6 +94,7 @@ int wmain(int argc, wchar_t** argv) {
         }
         if(graph.presentDepth())graph.presentDepth()->SetName(L"Veyra acceptance graph depth");
         diagnose(cycles,0,"open");
+        const auto srEvaluationsBefore=graph.metrics().srEvaluateCount;
         unsigned generated=0,nonblack=0;
         for(unsigned i=0;ok&&i<40;++i){
             if(i==20)SetWindowPos(window,nullptr,40,40,800,450,SWP_NOZORDER|SWP_NOACTIVATE);
@@ -147,8 +148,8 @@ int wmain(int argc, wchar_t** argv) {
         const unsigned minGenerated=(c.multiplier-1)*25;
         ok=ok&&generated>=minGenerated&&nonblack>=2;
         const bool srActive=graph.fsrSrEnabled();
-        const auto srEvaluations=srActive?graph.metrics().srEvaluateCount:0;
-        if(srLifetime)ok=ok&&srActive==c.sr&&(!srActive||srEvaluations==40);
+        const auto srEvaluations=graph.metrics().srEvaluateCount-srEvaluationsBefore;
+        if(srLifetime)ok=ok&&srActive==c.sr&&srEvaluations==(c.sr?40u:0u);
         totalGenerated+=generated;
         std::cout<<"SWITCH_CASE cycle="<<cycles<<" pid="<<GetCurrentProcessId()<<" hwnd="<<window
             <<" backend="<<engine::frameGenerationBackendName(c.backend)<<" multiplier="<<c.multiplier
