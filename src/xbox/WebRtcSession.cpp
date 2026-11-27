@@ -181,10 +181,13 @@ bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono:
         std::lock_guard callbackLock(gate->mutex);if(!gate->open)return;
         ++videoUnits_;
         videoBytes_ += data.size();
-        if (!callbacks_.video) return;
-        std::vector<uint8_t> unit(data.size());
-        std::memcpy(unit.data(), data.data(), data.size());
-        callbacks_.video(std::move(unit), info.timestamp, host100ns());
+        if (callbacks_.videoKeepalive) {
+            callbacks_.videoKeepalive(info.timestamp, host100ns());
+        } else if (callbacks_.video) {
+            std::vector<uint8_t> unit(data.size());
+            std::memcpy(unit.data(), data.data(), data.size());
+            callbacks_.video(std::move(unit), info.timestamp, host100ns());
+        }
     });
     audio_->setMediaHandler(std::make_shared<rtc::OpusRtpDepacketizer>());
     audio_->chainMediaHandler(std::make_shared<rtc::RtcpReceivingSession>());

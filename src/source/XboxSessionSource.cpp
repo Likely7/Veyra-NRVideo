@@ -308,23 +308,25 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 
         setState(XboxStats::State::Connecting, L"正在建立连接…");
         xbox::WebRtcCallbacks callbacks;
-        callbacks.video = [&p](std::vector<uint8_t>&& unit, uint32_t rtp, int64_t arrival) {
-            auto& q = p;
-            q.units.fetch_add(1, std::memory_order_relaxed);
-            if (q.desc.controlOnly) {
-                q.rtc.videoPresented(rtp, arrival, arrival, arrival, arrival);
-                return;
-            }
-            std::lock_guard lock(q.queueMutex);
-            // Latency first: keep only a short backlog; a decoder that falls behind drops the oldest.
-            const auto lost = xbox::trimVideoInputs(q.queue, 8);
-            if (lost) q.ingressEvicted.fetch_add(lost, std::memory_order_relaxed);
-            q.queue.push_back({std::move(unit), rtp, arrival, lost>0&&q.queue.empty()});
-            const unsigned depth = unsigned(q.queue.size());
-            q.queueDepth.store(depth, std::memory_order_relaxed);
-            if (depth > q.queueHighWater.load(std::memory_order_relaxed)) q.queueHighWater.store(depth, std::memory_order_relaxed);
-            q.queueCv.notify_one();
-        };
+        if (p.desc.controlOnly) {
+            callbacks.videoKeepalive = [&p](uint32_t rtp, int64_t arrival) {
+                p.units.fetch_add(1, std::memory_order_relaxed);
+                p.rtc.videoPresented(rtp, arrival, arrival, arrival, arrival);
+            };
+        } else {
+            callbacks.video = [&p](std::vector<uint8_t>&& unit, uint32_t rtp, int64_t arrival) {
+                p.units.fetch_add(1, std::memory_order_relaxed);
+                std::lock_guard lock(p.queueMutex);
+                // Latency first: keep only a short backlog; a decoder that falls behind drops the oldest.
+                const auto lost = xbox::trimVideoInputs(p.queue, 8);
+                if (lost) p.ingressEvicted.fetch_add(lost, std::memory_order_relaxed);
+                p.queue.push_back({std::move(unit), rtp, arrival, lost > 0 && p.queue.empty()});
+                const unsigned depth = unsigned(p.queue.size());
+                p.queueDepth.store(depth, std::memory_order_relaxed);
+                if (depth > p.queueHighWater.load(std::memory_order_relaxed)) p.queueHighWater.store(depth, std::memory_order_relaxed);
+                p.queueCv.notify_one();
+            };
+        }
         callbacks.audio = [this, &p](const uint8_t* data, size_t size, uint32_t rtp) {
             auto& q = p;
             if (q.desc.controlOnly) { q.audioDiscarded.fetch_add(1, std::memory_order_relaxed); return; }

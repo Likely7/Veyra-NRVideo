@@ -709,6 +709,53 @@ void webrtcTests() {
     check(!session.ready(), "remote/local close with active sends is contained and clears readiness");
 }
 
+void controlVideoFeedbackTests() {
+    FakeConsole console;
+    std::atomic<unsigned> payloadCallbacks{0};
+    WebRtcSession session;
+    session.setBindAddress("127.0.0.1");
+    session.preferVideoSize(1280, 720);
+    WebRtcCallbacks callbacks;
+    callbacks.video = [&](std::vector<uint8_t>&&, uint32_t, int64_t) { ++payloadCallbacks; };
+    callbacks.videoKeepalive = [&](uint32_t rtp, int64_t arrival) {
+        session.videoPresented(rtp, arrival, arrival, arrival, arrival);
+    };
+    session.setCallbacks(std::move(callbacks));
+    std::string error;
+    const bool connected = session.start(console, &error, std::chrono::seconds(15)) &&
+                           session.waitReady(std::chrono::seconds(5));
+    check(connected, ("controller-only media feedback connects to a second local peer: " + error).c_str());
+    if (!connected) return;
+    const bool videoReady = console.waitFor([&] { return console.video && console.video->isOpen(); });
+    check(videoReady, "controller-only session keeps a video track");
+    if (!videoReady) return;
+
+    uint32_t timestamp = 1500;
+    for (const auto& unit : {nal(0x65, 5000, 9), nal(0x41, 800, 10), nal(0x41, 100, 11)}) {
+        console.videoConfig->timestamp = timestamp;
+        console.video->sendFrame(reinterpret_cast<const std::byte*>(unit.data()), unit.size(), rtc::FrameInfo(timestamp));
+        timestamp += 1500;
+    }
+    check(console.waitFor([&] {
+        bool first = false, second = false;
+        for (const auto& report : console.reports) {
+            if (report.size() != 43 || report[0] != ReportMetadata || report[14] != 1) continue;
+            const auto time = detail::get32(report.data() + 19);
+            if (time != detail::get32(report.data() + 23) || time != detail::get32(report.data() + 27) ||
+                time != detail::get32(report.data() + 31)) continue;
+            const auto rtp = detail::get32(report.data() + 15);
+            first |= rtp == 1500;
+            second |= rtp == 3000;
+        }
+        return first && second;
+    }), "fragmented and single-packet keepalive frames acknowledge original RTP timestamps");
+    const auto counters = session.stats();
+    check(counters.videoRtp.received > counters.videoUnits && counters.videoUnits >= 2 && counters.videoBytes >= 5810,
+          "controller-only tracks maintain both RTP and depacketized frame and byte counts");
+    session.close();
+    check(payloadCallbacks.load() == 0, "controller-only timing bypasses the video payload callback");
+}
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -781,6 +828,7 @@ int main(int argc, char** argv) {
     accountTests();
     videoRtpWindowTests();
     webrtcTests();
+    controlVideoFeedbackTests();
     std::printf("xbox tests: %d checks, %d failures\n", g_checks, g_failures);
     rtc::Cleanup();
     return g_failures == 0 ? 0 : 1;

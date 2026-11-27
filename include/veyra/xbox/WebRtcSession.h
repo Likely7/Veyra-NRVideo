@@ -38,6 +38,9 @@ public:
 struct WebRtcCallbacks {
     // One access unit, Annex-B, with the RTP timestamp (90 kHz) and the local arrival time (100 ns ticks).
     std::function<void(std::vector<uint8_t>&& unit, uint32_t rtpTimestamp, int64_t arrival100ns)> video;
+    // Controller-only sessions acknowledge complete frames without taking their payload.
+    // When set, this receives the timing in place of the video data callback.
+    std::function<void(uint32_t rtpTimestamp, int64_t arrival100ns)> videoKeepalive;
     // One Opus packet, 48 kHz timestamp.
     std::function<void(const uint8_t* data, size_t size, uint32_t rtpTimestamp)> audio;
     std::function<void(const Vibration&)> vibration;
@@ -48,7 +51,7 @@ struct WebRtcCallbacks {
 
 struct WebRtcStats {
     uint64_t bytesReceived = 0;      // data channels (libdatachannel's count)
-    uint64_t videoBytes = 0;         // access units handed to the decoder
+    uint64_t videoBytes = 0;         // received access units, including controller-session keepalive
     uint64_t videoUnits = 0, audioPackets = 0, keyframeRequests = 0;
     VideoRtpStats videoRtp;
     double rttMs = 0;
