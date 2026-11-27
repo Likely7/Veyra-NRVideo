@@ -1336,6 +1336,16 @@ VPage {
                                 onToggled: enabled => secXbox.model?.set("softwareDecode", enabled)
                             }
                         }
+                        VRow {
+                            label: qsTr("D3D11VA 硬件解码")
+                            hint: qsTr("部分 Intel 核显花屏时可尝试。关闭软件解码后重新连接生效。")
+                            VSwitch {
+                                objectName: "set-xbox-d3d11-decode"
+                                enabled: secXbox.state.softwareDecode !== true
+                                checked: enabled && secXbox.state.d3d11Decode === true
+                                onToggled: checked => secXbox.model?.set("d3d11Decode", checked)
+                            }
+                        }
                     }
                 }
 
