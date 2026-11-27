@@ -242,7 +242,9 @@ int main(int argc,char** argv){
                 }
                 if(i>=firstPicture&&(i-firstPicture)%3==0){
                     const bool old=stale&&i<freshBlock;
-                    const int64_t delayMs=old?739:39;
+                    // Drain progressively newer queued pictures until the
+                    // delay settles. A steady slow stream is a separate core case.
+                    const int64_t delayMs=old?739-int64_t(i-firstPicture)*42:39;
                     const double biasMs=old?0:39;
                     const auto host=std::chrono::duration_cast<std::chrono::nanoseconds>(Clock::now().time_since_epoch()).count()/100;
                     output.videoPresented(double(i)*10-double(delayMs)-biasMs,host,host-delayMs*10000);
