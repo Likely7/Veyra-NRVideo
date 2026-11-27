@@ -1,8 +1,13 @@
 #include "veyra/source/RemotePlaySessionSource.h"
+#include "veyra/engine/DeadlineWait.h"
 #include "veyra/remoteplay/ControllerInput.h"
 #include "veyra/remoteplay/Discovery.h"
 #include "veyra/remoteplay/KeyboardMousePad.h"
+#include <array>
+#include <chrono>
 #include <string_view>
+#include <thread>
+#include <vector>
 #include <SDL3/SDL.h>
 #include <cmath>
 #include <iostream>
@@ -469,6 +474,70 @@ static void mailbox(){
     s.close();
     if(WaitForSingleObject(event,0)!=WAIT_TIMEOUT)throw std::runtime_error("closed mailbox event");
 }
+
+static bool compareFrameWake() {
+    using Wait = engine::DeadlineWait;
+    constexpr uint64_t frames = 180;
+    const auto measure = [&](bool useEvent) {
+        RemotePlaySessionSource source(useEvent);
+        source.started_ = true;
+        if (useEvent && !source.frameEvent()) throw std::runtime_error("mailbox event unavailable");
+        const auto freeFrame = [](AVFrame* frame) { av_frame_free(&frame); };
+        std::unique_ptr<AVFrame, decltype(freeFrame)> raw(av_frame_alloc(), freeFrame);
+        if (!raw) throw std::bad_alloc();
+        raw->width = 16;
+        raw->height = 16;
+        raw->format = AV_PIX_FMT_YUV420P;
+        if (av_frame_get_buffer(raw.get(), 32) < 0) throw std::bad_alloc();
+
+        Wait waiter;
+        const auto start = Wait::now100ns();
+        ULONG64 cyclesBefore = 0, cyclesAfter = 0;
+        if (!QueryThreadCycleTime(GetCurrentThread(), &cyclesBefore)) throw std::runtime_error("cannot sample consumer CPU cycles");
+        std::jthread producer([&] {
+            using namespace std::chrono;
+            constexpr std::array cadence{16667, 13334, 19999, 16667};
+            SourceInfo info;
+            pipeline::FramePacket packet;
+            for (uint64_t index = 0; index < frames; ++index) {
+                std::this_thread::sleep_for(microseconds(cadence[index % cadence.size()]));
+                packet.decodedHost100ns = Wait::now100ns();
+                source.publishDecoded(raw.get(), packet, info);
+            }
+        });
+        pipeline::FramePacket packet;
+        std::vector<int64_t> latencies;
+        latencies.reserve(frames);
+        uint64_t polls = 0;
+        // Keep the previous scheduler's exact 1 ms timer. Only the job
+        // waiting for another source frame subscribes to the new mailbox.
+        while (packet.sequence < frames && Wait::now100ns() - start < 90000000) {
+            if (source.read(packet, nullptr) == SourceReadStatus::Frame) {
+                latencies.push_back(Wait::now100ns() - packet.decodedHost100ns);
+                continue;
+            }
+            ++polls;
+            waiter.slice(1.0, source.frameEvent());
+        }
+        const double elapsedMs = double(Wait::now100ns() - start) / 10000.0;
+        if (!QueryThreadCycleTime(GetCurrentThread(), &cyclesAfter)) throw std::runtime_error("cannot sample consumer CPU cycles");
+        producer.join();
+        if (latencies.empty()) return false;
+        std::ranges::sort(latencies);
+        const auto percentileUs = [&](size_t percent) {
+            return double(latencies[(latencies.size() * percent - 1) / 100]) / 10.0;
+        };
+        const uint64_t overwritten = source.skipped();
+        std::cout << "FRAME_WAKE mode=" << (useEvent ? "event" : "poll") << " frames=" << latencies.size()
+                  << " overwritten=" << overwritten << " elapsedMs=" << elapsedMs << " timerWaits=" << polls
+                  << " cycles=" << cyclesAfter - cyclesBefore << " wakeP50Us=" << percentileUs(50)
+                  << " wakeP95Us=" << percentileUs(95) << '\n';
+        return packet.sequence == frames && latencies.size() + overwritten == frames;
+    };
+    bool ok = true;
+    for (const bool event : {false, true, true, false}) ok &= measure(event);
+    return ok;
+}
 // PS5 手柄控制 (from PR #7): the same local validation boundary as a stream, an
 // owner loop that is over once the connect failed, and the shared pad queue.
 // No console is contacted.
@@ -606,6 +675,7 @@ int followInput(){
     std::cout<<"FOLLOW_INPUT last_pressed_switch_focus_detach_off="<<ok<<" REAL_PS5_NOT_TESTED=1\n";return ok?0:34;
 }
 int main(int argc,char** argv){
+    if(argc==2&&std::string_view(argv[1])=="--frame-wake")return veyra::source::RemotePlaySessionSourceTestAccess::compareFrameWake()?0:54;
     if(argc==2&&std::string_view(argv[1])=="--virtual")return virtualInput();
     if(argc==2&&std::string_view(argv[1])=="--follow")return followInput();
     if(argc==2&&std::string_view(argv[1])=="--control-stress"){
