@@ -11910,6 +11910,19 @@
    "ru": "Не используется при включении двойного SR; он возвращается, когда двойной SR выключен."
   },
   {
+   "zh": "双重超分或超分后缩回开启时不使用。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "雙重超解析或超解析後縮回開啟時不使用。",
+   "en": "Not used while double SR or the shrink after SR is on.",
+   "ja": "2段階超解像または超解像後の縮小がオンの間は使用されません。",
+   "ko": "2단계 초해상도나 초해상도 후 축소를 켜면 적용하지 않습니다.",
+   "es": "No se usa mientras el doble SR o la reducción tras la SR están activados.",
+   "fr": "Non utilisée tant que la double SR ou la réduction après la SR est activée.",
+   "de": "Nicht verwendet, solange doppelte SR oder das Verkleinern nach der SR aktiv ist.",
+   "pt-BR": "Não é usada enquanto a SR dupla ou a redução depois da SR estiver ligada.",
+   "ru": "Не используется, пока включены двойное SR или уменьшение после SR."
+  },
+  {
    "zh": "反馈时请附上以下转储文件。",
    "src": "apps/veyra-qml/main.cpp",
    "zh-TW": "回報時請附上以下傾印檔案。",
@@ -24456,6 +24469,32 @@
    "ru": "Для обычной SDR-игры я начинаю с **1440p60 · NV12 · SDR · 709**. На экране 1080p начните с 1080p60. Убедитесь, что изображение и частота захвата стабильны, и затем включайте интерполяцию и масштабирование."
   },
   {
+   "zh": "智能超分",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "智慧超解析",
+   "en": "Smart SR",
+   "ja": "スマート超解像",
+   "ko": "스마트 초해상도",
+   "es": "SR inteligente",
+   "fr": "SR intelligente",
+   "de": "Intelligente SR",
+   "pt-BR": "SR inteligente",
+   "ru": "Умное SR"
+  },
+  {
+   "zh": "智能超分目前仅支持 RTX 视频超分（标准）",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "智慧超解析目前僅支援 RTX 影片超解析（標準）",
+   "en": "Smart SR currently supports RTX Video SR (Standard) only",
+   "ja": "スマート超解像は現在 RTX Video SR（標準）のみ対応しています",
+   "ko": "스마트 초해상도는 현재 RTX 비디오 초해상도(표준)만 지원합니다.",
+   "es": "La SR inteligente solo admite por ahora RTX Video SR (Estándar)",
+   "fr": "La SR intelligente ne prend en charge pour l'instant que RTX Video SR (Standard)",
+   "de": "Intelligente SR unterstützt derzeit nur RTX Video SR (Standard)",
+   "pt-BR": "A SR inteligente por enquanto só funciona com RTX Video SR (Padrão)",
+   "ru": "Умное SR пока работает только с RTX Video SR (Стандарт)"
+  },
+  {
    "zh": "暂不支持此字幕格式",
    "src": "src/engine/Subtitles.cpp",
    "zh-TW": "暫不支援此字幕格式",
@@ -26354,6 +26393,19 @@
    "ru": "Douyin Live Companion обнаружил: приоритет GPU на данный момент снижен с Realtime до High, поэтому две программы не висят при совместном использовании GPU; он возвращается, когда компаньон выходит."
   },
   {
+   "zh": "检测到渲染分辨率 %1x%2，按此还原后超分",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "偵測到渲染解析度 %1x%2，依此還原後超解析",
+   "en": "Render resolution %1x%2 detected; restored to it before SR",
+   "ja": "レンダリング解像度 %1x%2 を検出しました。これに戻してから超解像します",
+   "ko": "렌더링 해상도 %1x%2를 감지했습니다. 이 해상도로 되돌린 뒤 초해상도를 적용합니다.",
+   "es": "Resolución de renderizado %1x%2 detectada; se restaura a ella antes de la SR",
+   "fr": "Résolution de rendu %1x%2 détectée ; l'image y est restituée avant la SR",
+   "de": "Renderauflösung %1x%2 erkannt; vor der SR darauf zurückgerechnet",
+   "pt-BR": "Resolução de renderização %1x%2 detectada; restaurada para ela antes da SR",
+   "ru": "Обнаружено разрешение рендеринга %1x%2; перед SR картинка восстанавливается до него"
+  },
+  {
    "zh": "检测到约两帧一组的画面。主机锁定 30 帧时，可试用 60→30 保持固定节奏。",
    "src": "qml/DedupModeRow.qml",
    "zh-TW": "偵測到約兩幀一組的畫面。主機鎖定 30 幀時，可試用 60→30 維持固定節奏。",
@@ -27223,6 +27275,19 @@
    "de": "Den Gastgeber überprüfen...",
    "pt-BR": "A verificar a máquina...",
    "ru": "Проверить хозяина..."
+  },
+  {
+   "zh": "正在检测渲染分辨率…",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "正在偵測渲染解析度…",
+   "en": "Detecting the render resolution…",
+   "ja": "レンダリング解像度を検出しています…",
+   "ko": "렌더링 해상도를 감지하는 중…",
+   "es": "Detectando la resolución de renderizado…",
+   "fr": "Détection de la résolution de rendu…",
+   "de": "Renderauflösung wird erkannt…",
+   "pt-BR": "Detectando a resolução de renderização…",
+   "ru": "Определение разрешения рендеринга…"
   },
   {
    "zh": "正在登录 Xbox 串流服务…",
@@ -28447,6 +28512,19 @@
    "ru": "Игровой автомат"
   },
   {
+   "zh": "游戏机常把 1080p、1440p 的画面放大成 4K 输出。开启后自动检测实际渲染分辨率，精确还原后再超分；原生画面照常处理。用于实时视频，支持 SDR 与 HDR10。列表模式的抗锯齿会移到超分之后执行。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "遊戲機常把 1080p、1440p 的畫面放大成 4K 輸出。開啟後自動偵測實際渲染解析度，精確還原後再超解析；原生畫面照常處理。用於即時影片，支援 SDR 與 HDR10。清單模式的抗鋸齒會移到超解析之後執行。",
+   "en": "Consoles often upscale a 1080p or 1440p picture to a 4K output. When on, the actual render resolution is detected, the picture is restored to it exactly and then super-resolved; native pictures are processed as usual. For live video, SDR and HDR10. In list mode anti-aliasing then runs after SR.",
+   "ja": "ゲーム機は 1080p や 1440p の映像を 4K に拡大して出力することがよくあります。オンにすると実際のレンダリング解像度を自動で検出し、正確に戻してから超解像します。ネイティブの映像は通常どおり処理します。リアルタイム映像用で、SDR と HDR10 に対応します。リストモードのアンチエイリアスは超解像の後に実行されます。",
+   "ko": "게임기는 1080p나 1440p 화면을 4K로 확대해 출력하는 경우가 많습니다. 켜면 실제 렌더링 해상도를 자동으로 감지해 정확히 되돌린 뒤 초해상도를 적용하고, 원본 해상도 화면은 평소대로 처리합니다. 실시간 영상용이며 SDR과 HDR10을 지원합니다. 목록 모드의 안티앨리어싱은 초해상도 뒤에 실행됩니다.",
+   "es": "Las consolas suelen ampliar una imagen de 1080p o 1440p a una salida 4K. Al activarla se detecta la resolución de renderizado real, la imagen se restaura exactamente a ella y luego se aplica la SR; las imágenes nativas se procesan como siempre. Para vídeo en tiempo real, SDR y HDR10. En el modo de lista, el suavizado de bordes se ejecuta después de la SR.",
+   "fr": "Les consoles agrandissent souvent une image 1080p ou 1440p en sortie 4K. Une fois activée, la résolution de rendu réelle est détectée, l'image y est restituée exactement puis passe en SR ; les images natives sont traitées comme d'habitude. Pour la vidéo en direct, SDR et HDR10. En mode liste, l'anticrénelage s'exécute alors après la SR.",
+   "de": "Konsolen skalieren ein 1080p- oder 1440p-Bild oft auf eine 4K-Ausgabe hoch. Eingeschaltet wird die tatsächliche Renderauflösung erkannt, das Bild exakt auf sie zurückgerechnet und dann per SR vergrößert; native Bilder werden wie gewohnt verarbeitet. Für Live-Video, SDR und HDR10. Im Listenmodus läuft die Kantenglättung dann nach der SR.",
+   "pt-BR": "Consoles costumam ampliar uma imagem 1080p ou 1440p para uma saída 4K. Ligada, a resolução real de renderização é detectada, a imagem é restaurada exatamente para ela e depois passa pela SR; imagens nativas são processadas normalmente. Para vídeo ao vivo, SDR e HDR10. No modo de lista, o antisserrilhado passa a ser executado depois da SR.",
+   "ru": "Консоли часто увеличивают картинку 1080p или 1440p до выхода 4K. Если включено, определяется фактическое разрешение рендеринга, картинка точно восстанавливается до него и затем проходит SR; нативная картинка обрабатывается как обычно. Для видео в реальном времени, SDR и HDR10. В режиме списка сглаживание выполняется после SR."
+  },
+  {
    "zh": "源 %1 fps",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "源 %1 fps",
@@ -29147,6 +29225,19 @@
    "de": "Gerade gelesen: %1",
    "pt-BR": "Lendo agora: %1",
    "ru": "Сейчас прочитано: %1"
+  },
+  {
+   "zh": "画面不是放大输出，按原画面处理",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "畫面不是放大輸出，依原畫面處理",
+   "en": "The picture is not an upscaled output; processed as it is",
+   "ja": "映像は拡大出力ではないため、そのまま処理します",
+   "ko": "확대 출력된 화면이 아니므로 그대로 처리합니다.",
+   "es": "La imagen no es una salida ampliada; se procesa tal cual",
+   "fr": "L'image n'est pas une sortie agrandie ; elle est traitée telle quelle",
+   "de": "Das Bild ist keine hochskalierte Ausgabe; es wird unverändert verarbeitet",
+   "pt-BR": "A imagem não é uma saída ampliada; é processada como está",
+   "ru": "Картинка не является увеличенным выводом; обрабатывается как есть"
   },
   {
    "zh": "画面中断，正在请求关键帧恢复…",
@@ -36349,6 +36440,19 @@
    "de": "SR 4K · NR 1 Schicht · FG 2X",
    "pt-BR": "SR 4K · NR 1 camada · FG 2X",
    "ru": "SR 4K · NR 1 слой · FG 2X"
+  },
+  {
+   "zh": "超分之前有会改动画面的处理（NR、降噪、抗锯齿或美颜），智能超分未运行；请关闭，或移到超分之后。",
+   "src": "src/ui/bridge/Status.cpp",
+   "zh-TW": "超解析之前有會改動畫面的處理（NR、降噪、抗鋸齒或美顏），智慧超解析未執行；請關閉，或移到超解析之後。",
+   "en": "Something ahead of SR changes the picture (NR, denoise, anti-aliasing or beauty), so smart SR is not running. Switch it off or move it after SR.",
+   "ja": "超解像の前に映像を変える処理（NR、ノイズ除去、アンチエイリアス、美顔）があるため、スマート超解像は動作していません。オフにするか、超解像の後に移動してください。",
+   "ko": "초해상도 앞에 화면을 바꾸는 처리(NR, 노이즈 제거, 안티앨리어싱, 뷰티)가 있어 스마트 초해상도가 작동하지 않습니다. 끄거나 초해상도 뒤로 옮기세요.",
+   "es": "Antes de la SR hay un proceso que cambia la imagen (NR, reducción de ruido, suavizado de bordes o belleza), por lo que la SR inteligente no se ejecuta. Desactívalo o muévelo después de la SR.",
+   "fr": "Un traitement placé avant la SR modifie l'image (NR, réduction du bruit, anticrénelage ou embellissement) : la SR intelligente ne s'exécute pas. Désactivez-le ou placez-le après la SR.",
+   "de": "Vor der SR verändert etwas das Bild (NR, Entrauschen, Kantenglättung oder Beauty), daher läuft die intelligente SR nicht. Schalten Sie es aus oder verschieben Sie es hinter die SR.",
+   "pt-BR": "Algo antes da SR altera a imagem (NR, redução de ruído, antisserrilhado ou beleza), por isso a SR inteligente não está em execução. Desligue ou mova para depois da SR.",
+   "ru": "Перед SR есть обработка, которая меняет картинку (NR, шумоподавление, сглаживание или ретушь), поэтому умная SR не работает. Отключите её или переместите после SR."
   },
   {
    "zh": "超分后缩回到",

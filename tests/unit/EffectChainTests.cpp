@@ -1655,6 +1655,306 @@ static void testSupersampleSr(){
     }
 }
 
+// Smart SR (2026-11-22): render extent math, the detection verdict, settings
+// normalization and the graph description.
+// Smart SR reads the source's own scaled picture: what may run ahead of SR.
+__declspec(noinline) static void testSmartSrStages(){
+    using namespace veyra;using Slot=pipeline::EnhanceGraphDesc::PassSlot;using pipeline::Extent;
+    auto list=std::make_unique<EnhancementSettings>();
+    list->nr=false;list->sr=true;list->multiplier=1;list->videoSrQuality=4;list->srTarget=pipeline::SrTarget::Uhd4K;list->smartSr=true;
+    list->antiAlias.enabled=true;list->antiAlias.method=AntiAliasMethod::Dlaa;
+    StageRequest r;r.sr=true;r.width=3840;r.height=2160;r.nvidiaAdapter=true;r.uncompressedSource=true;
+    auto d=std::make_unique<pipeline::EnhanceGraphDesc>();
+    const auto slot=[&](EffectType type){return d->slotOfStep(d->planStepOf(type,0));};
+    const auto stepOf=[&](EffectType type){return d->planStepOf(type,0);};
+    describeStages(r,*list,*d);
+    check(d->smartSr&&!d->smartSrBlocked&&d->smartSrNativeCopy&&stepOf(EffectType::SuperResolution)<stepOf(EffectType::AntiAliasing)&&
+          slot(EffectType::AntiAliasing)==Slot::Tail&&!d->sourcePostActive()&&!d->nrBeforeSr&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: list anti-aliasing runs behind SR, also at the same size");
+    r.width=1920;r.height=1080;describeStages(r,*list,*d);
+    check(d->smartSr&&slot(EffectType::AntiAliasing)==Slot::Tail&&d->validateFixedExecutionPlan().empty()&&
+          d->fixedExecutionPlan->steps[stepOf(EffectType::AntiAliasing)].output==Extent{3840,2160},
+          "smart SR: behind an enlarging SR that is the output size");
+    r.width=3840;r.height=2160;
+    auto other=std::make_unique<EnhancementSettings>(*list);other->smartSr=false;describeStages(r,*other,*d);
+    check(!d->smartSr&&!d->smartSrBlocked&&slot(EffectType::AntiAliasing)==Slot::SourcePost&&d->sourcePostActive()&&
+          stepOf(EffectType::SuperResolution)==kMaxChainNodes,
+          "smart SR off: list anti-aliasing stays at source size and a same-size SR has no step");
+    *other=*list;other->videoDenoiseEnabled=true;describeStages(r,*other,*d);
+    check(!d->smartSr&&d->smartSrBlocked&&!d->enableSr&&slot(EffectType::AntiAliasing)==Slot::SourcePost&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: a denoise ahead of SR blocks it and the order stays the ordinary one");
+    *other=*list;other->nr=true;r.nr=true;describeStages(r,*other,*d);
+    check(d->smartSr&&!d->smartSrBlocked&&!d->nrBeforeSr&&slot(EffectType::AntiAliasing)==Slot::Tail&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: NR behind SR does not block it");
+    other->lowLatency=true;describeStages(r,*other,*d);
+    check(!d->smartSr&&d->smartSrBlocked&&d->validateFixedExecutionPlan().empty(),"smart SR: NR ahead of SR blocks it");
+    r.nr=false;describeStages(r,*other,*d);
+    check(d->smartSr&&!d->smartSrBlocked,"smart SR: an NR-first setting without NR does not block it");
+    *other=*list;other->smartSr=false;other->videoDenoiseEnabled=true;describeStages(r,*other,*d);
+    check(!d->smartSrBlocked,"smart SR off: never blocked");
+
+    const auto node=[&](const std::vector<EffectType>& types,bool enabled=true){
+        auto chain=std::make_unique<EffectChain>();chain->mode=ChainMode::Node;
+        for(const auto type:types){
+            auto& n=chain->nodes[chain->nodeCount++];n.type=type;n.enabled=type==EffectType::SuperResolution||enabled;
+            if(type==EffectType::AntiAliasing){n.aa.enabled=n.enabled;n.aa.method=AntiAliasMethod::Smaa;n.aa.quality=1;}
+            if(type==EffectType::Beauty){n.beauty.enabled=n.enabled;n.beauty.smooth=true;}
+        }
+        auto s=std::make_unique<EnhancementSettings>(*list);s->antiAlias={};fromChain(*chain,*s);s->smartSr=true;s->videoSrQuality=4;
+        const auto order=runtimeOrder(*chain);StageRequest n=r;n.nodeOrder=&*order;
+        n.nr=std::find(types.begin(),types.end(),EffectType::NrEnhance)!=types.end();
+        describeStages(n,*s,*d);
+    };
+    node({EffectType::SuperResolution,EffectType::AntiAliasing});
+    check(d->smartSr&&!d->smartSrBlocked&&slot(EffectType::AntiAliasing)==Slot::Tail&&!d->sourcePostActive()&&d->validateFixedExecutionPlan().empty(),
+          "smart SR: node anti-aliasing behind a same-size SR runs behind it");
+    node({EffectType::AntiAliasing,EffectType::SuperResolution});
+    check(!d->smartSr&&d->smartSrBlocked&&slot(EffectType::AntiAliasing)==Slot::SourcePost,"smart SR: node anti-aliasing ahead of SR blocks it");
+    node({EffectType::AntiAliasing,EffectType::SuperResolution},false);
+    check(d->smartSr&&!d->smartSrBlocked,"smart SR: a bypassed node ahead of SR does not block it");
+    node({EffectType::Beauty,EffectType::SuperResolution});
+    check(!d->smartSr&&d->smartSrBlocked,"smart SR: a beauty node ahead of SR blocks it");
+    node({EffectType::NrEnhance,EffectType::SuperResolution});
+    check(!d->smartSr&&d->smartSrBlocked,"smart SR: an NR node ahead of SR blocks it");
+    node({EffectType::SuperResolution,EffectType::NrEnhance});
+    check(d->smartSr&&!d->smartSrBlocked&&!d->nrBeforeSr&&d->validateFixedExecutionPlan().empty(),"smart SR: an NR node behind SR does not block it");
+    node({EffectType::Color,EffectType::SuperResolution});
+    check(d->smartSr&&!d->smartSrBlocked&&!d->sourcePostActive(),"smart SR: a colour node ahead of SR is part of the input conversion");
+}
+
+static void testSmartSr(){
+    using namespace veyra;using pipeline::Extent;using pipeline::SrOutput;using pipeline::SrTarget;
+    {
+        check(pipeline::smartSrRenderExtent({3840,2160},1080)==Extent{1920,1080}&&pipeline::smartSrRenderExtent({1920,1080},721)==Extent{1280,720}&&
+              !pipeline::smartSrRenderExtent({3840,2160},2160).valid()&&!pipeline::smartSrRenderExtent({1920,1080},1440).valid(),
+              "smart SR: a render extent keeps the aspect, is even and only reduces");
+        const auto x2=pipeline::smartSrInverseAxis(3840,1920),x15=pipeline::smartSrInverseAxis(3840,2560);
+        check(x2.p==2&&x2.q==1&&x2.taps.size()==1&&x15.p==3&&x15.q==2&&x15.taps.size()==2&&pipeline::smartSrInverseAxis(1080,1080).taps.empty(),
+              "smart SR: one tap row per phase of the scale ratio");
+        check(pipeline::smartSrSelfCheck(x2)<1e-3&&pipeline::smartSrSelfCheck(x15)<1e-3,"smart SR: the inverse recovers a 2x and a 1.5x bilinear upscale");
+        bool phases=true;double worst=0.0,gain=0.0;
+        for(const uint32_t h:pipeline::kSmartSrCandidates){
+            const auto e=pipeline::smartSrRenderExtent({3840,2160},h);
+            const auto ax=pipeline::smartSrInverseAxis(3840,e.width),ay=pipeline::smartSrInverseAxis(2160,e.height);
+            phases=phases&&e.width*9==e.height*16&&ax.q&&ax.q<=pipeline::kSmartSrMaxPhases&&ay.q==ax.q;
+            worst=std::max({worst,pipeline::smartSrSelfCheck(ax),pipeline::smartSrSelfCheck(ay)});
+            for(const auto* axis:{&ax,&ay})for(const auto& taps:axis->taps){
+                double sum=0.0;for(const float t:taps)sum+=t;
+                gain=std::max(gain,std::abs(sum-1.0));
+            }
+        }
+        check(gain<1e-6,"smart SR: every tap row sums to one, a flat picture is left as it is");
+        check(phases,"smart SR: every 4K candidate is exact 16:9 within the phase limit");
+        std::printf("smart SR: largest candidate inverse error %.3e\n",worst);
+        check(worst<2e-2,"smart SR: every 4K candidate inverts its bilinear upscale");
+        using pipeline::SmartSrScaler;
+        const auto wide=pipeline::smartSrInverseAxis(3840,1920,SmartSrScaler::Aligned2x),tall=pipeline::smartSrInverseAxis(2160,1080,SmartSrScaler::Aligned2x);
+        check(wide.p==2&&wide.q==1&&wide.taps.size()==1&&wide.lowLength==1920&&wide.scaler==SmartSrScaler::Aligned2x&&tall.taps==wide.taps&&
+              pipeline::smartSrInverseAxis(3840,2560,SmartSrScaler::Aligned2x).taps.empty()&&pipeline::smartSrInverseAxis(2161,1080,SmartSrScaler::Aligned2x).taps.empty(),
+              "smart SR: the aligned scaler is inverted at exactly 2x only");
+        double alignedSum=0.0,alignedNoise=0.0;for(const float t:wide.taps[0]){alignedSum+=t;alignedNoise+=double(t)*t;}
+        std::printf("smart SR: aligned inverse error %.3e, noise gain %.3f\n",pipeline::smartSrSelfCheck(wide),std::sqrt(alignedNoise));
+        check(pipeline::smartSrSelfCheck(wide)<1e-3&&pipeline::smartSrSelfCheck(tall)<1e-3&&std::abs(alignedSum-1.0)<1e-6&&alignedNoise<1.5,
+              "smart SR: the aligned inverse recovers its 2x upscale, keeps a flat picture and hardly amplifies noise");
+        double even=0.0,odd=0.0;for(int i=80;i<=120;++i){even+=pipeline::smartSrAlignedWeight(200,i);odd+=pipeline::smartSrAlignedWeight(201,i);}
+        check(std::abs(even-1.0)<1e-12&&std::abs(odd-1.0)<1e-12&&pipeline::smartSrAlignedWeight(200,97)==pipeline::smartSrAlignedWeight(200,103)&&
+              pipeline::smartSrAlignedWeight(201,100)==pipeline::smartSrAlignedWeight(201,101),"smart SR: both aligned phases are symmetric and sum to one");
+    }
+    {
+        // The probe of one row (SmartSrProbeReduce / Residual) on almost flat pictures.
+        const auto probe=[](const std::vector<float>& row){
+            constexpr size_t n=pipeline::kSmartSrCandidates.size();
+            std::array<double,n> errors{};
+            const uint32_t w=uint32_t(row.size());
+            double s1=0.0,s2=0.0;for(const float v:row){s1+=v;s2+=double(v)*v;}
+            const double energy=s2-s1*s1/w;
+            for(size_t c=0;c<n;++c){
+                const auto axis=pipeline::smartSrInverseAxis(w,pipeline::smartSrRenderExtent({3840,2160},pipeline::kSmartSrCandidates[c]).width);
+                std::vector<float> low(axis.lowLength);
+                for(uint32_t i=0;i<axis.lowLength;++i){
+                    const int base=int(pipeline::smartSrCentre(i,axis.p,axis.q))-pipeline::kSmartSrTapOrigin;
+                    float v=0.f;for(uint32_t t=0;t<pipeline::kSmartSrTaps;++t)v+=axis.taps[i%axis.q][t]*row[size_t(std::clamp(base+int(t),0,int(w)-1))];
+                    low[i]=v;
+                }
+                double residual=0.0;
+                for(uint32_t j=0;j<w;++j){
+                    int i0,i1;double w0,w1;pipeline::smartSrBilinear(j,w,axis.lowLength,i0,w0,i1,w1);
+                    const double d=row[j]-(w0*low[size_t(i0)]+w1*low[size_t(i1)]);residual+=d*d;
+                }
+                errors[c]=residual/energy;
+            }
+            return errors;
+        };
+        // The aligned 2x probe of the same row.
+        const auto probeAligned=[](const std::vector<float>& row){
+            const uint32_t w=uint32_t(row.size());
+            double s1=0.0,s2=0.0;for(const float v:row){s1+=v;s2+=double(v)*v;}
+            const auto axis=pipeline::smartSrInverseAxis(w,w/2,pipeline::SmartSrScaler::Aligned2x);
+            std::vector<float> low(axis.lowLength);
+            for(uint32_t i=0;i<axis.lowLength;++i){
+                const int base=int(pipeline::smartSrCentre(i,axis.p,axis.q))-pipeline::kSmartSrTapOrigin;
+                float v=0.f;for(uint32_t t=0;t<pipeline::kSmartSrTaps;++t)v+=axis.taps[0][t]*row[size_t(std::clamp(base+int(t),0,int(w)-1))];
+                low[i]=v;
+            }
+            double residual=0.0;
+            for(uint32_t j=0;j<w;++j){
+                float back=0.f;
+                for(int i=int(j/2)-3;i<=int(j/2)+4;++i)back+=float(pipeline::smartSrAlignedWeight(j,i))*low[size_t(std::clamp(i,0,int(axis.lowLength)-1))];
+                residual+=(double(row[j])-back)*(double(row[j])-back);
+            }
+            return residual/(s2-s1*s1/w);
+        };
+        bool quiet=true;
+        for(const double level:{0.1,0.5,0.9})for(const double steps:{0.0,1023.0,255.0})for(const double swing:{0.04,0.2}){
+            std::vector<float> row(3840);
+            for(size_t j=0;j<row.size();++j){
+                double v=level+swing*(double(j)/double(row.size()-1)-0.5);
+                if(steps>0.0)v=std::round(v*steps)/steps;
+                row[j]=float(v);
+            }
+            quiet=quiet&&!pipeline::smartSrDecide(probe(row),probeAligned(row),1080).spatial;
+        }
+        check(quiet,"smart SR: an almost flat picture is no render height (live 2026-11-24: 1152)");
+        std::vector<float> render(1920),row(3840);
+        for(size_t i=0;i<render.size();++i)render[i]=float(0.5+0.2*std::sin(double(i)*1.7)+0.2*std::sin(double(i)*0.37)*std::cos(double(i)*2.9));
+        for(uint32_t j=0;j<row.size();++j){
+            int i0,i1;double w0,w1;pipeline::smartSrBilinear(j,3840,1920,i0,w0,i1,w1);
+            row[j]=float(std::round((w0*render[size_t(i0)]+w1*render[size_t(i1)])*255.0)/255.0);
+        }
+        auto v=pipeline::smartSrDecide(probe(row),probeAligned(row),1080);
+        check(v.height==1080&&v.spatial&&v.fit==1080&&v.scaler==pipeline::SmartSrScaler::Bilinear,"smart SR: the same probe finds a detailed 8-bit 1080p upscale");
+        for(const double steps:{255.0,1023.0}){
+            for(uint32_t j=0;j<row.size();++j){
+                double y=0.0;
+                for(int i=int(j/2)-3;i<=int(j/2)+4;++i)y+=pipeline::smartSrAlignedWeight(j,i)*render[size_t(std::clamp(i,0,1919))];
+                row[j]=float(std::round(y*steps)/steps);
+            }
+            check(!pipeline::smartSrDecide(probe(row)).spatial,"smart SR: bilinear candidates alone do not find an aligned 2x upscale (live 2026-11-26)");
+            v=pipeline::smartSrDecide(probe(row),probeAligned(row),1080);
+            check(v.height==1080&&v.spatial&&v.scaler==pipeline::SmartSrScaler::Aligned2x&&v.knee>10.0&&v.notch>10.0,
+                  "smart SR: the aligned probe finds an aligned 2x upscale of 1080p");
+        }
+        for(size_t j=0;j<row.size();++j)row[j]=float(0.5+0.2*std::sin(double(j)*2.3)+0.2*std::sin(double(j)*0.41)*std::cos(double(j)*1.1));
+        check(!pipeline::smartSrDecide(probe(row),probeAligned(row),1080).spatial,"smart SR: native detail is no aligned upscale");
+    }
+    {
+        constexpr size_t n=pipeline::kSmartSrCandidates.size();
+        const auto at=[](uint32_t h){return size_t(std::find(pipeline::kSmartSrCandidates.begin(),pipeline::kSmartSrCandidates.end(),h)-pipeline::kSmartSrCandidates.begin());};
+        std::array<double,n> upscaled{};
+        for(size_t i=0;i<n;++i)upscaled[i]=i<at(1080)?0.1:1e-4*(1.0+double(i-at(1080)));
+        upscaled[at(1152)]=6e-4;
+        auto v=pipeline::smartSrDecide(upscaled);
+        check(v.height==1080&&v.spatial&&v.knee>100&&v.notch>2,"smart SR: a bilinear 1080p upscale settles at 1080");
+        std::array<double,n> native{};
+        for(size_t i=0;i<n;++i)native[i]=0.05*std::pow(0.85,double(i));
+        v=pipeline::smartSrDecide(native);
+        check(!v.height&&!v.spatial,"smart SR: a smooth error curve (native 4K) gives no render height");
+        std::array<double,n> fhd{};
+        const double nan=std::numeric_limits<double>::quiet_NaN();
+        for(size_t i=0;i<n;++i)fhd[i]=pipeline::kSmartSrCandidates[i]>=1080?nan:i<at(720)?0.08:2e-4*(1.0+double(i-at(720)));
+        fhd[at(810)]=1.2e-3;
+        v=pipeline::smartSrDecide(fhd);
+        check(v.height==720&&v.spatial,"smart SR: unmeasured heights of a 1080p source are skipped (720p render)");
+        for(size_t i=0;i<n;++i)fhd[i]=pipeline::kSmartSrCandidates[i]>=1080?nan:i<at(1008)?0.08:1e-4;
+        v=pipeline::smartSrDecide(fhd);
+        check(v.height==1008&&v.notch==1.0&&v.spatial,"smart SR: the top measured height needs no notch past the source");
+        {
+            // Aligned 2x: only a clear gain over the bilinear fits of its own and of the next height.
+            using pipeline::SmartSrScaler;
+            auto errors=native;errors[at(1080)]=6e-4;errors[at(1152)]=6.5e-4;
+            auto a=pipeline::smartSrDecide(errors,1e-5,1080);
+            check(a.height==1080&&a.spatial&&a.scaler==SmartSrScaler::Aligned2x&&a.knee>50&&a.notch>50,"smart SR: a clear aligned fit settles at half the source height");
+            a=pipeline::smartSrDecide(errors,5e-4,1080);
+            check(!a.spatial&&a.scaler==SmartSrScaler::Bilinear,"smart SR: an aligned fit like the bilinear ones is no aligned upscale");
+            a=pipeline::smartSrDecide(errors,6e-4/2.7,1080);
+            check(!a.spatial&&!a.height&&a.scaler==SmartSrScaler::Aligned2x&&a.fit==1080,"smart SR: a weak aligned fit only counts where it is in use");
+            check(pipeline::smartSrDecide(upscaled,2e-5,1080).scaler==SmartSrScaler::Aligned2x&&
+                  pipeline::smartSrDecide(upscaled,8e-4,1080).scaler==SmartSrScaler::Bilinear,"smart SR: the better scaler of the same height wins");
+            a=pipeline::smartSrDecide(upscaled,nan,1080);
+            check(a.height==1080&&a.scaler==SmartSrScaler::Bilinear,"smart SR: an unmeasured aligned probe changes nothing");
+            check(pipeline::smartSrDecide(errors,1e-5,1000).scaler==SmartSrScaler::Bilinear&&pipeline::smartSrDecide(errors,0.5,1080).scaler==SmartSrScaler::Bilinear,
+                  "smart SR: the aligned probe needs a measured height and a fit under 2 %");
+        }
+        std::array<double,n> flat{};flat.fill(1.0);
+        check(!pipeline::smartSrDecide(flat).height,"smart SR: no fit under 2 % gives no render height");
+        std::array<double,n> smooth{};
+        for(size_t i=0;i<n;++i)smooth[i]=i<at(1152)?1e-4:1e-7*(1.0+0.1*double(i-at(1152)));
+        v=pipeline::smartSrDecide(smooth);
+        check(v.fit==1152&&v.knee>900&&v.notch<1.2&&!v.spatial,"smart SR: a large knee alone (everything above fits alike) is no upscale");
+    }
+    {
+        using pipeline::SmartSrVerdict;using pipeline::SmartSrTarget;using pipeline::SmartSrScaler;
+        const auto smartSrVote=[](const SmartSrVerdict& v,uint32_t current){return pipeline::smartSrVote(v,{current}).height;};
+        const auto smartSrVotesNeeded=[](uint32_t vote,uint32_t current){return pipeline::smartSrVotesNeeded({vote},{current});};
+        const SmartSrVerdict spatial1080{1080,1000.0,6.0,true,1080},dark1440{0,2.9,1.8,false,1440},native{0,1.6,1.0,false,2016};
+        const SmartSrVerdict weak1440{1440,3.1,1.9,false,1440},reconstructed1080{1080,8.0,1.2,false,1080};
+        check(smartSrVote(spatial1080,0)==1080&&smartSrVote(dark1440,0)==0&&smartSrVote(weak1440,0)==0,
+              "smart SR: without a height in use only a spatial upscale votes for one");
+        check(smartSrVote(dark1440,1440)==1440&&smartSrVote(weak1440,1440)==1440,"smart SR: a weak fit at the height in use counts for it");
+        check(smartSrVote(dark1440,1152)==0&&smartSrVote(weak1440,1152)==0,"smart SR: a weak fit elsewhere does not hold a wrong height");
+        check(smartSrVote(native,1440)==0,"smart SR: a smooth (native) picture turns it off");
+        check(smartSrVote(reconstructed1080,1440)==0&&smartSrVote(spatial1080,1440)==1080,
+              "smart SR: a fit at another height counts against the height in use");
+        check(smartSrVotesNeeded(1080,0)==pipeline::kSmartSrProbeStreak&&smartSrVotesNeeded(1080,1440)==pipeline::kSmartSrProbeStreak&&
+              smartSrVotesNeeded(0,0)==pipeline::kSmartSrProbeStreak&&smartSrVotesNeeded(0,1440)==pipeline::kSmartSrOffStreak&&
+              pipeline::kSmartSrOffStreak>pipeline::kSmartSrProbeStreak,
+              "smart SR: dropping a height for none takes more votes than finding one");
+        const SmartSrTarget bilinear{1080},aligned{1080,SmartSrScaler::Aligned2x};
+        const SmartSrVerdict clear{1080,60.0,60.0,true,1080,SmartSrScaler::Aligned2x},weak{0,2.7,2.6,false,1080,SmartSrScaler::Aligned2x};
+        check(pipeline::smartSrVote(clear,{})==aligned&&pipeline::smartSrVote(clear,bilinear)==aligned&&pipeline::smartSrVote(clear,aligned)==aligned&&
+              pipeline::smartSrVote(spatial1080,aligned)==bilinear,"smart SR: a vote names the height and its scaler");
+        check(pipeline::smartSrVote(weak,aligned)==aligned&&!pipeline::smartSrVote(weak,bilinear).height&&!pipeline::smartSrVote(weak,{}).height,
+              "smart SR: a weak aligned fit holds the aligned scaler only");
+        check(pipeline::smartSrVotesNeeded(aligned,bilinear)==pipeline::kSmartSrProbeStreak,"smart SR: the scaler changes like a height does");
+    }
+    {
+        using pipeline::SmartSrCoding;using pipeline::smartSrCoding;
+        check(smartSrCoding(false,false,false,false)==SmartSrCoding::Srgb,"smart SR: SDR filters sRGB codes");
+        check(smartSrCoding(true,true,true,false)==SmartSrCoding::Pq,"smart SR: HDR10 kept as HDR filters PQ codes");
+        check(smartSrCoding(true,true,false,false)==SmartSrCoding::None,"smart SR: HLG keeps the ordinary path");
+        check(smartSrCoding(true,false,true,false)==SmartSrCoding::None,"smart SR: HDR tone-mapped at ingest keeps the ordinary path");
+        check(smartSrCoding(true,true,false,true)==SmartSrCoding::None,"smart SR: linear float (scRGB) sources keep the ordinary path");
+    }
+    EnhancementSettings s;s.nr=false;s.sr=true;s.multiplier=1;s.videoSrQuality=4;s.srTarget=SrTarget::Uhd4K;
+    check(!s.smartSr&&s.validate().empty(),"smart SR: off by default");
+    auto on=s;on.smartSr=true;
+    {
+        check(on.validate().empty()&&on.activeVideoSettings().smartSr,"smart SR: standard RTX Video SR keeps the switch");
+        for(const unsigned q:{0u,kVideoSrFsr,16u,23u}){auto other=on;other.videoSrQuality=q;check(!other.activeVideoSettings().smartSr,"smart SR: other SR families leave it inactive");}
+        auto dual=on;dual.dualSrEnabled=true;dual.srPrescale=pipeline::SrPrescale::P1080;
+        auto shrink=on;shrink.srTarget=SrTarget::Uhd8K;shrink.srOutput=SrOutput::Uhd4K;
+        auto off=on;off.sr=false;
+        check(!dual.activeVideoSettings().smartSr&&!shrink.activeVideoSettings().smartSr&&!off.activeVideoSettings().smartSr,
+              "smart SR: double SR, the supersample shrink and SR off leave it inactive");
+        check(requiresGraphRebuild(s,on),"smart SR: the switch rebuilds the graph");
+        auto dlss=s;dlss.videoSrQuality=0;auto dlssOn=dlss;dlssOn.smartSr=true;
+        check(!requiresGraphRebuild(dlss,dlssOn),"smart SR: an inactive switch does not rebuild");
+        EnhancementSettings restored;ChainGlobalSettings::capture(on).apply(restored);
+        check(restored.smartSr,"smart SR: chain globals carry the switch");
+    }
+    {
+        StageRequest r;r.sr=true;r.width=3840;r.height=2160;r.nvidiaAdapter=true;r.uncompressedSource=true;
+        pipeline::EnhanceGraphDesc d;describeStages(r,s,d);
+        check(!d.enableSr&&!d.smartSr,"smart SR: off, raw 4K capture at a 4K target still skips SR");
+        describeStages(r,on,d);
+        check(d.enableSr&&d.smartSr&&d.smartSrNativeCopy&&d.srInputWidth==3840&&d.workWidth==3840&&d.validateFixedExecutionPlan().empty(),
+              "smart SR: raw 4K capture keeps the SR stage and copies until a render extent is found");
+        r.uncompressedSource=false;describeStages(r,on,d);
+        check(d.enableSr&&d.smartSr&&!d.smartSrNativeCopy,"smart SR: compressed 4K keeps the same-size repair without a render extent");
+        r.uncompressedSource=true;r.width=1920;r.height=1080;describeStages(r,on,d);
+        check(d.enableSr&&d.smartSr&&!d.smartSrNativeCopy&&d.srInputWidth==1920&&d.workWidth==3840,"smart SR: raw 1080p capture keeps its upscale to 4K");
+        r.width=3840;r.height=2160;
+        auto q=r;q.stillImage=true;describeStages(q,on,d);check(!d.smartSr,"smart SR: still images do not detect");
+        q=r;q.exportJob=true;describeStages(q,on,d);check(!d.smartSr,"smart SR: exports do not detect");
+        q=r;q.nvidiaAdapter=false;describeStages(q,on,d);check(!d.smartSr,"smart SR: other adapters do not detect");
+        auto dlss=on;dlss.videoSrQuality=0;describeStages(r,dlss,d);check(!d.enableSr&&!d.smartSr,"smart SR: DLSS SR is not changed by the switch");
+        auto dual=on;dual.dualSrEnabled=true;dual.srPrescale=pipeline::SrPrescale::P1080;describeStages(r,dual,d);
+        check(d.dualSr&&!d.smartSr,"smart SR: double SR keeps its own reduction");
+        auto shrink=on;shrink.srTarget=SrTarget::Uhd8K;shrink.srOutput=SrOutput::Uhd4K;describeStages(r,shrink,d);
+        check(!d.smartSr&&d.srOutputWidth==7680,"smart SR: the supersample shrink keeps its own path");
+    }
+}
+
 int main() {
     {
         EnhancementSettings off;
@@ -1790,6 +2090,8 @@ int main() {
     testWideChains();
     testThreeStepSr();
     testSupersampleSr();
+    testSmartSr();
+    testSmartSrStages();
     {
         using namespace veyra;using pipeline::SrTarget;using pipeline::SrPrescale;using pipeline::SrOutput;
         EnhancementSettings s;s.sr=true;s.nr=false;s.videoSrQuality=2;s.srTarget=SrTarget::Uhd8K;

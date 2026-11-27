@@ -80,7 +80,7 @@ struct PresetEntry {
 
 class PresetLibrary {
 public:
-    explicit PresetLibrary(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit PresetLibrary(std::filesystem::path path) : path_(std::move(path)), smartSrPath_(std::filesystem::path(path_).concat(L".smart-sr")) {}
     // Missing file is not an error: the library starts with the built-ins.
     bool load();
     bool save();
@@ -130,7 +130,7 @@ private:
     std::string serialize() const;
     static std::string encodeEntries(const std::vector<PresetEntry>& entries, const std::wstring& defaultName, int minimumVersion = 1);
     void addBuiltins();
-    std::filesystem::path path_;
+    std::filesystem::path path_,smartSrPath_;
     std::vector<PresetEntry> entries_;
     std::wstring defaultName_, error_;
     bool corrupt_ = false;
@@ -141,7 +141,7 @@ private:
 // Reuses the versioned chain codec; no second set of per-node serializers.
 class ChainSessionStore {
 public:
-    explicit ChainSessionStore(std::filesystem::path path) : path_(std::move(path)) {}
+    explicit ChainSessionStore(std::filesystem::path path) : path_(std::move(path)), smartSrPath_(std::filesystem::path(path_).concat(L".smart-sr")) {}
     bool load(ChainSession& session); // missing: keep the caller's initial state
     bool save(const ChainSession& session);
     const std::wstring& error() const { return error_; }
@@ -149,7 +149,7 @@ private:
     friend class PresetLibrary;
     static std::string encode(const ChainSession&);
     static bool decode(const std::string&, ChainSession&, bool* migrated = nullptr);
-    std::filesystem::path path_;
+    std::filesystem::path path_,smartSrPath_;
     std::wstring error_;
     bool corrupt_ = false;
 };

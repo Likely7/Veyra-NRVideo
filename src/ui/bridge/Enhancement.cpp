@@ -119,6 +119,15 @@ QString QmlPlayerBridge::srQualityLabel(int quality,bool withFamily) const {
     return (family==engine::VideoSrFamily::HighBitrate?tr("高码率"):family==engine::VideoSrFamily::Streaming?tr("流媒体"):tr("标准"))+QLatin1Char(' ')+tier;
 }
 int QmlPlayerBridge::srOutput() const { return int(settings().srOutput); }
+bool QmlPlayerBridge::smartSr() const { return settings().smartSr; }
+// Smart SR descales and enlarges with the standard RTX Video SR family (NGX) only.
+void QmlPlayerBridge::setSmartSr(bool enabled) {
+    auto s = settings();
+    if (s.smartSr == enabled) return;
+    if (enabled && !engine::ngxVideoSr(s.videoSrQuality)) { emit notice(tr("智能超分目前仅支持 RTX 视频超分（标准）"), true); return; }
+    s.smartSr = enabled;
+    if (impl_->commit(s)) emit settingsChanged();
+}
 // The double SR reduction works with every SR backend; the supersample shrink
 // runs on RTX Video SR (every family) only.
 void QmlPlayerBridge::setSrPrescale(int value) {
@@ -821,7 +830,8 @@ bool QmlPlayerBridge::setAntiAliasParameter(const QString& key, double value) {
     if (c.mode != engine::ChainMode::List) { emit notice(tr("请先添加抗锯齿节点"), true); return false; }
     // The list card's instance exists once it is used, stored after the grades
     // where toChain() puts it; the list order (compileChainExecutionPlan) runs it
-    // behind the NR group when NR is on and in front of SR otherwise.
+    // behind the NR group when NR is on and in front of SR otherwise (behind it
+    // for smart SR).
     engine::ChainNode node; node.type = engine::EffectType::AntiAliasing;
     bool enabled = false;
     if (!applyAntiAliasKey(node.aa, enabled, key, value)) return false;

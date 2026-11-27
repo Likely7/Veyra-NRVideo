@@ -29,12 +29,14 @@ bool VideoSrBackend::create(NgxCoreHost& core,ID3D12GraphicsCommandList* list,un
     if(duplicateCreation_){handle_=nullptr;log::info("video-sr","create key already exists; no ownership acquired");return false;}
     return result(0,r,seh)&&handle_;
 }
-bool VideoSrBackend::evaluate(ID3D12GraphicsCommandList* list,ID3D12Resource* input,ID3D12Resource* output,unsigned quality){
+bool VideoSrBackend::evaluate(ID3D12GraphicsCommandList* list,ID3D12Resource* input,ID3D12Resource* output,unsigned quality,unsigned inputWidth,unsigned inputHeight){
     if(!handle_||!input||!output||quality<1||quality>4)return false;
     const auto a=input->GetDesc(),b=output->GetDesc();
     if(a.Format!=DXGI_FORMAT_R8G8B8A8_UNORM||b.Format!=DXGI_FORMAT_R8G8B8A8_UNORM)return false;
+    const unsigned inW=inputWidth?inputWidth:unsigned(a.Width),inH=inputHeight?inputHeight:a.Height;
+    if(inW>a.Width||inH>a.Height)return false;
     params_->Set("Input1",input);params_->Set("Output",output);
-    params_->Set("Rect.X",0u);params_->Set("Rect.Y",0u);params_->Set("Rect.W",unsigned(a.Width));params_->Set("Rect.H",a.Height);
+    params_->Set("Rect.X",0u);params_->Set("Rect.Y",0u);params_->Set("Rect.W",inW);params_->Set("Rect.H",inH);
     params_->Set("OutRect.X",0u);params_->Set("OutRect.Y",0u);params_->Set("OutRect.W",unsigned(b.Width));params_->Set("OutRect.H",b.Height);
     params_->Set("VSR.QualityLevel",quality);
     unsigned seh=0;auto r=invoke(1,list,params_,&handle_,seh);return result(1,r,seh);

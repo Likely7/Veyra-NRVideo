@@ -84,6 +84,23 @@ inline pipeline::SrOutput runningSrOutput(const EnhancementSettings& s,bool nvid
     return nvidiaAdapter&&rtxVideoSr(s.videoSrQuality)&&!s.dualSrEnabled?s.srOutput:pipeline::SrOutput::Target;
 }
 
+// Smart SR measures and inverts the source's own scaler, so nothing may change the
+// picture ahead of SR. The list order moves anti-aliasing behind SR for it
+// (ChainExecutionRequest::smartSr); a denoise or an NR-first order there, and any
+// same-size or NR step ahead of SR in a node chain, block it. A colour grade there
+// is fused into the input conversion and stays: it only weakens the detection.
+inline bool smartSrBlocked(const EffectChain& chain,bool nodeOrder,bool nrRuns,bool nrFirst){
+    for(uint32_t i=0;i<chain.nodeCount;++i){
+        const auto& node=chain.nodes[i];
+        if(nodeOrder&&node.type==EffectType::SuperResolution)return false;
+        if(!node.enabled)continue;
+        if(node.type==EffectType::VideoDenoise)return true;
+        if(nodeOrder&&(node.type==EffectType::AntiAliasing||node.type==EffectType::Beauty||
+                       (node.type==EffectType::NrEnhance&&nrRuns)))return true;
+    }
+    return !nodeOrder&&nrRuns&&nrFirst;
+}
+
 // Fills the stage, size and parameter fields of `desc` from `settings`.
 // Source-format fields (hdrInput, rgbInput, packedInput, ...), hdrOutput and
 // host hooks are left untouched: the caller owns those.
@@ -148,10 +165,20 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     // ResolutionPlan::srApplied describes enlargement, not SDK execution. Raw capture has
     // no compression artifacts: there a source already at the target skips SR as in 2.0.6
     // (5090 field log 57: 4K->4K VSR cost ~8.7 ms a frame and pushed 60 fps over budget).
-    const bool nativeVideoRestore=request.sr&&!request.stillImage&&!request.uncompressedSource&&request.nvidiaAdapter&&
+    // Smart SR (live video, one standard RTX Video SR pass, no supersample shrink)
+    // re-renders a raw frame from its detected render extent, so it keeps the stage
+    // there; until it finds one, such a frame at the work size is copied as before.
+    desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
+    const bool smartSrAsked=settings.smartSr&&request.sr&&!request.stillImage&&!request.exportJob&&request.nvidiaAdapter&&
+        ngxVideoSr(settings.videoSrQuality)&&!dualSrRuns(settings,request.nvidiaAdapter,request.stillImage)&&
+        srOutput==pipeline::SrOutput::Target;
+    desc.smartSrBlocked=smartSrAsked&&smartSrBlocked(chain,request.nodeOrder!=nullptr,desc.enableNr,lowLatency);
+    const bool smartSr=smartSrAsked&&!desc.smartSrBlocked;
+    const bool nativeVideoRestore=request.sr&&!request.stillImage&&(!request.uncompressedSource||smartSr)&&request.nvidiaAdapter&&
         ngxVideoSr(settings.videoSrQuality);
     desc.enableSr=(plan.srApplied||nativeVideoRestore)&&videoSrRunsOn(settings.videoSrQuality,request.nvidiaAdapter,request.amdAdapter);
-    desc.enableNr=request.nr&&(request.nvidiaAdapter||request.amdNr)&&(!settings.nrLayerCount||settings.activeNrLayerCount()>0);
+    desc.smartSr=smartSr&&desc.enableSr;
+    desc.smartSrNativeCopy=desc.smartSr&&request.uncompressedSource&&!plan.srApplied;
     if(!desc.enableNr||!request.nvidiaAdapter||settings.opticalFlowBackend!=OpticalFlowBackend::Nvidia)
         plan.flow=plan.source;
     desc.flowWidth=plan.flow.width;desc.flowHeight=plan.flow.height;
@@ -211,7 +238,7 @@ inline pipeline::ResolutionPlan describeStages(const StageRequest& request,const
     ChainExecutionPlan execution;
     const auto validation=compileChainExecutionPlan(chain,{{request.width,request.height},settings.srTarget,
         request.stillImage,request.exportJob,boundedAmd,desc.dualSr?srPrescale:pipeline::SrPrescale::Off,
-        desc.dualSr?pipeline::SrOutput::Target:srOutput,desc.dualSr,settings.dualSrTarget},execution);
+        desc.dualSr?pipeline::SrOutput::Target:srOutput,desc.dualSr,settings.dualSrTarget,desc.smartSr},execution);
     if(!validation.accepted){desc.fixedExecutionPlanError=validation.message;return plan;}
     if(request.nodeOrder){
         // Node order owns the first NR stage, even for an ordinary resize or
