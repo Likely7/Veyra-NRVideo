@@ -85,7 +85,7 @@ void protocolTests() {
     check(r[26] == 0xFF && r[27] == 0xFF && r[28] == 0x01 && r[29] == 0x01, "triggers 0..65535");
     const uint32_t phys = PhysA | PhysMenu | PhysNexus | PhysLeftTrigger | PhysRightTrigger |
                           PhysLeftThumbX | PhysLeftThumbY | PhysRightThumbX | PhysRightThumbY;
-    check(r[30] == uint8_t(phys) && r[31] == uint8_t(phys >> 8) && r[32] == uint8_t(phys >> 16) && r[33] == uint8_t(phys >> 24),
+    check(r[30] == uint8_t(phys & 0xffu) && r[31] == uint8_t((phys >> 8) & 0xffu) && r[32] == uint8_t((phys >> 16) & 0xffu) && r[33] == uint8_t((phys >> 24) & 0xffu),
           "physicality: little-endian bits for every button, trigger and stick in use");
     check(r[34] == 0 && r[35] == 0 && r[36] == 0 && r[37] == 0, "virtual physicality 0");
     check(gamepadPhysicality(GamepadFrame{}) == 0, "an idle pad reports no physicality");
