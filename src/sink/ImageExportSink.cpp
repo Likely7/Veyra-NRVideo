@@ -4,6 +4,7 @@
 #include "veyra/Log.h"
 #include <wincodec.h>
 #include <wrl/client.h>
+#include <array>
 #include <cstring>
 #include <filesystem>
 #include <limits>
@@ -118,13 +119,38 @@ bool saveHdrScreenshot(const std::wstring& path, const RgbaImage& raw, DXGI_FORM
     if (std::filesystem::exists(path)) return check(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS), "destination");
     log::info("hdr-screenshot", std::format("source format={} extent={}x{}", unsigned(format), raw.width, raw.height));
     const size_t count=size_t(raw.width)*raw.height;std::vector<uint16_t> pixels(count*4);
-    if(!pq)memcpy(pixels.data(),raw.pixels.data(),count*8);
-    else for(size_t i=0;i<count;++i){
-        uint32_t packed;memcpy(&packed,raw.pixels.data()+i*4,4);double linear[3];
-        for(unsigned c=0;c<3;++c){const double p=pow(double((packed>>(10*c))&1023)/1023,32.0/2523);linear[c]=125*pow(std::max(p-3424.0/4096,0.0)/(2413.0/128-2392.0/128*p),16384.0/2610);}
-        const double matrix[3][3]={{1.660491,-.587641,-.072850},{-.124550,1.132900,-.008349},{-.018151,-.100579,1.118730}};
-        for(unsigned c=0;c<3;++c)pixels[i*4+c]=DirectX::PackedVector::XMConvertFloatToHalf(float(matrix[c][0]*linear[0]+matrix[c][1]*linear[1]+matrix[c][2]*linear[2]));
-        pixels[i*4+3]=DirectX::PackedVector::XMConvertFloatToHalf(1);
+    if (!pq) {
+        std::memcpy(pixels.data(), raw.pixels.data(), count * 8);
+    } else {
+        // RGB10 is already quantized. Evaluate the same PQ curve once per
+        // possible code and keep the original double-precision color matrix.
+        static const auto linearByCode = [] {
+            std::array<double, 1024> values{};
+            for (size_t code = 0; code < values.size(); ++code) {
+                const double p = std::pow(double(code) / 1023, 32.0 / 2523);
+                values[code] = 125 * std::pow(std::max(p - 3424.0 / 4096, 0.0) /
+                    (2413.0 / 128 - 2392.0 / 128 * p), 16384.0 / 2610);
+            }
+            return values;
+        }();
+        constexpr double matrix[3][3] = {
+            {1.660491, -.587641, -.072850},
+            {-.124550, 1.132900, -.008349},
+            {-.018151, -.100579, 1.118730}
+        };
+        const auto opaque = DirectX::PackedVector::XMConvertFloatToHalf(1.0f);
+        for (size_t i = 0; i < count; ++i) {
+            uint32_t packed;
+            std::memcpy(&packed, raw.pixels.data() + i * 4, sizeof(packed));
+            const double r = linearByCode[packed & 1023u];
+            const double g = linearByCode[(packed >> 10) & 1023u];
+            const double b = linearByCode[(packed >> 20) & 1023u];
+            for (unsigned c = 0; c < 3; ++c) {
+                pixels[i * 4 + c] = DirectX::PackedVector::XMConvertFloatToHalf(
+                    float(matrix[c][0] * r + matrix[c][1] * g + matrix[c][2] * b));
+            }
+            pixels[i * 4 + 3] = opaque;
+        }
     }
     const auto partial=path+L".partial";HANDLE file=CreateFileW(partial.c_str(),GENERIC_WRITE,0,nullptr,CREATE_NEW,FILE_ATTRIBUTE_NORMAL,nullptr);if(file==INVALID_HANDLE_VALUE)return check(HRESULT_FROM_WIN32(GetLastError()),"create-partial");CloseHandle(file);
     struct Guard{std::wstring path;bool active=true;~Guard(){if(active)DeleteFileW(path.c_str());}} guard{partial};
