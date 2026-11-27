@@ -104,6 +104,7 @@ int main(int argc, char** argv) {
     reply = control("OPTIONS", shot, "Origin: " + origin + "\r\n");
     check(reply.startsWith("HTTP/1.1 403") && !reply.contains("Access-Control-Allow-Origin"), "control never issues CORS approval");
     check(control("POST", shot, bearer + "Origin: \r\n").startsWith("HTTP/1.1 403"), "empty Origin is still refused");
+    check(control("POST", shot, bearer + "Origin : https://example.invalid\r\n").startsWith("HTTP/1.1 400"), "malformed names are not allowed");
     check(control("POST", shot, bearer + "Origin: " + origin + "\r\n").startsWith("HTTP/1.1 403"), "extension origin refused with token");
     check(control("POST", shot, bearer + "Sec-Fetch-Site: same-origin\r\n").startsWith("HTTP/1.1 403"), "browser Fetch Metadata refused with token");
     check(request("POST " + shot + " HTTP/1.1\r\nHost: external.invalid\r\n" + bearer +
@@ -137,7 +138,7 @@ int main(int argc, char** argv) {
     check(control("POST", shot, bearer).startsWith("HTTP/1.1 404") && actions.size() == dispatched, "disable revokes the credential");
     check(server.setControlEnabled(true) && server.controlToken() != token, "re-enabling rotates the token");
     check(control("POST", shot, bearer).startsWith("HTTP/1.1 403") && actions.size() == dispatched, "prior token is no longer valid");
-    check(control("GET", state, "Authorization: Bearer " + server.controlToken() + "\r\n").startsWith("HTTP/1.1 200"), "only the current token works");
+    check(control("GET", state, "Authorization: bearer " + server.controlToken() + "\r\n").startsWith("HTTP/1.1 200"), "the current token works with a case-insensitive scheme");
     check(request(post(body,"Origin: "+origin+"\r\n")).startsWith("HTTP/1.1 200") && delivered == 3, "extension playback stays compatible");
     std::cout<<checks<<" checks, "<<failed<<" failures\n";return failed?1:0;
 }

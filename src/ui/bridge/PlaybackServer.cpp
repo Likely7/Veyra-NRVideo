@@ -31,11 +31,19 @@ struct Pending{QByteArray bytes;qsizetype expected=-1;bool finished=false;};
 
 bool validBearer(QByteArrayView authorization, QByteArrayView token) {
     constexpr QByteArrayView prefix("Bearer ");
-    if (!authorization.startsWith(prefix) || authorization.size() != prefix.size() + token.size()) return false;
+    if (authorization.size() != prefix.size() + token.size() ||
+        authorization.first(prefix.size()).compare(prefix, Qt::CaseInsensitive) != 0) return false;
     unsigned difference = 0;
     for (qsizetype i = 0; i < token.size(); ++i)
         difference |= static_cast<unsigned char>(authorization[i + prefix.size()] ^ token[i]);
     return difference == 0;
+}
+
+bool validHeaderName(const QByteArray& name) {
+    constexpr QByteArrayView punctuation("!#$%&'*+-.^_`|~");
+    return std::all_of(name.begin(), name.end(), [&](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || punctuation.contains(c);
+    });
 }
 }
 PlaybackServer::PlaybackServer(PlayHandler handler,QObject* parent)
@@ -101,6 +109,7 @@ void PlaybackServer::handleRequest(QTcpSocket* socket,const QByteArray& request)
         const auto line=lines[i].trimmed();const auto colon=line.indexOf(':');
         if(colon<=0){respond(socket,400,R"({"ok":false,"error":"invalid header"})");return;}
         const auto name=line.left(colon).toLower(),value=line.mid(colon+1).trimmed();
+        if(!validHeaderName(name)){respond(socket,400,R"({"ok":false,"error":"invalid header name"})");return;}
         if(headers.contains(name)){respond(socket,400,R"({"ok":false,"error":"duplicate header"})");return;}
         headers.insert(name,value);
     }
