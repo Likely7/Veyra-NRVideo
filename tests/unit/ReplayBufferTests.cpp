@@ -39,16 +39,25 @@ struct Collect final : veyra::sink::RecordingAudioSink {
 int main(){
     {
         const RecordingGrid grid(60);
-        check(grid.boundary(0,16'667)==1&&grid.boundary(16'667,33'333)==2,
+        check(grid.indexAt(16'667)==1&&grid.indexAt(33'333)==2,
               "regular 60 fps pictures each get a grid index");
-        check(grid.boundary(0,12'500)==1&&grid.boundary(12'500,37'500)==2,
-              "the nearer picture wins despite jitter");
-        check(grid.boundary(0,16'450)==1&&grid.boundary(16'450,16'724)==1,
-              "two closely spaced pictures claim only one tick");
-        check(grid.boundary(0,150'000)==9&&grid.boundary(0,3'000'000)==180,
-              "gaps repeat the previous picture until the new picture is near a tick");
-        check(grid.boundary(25'000,75'000)==4&&grid.deadlineUs(3)==58'334,
-              "a tie keeps the older picture and the deadline preserves half a tick");
+        check(grid.indexAt(16'450)==1&&grid.indexAt(16'724)==1,
+              "close pictures can be rejected before conversion");
+        check(grid.indexAt(150'000)==9&&grid.indexAt(3'000'000)==180,
+              "gaps leave missing ticks for repeating the previous picture");
+        check(grid.deadlineUs(3)==58'334&&grid.indexAt(58'333)==3&&grid.indexAt(58'334)==4,
+              "the deadline falls after the final eligible clock tick");
+        const RecordingGrid thirty(30);
+        int64_t last=-1;
+        bool continuous=true;
+        for(int i=0;i<=1200;++i){
+            const auto at=grid.timeUs(i)+(i%4==1?380:i%4==3?-420:0);
+            const auto next=thirty.indexAt(at);
+            if(next<=last)continue;
+            continuous&=next==last+1;
+            last=next;
+        }
+        check(continuous&&last==600,"jittering 60 Hz input selects one picture per 30 fps tick");
         for(const uint32_t fps:{30u,60u,120u,143u}){
             const RecordingGrid rate(fps);
             const auto afterHours=int64_t(fps)*12*3600;

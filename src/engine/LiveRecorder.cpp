@@ -479,6 +479,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     int pending=-1;
     std::atomic<int64_t> t0Us{0};               // recording clock of the first frame
     int64_t lastPtsUs=-1;
+    int64_t lastCfrInput=-1;
     std::atomic<uint64_t> frames{0},dropped{0};
     std::atomic<uint64_t> cfrRepeated{0},cfrDropped{0};
 
@@ -610,6 +611,10 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
     // ---- capture (engine thread) ---------------------------------------------
     bool capture(ID3D12GraphicsCommandList* list,const PresentCapture::Frame& frame,int64_t nowUs){
         if(closing.load()||!encoderReady.load())return false;
+        const int64_t origin=t0Us.load();
+        const int64_t cfrIndex=cfr&&origin?RecordingGrid(fps).indexAt(nowUs-origin):0;
+        // Select at most one eligible picture per output tick before any GPU work.
+        if(cfr&&cfrIndex<=lastCfrInput)return false;
         if(backlogBytes.load()>=kBacklogFailBytes){fail(L"磁盘写入跟不上录制，已停止录制（请换更快的磁盘或降低码率）");return false;}
         if(backlogBytes.load()>=kBacklogSkipBytes){++dropped;return false;}
         int index=-1;
@@ -625,10 +630,10 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         auto& slot=slots[size_t(index)];
         if(cfr){
             // Establish the origin when this GPU work is submitted.
-            slot.ptsUs=nowUs;
+            slot.ptsUs=origin?RecordingGrid(fps).timeUs(cfrIndex):nowUs;
         }else{
-            if(!t0Us.load())t0Us=nowUs;
-            int64_t pts=nowUs-t0Us.load();
+            if(!origin)t0Us=nowUs;
+            int64_t pts=origin?nowUs-origin:0;
             if(pts<=lastPtsUs)pts=lastPtsUs+1;
             lastPtsUs=pts;slot.ptsUs=pts;
         }
@@ -686,9 +691,10 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         if(cfr){
             if(!t0Us.load()){
                 t0Us=slot.ptsUs;
+                slot.ptsUs=0;
                 if(closing.load())endUs=0;
             }
-            slot.ptsUs-=t0Us.load();
+            lastCfrInput=RecordingGrid(fps).indexAt(slot.ptsUs);
         }
         slot.fence=fence;slot.value=value;slot.state=2;
         {std::lock_guard lock(jobMutex);if(!encoderFinished.load())jobs.push_back(unsigned(&slot-slots.data()));}
@@ -721,9 +727,8 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
         {std::lock_guard lock(outMutex);videoPackets.push_back({std::move(data),ptsUs,key});backlogBytes+=size;}
         outCv.notify_one();
     }
-    // Both encoders consume the same grid. Keep the prior GPU slot until every
-    // tick assigned to it is encoded. The wait also advances the picture when
-    // the source stops presenting, without involving the playback thread.
+    // Keep the prior GPU slot for any missing ticks before the next picture.
+    // The worker advances the same grid if the source stops presenting.
     template<class Encode> void encodeCfr(Encode&& encode){
         const RecordingGrid grid(fps);
         std::optional<unsigned> previous;
@@ -745,7 +750,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
             if(failed.load())break;
             if(previous){
                 const int64_t end=closed?std::max<int64_t>(0,endUs.load()):sink::recordingClockUs()-t0Us.load();
-                const int64_t until=incoming?grid.boundary(slots[*previous].ptsUs,slots[*incoming].ptsUs):
+                const int64_t until=incoming?grid.indexAt(slots[*incoming].ptsUs):
                     std::max<int64_t>(closed?1:0,grid.indexAt(end));
                 if(until-nextIndex>int64_t(fps)*kCfrMaxCatchupSeconds){
                     fail(L"恒定帧率录制无法赶上录制时钟，已停止");
@@ -1449,9 +1454,8 @@ bool LiveRecorder::record(ID3D12GraphicsCommandList* list,const Frame& frame){
     if(!s.armed)return false;
     const int64_t now=sink::recordingClockUs();
     if(s.replayMode&&!s.current&&now<s.retryAfterUs)return false;
-    // Respect an explicit cap before recording NV12/P010 conversion work.
-    // CFR still emits every output tick and holds a picture across gaps.
-    if(s.settings.fpsLimit){
+    // VFR keeps its original pacing. CFR selects pictures on the encoder's grid.
+    if(s.settings.fpsLimit&&!s.settings.cfr){
         const int64_t interval=1000000/int64_t(s.settings.fpsLimit);
         if(s.nextDueUs&&now+interval/4<s.nextDueUs)return false;
         s.nextDueUs=(s.nextDueUs&&now-s.nextDueUs<interval)?s.nextDueUs+interval:now+interval;
