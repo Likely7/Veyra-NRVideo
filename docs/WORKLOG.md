@@ -1,5 +1,14 @@
 # 当前工作日志
 
+## 2026-11-26 实际回放与后续性能对照
+
+- 用原始 1440p H.264 码流循环构造同一段 GTA 实录对照。29.97 FPS 输入加 VFG 2×，旧版 P99 17.011–17.038 ms、提交 1% Low 58.69–58.78 FPS，候选 P99 17.023–17.025 ms、提交 1% Low 58.74 FPS。120 Hz 无损夹具中约 26.6 ms 的长尾可与一次 10.47 ms 软件解码阻塞对齐。用户确认本轮用视频，实体主机未开。 [逐帧对照](<E:/项目/Veyra/logs/codex-github-fixes-20261126/replay>)
+- `96e9ae74` 把截图的 10-bit PQ 解码改为 1,024 项查表，保留原有双精度颜色矩阵和无损 JXR 校验。4K A–B–B–A 保存从 1,229–1,243 ms 降为 698–723 ms。四份文件逐字节相同，PNG 和 JXR 图像回归通过。 [保存计时](<E:/项目/Veyra/logs/codex-github-fixes-20261126/hdr-pq-bench/result.json>) · [整合图像测试](<E:/项目/Veyra/logs/codex-github-fixes-20261126/split-checks-20261126-230934/image.log>)
+- #364 拆开原生、线性和高质量三次缩放的 shader 选择。4K PQ 三次缩放 P95 两轮均降至 0.67–0.68 ms，正反序各 12 组像素逐字节一致。相同原版 DXIL 的线性模式仍测到 P95 尾部升高，候选保留隔离。#316 1084 行补边恢复底边亮度及色度，Read P95 中位增加约 0.071 ms。1082 行单拷贝色度仍错，保留两份证据。#331 的 x64 传输边界修正通过 73 项和私有 4K60 DirectShow 测试，另行保留安装验证分支。 [GPU 分项报告](<E:/项目/Veyra/reports/codex-github-review-20261126/GPU-IMPLEMENTATION.md>)
+- #339 CFR 在 4K NVENC 上通过 30 和 60 FPS 时间戳网格和回放缓冲单测。4K60 录 30 时 VFR、CFR 均写出 363 帧，CFR 须额外转换 364 张随后丢弃的帧。候选留在 `1aa89472`。 [录制 A/B](<E:/项目/Veyra/logs/codex-github-fixes-20261126/cfr>)
+- 测试误写了虚拟摄像机当前用户的两个 DLL 路径。按用户确认恢复到现有 Program Files 组件。后续实测前后核对了 32/64 位 HKCU 和 HKLM 的值及时间戳。 [恢复记录](<E:/项目/Veyra/reports/codex-github-fixes-20261126/CAMERA-REGISTRY-SYSTEM-COMPONENTS.json>)
+- 本地 main 的产品提交 `3b3d3d31` 完成最终 Windows Release 构建，6 个目标用时 129.9 秒。实时翻译回归和 29 项更新回归通过，使用真实 Qt 窗口播放用户实录并提交 269 帧。 [最终构建](<E:/项目/Veyra/logs/codex-github-fixes-20261126/build-20261126-232239/receipt.json>) · [实际播放器测试](<E:/项目/Veyra/logs/codex-github-fixes-20261126/main-final-20261126-232543/result.json>)
+
 ## 2026-11-26 GitHub 串流、截图、AMD 和音频修复
 
 - 在首批提交 `5d6f900d` 上接入 #287 Xbox 原生按键修正、#308 MPEG-TS 回零、#307 HTTP 内嵌字幕及 #372 采样率表。串流和音频回归共 16 项通过。MPEG-TS 文件与 HTTP 的前后两轮逐帧 PTS、亮度哈希一致。真实播放器的两个 Matroska 都显示两条字幕，扩展名为 .mkv 的 MP4 跳过扫描。三次本机 HTTP 播放合计提交 512 帧，均无缓冲停顿或重连。 [串流和音频证据](<E:/项目/Veyra/reports/codex-github-fixes-20261126/STREAM-FOLLOWUP.md>)
