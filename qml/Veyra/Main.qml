@@ -59,6 +59,7 @@ Window {
     // sized window during that transition.
     readonly property bool screenSized: fullTarget || fullRestorePending || visibility === Window.FullScreen || visibility === Window.Maximized
     function toggleMaximized() {
+        if (fullRestorePending) return
         // The dock's restore button must also leave fullscreen, using the same
         // saved window state and cleanup as F11 / the transport button.
         if (fullscreen) { toggleFullscreen(); return }
@@ -470,20 +471,18 @@ Window {
     // cinema rule would otherwise snap that fullscreen size back to the film.
     property bool fullTarget: false
     property int fullRestoreVisibility: Window.Windowed
-    // Windows may briefly report Windowed while restoring a maximized window.
-    // Keep cinema sizing out of that native transition, without a polling timer.
+    // Keep cinema sizing suspended while Windows restores or moves a window.
     property bool fullRestorePending: false
     property var fullscreenPlacement: null
     readonly property var fullscreenDisplays: Qt.application.screens.length > 0 ? veyra.fullscreenDisplays() : []
 
-    onFullscreenDisplaysChanged: {
-        Qt.callLater(function() {
-            if (root.fullscreenPlacement && !root.fullscreenDisplays.some(
-                    display => display.id === root.fullscreenPlacement.target)) {
-                root.restoreFullscreenWindow()
-                toast.show(qsTr("全屏显示器已断开，已恢复窗口。"), true)
-            }
-        })
+    onFullscreenDisplaysChanged: Qt.callLater(checkFullscreenDisplay)
+    function checkFullscreenDisplay() {
+        const placement = fullscreenPlacement
+        if (placement && !fullscreenDisplays.some(display => display.id === placement.target)) {
+            restoreFullscreenWindow(true)
+            toast.show(qsTr("全屏显示器已断开，已恢复窗口。"), true)
+        }
     }
     property bool fullLocked: false
     // Fullscreen quick-adjust panel (Home): the professional mode's own controls
@@ -534,18 +533,36 @@ Window {
         fullHide.restart()
         videoHost.syncRect()
     }
-    function restoreFullscreenWindow() {
+    function restoreFullscreenWindow(disconnected) {
         const previous = fullscreenPlacement
+        const reposition = previous !== null && (previous.moved || disconnected)
         fullscreenPlacement = null
-        fullRestorePending = true
+        fullRestorePending = reposition || fullRestoreVisibility === Window.Maximized
         fullTarget = false
-        visibility = Window.Windowed
+        visibility = reposition ? Window.Windowed : fullRestoreVisibility
         Qt.callLater(function() {
-            veyra.placeFullscreenWindow(root, previous.origin, previous.rect)
-            root.visibility = root.fullRestoreVisibility
+            if (reposition) {
+                veyra.placeFullscreenWindow(root, previous.origin, previous.rect)
+                root.visibility = root.fullRestoreVisibility
+                videoHost.syncRect()
+            }
             root.fullRestorePending = false
-            videoHost.syncRect()
         })
+        veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
+    }
+    function enterFullscreenOnDisplay(origin, target) {
+        fullscreenPlacement = null
+        let moved = false
+        if (target) {
+            const rect = Qt.rect(x, y, width, height)
+            moved = origin !== target && veyra.placeFullscreenWindow(root, target, Qt.rect(0, 0, 0, 0))
+            if (origin === target || moved)
+                fullscreenPlacement = {origin: origin, target: target, rect: rect, moved: moved}
+        }
+        visibility = Window.FullScreen
+        fullRestorePending = false
+        if (moved) Qt.callLater(videoHost.syncRect)
+        veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
     }
     function toggleFullscreen() {
         if (fullRestorePending) return
@@ -555,27 +572,24 @@ Window {
             return
         }
         fullLocked = false
-        if (!fullscreen) {
-            fullRestoreVisibility = maximized ? Window.Maximized : Window.Windowed
-            fullTarget = true
-            const target = veyra.preferences.fullscreenDisplay || ""
-            if (target && fullscreenDisplays.some(display => display.id === target)) {
-                const origin = veyra.fullscreenDisplayId(root)
-                if (origin !== target && maximized) visibility = Window.Windowed
-                const previous = { origin: origin, target: target, rect: Qt.rect(x, y, width, height) }
-                if (origin === target || veyra.placeFullscreenWindow(root, target, Qt.rect(0, 0, 0, 0)))
-                    fullscreenPlacement = previous
-            }
-            visibility = Window.FullScreen
-        } else if (fullscreenPlacement) {
-            restoreFullscreenWindow()
-        } else {
-            fullRestorePending = fullRestoreVisibility === Window.Maximized
-            fullTarget = false
-            visibility = fullRestoreVisibility
-            Qt.callLater(function() { root.fullRestorePending = false })
+        if (fullscreen) {
+            restoreFullscreenWindow(false)
+            return
         }
-        veyra.logUi("ui-fullscreen", "enabled=" + fullscreen)
+        fullRestoreVisibility = maximized ? Window.Maximized : Window.Windowed
+        fullTarget = true
+        const preference = veyra.preferences.fullscreenDisplay || ""
+        const target = fullscreenDisplays.some(display => display.id === preference) ? preference : ""
+        const origin = target ? veyra.fullscreenDisplayId(root) : ""
+        if (target && origin !== target && maximized) {
+            // Let Windows restore the normal rectangle before saving it and
+            // moving across potentially different display scaling factors.
+            fullRestorePending = true
+            visibility = Window.Windowed
+            Qt.callLater(function() { root.enterFullscreenOnDisplay(origin, target) })
+        } else {
+            enterFullscreenOnDisplay(origin, target)
+        }
     }
 
     // G2.5 fullscreen controls. AppShell: any pointer movement shows the transport,

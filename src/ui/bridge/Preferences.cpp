@@ -185,7 +185,7 @@ void QmlPlayerBridge::rememberWindowSize(int width, int height) {
     if (!impl_->savePrefs()) veyra::log::warn("ui-prefs", "last window size not saved");
 }
 namespace {
-QString displayInterfaceId(const QScreen* screen) {
+QString displayInterfaceId(const QScreen* screen, QString* description = nullptr) {
     if (!screen || QGuiApplication::platformName() != QLatin1String("windows")) return {};
     // Qt's Windows backend keeps the virtual desktop origin in native pixels
     // even when a screen's logical size is scaled.
@@ -195,10 +195,20 @@ QString displayInterfaceId(const QScreen* screen) {
     info.cbSize = sizeof(info);
     if (!monitor || !GetMonitorInfoW(monitor, reinterpret_cast<MONITORINFO*>(&info)) ||
         info.rcMonitor.left != origin.x() || info.rcMonitor.top != origin.y()) return {};
-    DISPLAY_DEVICEW device{};
-    device.cb = sizeof(device);
-    if (!EnumDisplayDevicesW(info.szDevice, 0, &device, EDD_GET_DEVICE_INTERFACE_NAME)) return {};
-    return QString::fromWCharArray(device.DeviceID).toCaseFolded();
+    QString id;
+    for (DWORD index = 0; ; ++index) {
+        DISPLAY_DEVICEW device{};
+        device.cb = sizeof(device);
+        if (!EnumDisplayDevicesW(info.szDevice, index, &device, EDD_GET_DEVICE_INTERFACE_NAME)) break;
+        if (!(device.StateFlags & DISPLAY_DEVICE_ACTIVE) || !device.DeviceID[0]) continue;
+        const auto candidate = QString::fromWCharArray(device.DeviceID).toCaseFolded();
+        // Mirrored monitors share a desktop rectangle. Do not save an arbitrary
+        // physical output picked by the order of the native enumeration.
+        if (!id.isEmpty() && id != candidate) return {};
+        id = candidate;
+        if (description) *description = QString::fromWCharArray(device.DeviceString).trimmed();
+    }
+    return id;
 }
 
 QScreen* findFullscreenDisplay(const QString& id) {
@@ -223,14 +233,17 @@ QRect QmlPlayerBridge::launchScreenAvailable() const {
 QVariantList QmlPlayerBridge::fullscreenDisplays() const {
     QVariantList displays;
     for (const auto* screen : QGuiApplication::screens()) {
-        const auto id = displayInterfaceId(screen);
+        QString description;
+        const auto id = displayInterfaceId(screen, &description);
         if (id.isEmpty()) continue;
         // Model names can repeat. The position disambiguates the labels while
         // the per-target Windows device interface is the saved choice.
         const auto bounds = screen->geometry();
         const auto size = bounds.size() * screen->devicePixelRatio();
+        auto name = screen->name();
+        if ((name.isEmpty() || name.startsWith(QStringLiteral("\\\\.\\"))) && !description.isEmpty()) name = description;
         auto label = QStringLiteral("%1 · %2×%3 · %4 Hz · (%5, %6)")
-            .arg(screen->name()).arg(size.width()).arg(size.height()).arg(qRound(screen->refreshRate()))
+            .arg(name).arg(size.width()).arg(size.height()).arg(qRound(screen->refreshRate()))
             .arg(bounds.x()).arg(bounds.y());
         displays.append(QVariantMap{{"id", id}, {"label", std::move(label)}});
     }
@@ -247,14 +260,16 @@ bool QmlPlayerBridge::placeFullscreenWindow(QObject* object, const QString& disp
     if (!window || window->visibility() == QWindow::FullScreen) return false;
     const bool restoring = restoreGeometry.isValid();
     auto* target = findFullscreenDisplay(display);
+    auto* current = window->screen();
+    if (!QGuiApplication::screens().contains(current)) current = nullptr;
     if (!target && restoring) target = QGuiApplication::screenAt(restoreGeometry.center());
-    if (!target && restoring) target = window->screen() ? window->screen() : QGuiApplication::primaryScreen();
+    if (!target && restoring) target = current ? current : QGuiApplication::primaryScreen();
     if (!target) return false;
 
-    if (window->screen() != target) {
+    if (current != target) {
         // Setting a screen outside the current virtual desktop can recreate
         // the top-level native window, dropping the existing video child.
-        if (window->screen() && !window->screen()->virtualSiblings().contains(target)) return false;
+        if (current && !current->virtualSiblings().contains(target)) return false;
         window->setScreen(target);
     }
     if (restoring) {
@@ -402,7 +417,7 @@ bool QmlPlayerBridge::setPreference(const QString& key, const QVariant& value) {
         if (!v.isEmpty() && std::none_of(impl_->gpuAdapters.begin(), impl_->gpuAdapters.end(), [&](const auto& a) { return a.id == v; })) return false;
         stored = v;
     } else if (key == QLatin1String("fullscreenDisplay")) {
-        const auto id = value.toString();
+        const auto id = value.toString().trimmed().toCaseFolded();
         if (!id.isEmpty() && !findFullscreenDisplay(id)) return false;
         stored = id;
     } else if (key == QLatin1String("windowSize")) {

@@ -672,6 +672,10 @@ struct QmlPlayerBridge::Impl {
             return;
         }
         prefs = doc.object().toVariantMap();
+        // Windows device interface paths are case-insensitive. A temporarily
+        // disconnected target remains saved for the next time it is present.
+        const auto target = prefs.find(QStringLiteral("fullscreenDisplay"));
+        if (target != prefs.end()) target.value() = target->toString().trimmed().toCaseFolded();
     }
     bool savePrefs() {
         if (prefsUnreadable) return false;

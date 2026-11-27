@@ -391,7 +391,7 @@ VPage {
                             }
                         }
                         VRow {
-                            visible: root.fullscreenDisplays.length > 0 || !!veyra.preferences.fullscreenDisplay
+                            visible: root.fullscreenDisplays.length > 1 || !!veyra.preferences.fullscreenDisplay
                             label: qsTr("全屏显示器")
                             hint: (veyra.preferences.fullscreenDisplay && !root.fullscreenDisplays.some(
                                       screen => screen.id === veyra.preferences.fullscreenDisplay))
