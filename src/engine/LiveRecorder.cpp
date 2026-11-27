@@ -617,7 +617,7 @@ struct LiveRecorder::Segment final : sink::RecordingAudioSink, MicrophoneSink {
             auto& slot=slots[i];
             // A CFR candidate can lose before its GPU conversion completed.
             // The engine reclaims its descriptor and texture only after the fence.
-            if(slot.state.load()==3&&slot.fence->GetCompletedValue()>=slot.value)releaseSlot(i);
+            if(cfr&&slot.state.load()==3&&slot.fence->GetCompletedValue()>=slot.value)releaseSlot(i);
             int expected=0;
             if(slot.state.compare_exchange_strong(expected,1)){index=int(i);break;}
         }
