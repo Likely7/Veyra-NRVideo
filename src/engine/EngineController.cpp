@@ -1073,6 +1073,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             auto stageRequest=[&](const PlayerOptions& o){
                 StageRequest r;r.nr=o.nr;r.sr=o.sr;r.fg=o.fg;r.fgMultiplier=o.fgMultiplier;
                 r.width=width;r.height=height;r.stillImage=isImage;r.nvidiaAdapter=nvidiaAdapter;r.amdNr=amdNrAdapter;r.amdAdapter=amdNrAdapter;
+                // CaptureGraphPreparation creates the graph on a worker and hands it
+                // over. The XeSS-SR SDK requires calls on its initializing thread.
+                r.liveSource=isCapture;
                 r.uncompressedSource=isScreen||(physicalCapture&&!captureSource.compressedVideo());
                 r.nodeOrder=o.nodeOrder?&*o.nodeOrder:nullptr;return r;
             };
@@ -4342,7 +4345,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 
 
                 for(size_t stage=0;stage<measured.gpu.size();++stage){const auto& sample=measured.gpu[stage];if(sample.state==diagnostics::SampleState::Measured&&sample.milliseconds&&sample.end&&sample.end!=lastGpuSampleEnd[stage]){gpuStageTimes[stage].add(*sample.milliseconds);lastGpuSampleEnd[stage]=sample.end;}}
-                measured.resolution=pipeline::ResolutionPlan::make({width,height},options.sr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr,0,runningSrPrescale(options.settings,ctx.adapter().isNvidia,isImage,amdNrAdapter),runningSrOutput(options.settings,ctx.adapter().isNvidia),dualSrRuns(options.settings,ctx.adapter().isNvidia,isImage,amdNrAdapter),options.settings.dualSrTarget);measured.decodeCpuMs=decodeMs;measured.submitCpuMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();measured.gpuWaitCpuMs=gpuWaitMs;measured.deadlineWaitCpuMs=frameWaitMs;measured.presentCpuMs=framePresentMs;measured.queueWatermark=out.batch.count;
+                const bool sourceSr=options.sr&&videoSrAvailableForSource(options.settings.videoSrQuality,isImage,isCapture);
+                measured.resolution=pipeline::ResolutionPlan::make({width,height},sourceSr,options.snapshot().nrPolicy,isImage,options.settings.revision,options.settings.srTarget,options.settings.lowLatency&&options.nr,0,runningSrPrescale(options.settings,ctx.adapter().isNvidia,isImage,amdNrAdapter,isCapture),runningSrOutput(options.settings,ctx.adapter().isNvidia),dualSrRuns(options.settings,ctx.adapter().isNvidia,isImage,amdNrAdapter,isCapture),options.settings.dualSrTarget);measured.decodeCpuMs=decodeMs;measured.submitCpuMs=std::chrono::duration<double,std::milli>(processDone-processStart).count();measured.gpuWaitCpuMs=gpuWaitMs;measured.deadlineWaitCpuMs=frameWaitMs;measured.presentCpuMs=framePresentMs;measured.queueWatermark=out.batch.count;
                 measured.resolution.flow={graph->flowWidth(),graph->flowHeight()};
                 measured.resolution.base=measured.resolution.fg=measured.resolution.output={graph->workWidth(),graph->workHeight()};
                 LiveStats completed;if(liveScheduler)completed=liveStats;

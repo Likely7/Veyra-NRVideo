@@ -408,6 +408,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const uint64_t before = impl_->publishedRevision;
         const bool wasRunning = impl_->snapshot.running;
         const bool wasImage = impl_->snapshot.image;
+        const bool wasXeSSSrRestricted=wasRunning&&(wasImage||impl_->snapshot.capture);
         const bool wasFailed = impl_->snapshot.failed;
         const bool wasEngineHung = impl_->snapshot.status == engine::kEngineHangStatus;
         const bool wasCaptureDriverWaiting = impl_->snapshot.captureDriverWaitMs != 0;
@@ -416,6 +417,8 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
         const uint64_t wasSession = impl_->snapshot.sessionId;
         const auto oldSourceAspect=sourceAspect();
         if(impl_->poll()){emit settingsChanged();emitChainChanged();}
+        if(wasXeSSSrRestricted!=(impl_->snapshot.running&&(impl_->snapshot.image||impl_->snapshot.capture)))
+            emit effectCapabilitiesChanged();
         if(wasSession!=impl_->snapshot.sessionId||oldSourceAspect!=sourceAspect())emit compareChanged();
         // Live recording state: the recorder owns the files, this side shows them.
         {

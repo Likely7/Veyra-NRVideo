@@ -13,11 +13,11 @@ public:
     XessSrBackend();
     ~XessSrBackend();
 
+    static bool runtimeAvailable();
     bool initialize(ID3D12Device*, uint32_t inputWidth, uint32_t inputHeight,
                     uint32_t outputWidth, uint32_t outputHeight);
     bool evaluate(ID3D12GraphicsCommandList*, ID3D12Resource* color, ID3D12Resource* motion,
                   ID3D12Resource* depth, ID3D12Resource* output, bool reset);
-    bool created() const { return p_ != nullptr; }
 
 private:
     struct Impl;

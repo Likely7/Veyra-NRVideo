@@ -34,6 +34,9 @@ QString QmlPlayerBridge::srStageNote() const {
     const auto& plan = s.metrics.resolution;
     if (!s.running || !plan.output.valid() || plan.settingsRevision != s.applied.revision) return {};
     QStringList notes;
+    if(s.applied.sr&&(!engine::videoSrAvailableForSource(s.applied.videoSrQuality,s.image,s.capture)||
+        (s.applied.dualSrEnabled&&!engine::videoSrAvailableForSource(s.applied.dualSrQuality,s.image,s.capture))))
+        notes << tr("Intel XeSS 超分当前仅用于视频播放");
     if (plan.srPrescaleIneffective) notes << tr("第二次超分未执行：再次降低后的尺寸须小于基础超分结果及第二次目标。");
     if (plan.srOutputIneffective) notes << tr("超分后缩回未生效：超分须先放大画面，且缩回尺寸要小于超分结果。");
     // Only the standard family restores a source already at the target size.

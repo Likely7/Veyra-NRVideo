@@ -3290,6 +3290,19 @@
    "ru": "Суперразрешение Intel XeSS · экспериментально"
   },
   {
+   "zh": "Intel XeSS 超分当前仅用于视频播放",
+   "src": "src/ui/bridge/Hardware.cpp",
+   "zh-TW": "Intel XeSS 超解析度目前僅用於影片播放",
+   "en": "Intel XeSS Super Resolution is currently available for video playback only",
+   "ja": "Intel XeSS 超解像は現在、動画再生時のみ使用できます",
+   "ko": "Intel XeSS 초해상도는 현재 동영상 재생에서만 사용할 수 있습니다",
+   "es": "La superresolución Intel XeSS solo está disponible para reproducir vídeos",
+   "fr": "La super résolution Intel XeSS est actuellement réservée à la lecture vidéo",
+   "de": "Intel XeSS Super Resolution ist derzeit nur bei der Videowiedergabe verfügbar",
+   "pt-BR": "A super-resolução Intel XeSS só está disponível durante a reprodução de vídeo",
+   "ru": "Суперразрешение Intel XeSS пока доступно только при воспроизведении видео"
+  },
+  {
    "zh": "Intel XeSS 原生补帧 · 启用后检测支持的倍率",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "Intel XeSS 原生補幀 · 啟用後檢查支援倍率",

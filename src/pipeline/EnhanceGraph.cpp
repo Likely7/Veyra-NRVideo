@@ -1519,13 +1519,6 @@ bool EnhanceGraph::fsrSrEnabled() const
            (!firstFsr||(firstFsrSrBackend_!=nullptr&&firstFsrSrBackend_->created()));
 }
 
-bool EnhanceGraph::xessSrEnabled() const
-{
-    const bool final=desc_.finalSrQuality()==engine::kVideoSrXess;
-    const bool first=desc_.firstSrRuns(engine::kVideoSrXess);
-    return (final||first)&&(!final||xessSrBackend_)&&(!first||firstXessSrBackend_);
-}
-
 void EnhanceGraph::applyAdaMfgUnlock()
 {
     const auto& adapter = context_.adapter();

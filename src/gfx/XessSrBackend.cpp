@@ -8,6 +8,14 @@
 
 namespace veyra::gfx {
 
+#ifdef VEYRA_HAS_XESS_SR
+namespace {
+auto xessSrRuntimePath(){
+    return runtime::localDataDirectory()/"intel"/"experimental"/"libxess.dll";
+}
+}
+#endif
+
 struct XessSrBackend::Impl {
 #ifdef VEYRA_HAS_XESS_SR
     HMODULE dll=nullptr;
@@ -29,12 +37,21 @@ struct XessSrBackend::Impl {
 XessSrBackend::XessSrBackend()=default;
 XessSrBackend::~XessSrBackend()=default;
 
+bool XessSrBackend::runtimeAvailable(){
+#ifdef VEYRA_HAS_XESS_SR
+    std::error_code ec;
+    return std::filesystem::is_regular_file(xessSrRuntimePath(),ec);
+#else
+    return false;
+#endif
+}
+
 bool XessSrBackend::initialize(ID3D12Device* device,uint32_t inputWidth,uint32_t inputHeight,
                                uint32_t outputWidth,uint32_t outputHeight) {
 #ifdef VEYRA_HAS_XESS_SR
     if(!device||!inputWidth||!inputHeight||!outputWidth||!outputHeight||p_)return false;
     auto pending=std::make_unique<Impl>();
-    const auto path=std::filesystem::absolute(runtime::localDataDirectory()/"intel"/"experimental"/"libxess.dll");
+    const auto path=std::filesystem::absolute(xessSrRuntimePath());
     pending->dll=LoadLibraryExW(path.c_str(),nullptr,LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR|LOAD_LIBRARY_SEARCH_APPLICATION_DIR|LOAD_LIBRARY_SEARCH_SYSTEM32);
     if(!pending->dll){
         const auto error=GetLastError();

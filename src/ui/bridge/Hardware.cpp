@@ -7,6 +7,7 @@
 #include "veyra/gfx/AmfFrcBackend.h"
 #include "veyra/gfx/RifeDmlBackend.h"
 #include "veyra/gfx/AmfVideoSrBackend.h"
+#include "veyra/gfx/XessSrBackend.h"
 
 namespace veyra::ui {
 
@@ -110,7 +111,7 @@ static QVariantMap scanEffectCapabilities() {
     add("sr5", H::CrossVendor, fsrLoader && exists(fsr / "amd_fidelityfx_upscaler_dx12.dll"), QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     const auto srId = [](uint32_t id) { return "sr" + QString::number(id); };
     const auto shaders = runtime::shaderDirectory();
-    add(srId(engine::kVideoSrXess), H::CrossVendor, exists(data / "intel/experimental/libxess.dll"),
+    add(srId(engine::kVideoSrXess), H::CrossVendor, gfx::XessSrBackend::runtimeAvailable(),
         QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     add(srId(engine::kVideoSrNis), H::CrossVendor, exists(shaders / "NisSdr.dxil") && exists(shaders / "NisHdr.dxil"),
         QObject::tr("需要支持 DirectX 12 的硬件显卡"));
@@ -244,7 +245,14 @@ QString disableUnavailableEffects(engine::ChainConfiguration& configuration) {
     reasons.removeDuplicates();
     return reasons.join("; ");
 }
-QVariantMap QmlPlayerBridge::effectCapabilities() const { return currentEffectCapabilities(); }
+QVariantMap QmlPlayerBridge::effectCapabilities() const {
+    auto caps=currentEffectCapabilities();
+    const auto& s=impl_->snapshot;
+    if(s.running&&!engine::videoSrAvailableForSource(engine::kVideoSrXess,s.image,s.capture))
+        caps["sr"+QString::number(engine::kVideoSrXess)]=QVariantMap{
+            {"available",false},{"reason",tr("Intel XeSS 超分当前仅用于视频播放")}};
+    return caps;
+}
 QVariantMap QmlPlayerBridge::effectAvailability(const QString& id) const {
     const auto& s = settings();
     const QString key = id == "nr" ? "nr" + QString::number(int(engine::currentNrRuntime(s.nrRuntime))) :

@@ -48,7 +48,7 @@ int wmain(int argc,wchar_t** argv){
     for(uint32_t q=0;q<40;++q){
         const bool rtx=(q>=1&&q<=4)||(q>=16&&q<=19)||q==21||q==23;
         check(rtxVideoSr(q)==rtx,"RTX Video SR family values");
-        check(validVideoSrQuality(q)==(rtx||q==0||q==kVideoSrFsr||q==24||q==25||q==26),"stored SR quality table");
+        check(validVideoSrQuality(q)==(rtx||q==0||q==kVideoSrFsr||q==24||q==25||q==26||q==kVideoSrXess),"stored SR quality table");
         EnhancementSettings s;s.sr=true;s.videoSrQuality=q;
         check(s.validate().empty()==validVideoSrQuality(q),"validation accepts exactly the stored SR qualities");
         check(ngxVideoSr(q)==(q>=1&&q<=4)&&vfxVideoSr(q)==(rtx&&q>4),"standard runs on NGX, the others on Video Effects");
@@ -102,8 +102,8 @@ int wmain(int argc,wchar_t** argv){
         check(s.validate().empty(),"high bitrate base with a streaming second pass");
         auto active=s.activeVideoSettings();
         check(active.dualSrEnabled&&active.dualSrQuality==23&&active.srPrescale==SrPrescale::P1080,"double SR stays active on high bitrate");
-        for(uint32_t bad2:{6u,15u,20u,22u,27u}){auto bad=s;bad.dualSrQuality=bad2;check(!bad.validate().empty(),"second SR must be a stored SR value");}
-        for(uint32_t good2:{0u,kVideoSrFsr,kVideoSrNis,kVideoSrAmf10,kVideoSrAmf11}){auto good=s;good.dualSrQuality=good2;check(good.validate().empty(),"DLSS, FSR, NIS and AMD VideoSR are valid second passes");}
+        for(uint32_t bad2:{6u,15u,20u,22u,28u}){auto bad=s;bad.dualSrQuality=bad2;check(!bad.validate().empty(),"second SR must be a stored SR value");}
+        for(uint32_t good2:{0u,kVideoSrFsr,kVideoSrNis,kVideoSrAmf10,kVideoSrAmf11,kVideoSrXess}){auto good=s;good.dualSrQuality=good2;check(good.validate().empty(),"temporal and spatial SR are valid second passes");}
         s.videoSrQuality=4;s.dualSrQuality=17;check(s.validate().empty()&&s.activeVideoSettings().dualSrEnabled,"standard base with a high bitrate second pass");
         s.videoSrQuality=0;check(s.activeVideoSettings().dualSrEnabled,"a DLSS SR base runs double SR");
         s.videoSrQuality=kVideoSrFsr;check(s.activeVideoSettings().dualSrEnabled,"an FSR base runs double SR");
@@ -162,6 +162,81 @@ int wmain(int argc,wchar_t** argv){
     dlssSecond.dlssSrModel=1;dlssSecond.srPrescale=SrPrescale::P1080;
     EnhancementSettings fsrSecond;fsrSecond.sr=true;fsrSecond.videoSrQuality=0;fsrSecond.dualSrEnabled=true;fsrSecond.dualSrQuality=kVideoSrFsr;
     fsrSecond.srPrescale=SrPrescale::P900;fsrSecond.srTarget=SrTarget::Uhd8K;
+
+    // The file, library and session keep their downgrade counterparts when
+    // either pass selects XeSS. A live source never creates the SDK context.
+    {
+        EnhancementSettings xess;xess.sr=true;xess.videoSrQuality=kVideoSrXess;
+        xess.srTarget=SrTarget::Uhd4K;
+        StageRequest request;request.sr=true;request.width=1280;request.height=720;request.nvidiaAdapter=false;
+        veyra::pipeline::EnhanceGraphDesc desc;
+        check(describeStages(request,xess,desc).srApplied&&desc.enableSr,"XeSS runs on a non-NVIDIA video adapter");
+        request.liveSource=true;
+        check(!describeStages(request,xess,desc).srApplied&&!desc.enableSr&&desc.fixedExecutionPlanError.empty(),
+            "live playback retains its source extent when the preset uses XeSS");
+        request.liveSource=false;request.stillImage=true;
+        check(!describeStages(request,xess,desc).srApplied&&!desc.enableSr&&desc.fixedExecutionPlanError.empty(),
+            "a still image leaves the XeSS preset inactive");
+        auto dual=xess;dual.videoSrQuality=kVideoSrNis;dual.dualSrQuality=kVideoSrXess;dual.dualSrEnabled=true;
+        dual.srPrescale=SrPrescale::P1080;
+        request.stillImage=false;
+        check(describeStages(request,dual,desc).dualSrApplied&&desc.enableSr,"XeSS can run as the second video pass");
+        request.liveSource=true;
+        check(!describeStages(request,dual,desc).dualSrApplied&&desc.enableSr&&desc.videoSrQuality==kVideoSrNis,
+            "the other live SR pass remains active when the second pass is XeSS");
+
+        const auto flatPath=root/L"xess.txt";
+        PresetStore flat(flatPath);
+        check(flat.put(L"older",EnhancementSettings{}),"save a pre-XeSS flat preset");
+        const auto flatOld=files(flatPath);
+        check(flat.put(L"XeSS",xess)&&flat.put(L"XeSS second",dual)&&
+            kept(flatOld,files(flatPath))&&bytes(sidecar(flatPath,L".xess-sr")).starts_with("VEYRA_PRESETS 40\n"),
+            "XeSS flat presets are isolated in v40");
+        PresetStore flatReader(flatPath);
+        check(flatReader.load()&&flatReader.entries().size()==3&&flatReader.entries()[1].settings==xess&&
+            flatReader.entries()[2].settings==dual,"XeSS flat presets round trip both passes");
+
+        const auto sessionPath=root/L"xess.session";
+        ChainSessionStore sessionWriter(sessionPath);
+        auto oldSession=std::make_unique<ChainSession>(ChainSession::initial({}));
+        check(sessionWriter.save(*oldSession),"save a pre-XeSS session");
+        const auto sessionOld=files(sessionPath);
+        auto xessSession=std::make_unique<ChainSession>(ChainSession::initial(xess));
+        check(xessSession->select(ChainMode::Node),"initialize the XeSS node mode");
+        auto editor=std::make_shared<NodeEditorDocument>();
+        editor->nodes=xessSession->configurations[1].chain;editor->globals=ChainGlobalSettings::capture(dual);
+        check(editor->layout.initialize(editor->nodes).accepted,"initialize the XeSS editor document");
+        xessSession->configurations[1].editor=editor;
+        check(sessionWriter.save(*xessSession)&&kept(sessionOld,files(sessionPath))&&
+            bytes(sidecar(sessionPath,L".xess-sr")).starts_with("VEYRA_CHAIN_SESSION 22\n"),
+            "XeSS mode state and editor use their own session schema");
+        ChainSessionStore sessionReader(sessionPath);
+        auto restored=std::make_unique<ChainSession>();
+        check(sessionReader.load(*restored)&&*restored==*xessSession,"XeSS session restores list and editor values");
+
+        const auto libraryPath=root/L"xess.library";
+        PresetLibrary library(libraryPath);library.setIncludeBuiltins(false);
+        auto entry=std::make_unique<PresetEntry>();entry->name=L"older";entry->chain=toChain(EnhancementSettings{});
+        check(library.put(*entry),"save a pre-XeSS library");
+        const auto libraryOld=files(libraryPath);
+        entry->name=L"XeSS";entry->chain=toChain(xess);entry->globals=ChainGlobalSettings::capture(xess);
+        auto draft=std::make_unique<PresetEntry>();draft->name=L"XeSS editor";draft->kind=ChainMode::Node;
+        draft->nodeConfiguration=xessSession->configurations[1];draft->chain=draft->nodeConfiguration->chain;
+        check(library.put(*entry)&&library.put(*draft)&&kept(libraryOld,files(libraryPath))&&
+            bytes(sidecar(libraryPath,L".xess-sr")).starts_with("VEYRA_PRESET_LIBRARY 27\n"),
+            "XeSS library entries are isolated from the older library");
+        PresetLibrary libraryReader(libraryPath);libraryReader.setIncludeBuiltins(false);
+        check(libraryReader.load()&&libraryReader.entries().size()==3&&
+            libraryReader.entries()[1]==*entry&&libraryReader.entries()[2]==*draft,
+            "XeSS library restores list and editor entries");
+        const auto exported=root/L"xess.vpreset";
+        check(library.exportEntry(2,exported)&&bytes(exported).starts_with("VEYRA_PRESET_LIBRARY 27\n"),
+            "standalone XeSS export declares its version");
+        PresetLibrary imported(root/L"xess-imported.library");imported.setIncludeBuiltins(false);
+        std::wstring importedName;
+        check(imported.importFile(exported,importedName)&&imported.entries().size()==1&&
+            imported.entries()[0]==*draft,"standalone XeSS import restores the editor preset");
+    }
 
     // Settings presets: v35 only when a Video Effects value is stored.
     {

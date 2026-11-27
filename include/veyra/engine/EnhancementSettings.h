@@ -124,6 +124,9 @@ constexpr bool amdVideoSr(uint32_t q){return q==kVideoSrAmf10||q==kVideoSrAmf11;
 constexpr bool spatialVideoSr(uint32_t q){return q==kVideoSrNis||amdVideoSr(q);}
 constexpr bool lowResolutionMotionSr(uint32_t q){return q==kVideoSrFsr||q==kVideoSrXess;}
 constexpr bool validVideoSrQuality(uint32_t q){return q<=kVideoSrFsr||vfxVideoSr(q)||spatialVideoSr(q)||q==kVideoSrXess;}
+constexpr bool videoSrAvailableForSource(uint32_t q,bool stillImage,bool liveSource){
+    return q!=kVideoSrXess||(!stillImage&&!liveSource);
+}
 constexpr bool videoSrRunsOn(uint32_t q,bool nvidia,bool amd){
     if (amdVideoSr(q)) return amd;
     return validVideoSrQuality(q) && (nvidia || lowResolutionMotionSr(q) || q==kVideoSrNis);
