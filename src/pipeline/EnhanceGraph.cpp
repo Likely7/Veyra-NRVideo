@@ -4752,8 +4752,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         tracker_.transition(list,fgFrame,D3D12_RESOURCE_STATE_COMMON);
     }
     if((runFg||rifeRecordOnly)&&rife_){
-        // The span from here to the last unpack brackets RIFE's DirectML work,
-        // which runs between our lists on this same queue.
+        // Both spans include capture and the fixed preparation. DirectML
+        // runs between the producer and unpack lists on this same queue.
         if(runFg){gpuTimer_.mark(list,GpuStage::FgBatch);gpuTimer_.mark(list,GpuStage::Fg1);}
         if(resetFg)rife_->reset();
         tracker_.transition(list,fgFrame,D3D12_RESOURCE_STATE_COPY_SOURCE);
@@ -4816,7 +4816,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
             composeExclusion(flist,generatedSlot+2,1-parity,false,true,useNewerHud);
             tracker_.transition(flist,genFrame_[generatedSlot].Get(),D3D12_RESOURCE_STATE_COMMON);
             const bool last=sub==fgCalls;
-            if(last){gpuTimer_.mark(flist,GpuStage::Fg1,true);gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);}
+            if(sub==1)gpuTimer_.mark(flist,GpuStage::Fg1,true);
+            if(last){gpuTimer_.mark(flist,GpuStage::FgBatch,true);gpuTimer_.resolve(flist);}
             if(!submitGraph(slot))return false;
             if(last)gpuTimer_.submitted(ring_->lastSignaledValue());
             if(previewCheckpoint&&!reset)previewCheckpoint();

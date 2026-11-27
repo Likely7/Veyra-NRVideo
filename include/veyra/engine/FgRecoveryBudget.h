@@ -12,6 +12,7 @@ namespace veyra::engine {
 class FgRecoveryBudget {
     struct Sample {int64_t time;double ms;};
     std::deque<Sample> base_,fg_,warmup_;
+    std::optional<std::deque<Sample>> first_,midpoint_;
     bool limited_=false;
     unsigned recoveryPairs_=0;
     bool recordAdmission(bool fits){
@@ -32,8 +33,21 @@ class FgRecoveryBudget {
         std::nth_element(current.begin(),current.begin()+index,current.end());return current[index];
     }
 public:
-    void reset(){base_.clear();fg_.clear();warmup_.clear();limited_=false;recoveryPairs_=0;}
+    void reset(){base_.clear();fg_.clear();warmup_.clear();first_.reset();midpoint_.reset();limited_=false;recoveryPairs_=0;}
     void fgCost(double ms,int64_t now){add(fg_,now,ms);}
+    void observeSingleInterpolation(double ms,int64_t now,bool midpoint){
+        auto& samples=midpoint?midpoint_:first_;
+        if(!samples)samples.emplace();
+        add(*samples,now,ms);
+    }
+    // A 3X prefix includes the pair preparation and the first output. Use the
+    // larger of that measurement and the actual midpoint when both are recent.
+    std::optional<double> singleInterpolationCost(int64_t now)const{
+        const auto first=first_?p95(*first_,now,20000000):std::nullopt;
+        const auto midpoint=midpoint_?p95(*midpoint_,now,20000000):std::nullopt;
+        if(first&&midpoint)return std::max(*first,*midpoint);
+        return first?first:midpoint;
+    }
     // fgCostComparable=false marks a group whose FG stage did less work than a
     // full group (a reduced 2X group): its FG time must not lower the
     // full-group FG estimate. Its BASE cost is still recorded - the base work

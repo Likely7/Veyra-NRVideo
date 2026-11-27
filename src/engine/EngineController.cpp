@@ -1588,6 +1588,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             TimingWindow livePresent{std::chrono::seconds(1)};
             TimingWindow livePresentGpu{std::chrono::seconds(1)};
             FgRecoveryBudget fgBudget;uint64_t fgBudgetRevision=options.settings.revision;
+            const bool reducedGroups=GetEnvironmentVariableW(L"VEYRA_TEST_FG_NO_REDUCED",nullptr,0)==0;
             const bool vfgMeasuredReducedQueue=GetEnvironmentVariableW(L"VEYRA_TEST_VFG_FULL_REDUCED_QUEUE_COST",nullptr,0)==0;
             int64_t nextVfgQueueLog=0;
             VfgOverloadEstimate vfgOverload;
@@ -1809,7 +1810,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(!batch.fgFast){vfgChosenAt=host100ns();++vfgChosenPairs;}
                     }
                     if(vfgCostSettling.holdUntil()!=vfgHeldUntil)veyra::log::info("vfg-probe",std::format("revision={} retryInMs={} (a VFG probe after a long skip stayed over budget; failed probes retry after 2, 4, then every 8 s)",options.settings.revision,(vfgCostSettling.holdUntil()-host100ns())/10000));
-                    if(currentCost)fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery||costSettling,host100ns(),watch.fgExecutionMs,!batch.fgReduced&&!batch.fgFast);
+                    if(currentCost){
+                        const auto completedAt=host100ns();
+                        fgBudget.complete(watch.gpuExecutionMs,batch.fgEvaluated>0,batch.historyReset||batch.fgRecovery||costSettling,completedAt,watch.fgExecutionMs,!batch.fgReduced&&!batch.fgFast);
+                        if(isCapture&&options.settings.frameGenerationBackend==FrameGenerationBackend::Rife&&options.fgMultiplier==3&&
+                            !batch.historyReset&&!batch.fgRecovery&&batch.fgEvaluated&&watch.firstFgExecutionMs)
+                            fgBudget.observeSingleInterpolation(*watch.firstFgExecutionMs,completedAt,batch.fgEvaluated==1);
+                    }
                     if(options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&currentCost){
                         if(batch.historyReset)vfgOverload.reset();
                         if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&batch.fgEvaluated+1==options.fgMultiplier)
@@ -3601,6 +3608,24 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         if(adjustPhase&&!admitted)pairLatency.observe(now,neededPhase);
                         logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous");
                         auto decision=admitted?pipeline::EnhanceGraph::FgDecision::Evaluate:pipeline::EnhanceGraph::FgDecision::Skip;
+                        // A slower RIFE 3X pair may still meet the original
+                        // midpoint deadline with the same model. Its first
+                        // GPU span includes the fixed capture/preparation cost.
+                        if(!admitted&&!held&&!warmingHistory&&!historyReset&&reducedGroups&&previewFgMultiplier==3&&
+                            options.settings.frameGenerationBackend==FrameGenerationBackend::Rife){
+                            const auto first=fgBudget.singleInterpolationCost(now);
+                            const auto midpoint=liveTimeline.deadline(pipeline::FrameBatch::interpolate(a,batch.b100ns,1,2));
+                            if(fgBudget.canAdmitReduced(now,midpoint,interval/3,elapsed,presentP95,first,0)&&
+                                std::all_of(pendingCompletions.begin(),pendingCompletions.end(),[](const auto& group){return group->output.gpuComplete();})){
+                                decision=pipeline::EnhanceGraph::FgDecision::Reduced;
+                                ++fgReducedPairs;
+                                if(now>=nextFgReducedLog){
+                                    nextFgReducedLog=now+10000000;
+                                    veyra::log::info("live-fg-admission",std::format("timeline={} revision={} source={} backend=RIFE reduced=2X requestedMultiplier=3 reducedPairs={} remainingMidpointMs={:.3f} singleGpuP95Ms={:.3f} predictedFullMs={:.3f}",
+                                        pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous",batch.identity.settingsRevision,batch.identity.sourceFrameId,fgReducedPairs,double(midpoint-now)/10000,*first,fgBudget.predicted(now,false).value_or(-1)));
+                                }
+                            }
+                        }
                         if(smoothTransportAnchor&&options.settings.vfgAutoRegulate&&previewFgMultiplier==2&&!warmingHistory&&graph->vfgFastReady()){
                             const double base=fgBudget.baseCost(now).value_or(0),progress=std::clamp(elapsed,0.0,base),blit=std::max(0.0,presentP95);
                             if(!admitted){
@@ -3657,7 +3682,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto media=int64_t(nowMs()*10000.0);
                         const auto firstPts=pipeline::FrameBatch::interpolate(a,batch.b100ns,1,previewFgMultiplier);
                         const auto firstDeadline=now+int64_t((firstPts-media)/playbackRate),deadline=now+int64_t((lastGenerated-media)/playbackRate);
-                        const auto first=frameFlow->snapshot(now,false).gpuTiming[size_t(diagnostics::GpuStage::Fg1)].p95;
+                        // Preserve file admission's RIFE group estimate. The
+                        // independently timed prefix is used by live 3X pairs.
+                        const auto firstStage=options.settings.frameGenerationBackend==FrameGenerationBackend::Rife?diagnostics::GpuStage::FgBatch:diagnostics::GpuStage::Fg1;
+                        const auto first=frameFlow->snapshot(now,false).gpuTiming[size_t(firstStage)].p95;
                         const auto elapsed=elapsedMs(processStart),blit=livePresentGpu.p95();
                         const auto outputInterval=int64_t(interval/playbackRate)/previewFgMultiplier;
                         bool retainedFits=true;
@@ -3698,7 +3726,6 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         // 100 Hz panel submission oversupplies by ~3x, so a
                         // submitted-frame count says nothing about what is seen.
                         // VEYRA_TEST_FG_NO_REDUCED=1 disables it for A/B runs.
-                        static const bool reducedGroups=GetEnvironmentVariableW(L"VEYRA_TEST_FG_NO_REDUCED",nullptr,0)==0;
                         if(reducedGroups&&!warmingHistory&&previewFgMultiplier>2){
                             const auto midpoint=now+int64_t((pipeline::FrameBatch::interpolate(a,batch.b100ns,1,2)-media)/playbackRate);
                             if(fgBudget.canAdmitReduced(now,midpoint,int64_t(interval/playbackRate)/2,elapsed,blit,first,queuedGpuMs)){

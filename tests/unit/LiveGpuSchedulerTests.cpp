@@ -93,6 +93,26 @@ int main(){
         check(!reduced.recovering(),"reduced affordability query does not touch recovery state");
     }
     {
+        veyra::engine::FgRecoveryBudget rife;
+        constexpr int64_t now=10000000,outputInterval=111111;
+        rife.complete(32,true,false,now,24);
+        const auto fitsMidpoint=[&](int64_t lead){
+            return rife.canAdmitReduced(now,now+lead,outputInterval,0,0,rife.singleInterpolationCost(now),0);
+        };
+        check(!rife.admit(now,now+200000,0,0),"RIFE two-output group misses its deadline");
+        check(!fitsMidpoint(130000),"RIFE midpoint waits for a measured interpolation");
+        rife.observeSingleInterpolation(15,now,false);
+        check(fitsMidpoint(130000),"RIFE real first span fits a later midpoint");
+        check(!fitsMidpoint(100000),"RIFE fixed preparation makes the midpoint miss where half the group would fit");
+        rife.observeSingleInterpolation(18,now,true);
+        check(!fitsMidpoint(130000),"RIFE actual midpoint time protects against a cheaper first output");
+        rife.complete(26,true,false,now,18,false);
+        check(rife.predicted(now)==32,"RIFE midpoint timing does not lower the full-group estimate");
+        check(!rife.singleInterpolationCost(now+20000001),"RIFE single interpolation timing expires");
+        rife.reset();
+        check(!rife.singleInterpolationCost(now)&&!rife.predicted(now),"RIFE reset clears both timing scopes");
+    }
+    {
         veyra::engine::FgRecoveryBudget queued;
         queued.complete(10,true,false,10000000,4);
         check(queued.admit(10000000,10020000,0,0),"idle GPU can fit the measured batch");
