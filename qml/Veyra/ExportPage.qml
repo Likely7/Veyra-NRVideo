@@ -52,7 +52,7 @@ VPage {
         implicitWidth: 172
         implicitHeight: Math.max(30, contentItem.implicitHeight + 8)
         onActivated: index => picked(String(options[index].id))
-        background: Rectangle { radius: 8; color: Theme.card2; border.color: Theme.stroke2 }
+        background: Rectangle { radius: Theme.rCtl; color: Theme.card2; border.color: Theme.stroke2 }
         contentItem: Text { leftPadding: 10; rightPadding: 24; verticalAlignment: Text.AlignVCenter; text: choice.currentText; color: Theme.t1; wrapMode: Text.Wrap; font.family: Theme.fontUi; font.pixelSize: 12 }
         indicator: VIcon { x: choice.width - 22; y: 8; name: "down"; size: 14; color: Theme.t3 }
         popup: Popup {
@@ -66,7 +66,7 @@ VPage {
                 x = Math.max(8, Math.min(point.x, parent.width - width - 8))
                 y = Math.max(8, Math.min(point.y, parent.height - height - 8))
             }
-            background: Rectangle { radius: 8; color: Theme.card2; border.color: Theme.stroke2 }
+            background: Rectangle { radius: Theme.rCtl; color: Theme.card2; border.color: Theme.stroke2 }
             contentItem: ListView {
                 id: list
                 objectName: "videoCover"
@@ -115,7 +115,7 @@ VPage {
             x: 10; y: 10; width: parent.width - 20; height: 30; spacing: 5
             Text { text: qsTr("队列 ") + veyra.exportQueueModel.count; color: Theme.t2; font.family: Theme.fontUi; font.pixelSize: 12 }
             Item { Layout.fillWidth: true }
-            VButton { objectName: "export-add-files"; text: qsTr("添加"); iconName: "plus"; onClicked: veyra.addExportFilesDialog() }
+            VButton { objectName: "export-add-files"; primary: true; text: qsTr("添加"); iconName: "plus"; onClicked: veyra.addExportFilesDialog() }
             VButton { objectName: "export-clear-queue"; ghost: true; text: veyra.exportRunning ? qsTr("清空等待") : qsTr("清空"); onClicked: veyra.exportQueueModel.clearWaiting() }
         }
         ListView {
@@ -141,7 +141,7 @@ VPage {
                 required property bool locked
                 required property bool inspecting
                 objectName: "export-queue-row-" + index
-                width: queueList.width; height: 72; radius: 9
+                width: queueList.width; height: 72; radius: Theme.rCtl
                 color: current ? Theme.card3 : rowHover.hovered ? Theme.card2 : "transparent"
                 border.color: current ? Theme.accent : "transparent"
                 HoverHandler { id: rowHover }

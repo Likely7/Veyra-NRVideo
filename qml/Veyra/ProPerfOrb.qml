@@ -2,8 +2,6 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
-import QtQuick.Shapes
-import QtQuick.Effects
 
 Item {
     id: orb
@@ -13,14 +11,14 @@ Item {
     property string label: ""
     property string tip: ""
     property int size: 56
-    // Compact (the node page's 40px bar): no label under the ring; the
-    // tooltip names the orb instead.
+    // Compact (the node page's 40px bar): no label under the meter; the
+    // tooltip names the metric instead.
     property bool showLabel: true
     readonly property color tone: !known ? Qt.rgba(1, 1, 1, 0.25)
                                 : fraction < 0.7 ? Theme.ok : fraction < 1.0 ? "#F2B941" : Theme.err
     implicitWidth: Math.max(size, labelText.implicitWidth)
     implicitHeight: showLabel ? size + 4 + labelText.implicitHeight : size
-    // The ring is only a few dozen pixels across. Sub-percent changes do
+    // The meter is only a few dozen pixels across. Sub-percent changes do
     // not add visible information; the numeric label retains full precision.
     readonly property real shown: Math.round(telemetry.value * 100) / 100
     VTelemetryValue {
@@ -29,47 +27,34 @@ Item {
         animate: orb.visible && !Theme.reduced && (!veyra.paused || (typeof vyTest !== "undefined" && vyTest.disablePausedUiIdle === true))
         duration: 600
     }
-    onShownChanged: ring.requestPaint()
-    onToneChanged: ring.requestPaint()
-    // Layout footprint of the ring: always orb.size square, so rows of orbs
-    // keep their spacing and the label sits where it always has.
     Item {
         id: ringBox
         width: orb.size; height: orb.size
         anchors.horizontalCenter: parent.horizontalCenter
-    }
-    // The canvas is larger than ringBox so the shadowBlur glow around the
-    // arc has room to fade out. Drawn at exactly orb.size, the glow was cut
-    // off flat at the canvas edges (squared-off halo on all four sides).
-    readonly property real glowBlur: 8
-    readonly property real glowPad: glowBlur + 4
-    Canvas {
-        id: ring
-        width: orb.size + orb.glowPad * 2; height: width
-        anchors.centerIn: ringBox
-        onPaint: {
-            const c = getContext("2d"); c.reset()
-            const r = orb.size / 2 - 4, cx = width / 2, cy = height / 2
-            c.lineWidth = 5; c.lineCap = "round"
-            c.strokeStyle = Qt.rgba(1, 1, 1, 0.08)
-            c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2); c.stroke()
-            if (orb.shown > 0.001) {
-                c.strokeStyle = orb.tone
-                c.shadowColor = orb.tone; c.shadowBlur = orb.glowBlur
-                c.beginPath(); c.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * orb.shown); c.stroke()
+        Text {
+            anchors.centerIn: parent
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            text: orb.value
+            color: orb.known ? Theme.t1 : Theme.t3
+            font.family: Theme.fontMono
+            font.pixelSize: orb.size >= 50 ? 13 : 11
+            fontSizeMode: Text.HorizontalFit
+            minimumPixelSize: 9
+        }
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: 3
+            color: Theme.stroke
+            Rectangle {
+                width: parent.width * orb.shown
+                height: parent.height
+                color: orb.tone
+                visible: orb.known
             }
         }
-    }
-    Text {
-        anchors.centerIn: ringBox
-        width: orb.size - 12
-        horizontalAlignment: Text.AlignHCenter
-        text: orb.value
-        color: orb.known ? Theme.t1 : Theme.t3
-        font.family: Theme.fontMono
-        font.pixelSize: orb.size >= 50 ? 11 : 9
-        font.weight: Font.DemiBold; font.variableAxes: Theme.axesDemiBold
-        fontSizeMode: Text.HorizontalFit; minimumPixelSize: 8
     }
     Text {
         id: labelText

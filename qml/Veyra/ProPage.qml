@@ -81,7 +81,7 @@ VPage {
         for (let k = 0; k < col.children.length; ++k) {
             const c = col.children[k]
             if (!c.visible || c.motionDy === undefined) continue
-            staggerComp.createObject(root, { target: c, delay: i * step, span: span, dy: dy }).start()
+            staggerComp.createObject(root, { target: c, delay: i * step, span: Theme.durFast, dy: 0 }).start()
             ++i
         }
     }
@@ -182,7 +182,7 @@ VPage {
         title: qsTr("NR 层 ") + layerNumber
         // .lnum: the layer number where a stage card has its icon.
         headerLeadingActions: Rectangle {
-            implicitWidth: 22; implicitHeight: 22; radius: 7
+            implicitWidth: 22; implicitHeight: 22; radius: Theme.rCtl
             color: Qt.rgba(1, 138 / 255, 61 / 255, 0.16)
             Text {
                 anchors.centerIn: parent
@@ -233,7 +233,7 @@ VPage {
         popIn: layerNumber === root.popBeauty
         title: qsTr("美颜层 ") + layerNumber
         headerLeadingActions: Rectangle {
-            implicitWidth: 22; implicitHeight: 22; radius: 7
+            implicitWidth: 22; implicitHeight: 22; radius: Theme.rCtl
             color: Qt.rgba(1, 143 / 255, 191 / 255, 0.16)
             Text {
                 anchors.centerIn: parent
@@ -752,20 +752,20 @@ VPage {
                         anchors.verticalCenter: parent.verticalCenter
                         width: parent.width
                         height: 3
-                        radius: 9
+                        radius: Theme.rCtl
                         color: Qt.rgba(1, 1, 1, 0.14)
                         // White; the sunset gradient along the rail in the dusk palette.
                         Rectangle {
                             width: parent.width * proSeekArea.frac
                             height: parent.height
-                            radius: 9
+                            radius: Theme.rCtl
                             color: "#FFFFFF"
                             visible: !Theme.accentGradient
                         }
                         VAccentFill {
                             width: parent.width * proSeekArea.frac
                             height: parent.height
-                            radius: 9
+                            radius: Theme.rCtl
                             farEnd: true
                             span: parent.width
                             visible: Theme.accentGradient
@@ -1098,13 +1098,13 @@ VPage {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: parent.width
                                 height: 5
-                                radius: 9
+                                radius: Theme.rCtl
                                 color: Qt.rgba(1, 1, 1, 0.08)
                                 Rectangle {
                                     objectName: "stage-bar-fill"
                                     width: root.barsArmed ? Math.round(parent.width * (root.barsSettled ? liveFraction.value : Math.max(0, Math.min(1, modelData.fraction)))) : 0
                                     height: parent.height
-                                    radius: 9
+                                    radius: Theme.rCtl
                                     color: modelData.color
                                     VTelemetryValue {
                                         id: liveFraction
@@ -1361,7 +1361,7 @@ VPage {
                         Layout.fillWidth: true
                         implicitWidth: tabLabel.implicitWidth + 10
                         implicitHeight: Math.max(30, tabLabel.implicitHeight + 8)
-                        radius: 9
+                        radius: Theme.rCtl
                         color: root.tab === modelData.id ? Theme.card3
                              : tabHover.hovered ? Qt.rgba(1, 1, 1, 0.04) : "transparent"
                         Behavior on color { ColorAnimation { duration: Theme.d(200) } }
@@ -1394,7 +1394,7 @@ VPage {
                 // The design draws the chain bar on the 画质 tab only.
                 // Leave the controls a usable scroll area in short windows.
                 visible: root.tab === "quality" && insp.height >= 240
-                radius: 12
+                radius: Theme.rCtl
                 color: Qt.rgba(1, 1, 1, 0.03)
                 border.width: 1
                 border.color: Theme.stroke
@@ -1415,7 +1415,7 @@ VPage {
                         Rectangle {
                             width: inChip.implicitWidth + 18
                             height: 24
-                            radius: 99
+                            radius: Theme.rCtl
                             color: "transparent"
                             border.width: 1
                             border.color: Theme.stroke
@@ -1437,7 +1437,7 @@ VPage {
                                 Rectangle {
                                     width: chipLabel.implicitWidth + 18
                                     height: 24
-                                    radius: 99
+                                    radius: Theme.rCtl
                                     color: Theme.card3
                                     border.width: 1
                                     border.color: Theme.stroke
@@ -2304,7 +2304,7 @@ VPage {
         Layout.fillWidth: true
         Layout.preferredWidth: 1
         implicitHeight: modeCol.implicitHeight + 24
-        radius: 12
+        radius: Theme.rCtl
         color: active ? Qt.rgba(1, 138 / 255, 61 / 255, 0.08) : Theme.card2
         border.width: 1
         border.color: active ? Theme.accent : Theme.stroke
@@ -2316,7 +2316,7 @@ VPage {
             anchors.margins: 12
             spacing: 6
             Rectangle {
-                implicitWidth: 28; implicitHeight: 28; radius: 8
+                implicitWidth: 28; implicitHeight: 28; radius: Theme.rCtl
                 color: Qt.rgba(1, 1, 1, 0.06)
                 VIcon { anchors.centerIn: parent; name: mc.glyph; size: 14 }
             }

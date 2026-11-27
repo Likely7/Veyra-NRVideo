@@ -1,5 +1,11 @@
 # Third-party dependencies
 
+## UI icons and typography (2026-11-27)
+
+- Font Awesome Free 7.3.1 by Fonticons, Inc., https://fontawesome.com. The unmodified solid SVG paths in `qml/Veyra/FontAwesomeIconData.js` come from the official `FortAwesome/Font-Awesome` tag `7.3.1`, `metadata/icons.json`. SVG icons are licensed under CC BY 4.0. App-specific names map to those paths; ten-second seek icons overlay an application text label. Full upstream license: `qml/Veyra/fonts/FontAwesome-LICENSE.txt`.
+- Inter 4.1 by Rasmus Andersson, https://rsms.me/inter/. `qml/Veyra/fonts/InterVariable.ttf` is the unmodified font from the official `rsms/inter` v4.1 release, licensed under SIL Open Font License 1.1. Full license: `qml/Veyra/fonts/Inter-LICENSE.txt`. Loaded only within the app; no system font installation.
+- Pinned source URLs, upstream metadata digest, icon aliases and font SHA-256 are recorded in `qml/Veyra/fonts/SOURCES.json`. These assets and licenses travel with the QML directory.
+
 ## Magpie author’s private Veyra patches (2026-11-22)
 
 The Magpie author supplied two source patches against Veyra `c6633121`.

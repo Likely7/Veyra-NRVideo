@@ -13,6 +13,7 @@
 // that apps/veyra-qml/main.cpp places over the item named "videoHost"; Qt hosts
 // it and never composites it, which is what preserved present cost in S3.
 import QtQuick
+import QtCore
 import QtQuick.Controls
 import QtQuick.Layouts
 import "ExportLayout.js" as ExportLayout
@@ -66,7 +67,33 @@ Window {
         veyra.logUi("ui-window", "maximized=" + (visibility === Window.Maximized))
     }
     Binding { target: Theme; property: "reduced"; value: veyra.reducedMotion || root.test.reducedMotion === true }
-    Binding { target: Theme; property: "accentName"; value: veyra.preferences.accent || "orange" }
+    // UI-owned palette storage also works with the 2.2.1 engine, whose native
+    // accent preference accepts only orange/white. Keep each --data-dir isolated.
+    Settings {
+        id: appearancePreferences
+        location: {
+            const path = veyra.dataDirectory.replace(/\\/g, '/')
+            const encoded = path.split('/').map(encodeURIComponent).join('/')
+            const directory = path.startsWith('//') ? "file:" + encoded
+                : "file:///" + encoded.replace(/^([A-Za-z])%3A/, '$1:')
+            return directory + "/ui-appearance.ini"
+        }
+        property string accent: ""
+    }
+    Connections {
+        target: Theme
+        function onAccentPicked(name) {
+            if (!Theme.isAccent(name)) return
+            appearancePreferences.accent = name
+            appearancePreferences.sync()
+        }
+    }
+    Binding {
+        target: Theme
+        property: "accentName"
+        value: Theme.isAccent(appearancePreferences.accent) ? appearancePreferences.accent
+            : (veyra.preferences.accent || "orange")
+    }
     Binding { target: Theme; property: "paletteName"; value: veyra.preferences.palette || "dusk" }
     Binding { target: Theme; property: "backdropLevel"; value: veyra.preferences.backdrop !== undefined ? veyra.preferences.backdrop : 1 }
 
@@ -253,14 +280,18 @@ Window {
         case "min":
             // .min .stage: full width, height = the picture height.
             return { x: 0, y: 0, width: width, height: Math.round(pictureHeight) }
-        case "pro":
-            // Share the page's responsive header, transport and status dimensions.
-            // A second fixed-height formula let the HWND cover the playback bar.
-            return proPage.videoViewport
-        case "node":
-            return nodePage.videoViewport
-        case "exp":
-            return ExportLayout.calculate(width, height, exportPage.compactTab).video
+        case "pro": {
+            const r = proPage.videoViewport
+            return { x: r.x, y: r.y + pages.y, width: r.width, height: r.height }
+        }
+        case "node": {
+            const r = nodePage.videoViewport
+            return { x: r.x, y: r.y + pages.y, width: r.width, height: r.height }
+        }
+        case "exp": {
+            const r = ExportLayout.calculate(pages.width, pages.height, exportPage.compactTab).video
+            return { x: r.x, y: r.y + pages.y, width: r.width, height: r.height }
+        }
         default:
             return { x: 0, y: 0, width: 0, height: 0 }
         }
@@ -268,9 +299,14 @@ Window {
 
     // Pages live for the whole session so switching never loses a half-edited
     // chain; only the visible page owns the video window.
+    readonly property bool chromePersistent: page !== "min" && !fullscreen
+    readonly property real chromeInset: chromePersistent ? Theme.appBarHeight : 0
+    onChromeInsetChanged: videoHost.syncRect()
+
     Item {
         id: pages
         anchors.fill: parent
+        anchors.topMargin: root.chromeInset
         // In fullscreen the picture covers the page, and the native video window
         // passes the pointer through: a hidden page control must not take a click
         // meant for the picture.
@@ -394,17 +430,14 @@ Window {
         onClosed: if (root.page === "home" && dialogs.dialog === "") homePage.onboardingEntry.forceActiveFocus()
     }
 
-    // The dock floats above every page and retracts on its own.
     TopDock {
         id: dock
-        anchors.horizontalCenter: parent.horizontalCenter
-        // The node page is the professional mode's node view.
+        persistent: root.chromePersistent
         currentPage: root.page === "node" ? "pro" : root.page
         maximized: root.maximized || root.fullscreen
         pinned: root.test.dockPinned === true || veyra.preferences.dockPinned === true
         locked: root.fullLocked
         forcedTip: root.test.tip !== undefined ? root.test.tip : ""
-        opened: pinned
         // In fullscreen only the picture is on screen, so another page (专业 above all)
         // would change nothing visible: leave fullscreen first, as the pill's menu does.
         onRequestPage: p => {
@@ -788,7 +821,7 @@ Window {
     readonly property bool pillHidden: veyra.preferences.cinePillHidden === true
     function setPillHidden(hidden) {
         veyra.setPreference("cinePillHidden", hidden)
-        toast.show(hidden ? qsTr("播放条已隐藏 · 鼠标移到顶部，点胶囊里的眼睛可重新打开") : qsTr("播放条已显示"), false)
+        toast.show(hidden ? qsTr("播放条已隐藏 · 鼠标移到顶部，点标题栏里的眼睛可重新打开") : qsTr("播放条已显示"), false)
     }
     function toggleLock() {
         fullLocked = !fullLocked
@@ -1108,7 +1141,7 @@ Window {
         }
         if (root.test.menu !== undefined) testMenuTimer.start()
         if (root.test.fullBar !== undefined) testFullTimer.start()
-        if ((veyra.preferences.palette || "dusk") !== "classic" && veyra.preferences.introAnimation !== false
+        if ((veyra.preferences.palette || "dusk") !== "classic" && veyra.preferences.introAnimation === true
                 && !veyra.reducedMotion && root.page === "home" && Object.keys(root.test).length === 0) {
             homePage.introHold = true
             introLoader.active = true
