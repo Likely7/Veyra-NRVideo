@@ -38,10 +38,11 @@ Item {
         if (action >= 28 && action <= 31) return ["↑", "↓", "←", "→"][action - 28]
         if (action === 32) return "L+R"
         if (action === 33) return "½"
+        if (action === 34) return "→←"
         return ""
     }
 
-    implicitWidth: size + (shoulder || trigger || action === 32 || (xbox && action === 15) ? 6 : 0)
+    implicitWidth: size + (shoulder || trigger || action === 32 || action === 34 || (xbox && action === 15) ? 6 : 0)
     implicitHeight: size
     width: implicitWidth
     height: implicitHeight

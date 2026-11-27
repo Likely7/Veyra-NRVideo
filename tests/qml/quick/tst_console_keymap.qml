@@ -12,24 +12,28 @@ Item {
         property string driveKeyLabel: "F6"
         property string quickKeyLabel: "F2"
         property string unlockLabel: "F1"
+        property bool aimTesting: false
+        property string aimStatus: ""
         property var bindings: {
-            let keys = Array(34).fill("—")
+            let keys = Array(35).fill("—")
             for (let action = 4; action <= 25; ++action) keys[action] = "K" + action
             keys[3] = "F"
             keys[18] = "W"
+            keys[34] = "T"
             return keys
         }
         property var alternateBindings: {
-            let keys = Array(34).fill("—")
+            let keys = Array(35).fill("—")
             keys[3] = "Ctrl+F"
             return keys
         }
         property var drivingBindings: {
-            let keys = Array(34).fill("—")
+            let keys = Array(35).fill("—")
             keys[17] = "Up"
             keys[16] = "Down"
             keys[20] = "A"
             keys[21] = "D"
+            keys[34] = "T"
             return keys
         }
         property var drivingAlternateBindings: []
@@ -49,7 +53,11 @@ Item {
         name: "ConsoleKeymapOverlay"
         when: windowShown
 
-        function init() { mapper.driving = false }
+        function init() {
+            mapper.driving = false
+            mapper.aimTesting = false
+            mapper.aimStatus = ""
+        }
 
         function expires(overlay, hint, message) {
             verify(hint.visible)
@@ -87,9 +95,36 @@ Item {
             compare(primary.text, "F")
             compare(alternate.text, "Ctrl+F")
             verify(primary.accessibleText.includes("Y，主键 F，备用键 Ctrl+F"))
+            compare(findChild(overlay, "controller-panel-list-primary-34").text, "T")
+            mapper.quickReferenceRequested()
+            compare(overlay.referenceOpen, false)
+            mapper.driving = true
+            mapper.quickReferenceRequested()
+            verify(overlay.showDriving)
+            compare(findChild(overlay, "controller-panel-list-primary-34").text, "T")
             mapper.quickReferenceRequested()
             compare(overlay.referenceOpen, false)
             compare(overlay.locked, true)
+        }
+
+        function test_calibrationInstructionsAndResult() {
+            const overlay = createTemporaryObject(fixture, parent, { active: true, locked: true })
+            mapper.quickReferenceRequested()
+            verify(overlay.referenceOpen)
+            mapper.aimTesting = true
+            mapper.aimStatus = "Press Space to save calibration"
+            const hint = findChild(overlay, "ps5-input-hint")
+            const label = findChild(overlay, "console-aim-status")
+            verify(hint.visible && label.visible)
+            compare(hint.opacity, 1)
+            compare(overlay.referenceOpen, false)
+            mapper.quickReferenceRequested()
+            compare(overlay.referenceOpen, false)
+            mapper.aimTesting = false
+            mapper.aimStatus = "Calibration saved"
+            overlay.locked = false
+            verify(hint.visible && label.visible)
+            compare(label.text, "Calibration saved")
         }
 
         function test_referenceFit_data() {
@@ -121,6 +156,10 @@ Item {
             compare(primary.text, "F")
             compare(alternate.text, "Ctrl+F")
             compare(primary.parent.parent.note, "Enter car")
+            const inward = findChild(reference, "controller-panel-list-primary-34")
+            verify(inward)
+            compare(inward.text, "T")
+            verify(inward.accessibleText.includes("双摇杆向内推"))
             if (data.tag === "narrow") {
                 const list = findChild(reference, "console-keymap-bindings")
                 tryVerify(() => list.contentHeight > list.height)

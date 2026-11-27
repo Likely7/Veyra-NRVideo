@@ -185,13 +185,20 @@ public:
         }
 
         bool useMouse = false;
-        auto mapped = mapper_.state(&useMouse, us);
+        bool inward = false;
+        auto mapped = mapper_.state(&useMouse, us, &inward);
         const bool vehicleButton = (mapped.buttons & ControllerState::Triangle) != 0;
         if (tune.autoDriving && vehicleButton && !vehicleButtonHeld_) driveAt_ = us + tune.autoDriveMs * 1000LL;
         vehicleButtonHeld_ = vehicleButton;
         const bool mouseSteering = mapper_.driving() && tune.mouseSteering;
         mouse_.controlContext(mapper_.menuActive(), mapper_.driving());
-        if (mouseSteering) {
+        if (inward || inwardSticksHeld_) {
+            // Game camera or driving input accumulated during the chord must
+            // not leak into the first normal sample when the chord is released.
+            mouse_.resetMotion();
+            lastMouse_ = 0;
+            steeringCounts_ = steering_ = 0.;
+        } else if (mouseSteering) {
             const double recenter = double(elapsedUs) / (tune.steeringReturnMs * 1000.);
             steering_ = std::copysign(std::max(0., std::abs(steering_) - recenter), steering_);
             steering_ = std::clamp(steering_ + steeringCounts_ * 2.54 / tune.dpi * tune.mouseSteerGain, -1., 1.);
@@ -207,7 +214,8 @@ public:
         preview_.speedCounts = mouse_.speed();
         preview_.driving = mapper_.driving();
         const bool recentMouse = useMouse && !mouseSteering && lastMouse_ && us - lastMouse_ < 100000;
-        return tune.mixPhysical ? combine(mapped, physical, recentMouse) : mapped;
+        inwardSticksHeld_ = inward;
+        return tune.mixPhysical ? combine(mapped, physical, recentMouse, inward) : mapped;
     }
 
 private:
@@ -240,17 +248,17 @@ private:
         }
     };
 
-    static ControllerState combine(ControllerState mapped, const ControllerState& pad, bool recentMouse) {
+    static ControllerState combine(ControllerState mapped, const ControllerState& pad, bool recentMouse, bool inward) {
         if (!pad.inputActive) return mapped;
         mapped.buttons |= pad.buttons;
         mapped.l2 = std::max(mapped.l2, pad.l2);
         mapped.r2 = std::max(mapped.r2, pad.r2);
         const auto magnitude = [](int16_t x, int16_t y) { return double(x) * x + double(y) * y; };
-        if (magnitude(pad.leftX, pad.leftY) > magnitude(mapped.leftX, mapped.leftY)) {
+        if (!inward && magnitude(pad.leftX, pad.leftY) > magnitude(mapped.leftX, mapped.leftY)) {
             mapped.leftX = pad.leftX;
             mapped.leftY = pad.leftY;
         }
-        if (!recentMouse && magnitude(pad.rightX, pad.rightY) > magnitude(mapped.rightX, mapped.rightY)) {
+        if (!inward && !recentMouse && magnitude(pad.rightX, pad.rightY) > magnitude(mapped.rightX, mapped.rightY)) {
             mapped.rightX = pad.rightX;
             mapped.rightY = pad.rightY;
         }
@@ -301,6 +309,7 @@ private:
     int64_t driveAt_ = 0;
     double steering_ = 0., steeringCounts_ = 0.;
     bool vehicleButtonHeld_ = false;
+    bool inwardSticksHeld_ = false;
     size_t fullSamples_ = 0, totalSamples_ = 0, mouseReports_ = 0;
     Times keyTimes_, mouseTimes_, sendTimes_;
     Preview preview_;

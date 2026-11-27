@@ -403,7 +403,8 @@ Window {
                             visible: !panel.connected || panel.keyboard
                             primary: true
                             enabled: panel.connected || connection.primaryEnabled
-                            text: panel.connected ? qsTr("开始键鼠控制") : connection.primaryLabel
+                            text: !panel.connected ? connection.primaryLabel : panel.input?.aimArmed === true
+                                ? qsTr("返回游戏开始测试") : qsTr("开始键鼠控制")
                             iconName: panel.connected ? "play" : ""
                             onClicked: panel.primaryAction()
                         }

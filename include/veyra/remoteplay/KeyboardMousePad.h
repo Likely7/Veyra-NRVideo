@@ -21,7 +21,8 @@ public:
         Cross, Circle, Square, Triangle, Left, Right, Up, Down,
         L1, R1, L3, R3, Options, Share, Touchpad, PS, L2, R2,
         LeftUp, LeftDown, LeftLeft, LeftRight, RightUp, RightDown, RightLeft, RightRight,
-        LeftSlow, MenuStick, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, StickClickBoth, HalfPedal, ActionCount
+        LeftSlow, MenuStick, SwipeUp, SwipeDown, SwipeLeft, SwipeRight, StickClickBoth, HalfPedal,
+        StickInwardBoth, ActionCount
     };
     static constexpr int MouseLeft = 257, MouseMiddle = 258, MouseRight = 259;
     static constexpr int MouseBack = 260, MouseForward = 261;
@@ -34,12 +35,12 @@ public:
     static constexpr Bindings Defaults = {
         0x20, 0xA2, 'R', 'F', 0x25, 0x27, 0x26, 0x28, 0x09, 'Q', 0xA0, 'C',
         0x1B, 0x08, 'M', 'P', MouseRight, MouseLeft, 'W', 'S', 'A', 'D', 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 'V'
+        0, 0, 0, 0, 0, 0, 'V', 0, 'T'
     };
     static constexpr Bindings DrivingDefaults = {
         0x20, 0xA2, 'R', 'F', 0x25, 0x27, 0x26, 0x28, 0x09, 'Q', 0xA0, 'C',
         0x1B, 0x08, 'M', 'P', 'S', 'W', 0, 0, 'A', 'D', 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 'V'
+        0, 0, 0, 0, 0, 0, 'V', 0, 'T'
     };
 
     using Tuning = MouseStick::Tuning;
@@ -185,12 +186,14 @@ public:
     static int64_t clockUs(){return std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();}
     uint64_t toggleMask() const{return toggleMask_;}
     uint64_t activeToggles() const {
-        // L2 is a held brake in the driving layout.
-        return driving_ ? toggleMask_ & ~(uint64_t{1} << L2) : toggleMask_;
+        // Inward sticks are momentary. L2 is also held in the driving layout.
+        const auto mask = toggleMask_ & ~(uint64_t{1} << StickInwardBoth);
+        return driving_ ? mask & ~(uint64_t{1} << L2) : mask;
     }
     void setToggleMask(uint64_t mask){toggleMask_=mask;reset();}
     bool menuActive()const{return (toggleMask_&(uint64_t{1}<<MenuStick))?(toggled_&(uint64_t{1}<<MenuStick))!=0:std::find(active_.begin(),active_.end(),MenuStick)!=active_.end();}
-    ControllerState state(bool* mouseControlsRightStick = nullptr, int64_t now = clockUs()) const {
+    ControllerState state(bool* mouseControlsRightStick = nullptr, int64_t now = clockUs(),
+                          bool* inwardSticksHeld = nullptr) const {
         std::array<bool, ActionCount> on{};
         for (const int a : active_) if (a >= 0) on[a] = true;
         const auto toggles = activeToggles();
@@ -230,7 +233,14 @@ public:
         const int rightY = int(on[RightDown]) - int(on[RightUp]);
         const bool rightKeys = on[RightRight] || on[RightLeft] || on[RightUp] || on[RightDown];
         setStick(pad.rightX, pad.rightY, rightX, rightY);
-        if (mouseControlsRightStick) *mouseControlsRightStick = tuning_.mouseLook && !rightKeys;
+        const bool inward = on[StickInwardBoth];
+        if (inward) {
+            pad.leftX = 32767;
+            pad.rightX = -32767;
+            pad.leftY = pad.rightY = 0;
+        }
+        if (inwardSticksHeld) *inwardSticksHeld = inward;
+        if (mouseControlsRightStick) *mouseControlsRightStick = tuning_.mouseLook && !rightKeys && !inward;
         return pad;
     }
 

@@ -13,6 +13,7 @@ Item {
     property bool xbox: false
     property bool referenceOpen: false
     property bool showDriving: false
+    property bool showAimResult: false
     property var hintParts: []
     readonly property string hintText: hintParts.map(part => part.keys.concat([part.label]).join(" ")).join(" · ")
     readonly property real uiScale: Math.max(1, Math.min(1.65, height / 800))
@@ -78,7 +79,7 @@ Item {
         hintTimer.restart()
     }
     function toggleReference() {
-        if (!active || suppressed) return
+        if (!active || suppressed || input?.aimTesting === true) return
         if (referenceOpen) { referenceOpen = false; return }
         showDriving = input?.driving === true
         referenceOpen = true
@@ -89,7 +90,10 @@ Item {
         if (active) showHint(locked ? "locked" : "ready")
         else { hintParts = []; referenceOpen = false }
     }
-    onLockedChanged: showHint(locked ? "locked" : "released")
+    onLockedChanged: {
+        if (locked && input?.aimTesting !== true) showAimResult = false
+        showHint(locked ? "locked" : "released")
+    }
     onSuppressedChanged: if (suppressed) referenceOpen = false
     Connections {
         target: overlay.input
@@ -100,7 +104,15 @@ Item {
         }
         function onQuickReferenceRequested() { overlay.toggleReference() }
         function onAimStatusChanged() {
-            if (overlay.input.aimTesting) overlay.referenceOpen = false
+            if (overlay.input.aimTesting) {
+                overlay.referenceOpen = false
+                overlay.showAimResult = true
+                aimResultTimer.stop()
+                hintFade.stop()
+                hint.opacity = 1
+            } else if (overlay.showAimResult) {
+                aimResultTimer.restart()
+            }
         }
         function onQuickReferenceScrolled(delta) {
             if (!reference.visible) return
@@ -108,7 +120,15 @@ Item {
                 rowsView.contentY - delta * 0.5))
         }
     }
-    Timer { id: hintTimer; interval: 4700; onTriggered: if (overlay.input?.aimTesting !== true) hintFade.start() }
+    Timer { id: hintTimer; interval: 4700; onTriggered: if (!hint.calibrating) hintFade.start() }
+    Timer {
+        id: aimResultTimer
+        interval: 7000
+        onTriggered: {
+            overlay.showAimResult = false
+            if (!hintTimer.running) hintFade.start()
+        }
+    }
     NumberAnimation {
         id: hintFade
         target: hint
@@ -130,6 +150,7 @@ Item {
         readonly property bool videoCover: visible
         readonly property real coverRadius: radius
         readonly property bool calibrating: overlay.input?.aimTesting === true
+            || (overlay.showAimResult && (overlay.input?.aimStatus || "").length > 0)
         visible: overlay.active && !overlay.suppressed && !overlay.referenceOpen &&
             (overlay.hintParts.length > 0 || calibrating)
         anchors.top: parent.top
@@ -144,6 +165,7 @@ Item {
         TapHandler { enabled: !overlay.locked && !hint.calibrating; onTapped: overlay.editRequested() }
         Text {
             id: aimLabel
+            objectName: "console-aim-status"
             anchors.centerIn: parent
             width: Math.max(0, hint.width - 24)
             visible: hint.calibrating

@@ -13,14 +13,14 @@ QtObject {
         qsTr("右摇杆 上"), qsTr("右摇杆 下"), qsTr("右摇杆 左"), qsTr("右摇杆 右"),
         qsTr("慢走"), qsTr("菜单摇杆"), qsTr("触摸板上滑"), qsTr("触摸板下滑"),
         qsTr("触摸板左滑"), qsTr("触摸板右滑"), xbox ? "LS + RS" : "L3 + R3",
-        qsTr("半油门／刹车")
+        qsTr("半油门／刹车"), qsTr("双摇杆向内推")
     ]
 
     function groups(driving) {
         return [
             { title: qsTr("移动"), actions: driving ? [18, 19, 26, 10] : [18, 19, 20, 21, 26, 10] },
             { title: qsTr("视角"), actions: [22, 23, 24, 25] },
-            { title: qsTr("战斗"), actions: driving ? [8, 9, 11, 32] : [17, 16, 8, 9, 11, 32] },
+            { title: qsTr("战斗"), actions: driving ? [8, 9, 11, 32, 34] : [17, 16, 8, 9, 11, 32, 34] },
             { title: qsTr("交互"), actions: [0, 1, 2, 3] },
             { title: qsTr("菜单"), actions: xbox ? [4, 5, 6, 7, 12, 13, 15, 27] : [4, 5, 6, 7, 12, 13, 14, 15, 27, 28, 29, 30, 31] },
             { title: qsTr("驾驶"), actions: driving ? [17, 16, 20, 21, 33] : [] }
@@ -40,6 +40,8 @@ QtObject {
     function pressed(live, action) {
         if (!live) return false
         if (action === 32) return pressed(live, 10) && pressed(live, 11)
+        if (action === 34) return live.leftX >= .99 && live.rightX <= -.99
+            && Math.abs(live.leftY) < .01 && Math.abs(live.rightY) < .01
         if (action < 0 || action >= 26) return false
         if (action < 16) return (Number(live.buttons || 0) & (1 << action)) !== 0
         if (action === 16 || action === 17) return Number(action === 16 ? live.l2 : live.r2) > 0

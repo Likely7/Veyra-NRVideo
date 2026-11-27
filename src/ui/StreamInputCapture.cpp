@@ -496,14 +496,19 @@ bool StreamInputCapture::begin(Route route) {
         using Mode = remoteplay::AimTest::Mode;
         using Render = engine::EngineController::ConsoleRenderMode;
         if (armedAimMode_) {
-            aimTest_ = std::make_shared<remoteplay::AimTest>(Mode(armedAimMode_));
+            const auto mode = Mode(armedAimMode_);
+            const bool compareFg = mode == Mode::Latency && engine_.snapshot().fgActive;
+            aimTest_ = std::make_shared<remoteplay::AimTest>(mode, compareFg);
             armedAimMode_ = 0;
             measuredFg_ = false;
             aimStageAt_ = nowUs();
             mapped_->setAimTest(aimTest_);
-            engine_.setConsoleAimProbe(aimTest_);
-            if (aimTest_->mode() == Mode::Latency && !engine_.setConsoleRenderMode(Render::MeasureWithoutFg))
-                aimTest_->cancel();
+            if (aimTest_->needsFrames()) engine_.setConsoleAimProbe(aimTest_);
+            if (mode == Mode::Latency && !engine_.setConsoleRenderMode(Render::MeasureWithoutFg)) {
+                end();
+                setAimStatus(tr("画面尚未就绪。请先进入游戏并确认画面正常播放。"));
+                return false;
+            }
             emit aimStatusChanged();
         } else if (mapper_.tuning().consoleLowLatency) {
             lowLatencyActive_ = engine_.setConsoleRenderMode(Render::LowLatency);
@@ -716,7 +721,12 @@ bool StreamInputCapture::nativeEventFilter(const QByteArray& eventType, void* me
     case WM_ACTIVATE:
         if (LOWORD(msg->wParam) == WA_INACTIVE) end();
         return false;
-    case WM_KILLFOCUS: end(); return false;
+    case WM_KILLFOCUS: {
+        const auto next = reinterpret_cast<HWND>(msg->wParam);
+        const auto owner = route_ == Route::Preview ? previewWindow_ : window_;
+        if (route_ == Route::Moonlight || !next || GetAncestor(next, GA_ROOT) != owner) end();
+        return false;
+    }
     default: break;
     }
     if (!captured()) return false;
@@ -825,7 +835,7 @@ void StreamInputCapture::armAimTest(int mode) {
     if (mode < 0 || mode > int(remoteplay::AimTest::Mode::Latency)) return;
     releasePs5();
     armedAimMode_ = mode;
-    setAimStatus(mode ? tr("返回游戏画面后点击接管。请站在开阔、静止的场景，松开手柄。") : QString{});
+    setAimStatus(mode ? tr("站在原地，面向有纹理的静止场景。点击下方按钮返回游戏开始测试。") : QString{});
 }
 void StreamInputCapture::tickAimTest() {
     using Test = remoteplay::AimTest;
@@ -833,30 +843,45 @@ void StreamInputCapture::tickAimTest() {
     const auto status = aimTest_->status();
     const auto mode = aimTest_->mode();
     if (status.state == Test::State::Cancelled || status.state == Test::State::Unreliable) {
+        const bool manual = !aimTest_->needsFrames();
         end();
-        setAimStatus(status.state == Test::State::Cancelled ? tr("校准或延迟测试已取消") :
-            tr("画面运动样本不足。请换到开阔、静止的场景再试。"));
+        if (status.state == Test::State::Cancelled) setAimStatus(tr("校准或延迟测试已取消"));
+        else if (manual) setAimStatus(tr("未确认死区。请在镜头开始移动时按空格保存。"));
+        else {
+            setAimStatus(tr("只检测到 %1 次有效镜头响应。请换到有纹理的静止场景再试。").arg(status.latencySamples[0]));
+            veyra::log::info("console-aim", std::format("latency responses={} motionSamples={}", status.latencySamples[0], status.motionSamples));
+        }
         return;
     }
+    const auto baselineLatency = [&] {
+        return tr("摇杆发送到画面提交 · 关闭补帧 %1 ms").arg(status.latencyMs[0], 0, 'f', 1);
+    };
     if (status.state == Test::State::Complete) {
         if (mode == Test::Mode::Latency) {
-            if (!engine_.snapshot().fgActive) {
-                end();
-                setAimStatus(tr("画面处理尚未就绪，延迟测试已结束。"));
-                return;
-            }
-            setAimStatus(tr("摇杆发送到画面提交 · 关闭补帧 %1 ms · 开启补帧 %2 ms")
-                .arg(status.latencyMs[0], 0, 'f', 1).arg(status.latencyMs[1], 0, 'f', 1));
-            veyra::log::info("console-aim", std::format("inputToPresent five samples per mode fgOffMs={:.2f} fgOnMs={:.2f}",
-                status.latencyMs[0], status.latencyMs[1]));
+            const bool compared = status.latencySamples[1] >= Test::kMinLatencySamples;
+            setAimStatus(compared
+                ? tr("摇杆发送到画面提交 · 关闭补帧 %1 ms · 开启补帧 %2 ms")
+                    .arg(status.latencyMs[0], 0, 'f', 1).arg(status.latencyMs[1], 0, 'f', 1)
+                : baselineLatency());
+            veyra::log::info("console-aim", std::format("inputToPresent fgOffSamples={} fgOffMs={:.2f} fgOnSamples={} fgOnMs={:.2f}",
+                status.latencySamples[0], status.latencyMs[0], status.latencySamples[1], status.latencyMs[1]));
         } else {
             auto tune = mapper_.tuning();
             tune.physicalAim = tune.aimConfigured = true;
             if (mode == Test::Mode::Automatic) {
-                const auto curve = aimTest_->resultCurve();
+                const auto result = aimTest_->calibration();
+                const auto& curve = result.curve;
+                veyra::log::info("console-aim", std::format(
+                    "calibration failure={} motionSamples={} measuredSteps={} neutralSpeed={:.2f} fullSpeed={:.2f} firstMotion={:.3f} fitError={:.4f}",
+                    int(result.failure), status.motionSamples, result.measuredSteps, result.backgroundSpeed,
+                    result.fullSpeed, result.firstMotion, result.fitError));
                 if (!curve.valid()) {
                     end();
-                    setAimStatus(tr("画面运动样本不足。请换到开阔、静止的场景再试。"));
+                    if (result.failure == Test::CalibrationFailure::NoResponse)
+                        setAimStatus(tr("没有检测到足够的镜头转动。确认手柄已连接、角色能转动视角，也可以手动测死区。"));
+                    else if (result.failure == Test::CalibrationFailure::MovingScene)
+                        setAimStatus(tr("静止时画面也在移动。请面向有纹理的静止场景，松开手柄后重试。"));
+                    else setAimStatus(tr("镜头转动速度不稳定。可以换个场景再试，或手动测死区。"));
                     return;
                 }
                 tune.measuredCurve = curve;
@@ -882,20 +907,26 @@ void StreamInputCapture::tickAimTest() {
     if (mode == Test::Mode::Latency && status.fg != measuredFg_) {
         measuredFg_ = status.fg;
         aimStageAt_ = nowUs();
-        if (!engine_.setConsoleRenderMode(Render::MeasureWithFg)) aimTest_->cancel();
+        if (!engine_.setConsoleRenderMode(Render::MeasureWithFg)) {
+            end();
+            setAimStatus(baselineLatency());
+            return;
+        }
     }
-    const bool ready = engine_.consoleRenderReady();
+    const bool ready = engine_.consoleRenderReady() && (!status.fg || engine_.snapshot().fgActive);
     aimTest_->ready(ready);
     if (!ready && nowUs() - aimStageAt_ > 15000000) {
-        aimTest_->cancel();
         end();
-        setAimStatus(tr("画面处理尚未就绪，延迟测试已结束。"));
+        setAimStatus(status.latencySamples[0] >= Test::kMinLatencySamples ? baselineLatency() :
+            tr("画面尚未就绪。请先进入游戏并确认画面正常播放。"));
         return;
     }
-    if (aimTest_->needsFrames()) {
-        setAimStatus(tr("正在测量画面响应 %1% · 任意键取消").arg(status.progress));
+    if (!ready) {
+        setAimStatus(tr("正在等待游戏画面 · Esc 取消"));
+    } else if (aimTest_->needsFrames()) {
+        setAimStatus(tr("正在测量画面响应 %1% · Esc 取消").arg(status.progress));
     } else {
-        setAimStatus(tr("摇杆 %1% · 镜头开始转动时按空格 · ←／→ 微调 · Esc 取消").arg(status.percent));
+        setAimStatus(tr("摇杆 %1% · 镜头开始转动时按空格保存 · ←／→ 暂停并微调 · Esc 取消").arg(status.percent));
     }
 }
 
@@ -1163,6 +1194,10 @@ void StreamInputCapture::preview(bool on) {
 }
 void StreamInputCapture::releasePs5() {
     if (ps5Captured() || xboxCaptured() || previewing()) end();
+    if (armedAimMode_) {
+        armedAimMode_ = 0;
+        setAimStatus({});
+    }
     cancelLearning();
 }
 void StreamInputCapture::load() {
@@ -1216,8 +1251,10 @@ void StreamInputCapture::readProfile(const QJsonObject& json){
     mapper_.setDriveKey(0);
     mapper_.resetBindings();
     mapper_.resetBindings(true);
+    mapper_.setBinding(Mapper::StickInwardBoth, 0);
+    mapper_.setBinding(Mapper::StickInwardBoth, 0, true);
     const auto readBindings = [this](const QJsonArray& bindings, bool driving, int slot) {
-        if (bindings.size() < 26 || bindings.size() > Mapper::ActionCount) return;
+        if (bindings.size() < 26 || bindings.size() > Mapper::HalfPedal + 1) return;
         for (int i = 0; i < Mapper::ActionCount; ++i) mapper_.setBinding(i, 0, driving, slot);
         for (int i = 0; i < bindings.size(); ++i)
             mapper_.setBinding(i, bindings[i].toInt(), driving, slot);
@@ -1251,7 +1288,22 @@ void StreamInputCapture::readProfile(const QJsonObject& json){
     mapper_.setToggleMask(uint64_t(json.value("toggles").toInteger()));
     const int quickKey = json.value("quickKey").toInt(DefaultQuickKey);
     quickKey_ = quickKeyAvailable(quickKey) ? quickKey : fallbackQuickKey();
+    const auto inward = json.value("inwardStickBindings").toArray();
     for (bool drivingLayout : {false, true}) {
+        const int layout = drivingLayout ? 1 : 0;
+        const auto inwardKeys = layout < inward.size() ? inward.at(layout).toArray() : QJsonArray{};
+        if (inwardKeys.isEmpty()) {
+            constexpr int defaultInward = Mapper::Defaults[Mapper::StickInwardBoth];
+            if (defaultInward != quickKey_ && !mapper_.hasBinding(defaultInward, drivingLayout))
+                mapper_.setBinding(Mapper::StickInwardBoth, defaultInward, drivingLayout);
+        } else {
+            for (int slot = 0; slot < std::min<qsizetype>(Mapper::SlotCount, inwardKeys.size()); ++slot) {
+                const int binding = inwardKeys[slot].toInt();
+                if (binding && binding != quickKey_ && !unlockChord(binding, mapper_.tuning().unlock) &&
+                    !mapper_.hasBinding(binding, drivingLayout))
+                    mapper_.setBinding(Mapper::StickInwardBoth, binding, drivingLayout, slot);
+            }
+        }
         auto& notes = notes_[drivingLayout];
         notes.clear();
         const auto saved = json.value(drivingLayout ? "drivingActionNotes" : "actionNotes").toArray();
@@ -1268,6 +1320,14 @@ QJsonObject StreamInputCapture::activeProfile()const{
     };
     QJsonArray pedals;
     for (int slot = 0; slot < Mapper::SlotCount; ++slot) pedals.append(mapper_.bindings(true, slot)[Mapper::HalfPedal]);
+    // Keep the legacy button arrays readable by older builds.
+    QJsonArray inward;
+    for (const bool driving : {false, true}) {
+        QJsonArray inwardKeys;
+        for (int slot = 0; slot < Mapper::SlotCount; ++slot)
+            inwardKeys.append(mapper_.bindings(driving, slot)[Mapper::StickInwardBoth]);
+        inward.append(inwardKeys);
+    }
     auto profile = profiles_.value(profile_).toObject();
     profile.remove("gtaVProfile");
     auto options = profile.value("tuning").toObject();
@@ -1287,6 +1347,7 @@ QJsonObject StreamInputCapture::activeProfile()const{
     profile["toggles"] = qint64(mapper_.toggleMask());
     profile["xboxOnly"] = xboxOnlyProfile_;
     profile["halfPedalBindings"] = pedals;
+    profile["inwardStickBindings"] = inward;
     return profile;
 }
 bool StreamInputCapture::toggleAction(int action)const{return action>=0&&action<Mapper::ActionCount&&(mapper_.toggleMask()&(uint64_t{1}<<action));}

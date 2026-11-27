@@ -12456,6 +12456,18 @@
    "ru": "Двойной слой"
   },
   {
+   "zh": "双摇杆向内推",
+   "zh-TW": "雙搖桿向內推",
+   "en": "Push both sticks inward",
+   "ja": "左右のスティックを内側に倒す",
+   "ko": "양쪽 스틱을 안쪽으로 밀기",
+   "es": "Inclinar ambos sticks hacia el centro",
+   "fr": "Pousser les deux sticks vers le centre",
+   "de": "Beide Sticks nach innen neigen",
+   "pt-BR": "Mover os dois analógicos para dentro",
+   "ru": "Наклонить оба стика к центру"
+  },
+  {
    "zh": "双行不自动缩小；更多样式在字幕设置里",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "雙行不自動縮小；更多樣式在字幕設定裡",
@@ -12896,6 +12908,18 @@
    "de": "Nur der Knotenmodus verwendet Edit-Verbindungen",
    "pt-BR": "Somente o modo nó usa conexões de edição",
    "ru": "Только режим узла использует соединения редактирования"
+  },
+  {
+   "zh": "只检测到 %1 次有效镜头响应。请换到有纹理的静止场景再试。",
+   "zh-TW": "只偵測到 %1 次有效鏡頭反應。請換到有紋理的靜止場景再試。",
+   "en": "Detected only %1 usable camera responses. Try a still scene with visible detail.",
+   "ja": "カメラの有効な反応を %1 回しか検出できませんでした。模様のある静止した場所で再試行してください。",
+   "ko": "유효한 카메라 반응이 %1회만 감지되었습니다. 세부 무늬가 잘 보이는 정지 장면에서 다시 시도하세요.",
+   "es": "Solo se detectaron %1 respuestas válidas de la cámara. Prueba en una escena estática con detalles visibles.",
+   "fr": "Seulement %1 réponses exploitables de la caméra détectées. Réessayez dans une scène immobile avec des détails visibles.",
+   "de": "Nur %1 verwertbare Kamerareaktionen erkannt. Versuche es mit einer unbewegten Szene mit sichtbaren Details.",
+   "pt-BR": "Foram detectadas apenas %1 respostas utilizáveis da câmera. Tente em uma cena parada com detalhes visíveis.",
+   "ru": "Обнаружено только %1 пригодных для замера откликов камеры. Повторите проверку в неподвижной сцене с заметными деталями."
   },
   {
    "zh": "只清影片记忆，不动显示设备记忆",
@@ -23272,17 +23296,28 @@
    "ru": "Кадровая частота камеры"
   },
   {
-   "zh": "摇杆 %1% · 镜头开始转动时按空格 · ←／→ 微调 · Esc 取消",
-   "src": "src/ui/StreamInputCapture.cpp",
-   "zh-TW": "搖桿 %1% · 鏡頭開始轉動時按空白鍵 · ←／→ 微調 · Esc 取消",
-   "en": "Stick %1% · Press Space when the camera turns · ←/→ to adjust · Esc to cancel",
-   "ja": "スティック %1% · 視点が動き始めたら Space · ←／→ で調整 · Esc で中止",
-   "ko": "스틱 %1% · 시점이 움직이면 스페이스 · ←/→ 조정 · Esc 취소",
-   "es": "Palanca %1% · Pulsa Espacio cuando gire la cámara · ←/→ para ajustar · Esc cancela",
-   "fr": "Stick %1 % · Appuyez sur Espace dès que la caméra tourne · ←/→ pour ajuster · Échap pour annuler",
-   "de": "Stick %1 % · Leertaste bei Kameradrehung · ←/→ zum Anpassen · Esc zum Abbrechen",
-   "pt-BR": "Analógico %1% · Espaço quando a câmera girar · ←/→ para ajustar · Esc cancela",
-   "ru": "Стик %1% · Нажмите пробел при повороте камеры · ←/→ для подстройки · Esc для отмены"
+   "zh": "摇杆 %1% · 镜头开始转动时按空格保存 · ←／→ 暂停并微调 · Esc 取消",
+   "zh-TW": "搖桿 %1% · 鏡頭開始轉動時按空白鍵儲存 · ←／→ 暫停並微調 · Esc 取消",
+   "en": "Stick %1% · Space saves when the camera starts moving · ←/→ holds and adjusts · Esc cancels",
+   "ja": "スティック %1% · カメラが動き始めたら Space で保存 · ←/→ で停止して微調整 · Esc で中止",
+   "ko": "스틱 %1% · 카메라가 움직이기 시작하면 Space로 저장 · ←/→로 멈추고 미세 조정 · Esc로 취소",
+   "es": "Stick al %1% · Pulsa Espacio al empezar a girar la cámara · ←/→ pausa y ajusta · Esc cancela",
+   "fr": "Stick à %1% · Espace enregistre dès que la caméra bouge · ←/→ fige et ajuste · Échap annule",
+   "de": "Stick %1% · Bei Kamerabewegung mit Leertaste speichern · ←/→ hält und korrigiert · Esc bricht ab",
+   "pt-BR": "Analógico em %1% · Espaço salva quando a câmera começa a se mover · ←/→ pausa e ajusta · Esc cancela",
+   "ru": "Стик %1% · Сохраните пробелом, когда камера начнёт двигаться · ←/→ фиксируют и уточняют · Esc отменяет"
+  },
+  {
+   "zh": "摇杆发送到画面提交 · 关闭补帧 %1 ms",
+   "zh-TW": "搖桿送出到畫面提交 · 關閉補幀 %1 ms",
+   "en": "Stick send to frame submission · Frame generation off %1 ms",
+   "ja": "スティック送信からフレーム提出まで · フレーム生成オフ %1 ms",
+   "ko": "스틱 전송부터 프레임 제출까지 · 프레임 생성 끔 %1 ms",
+   "es": "Del envío del stick a la entrega del fotograma · Generación desactivada %1 ms",
+   "fr": "De l’envoi du stick à la soumission de l’image · Génération désactivée %1 ms",
+   "de": "Vom Senden des Stick-Signals bis zur Bildübergabe · Frame-Generierung aus %1 ms",
+   "pt-BR": "Do envio do analógico à apresentação do quadro · Geração de quadros desligada %1 ms",
+   "ru": "От отправки сигнала стика до передачи кадра на вывод · Без генерации кадров %1 мс"
   },
   {
    "zh": "摇杆发送到画面提交 · 关闭补帧 %1 ms · 开启补帧 %2 ms",
@@ -27407,6 +27442,18 @@
    "ru": "Неизвестный сетевой режим"
   },
   {
+   "zh": "未确认死区。请在镜头开始移动时按空格保存。",
+   "zh-TW": "未確認死區。請在鏡頭開始移動時按空白鍵儲存。",
+   "en": "Dead zone was not confirmed. Press Space when the camera starts moving to save it.",
+   "ja": "デッドゾーンが確定されませんでした。カメラが動き始めたら Space で保存してください。",
+   "ko": "데드존이 확인되지 않았습니다. 카메라가 움직이기 시작하면 Space를 눌러 저장하세요.",
+   "es": "No se confirmó la zona muerta. Pulsa Espacio para guardarla cuando empiece a moverse la cámara.",
+   "fr": "Zone morte non confirmée. Appuyez sur Espace dès que la caméra bouge pour l’enregistrer.",
+   "de": "Totzone nicht bestätigt. Drücke die Leertaste, sobald sich die Kamera bewegt, um sie zu speichern.",
+   "pt-BR": "Zona morta não confirmada. Pressione Espaço quando a câmera começar a se mover para salvar.",
+   "ru": "Мёртвая зона не подтверждена. Чтобы сохранить её, нажмите пробел, как только камера начнёт двигаться."
+  },
+  {
    "zh": "未能确认驱动配置",
    "src": "src/ui/NvidiaVrrProfileController.cpp",
    "zh-TW": "未能確認驅動程式設定",
@@ -29396,17 +29443,16 @@
    "ru": "Проверить хозяина..."
   },
   {
-   "zh": "正在测量画面响应 %1% · 任意键取消",
-   "src": "src/ui/StreamInputCapture.cpp",
-   "zh-TW": "正在測量畫面反應 %1% · 按任意鍵取消",
-   "en": "Measuring picture response %1% · Press any key to cancel",
-   "ja": "映像の反応を測定中 %1% · 任意のキーで中止",
-   "ko": "화면 응답 측정 중 %1% · 아무 키나 눌러 취소",
-   "es": "Midiendo la respuesta de imagen %1% · Cualquier tecla cancela",
-   "fr": "Mesure de la réponse de l’image %1 % · Une touche pour annuler",
-   "de": "Bildreaktion wird gemessen %1 % · Beliebige Taste zum Abbrechen",
-   "pt-BR": "Medindo resposta da imagem %1% · Qualquer tecla cancela",
-   "ru": "Замер отклика изображения %1% · Любая клавиша отменяет"
+   "zh": "正在测量画面响应 %1% · Esc 取消",
+   "zh-TW": "正在測量畫面反應 %1% · Esc 取消",
+   "en": "Measuring video response %1% · Esc cancels",
+   "ja": "映像応答を測定中 %1% · Esc で中止",
+   "ko": "화면 응답 측정 중 %1% · Esc로 취소",
+   "es": "Midiendo la respuesta de la imagen %1% · Esc cancela",
+   "fr": "Mesure de la réponse de l’image %1% · Échap annule",
+   "de": "Bildreaktion wird gemessen %1% · Esc bricht ab",
+   "pt-BR": "Medindo a resposta da imagem %1% · Esc cancela",
+   "ru": "Измерение отклика изображения %1% · Esc отменяет"
   },
   {
    "zh": "正在登录 Xbox 串流服务…",
@@ -29446,6 +29492,18 @@
    "de": "Warte auf Windows-Liveuntertitel…",
    "pt-BR": "Aguardando as legendas do Windows…",
    "ru": "Ожидание субтитров Windows…"
+  },
+  {
+   "zh": "正在等待游戏画面 · Esc 取消",
+   "zh-TW": "正在等待遊戲畫面 · Esc 取消",
+   "en": "Waiting for game video · Esc cancels",
+   "ja": "ゲーム映像を待っています · Esc で中止",
+   "ko": "게임 화면 대기 중 · Esc로 취소",
+   "es": "Esperando imagen del juego · Esc cancela",
+   "fr": "Attente de l’image du jeu · Échap annule",
+   "de": "Warten auf das Spielbild · Esc bricht ab",
+   "pt-BR": "Aguardando imagem do jogo · Esc cancela",
+   "ru": "Ожидание изображения игры · Esc отменяет"
   },
   {
    "zh": "正在等待画面字幕…",
@@ -30317,6 +30375,18 @@
    "de": "Keine Videodaten erhalten. Normalerweise erlaubt die Firewall oder Portweiterleitung UDP 47998-48010 nicht.",
    "pt-BR": "Nenhum dado de vídeo recebido. Normalmente o firewall ou encaminhamento de portas não permite UDP 47998-48010.",
    "ru": "Никаких видеоданных получено не было. Обычно брандмауэр или переадресация портов не допускают UDP 47998-48010."
+  },
+  {
+   "zh": "没有检测到足够的镜头转动。确认手柄已连接、角色能转动视角，也可以手动测死区。",
+   "zh-TW": "沒有偵測到足夠的鏡頭轉動。確認手把已連線、角色能轉動視角，也可以手動測死區。",
+   "en": "Too little camera movement was detected. Check the controller connection and make sure you can turn the camera in-game. You can also measure the dead zone manually.",
+   "ja": "カメラの回転量が不足しています。コントローラーが接続され、ゲーム内で視点を動かせることを確認してください。デッドゾーンを手動で測ることもできます。",
+   "ko": "감지된 카메라 회전이 부족합니다. 컨트롤러가 연결되어 있고 게임에서 시점을 돌릴 수 있는지 확인하세요. 데드존을 수동으로 측정할 수도 있습니다.",
+   "es": "Se detectó muy poco giro de cámara. Comprueba que el mando esté conectado y puedas girar la cámara en el juego. También puedes medir la zona muerta manualmente.",
+   "fr": "Trop peu de mouvement détecté. Vérifiez que la manette est connectée et que vous pouvez tourner la caméra en jeu. Vous pouvez aussi mesurer la zone morte manuellement.",
+   "de": "Zu wenig Kamerabewegung erkannt. Prüfe die Controller-Verbindung und ob sich die Kamera im Spiel drehen lässt. Du kannst die Totzone auch manuell messen.",
+   "pt-BR": "Foi detectado pouco giro da câmera. Verifique se o controle está conectado e se você pode girar a câmera no jogo. Também é possível medir a zona morta manualmente.",
+   "ru": "Камера двигалась слишком мало. Проверьте подключение геймпада и возможность поворачивать камеру в игре. Мёртвую зону также можно измерить вручную."
   },
   {
    "zh": "没有正在播放的画面，无法录制",
@@ -31905,19 +31975,6 @@
    "ru": "Картина играет в главном окне"
   },
   {
-   "zh": "画面处理尚未就绪，延迟测试已结束。",
-   "src": "src/ui/StreamInputCapture.cpp",
-   "zh-TW": "畫面處理尚未就緒，延遲測試已結束。",
-   "en": "Video processing was not ready. The latency test ended.",
-   "ja": "映像処理の準備ができず、遅延テストを終了しました。",
-   "ko": "영상 처리가 준비되지 않아 지연 테스트를 종료했습니다.",
-   "es": "El procesamiento de vídeo no estaba listo. La prueba de latencia terminó.",
-   "fr": "Le traitement vidéo n’était pas prêt. Le test de latence est terminé.",
-   "de": "Videoverarbeitung war noch nicht bereit. Der Latenztest wurde beendet.",
-   "pt-BR": "O processamento de vídeo não estava pronto. O teste de latência terminou.",
-   "ru": "Обработка видео не подготовилась. Замер задержки завершён."
-  },
-  {
    "zh": "画面对比 · 补帧暂停",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "畫面對比 · 補幀暫停",
@@ -31929,6 +31986,18 @@
    "de": "Bildvergleich · Frame Generation pausiert",
    "pt-BR": "Comparação de imagens · geração de quadros pausados",
    "ru": "Сравнение изображений · генерация кадров приостановлена"
+  },
+  {
+   "zh": "画面尚未就绪。请先进入游戏并确认画面正常播放。",
+   "zh-TW": "畫面尚未就緒。請先進入遊戲並確認畫面正常播放。",
+   "en": "Game video is not ready. Enter the game and make sure the video is playing.",
+   "ja": "映像の準備ができていません。ゲームに入り、映像が再生されていることを確認してください。",
+   "ko": "게임 화면이 준비되지 않았습니다. 게임에 들어가 영상이 재생되는지 확인하세요.",
+   "es": "La imagen aún no está lista. Entra en el juego y asegúrate de que se vea correctamente.",
+   "fr": "L’image n’est pas encore prête. Lancez le jeu et vérifiez que son image s’affiche.",
+   "de": "Das Spielbild ist noch nicht bereit. Öffne das Spiel und prüfe, ob das Bild abgespielt wird.",
+   "pt-BR": "A imagem do jogo ainda não está pronta. Entre no jogo e confirme que a imagem está sendo exibida.",
+   "ru": "Видеопоток ещё не готов. Войдите в игру и убедитесь, что изображение воспроизводится."
   },
   {
    "zh": "画面尺寸或 HDR 模式变化，已接着写入新文件",
@@ -32085,19 +32154,6 @@
    "de": "Bildkorrektur steuert die zeitliche Stabilität; diese Einstellung kehrt zurück, wenn die Korrektur ausgeschaltet ist",
    "pt-BR": "A correção da imagem controla a estabilidade temporal; esta configuração retorna quando a correção está desligada",
    "ru": "Коррекция изображения контролирует временную стабильность; эта настройка возвращается, когда коррекция отключена."
-  },
-  {
-   "zh": "画面运动样本不足。请换到开阔、静止的场景再试。",
-   "src": "src/ui/StreamInputCapture.cpp",
-   "zh-TW": "畫面運動樣本不足。請換到開闊、靜止的場景再試。",
-   "en": "Too few usable motion samples. Try again in a still, open area.",
-   "ja": "動きのサンプルが不足しています。動きの少ない開けた場所で再試行してください。",
-   "ko": "사용 가능한 움직임 샘플이 부족합니다. 움직임이 적은 넓은 장소에서 다시 시도하세요.",
-   "es": "Faltan muestras útiles de movimiento. Prueba en una zona abierta y tranquila.",
-   "fr": "Trop peu d’échantillons de mouvement utilisables. Réessayez dans un endroit dégagé et immobile.",
-   "de": "Zu wenige brauchbare Bewegungsproben. Versuche es erneut in einem ruhigen, offenen Bereich.",
-   "pt-BR": "Poucas amostras de movimento disponíveis. Tente novamente em uma área aberta e parada.",
-   "ru": "Недостаточно пригодных образцов движения. Повторите в открытом и неподвижном месте."
   },
   {
    "zh": "界面始终用显卡绘制；小飞机 OSD 不在 Veyra 里显示；开着 NVIDIA 信息浮窗或游戏加加时可能卡死",
@@ -33296,17 +33352,16 @@
    "ru": "Перезапустить сейчас"
   },
   {
-   "zh": "站在空地，松开鼠标，点开始后按提示在游戏里转动镜头。",
-   "src": "qml/ControllerFeelPage.qml",
-   "zh-TW": "站在空曠處，放開滑鼠，按開始後依照提示在遊戲中轉動鏡頭。",
-   "en": "Stand in an open area and let go of the mouse. Select Start and follow the prompts to turn the camera in-game.",
-   "ja": "開けた場所でマウスから手を離し、開始を選んで画面の指示どおりにゲーム内のカメラを回してください。",
-   "ko": "트인 곳에서 마우스를 놓으세요. 시작을 선택한 뒤 안내에 따라 게임에서 시점을 돌리세요.",
-   "es": "Colócate en una zona abierta y suelta el ratón. Pulsa Iniciar y sigue las indicaciones para girar la cámara en el juego.",
-   "fr": "Placez-vous dans un espace dégagé et lâchez la souris. Sélectionnez Démarrer, puis suivez les indications pour tourner la caméra dans le jeu.",
-   "de": "Stell dich an einen freien Ort und lass die Maus los. Wähle Start und folge den Hinweisen, um die Kamera im Spiel zu drehen.",
-   "pt-BR": "Fique em uma área aberta e solte o mouse. Selecione Iniciar e siga as instruções para girar a câmera no jogo.",
-   "ru": "Встаньте на открытом месте и отпустите мышь. Нажмите «Начать» и поворачивайте камеру в игре по подсказкам."
+   "zh": "站在原地，面向有纹理的静止场景。点击下方按钮返回游戏开始测试。",
+   "zh-TW": "站在原地，面向有紋理的靜止場景。點擊下方按鈕返回遊戲開始測試。",
+   "en": "Stand still and face a scene with visible detail. Use the button below to return to the game and start the test.",
+   "ja": "その場に立ち止まり、模様のある静止した場所に向いてください。下のボタンでゲームに戻り、テストを開始します。",
+   "ko": "멈춰 서서 세부 무늬가 잘 보이는 정지 장면을 바라보세요. 아래 버튼을 눌러 게임으로 돌아가 테스트를 시작하세요.",
+   "es": "Quédate quieto frente a una escena estática con detalles visibles. Pulsa el botón de abajo para volver al juego e iniciar la prueba.",
+   "fr": "Restez immobile face à une scène fixe avec des détails visibles. Cliquez sur le bouton ci-dessous pour revenir au jeu et lancer le test.",
+   "de": "Bleib stehen und sieh auf eine unbewegte Szene mit sichtbaren Details. Nutze die Schaltfläche unten, um zum Spiel zurückzukehren und den Test zu starten.",
+   "pt-BR": "Fique parado de frente para uma cena com detalhes visíveis. Clique no botão abaixo para voltar ao jogo e iniciar o teste.",
+   "ru": "Остановитесь и направьте камеру на неподвижную сцену с заметными деталями. Нажмите кнопку ниже, чтобы вернуться в игру и начать тест."
   },
   {
    "zh": "端点已打开",
@@ -41083,17 +41138,16 @@
    "ru": "Назад к списку"
   },
   {
-   "zh": "返回游戏画面后点击接管。请站在开阔、静止的场景，松开手柄。",
-   "src": "src/ui/StreamInputCapture.cpp",
-   "zh-TW": "返回遊戲畫面後點擊接管。請停在開闊、靜止的場景並放開手把。",
-   "en": "Return to the game view and click to capture. Find a still, open area and release the controller.",
-   "ja": "ゲーム画面に戻ってクリックしてください。動きの少ない開けた場所でコントローラーから手を離します。",
-   "ko": "게임 화면으로 돌아가 클릭하여 입력을 잠그세요. 움직임이 적은 넓은 장소에서 컨트롤러를 놓으세요.",
-   "es": "Vuelve a la vista del juego y haz clic para capturar la entrada. Busca una zona abierta y tranquila y suelta el mando.",
-   "fr": "Revenez à la vue du jeu et cliquez pour capter les entrées. Placez-vous dans un endroit dégagé et immobile, puis relâchez la manette.",
-   "de": "Kehre zur Spielansicht zurück und klicke zur Erfassung. Wähle einen ruhigen, offenen Bereich und lass das Gamepad los.",
-   "pt-BR": "Volte à tela do jogo e clique para capturar. Escolha uma área aberta e parada e solte o controle.",
-   "ru": "Вернитесь к игре и щёлкните для захвата. Остановитесь на открытом участке и отпустите геймпад."
+   "zh": "返回游戏开始测试",
+   "zh-TW": "返回遊戲開始測試",
+   "en": "Return to game and start test",
+   "ja": "ゲームに戻ってテスト開始",
+   "ko": "게임으로 돌아가 테스트 시작",
+   "es": "Volver al juego e iniciar la prueba",
+   "fr": "Revenir au jeu et lancer le test",
+   "de": "Zum Spiel zurück und Test starten",
+   "pt-BR": "Voltar ao jogo e iniciar o teste",
+   "ru": "Вернуться в игру и начать тест"
   },
   {
    "zh": "还原",
@@ -41954,19 +42008,6 @@
    "ru": "Выбрать…"
   },
   {
-   "zh": "选择一个方向，按提示找出镜头刚开始移动的位置。",
-   "src": "qml/ControllerFeelPage.qml",
-   "zh-TW": "選擇一個方向，依照提示找出鏡頭剛開始移動的位置。",
-   "en": "Choose an axis and follow the prompts to find where the camera starts moving.",
-   "ja": "方向を選び、画面の指示に従ってカメラが動き始める位置を確認します。",
-   "ko": "방향을 선택하고 안내에 따라 시점이 움직이기 시작하는 지점을 찾으세요.",
-   "es": "Elige un eje y sigue las indicaciones para detectar cuándo empieza a moverse la cámara.",
-   "fr": "Choisissez un axe et suivez les indications pour repérer quand la caméra commence à bouger.",
-   "de": "Wähle eine Achse und folge den Hinweisen, bis sich die Kamera gerade zu bewegen beginnt.",
-   "pt-BR": "Escolha um eixo e siga as instruções para descobrir quando a câmera começa a se mover.",
-   "ru": "Выберите ось и по подсказкам найдите положение, в котором камера начинает двигаться."
-  },
-  {
    "zh": "选择主机",
    "src": "qml/ControllerConnectionPage.qml",
    "zh-TW": "選擇主機",
@@ -42043,6 +42084,18 @@
    "de": "Screenshot-Ordner wählen",
    "pt-BR": "Escolher pasta de capturas de tela",
    "ru": "Выбрать папку снимков экрана"
+  },
+  {
+   "zh": "选择方向后回到游戏，镜头刚开始移动时按空格保存。",
+   "zh-TW": "選擇方向後回到遊戲，鏡頭剛開始移動時按空白鍵儲存。",
+   "en": "Pick an axis and return to the game. Press Space to save as soon as the camera moves.",
+   "ja": "方向を選んでゲームに戻り、カメラが動き始めたら Space で保存します。",
+   "ko": "방향을 선택하고 게임으로 돌아가세요. 카메라가 움직이기 시작하면 Space로 저장하세요.",
+   "es": "Elige un eje y vuelve al juego. Pulsa Espacio para guardar en cuanto se mueva la cámara.",
+   "fr": "Choisissez un axe et revenez au jeu. Appuyez sur Espace pour enregistrer dès que la caméra bouge.",
+   "de": "Wähle eine Achse und kehre zum Spiel zurück. Speichere mit der Leertaste, sobald sich die Kamera bewegt.",
+   "pt-BR": "Escolha um eixo e volte ao jogo. Pressione Espaço para salvar assim que a câmera começar a se mover.",
+   "ru": "Выберите ось и вернитесь в игру. Нажмите пробел, чтобы сохранить значение, как только камера начнёт двигаться."
   },
   {
    "zh": "选择用于采集卡手柄控制的 Xbox 主机",
@@ -43553,6 +43606,18 @@
    "ru": "При сбое зеркала Veyra подключится напрямую к GitHub."
   },
   {
+   "zh": "镜头转动速度不稳定。可以换个场景再试，或手动测死区。",
+   "zh-TW": "鏡頭轉動速度不穩定。可以換個場景再試，或手動測死區。",
+   "en": "Camera rotation speed was inconsistent. Try a different scene or measure the dead zone manually.",
+   "ja": "カメラの回転速度が不安定でした。場所を変えて再試行するか、デッドゾーンを手動で測ってください。",
+   "ko": "카메라 회전 속도가 일정하지 않았습니다. 다른 장면에서 다시 시도하거나 데드존을 수동으로 측정하세요.",
+   "es": "La velocidad de giro fue irregular. Prueba en otra escena o mide la zona muerta manualmente.",
+   "fr": "La vitesse de rotation variait trop. Réessayez dans une autre scène ou mesurez la zone morte manuellement.",
+   "de": "Die Kameradrehung war ungleichmäßig. Teste in einer anderen Szene oder miss die Totzone manuell.",
+   "pt-BR": "A velocidade de giro da câmera variou muito. Tente em outra cena ou meça a zona morta manualmente.",
+   "ru": "Скорость вращения камеры была нестабильной. Повторите тест в другой сцене или измерьте мёртвую зону вручную."
+  },
+  {
    "zh": "长句自动缩小",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "長句自動縮小",
@@ -44164,6 +44229,18 @@
    "ru": "Статическое накопление"
   },
   {
+   "zh": "静止时画面也在移动。请面向有纹理的静止场景，松开手柄后重试。",
+   "zh-TW": "靜止時畫面也在移動。請面向有紋理的靜止場景，放開手把後重試。",
+   "en": "The image moved with the stick centered. Face a still scene with visible detail, release the controller, and try again.",
+   "ja": "スティックが中央にある間も映像が動いていました。模様のある静止した場所に向き、コントローラーから手を離して再試行してください。",
+   "ko": "스틱이 중앙에 있을 때도 화면이 움직였습니다. 세부 무늬가 보이는 정지 장면을 바라보고 컨트롤러에서 손을 뗀 뒤 다시 시도하세요.",
+   "es": "La imagen se movió con el stick centrado. Mira hacia una escena estática con detalles, suelta el mando y vuelve a probar.",
+   "fr": "L’image bougeait alors que le stick était centré. Orientez-vous vers une scène immobile avec des détails, relâchez la manette et réessayez.",
+   "de": "Das Bild bewegte sich bei zentriertem Stick. Richte die Kamera auf eine unbewegte Szene mit Details, lass den Controller los und versuche es erneut.",
+   "pt-BR": "A imagem se moveu com o analógico no centro. Olhe para uma cena parada com detalhes, solte o controle e tente novamente.",
+   "ru": "Изображение двигалось при нейтральном положении стика. Направьте камеру на неподвижную сцену, отпустите геймпад и повторите тест."
+  },
+  {
    "zh": "静音",
    "src": "qml/AudioSettingsDialog.qml",
    "zh-TW": "靜音",
@@ -44188,6 +44265,18 @@
    "de": "Inoffiziell: Verbindet sich mit dem Streaming-Dienst von Microsoft auf die gleiche Weise wie Open-Source-Clients wie Greenlight. Nicht mit Microsoft verbunden; es funktioniert möglicherweise nicht mehr, wenn Microsoft etwas ändert. Nur für den eigenen Account und die eigene Konsole.",
    "pt-BR": "Não oficial: conecta-se ao serviço de streaming da Microsoft da mesma forma que clientes de código aberto como o Greenlight. Não afiliado à Microsoft; ela pode parar de funcionar sempre que a Microsoft mudar alguma coisa. Apenas para sua própria conta e console.",
    "ru": "Unofficial: подключается к потоковому сервису Microsoft так же, как и клиенты с открытым исходным кодом, такие как Greenlight. Не связанная с Microsoft, она может перестать работать, когда Microsoft что-то меняет. Только для собственного аккаунта и консоли."
+  },
+  {
+   "zh": "面向有纹理的静止场景。测试会自动转动镜头，约 20 秒。",
+   "zh-TW": "面向有紋理的靜止場景。測試會自動轉動鏡頭，約 20 秒。",
+   "en": "Face a still scene with visible detail. The test turns the camera automatically and takes about 20 seconds.",
+   "ja": "模様のある静止した場所に向いてください。テストは自動でカメラを回転させ、約 20 秒かかります。",
+   "ko": "세부 무늬가 잘 보이는 정지 장면을 바라보세요. 테스트가 자동으로 카메라를 돌리며 약 20초가 걸립니다.",
+   "es": "Mira hacia una escena estática con detalles. La prueba gira la cámara y dura unos 20 segundos.",
+   "fr": "Orientez la caméra vers une scène immobile et détaillée. Le test la fait tourner automatiquement et dure environ 20 secondes.",
+   "de": "Richte die Kamera auf eine unbewegte Szene mit sichtbaren Details. Der Test dreht die Kamera automatisch und dauert etwa 20 Sekunden.",
+   "pt-BR": "Olhe para uma cena parada com detalhes visíveis. O teste gira a câmera automaticamente e leva cerca de 20 segundos.",
+   "ru": "Направьте камеру на неподвижную сцену с заметными деталями. Тест автоматически поворачивает камеру и занимает около 20 секунд."
   },
   {
    "zh": "音画同步",

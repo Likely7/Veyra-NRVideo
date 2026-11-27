@@ -7,6 +7,7 @@
 #include <array>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <mutex>
 #include <utility>
 
@@ -86,9 +87,11 @@ public:
         const bool firstFine = (lastMove_ < 0 || gap > 70000) && count == 1;
         // A slow physical move can produce one count every several USB polls.
         // Continuity follows nonzero reports here, independent of USB poll rate.
+        const auto sparseGap = tuning_.physicalAim ? 3500 : 6500;
+        const auto sparseSpeed = tuning_.physicalAim ? 300. : 200.;
         const bool sparse = firstFine ||
-            (gap >= 6500 && gap <= 70000 && count <= std::max(2., tuning_.dpi / 800.) &&
-             count * 1000000. / gap <= 200. * tuning_.dpi / 800.);
+            (gap >= sparseGap && gap <= 70000 && count <= std::max(2., tuning_.dpi / 800.) &&
+             count * 1000000. / gap <= sparseSpeed * tuning_.dpi / 800.);
         if (!tuning_.physicalAim && (gap > 70000 || (!sparse && gap > 16000) || (sparse && !sparse_))) used_ = 0;
         int64_t interval=period_;
         if(firstFine)interval=28571; // One isolated count carries no report-period evidence.
@@ -137,6 +140,22 @@ public:
     double speed(){std::lock_guard lock(mutex_);return std::hypot(filteredX_,filteredY_);}
 
 private:
+    std::pair<double, double> recentVelocity(int64_t windowUs, int64_t afterUs) const {
+        double dx = 0., dy = 0.;
+        int64_t measuredUs = 0;
+        for (size_t i = 0; i < used_ && measuredUs < windowUs; ++i) {
+            const auto& report = reports_[(newest_ + reports_.size() - i) % reports_.size()];
+            if (report.timeUs <= afterUs) break;
+            const int64_t overlap = std::min(report.periodUs, windowUs - measuredUs);
+            const double fraction = double(overlap) / report.periodUs;
+            dx += report.dx * fraction;
+            dy += report.dy * fraction;
+            measuredUs += overlap;
+        }
+        const double weight = 1000000. / measuredUs;
+        return {dx * weight, dy * weight};
+    }
+
     std::pair<int16_t,int16_t> axes(int64_t nowUs,bool ads){
         if (tuning_.physicalAim) return physicalAxes(nowUs, ads);
         if(!used_)return {};
@@ -162,20 +181,10 @@ private:
         if(!gain){filteredX_=filteredY_=0;if(!tuning_.carry||(!carryX_&&!carryY_))return {};}
         // Time-weight the newest reports. A 125 Hz mouse keeps the same
         // velocity on intervening 250 Hz sends; there is no per-send count bucket.
-        double dx = 0, dy = 0;
-        int64_t measuredUs = 0;
-        for (size_t i = 0; i < used_ && measuredUs < windowUs; ++i) {
-            const auto& report = reports_[(newest_ + reports_.size() - i) % reports_.size()];
-            const int64_t overlap = std::min(report.periodUs, windowUs - measuredUs);
-            const double fraction = double(overlap) / report.periodUs;
-            dx += report.dx * fraction;
-            dy += report.dy * fraction;
-            measuredUs += overlap;
-        }
-        const double weight=1000000./measuredUs;
+        const auto [vx, vy] = recentVelocity(windowUs, std::numeric_limits<int64_t>::min());
         const double alpha=tuning_.smoothingMs>0?-std::expm1(-1000.*dt/tuning_.smoothingMs):1.;
-        filteredX_+=(dx*weight*gain-filteredX_)*alpha;
-        filteredY_+=(dy*weight*gain-filteredY_)*alpha;
+        filteredX_+=(vx*gain-filteredX_)*alpha;
+        filteredY_+=(vy*gain-filteredY_)*alpha;
         const double scale = (ads ? tuning_.adsScale : 1.) / (tuning_.turnSpeed * tuning_.dpi / 800.);
         double x=filteredX_*tuning_.horizontal*scale, y=filteredY_*tuning_.vertical*scale*(tuning_.invertY?-1:1);
         const double mag=std::hypot(x,y);
@@ -210,16 +219,36 @@ private:
 
     std::pair<int16_t, int16_t> physicalAxes(int64_t nowUs, bool ads) {
         const double fps = tuning_.aimFps > 0 ? double(tuning_.aimFps) : gameFps_;
-        const auto windowUs = int64_t(std::lround(1000000. / fps));
+        const auto frameUs = int64_t(std::lround(1000000. / fps));
         double dx = 0., dy = 0.;
-        for (size_t i = 0; i < used_; ++i) {
-            const auto& report = reports_[(newest_ + reports_.size() - i) % reports_.size()];
-            if (report.timeUs <= nowUs - windowUs) break;
-            if (report.timeUs <= nowUs) { dx += report.dx; dy += report.dy; }
+        if (used_ && !sparse_) {
+            // Dense motion follows the mouse cadence. Holding between reports
+            // keeps a 125 Hz mouse from losing speed on every other send.
+            const auto lastUs = reports_[newest_].timeUs;
+            const auto age = nowUs - lastUs;
+            const auto holdUs = std::min(frameUs, std::clamp<int64_t>(period_ + 1500, 2500, 10000));
+            const auto releaseUs = std::clamp<int64_t>(period_ * 3 / 2, 4000, 8000);
+            const auto endUs = std::min(frameUs, holdUs + releaseUs);
+            if (age < endUs) {
+                const auto windowUs = std::min(frameUs, std::clamp<int64_t>(period_ * 3 / 2, 6000, 12000));
+                const auto [vx, vy] = recentVelocity(windowUs, lastUs - windowUs);
+                const double gain = std::clamp(double(endUs - age) / std::max<int64_t>(1, endUs - holdUs), 0., 1.);
+                dx = vx * gain;
+                dy = vy * gain;
+            }
+        } else {
+            // Isolated counts still get a full game frame so a slow movement
+            // remains visible even when the game polls less often than we send.
+            for (size_t i = 0; i < used_; ++i) {
+                const auto& report = reports_[(newest_ + reports_.size() - i) % reports_.size()];
+                if (report.timeUs <= nowUs - frameUs) break;
+                if (report.timeUs <= nowUs) { dx += report.dx; dy += report.dy; }
+            }
+            dx *= 1000000. / frameUs;
+            dy *= 1000000. / frameUs;
         }
-        const double reportScale = 1000000. / windowUs;
-        filteredX_ = dx * reportScale;
-        filteredY_ = dy * reportScale;
+        filteredX_ = dx;
+        filteredY_ = dy;
         const double adsGain = ads ? tuning_.adsScale : 1.;
         const double scale = 2.54 * adsGain / (tuning_.dpi * tuning_.aimFullSpeed);
         double x = filteredX_ * scale * tuning_.aimHorizontal;

@@ -47,22 +47,24 @@ Item {
                 property string quickKeyLabel: "F2"
                 property string unlockLabel: "F1"
                 property var bindings: {
-                    const result = Array(34).fill("—")
+                    const result = Array(35).fill("—")
                     result[0] = "Space"
                     result[17] = "鼠标左键"
                     result[32] = "V"
+                    result[34] = "T"
                     return result
                 }
-                property var alternateBindings: Array(34).fill("—")
+                property var alternateBindings: Array(35).fill("—")
                 property var drivingBindings: {
-                    const result = Array(34).fill("—")
+                    const result = Array(35).fill("—")
                     result[0] = "Space"
                     result[16] = "S"
                     result[17] = "W"
                     result[32] = "V"
+                    result[34] = "T"
                     return result
                 }
-                property var drivingAlternateBindings: Array(34).fill("—")
+                property var drivingAlternateBindings: Array(35).fill("—")
                 property var actionNotes: []
                 property var drivingActionNotes: []
                 property var padState: ({buttons: 0, legacyFullSpeed: 1.5})
@@ -89,8 +91,8 @@ Item {
                     learningSlot = slot
                     learningDriving = inDriving
                 }
-                function learnDriveKey(controls) { learnPanelBinding(34, controls, driving, 0) }
-                function learnQuickKey(controls) { learnPanelBinding(35, controls, driving, 0) }
+                function learnDriveKey(controls) { learnPanelBinding(bindings.length, controls, driving, 0) }
+                function learnQuickKey(controls) { learnPanelBinding(bindings.length + 1, controls, driving, 0) }
                 function cancelLearning() { learning = -1; bindingConflict = ({}) }
                 function preview(on) { previewing = on }
                 function releasePs5() { cancelLearning(); previewing = false; releaseCalls++ }
@@ -406,7 +408,7 @@ Item {
                 }
                 targets.push(rect)
             }
-            for (const action of [26, 27, 28, 29, 30, 31, 33])
+            for (const action of [26, 27, 28, 29, 30, 31, 33, 34])
                 compare(findChild(diagram, "controller-panel-diagram-key-" + action), null)
             const input = owner.mapper
             const walking = input.bindings.slice()
@@ -479,6 +481,13 @@ Item {
                 verify(find(panel, "controller-panel-list-primary-" + action))
             click(panel, "controller-panel-list-primary-33")
             compare(editor.selected, 33)
+            compare(find(panel, "controller-panel-list-primary-34").text, "T")
+            click(panel, "controller-panel-list-primary-34")
+            compare(editor.selected, 34)
+            click(panel, "controller-panel-edit-slot-1")
+            compare(owner.mapper.learning, 34)
+            compare(owner.mapper.learningSlot, 1)
+            compare(owner.mapper.learningDriving, true)
             const alternate = find(panel, "controller-panel-list-alternate-0")
             const end = alternate.mapToItem(list, alternate.width, 0)
             verify(end.x <= list.width + 1)

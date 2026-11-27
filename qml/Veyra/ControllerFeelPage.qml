@@ -501,7 +501,7 @@ ColumnLayout {
             VRow {
                 id: deadzoneRow
                 label: qsTr("测游戏死区")
-                hint: qsTr("选择一个方向，按提示找出镜头刚开始移动的位置。")
+                hint: qsTr("选择方向后回到游戏，镜头刚开始移动时按空格保存。")
                 hintBelow: true
                 enabled: page.keyboardEnabled
                 FeelSelect {
@@ -513,7 +513,7 @@ ColumnLayout {
             }
             VRow {
                 label: qsTr("校准当前游戏")
-                hint: qsTr("站在空地，松开鼠标，点开始后按提示在游戏里转动镜头。")
+                hint: qsTr("面向有纹理的静止场景。测试会自动转动镜头，约 20 秒。")
                 hintBelow: true
                 enabled: page.keyboardEnabled
                 ControllerPanelButton { text: qsTr("开始"); onClicked: page.input?.armAimTest(3) }

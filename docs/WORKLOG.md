@@ -1,5 +1,17 @@
 # 当前工作日志
 
+## 2026-11-27 鼠标反向响应、死区测试和双摇杆向内推
+
+鼠标新版映射的密集输入改用 6–12 ms 的采样窗口，按鼠标报告周期维持和释放输出。微动和单计数仍覆盖一个游戏帧，长时间停手后再次移动不会混入上一段输入。800 DPI、30 FPS 的报告回放在 125／500／1000 Hz 下，反向到摇杆输出改变方向的四相位均值由 14.0／17.75／18.875 ms 降至 3.0／3.75／3.875 ms，停手回中由 35.0／35.75／36.125 ms 降至 23.0／8.75／8.125 ms。48 组回放保持单计数和慢速跟踪，旧算法 100,000 次对拍无差异。 [输入回放基线](<E:/项目/Veyra/tmp/controller-panel-20261127/mouse-ab/baseline.json>) · [新版回放](<E:/项目/Veyra/tmp/controller-panel-20261127/mouse-ab/candidate.json>)
+
+手动测死区可暂停扫描、微调并按空格保存。自动校准用同一稳定档位内的长间隔亮度对测慢转，区分无有效转动、背景移动和曲线不可靠。指数触及上限、明显提前封顶或与低幅扫描矛盾时保留档案原值。T900 真机以 1440p60 NV12 工作，增强和补帧关闭。PS5 串流手柄给出 5 个有效镜头响应，摇杆发送至画面提交的中位数为 197.9 ms，包含输入传输、游戏和采集呈现路径。此前两次夜景换视角估算分别为 9% 和 28.5%，其中 9% 的指数触及拟合上界。最后一轮真机因窗口被切到后台而退出校准。 [实卡基础播放](<E:/项目/Veyra/logs/codex-controller-panel-20261127/aim-t900/app.log>) · [真机测量及估算](<E:/项目/Veyra/logs/codex-controller-panel-20261127/aim-ps5/app.log>) · [前台复测日志](<E:/项目/Veyra/logs/codex-controller-panel-20261127/aim-ps5-final/app.log>)
+
+T 默认同时向内推两根摇杆，支持步行、驾驶、PS5 和 Xbox，改键在列表和 F2 速查可见。独立测试覆盖两个轴的方向、按住和释放、备用键、实体摇杆优先级及 L3 + R3 共存。旧档案保持四组 33 槽的存储，新增动作保存为独立字段。 [发送与档案夹具](<E:/项目/Veyra/tmp/controller-panel-20261127/inward-sticks>) · [主程序输入回归](<E:/项目/Veyra/logs/codex-controller-panel-20261127/aim-boundaries/remoteplay.log>)
+
+复用 `build/codex-controller-panel-20261127`，并发 2 构建 `veyra_qml_ui`、`veyra_remoteplay_boundary_tests`、`veyra_fg_settings_tests` 和翻译检查。按测试目录布置后 Qt Quick 303 项通过，跳过 1 项可选栅格测试。Xbox 137 项通过，九种翻译无缺失。GPU 回放在补帧关闭时收到亮度样本，恢复 VFG 和原呈现设置的检查通过。测试入口指向本轮构建，校准结果仅写入测试夹具使用的私有档案。GTA 内点火和物理屏幕的鼠标延迟尚未验证。 [构建](<E:/项目/Veyra/logs/codex-controller-panel-20261127/build-20261127-071820/compile.log>) · [界面](<E:/项目/Veyra/logs/codex-controller-panel-20261127/aim-quick/aim-quick.log>) · [GPU 回放](<E:/项目/Veyra/logs/codex-controller-panel-20261127/aim-gpu/assertions.log>)
+
+最终版用 30／60 FPS 和 70／150 ms 模拟回传延迟对照。12 px/s 慢转在夜景底图四组均测得响应，死区估算比真值高 3–4.5 个百分点。普通测试场景的误差最大 1 个百分点。提前封顶、无纹理、静止和切档时短暂移动均被拒绝。 [最终画面夹具](<E:/项目/Veyra/logs/codex-controller-aim-20261127/guarded.log>)
+
 ## 2026-11-27 紧凑手柄图和实际键位
 
 参考原版手柄图，把手柄键与实际键鼠映射放在同一个键帽上。图示在 380 px 侧栏中为 296 px，最大 356 px。左右摇杆的按下及四个方向均在图上录键，当前步行或驾驶布局决定显示的映射。通过编辑卡设置备用键，长组合可悬停查看。L3 + R3／LS + RS 留在图示右上，触摸板手势、慢走、菜单摇杆和半油门在列表。

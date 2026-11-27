@@ -58,6 +58,7 @@ class StreamInputCapture final : public QObject, public QAbstractNativeEventFilt
     Q_PROPERTY(QVariantMap padState READ padState NOTIFY padStateChanged)
     Q_PROPERTY(QString aimStatus READ aimStatus NOTIFY aimStatusChanged)
     Q_PROPERTY(bool aimTesting READ aimTesting NOTIFY aimStatusChanged)
+    Q_PROPERTY(bool aimArmed READ aimArmed NOTIFY aimStatusChanged)
     Q_PROPERTY(bool lowLatencyActive READ lowLatencyActive NOTIFY aimStatusChanged)
 
 public:
@@ -94,6 +95,7 @@ public:
     QVariantMap tuning() const;
     QString aimStatus() const { return aimStatus_; }
     bool aimTesting() const { return bool(aimTest_); }
+    bool aimArmed() const { return armedAimMode_ != 0; }
     bool lowLatencyActive() const { return lowLatencyActive_; }
     QStringList profiles() const;
     QString profile() const {return profile_;}

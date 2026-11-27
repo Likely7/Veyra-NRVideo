@@ -88,19 +88,60 @@ static void aimCalibrationModel() {
     AimTest manual(AimTest::Mode::Vertical);
     manual.ready(true);
     manual.sample(start);
-    if (manual.sample(start + 5400000).rightY != 5898) throw std::runtime_error("vertical deadzone ramp");
+    if (manual.sample(start + 7800000).rightY != 5898) throw std::runtime_error("vertical deadzone ramp");
+    manual.key(0x25, true);
+    manual.sample(start + 10400000);
+    if (manual.status().percent != 17) throw std::runtime_error("arrow adjustment holds the manual threshold");
     manual.key(0x20, true);
-    if (std::abs(manual.status().manualDeadzone - .19) > .001 || manual.sample(start + 5404000) != ControllerState{})
+    if (std::abs(manual.status().manualDeadzone - .17) > .001 || manual.sample(start + 10404000) != ControllerState{})
         throw std::runtime_error("manual calibration must save and neutralize input");
+    AimTest cancelled(AimTest::Mode::Horizontal);
+    cancelled.ready(true);
+    cancelled.sample(start);
+    if (cancelled.sample(start + 28000000) != ControllerState{} || cancelled.status().state != AimTest::State::Unreliable)
+        throw std::runtime_error("unconfirmed manual calibration must neutralize the stick");
     AimTest automatic(AimTest::Mode::Automatic);
     automatic.ready(true);
     automatic.sample(start);
     automatic.key('A', true);
+    if (automatic.status().state != AimTest::State::Running)
+        throw std::runtime_error("unrelated gameplay keys must not cancel calibration");
+    automatic.key(0x1b, true);
     if (automatic.status().state != AimTest::State::Cancelled || automatic.sample(start + 4000) != ControllerState{})
         throw std::runtime_error("automatic calibration must abort to neutral");
+
+    AimTest latency(AimTest::Mode::Latency);
+    latency.ready(true);
+    latency.sample(start);
+    unsigned responses = 0;
+    for (int i = 0; i < 7; ++i) {
+        const int64_t pulse = start + i * 1400000LL + 500000;
+        latency.sample(pulse - 30000);
+        if (i == 1 || i == 4) {
+            latency.sample(pulse);
+            continue;
+        }
+        auto still = responses % 2 == 0 ? previous : translated;
+        auto motion = responses % 2 == 0 ? translated : previous;
+        still.presentUs = pulse - 30000;
+        motion.presentUs = pulse + 70000;
+        latency.frame(std::move(still));
+        latency.sample(pulse);
+        latency.frame(std::move(motion));
+        ++responses;
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        while (latency.status().motionSamples < responses && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        if (latency.status().motionSamples != responses) throw std::runtime_error("latency camera pulse samples");
+    }
+    const auto finalPad = latency.sample(start + 8980000);
+    const auto measured = latency.status();
+    if (finalPad != ControllerState{} || measured.state != AimTest::State::Complete || measured.fg ||
+        measured.latencySamples != std::array<unsigned, 2>{5, 0} || measured.latencyMs[0] != 70.)
+        throw std::runtime_error("latency test with frame generation off must report the baseline");
     std::cout << "AIM_CALIBRATION_MODEL deadzone=" << curve.deadzone << " exponent=" << curve.exponent
               << " worst_relative_error=" << maxError << " phase_shift_expected=" << shift
-              << " phase_shift_measured=" << *detected << '\n';
+              << " phase_shift_measured=" << *detected << " original_only_latency_ms=" << measured.latencyMs[0] << '\n';
 }
 static bool keyboardMouseMapping() {
     using Pad = remoteplay::KeyboardMousePad;
@@ -312,6 +353,80 @@ static void mappedControllerSender() {
     expect(mixed.sample(base + 124000, physical).rightX == physical.rightX, "physical aim resumes when mouse is idle");
     focused = false;
     expect(mixed.sample(base + 128000, physical) == State{}, "release both input paths on focus loss");
+}
+static void inwardStickMapping() {
+    using Pad = remoteplay::KeyboardMousePad;
+    using State = remoteplay::ControllerState;
+    using Input = remoteplay::MappedController;
+    const auto expect = [](bool condition, const char* message) {
+        if (!condition) throw std::runtime_error(message);
+    };
+    const auto inward = [](const State& state) {
+        return state.leftX == 32767 && state.leftY == 0 && state.rightX == -32767 && state.rightY == 0;
+    };
+    static_assert(Pad::StickClickBoth == 32 && Pad::HalfPedal == 33 && Pad::StickInwardBoth == 34);
+
+    for (bool driving : {false, true}) {
+        Pad layout;
+        expect(layout.bindings(driving)[Pad::StickInwardBoth] == 'T', "Both layouts should default to T");
+        expect(layout.setBinding(Pad::StickInwardBoth, 'J', driving, 1), "Inward sticks should accept a backup key");
+        expect(layout.setBinding(Pad::RightUp, 'U', driving), "Test right stick direction binding");
+        auto tuning = layout.tuning();
+        tuning.physicalAim = true;
+        tuning.mouseSteering = true;
+        tuning.autoDriving = false;
+        layout.setTuning(tuning);
+        layout.setToggleMask(uint64_t{1} << Pad::StickInwardBoth);
+        layout.selectDriving(driving);
+
+        auto input = std::make_shared<Input>(layout, [] { return true; });
+        RemotePlaySessionSource source;
+        source.setMappedController(input, false);
+        const auto base = remoteplay::monotonic100ns() / 10;
+        const auto sample = [&](int64_t elapsedUs) { return source.takeControllerLocked((base + elapsedUs) * 10); };
+        const auto press = [&](int key, bool down, int64_t elapsedUs) { input->press(key, down, base + elapsedUs); };
+        const auto move = [&](int64_t elapsedUs) { input->move(-400, 300, base + elapsedUs); };
+
+        State physical;
+        physical.inputActive = true;
+        physical.leftX = -32768;
+        physical.leftY = 31000;
+        physical.rightX = 31000;
+        physical.rightY = -32768;
+        physical.buttons = State::Cross;
+        physical.l2 = 120;
+        source.controller(physical);
+        press('T', true, 1000);
+        move(2000);
+        const auto engaged = sample(4000);
+        expect(inward(engaged) && engaged.buttons == State::Cross && engaged.l2 == 120,
+            "T must override both physical and mouse axes while continuing to mix buttons and triggers");
+        press('U', true, 5000);
+        expect(inward(sample(8000)), "The inward chord must also override a mapped stick direction");
+        press('V', true, 9000);
+        constexpr auto clicks = State::L3 | State::R3;
+        const auto simultaneous = sample(12000);
+        expect(inward(simultaneous) && (simultaneous.buttons & clicks) == clicks,
+            "Both stick clicks must still work while both analog sticks are pushed inward");
+
+        source.controller({});
+        press('U', false, 13000);
+        expect(inward(sample(16000)), "T remains held after a different action is released");
+        move(17000);
+        press('T', false, 18000);
+        const auto released = sample(20000);
+        expect(!released.leftX && !released.leftY && !released.rightX && !released.rightY &&
+            released.buttons == clicks, "Releasing T must resume normal axes without leaking buffered motion");
+        press('V', false, 21000);
+        expect(sample(24000).buttons == 0, "V release remains independent");
+
+        press('J', true, 25000);
+        press('J', false, 26000);
+        expect(inward(sample(28000)), "Backup key must send a full inward packet even on a short tap");
+        const auto neutral = sample(32000);
+        expect(!neutral.leftX && !neutral.leftY && !neutral.rightX && !neutral.rightY,
+            "Short tap must also send the release packet");
+    }
 }
 static bool calibratedMouse(){
     using Pad=remoteplay::KeyboardMousePad;using Stick=remoteplay::MouseStick;
@@ -938,6 +1053,7 @@ int main(int argc,char** argv){
         return 46;
     }
     veyra::source::RemotePlaySessionSourceTestAccess::mappedControllerSender();
+    veyra::source::RemotePlaySessionSourceTestAccess::inwardStickMapping();
     veyra::source::RemotePlaySessionSourceTestAccess::aimCalibrationModel();
 #ifdef VEYRA_ENABLE_XBOX
     veyra::source::RemotePlaySessionSourceTestAccess::xboxControllerLifetime();
