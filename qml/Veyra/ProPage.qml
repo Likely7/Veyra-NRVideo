@@ -26,6 +26,7 @@ VPage {
     // to the left of the picture, cut out of the native video window.
     property bool overlay: false
     property bool onboardingActive: false
+    property bool playlistActionEnabled: true
     function saveOnboardingView() {
         return { tab: tab, scroll: inspFlick.contentY, fgOpen: fgCard.open,
                  flowOpen: fgFlowGroup.expanded }
@@ -878,6 +879,17 @@ VPage {
                     highlighted: proAudioMenu.monitorOff
                     visible: veyra.hasSource && (!veyra.isCapture || proAudioMenu.captureSource)
                     onTapped: proAudioMenu.openAt(proAudioButton, "up")
+                }
+                BarButton {
+                    id: proPlaylistButton
+                    objectName: "pro-playlist"
+                    glyph: "list"
+                    tip: qsTr("播放列表")
+                    enabled: root.playlistActionEnabled
+                    Accessible.role: Accessible.Button
+                    Accessible.name: tip
+                    Accessible.onPressAction: if (enabled) proPlaylistButton.tapped()
+                    onTapped: veyra.showPlaylist()
                 }
                 // Fullscreen, at the picture's bottom-right corner where players put it.
                 Item {

@@ -301,6 +301,7 @@ Window {
             onVideoViewportChanged: if (root.page === "pro" && !root.fullscreen) videoHost.syncRect()
             home: pages
             onboardingActive: root.onboardingActive
+            playlistActionEnabled: root.playlistActionEnabled
             overlay: root.quickPanelShown && root.page === "pro"
             onRequestFullscreen: root.toggleFullscreen()
             onRequestPage: p => root.goPage(p)
@@ -863,6 +864,9 @@ Window {
     // Subtitles keep clear of the control pill: fullscreen bar 24px margin + pill,
     // windowed cinema pill straddling the picture's bottom edge.
     Binding { target: veyra; property: "subtitleBottomInset"; value: fullBar.shown ? (root.fullscreen ? 84 : 56) : 0 }
+    readonly property bool playlistActionEnabled: !root.fullLocked && !root.onboardingActive
+        && !root.ps5InputLocked && !veyra.moonlightCaptured && !screenCrop.editing && dialogs.dialog === ""
+        && (!settingsPage.visible || settingsPage.capturingKey === "")
     // Rebindable (设置 → 快捷键); the hold-to-compare key is handled by the bridge's
     // application event filter because it needs the key release too.
     Shortcut { sequence: veyra.shortcuts.playPause; enabled: !screenCrop.editing; onActivated: veyra.togglePlayPause() }
@@ -910,6 +914,13 @@ Window {
     Shortcut { sequence: "Ctrl+O"; onActivated: veyra.openFileDialog() }
     Shortcut { sequence: "Ctrl+U"; onActivated: veyra.openNetworkDialog() }
     Shortcut { sequence: "Ctrl+E"; onActivated: root.page = "exp" }
+    Shortcut {
+        objectName: "open-playlist-shortcut"
+        sequence: veyra.shortcuts.playlist
+        autoRepeat: false
+        enabled: root.playlistActionEnabled
+        onActivated: veyra.showPlaylist()
+    }
     Shortcut {
         sequence: veyra.shortcuts.lock
         enabled: root.fullscreen
