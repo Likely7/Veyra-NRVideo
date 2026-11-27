@@ -254,12 +254,15 @@ void QmlPlayerBridge::updateMaskOverlay() {
     RECT c{};GetClientRect(i.videoWindow,&c);if(c.right<1||c.bottom<1)return;
     const auto e=i.snapshot.metrics.resolution.output;const auto view=i.engine.previewView();
     if(!e.width||!e.height)return;
+    const float adaptiveRatio=view.adaptiveWidthRatio(float(c.right),float(c.bottom),float(e.width),float(e.height));
     QVariantList geometry{int(c.right),int(c.bottom),i.exclusionSelected};
     for(int k=0;k<int(node->protection.regions.size());++k){
         const auto q=i.exclusionDragging&&k==i.exclusionSelected?i.exclusionPreview:node->protection.regions[size_t(k)];
         if(q.empty())continue;
         const auto b=mask::hostBounds(q,view,float(c.right),float(c.bottom),float(e.width),float(e.height));
-        geometry<<QVariant(QVariantList{k,b[0],b[1],b[2],b[3],q.ellipse});
+        QVariantList bounds{k,b[0],b[1],b[2],b[3],q.ellipse};
+        if(q.ellipse&&adaptiveRatio!=1.0f)bounds<<adaptiveRatio;
+        geometry<<QVariant(std::move(bounds));
     }
     if(geometry.size()==3){if(i.protOverlay)ShowWindow(i.protOverlay,SW_HIDE);i.maskOverlayGeometry.clear();return;}
     if(geometry==i.maskOverlayGeometry&&i.protOverlay&&IsWindowVisible(i.protOverlay))return;
@@ -279,7 +282,24 @@ void QmlPlayerBridge::updateMaskOverlay() {
             Gdiplus::Pen pen(Gdiplus::Color(255,255,48,48),selected?3.0f:2.0f);
             Gdiplus::SolidBrush fill(Gdiplus::Color(selected?36:12,255,32,32));
             Gdiplus::RectF box(b[1].toFloat(),b[2].toFloat(),std::max(1.0f,b[3].toFloat()-b[1].toFloat()),std::max(1.0f,b[4].toFloat()-b[2].toFloat()));
-            if(b[5].toBool()){g.FillEllipse(&fill,box);g.DrawEllipse(&pen,box);}else{g.FillRectangle(&fill,box);g.DrawRectangle(&pen,box);}
+            if(b[5].toBool()&&adaptiveRatio!=1.0f){
+                // The visible edge must follow the same nonlinear transform as the mask hit test.
+                const int index=b[0].toInt();
+                const auto q=i.exclusionDragging&&selected?i.exclusionPreview:node->protection.regions[size_t(index)];
+                std::array<Gdiplus::PointF,96> outline;
+                constexpr float turn=6.283185307179586f;
+                const float centerX=(q.left+q.right)*.5f,centerY=(q.top+q.bottom)*.5f;
+                const float radiusX=(q.right-q.left)*.5f,radiusY=(q.bottom-q.top)*.5f;
+                for(size_t point=0;point<outline.size();++point){
+                    const float angle=float(point)*turn/float(outline.size());
+                    const auto mapped=view.displayPoint(centerX+std::cos(angle)*radiusX,centerY+std::sin(angle)*radiusY,
+                        float(c.right),float(c.bottom),float(e.width),float(e.height));
+                    outline[point]=Gdiplus::PointF(mapped.first,mapped.second);
+                }
+                g.FillPolygon(&fill,outline.data(),int(outline.size()));
+                g.DrawPolygon(&pen,outline.data(),int(outline.size()));
+            }else if(b[5].toBool()){g.FillEllipse(&fill,box);g.DrawEllipse(&pen,box);}
+            else{g.FillRectangle(&fill,box);g.DrawRectangle(&pen,box);}
             if(selected){Gdiplus::SolidBrush handle(Gdiplus::Color(255,255,64,64));g.FillRectangle(&handle,box.X-4,box.Y-4,8.0f,8.0f);}
         }
     }
