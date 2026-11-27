@@ -152,7 +152,11 @@ PcmCarrierRouter::PcmCarrierRouter(uint32_t rate,AverMediaAudioCarrier::Callback
 PcmCarrierRouter::Result PcmCarrierRouter::feed(std::span<const uint8_t> bytes,double now){
     Result result;
     if(!carrier_.feed(bytes,info_,now)){
-        log::warn("capture-audio-carrier",std::format("carrier reset: {}",carrier_.state().error));
+        const bool rejectedCarrier=carrier_.compressed();
+        if(!rejectedCarrier||now>=rejectedCarrierUntil_)
+            log::warn("capture-audio-carrier",std::format("carrier reset: {} withheld={}",carrier_.state().error,rejectedCarrier));
+        if(rejectedCarrier)
+            rejectedCarrierUntil_=now+kConfirmSeconds;
         carrier_.reset();compressedSince_=-1;
     }
     if(carrier_.compressed()){
@@ -162,6 +166,9 @@ PcmCarrierRouter::Result PcmCarrierRouter::feed(std::span<const uint8_t> bytes,d
         ++falseStarts_;carrier_.reset();compressedSince_=-1;
         log::info("capture-audio-carrier",std::format("IEC 61937 sync without a following burst; playing PCM again falseStarts={}",falseStarts_));
     }else compressedSince_=-1;
+    // A decode error clears the parser, but the current buffer and the
+    // remaining fragments of that burst still belong to the compressed input.
+    if(now<rejectedCarrierUntil_){result.route=Route::Withheld;return result;}
     if(decoding_){decoding_=false;result.restorePcm=true;}
     return result;
 }

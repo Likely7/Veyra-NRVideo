@@ -12,6 +12,8 @@ The capture session still decodes PCM for Veyra recording. During passthrough, t
 4. In Veyra's **Audio Settings**, choose **LG TV (NVIDIA High Definition Audio)** as the main output and leave **Stereo Downmix** off. Turn on **HDMI bitstream passthrough** to use the exclusive receiver output when a supported stream arrives. The default is decoded PCM. When the driver accepts the captured stream, the normal output status shows **AC-3 passthrough** or **DTS passthrough**.
 5. Confirm that the soundbar plays surround in sync with the picture. Use Veyra recording to verify the decoded PCM path. Turn **Stereo Downmix** on to restore stereo PCM monitoring and Windows loopback audio for OBS.
 
+On the GC553G2, use the supported AVerMedia multichannel component and select **Auto** for the capture audio ingress. A plain WASAPI HDMI/Line In endpoint can carry stereo when the console sends linear PCM. The DirectShow endpoint named **Not To Use** can return a carrier that the standard decoder rejects. Use the vendor input described above for Dolby Audio. [GC553G2 report](https://github.com/Likely7/Veyra-NRVideo/issues/383)
+
 ## Regression tests
 
 The independent Windows transport tests require MSVC and the Windows SDK.

@@ -232,6 +232,12 @@ int main(){try{
         for(int n=0;n<20;++n,now+=.04)route(pcm,now);
         require(router.falseStarts()==1&&decoded.size()==decodedBefore&&restores==1,"router: a sync-like pattern inside PCM is released");
         require(held<=std::max<size_t>(8,size_t(source::PcmCarrierRouter::kConfirmSeconds/.04+1))*pcm.size()&&raw>=10*pcm.size(),"router: at most the confirmation window is withheld");
+        raw=0;
+        for(int n=0;n<80;++n,now+=.032)route(invalidAc3,now);
+        require(raw==0&&decoded.size()==decodedBefore,"router: undecodable carrier is never replayed as linear PCM");
+        now+=source::PcmCarrierRouter::kConfirmSeconds+.04;
+        for(int n=0;n<150;++n,now+=.04)route(pcm,now);
+        require(raw>=30*pcm.size(),"router: actual PCM recovers after a rejected carrier");
     }
     std::cout<<"PASS "<<checks<<" checks: identity, real AC3/EAC3, fragmented carriers, 6/2ch and rate changes, PCM transitions, malformed input, generic PCM router\n";return 0;
 }catch(const std::exception& e){std::cerr<<"FAIL "<<e.what()<<" after "<<checks<<" checks\n";return 1;}}

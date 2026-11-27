@@ -80,6 +80,7 @@ private:
     AverMediaAudioCarrier carrier_;
     avermedia::SampleInfo info_{};
     double compressedSince_=-1;
+    double rejectedCarrierUntil_=-1;
     uint64_t burstsAtEntry_=0,falseStarts_=0;
     bool decoding_=false;
 };
