@@ -2,7 +2,7 @@ name: Windows build (reproducible)
 
 # Builds veyra_qml_ui.exe and the virtual camera on a clean GitHub-hosted
 # runner. Every dependency is fetched from its upstream source at a pinned
-# commit (see scripts/ci/fetch-sdks.ps1); FFmpeg 9.0.1 is built from source by
+# commit (see scripts/ci/fetch-sdks.ps1); FFmpeg 9.0.2 is built from source by
 # vcpkg at this repository's builtin-baseline with scripts/ffmpeg/*.patch.
 # Outputs: a portable zip without proprietary runtime DLLs, SHA256SUMS and,
 # outside pull requests, a signed build-provenance attestation so users can
@@ -115,7 +115,7 @@ jobs:
           path: C:\vcache
           key: vcpkg-${{ env.VCPKG_COMMIT }}-${{ env.OVERLAY_HASH }}-v1
 
-      - name: Build FFmpeg 9.0.1 (slices256, deinterlace, D3D12VA reference pool), dav1d, zlib and libass
+      - name: Build FFmpeg 9.0.2 (slices256, deinterlace, D3D12VA reference pool), dav1d, zlib and libass
         env:
           VCPKG_BINARY_SOURCES: clear;files,C:\vcache,readwrite
           VCPKG_DISABLE_METRICS: '1'
@@ -142,7 +142,7 @@ jobs:
           cmake --preset x64-release -B C:\b `
             -DVEYRA_BUILD_QML_UI=ON `
             -DVEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON `
-            "-DVEYRA_DLSS_SDK_ROOT=$((Resolve-Path third_party_local/nvidia/DLSS_SDK_310.7.0).Path)" `
+            "-DVEYRA_DLSS_SDK_ROOT=$((Resolve-Path third_party_local/nvidia/DLSS_SDK_310.9.16).Path)" `
             -DVEYRA_FFMPEG_ROOT=C:/v/installed/x64-windows `
             -DVEYRA_LIBASS_ROOT=C:/v/installed/x64-windows-static `
             -DVEYRA_LIBDOVI_ROOT=C:/dovi `

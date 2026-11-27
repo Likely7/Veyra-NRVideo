@@ -31299,17 +31299,17 @@
    "ru": "Нажмите на ползунок и используйте ← → для настройки на этом шаге; Esc или нажатие на картинку возвращает ключи стрелки к поиску"
   },
   {
-   "zh": "点击从 Apex Compute 下载并启用（约 3.2 MB）",
+   "zh": "点击从 Apex Compute 下载并启用（约 4.1 MB）",
    "src": "src/ui/bridge/FrameGeneration.cpp",
-   "zh-TW": "按一下即可從 Apex Compute 下載並啟用（約 3.2 MB）",
-   "en": "Download from Apex Compute and enable (about 3.2 MB)",
-   "ja": "Apex Compute からダウンロードして有効化（約 3.2 MB）",
-   "ko": "Apex Compute에서 다운로드하고 사용 설정 (약 3.2 MB)",
-   "es": "Descargar desde Apex Compute y activar (aprox. 3,2 MB)",
-   "fr": "Télécharger depuis Apex Compute et activer (environ 3,2 Mo)",
-   "de": "Von Apex Compute herunterladen und aktivieren (ca. 3,2 MB)",
-   "pt-BR": "Baixar da Apex Compute e ativar (cerca de 3,2 MB)",
-   "ru": "Скачать с Apex Compute и включить (около 3,2 МБ)"
+   "zh-TW": "按一下即可從 Apex Compute 下載並啟用（約 4.1 MB）",
+   "en": "Download from Apex Compute and enable (about 4.1 MB)",
+   "ja": "Apex Compute からダウンロードして有効化（約 4.1 MB）",
+   "ko": "Apex Compute에서 다운로드하고 사용 설정 (약 4.1 MB)",
+   "es": "Descargar desde Apex Compute y activar (aprox. 4,1 MB)",
+   "fr": "Télécharger depuis Apex Compute et activer (environ 4,1 Mo)",
+   "de": "Von Apex Compute herunterladen und aktivieren (ca. 4,1 MB)",
+   "pt-BR": "Baixar da Apex Compute e ativar (cerca de 4,1 MB)",
+   "ru": "Скачать с Apex Compute и включить (около 4,1 МБ)"
   },
   {
    "zh": "点击右侧按键，再按下新的组合键即可重新绑定；Esc 取消。",

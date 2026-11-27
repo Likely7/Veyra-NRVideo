@@ -20,9 +20,9 @@
 #include <filesystem>
 #include <vector>
 
-#include "../../third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/api/include/ffx_api_loader.h"
-#include "../../third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/upscalers/include/ffx_upscale.h"
-#include "../../third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/api/include/dx12/ffx_api_dx12.h"
+#include <ffx_api_loader.h>
+#include <ffx_upscale.h>
+#include <dx12/ffx_api_dx12.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -151,10 +151,7 @@ void reportVersions(const ffxFunctions& functions, uint64_t createDescType, cons
 
 int wmain(int argc, wchar_t** argv) {
     setvbuf(stdout, nullptr, _IONBF, 0);
-    std::filesystem::path loaderPath;
-    if (argc > 1) loaderPath = argv[1];
-    else loaderPath = std::filesystem::current_path() /
-        L"third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/signedbin/amd_fidelityfx_loader_dx12.dll";
+    const auto loaderPath = std::filesystem::absolute(argc > 1 ? argv[1] : VEYRA_FFX_LOADER);
     SetCurrentDirectoryW(loaderPath.parent_path().wstring().c_str());
     HMODULE loader = LoadLibraryW(loaderPath.filename().wstring().c_str());
     if (loader == nullptr) {

@@ -99,13 +99,29 @@ AnrProvider::~AnrProvider()=default;
 std::filesystem::path AnrProvider::downloadRoot() {
     return runtime::userDataDirectory() / L"components" / L"anr";
 }
-std::wstring AnrProvider::directory(const std::wstring& root) {
-    const auto downloaded = downloadRoot() / downloadVersion;
+namespace {
+constexpr char previousDownloadVersion[] = "FG-V.B15";
+
+bool hasAnrLibrary(const std::filesystem::path& folder) {
     std::error_code ec;
-    if (std::filesystem::is_regular_file(downloaded / L"nvngx_dlssg.dll", ec)) return downloaded.wstring();
+    return std::filesystem::is_regular_file(folder / L"nvngx_dlssg.dll", ec);
+}
+}
+
+bool AnrProvider::downloadUpdateAvailable() {
+    const auto root = downloadRoot();
+    return !hasAnrLibrary(root / downloadVersion) && hasAnrLibrary(root / previousDownloadVersion);
+}
+
+std::wstring AnrProvider::directory(const std::wstring& root) {
+    const auto downloads = downloadRoot();
+    for (const auto* version : {downloadVersion, previousDownloadVersion}) {
+        const auto folder = downloads / version;
+        if (hasAnrLibrary(folder)) return folder.wstring();
+    }
     return (std::filesystem::path(root) / L"anr").wstring();
 }
-bool AnrProvider::available(const std::wstring& root){std::error_code ec;return std::filesystem::is_regular_file(std::filesystem::path(directory(root))/L"nvngx_dlssg.dll",ec);}
+bool AnrProvider::available(const std::wstring& root){return hasAnrLibrary(directory(root));}
 bool AnrProvider::open(ID3D12Device* device,const std::wstring& root,unsigned& maxGenerated){
     auto& s=*impl_;if(s.runtime||!device)return false;
     const auto path=std::filesystem::absolute(std::filesystem::path(directory(root))/L"nvngx_dlssg.dll").lexically_normal();
@@ -136,7 +152,7 @@ bool AnrProvider::open(ID3D12Device* device,const std::wstring& root,unsigned& m
     unsigned maximum=0;const auto cap=s.params.Get("DLSSG.MultiFrameCountMax",&maximum);
     // The graph validates actual provider capability before creation.
     maxGenerated=maximum?std::min(maximum,5u):0u;
-    log::info("anr",std::format("Init result=0x{:X} seh=0x{:X} maxQuery=0x{:X} runtimeMax={} experimentMax={} (ANR FG V.B15; estimated video guidance)",unsigned(result),seh,unsigned(cap),maximum,maxGenerated));
+    log::info("anr",std::format("Init result=0x{:X} seh=0x{:X} maxQuery=0x{:X} runtimeMax={} experimentMax={} provider={} (estimated video guidance)",unsigned(result),seh,unsigned(cap),maximum,maxGenerated,path.parent_path().filename().string()));
     return result==NVSDK_NGX_Result_Success&&maxGenerated>0;
 }
 NVSDK_NGX_Parameter* AnrProvider::parameters(){return &impl_->params;}

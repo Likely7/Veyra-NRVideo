@@ -16,7 +16,7 @@ p.add_argument('--zlib-prefix', type=Path,
                help='Enable the existing static zlib dependency for compressed Matroska subtitles')
 a = p.parse_args()
 if '#define MAX_SLICES 256' not in (a.source / 'libavcodec/h264dec.h').read_text():
-    raise SystemExit('Apply ps5-h264-slices.patch to a separate n9.0.1 source tree first')
+    raise SystemExit('Apply ps5-h264-slices.patch to the matching private FFmpeg source tree first')
 with os.add_dll_directory(str(a.reference_bin.resolve())):
     lib = ctypes.CDLL(str((a.reference_bin / 'avcodec-63.dll').resolve()))
     lib.avcodec_configuration.restype = ctypes.c_char_p

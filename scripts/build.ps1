@@ -65,7 +65,10 @@ if ($Clean -and (Test-Path -LiteralPath $buildDir -PathType Container)) {
 # Local experimental DLSSNR support: enable when the staged official SDK tree
 # exists; the CMake configure itself fail-closes on missing paths.
 $configureExtra = ""
-$sdkRoot = Join-Path $Root "third_party_local\nvidia\DLSS_SDK_310.7.0"
+$sdkRoot = Join-Path $Root "third_party_local\nvidia\DLSS_SDK_310.9.16"
+if (-not (Test-Path -LiteralPath (Join-Path $sdkRoot "include\nvsdk_ngx.h") -PathType Leaf)) {
+    $sdkRoot = Join-Path $Root "third_party_local\nvidia\DLSS_SDK_310.7.0"
+}
 if (Test-Path -LiteralPath (Join-Path $sdkRoot "include\nvsdk_ngx.h") -PathType Leaf) {
     $configureExtra = ' -DVEYRA_ENABLE_EXPERIMENTAL_DLSSNR=ON -DVEYRA_DLSS_SDK_ROOT="{0}"' -f $sdkRoot
 }

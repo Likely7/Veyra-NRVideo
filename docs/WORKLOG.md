@@ -1,5 +1,15 @@
 # 当前工作日志
 
+## 2026-11-27 SDK、运行库和模型更新
+
+以本地 main `30cde02a` 为基线，公共 DLSS SDK 和签名 DLSS SR 更新到 310.9.16，NVENC 头文件更新到 n13.0.19.1 并维持 13.0 ABI。RedDuke RX 7000 worker 更新至 1.4.0 网络层，保留当前 ZLUDA、模型与缓存。构建采用 FSR SDK 2.4.0 的头文件，兼容运行库保留 2.3.0。AMD 核显 ABBA 对照的超分 GPU P50 为 16.411→17.584 ms，独立留存 2.4.0 官方运行组件。RTX 5070 和 AMD 核显的 FSR 补帧热切换分别通过 18、15 轮，共 774、660 个生成帧，D3D12 错误为 0。RX 7000 的 14 项诊断和 67 项 GPU 进程间检查通过。 [上游版本、证据和硬件范围](<E:/项目/Veyra/reports/runtime-dependency-refresh-20261127/DEPENDENCY-AUDIT.md>)
+
+按需下载更新到 ANR B20 和 sherpa-onnx 2.0.3。实测 B15→B20 官方下载、原设置保持和重开生效，1080p HDR 两版均生成 360 帧，失效为 0。4K60 PQ 软件解码压力回放两版均未持续提交补帧。Parakeet 和 Whisper 用旧缓存升级，保留模型且新版组件验证通过，两个版本分别识别出相同的 4 句文本。Qt Quick 306 项通过、1 项跳过，九种语言无缺失。 [ANR 最终界面](<E:/项目/Veyra/tests/runtime-dependency-refresh-20261127/anr-final-ui/summary.json>) · [语音组件迁移](<E:/项目/Veyra/tests/runtime-dependency-refresh-20261127/asr/upgrade-final/summary.json>)
+
+FFmpeg 编译采用 n9.0.2 和现用 vcpkg 构建配方，保持 PS5 256 slices、D3D12VA 引用池、异步去隔行；保留单独构建的 avfilter 模块。Veyra 用私有 `build-local.py --ffmpeg-9.0.2` 并发 2 编译并对照新旧运行库。两路去隔行各 200 帧通过，H.264 D3D12VA 与 HEVC D3D11VA 的 SDR 软硬解像素对照误差均为 0。应用正常硬解播放 4K60 HEVC PQ，启用 PQ RGB10，字幕和 597 帧 NVENC 导出通过。独立 HDR 像素图的失败来自把 PQ 源提交给只构建 SDR 图的夹具，已用 SDR 像素对照和应用 HDR 入口分别复测。 [构建回执](<E:/项目/Veyra/logs/codex-runtime-dependency-refresh-20261127/build-20261127-103300/receipt.json>) · [FFmpeg 编译记录](<E:/项目/Veyra/logs/runtime-dependency-refresh-20261127/ffmpeg-9.0.2-rebuild.json>) · [HDR 播放](<E:/项目/Veyra/tests/runtime-dependency-refresh-20261127/final-hdr-hevc-ui/engine.log>)
+
+本机测试入口使用独立档案，运行库和模型保留在 Git 外。 [启动测试版](<E:/项目/Veyra/tests/runtime-dependency-refresh-20261127/Start-Veyra-Dependency-Test.cmd>) · [版本清单](<E:/项目/Veyra/reports/runtime-dependency-refresh-20261127/active-runtime-versions.json>)
+
 ## 2026-11-27 社区 PR 适配
 
 从本地 main 08d2e28a 开工。对截图中的 20 个 PR 固定上游 head，逐个检查全补丁和当前实现。采用本地新版 PS5/Xbox 键鼠覆盖 #354 功能。接入 #274 的 1080p/1440p 请求和 #376 的自适应超宽预览，并分拆 #384 首页键盘与辅助功能、#331 录制状态和 Unicode 诊断路径。普通预览的三份显示与运动着色器 DXIL 保持字节一致。#382 的独立调度夹具有明显的 RIFE 容量缺口，#316 的旧对照存在读帧尾部上升，继续保留在独立验证范围。 [20 条结果](<E:/项目/Veyra/reports/community-pr-followup-20261127/RESULTS.md>)

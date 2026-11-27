@@ -1511,14 +1511,16 @@ VPage {
                                 readonly property bool anr: modelData.id === "anr"
                                 readonly property var download: veyra.anrDownload || ({})
                                 readonly property bool downloading: anr && !!download.active
-                                readonly property bool downloadable: anr
-                                    && !!((veyra.effectCapabilities || {}).anr || {}).downloadable
+                                readonly property var capability: (veyra.effectCapabilities || {}).anr || ({})
+                                readonly property bool updateAvailable: anr && !!capability.updateAvailable
+                                readonly property bool downloadable: anr && (!!capability.downloadable || updateAvailable)
                                 label: modelData.name
                                 hint: downloading ? download.status : modelData.detail
                                 value: downloading ? download.percent + "%" : ""
                                 VButton {
                                     visible: componentRow.downloading || componentRow.downloadable
-                                    text: componentRow.downloading ? qsTr("取消") : qsTr("下载并启用")
+                                    text: componentRow.downloading ? qsTr("取消")
+                                          : componentRow.updateAvailable ? qsTr("更新组件") : qsTr("下载并启用")
                                     onClicked: {
                                         if (componentRow.downloading) veyra.cancelAnrDownload()
                                         else veyra.downloadAnr()

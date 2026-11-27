@@ -120,7 +120,9 @@ static QVariantMap scanEffectCapabilities() {
     const bool anrInstalled = ngx::AnrProvider::available(nr.wstring());
     add("anr", H::CrossVendor, anrInstalled, QObject::tr("需要支持 DirectX 12 的硬件显卡"));
     auto anr = out.value("anr").toMap();
-    anr["downloadable"] = !anrInstalled && ui::hardwareSupports(H::CrossVendor, gpu);
+    const bool anrSupported = ui::hardwareSupports(H::CrossVendor, gpu);
+    anr["downloadable"] = !anrInstalled && anrSupported;
+    anr["updateAvailable"] = anrSupported && ngx::AnrProvider::downloadUpdateAvailable();
     out["anr"] = anr;
     add("dlss", H::Nvidia, exists(nr / "nvngx_dlssg.dll"), QObject::tr("需要 NVIDIA RTX 显卡"));
     add("vfg", H::Vfg, pipeline::VfgBackend::runtimeAvailable(nr.wstring()), QObject::tr("需要 NVIDIA RTX 30 / 40 / 50（30 系为实验兼容）"));

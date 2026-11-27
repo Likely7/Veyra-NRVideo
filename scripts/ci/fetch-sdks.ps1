@@ -11,11 +11,11 @@ $ErrorActionPreference = 'Stop'
 $PSNativeCommandUseErrorActionPreference = $true
 
 $pins = @(
-    @{ Name = 'NVIDIA DLSS SDK 310.7.0';      Repo = 'NVIDIA/DLSS';                              Commit = 'a291cc7d2cc642a51566f3dfd5376f635cd1b284' },
+    @{ Name = 'NVIDIA DLSS SDK 310.9.16';      Repo = 'NVIDIA/DLSS';                              Commit = '9981c6350dc58c0ce21f024fd65e31e851c31689' },
     @{ Name = 'Intel XeSS SDK 3.0.2';         Repo = 'intel/xess';                               Commit = '8fe81bdbbaf00b3c1b733fd0d830c333dc84e6f0' },
-    @{ Name = 'AMD FidelityFX SDK 2.3.0';     Repo = 'GPUOpen-LibrariesAndSDKs/FidelityFX-SDK'; Commit = '60f4ea81909200d8542eca14dccb2628b763a9a3' },
+    @{ Name = 'AMD FidelityFX SDK 2.4.0';     Repo = 'GPUOpen-LibrariesAndSDKs/FidelityFX-SDK'; Commit = '7539ae8b6568ad29ed78a753404351daf3b5cca7' },
     @{ Name = 'AMD AMF SDK 1.5.3 headers';    Repo = 'GPUOpen-LibrariesAndSDKs/AMF';             Commit = '57ee0cfb0e1a08d9041f77435653794c1b012be0' },
-    @{ Name = 'nv-codec-headers n13.0.19.0';  Repo = 'FFmpeg/nv-codec-headers';                  Commit = 'e844e5b26f46bb77479f063029595293aa8f812d' },
+    @{ Name = 'nv-codec-headers n13.0.19.1';  Repo = 'FFmpeg/nv-codec-headers';                  Commit = '88fee5c37318c991a8762d423530f91681e32e3a' },
     # NVIDIA publishes Optical Flow SDK 5.0.7 behind a developer login; this public
     # mirror's 5.0.7 commit carries the MIT-licensed headers byte for byte.
     @{ Name = 'NVIDIA Optical Flow SDK 5.0.7 headers'; Repo = 'mbucchia/Optical-Flow-SDK';      Commit = 'b9f71e4ca268e99f97e33c605b4a6d6a2256a83b' },
@@ -51,7 +51,7 @@ foreach ($p in $pins) {
 }
 $tpl = Join-Path $VeyraRoot 'third_party_local'
 
-$dlss = Join-Path $tpl 'nvidia/DLSS_SDK_310.7.0'
+$dlss = Join-Path $tpl 'nvidia/DLSS_SDK_310.9.16'
 Copy-Tree (Join-Path $src['NVIDIA/DLSS'] 'include') (Join-Path $dlss 'include')
 Copy-Tree (Join-Path $src['NVIDIA/DLSS'] 'lib') (Join-Path $dlss 'lib')
 
@@ -59,7 +59,7 @@ Copy-Tree (Join-Path $src['intel/xess'] 'inc') (Join-Path $tpl 'intel/xess-3.0.2
 
 $ffxSrc = Join-Path $src['GPUOpen-LibrariesAndSDKs/FidelityFX-SDK'] 'Kits/FidelityFX'
 foreach ($sub in 'api', 'framegeneration', 'upscalers') {
-    Copy-Tree (Join-Path $ffxSrc "$sub/include") (Join-Path $tpl "amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/$sub/include")
+    Copy-Tree (Join-Path $ffxSrc "$sub/include") (Join-Path $tpl "amd/FidelityFX-SDK-2.4.0/Kits/FidelityFX/$sub/include")
 }
 
 Copy-Tree (Join-Path $src['GPUOpen-LibrariesAndSDKs/AMF'] 'amf/public/include') (Join-Path $tpl 'amd/AMF-SDK-1.5.3/include')

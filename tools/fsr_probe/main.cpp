@@ -35,9 +35,9 @@
 #include <string>
 #include <vector>
 
-#include "../../third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/api/include/ffx_api_loader.h"
-#include "../../third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/framegeneration/include/ffx_framegeneration.h"
-#include "../../third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/framegeneration/include/dx12/ffx_api_framegeneration_dx12.h"
+#include <ffx_api_loader.h>
+#include <ffx_framegeneration.h>
+#include <dx12/ffx_api_framegeneration_dx12.h>
 
 using Microsoft::WRL::ComPtr;
 
@@ -259,10 +259,7 @@ void transition(ID3D12GraphicsCommandList* list, ID3D12Resource* resource, D3D12
 
 int wmain(int argc, wchar_t** argv) {
     setvbuf(stdout, nullptr, _IONBF, 0);  // evidence survives a probe crash
-    std::filesystem::path loaderPath;
-    if (argc > 1) loaderPath = argv[1];
-    else loaderPath = std::filesystem::current_path() /
-        L"third_party_local/amd/FidelityFX-SDK-2.3.0/Kits/FidelityFX/signedbin/amd_fidelityfx_loader_dx12.dll";
+    const auto loaderPath = std::filesystem::absolute(argc > 1 ? argv[1] : VEYRA_FFX_LOADER);
     UINT generatedPerFrame = 1;
     if (argc > 2) {
         const int requested = _wtoi(argv[2]);

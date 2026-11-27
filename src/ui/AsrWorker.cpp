@@ -82,14 +82,14 @@ struct Runtime {
 #undef DECLARE
     ~Runtime() { if (module) FreeLibrary(module); }
 
-    bool load(const QString& path) {
+    bool load(const QString& path, QByteArrayView expectedVersion) {
         module = LoadLibraryExW(QDir::toNativeSeparators(path).toStdWString().c_str(), nullptr,
             LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
         if (!module) return false;
 #define BIND(name) name = reinterpret_cast<decltype(name)>(GetProcAddress(module, #name)); if (!name) return false;
         VEYRA_ASR_SYMBOLS(BIND)
 #undef BIND
-        return QByteArrayView(SherpaOnnxGetVersionStr()) == runtimeVersion;
+        return QByteArrayView(SherpaOnnxGetVersionStr()) == expectedVersion;
     }
 };
 #undef VEYRA_ASR_SYMBOLS
@@ -142,8 +142,11 @@ public:
         if (!QDir::isAbsolutePath(folder) || !verify(folder, model, true))
             return fail("asset-verification");
         const auto bundle = assets(model);
-        const QString dll = QDir(ModelAssets::path(folder, bundle[0])).filePath(QStringLiteral("sherpa-onnx-c-api.dll"));
-        if (!runtime_.load(dll)) return fail("runtime-load", GetLastError());
+        const auto* library = installedRuntime(folder, true);
+        if (!library) return fail("runtime-verification");
+        const QString dll = QDir(ModelAssets::path(folder, *library)).filePath(QStringLiteral("sherpa-onnx-c-api.dll"));
+        const auto runtimeVersion = QByteArrayView(library->destination).sliced(sizeof("runtime-") - 1);
+        if (!runtime_.load(dll, runtimeVersion)) return fail("runtime-load", GetLastError());
 
         threads = std::clamp(threads, 1, 8);
         model_ = model;

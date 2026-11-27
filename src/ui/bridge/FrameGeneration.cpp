@@ -35,7 +35,7 @@ QVariantList QmlPlayerBridge::fgBackendChoices() const {
         const bool downloadable = cap.value("downloadable").toBool();
         row["download"] = downloadable;
         row["disabled"] = !cap.value("available").toBool() && !downloadable;
-        row["note"] = downloadable ? tr("点击从 Apex Compute 下载并启用（约 3.2 MB）") : cap.value("reason");
+        row["note"] = downloadable ? tr("点击从 Apex Compute 下载并启用（约 4.1 MB）") : cap.value("reason");
         choice = row;
     }
     return choices;

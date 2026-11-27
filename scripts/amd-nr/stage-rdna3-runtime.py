@@ -6,11 +6,17 @@ import argparse,hashlib,json,os,shutil,subprocess
 from pathlib import Path
 p=argparse.ArgumentParser()
 for name in ('dependency-root','components','build-dir','app','report'):p.add_argument('--'+name,type=Path,required=True)
+p.add_argument('--network-source-manifest',type=Path,help='Source receipt used to build this worker; defaults to the dependency root receipt')
 a=p.parse_args();base=Path('E:/项目/Veyra').resolve()
 for x in (a.dependency_root,a.build_dir,a.app,a.report):x.resolve().relative_to(base)
 def sha(p):
     with p.open('rb') as f:return hashlib.file_digest(f,'sha256').hexdigest()
 source=a.dependency_root/'runtime';manifest=json.loads(a.components.read_text('utf8'))
+network_manifest=a.network_source_manifest or a.dependency_root/'source-manifest.json'
+network_manifest.resolve().relative_to(base)
+network_source=json.loads(network_manifest.read_text('utf8'))
+assert network_source['repository']=='RedDukeDev/dlss5-nr-amd-custom'
+assert network_source['commit'] in {'ab455d179922adc11f65675d399e1d553bf423f0','3d7eb7cac4a5185455ae029d9a3339369d900f88'}
 assert manifest['archiveSha256']=='779b7d375bbe6d2419bcbd68e3d229c84acf09c74206837cfb0e12a253da1b00'
 for row in manifest['files']:
     path=source/row['path'];path.resolve().relative_to(source.resolve())
@@ -47,8 +53,8 @@ shutil.copyfile(worker,dst);rows.append(dict(path=worker.name,size=dst.stat().st
 shader=a.build_dir/'shaders/Rdna3NrDecode.dxil';shaderOut=a.app/'shaders'/shader.name
 if shaderOut.exists():shaderOut.unlink()
 shutil.copyfile(shader,shaderOut)
-for filename in ('source-manifest.json',):shutil.copyfile(a.dependency_root/filename,target/filename)
-out=dict(localOnly=True,releaseAuthorized=False,backend='RX7000 RedDuke, same-frame, isolated worker',sourceCommit='ab455d179922adc11f65675d399e1d553bf423f0',zludaCommit='b135e233bb7a6ff7f8690e49701f87f4944adcee',networkIdentity=identity,driverIncluded=False,mainProcessDriverReplaced=False,files=rows,guardShaderSha256=sha(shaderOut))
+shutil.copyfile(network_manifest,target/'source-manifest.json')
+out=dict(localOnly=True,releaseAuthorized=False,backend='RX7000 RedDuke, same-frame, isolated worker',sourceCommit=network_source['commit'],zludaCommit='b135e233bb7a6ff7f8690e49701f87f4944adcee',networkIdentity=identity,driverIncluded=False,mainProcessDriverReplaced=False,files=rows,guardShaderSha256=sha(shaderOut))
 (target/'veyra-rdna3-runtime-manifest.json').write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
 a.report.parent.mkdir(parents=True,exist_ok=True);a.report.write_text(json.dumps(out,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
 print(json.dumps(dict(files=len(rows),root=str(target),workerSha256=sha(dst),networkIdentity=identity),ensure_ascii=False))

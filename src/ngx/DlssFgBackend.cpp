@@ -238,7 +238,7 @@ bool DlssFgBackend::openAnr(ID3D12Device* device,const std::wstring& root,unsign
 
 bool DlssFgBackend::create(ID3D12GraphicsCommandList* cmdList,NVSDK_NGX_Parameter* params,const CreateDesc& desc,Status& status){
     if(anr_)params=anr_->parameters();
-    if(anr_&&(desc.width<640||desc.height<360||desc.width>7680||desc.height>4320)){log::error("anr","ANR V.B15 requires a working extent from 640x360 through 7680x4320");status=Status::InvalidArgument;return false;}
+    if(anr_&&(desc.width<640||desc.height<360||desc.width>7680||desc.height>4320)){log::error("anr","ANR requires a working extent from 640x360 through 7680x4320");status=Status::InvalidArgument;return false;}
     if (handle_ != nullptr) {
         release();
     }
@@ -423,7 +423,7 @@ bool DlssFgBackend::evaluate(ID3D12GraphicsCommandList* cmdList,
     // Monotonic real-frame id (uint64 via the C++ Set overload).
     params->Set(NVSDK_NGX_DLSSG_Parameter_BackbufferFrameID, static_cast<unsigned long long>(desc.frameId));
 
-    // ANR V.B15 copies depth/motion through its Vulkan bridge. Its D3D12
+    // ANR copies depth/motion through its Vulkan bridge. Its D3D12
     // entry/exit contract for these two resources is COPY_DEST, whereas the
     // shared graph and NVIDIA provider use NON_PIXEL_SHADER_RESOURCE. Restore
     // the graph contract around the call; never change shared flow tracking.

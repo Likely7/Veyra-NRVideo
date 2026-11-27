@@ -210,11 +210,23 @@ void pinnedArchiveChecks(const QString& root, const QUrl& fixtureBase, int model
     }
     const QString destination = asr::root(root);
     ModelAssets loader(destination, manifest);
-    check(!loader.installed(), "pinned archive fixture uses a fresh private profile");
+    check(!loader.installed(), "pinned archive fixture has no current runtime");
+    const bool legacyInstalled = asr::verify(destination, model, false);
+    {
+        LiveTranslation beforeUpgrade(root);
+        beforeUpgrade.setRecognitionModel(model);
+        check(beforeUpgrade.recognitionInstalled() == legacyInstalled &&
+                  beforeUpgrade.recognitionRuntimeUpdateAvailable() == legacyInstalled,
+              "a complete legacy bundle stays usable and offers the runtime upgrade");
+    }
     loader.download();
     check(QTest::qWaitFor([&] { return !loader.downloading(); }, std::chrono::seconds(220)) &&
           loader.installed() && asr::verify(destination, model, true),
           "actual archive and every installed member match the pinned ASR manifest");
+    LiveTranslation afterUpgrade(root);
+    afterUpgrade.setRecognitionModel(model);
+    check(afterUpgrade.recognitionInstalled() && !afterUpgrade.recognitionRuntimeUpdateAvailable(),
+          "the new installation is ready without another runtime upgrade");
     std::printf("Pinned archive state %s\n", qPrintable(loader.status()));
 }
 

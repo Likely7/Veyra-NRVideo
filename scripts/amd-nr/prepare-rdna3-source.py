@@ -3,8 +3,8 @@ No NVIDIA SDK, DLL, model, translation cache or full game mod is fetched here.
 """
 import argparse,hashlib,json,urllib.request
 from pathlib import Path
-PIN='ab455d179922adc11f65675d399e1d553bf423f0'
-BLOBS={"runtime/core/network.cpp":"aa8628396dfe5d70d9f56e77072ad34596540552","runtime/core/network.h":"037a6463060c561e5baa6b66aaac26d65ccf81c1","runtime/common/cuda_min.h":"54ba01035ae482db84cd5a45aa0930025d355d67","runtime/common/ngx_cuda.h":"52593d310f2b7c3ed189e7a88c4b4aa197eeda9c","LICENSE":"ad7bd58931ae2ca601959041fdd8fb94390f04c0"}
+PIN='3d7eb7cac4a5185455ae029d9a3339369d900f88'
+BLOBS={"runtime/core/network.cpp":"9e4ca661a9f8dedefeda46cabd152ac8ee215063","runtime/core/network.h":"d3603a0bca8de880facd90a09ad01eb33e796eb6","runtime/common/cuda_min.h":"54ba01035ae482db84cd5a45aa0930025d355d67","runtime/common/ngx_cuda.h":"52593d310f2b7c3ed189e7a88c4b4aa197eeda9c","LICENSE":"4911a84c7accd4a87755c96512e42912878206a4"}
 FILES=['runtime/core/network.cpp','runtime/core/network.h','runtime/common/cuda_min.h','runtime/common/ngx_cuda.h','LICENSE']
 p=argparse.ArgumentParser();p.add_argument('--out',type=Path,required=True);a=p.parse_args()
 a.out.resolve().relative_to(Path('E:/项目/Veyra').resolve())
@@ -19,7 +19,11 @@ for name in FILES:
     text=source.read_text('utf8').replace('\r\n','\n')
     if name.endswith('network.h'):
         text=text.replace('    std::wstring data_dir;','    uint64_t adapter_luid = 0; // Veyra: the host D3D12 adapter\n    std::wstring data_dir;',1)
+        # Preserve the header contract consumed by the Veyra worker and old prepared SDK trees.
         text=text.replace('    bool staged_by_list = false;','    bool staged_by_list = false;\n    bool synchronise = true; // Veyra: native GPU-fence path may enqueue without a CPU wait',1)
+        before='bool evaluate(const EvaluateDesc &desc, std::string &error, bool synchronise = true);'
+        assert text.count(before)==1,'pinned evaluation declaration differs'
+        text=text.replace(before,'bool evaluate(const EvaluateDesc &desc, std::string &error);')
     elif name.endswith('network.cpp'):
         before='''            CUdevice device = 0;
             if (!cu_ok(g.cu.cuDeviceGet(&device, 0), "cuDeviceGet", error)) return false;'''
@@ -44,12 +48,11 @@ for name in FILES:
             }'''
         assert text.count(before)==1,'pinned adapter-selection source differs'
         text=text.replace(before,after)
-        before='if (!cu_ok(g.cu.cuCtxSynchronize(), "cuCtxSynchronize", error)) return false;'
-        pos=text.index('bool Network::evaluate(const EvaluateDesc &d, std::string &error)')
-        tail=text[pos:];assert before in tail
-        text=text[:pos]+tail.replace(before,'if (d.synchronise && !cu_ok(g.cu.cuCtxSynchronize(), "cuCtxSynchronize", error)) return false;',1)
+        before='bool Network::evaluate(const EvaluateDesc &d, std::string &error, bool synchronise) {'
+        assert text.count(before)==1,'pinned evaluation implementation differs'
+        text=text.replace(before,'bool Network::evaluate(const EvaluateDesc &d, std::string &error) {\n    const bool synchronise = d.synchronise;')
     dest=a.out/'prepared'/name;dest.parent.mkdir(parents=True,exist_ok=True)
     dest.write_text(text,encoding='utf8',newline='\n')
     rows.append(dict(path=name,originalSha256=hashlib.sha256(source.read_bytes()).hexdigest(),preparedSha256=hashlib.sha256(dest.read_bytes()).hexdigest()))
-(a.out/'source-manifest.json').write_text(json.dumps(dict(repository='RedDukeDev/dlss5-nr-amd-custom',commit=PIN,license='MIT',changes=['select host adapter LUID or reject ambiguous multi-device mapping','optional asynchronous enqueue paired with mandatory native GPU semaphore by Veyra worker'],files=rows),indent=2),encoding='utf8')
+(a.out/'source-manifest.json').write_text(json.dumps(dict(repository='RedDukeDev/dlss5-nr-amd-custom',commit=PIN,license='MIT',changes=['select host adapter LUID or reject ambiguous multi-device mapping','map Veyra worker synchronization flag onto the upstream 1.4.0 asynchronous evaluation; worker signals a native GPU fence'],files=rows),indent=2),encoding='utf8')
 print(json.dumps(dict(prepared=str(a.out/'prepared'),files=len(rows),commit=PIN)))

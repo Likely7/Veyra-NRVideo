@@ -35,6 +35,7 @@ class LiveTranslation final : public QObject {
     Q_PROPERTY(QString recognitionDirectory READ recognitionDirectory CONSTANT)
     Q_PROPERTY(QString recognitionInstallLayout READ recognitionInstallLayout NOTIFY changed)
     Q_PROPERTY(bool recognitionInstalled READ recognitionInstalled NOTIFY changed)
+    Q_PROPERTY(bool recognitionRuntimeUpdateAvailable READ recognitionRuntimeUpdateAvailable NOTIFY changed)
     Q_PROPERTY(bool recognitionDownloading READ recognitionDownloading NOTIFY changed)
     Q_PROPERTY(double recognitionProgress READ recognitionProgress NOTIFY changed)
     Q_PROPERTY(qint64 recognitionBytes READ recognitionBytes NOTIFY changed)
@@ -82,6 +83,7 @@ public:
     QString recognitionDirectory() const { return asr_.directory(); }
     QString recognitionInstallLayout() const { return asr_.installLayout(); }
     bool recognitionInstalled() const { return asr_.installed(); }
+    bool recognitionRuntimeUpdateAvailable() const { return asr_.runtimeUpdateAvailable(); }
     bool recognitionDownloading() const { return asr_.downloading(); }
     double recognitionProgress() const { return asr_.progress(); }
     qint64 recognitionBytes() const { return asr_.downloadBytes(); }

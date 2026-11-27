@@ -32,7 +32,11 @@ records = []
 local_build_path = args.prefix / 'share/ffmpeg/veyra-local-build.json'
 local_build = json.loads(local_build_path.read_text(encoding='utf-8-sig')) if local_build_path.exists() else None
 patches = Path(__file__).resolve().parent / 'ffmpeg'
+source_version = (args.source / 'RELEASE').read_text(encoding='utf-8').strip()
+source_tag = 'n' + source_version
 if local_build:
+    if local_build.get('sourceTag', source_tag) != source_tag:
+        raise SystemExit('FFmpeg source version does not match the local build record')
     for item in local_build['files']:
         if Path(item['name']).name != item['name']:
             raise SystemExit('Invalid FFmpeg build manifest path')
@@ -101,15 +105,15 @@ with zipfile.ZipFile(args.output, 'x', compression=zipfile.ZIP_DEFLATED, compres
     archive.writestr('binary-configuration.txt', license_name + '\n\n' + configuration + '\n')
     archive.writestr('source-manifest.json', json.dumps(records, indent=2))
     archive.writestr('README.txt',
-        f'FFmpeg 9.0.1#1 corresponding-source material for Veyra {args.version}.\n'
+        f'FFmpeg {source_version} corresponding-source material for Veyra {args.version}.\n'
         'Not needed to run the application. No NVIDIA SDK or runtime is included.\n'
-        'ffmpeg-patched is the matching patched n9.0.1 source tree.\n'
+        f'ffmpeg-patched is the matching patched {source_tag} source tree.\n'
         'FFMPEG-VEYRA-BUILD.json lists the Veyra patches included in ffmpeg-patched.\n'
         'When starting from an unpatched copy, see veyra-patches/README.md for rebuild steps.\n'
         'vcpkg-port contains the build recipe and patches, verified against the shipped SPDX.\n'
         'binary-configuration.txt is queried from the actual distributed avcodec DLL,\n'
         'not copied from a potentially newer build cache.\n'
-        'Build using Visual Studio x64 tools and vcpkg FFmpeg 9.0.1#1, selecting features\n'
+        'Build the patched source with Visual Studio x64 and the recorded features\n'
         'to match the recorded configuration (shared LGPL libraries, swscale/swresample,\n'
         'external libraries exactly as listed in binary-configuration.txt, no CLI programs).\n'
         'When dav1d is enabled, dav1d-source and dav1d-vcpkg-port contain its source/recipe;\n'
@@ -120,7 +124,7 @@ with zipfile.ZipFile(args.output, 'x', compression=zipfile.ZIP_DEFLATED, compres
         'See portfile.cmake and build.sh.in.\n'
         'The recorded configuration includes original local build paths; adapt paths locally.\n'
         'Veyra links dynamically; compatible rebuilt libraries may replace the shipped DLLs.\n'
-        'Upstream: https://github.com/FFmpeg/FFmpeg/tree/n9.0.1\n'
+        f'Upstream: https://github.com/FFmpeg/FFmpeg/tree/{source_tag}\n'
         'Port: https://github.com/microsoft/vcpkg/tree/55cd8b8a4f19d8e6ba2ad114c8acacc4af5915a0/ports/ffmpeg\n')
 digest = hashlib.sha256(args.output.read_bytes()).hexdigest().upper()
 args.output.with_suffix(args.output.suffix + '.sha256').write_text(

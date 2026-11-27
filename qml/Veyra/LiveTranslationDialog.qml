@@ -285,8 +285,11 @@ DialogLayer {
             RowLayout {
                 VButton {
                     objectName: "live-translation-recognition-download"
-                    text: root.translation && root.translation.recognitionDownloading ? qsTr("取消下载") : qsTr("下载模型")
-                    enabled: root.translation && (!root.translation.recognitionInstalled || root.translation.recognitionDownloading)
+                    text: root.translation && root.translation.recognitionDownloading ? qsTr("取消下载")
+                          : root.translation && root.translation.recognitionRuntimeUpdateAvailable ? qsTr("更新组件") : qsTr("下载模型")
+                    enabled: root.translation && (root.translation.recognitionDownloading
+                        || !root.translation.recognitionInstalled
+                        || (root.translation.recognitionRuntimeUpdateAvailable && !root.translation.enabled))
                     onClicked: {
                         if (root.translation.recognitionDownloading) root.translation.cancelRecognitionDownload()
                         else root.translation.downloadRecognitionModel()

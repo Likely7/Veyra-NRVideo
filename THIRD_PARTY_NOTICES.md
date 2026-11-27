@@ -75,7 +75,7 @@ CPU in a separate process. Timestamps and sentence identifiers are shared with
 the legacy Windows Live Captions source. ASR models and runtime binaries are
 downloaded on demand into the user's data directory.
 
-- [sherpa-onnx v2.0.2](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v2.0.2)
+- [sherpa-onnx v2.0.3](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v2.0.3) for new downloads. Existing [v2.0.2](https://github.com/k2-fsa/sherpa-onnx/releases/tag/v2.0.2) installations remain usable with the same model assets.
   at 5d2bd37de78b223a2e8e00e25483d12c5b164299, Apache-2.0. The public
   sherpa-onnx/c-api/c-api.h header is copied unmodified to
   [third_party/sherpa-onnx](third_party/sherpa-onnx) with its license. Veyra uses
@@ -205,9 +205,9 @@ sender regression tests additionally exercise strike/modifier combinations,
 16-bit sequence wrap and a lost final release packet. Offline test results do
 not establish behavior on a physical PS5.
 
-## RX 7000 experimental NR provider (2026-10-30, development branch)
+## RX 7000 experimental NR provider (updated 2026-11-27)
 
-RedDukeDev/dlss5-nr-amd-custom, fixed commit `ab455d179922adc11f65675d399e1d553bf423f0`: MIT network layer and NR kernels; ZLUDA at `b135e233bb7a6ff7f8690e49701f87f4944adcee`, MIT OR Apache-2.0. Original notices, exact file selection, modifications and proprietary component boundaries are in [third_party/redduke/VEYRA_ORIGIN.md](third_party/redduke/VEYRA_ORIGIN.md) and its LICENSE. The five external source files are fetched and Git-blob verified by `scripts/amd-nr/prepare-rdna3-source.py`; no SDK, runtime DLL, model or translation cache enters source Git.
+RedDukeDev/dlss5-nr-amd-custom 1.4.0, fixed commit `3d7eb7cac4a5185455ae029d9a3339369d900f88`: MIT network layer; ZLUDA at `b135e233bb7a6ff7f8690e49701f87f4944adcee`, MIT OR Apache-2.0. Original notices, exact file selection, modifications and proprietary component boundaries are in [third_party/redduke/VEYRA_ORIGIN.md](third_party/redduke/VEYRA_ORIGIN.md) and its LICENSE. The five external source files are fetched and Git-blob verified by `scripts/amd-nr/prepare-rdna3-source.py`; no SDK, runtime DLL, model or translation cache enters source Git.
 
 Veyra adds a per-layer isolated network host with D3D12 shared textures/fences, adapter-LUID selection, bounded queues, same-frame GPU validity markers and failure teardown. Small/Original model selection uses the existing AMD runtime ID and settings. No OptiScaler/ReShade/game wrapper or SR/RR/FG kernels are used. Private ZLUDA compatibility DLLs are not system driver replacements and never load in the player process. NVIDIA's original 310.9.16.0 DLL and translation cache retain their separate rights; local staging and manifest audit do not confer redistribution rights or change the formal Release whitelist. Existing RX 9000 lmxxf integration retains its own notices and ABI.
 
@@ -469,7 +469,7 @@ framing and checksum, and validates the InfoFrame with the existing parser. Full
 
 ## NVENC API declarations
 
-Source: https://github.com/FFmpeg/nv-codec-headers ; encoder ABI baseline `e844e5b26f46bb77479f063029595293aa8f812d` (tag `n13.0.19.0`, SDK 13.0 declarations), stored only under ignored `third_party_local/nvidia/nv-codec-headers-13.0`. Stage with `git clone --depth 1 --branch n13.0.19.0 https://github.com/FFmpeg/nv-codec-headers.git third_party_local/nvidia/nv-codec-headers-13.0`. CMake accepts `VEYRA_NVENC_HEADERS_ROOT`; compilation checks major/minor 13.0. The previous 13.1 checkout `eddcea9e27f6b772057c9b3f87de2cc1737faffc` remains unmodified for other local tools. Veyra now queries the driver's maximum API before creating the 13.0 function table/session and uses the same ABI for every structure, without pretending that a version-number-only downgrade changes structure layouts. No header or runtime is copied into source control.
+Source: https://github.com/FFmpeg/nv-codec-headers ; encoder ABI baseline `88fee5c37318c991a8762d423530f91681e32e3a` (tag `n13.0.19.1`, SDK 13.0 declarations), stored only under ignored `third_party_local/nvidia/nv-codec-headers-13.0`. Stage with `git clone --depth 1 --branch n13.0.19.1 https://github.com/FFmpeg/nv-codec-headers.git third_party_local/nvidia/nv-codec-headers-13.0`. CMake accepts `VEYRA_NVENC_HEADERS_ROOT`; compilation checks major/minor 13.0. The previous 13.1 checkout `eddcea9e27f6b772057c9b3f87de2cc1737faffc` remains unmodified for other local tools. Veyra now queries the driver's maximum API before creating the 13.0 function table/session and uses the same ABI for every structure, without pretending that a version-number-only downgrade changes structure layouts. No header or runtime is copied into source control.
 
 The nvEncodeAPI.h header itself has NVIDIA's permissive MIT-style notice (Copyright 2010–2024 NVIDIA Corporation in the pinned 13.0 header). Its full notice is retained unmodified in that header. This permits using the declarations without retrieving the full developer-portal sample package; it does not grant rights to distribute NVIDIA driver/runtime binaries. Veyra uses the system NVENC library, never copies it into a package. Implementation is independently authored against these declarations; no competitor/sample implementation copied.
 
@@ -678,21 +678,26 @@ Remote Play also depends on **OpenSSL, Opus, json-c, libevent, miniupnpc, curl, 
 
 </details>
 
-## AMD FidelityFX SDK 2.3.0 (experimental FSR frame generation and FSR upscaling)
+## AMD FidelityFX FSR SDK (experimental frame generation and upscaling)
 
 The player's AMD FSR backends (independent frame generation and upscaling in
 the enhancement graph) are written against the public FidelityFX
-API documented and shipped in the AMD FidelityFX SDK 2.3.0 (MIT licensed). The
-SDK itself is **not** vendored into this source repository: it stays in the
-gitignored `third_party_local/amd/FidelityFX-SDK-2.3.0` tree, and the signed
-provider/loader DLLs are used from the local
-`runtime_local/amd/fidelityfx/` folder like the other experimental runtimes.
+API headers from the AMD FidelityFX SDK. The SDK stays in the ignored
+`third_party_local/amd/FidelityFX-SDK-2.4.0` tree or an explicit external SDK
+directory. Signed provider and loader DLLs are loaded from
+`runtime_local/amd/fidelityfx/`. Use a matching loader, frame generation DLL
+and upscaler DLL from a single SDK release and include AMD's corresponding
+binary redistribution notice when distributing those DLLs.
 Integration code (`src/gfx/FsrFgPresenter.cpp`, `src/gfx/FsrSrBackend.cpp`) is an
 independent implementation of the documented API sequence and was written
 against these references:
 
 - Fixed SDK source: [GPUOpen-LibrariesAndSDKs/FidelityFX-SDK](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/tree/60f4ea81909200d8542eca14dccb2628b763a9a3),
-  commit `60f4ea81909200d8542eca14dccb2628b763a9a3` (SDK 2.3.0).
+  commit `60f4ea81909200d8542eca14dccb2628b763a9a3` for the compatible SDK
+  2.3.0 runtime. The [current SDK headers](https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/releases/tag/v2.4.0)
+  are pinned to `7539ae8b6568ad29ed78a753404351daf3b5cca7`. The 2.4.0 runtime
+  is evaluated in isolation because the analytical upscaler cost increased on
+  the tested AMD integrated GPU.
 - `Kits/FidelityFX/framegeneration/include/ffx_framegeneration.h` and
   `Kits/FidelityFX/framegeneration/fsr3/internal/ffx_provider_fsr3framegeneration.cpp`
 - `Kits/FidelityFX/docs/techniques/frame-interpolation-ml.md`
@@ -1176,6 +1181,10 @@ timing fields. The optional native input mode ports the mouse and keyboard
 report layouts from `packages/player/src/client/lib/channel/input/packet.ts`
 into `include/veyra/xbox/Protocol.h` and sends them on the existing input channel.
 
+## NVIDIA DLSS SDK and DLSS Super Resolution (2026-11-27)
+
+The NGX build uses the public DLSS 310.9.16 SDK at commit `9981c6350dc58c0ce21f024fd65e31e851c31689`. The verified test stage uses the same release's NVIDIA-signed `nvngx_dlss.dll` (310.9.16.0, 58,956,912 bytes, SHA-256 `d00b5b0ab29c3ca101b70c3a5ecb3a01b7ef33766a3383a28a18623083e6123e`). The SDK license accompanies this runtime in the test stage. [NVIDIA DLSS 310.9.16](https://github.com/NVIDIA/DLSS/releases/tag/v310.9.16)
+
 ## NVIDIA original NR restored in 2.0.2
 
 The user-approved, unmodified NVIDIA-signed 310.8.0.0 NR (SHA256 E16BCF15E16E13F527491CDF7845B2FE6521A738D8F7C9C721866A8496E1FC8E) is distributed only as a release runtime at runtime/experimental/nr-original/nvngx_dlssnr.dll. Existing community Lecram/SF-v2 choices and notices remain. See docs/RUNTIME_COMPONENTS_2.0.2.md and the publisher manifest. This experimental integration is not NVIDIA certification or complete official DLSS 5 support. No proprietary binary has been added to source Git.
@@ -1381,7 +1390,7 @@ Upstream collaborator selimsandal explicitly states that third-party redistribut
 
 ### ANR on-demand download (2026-11-23)
 
-Selecting ANR with the component missing retrieves the pinned FG V.B15 Windows Addon directly from Apex Compute's GitHub Release. Veyra checks the archive's published SHA-256 and the 19 original provider members before installing them in the user's application data. The installer selects the provider directory with its original data and configuration, and Veyra's own host calls the provider. The upstream archive supplies all vendor bytes for this user-initiated download. [Official FG V.B15 release](https://github.com/apex-compute/ANR/releases/tag/FG-V.B15)
+Selecting ANR with the component missing retrieves the pinned FG V.B20 Windows Addon directly from Apex Compute's GitHub Release. Veyra verifies the archive SHA-256 and all 30 original provider members before installing them in the user's application data. FG V.B15 installations remain usable and can update through Settings → Components. Veyra's own host calls the extracted provider with its original data and configuration. [Official FG V.B20 release](https://github.com/apex-compute/ANR/releases/tag/FG-V.B20)
 
 ## AMD Advanced Media Framework (AMF) SDK headers
 

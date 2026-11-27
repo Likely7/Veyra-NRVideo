@@ -6,19 +6,33 @@
 
 namespace veyra::ui::asr {
 namespace {
-constexpr ModelFile runtimeFiles[]{
+constexpr ModelFile legacyRuntimeFiles[]{
     {"sherpa-onnx-c-api.dll", "6ec3f171edabd8778c698befc11e44b21e7c93651ad4e83733f742044564da88", 3257344},
     {"onnxruntime.dll", "9ab1e925c610b42410b1ebacc61306436282522221bf3b3c6ea5950d000d44be", 14203904},
     {"onnxruntime_providers_shared.dll", "3ef52275f70976fd0ac83f6a4e516cad045622851d5d4ce692f0926333cc8062", 10752},
 };
-constexpr ModelSource runtimeSources[]{
+constexpr ModelSource legacyRuntimeSources[]{
     {"https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.2/sherpa-onnx-v2.0.2-win-x64-shared-MD-MinSizeRel-no-tts-lib.tar.bz2"},
 };
-constexpr ModelAsset runtime{
+constexpr ModelAsset legacyRuntime{
     "runtime-2.0.2",
     "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.2/sherpa-onnx-v2.0.2-win-x64-shared-MD-MinSizeRel-no-tts-lib.tar.bz2",
     6071299, "fb3ef6cf2e65d03e44d3ff3ac5a8a1f3a1e2710416359f86d59525a1309bf8ce",
-    runtimeFiles, "sherpa-onnx-v2.0.2-win-x64-shared-MD-MinSizeRel-no-tts-lib/lib/", 2, true, runtimeSources
+    legacyRuntimeFiles, "sherpa-onnx-v2.0.2-win-x64-shared-MD-MinSizeRel-no-tts-lib/lib/", 2, true, legacyRuntimeSources
+};
+constexpr ModelFile runtimeFiles[]{
+    {"sherpa-onnx-c-api.dll", "5cdf6580abcf4c66683b0667f5a96192aa7ccb1e5f90a8139c2aee1f6cab96f2", 3939328},
+    legacyRuntimeFiles[1],
+    legacyRuntimeFiles[2],
+};
+constexpr ModelSource runtimeSources[]{
+    {"https://gh-proxy.com/https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-v2.0.3-win-x64-shared-MD-MinSizeRel-no-tts-lib.tar.bz2"},
+};
+constexpr ModelAsset runtime{
+    "runtime-2.0.3",
+    "https://github.com/k2-fsa/sherpa-onnx/releases/download/v2.0.3/sherpa-onnx-v2.0.3-win-x64-shared-MD-MinSizeRel-no-tts-lib.tar.bz2",
+    6405460, "cb2322080eb765f16b58deb25b5469fd02634fed23e71035c38ac0a27ce4b5c0",
+    runtimeFiles, "sherpa-onnx-v2.0.3-win-x64-shared-MD-MinSizeRel-no-tts-lib/lib/", 2, true, runtimeSources
 };
 // This pinned upstream Silero V5 is also supported by sherpa-onnx's CPU VAD.
 constexpr ModelSource vadSources[]{
@@ -80,11 +94,18 @@ std::span<const ModelAsset> assets(int model) {
     }
 }
 
+const ModelAsset* installedRuntime(const QString& folder, bool contents) {
+    if (ModelAssets::verify(folder, runtime, contents)) return &runtime;
+    if (ModelAssets::verify(folder, legacyRuntime, contents)) return &legacyRuntime;
+    return nullptr;
+}
+
 bool verify(const QString& folder, int model, bool contents) {
     const auto bundle = assets(model);
-    return !bundle.empty() && std::ranges::all_of(bundle, [&](const ModelAsset& asset) {
-        return ModelAssets::verify(folder, asset, contents);
-    });
+    return !bundle.empty() && installedRuntime(folder, contents) &&
+        std::ranges::all_of(bundle.subspan(1), [&](const ModelAsset& asset) {
+            return ModelAssets::verify(folder, asset, contents);
+        });
 }
 
 QString whisperLanguage(const QString& language) {
