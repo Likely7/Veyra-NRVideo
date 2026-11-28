@@ -37,7 +37,11 @@ inline int decklinkGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comm
             }
             for(unsigned x=0;x<w;++x){
                 std::array<double,3> c;
-                if(code==6){const double yy=(double(component(x,y,0))-(full?0:64))/(full?1023:876),u=(double(component(x,y,1))-512)/(full?1023:896),v=(double(component(x,y,2))-512)/(full?1023:896);
+                if(code==6){
+                    const double yy=(double(component(x,y,0))-(full?0:64))/(full?1023:876);
+                    const unsigned next=(x%2&&x+1<w)?x+1:x;
+                    const double u=(.5*(component(x,y,1)+component(next,y,1))-512)/(full?1023:896);
+                    const double v=(.5*(component(x,y,2)+component(next,y,2))-512)/(full?1023:896);
                     c=curve==1?std::array{yy+1.5748*v,yy-.187324*u-.468124*v,yy+1.8556*u}:std::array{yy+1.4746*v,yy-.164553*u-.571353*v,yy+1.8814*u};
                 }else{for(unsigned i=0;i<3;++i)c[i]=(double(component((x+(i==1?19:i==2?37:0))%w,y,0))-(full?0:64))/(full?1023:876);}
                 for(auto& v:c)v=decode(std::clamp(v,0.0,1.0));

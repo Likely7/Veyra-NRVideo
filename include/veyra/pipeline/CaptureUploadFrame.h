@@ -92,12 +92,17 @@ inline CaptureUploadFrame* captureUploadFrame(const AVFrame* frame) {
 inline uint32_t captureUploadPixelBytes(AVPixelFormat format) {
     switch (format) {
     case AV_PIX_FMT_NV12: return 1;
-    case AV_PIX_FMT_P010: case AV_PIX_FMT_P016: return 2;
+    case AV_PIX_FMT_P010: case AV_PIX_FMT_P016: case AV_PIX_FMT_P210LE: return 2;
+    case AV_PIX_FMT_Y210LE: return 4;
     case AV_PIX_FMT_YUYV422: case AV_PIX_FMT_UYVY422: case AV_PIX_FMT_YVYU422: return 2;
     case AV_PIX_FMT_RGB555LE: case AV_PIX_FMT_RGB565LE: return 2;
     case AV_PIX_FMT_BGR24: return 3;
     default: return 0;
     }
+}
+
+inline bool captureUploadSemiplanar(AVPixelFormat format) {
+    return format==AV_PIX_FMT_NV12||format==AV_PIX_FMT_P010||format==AV_PIX_FMT_P016||format==AV_PIX_FMT_P210LE;
 }
 
 // Returns nullptr when the format is not supported or the buffer cannot be
@@ -107,12 +112,13 @@ inline AVFrame* allocCaptureUploadFrame(ID3D12Device* device, AVPixelFormat form
     // DeckLink packing. It is never interpreted as BGRA pixels by the graph.
     const uint32_t pixelBytes = packed10Carrier&&format==AV_PIX_FMT_BGRA?4:captureUploadPixelBytes(format);
     if (!device || !width || !height || !pixelBytes) return nullptr;
-    const bool semiplanar = format == AV_PIX_FMT_NV12 || format == AV_PIX_FMT_P010 || format == AV_PIX_FMT_P016;
+    const bool semiplanar = captureUploadSemiplanar(format);
+    const unsigned chromaRows = format==AV_PIX_FMT_P210LE?height:(height+1)/2;
     // Packed rows are uploaded as RGBA8 texels, so a row is a whole number of texels.
     const uint32_t rowBytes = (width * pixelBytes + 3u) & ~3u;
     const uint32_t pitch = (rowBytes + 255u) & ~255u;                              // D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
     const uint64_t chromaOffset = semiplanar ? (uint64_t(pitch) * height + 511u) & ~uint64_t(511) : 0; // ..._PLACEMENT_ALIGNMENT
-    const uint64_t bytes = semiplanar ? chromaOffset + uint64_t(pitch) * ((height + 1) / 2) : uint64_t(pitch) * height;
+    const uint64_t bytes = semiplanar ? chromaOffset + uint64_t(pitch) * chromaRows : uint64_t(pitch) * height;
     D3D12_HEAP_PROPERTIES heap{}; heap.Type = D3D12_HEAP_TYPE_UPLOAD;
     D3D12_RESOURCE_DESC desc{}; desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER; desc.Width = bytes; desc.Height = 1; desc.DepthOrArraySize = 1;
     desc.MipLevels = 1; desc.SampleDesc.Count = 1; desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;

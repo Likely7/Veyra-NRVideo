@@ -6,7 +6,11 @@
 #include <format>
 
 namespace veyra::source {
-enum class CapturePacking { Unknown, Yuy2, Uyvy, Yvyu, Nv12, Nv21, I420, Yv12, P010, P016, Bgr32, Bgra32, Bgr24, Rgb555, Rgb565, V210, Rgb10xLE };
+enum class CapturePacking { Unknown, Yuy2, Uyvy, Yvyu, Nv12, Nv21, I420, Yv12, P010, P016, Bgr32, Bgra32, Bgr24, Rgb555, Rgb565, V210, Rgb10xLE, Y210, P210 };
+constexpr bool captureUses16BitWords(CapturePacking packing) {
+    return packing == CapturePacking::P010 || packing == CapturePacking::P016 ||
+           packing == CapturePacking::Y210 || packing == CapturePacking::P210;
+}
 constexpr DWORD captureFourcc(char a,char b,char c,char d){return DWORD(uint8_t(a))|(DWORD(uint8_t(b))<<8)|(DWORD(uint8_t(c))<<16)|(DWORD(uint8_t(d))<<24);}
 inline bool captureIsFourcc(const GUID& id,DWORD code){
     const GUID expected{code,0,0x10,{0x80,0,0,0xaa,0,0x38,0x9b,0x71}};return id==expected;
@@ -24,7 +28,8 @@ inline CapturePacking capturePacking(const GUID& id){
         {captureFourcc('Y','V','Y','U'),CapturePacking::Yvyu},{captureFourcc('N','V','1','2'),CapturePacking::Nv12},
         {captureFourcc('N','V','2','1'),CapturePacking::Nv21},{captureFourcc('I','4','2','0'),CapturePacking::I420},
         {captureFourcc('I','Y','U','V'),CapturePacking::I420},{captureFourcc('Y','V','1','2'),CapturePacking::Yv12},
-        {captureFourcc('P','0','1','0'),CapturePacking::P010},{captureFourcc('P','0','1','6'),CapturePacking::P016}};
+        {captureFourcc('P','0','1','0'),CapturePacking::P010},{captureFourcc('P','0','1','6'),CapturePacking::P016},
+        {captureFourcc('Y','2','1','0'),CapturePacking::Y210},{captureFourcc('P','2','1','0'),CapturePacking::P210}};
     for(const auto& e:entries)if(captureIsFourcc(id,e.code))return e.packing;
     return CapturePacking::Unknown;
 }

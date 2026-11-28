@@ -147,6 +147,16 @@ float3 DoviP5ToPqBt2020(float luma,float2 chroma)
 float2 ReconstructChroma(uint2 pixel)
 {
     uint location=yuvDimensions.w;
+#ifdef VEYRA_P210
+    // Horizontal 4:2:2 filtering, with a separate chroma row for every luma row.
+    const uint pair = pixel.x / 2;
+    const float2 chroma = chromaPlane[uint2(pair, pixel.y)];
+    const bool centered = location != 0 && (location & 1) == 0;
+    const bool odd = (pixel.x & 1) != 0;
+    if(location==0 || (!centered && !odd))return chroma;
+    const int neighbor = clamp(int(pair) + (centered && !odd ? -1 : 1), 0, int(yuvDimensions.x / 2) - 1);
+    return lerp(chroma, chromaPlane[uint2(neighbor, pixel.y)], centered ? 0.25 : 0.5);
+#else
     if(location==0)return chromaPlane[pixel/2];
     // Chroma sample origin in luma pixel-center coordinates. Respect MPEG
     // left, JPEG center and vertical top/bottom placement; no luma filtering.
@@ -165,6 +175,7 @@ float2 ReconstructChroma(uint2 pixel)
     float2 c=chromaPlane[clamp(base+int2(0,1),int2(0,0),last)];
     float2 d=chromaPlane[clamp(base+int2(1,1),int2(0,0),last)];
     return lerp(lerp(a,b,fraction.x),lerp(c,d,fraction.x),fraction.y);
+#endif
 }
 
 
@@ -352,6 +363,9 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
     }
     const float y = lumaPlane[uint2(dispatchThreadId.x, dispatchThreadId.y)];
     const float2 uv = ReconstructChroma(dispatchThreadId.xy);
+#ifdef VEYRA_P210
+    float3 rgb = YuvToRgb(y, uv);
+#else
     // Custom (P7): dv6.w == 2 rebuilds the 12-bit signal from base + enhancement
     // before the colour conversion; dv6.w == 1 is the profile 5 conversion.
     // dv6.w == 2 reconstructs; dv6.w == 3 reconstructs and shows the gap instead.
@@ -370,6 +384,7 @@ void main(uint3 dispatchThreadId : SV_DispatchThreadID)
         const float el = saturate(float(max(max(abs(elResidual.x), abs(elResidual.y)), abs(elResidual.z))) / 400.0);
         rgb = float3(el, el, el);
     }
+#endif
     rgb = saturate(rgb);
     if(colorParams0.z>3.5){
         // ST2084 EOTF to absolute cd/m2, then BT.2020 -> BT.709 linear.

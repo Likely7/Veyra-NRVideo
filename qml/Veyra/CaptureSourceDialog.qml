@@ -503,7 +503,7 @@ DialogLayer {
             id: inputColorRow
             visible: veyra.captureMjpegSelected !== true
             label: qsTr("输入色彩（SDR / HDR）")
-            hint: qsTr("不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连")
+            hint: qsTr("不确定就选「自动」。HDR10 选「HDR · PQ」，可使用采集卡驱动提供的 P010、Y210 或 P210。「HDR · HLG」用于广播信号。「SDR · 709」用于普通画面。修改后需重新连接。")
             VSeg {
                 objectName: "capture-color-space"
                 options: [{ id: "0", label: qsTr("自动") }, { id: "1", label: "HDR · PQ" }, { id: "2", label: "HDR · HLG" }, { id: "3", label: "SDR · 709" }]

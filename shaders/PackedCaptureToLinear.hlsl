@@ -31,6 +31,28 @@ uint wordAt(uint y, uint index) {
 void main(uint3 p : SV_DispatchThreadID) {
     if (p.x >= width || p.y >= height) return;
     float3 rgb;
+#ifdef VEYRA_Y210
+    // Y0 U Y1 V, in four little-endian words. Ignore the low six padding bits.
+    const uint pair = p.x / 2;
+    const uint lo = wordAt(p.y, pair * 2);
+    const uint hi = wordAt(p.y, pair * 2 + 1);
+    const bool odd = (p.x & 1) != 0;
+    const float luma = float(((odd ? hi : lo) >> 6) & 1023);
+    float2 cbcr = float2(lo >> 22, hi >> 22);
+    const uint chromaLocation = asuint(reserved);
+    const bool centered = chromaLocation != 0 && (chromaLocation & 1) == 0;
+    if (centered || odd) {
+        const int neighbor = clamp(int(pair) + (centered && !odd ? -1 : 1), 0, int(width / 2) - 1);
+        const float2 adjacent = float2(wordAt(p.y, neighbor * 2) >> 22, wordAt(p.y, neighbor * 2 + 1) >> 22);
+        cbcr = lerp(cbcr, adjacent, centered ? 0.25 : 0.5);
+    }
+    const float y = saturate(limited > 0.5 ? (luma - 64.0) / 876.0 : luma / 1023.0);
+    const float2 uv = (cbcr - 512.0) / (limited > 0.5 && limited < 1.5 ? 896.0 : 1023.0);
+    rgb = matrix709 > 1.5 ? float3(y + 1.4746*uv.y, y - .164553*uv.x - .571353*uv.y, y + 1.8814*uv.x)
+        : matrix709 > .5 ? float3(y + 1.5748*uv.y, y - .1873*uv.x - .4681*uv.y, y + 1.8556*uv.x)
+        : float3(y + 1.402*uv.y, y - .3441*uv.x - .7141*uv.y, y + 1.772*uv.x);
+    rgb = saturate(rgb);
+#else
     if (packing == 6) {
         // Each of the three 4:2:2 pairs shares two adjacent 32-bit words.
         // Avoid reading the whole group for every pixel.
@@ -94,6 +116,7 @@ void main(uint3 p : SV_DispatchThreadID) {
         else rgb = float3(((v >> 11) & 31) / 31.0, ((v >> 5) & 63) / 63.0, (v & 31) / 31.0);
     }
     if (limitedU != 0 && packing <= 3) rgb = saturate((rgb - 16.0 / 255.0) * (255.0 / 219.0));
+#endif
     float3 decoded;
     if(transfer>=4){
         float3 nits;

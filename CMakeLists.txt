@@ -410,6 +410,7 @@ endif()
 
 # YUV→RGB shader is shared between the media pipeline and the harness.
 veyra_add_compute_shader(veyra_shader_yuv_to_rgb YuvToLinearRgb)
+veyra_add_compute_shader_variant(veyra_shader_p210_input YuvToLinearRgb P210ToLinearRgb VEYRA_P210)
 veyra_add_compute_shader(veyra_shader_rgb_to_linear RgbToLinear)
 veyra_add_compute_shader(veyra_shader_color_grade ColorGradePass)
 # 纹理 / 清晰度 / 去朦胧: block statistics, blur, apply (ColorDetailPass).
@@ -418,6 +419,7 @@ veyra_add_compute_shader(veyra_shader_color_detail_blur ColorDetailBlur)
 veyra_add_compute_shader(veyra_shader_color_detail_apply ColorDetailApply)
 veyra_add_compute_shader(veyra_shader_yuy2_to_linear Yuy2ToLinear)
 veyra_add_compute_shader(veyra_shader_packed_capture PackedCaptureToLinear)
+veyra_add_compute_shader_variant(veyra_shader_y210_input PackedCaptureToLinear Y210ToLinearRgb VEYRA_Y210)
 add_dependencies(veyra_shader_rgb_to_linear veyra_shader_yuy2_to_linear)
 # ScaleBlit: working frame -> swapchain backbuffer (Phase 6 present path).
 veyra_add_compute_shader(veyra_shader_scale_blit ScaleBlit)
@@ -745,7 +747,7 @@ if(TARGET veyra_ngx AND TARGET veyra_nvof AND VEYRA_FFMPEG_ROOT)
     veyra_shader_yuv_to_rgb veyra_shader_rgb_to_linear veyra_shader_parity_encode
     veyra_shader_parity_decode veyra_shader_scale_blit veyra_shader_nis veyra_shader_smart_sr_reduce veyra_shader_smart_sr_probe_reduce veyra_shader_smart_sr_probe_residual
     veyra_shader_hdr_amd_nr_encode veyra_shader_hdr_amd_nr_restore
-    veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture)
+    veyra_shader_nv12_upload veyra_shader_nvof_densify veyra_shader_packed_capture veyra_shader_p210_input veyra_shader_y210_input)
 endif()
 
 # ---------------------------------------------------------------------------

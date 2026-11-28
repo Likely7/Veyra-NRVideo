@@ -20,6 +20,8 @@ constexpr int captureFormatRank(CapturePacking packing) {
     case CapturePacking::Bgr24: return 20;  // RGB24 DIB
     case CapturePacking::Bgr32: return 21;  // RGB32 DIB
     case CapturePacking::Bgra32: return 22; // ARGB32 DIB
+    case CapturePacking::P210: return 23;
+    case CapturePacking::Y210: return 24;
     case CapturePacking::Uyvy: return 30;
     case CapturePacking::Yvyu: return 31;
     case CapturePacking::Rgb555: return 32;
@@ -33,7 +35,7 @@ constexpr CaptureFormatTier captureFormatTier(CapturePacking packing) {
     switch (captureFormatRank(packing)) {
     case 0: case 1: case 2: case 3: case 4: case 5: case 10:
         return CaptureFormatTier::Low;
-    case 20: case 21: case 22:
+    case 20: case 21: case 22: case 23: case 24:
         return CaptureFormatTier::Medium;
     case 30: case 31: case 32: case 33:
         return CaptureFormatTier::High;

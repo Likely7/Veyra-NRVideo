@@ -12,7 +12,7 @@ template<class Check> void captureFormatCases(Check check){
         {MEDIASUBTYPE_RGB24,48},{MEDIASUBTYPE_RGB32,64},{MEDIASUBTYPE_ARGB32,64},{MEDIASUBTYPE_RGB555,32},{MEDIASUBTYPE_RGB565,32},
         {fourcc("YUY2"),32},{fourcc("UYVY"),32},{fourcc("HDYC"),32},{fourcc("YVYU"),32},
         {fourcc("NV12"),24},{fourcc("NV21"),24},{fourcc("I420"),24},{fourcc("IYUV"),24},{fourcc("YV12"),24},
-        {fourcc("P010"),48},{fourcc("P016"),48}};
+        {fourcc("P010"),48},{fourcc("P016"),48},{fourcc("Y210"),64},{fourcc("P210"),64}};
     for(const auto& item:cases){
         t.subtype=item.id;CaptureMediaLayout l;
         bool ok=captureMediaLayout(t,l);check(ok&&l.sampleBytes==size_t(item.bytes),"raw format negotiated layout/size");
@@ -29,9 +29,16 @@ template<class Check> void captureFormatCases(Check check){
             // the GPU upload shader does the unpack, so rows compare raw.
             exact&=memcmp(d,s,l.rowBytes)==0;
         }
-        for(unsigned p=1;p<l.planes;++p)for(unsigned y=0;y<2;++y){const auto* s=bytes.data()+(p==1?l.chromaOffset:l.secondChromaOffset)+y*l.chromaStride;const auto* d=f->data[p]+y*f->linesize[p];
+        for(unsigned p=1;p<l.planes;++p)for(unsigned y=0;y<l.chromaRows();++y){const auto* s=bytes.data()+(p==1?l.chromaOffset:l.secondChromaOffset)+y*l.chromaStride;const auto* d=f->data[p]+y*f->linesize[p];
             if(l.packing==CapturePacking::Nv21)for(unsigned x=0;x<l.chromaRowBytes;x+=2)exact&=d[x]==s[x+1]&&d[x+1]==s[x];else exact&=memcmp(d,s,l.chromaRowBytes)==0;}
         check(exact,"raw plane order, channels and orientation match reference");
+        if(l.packing==CapturePacking::P210){
+            const bool flipped=copyCaptureSample(l,bytes.data(),bytes.size(),*f,true);
+            check(flipped&&l.chromaRows()==l.height&&
+                memcmp(f->data[1],bytes.data()+l.chromaOffset+3*l.chromaStride,l.chromaRowBytes)==0&&
+                memcmp(f->data[1]+3*f->linesize[1],bytes.data()+l.chromaOffset,l.chromaRowBytes)==0,
+                "P210 vertical reversal preserves all four chroma rows");
+        }
         av_frame_free(&f);
     }
     t.subtype=MEDIASUBTYPE_RGB24;vi.bmiHeader.biWidth=3;vi.bmiHeader.biHeight=-2;CaptureMediaLayout l;
@@ -41,6 +48,24 @@ template<class Check> void captureFormatCases(Check check){
     check(captureMediaLayout(t,l)&&l.stride==12&&l.chromaOffset==48&&l.chromaRowBytes==8,"P010 padded UV starts after full padded Y plane");
     vi.bmiHeader.biSizeImage=66;check(!captureMediaLayout(t,l),"16-bit samples reject odd byte stride");vi.bmiHeader.biSizeImage=0;
     auto other=t;other.subtype=fourcc("P016");check(!equivalentCaptureTypes(t,other),"P010 to P016 requires reconnect despite identical dimensions");
+    other.subtype=fourcc("P210");check(!equivalentCaptureTypes(t,other),"4:2:0 and 4:2:2 cannot reuse a layout");
+    t.subtype=fourcc("P210");vi.bmiHeader.biSizeImage=96;
+    check(captureMediaLayout(t,l)&&l.format==AV_PIX_FMT_P210LE&&l.stride==12&&l.chromaOffset==48&&l.chromaRows()==4,
+          "P210 padded layout carries full-height UV");
+    vi.bmiHeader.biHeight=3;vi.bmiHeader.biSizeImage=0;
+    check(captureMediaLayout(t,l)&&l.sampleBytes==48&&l.chromaOffset==24&&l.chromaRows()==3,
+          "P210 has one UV row per luma row for an odd height");
+    vi.bmiHeader.biHeight=4;vi.bmiHeader.biSizeImage=96;
+    t.subtype=fourcc("Y210");
+    check(captureMediaLayout(t,l)&&l.format==AV_PIX_FMT_Y210LE&&l.stride==24&&l.rowBytes==16&&l.planes==1,
+          "Y210 padded layout preserves the packed high bits");
+    DXVA2_ExtendedFormat pq{};pq.VideoTransferFunction=15;
+    pq.NominalRange=DXVA2_NominalRange_16_235;
+    vi.dwControlFlags=pq.value|AMCONTROL_COLORINFO_PRESENT;
+    check(captureMediaLayout(t,l)&&l.color.transfer==veyra::pipeline::TransferFunction::PQ&&
+          l.color.primaries==veyra::pipeline::ColorPrimaries::BT2020,
+          "Y210 honors explicit PQ and resolves missing HDR primaries");
+    vi.dwControlFlags=0;vi.bmiHeader.biSizeImage=0;
     t.subtype=fourcc("NV12");other=t;other.subtype=fourcc("NV21");check(!equivalentCaptureTypes(t,other),"UV to VU change cannot silently reuse layout");
     t.subtype=fourcc("YV12");check(captureMediaLayout(t,l)&&l.chromaOffset==20&&l.secondChromaOffset==16,"YV12 V precedes U in incoming memory");
     for(const auto id:{MEDIASUBTYPE_RGB555,MEDIASUBTYPE_RGB565}){

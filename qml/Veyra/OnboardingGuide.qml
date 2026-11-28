@@ -33,7 +33,7 @@ Popup {
         { target: "format", title: qsTr("选择采集格式"),
           detail: qsTr("「像素格式」会列出当前分辨率和帧率下可以用的选项。这几种常见格式的区别如下。") },
         { target: "input-color", title: qsTr("设置输入色彩"),
-          detail: qsTr("主机正在输出 HDR10 时，选 P010，再把这里设为「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改后重新连接才生效。") },
+          detail: qsTr("主机正在输出 HDR10 时，选 P010、Y210 或 P210，再把这里设为「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改后重新连接才生效。") },
         { target: "connect", title: qsTr("连接并开始采集"),
           detail: qsTr("选好设备和格式后，在这里连接。先确认预览有画面、采集帧率符合预期，再看专业模式里的增强选项。") },
         { tab: "quality", target: "sr", title: qsTr("超分辨率在这里"),

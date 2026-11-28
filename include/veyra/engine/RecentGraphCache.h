@@ -21,7 +21,7 @@ public:
         std::optional<ChainRuntimeOrder> order;
         unsigned sourceWidth=0,sourceHeight=0,workWidth=0,workHeight=0,nrWidth=0,nrHeight=0;
         bool hdrInput=false,hdrOutput=false,rgbInput=false;
-        unsigned captureBitDepth=8,packedInput=0;bool yuy2Input=false;
+        unsigned captureBitDepth=8,packedInput=0;bool yuy2Input=false,p210Input=false;
         std::wstring runtime;
         uint64_t nrFileBytes=0;int64_t nrFileTimestamp=0;
         bool operator==(const Key&)const=default;
@@ -31,7 +31,7 @@ public:
     static Key key(EnhancementSettings settings,std::optional<ChainRuntimeOrder> order,const pipeline::EnhanceGraphDesc& desc){
         settings.revision=0;
         Key result{std::move(settings),std::move(order),desc.sourceWidth,desc.sourceHeight,desc.workWidth,desc.workHeight,
-            desc.nrWidth,desc.nrHeight,desc.hdrInput,desc.hdrOutput,desc.rgbInput,desc.captureBitDepth,desc.packedInput,desc.yuy2Input,desc.runtimeAbsPath};
+            desc.nrWidth,desc.nrHeight,desc.hdrInput,desc.hdrOutput,desc.rgbInput,desc.captureBitDepth,desc.packedInput,desc.yuy2Input,desc.p210Input,desc.runtimeAbsPath};
         auto module=std::filesystem::path(desc.runtimeAbsPath);
         if(currentNrRuntime(desc.nrRuntime)==NrRuntime::Ampere)module/=L"nr-ampere";
         else if(currentNrRuntime(desc.nrRuntime)==NrRuntime::NvidiaOriginal)module/=L"nr-original";

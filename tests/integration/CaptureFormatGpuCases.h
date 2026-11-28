@@ -21,13 +21,13 @@ inline bool captureReadFp16(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comm
 inline int captureGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::CommandSlotRing& ring){
     using namespace veyra;using namespace veyra::source;int failures=0;
     auto fourcc=[](const char* n){return GUID{captureFourcc(n[0],n[1],n[2],n[3]),0,0x10,{0x80,0,0,0xaa,0,0x38,0x9b,0x71}};};
-    const GUID ids[]={MEDIASUBTYPE_RGB24,MEDIASUBTYPE_RGB32,MEDIASUBTYPE_ARGB32,MEDIASUBTYPE_RGB555,MEDIASUBTYPE_RGB565,fourcc("YUY2"),fourcc("UYVY"),fourcc("HDYC"),fourcc("YVYU"),fourcc("NV12"),fourcc("NV21"),fourcc("I420"),fourcc("IYUV"),fourcc("YV12"),fourcc("P010"),fourcc("P016")};
+    const GUID ids[]={MEDIASUBTYPE_RGB24,MEDIASUBTYPE_RGB32,MEDIASUBTYPE_ARGB32,MEDIASUBTYPE_RGB555,MEDIASUBTYPE_RGB565,fourcc("YUY2"),fourcc("UYVY"),fourcc("HDYC"),fourcc("YVYU"),fourcc("NV12"),fourcc("NV21"),fourcc("I420"),fourcc("IYUV"),fourcc("YV12"),fourcc("P010"),fourcc("P016"),fourcc("Y210"),fourcc("P210")};
     for(const auto& id:ids)for(bool full:{false,true}){
         VIDEOINFOHEADER2 vi{};vi.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);vi.bmiHeader.biWidth=64;vi.bmiHeader.biHeight=32;vi.AvgTimePerFrame=166667;
         DXVA2_ExtendedFormat ext{};ext.NominalRange=full?DXVA2_NominalRange_0_255:DXVA2_NominalRange_16_235;ext.VideoTransferMatrix=DXVA2_VideoTransferMatrix_BT709;vi.dwControlFlags=ext.value|AMCONTROL_COLORINFO_PRESENT;
         AM_MEDIA_TYPE t{};t.majortype=MEDIATYPE_Video;t.subtype=id;t.formattype=FORMAT_VideoInfo2;t.pbFormat=reinterpret_cast<BYTE*>(&vi);t.cbFormat=sizeof(vi);CaptureMediaLayout l;
         if(!captureMediaLayout(t,l)){++failures;continue;}
-        const bool rgbDib=l.format==AV_PIX_FMT_BGR0||l.format==AV_PIX_FMT_BGR24||l.format==AV_PIX_FMT_RGB555LE||l.format==AV_PIX_FMT_RGB565LE,wide=l.format==AV_PIX_FMT_P010||l.format==AV_PIX_FMT_P016;const unsigned bits=l.format==AV_PIX_FMT_P016?16:wide?10:8;
+        const bool rgbDib=l.format==AV_PIX_FMT_BGR0||l.format==AV_PIX_FMT_BGR24||l.format==AV_PIX_FMT_RGB555LE||l.format==AV_PIX_FMT_RGB565LE,wide=captureUses16BitWords(l.packing);const unsigned bits=l.format==AV_PIX_FMT_P016?16:wide?10:8;
         // RGB bitfield tests use full range (unit tests cover channel masks).
         if(rgbDib){l.color.range=pipeline::ColorRange::Full;}
         std::vector<uint8_t> raw(l.sampleBytes,0);const unsigned max=bits==16?65535:bits==10?1023:255,black=full?0:16*(1u<<(bits-8)),white=full?max:235*(1u<<(bits-8));
@@ -39,6 +39,10 @@ inline int captureGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comma
                 else if(l.format==AV_PIX_FMT_RGB555LE){const uint16_t v=x<32?0:0x7FFF;memcpy(row+x*2,&v,2);}
                 else if(l.format==AV_PIX_FMT_RGB565LE){const uint16_t v=x<32?0:0xFFFF;memcpy(row+x*2,&v,2);}
                 else if(l.format==AV_PIX_FMT_YUYV422||l.format==AV_PIX_FMT_UYVY422||l.format==AV_PIX_FMT_YVYU422){row[x*2]=uint8_t(code);row[x*2+1]=128;}
+                else if(l.packing==CapturePacking::Y210){
+                    const uint16_t words[]={uint16_t(code<<6),uint16_t(512<<6)};
+                    std::memcpy(row+x*4,words,sizeof(words));
+                }
                 else if(wide){const uint16_t v=uint16_t(bits==10?code<<6:code);memcpy(row+x*2,&v,2);}
                 else row[x]=uint8_t(code);
             }
@@ -46,7 +50,7 @@ inline int captureGpuCases(veyra::gfx::D3D12DeviceContext& ctx,veyra::gfx::Comma
         }
         if(l.planes>1)for(size_t i=size_t(l.stride)*32;i<raw.size();i+=wide?2:1){if(wide){raw[i]=0;raw[i+1]=128;}else raw[i]=128;}
         AVFrame* f=av_frame_alloc();f->width=64;f->height=32;f->format=l.format;bool ok=av_frame_get_buffer(f,32)>=0&&copyCaptureSample(l,raw.data(),raw.size(),*f);
-        pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;gd.sourceWidth=gd.workWidth=64;gd.sourceHeight=gd.workHeight=32;gd.enableNr=gd.enableFg=gd.enableSr=false;gd.noFeatures=true;gd.rgbInput=l.format==AV_PIX_FMT_BGR0;gd.yuy2Input=l.format==AV_PIX_FMT_YUYV422;gd.packedInput=pipeline::packedInputCode(l.color.pixelFormat);gd.captureBitDepth=bits;
+        pipeline::EnhanceGraph graph(ctx,ring);pipeline::EnhanceGraphDesc gd;gd.sourceWidth=gd.workWidth=64;gd.sourceHeight=gd.workHeight=32;gd.enableNr=gd.enableFg=gd.enableSr=false;gd.noFeatures=true;gd.rgbInput=l.format==AV_PIX_FMT_BGR0;gd.yuy2Input=l.format==AV_PIX_FMT_YUYV422;gd.packedInput=pipeline::packedInputCode(l.color.pixelFormat);gd.captureBitDepth=bits;gd.p210Input=l.packing==CapturePacking::P210;
         pipeline::EnhanceGraph::FrameOutputs out;std::vector<float> pixels;
         ok=ok&&graph.initialize(gd)&&graph.createViews()&&graph.process(f,0,true,out,1,&l.color)&&captureReadFp16(ctx,ring,graph.diagnosticLinearInput(),pixels);
         double error=0;if(ok){for(unsigned c=0;c<3;++c){error=std::max(error,std::abs(double(pixels[4*4+c])));error=std::max(error,std::abs(double(pixels[56*4+c])-1));}ok=error<.003;}

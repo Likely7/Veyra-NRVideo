@@ -22,6 +22,7 @@ struct CaptureMediaLayout {
     CapturePacking packing=CapturePacking::Unknown;
     unsigned planes=1,chromaStride=0,chromaRowBytes=0;
     size_t chromaOffset=0,secondChromaOffset=0;
+    unsigned chromaRows() const { return packing==CapturePacking::P210?height:height/2; }
 };
 // Walk the AM_MEDIA_TYPE's format block without assuming VideoInfo vs
 // VideoInfo2; used to read/rewrite the DIB orientation flag in place.
@@ -75,6 +76,12 @@ inline bool captureMediaLayout(const AM_MEDIA_TYPE& type,CaptureMediaLayout& out
         // on the GPU; only the legacy CPU-unpack diagnostic maps to YUY2.
         out.format=out.packing==CapturePacking::Uyvy?AV_PIX_FMT_UYVY422:out.packing==CapturePacking::Yvyu?AV_PIX_FMT_YVYU422:AV_PIX_FMT_YUYV422;
         out.rowBytes=out.width*2;break;
+    case CapturePacking::Y210:
+        if(out.width%2)return false;
+        out.format=AV_PIX_FMT_Y210LE;out.rowBytes=out.width*4;break;
+    case CapturePacking::P210:
+        if(out.width%2)return false;
+        out.planes=2;out.format=AV_PIX_FMT_P210LE;out.rowBytes=out.width*2;break;
     case CapturePacking::Nv12:case CapturePacking::Nv21:case CapturePacking::I420:case CapturePacking::Yv12:
     case CapturePacking::P010:case CapturePacking::P016:
         if(out.width%2||out.height%2)return false;
@@ -87,7 +94,7 @@ inline bool captureMediaLayout(const AM_MEDIA_TYPE& type,CaptureMediaLayout& out
         out.rowBytes=out.width*(out.packing==CapturePacking::Bgr24?3:(out.packing==CapturePacking::Rgb555||out.packing==CapturePacking::Rgb565)?2:4);break;
     default:return false;
     }
-    const unsigned rows=out.planes>1?out.height*3/2:out.height;
+    const unsigned rows=out.height+(out.planes>1?out.chromaRows():0);
     const bool rgbDib=out.format==AV_PIX_FMT_BGR0||out.format==AV_PIX_FMT_BGR24||out.format==AV_PIX_FMT_RGB555LE||out.format==AV_PIX_FMT_RGB565LE;
     out.stride=out.rowBytes;
     if(rgbDib)out.stride=(out.stride+3)&~3u;
@@ -98,13 +105,13 @@ inline bool captureMediaLayout(const AM_MEDIA_TYPE& type,CaptureMediaLayout& out
         out.stride=bm.biSizeImage/rows;
     }
     if(rgbDib&&out.stride%4)return false;
-    if((out.planes==3||out.format==AV_PIX_FMT_P010||out.format==AV_PIX_FMT_P016)&&out.stride%2)return false;
+    if((out.planes==3||captureUses16BitWords(out.packing))&&out.stride%2)return false;
     out.sampleBytes=size_t(out.stride)*rows;
     if(out.planes>1){
         out.chromaStride=out.planes==3?out.stride/2:out.stride;
         out.chromaRowBytes=out.planes==3?out.width/2:out.rowBytes;
         out.chromaOffset=size_t(out.stride)*out.height;
-        out.secondChromaOffset=out.chromaOffset+size_t(out.chromaStride)*(out.height/2);
+        out.secondChromaOffset=out.chromaOffset+size_t(out.chromaStride)*out.chromaRows();
         if(out.packing==CapturePacking::Yv12)std::swap(out.chromaOffset,out.secondChromaOffset);
     }
     if(out.sampleBytes>size_t(std::numeric_limits<LONG>::max()))return false;
@@ -148,7 +155,7 @@ inline bool captureMediaLayout(const AM_MEDIA_TYPE& type,CaptureMediaLayout& out
             if(ext.VideoTransferMatrix==DXVA2_VideoTransferMatrix_Unknown)out.color.matrix=pipeline::YuvMatrix::BT2020NCL;
             if(ext.VideoPrimaries==DXVA2_VideoPrimaries_Unknown)out.color.primaries=pipeline::ColorPrimaries::BT2020;
         }
-        if(out.planes>1){
+        if(out.planes>1||out.packing==CapturePacking::Y210){
             const unsigned chroma=ext.VideoChromaSubsampling&~DXVA2_VideoChromaSubsampling_ProgressiveChroma;
             if(chroma==DXVA2_VideoChromaSubsampling_MPEG2)out.color.chromaLocation=pipeline::ChromaLocation::Left;
             else if(chroma==DXVA2_VideoChromaSubsampling_MPEG1)out.color.chromaLocation=pipeline::ChromaLocation::Center;
@@ -199,8 +206,9 @@ inline bool copyCaptureSample(const CaptureMediaLayout& layout,const uint8_t* sr
             const bool uy=layout.packing==CapturePacking::Uyvy;for(unsigned x=0;x<layout.rowBytes;x+=4){d[x]=s[x+(uy?1:0)];d[x+1]=s[x+(uy?0:3)];d[x+2]=s[x+(uy?3:2)];d[x+3]=s[x+(uy?2:1)];}
         }else std::memcpy(d,s,layout.rowBytes);
     }
-    for(unsigned p=1;p<layout.planes;++p)for(unsigned y=0;y<layout.height/2;++y){
-        const auto* s=src+(p==1?layout.chromaOffset:layout.secondChromaOffset)+size_t(flip?layout.height/2-1-y:y)*layout.chromaStride;auto* d=dst.data[p]+ptrdiff_t(y)*dst.linesize[p];
+    const unsigned chromaRows=layout.chromaRows();
+    for(unsigned p=1;p<layout.planes;++p)for(unsigned y=0;y<chromaRows;++y){
+        const auto* s=src+(p==1?layout.chromaOffset:layout.secondChromaOffset)+size_t(flip?chromaRows-1-y:y)*layout.chromaStride;auto* d=dst.data[p]+ptrdiff_t(y)*dst.linesize[p];
         if(layout.packing==CapturePacking::Nv21){for(unsigned x=0;x<layout.chromaRowBytes;x+=2){d[x]=s[x+1];d[x+1]=s[x];}}
         else std::memcpy(d,s,layout.chromaRowBytes);
     }

@@ -472,7 +472,7 @@ bool parseCapturePath(std::wstring_view path,CaptureSelection& selection){
 // content mode asks for it.
 static unsigned capturePicturePlanes(const CaptureMediaLayout& layout,const uint8_t* data,pipeline::PicturePlane (&planes)[3]){
     planes[0]={data,layout.stride,layout.rowBytes,layout.height};unsigned count=1;
-    for(unsigned p=1;p<layout.planes&&p<3;++p)planes[count++]={data+(p==1?layout.chromaOffset:layout.secondChromaOffset),layout.chromaStride,layout.chromaRowBytes,layout.height/2};
+    for(unsigned p=1;p<layout.planes&&p<3;++p)planes[count++]={data+(p==1?layout.chromaOffset:layout.secondChromaOffset),layout.chromaStride,layout.chromaRowBytes,layout.chromaRows()};
     return count;
 }
 // Returns true when the sample is a new picture whose copy into the reference
@@ -482,8 +482,8 @@ static unsigned capturePicturePlanes(const CaptureMediaLayout& layout,const uint
 static bool compareCaptureSample(const CaptureMediaLayout& layout,const uint8_t* data,AVFrame& frame,pipeline::PictureReference& reference){
     auto* info=pipeline::captureUploadFrame(&frame);if(!info)return false;
     pipeline::PicturePlane planes[3];const unsigned count=capturePicturePlanes(layout,data,planes);
-    // P010/P016 are 16-bit words; packed 10-bit and 5/6-bit RGB fields compare exactly; the rest are 8-bit components.
-    const bool p016=layout.packing==CapturePacking::P016,words=p016||layout.packing==CapturePacking::P010;
+    // Word-based YUV and bit-packed RGB/v210 have different comparison layouts.
+    const bool p016=layout.packing==CapturePacking::P016,words=captureUses16BitWords(layout.packing);
     const bool exact=layout.packing==CapturePacking::V210||layout.packing==CapturePacking::Rgb10xLE||layout.packing==CapturePacking::Rgb555||
         layout.packing==CapturePacking::Rgb565||layout.packing==CapturePacking::Unknown;
     const auto r=reference.observe(planes,count,exact?pipeline::PictureComponents::Exact:words?pipeline::PictureComponents::Words:pipeline::PictureComponents::Bytes,
@@ -743,7 +743,7 @@ struct CaptureCardSource::Impl:ISampleGrabberCB {
         const bool legacyYuy2=p.layout.format==AV_PIX_FMT_YUYV422&&(p.layout.packing==CapturePacking::Uyvy||p.layout.packing==CapturePacking::Yvyu);
         if(packed10)uploadFormat=AV_PIX_FMT_BGRA;
         else if(p.layout.planes==3&&p.layout.format==AV_PIX_FMT_YUV420P&&p.info.width%2==0&&p.info.height%2==0)uploadFormat=AV_PIX_FMT_NV12;
-        else if(p.layout.planes==(pipeline::captureUploadPixelBytes(p.layout.format)&&(p.layout.format==AV_PIX_FMT_NV12||p.layout.format==AV_PIX_FMT_P010||p.layout.format==AV_PIX_FMT_P016)?2u:1u)&&
+        else if(p.layout.planes==(pipeline::captureUploadPixelBytes(p.layout.format)&&pipeline::captureUploadSemiplanar(p.layout.format)?2u:1u)&&
             p.layout.packing!=CapturePacking::Nv21&&!legacyYuy2)uploadFormat=p.layout.format;
     }
     const bool uploadFrames=uploadFormat!=AV_PIX_FMT_NONE;
@@ -1474,7 +1474,7 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
     hr=S_OK;
     CaptureMediaLayout nativeLayout;const bool nativeSupported=captureMediaLayout(*native,nativeLayout);
     if(!nativeSupported&&capturePacking(native->subtype)!=CapturePacking::Unknown){log::error("capture","Known raw format has unsupported layout/color metadata; refusing implicit RGB conversion");freeType(native);return false;}
-    if(nativeSupported&&(nativeLayout.format==AV_PIX_FMT_P010||nativeLayout.format==AV_PIX_FMT_P016)&&desc.legacyCaptureRgbForDiagnostic){log::error("capture","10/16-bit capture cannot use the legacy 8-bit RGB diagnostic converter");freeType(native);return false;}
+    if(nativeSupported&&captureUses16BitWords(nativeLayout.packing)&&desc.legacyCaptureRgbForDiagnostic){log::error("capture","10/16-bit capture cannot use the legacy 8-bit RGB diagnostic converter");freeType(native);return false;}
     // Some drivers advertise a bottom-up DIB (biHeight>0) while their samples
     // actually arrive top-down, which users reported as "RGB24 captures upside
     // down". Ask for an explicit top-down connection first: an accepted request
@@ -1637,7 +1637,8 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
     auto elgatoHdr=std::make_unique<ElgatoHdrControl>();
     // Elgato cards: P010 takes the HDR path, 8-bit native formats ask the card
     // to tone map (OBS parity). Other wide formats leave the card state alone.
-    const bool otherWide=p.layout.format==AV_PIX_FMT_P016||p.layout.packing==CapturePacking::V210||p.layout.packing==CapturePacking::Rgb10xLE;
+    const bool wordPacking=captureUses16BitWords(p.layout.packing);
+    const bool otherWide=(wordPacking&&p.layout.format!=AV_PIX_FMT_P010)||p.layout.packing==CapturePacking::V210||p.layout.packing==CapturePacking::Rgb10xLE;
     if(!compressedPath&&!otherWide){
         std::wstring deviceName;
         const auto devices=monikers(false);
@@ -1651,15 +1652,12 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
     }
     if(colorOverride){
         const auto space=captureColorSpace(colorOverride);
-        if((space==1||space==2)&&p.layout.format!=AV_PIX_FMT_P010&&p.layout.format!=AV_PIX_FMT_P016){error_=L"手动 HDR 需要 P010/P016 格式；SDR 信号请选择自动或 Rec.709。";log::error("capture-color","Explicit HDR requires P010/P016");return false;}
+        if((space==1||space==2)&&!wordPacking){error_=L"手动 HDR 需要 P010、P016、Y210 或 P210；SDR 信号请选择自动或 Rec.709。";log::error("capture-color","Explicit HDR requires P010, P016, Y210 or P210");return false;}
         applyCaptureColorOverride(p.layout.color,colorOverride);
         log::info("capture-color",std::format("manual space={} range={} effective transfer={} matrix={} primaries={} range={} (0=auto, space 1=PQ 2=HLG 3=709, range 1=limited 2=full)",space,captureColorRange(colorOverride),int(p.layout.color.transfer),int(p.layout.color.matrix),int(p.layout.color.primaries),int(p.layout.color.range)));
     }
-    // Planar 4:2:0 capture (NV12/P010/P016): interpolate chroma at its sited
-    // position (unknown siting resolves to MPEG-2 left in YuvToLinearRgb)
-    // instead of repeating one sample over a 2x2 block. Until now only PS5
-    // Remote Play asked for this; OBS filters capture chroma bilinearly too.
-    // Packed 4:2:2 formats interpolate in their own ingress shaders.
+    // Reconstruct at the declared chroma location. Untagged capture uses
+    // left siting. Packed 4:2:2 formats interpolate in their ingress shaders.
     p.layout.color.reconstructChroma=true;
     p.info={};p.info.kind=pipeline::SourceKind::CaptureCard;p.info.width=p.layout.width;p.info.height=p.layout.height;p.info.displayAspect=p.layout.height>0?double(p.layout.width)/p.layout.height:0.0;p.info.averageFps=p.layout.duration>0?1e7/p.layout.duration:0;p.info.duration=pipeline::Rational::unknown();p.info.color=p.layout.color;
     if(expectedFps>0){
@@ -1670,7 +1668,7 @@ bool CaptureCardSource::configureDevice(const SourceOpenDesc& desc) {
     if(chosen&&(p.info.width!=chosen->width||p.info.height!=chosen->height)){
         error_=L"采集卡返回的分辨率与所选格式不符，请重新选择采集格式。";return false;
     }
-    if(!compressedPath&&!colorOverride&&(p.layout.format==AV_PIX_FMT_P010||p.layout.format==AV_PIX_FMT_P016)&&p.info.color.transferAssumed)
+    if(!compressedPath&&!colorOverride&&wordPacking&&p.info.color.transferAssumed)
         log::warn("capture-color","No explicit HDR transfer from driver; bit depth does not identify HDR. Keeping SDR fallback; manual PQ/HLG remains available.");
     if(p.info.color.isHdrPath())log::info("capture-color",std::format("HDR input transfer={} matrix={} assumed={} primaries={} assumed={}",int(p.info.color.transfer),int(p.info.color.matrix),p.info.color.matrixAssumed,int(p.info.color.primaries),p.info.color.primariesAssumed));
     p.nominalDuration100ns=p.layout.duration;

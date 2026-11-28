@@ -1066,8 +1066,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             static const bool bilinearPresent=GetEnvironmentVariableW(L"VEYRA_TEST_PRESENT_BILINEAR",nullptr,0)>0;
             gd.highQualityPresentation=!bilinearPresent;
             gd.rgbInput=isImage||isScreen||(isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Bgra8);
-            auto ingressBitDepth=[](pipeline::SourcePixelFormat format){return format==pipeline::SourcePixelFormat::P010||format==pipeline::SourcePixelFormat::V210||format==pipeline::SourcePixelFormat::Rgb10xLE?10u:format==pipeline::SourcePixelFormat::P016?16u:8u;};
+            auto ingressBitDepth=[](pipeline::SourcePixelFormat format){
+                using Format=pipeline::SourcePixelFormat;
+                switch(format){
+                case Format::P010:case Format::Y210:case Format::P210:case Format::V210:case Format::Rgb10xLE:return 10u;
+                case Format::P016:return 16u;
+                default:return 8u;
+                }
+            };
             gd.captureBitDepth=ingressBitDepth(activeSource->info().color.pixelFormat);
+            gd.p210Input=isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::P210;
             gd.yuy2Input=isCapture&&activeSource->info().color.pixelFormat==pipeline::SourcePixelFormat::Yuy2;gd.stillImage=isImage;
             gd.packedInput=isCapture?pipeline::packedInputCode(activeSource->info().color.pixelFormat):0;
             auto captureGraphColor=activeSource->info().color;
@@ -3043,7 +3051,9 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     const unsigned resizeFall=hdrMetadataNits(resizeSourceColor.hdrMaxFallNits);
                     if(nativeCapture){
                         captureGraphColor=activeSource->info().color;gd.rgbInput=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::Bgra8;
-                        gd.yuy2Input=false;gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
+                        gd.yuy2Input=false;
+                        gd.p210Input=captureGraphColor.pixelFormat==pipeline::SourcePixelFormat::P210;
+                        gd.packedInput=pipeline::packedInputCode(captureGraphColor.pixelFormat);gd.captureBitDepth=ingressBitDepth(captureGraphColor.pixelFormat);
                     }
                     // Window capture publishes the same geometry used to rebuild
                     // the graph, rather than retaining its opening DAR.
@@ -3110,7 +3120,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto& desc=startupRequest->desc;
                         const bool current=!prepared->cancelled&&startupRequest->settings==target&&startupRequest->order==order&&
                             desc.sourceWidth==width&&desc.sourceHeight==height&&desc.hdrInput==gd.hdrInput&&
-                            desc.captureBitDepth==gd.captureBitDepth&&desc.packedInput==gd.packedInput&&
+                            desc.captureBitDepth==gd.captureBitDepth&&desc.packedInput==gd.packedInput&&desc.p210Input==gd.p210Input&&
                             desc.rgbInput==gd.rgbInput&&desc.yuy2Input==gd.yuy2Input&&
                             desc.hdrOutput==startupRequest->selected.settings.useHdrPreview(gd.hdrInput,displayHdrActive());
                         if(!current){

@@ -1,5 +1,7 @@
 #include "veyra/pipeline/EnhanceGraph.h"
 #include "veyra/pipeline/ColorMetadata.h"
+#include "veyra/pipeline/PqTransfer.h"
+#include "veyra/pipeline/CaptureUploadFrame.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include "veyra/engine/VideoPresenter.h"
@@ -170,13 +172,20 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
         {"YVYU",AV_PIX_FMT_YVYU422,SourcePixelFormat::Yvyu},
         {"v210",AV_PIX_FMT_BGRA,SourcePixelFormat::V210},
         {"NV12",AV_PIX_FMT_NV12,SourcePixelFormat::NV12},
-        {"P010",AV_PIX_FMT_P010,SourcePixelFormat::P010}
+        {"P010",AV_PIX_FMT_P010,SourcePixelFormat::P010},
+        {"Y210",AV_PIX_FMT_Y210LE,SourcePixelFormat::Y210},
+        {"P210",AV_PIX_FMT_P210LE,SourcePixelFormat::P210}
     };
     bool all=true;
     for(const auto& spec:formats){
-        const bool planar=spec.input==AV_PIX_FMT_NV12||spec.input==AV_PIX_FMT_P010;
-        const bool p010=spec.input==AV_PIX_FMT_P010;
+        const bool p210=spec.input==AV_PIX_FMT_P210LE;
+        const bool y210=spec.input==AV_PIX_FMT_Y210LE;
+        const bool widePlanar=spec.input==AV_PIX_FMT_P010||p210;
+        const bool planar=spec.input==AV_PIX_FMT_NV12||widePlanar;
+        const bool halfHeightChroma=planar&&!p210;
         const bool v210=spec.color==SourcePixelFormat::V210;
+        const unsigned chromaRows=halfHeightChroma?h/2:h;
+        const unsigned lumaCode=126*4+(y210||p210?3:0);
         AVFrame* frame=av_frame_alloc();
         if(!frame)return false;
         frame->format=spec.input;frame->width=w;frame->height=h;
@@ -186,15 +195,21 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
         if(planar){
             for(unsigned y=0;y<h;++y){
                 auto* line=frame->data[0]+y*frame->linesize[0];
-                if(p010)std::fill_n(reinterpret_cast<uint16_t*>(line),w,uint16_t(126*256));
+                if(widePlanar)std::fill_n(reinterpret_cast<uint16_t*>(line),w,uint16_t(lumaCode<<6));
                 else std::fill_n(line,w,uint8_t(126));
             }
-            for(unsigned y=0;y<h/2;++y)for(unsigned x=0;x<w/2;++x){
+            for(unsigned y=0;y<chromaRows;++y)for(unsigned x=0;x<w/2;++x){
                 auto* line=frame->data[1]+y*frame->linesize[1];
-                if(p010){
+                if(widePlanar){
                     auto* words=reinterpret_cast<uint16_t*>(line)+2*x;
                     words[0]=uint16_t(u(x,y))*256;words[1]=uint16_t(v(x,y))*256;
                 }else{line[2*x]=u(x,y);line[2*x+1]=v(x,y);}
+            }
+        }else if(y210){
+            for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w/2;++x){
+                auto* pair=reinterpret_cast<uint16_t*>(frame->data[0]+y*frame->linesize[0])+x*4;
+                pair[0]=pair[2]=uint16_t(lumaCode<<6);
+                pair[1]=uint16_t(u(x,y))*256;pair[3]=uint16_t(v(x,y))*256;
             }
         }else if(v210){
             constexpr uint32_t luma=126*4;
@@ -226,7 +241,8 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
         EnhanceGraphDesc desc;
         desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;desc.noFeatures=true;
         desc.yuy2Input=spec.color==SourcePixelFormat::Yuy2;
-        desc.packedInput=packedInputCode(spec.color);desc.captureBitDepth=p010||v210?10:8;
+        desc.packedInput=packedInputCode(spec.color);desc.captureBitDepth=widePlanar||v210||y210?10:8;
+        desc.p210Input=p210;
         ColorDescription color;
         color.pixelFormat=spec.color;color.range=ColorRange::Limited;color.matrix=YuvMatrix::BT709;
         color.transfer=TransferFunction::SRGB;
@@ -237,13 +253,13 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
             sink::readRgba8(ctx,ring,graph.videoFrameResource(out.videoSlot),pixels);
         int maxError=0;
         if(rendered)for(unsigned y=0;y<h;++y)for(unsigned x=0;x<w;++x){
-            const unsigned row=planar?y/2:y,nextRow=planar?std::min(row+1,h/2-1):row;
+            const unsigned row=halfHeightChroma?y/2:y,nextRow=std::min(row+1,chromaRows-1);
             const auto col=x/2,nextCol=std::min(col+1,w/2-1);
-            const double fx=x%2?.5:0,fy=planar&&y%2?.5:0;
+            const double fx=x%2?.5:0,fy=halfHeightChroma&&y%2?.5:0;
             const auto sample=[&](auto c){return std::lerp(
                 std::lerp(double(c(col,row)),double(c(nextCol,row)),fx),
                 std::lerp(double(c(col,nextRow)),double(c(nextCol,nextRow)),fx),fy);};
-            const double l=110.0/219,cb=(sample(u)-128.0)/224,cr=(sample(v)-128.0)/224;
+            const double l=(lumaCode-64.0)/876,cb=(sample(u)-128.0)/224,cr=(sample(v)-128.0)/224;
             const double rgb[]={l+1.5748*cr,l-.187324*cb-.468124*cr,l+1.8556*cb};
             for(unsigned c=0;c<3;++c)maxError=std::max(maxError,std::abs(
                 int(pixels.pixels[(size_t(y)*w+x)*4+c])-int(std::lround(std::clamp(rgb[c],0.0,1.0)*255))));
@@ -254,6 +270,98 @@ bool reconstructedCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRin
         out={};graph.shutdown();av_frame_free(&frame);
     }
     return all;
+}
+bool hdrCapture422(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring,const wchar_t* raw=nullptr) {
+    using namespace pipeline;
+    const unsigned w=raw?3840u:64u,h=raw?2160u:32u;
+    std::vector<uint16_t> captured;
+    if(raw){
+        captured.resize(size_t(w)*h*2);
+        std::ifstream input(std::filesystem::path(raw),std::ios::binary);
+        if(!input.read(reinterpret_cast<char*>(captured.data()),std::streamsize(captured.size()*sizeof(uint16_t)))||
+           input.peek()!=std::char_traits<char>::eof())return false;
+    }
+    const auto packedCode=[&](unsigned pair,unsigned y,unsigned component){
+        return unsigned(captured[(size_t(y)*w/2+pair)*4+component]>>6);
+    };
+    const auto luma=[&](unsigned x,unsigned y){return raw?packedCode(x/2,y,(x&1)*2):365u+x+2*y;};
+    const auto cb=[&](unsigned pair,unsigned y){return raw?packedCode(pair,y,1):((pair+y)&1)?619u:426u;};
+    const auto cr=[&](unsigned pair,unsigned y){return raw?packedCode(pair,y,3):((pair+y)&1)?454u:563u;};
+    const auto word=[](unsigned value){return uint16_t(value<<6);};
+    bool passed=true;
+    for(bool planar:{false,true}){
+        const auto format=planar?AV_PIX_FMT_P210LE:AV_PIX_FMT_Y210LE;
+        using Frame=std::unique_ptr<AVFrame,void(*)(AVFrame*)>;
+        Frame frame(allocCaptureUploadFrame(ctx.device(),format,w,h),[](AVFrame* f){av_frame_free(&f);});
+        if(!frame)return false;
+        selectCaptureUploadTarget(*frame);
+        std::vector<uint16_t> lumaWords(size_t(w)*h*(planar?1:2));
+        std::vector<uint16_t> chromaWords(planar?size_t(w)*h:0);
+        for(unsigned y=0;y<h;++y)for(unsigned pair=0;pair<w/2;++pair){
+            const unsigned x=pair*2;
+            const size_t p=size_t(y)*w+x;
+            if(planar){
+                lumaWords[p]=word(luma(x,y));lumaWords[p+1]=word(luma(x+1,y));
+                chromaWords[p]=word(cb(pair,y));chromaWords[p+1]=word(cr(pair,y));
+            }else{
+                lumaWords[p*2]=word(luma(x,y));lumaWords[p*2+1]=word(cb(pair,y));
+                lumaWords[p*2+2]=word(luma(x+1,y));lumaWords[p*2+3]=word(cr(pair,y));
+            }
+        }
+        const size_t pitch=w*(planar?2:4);
+        const auto* lumaBytes=reinterpret_cast<const uint8_t*>(lumaWords.data());
+        for(unsigned y=0;y<h;++y){
+            std::memcpy(frame->data[0]+y*frame->linesize[0],lumaBytes+y*pitch,pitch);
+            if(planar)std::memcpy(frame->data[1]+y*frame->linesize[1],chromaWords.data()+y*w,w*2);
+        }
+        sampleCaptureUploadProxy(*frame,lumaBytes,pitch,false);
+        EnhanceGraphDesc desc;
+        desc.sourceWidth=desc.workWidth=w;desc.sourceHeight=desc.workHeight=h;
+        desc.noFeatures=true;desc.enableNr=desc.enableSr=desc.enableFg=false;
+        desc.hdrInput=desc.hdrOutput=true;desc.hdrOutputMode=engine::HdrOutputMode::ScRgb;
+        desc.captureBitDepth=10;desc.p210Input=planar;
+        const auto pixel=planar?SourcePixelFormat::P210:SourcePixelFormat::Y210;
+        desc.packedInput=packedInputCode(pixel);
+        ColorDescription color;
+        color.pixelFormat=pixel;color.range=ColorRange::Limited;color.matrix=YuvMatrix::BT2020NCL;
+        color.primaries=ColorPrimaries::BT2020;color.transfer=TransferFunction::PQ;
+        color.chromaLocation=raw?ChromaLocation::Left:ChromaLocation::Center;color.reconstructChroma=true;
+        EnhanceGraph graph(ctx,ring);EnhanceGraph::FrameOutputs out;std::vector<float> actual;
+        bool ok=graph.initialize(desc)&&graph.createViews()&&graph.process(frame.get(),0,true,out,1,&color)&&
+            captureReadFp16(ctx,ring,graph.diagnosticLinearInput(),actual);
+        double error=0,normalizedError=0,redError=0;
+        const unsigned step=raw?3u:1u;
+        if(ok)for(unsigned y=0;y<h;y+=step)for(unsigned x=0;x<w;x+=step){
+            const unsigned pair=x/2;
+            const int direction=(raw||x%2)?1:-1;
+            const unsigned adjacent=unsigned(std::clamp(int(pair)+direction,0,int(w/2)-1));
+            const double mix=raw?(x%2?.5:0):.25;
+            const double u=(std::lerp(double(cb(pair,y)),double(cb(adjacent,y)),mix)-512)/896;
+            const double v=(std::lerp(double(cr(pair,y)),double(cr(adjacent,y)),mix)-512)/896;
+            const double l=(luma(x,y)-64.0)/876.0;
+            const auto nits=[](double code){return pqToNits(std::clamp(code,0.0,1.0));};
+            const double r=nits(l+1.4746*v),g=nits(l-.164553*u-.571353*v),b=nits(l+1.8814*u);
+            const double expected[]={1.660491*r-.587641*g-.072850*b,-.124550*r+1.132900*g-.008349*b,
+                -.018151*r-.100579*g+1.118730*b};
+            const auto* actualPixel=actual.data()+(size_t(y)*w+x)*4;
+            for(unsigned c=0;c<3;++c){
+                const double reference=expected[c]/80.0;
+                const double difference=std::abs(actualPixel[c]-reference);
+                error=std::max(error,difference);
+                normalizedError=std::max(normalizedError,difference/std::max(1.0,std::abs(reference)));
+            }
+            if(r>g*1.5&&r>b*1.5)redError=std::max(redError,std::abs(actualPixel[0]-expected[0]/80.0));
+        }
+        // FP16 storage error grows with HDR intensity. Leave room for one
+        // half-float rounding step and the single-precision PQ conversion.
+        ok=ok&&normalizedError<.001;
+        std::cout<<"HDR422 "<<(planar?"P210":"Y210")<<" sample="<<(raw?"real-card":"synthetic")
+            <<" maxErrorScRgb="<<error<<" normalizedError="<<normalizedError
+            <<" redErrorScRgb="<<redError<<" pass="<<ok<<std::endl;
+        passed&=ok;
+        out={};ring.drainQueue();graph.shutdown();
+    }
+    return passed;
 }
 bool hdrCaptureChroma(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& ring) {
     using namespace pipeline;
@@ -401,8 +509,10 @@ int wmain(int argc,wchar_t**argv){
         return v210ConversionTiming(ctx,ring)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-chroma")
         return reconstructedCaptureChroma(ctx,ring)?0:1;
+    if(argc==3&&std::wstring_view(argv[1])==L"--capture-422-hdr-file")
+        return hdrCapture422(ctx,ring,argv[2])?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--capture-hdr-chroma")
-        return hdrCaptureChroma(ctx,ring)?0:1;
+        return hdrCaptureChroma(ctx,ring)&&hdrCapture422(ctx,ring)?0:1;
     if(argc==2&&std::wstring_view(argv[1])==L"--fullscreen-stats")
         return fullscreenFrameStats(ctx,ring)?0:1;
     if(argc==3&&std::wstring_view(argv[1])==L"--mjpeg-range")

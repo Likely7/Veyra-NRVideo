@@ -1132,17 +1132,17 @@
    "ru": "(устройство без имени)"
   },
   {
-   "zh": "**采集原生 HDR10 时，P010 要配 HDR · PQ。** 主机开启 HDR，采集页「像素格式」选 **P010**，「输入色彩（SDR / HDR）」选 **HDR · PQ**，然后重新连接。**NV12、YUY2 和 RGB 在这套指南里都用 SDR · 709。**",
+   "zh": "**采集原生 HDR10 时，输入色彩选 HDR · PQ。** 主机开启 HDR，采集页「像素格式」选 **P010、Y210 或 P210**，「输入色彩（SDR / HDR）」选 **HDR · PQ**，然后重新连接。**NV12、YUY2 和 RGB 在这套指南里都用 SDR · 709。**",
    "src": "qml/CaptureGuideDialog.qml",
-   "zh-TW": "**擷取原生 HDR10 時，P010 要搭配 HDR · PQ。** 在主機開啟 HDR，擷取頁「像素格式」選 **P010**，「輸入色彩（SDR / HDR）」選 **HDR · PQ**，然後重新連線。**本指南的 NV12、YUY2 和 RGB 都使用 SDR · 709。**",
-   "en": "**Use P010 with HDR · PQ for native HDR10 capture.** Enable HDR on your console, choose **P010** under Pixel format and **HDR · PQ** under Input color (SDR / HDR), then reconnect. **For NV12, YUY2 and RGB, use SDR · 709 in this setup.**",
-   "ja": "**ネイティブ HDR10 のキャプチャでは P010 と HDR · PQ を組み合わせます。** ゲーム機で HDR を有効にし、「ピクセルフォーマット」で **P010**、「入力の色（SDR / HDR）」で **HDR · PQ** を選んで再接続してください。**この手順で NV12、YUY2、RGB を使う場合は SDR · 709 を選びます。**",
-   "ko": "**네이티브 HDR10을 캡처할 때는 P010과 HDR · PQ를 함께 사용합니다.** 콘솔에서 HDR을 켜고 캡처 화면의 ‘픽셀 형식’에서 **P010**, ‘입력 색상(SDR/HDR)’에서 **HDR · PQ**를 선택한 뒤 다시 연결하세요. **이 가이드에서 NV12, YUY2, RGB는 SDR · 709를 사용합니다.**",
-   "es": "**Para capturar HDR10 nativo, usa P010 con HDR · PQ.** Activa HDR en la consola, elige **P010** en Formato de píxel y **HDR · PQ** en Color de entrada (SDR / HDR), y vuelve a conectar. **En esta configuración, usa SDR · 709 con NV12, YUY2 y RGB.**",
-   "fr": "**Pour capturer du HDR10 natif, associez P010 à HDR · PQ.** Activez le HDR sur la console, choisissez **P010** dans Format de pixel et **HDR · PQ** dans Couleur d’entrée (SDR / HDR), puis reconnectez-vous. **Avec NV12, YUY2 ou RGB, choisissez SDR · 709 dans cette configuration.**",
-   "de": "**Für natives HDR10 nimm P010 mit HDR · PQ.** Aktiviere HDR an der Konsole, wähle unter Pixelformat **P010** und unter Eingangsfarbe (SDR / HDR) **HDR · PQ**. Stelle anschließend die Verbindung neu her. **Für NV12, YUY2 und RGB wählst du in diesem Setup SDR · 709.**",
-   "pt-BR": "**Para capturar HDR10 nativo, combine P010 com HDR · PQ.** Ative o HDR no console, selecione **P010** em Formato de pixel e **HDR · PQ** em Cor de entrada (SDR / HDR), depois reconecte. **Use SDR · 709 com NV12, YUY2 e RGB nesta configuração.**",
-   "ru": "**Для захвата исходного HDR10 используйте P010 и HDR · PQ.** Включите HDR на консоли, выберите **P010** в пункте «Формат пикселей» и **HDR · PQ** в пункте «Цвет входа (SDR / HDR)», затем переподключитесь. **Для NV12, YUY2 и RGB в этой схеме выбирайте SDR · 709.**"
+   "zh-TW": "**擷取原生 HDR10 時，輸入色彩選 HDR · PQ。** 在主機開啟 HDR，擷取頁「像素格式」選 **P010、Y210 或 P210**，「輸入色彩（SDR / HDR）」選 **HDR · PQ**，然後重新連線。**本指南的 NV12、YUY2 和 RGB 都使用 SDR · 709。**",
+   "en": "**Select HDR · PQ input for native HDR10 capture.** Enable HDR on your console, choose **P010, Y210, or P210** under Pixel format and **HDR · PQ** under Input color (SDR / HDR), then reconnect. **For NV12, YUY2 and RGB, use SDR · 709 in this setup.**",
+   "ja": "**ネイティブ HDR10 のキャプチャでは入力の色を HDR · PQ に設定します。** ゲーム機で HDR を有効にし、「ピクセルフォーマット」で **P010、Y210、P210 のいずれか**、「入力の色（SDR / HDR）」で **HDR · PQ** を選んで再接続してください。**この手順で NV12、YUY2、RGB を使う場合は SDR · 709 を選びます。**",
+   "ko": "**네이티브 HDR10 캡처에는 입력 색상을 HDR · PQ로 설정하세요.** 콘솔에서 HDR을 켜고 캡처 화면의 ‘픽셀 형식’에서 **P010, Y210, P210 중 하나**, ‘입력 색상(SDR/HDR)’에서 **HDR · PQ**를 선택한 뒤 다시 연결하세요. **이 가이드에서 NV12, YUY2, RGB는 SDR · 709를 사용합니다.**",
+   "es": "**Selecciona HDR · PQ como color de entrada para capturar HDR10 nativo.** Activa HDR en la consola, elige **P010, Y210 o P210** en Formato de píxel y **HDR · PQ** en Color de entrada (SDR / HDR), y vuelve a conectar. **En esta configuración, usa SDR · 709 con NV12, YUY2 y RGB.**",
+   "fr": "**Pour capturer du HDR10 natif, réglez la couleur d’entrée sur HDR · PQ.** Activez le HDR sur la console, choisissez **P010, Y210 ou P210** dans Format de pixel et **HDR · PQ** dans Couleur d’entrée (SDR / HDR), puis reconnectez-vous. **Avec NV12, YUY2 ou RGB, choisissez SDR · 709 dans cette configuration.**",
+   "de": "**Wähle für natives HDR10 als Eingangsfarbe HDR · PQ.** Aktiviere HDR an der Konsole, wähle unter Pixelformat **P010, Y210 oder P210** und unter Eingangsfarbe (SDR / HDR) **HDR · PQ**. Stelle anschließend die Verbindung neu her. **Für NV12, YUY2 und RGB wählst du in diesem Setup SDR · 709.**",
+   "pt-BR": "**Para capturar HDR10 nativo, selecione HDR · PQ como cor de entrada.** Ative o HDR no console, selecione **P010, Y210 ou P210** em Formato de pixel e **HDR · PQ** em Cor de entrada (SDR / HDR), depois reconecte. **Use SDR · 709 com NV12, YUY2 e RGB nesta configuração.**",
+   "ru": "**Для захвата исходного HDR10 выберите HDR · PQ в настройках цвета входа.** Включите HDR на консоли, выберите **P010, Y210 или P210** в пункте «Формат пикселей» и **HDR · PQ** в пункте «Цвет входа (SDR / HDR)», затем переподключитесь. **Для NV12, YUY2 и RGB в этой схеме выбирайте SDR · 709.**"
   },
   {
    "zh": "+  添加 NR 层",
@@ -6358,6 +6358,19 @@
    "ru": "Аппаратное декодирование, возможно, не смогло выделить память, особенно для 4K. Перезагрузите проигрыватель; если он повторяется, выберите Программное декодирование в настройках → Воспроизведение"
   },
   {
+   "zh": "。默认使用“实时”。同时运行游戏或其他重负载程序变慢时，可选择“普通”。",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "。預設使用「即時」。同時執行遊戲或其他重負載程式變慢時，可選擇「普通」。",
+   "en": ". Realtime by default. If a game or other demanding app slows down, choose Normal.",
+   "ja": "。既定は「リアルタイム」です。同時に実行しているゲームや負荷の高いアプリが遅くなる場合は「通常」を選択してください。",
+   "ko": ". 기본값은 실시간입니다. 함께 실행하는 게임이나 무거운 앱이 느려지면 보통을 선택하세요.",
+   "es": ". Tiempo real por defecto. Si un juego u otra aplicación exigente se ralentiza, elija Normal.",
+   "fr": ". Temps réel par défaut. Si un jeu ou une autre application gourmande ralentit, choisissez Normal.",
+   "de": ". Standardmäßig Echtzeit. Wenn ein Spiel oder eine andere anspruchsvolle App langsamer wird, wählen Sie Normal.",
+   "pt-BR": ". Tempo real por padrão. Se um jogo ou outro aplicativo exigente ficar mais lento, escolha Normal.",
+   "ru": ". По умолчанию используется режим «Реальное время». Если игра или другое ресурсоёмкое приложение замедляется, выберите «Обычный»."
+  },
+  {
    "zh": "「像素格式」会列出当前分辨率和帧率下可以用的选项。这几种常见格式的区别如下。",
    "src": "qml/OnboardingGuide.qml",
    "zh-TW": "「像素格式」會列出目前解析度和幀率下可用的選項。以下是幾種常見格式的差異。",
@@ -6969,17 +6982,17 @@
    "ru": "Не действительный файл.vpcolor"
   },
   {
-   "zh": "不确定就选「自动」。采集 HDR：采集格式选 P010，这里选「HDR · PQ」（游戏机、显卡的 HDR10 都是 PQ）。「HDR · HLG」用于广播信号。「SDR · 709」是普通画面。变更需重连",
+   "zh": "不确定就选「自动」。HDR10 选「HDR · PQ」，可使用采集卡驱动提供的 P010、Y210 或 P210。「HDR · HLG」用于广播信号。「SDR · 709」用于普通画面。修改后需重新连接。",
    "src": "qml/CaptureSourceDialog.qml",
-   "zh-TW": "不確定就選「自動」。擷取 HDR：擷取格式選 P010，這裡選「HDR · PQ」（遊戲機、顯示卡的 HDR10 都是 PQ）。「HDR · HLG」用於廣播信號。「SDR · 709」是普通畫面。變更需重連",
-   "en": "If unsure, choose Auto. To capture HDR: pick P010 as the capture format and HDR · PQ here (HDR10 from consoles and GPUs is PQ). HDR · HLG is for broadcast signals. SDR · 709 is a normal picture. Changes need a reconnect",
-   "ja": "わからなければ「自動」を選んでください。HDR をキャプチャーする場合：フォーマットに P010 を選び、ここでは「HDR · PQ」を選択（ゲーム機や GPU の HDR10 は PQ）。「HDR · HLG」は放送信号用、「SDR · 709」は通常の映像です。変更には再接続が必要です",
-   "ko": "잘 모르겠다면 자동을 선택하세요. HDR 캡처는 형식을 P010으로, 색상 신호를 HDR · PQ로 설정합니다. 콘솔·GPU의 HDR10은 PQ, 방송용 HDR은 보통 HLG입니다. SDR · 709는 일반 영상용입니다. 변경 후 다시 연결해야 합니다.",
-   "es": "Si no está seguro, elija Auto. Para capturar HDR: elegir P010 como el formato de captura y HDR · PQ aquí (HDR10 HDR · HLG es para las señales de transmisión. SDR · 709 es una imagen normal. Los cambios necesitan una reconexión",
-   "fr": "Si vous n'êtes pas sûr, choisissez Auto. Pour capturer HDR : choisissez P010  comme format de capture et HDR · PQ ici (HDR10 HDR · HLG est pour les signaux de diffusion. SDR · 709 est une image normale.",
-   "de": "Wenn unsicher, wählen Sie Auto. Um HDR zu erfassen: pick P010 als Aufnahmeformat und HDR · PQ hier (HDR10 von Konsolen und GPUs ist PQ). HDR · HLG steht für Sendesignale. SDR · 709 ist ein normales Bild. Veränderungen brauchen ein Reconnect",
-   "pt-BR": "Se não tiver certeza, escolha Auto. Para capturar HDR: pick P010 como formato de captura e HDR · PQ aqui (HDR10 de consoles e GPUs é PQ). HDR · HLG é para sinais de transmissão. SDR · 709 é uma imagem normal. As alterações precisam de uma reconexão",
-   "ru": "Если вы не уверены, выберите авто. Скачать HDR: pick P010 как формат захвата и HDR · PQ здесь (HDR10 из консолей и графических процессоров PQ). HDR · HLG - для широковещательных сигналов. SDR 709 — нормальная картина. Изменения требуют повторного подключения"
+   "zh-TW": "不確定就選「自動」。HDR10 選「HDR · PQ」，可使用擷取卡驅動程式提供的 P010、Y210 或 P210。「HDR · HLG」用於廣播訊號。「SDR · 709」用於一般畫面。變更後須重新連線。",
+   "en": "Choose Auto if unsure. For HDR10, select HDR · PQ and use a format offered by the capture card driver, such as P010, Y210, or P210. Use HDR · HLG for broadcast signals and SDR · 709 for SDR. Reconnect after making changes.",
+   "ja": "不明な場合は「自動」を選択します。HDR10 では「HDR · PQ」を選び、キャプチャーカードのドライバーが提供する P010、Y210、P210 などを使用します。放送信号には「HDR · HLG」、SDR には「SDR · 709」を選びます。変更後は再接続してください。",
+   "ko": "잘 모르겠다면 자동을 선택하세요. HDR10에는 HDR · PQ를 선택하고 캡처 카드 드라이버가 제공하는 P010, Y210 또는 P210을 사용하세요. 방송 신호에는 HDR · HLG를, SDR 영상에는 SDR · 709를 사용하세요. 변경 후 다시 연결해야 합니다.",
+   "es": "Si tienes dudas, elige Automático. Para HDR10, selecciona HDR · PQ y usa un formato que ofrezca el controlador de la capturadora, como P010, Y210 o P210. Usa HDR · HLG para señales de radiodifusión y SDR · 709 para SDR. Vuelve a conectar después de cambiar la configuración.",
+   "fr": "En cas de doute, choisissez Auto. Pour le HDR10, sélectionnez HDR · PQ et utilisez un format proposé par le pilote de la carte de capture, comme P010, Y210 ou P210. Utilisez HDR · HLG pour la diffusion et SDR · 709 pour le SDR. Reconnectez-vous après toute modification.",
+   "de": "Wählen Sie bei Unklarheit „Automatisch“. Für HDR10 wählen Sie HDR · PQ und ein vom Treiber der Aufnahmekarte angebotenes Format wie P010, Y210 oder P210. HDR · HLG ist für Rundfunksignale und SDR · 709 für SDR vorgesehen. Stellen Sie nach Änderungen die Verbindung neu her.",
+   "pt-BR": "Na dúvida, selecione Automático. Para HDR10, selecione HDR · PQ e use um formato oferecido pelo driver da placa de captura, como P010, Y210 ou P210. Use HDR · HLG para sinais de transmissão e SDR · 709 para SDR. Reconecte após fazer alterações.",
+   "ru": "Если сомневаетесь, выберите «Авто». Для HDR10 выберите HDR · PQ и формат, который предоставляет драйвер карты захвата, например P010, Y210 или P210. HDR · HLG предназначен для вещательных сигналов, а SDR · 709 для SDR. После изменений подключитесь заново."
   },
   {
    "zh": "不等待",
@@ -7918,17 +7931,17 @@
    "ru": "Хост подключается к другому устройству; попробуйте снова."
   },
   {
-   "zh": "主机正在输出 HDR10 时，选 P010，再把这里设为「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改后重新连接才生效。",
+   "zh": "主机正在输出 HDR10 时，选 P010、Y210 或 P210，再把这里设为「HDR · PQ」。NV12、YUY2 和 RGB24 走「SDR · 709」。修改后重新连接才生效。",
    "src": "qml/OnboardingGuide.qml",
-   "zh-TW": "主機正在輸出 HDR10 時，選擇 P010，再將這裡設為「HDR · PQ」。NV12、YUY2 和 RGB24 請選「SDR · 709」。變更後重新連線才會生效。",
-   "en": "When your console is outputting HDR10, choose P010 and set the input to HDR · PQ. Use SDR · 709 for NV12, YUY2, or RGB24. Reconnect to apply the change.",
-   "ja": "ゲーム機が HDR10 を出力している場合は P010 を選び、ここを「HDR · PQ」に設定します。NV12、YUY2、RGB24 は「SDR · 709」を使います。変更は再接続すると反映されます。",
-   "ko": "콘솔이 HDR10을 출력 중이면 P010을 선택하고 입력을 ‘HDR · PQ’로 설정하세요. NV12, YUY2, RGB24에는 ‘SDR · 709’를 사용하세요. 변경 후 다시 연결해야 적용됩니다.",
-   "es": "Si la consola emite en HDR10, selecciona P010 y ajusta la entrada a HDR · PQ. Usa SDR · 709 para NV12, YUY2 y RGB24. Vuelve a conectar para aplicar el cambio.",
-   "fr": "Si la console émet en HDR10, choisissez P010 et réglez l’entrée sur HDR · PQ. Avec NV12, YUY2 ou RGB24, choisissez SDR · 709. Reconnectez la source pour appliquer le changement.",
-   "de": "Wenn deine Konsole HDR10 ausgibt, wähle P010 und stelle den Eingang auf HDR · PQ. Verwende mit NV12, YUY2 oder RGB24 die Einstellung SDR · 709. Stelle die Verbindung erneut her, um die Änderung anzuwenden.",
-   "pt-BR": "Se o console estiver enviando HDR10, selecione P010 e ajuste a entrada para HDR · PQ. Use SDR · 709 com NV12, YUY2 ou RGB24. Reconecte a fonte para aplicar a alteração.",
-   "ru": "Если консоль выдаёт HDR10, выберите P010 и установите HDR · PQ. Для NV12, YUY2 и RGB24 используйте SDR · 709. Чтобы применить изменения, подключите источник заново."
+   "zh-TW": "主機正在輸出 HDR10 時，選擇 P010、Y210 或 P210，再將這裡設為「HDR · PQ」。NV12、YUY2 和 RGB24 請選「SDR · 709」。變更後重新連線才會生效。",
+   "en": "When your console is outputting HDR10, choose P010, Y210, or P210 and set the input to HDR · PQ. Use SDR · 709 for NV12, YUY2, or RGB24. Reconnect to apply the change.",
+   "ja": "ゲーム機が HDR10 を出力している場合は P010、Y210、P210 のいずれか を選び、ここを「HDR · PQ」に設定します。NV12、YUY2、RGB24 は「SDR · 709」を使います。変更は再接続すると反映されます。",
+   "ko": "콘솔이 HDR10을 출력 중이면 P010, Y210, P210 중 하나을 선택하고 입력을 ‘HDR · PQ’로 설정하세요. NV12, YUY2, RGB24에는 ‘SDR · 709’를 사용하세요. 변경 후 다시 연결해야 적용됩니다.",
+   "es": "Si la consola emite en HDR10, selecciona P010, Y210 o P210 y ajusta la entrada a HDR · PQ. Usa SDR · 709 para NV12, YUY2 y RGB24. Vuelve a conectar para aplicar el cambio.",
+   "fr": "Si la console émet en HDR10, choisissez P010, Y210 ou P210 et réglez l’entrée sur HDR · PQ. Avec NV12, YUY2 ou RGB24, choisissez SDR · 709. Reconnectez la source pour appliquer le changement.",
+   "de": "Wenn deine Konsole HDR10 ausgibt, wähle P010, Y210 oder P210 und stelle den Eingang auf HDR · PQ. Verwende mit NV12, YUY2 oder RGB24 die Einstellung SDR · 709. Stelle die Verbindung erneut her, um die Änderung anzuwenden.",
+   "pt-BR": "Se o console estiver enviando HDR10, selecione P010, Y210 ou P210 e ajuste a entrada para HDR · PQ. Use SDR · 709 com NV12, YUY2 ou RGB24. Reconecte a fonte para aplicar a alteração.",
+   "ru": "Если консоль выдаёт HDR10, выберите P010, Y210 или P210 и установите HDR · PQ. Для NV12, YUY2 и RGB24 используйте SDR · 709. Чтобы применить изменения, подключите источник заново."
   },
   {
    "zh": "主机正在运行另一个游戏。先选它继续，或点「退出游戏」结束它（未保存的进度会丢失），再开始新的。",
@@ -22310,17 +22323,17 @@
    "ru": "Вручную 1/4 · повтор 1 кадра из 4"
   },
   {
-   "zh": "手动 HDR 需要 P010/P016 格式；SDR 信号请选择自动或 Rec.709。",
+   "zh": "手动 HDR 需要 P010、P016、Y210 或 P210；SDR 信号请选择自动或 Rec.709。",
    "src": "src/source/CaptureCardSource.cpp",
-   "zh-TW": "手動 HDR 需要 P010/P016 格式；SDR 信號請選擇自動或 Rec.709。",
-   "en": "Manual HDR needs a P010/P016 format; for SDR signals choose Auto or Rec.709.",
-   "ja": "手動の HDR には P010/P016 フォーマットが必要です。SDR 信号には「自動」か Rec.709 を選んでください。",
-   "ko": "수동 HDR에는 P010/P016 형식이 필요합니다. SDR 신호의 경우 Auto 또는 Rec.709를 선택합니다.",
-   "es": "Manual HDR necesita un formato P010 /P016; para SDR las señales eligen Auto o Rec.709.",
-   "fr": "Manuel HDR nécessite un format P010 /P016; pour SDR les signaux choisissent Auto ou Rec.709.",
-   "de": "Handbuch HDR benötigt ein P010 /P016 Format; für SDR Signale wählen Sie Auto oder Rec.709.",
-   "pt-BR": "Manual HDR necessita de um formato P010 /P016; para SDR os sinais escolhem Auto ou Rec.709.",
-   "ru": "Ручной HDR нужен формат P010/P016; для SDR сигналов выберите Авто или Rec.709."
+   "zh-TW": "手動 HDR 需要 P010、P016、Y210 或 P210。SDR 訊號請選擇自動或 Rec.709。",
+   "en": "Manual HDR requires P010, P016, Y210, or P210. For SDR input, choose Auto or Rec.709.",
+   "ja": "HDR を手動で指定する場合は P010、P016、Y210、または P210 が必要です。SDR 信号は「自動」または Rec.709 を選択してください。",
+   "ko": "수동 HDR에는 P010, P016, Y210 또는 P210이 필요합니다. SDR 신호는 자동 또는 Rec.709를 선택하세요.",
+   "es": "El HDR manual requiere P010, P016, Y210 o P210. Para señales SDR, elige Automático o Rec.709.",
+   "fr": "Le HDR manuel nécessite P010, P016, Y210 ou P210. Pour les signaux SDR, choisissez Auto ou Rec.709.",
+   "de": "Für manuelles HDR ist P010, P016, Y210 oder P210 erforderlich. Wählen Sie für SDR-Signale Automatisch oder Rec.709.",
+   "pt-BR": "O HDR manual requer P010, P016, Y210 ou P210. Para um sinal SDR, escolha Automático ou Rec.709.",
+   "ru": "Для ручного режима HDR требуется P010, P016, Y210 или P210. Для сигнала SDR выберите «Авто» или Rec.709."
   },
   {
    "zh": "手动偏移",
@@ -40745,6 +40758,19 @@
    "ru": "Перед SR есть обработка, которая меняет картинку (NR, шумоподавление, сглаживание или ретушь), поэтому умная SR не работает. Отключите её или переместите после SR."
   },
   {
+   "zh": "超分到目标尺寸后，以 Lanczos-2 AA 抗混叠缩回。NR 和补帧按缩回后的尺寸处理。",
+   "src": "qml/SrStageEditor.qml",
+   "zh-TW": "超解析度處理至目標尺寸後，以 Lanczos-2 AA 抗鋸齒縮小。NR 和影格生成以縮小後的尺寸執行。",
+   "en": "Upscale to the target size, then downsample with Lanczos-2 AA. NR and frame generation run at the reduced size.",
+   "ja": "目標サイズまで超解像した後、Lanczos-2 AA で縮小します。NR とフレーム生成は縮小後のサイズで処理します。",
+   "ko": "목표 크기로 업스케일한 뒤 Lanczos-2 AA로 축소합니다. NR과 프레임 생성은 축소된 해상도에서 처리합니다.",
+   "es": "Aumenta la imagen al tamaño objetivo y luego la reduce con Lanczos-2 AA. NR y la generación de fotogramas se aplican al tamaño reducido.",
+   "fr": "Agrandit l’image à la taille cible, puis la réduit avec Lanczos-2 AA. Le NR et la génération d’images traitent la résolution réduite.",
+   "de": "Skaliert auf die Zielgröße hoch und verkleinert anschließend mit Lanczos-2 AA. NR und Frame-Generierung verwenden die reduzierte Auflösung.",
+   "pt-BR": "Amplia para o tamanho desejado e depois reduz com Lanczos-2 AA. O NR e a geração de quadros usam a resolução reduzida.",
+   "ru": "Изображение увеличивается до целевого размера, затем уменьшается с фильтром Lanczos-2 AA. NR и генерация кадров работают в уменьшенном разрешении."
+  },
+  {
    "zh": "超分后缩回到",
    "src": "qml/SrStageEditor.qml",
    "zh-TW": "超解析後縮回到",
@@ -40886,19 +40912,6 @@
    "de": "Helligkeit über die Kappe hinaus muss komprimiert werden; Verwenden Sie die Probenlesung, um harte Schnitte zu überprüfen",
    "pt-BR": "Brilho além da tampa precisa de compressão; use a leitura da amostra para verificar o recorte rígido",
    "ru": "Яркость за пределами крышки нуждается в сжатии; используйте чтение образца для проверки жесткой обрезки"
-  },
-  {
-   "zh": "超分到目标尺寸后，以 Lanczos-2 AA 抗混叠缩回。NR 和补帧按缩回后的尺寸处理。",
-   "src": "qml/SrStageEditor.qml",
-   "zh-TW": "超解析度處理至目標尺寸後，以 Lanczos-2 AA 抗鋸齒縮小。NR 和影格生成以縮小後的尺寸執行。",
-   "en": "Upscale to the target size, then downsample with Lanczos-2 AA. NR and frame generation run at the reduced size.",
-   "ja": "目標サイズまで超解像した後、Lanczos-2 AA で縮小します。NR とフレーム生成は縮小後のサイズで処理します。",
-   "ko": "목표 크기로 업스케일한 뒤 Lanczos-2 AA로 축소합니다. NR과 프레임 생성은 축소된 해상도에서 처리합니다.",
-   "es": "Aumenta la imagen al tamaño objetivo y luego la reduce con Lanczos-2 AA. NR y la generación de fotogramas se aplican al tamaño reducido.",
-   "fr": "Agrandit l’image à la taille cible, puis la réduit avec Lanczos-2 AA. Le NR et la génération d’images traitent la résolution réduite.",
-   "de": "Skaliert auf die Zielgröße hoch und verkleinert anschließend mit Lanczos-2 AA. NR und Frame-Generierung verwenden die reduzierte Auflösung.",
-   "pt-BR": "Amplia para o tamanho desejado e depois reduz com Lanczos-2 AA. O NR e a geração de quadros usam a resolução reduzida.",
-   "ru": "Изображение увеличивается до целевого размера, затем уменьшается с фильтром Lanczos-2 AA. NR и генерация кадров работают в уменьшенном разрешении."
   },
   {
    "zh": "超高",
@@ -48556,19 +48569,6 @@
    "de": "; siehe Protokoll für Details",
    "pt-BR": "; ver o log para mais detalhes",
    "ru": "; см. журнал для деталей"
-  },
-  {
-   "zh": "。默认使用“实时”。同时运行游戏或其他重负载程序变慢时，可选择“普通”。",
-   "src": "qml/SettingsPage.qml",
-   "zh-TW": "。預設使用「即時」。同時執行遊戲或其他重負載程式變慢時，可選擇「普通」。",
-   "en": ". Realtime by default. If a game or other demanding app slows down, choose Normal.",
-   "ja": "。既定は「リアルタイム」です。同時に実行しているゲームや負荷の高いアプリが遅くなる場合は「通常」を選択してください。",
-   "ko": ". 기본값은 실시간입니다. 함께 실행하는 게임이나 무거운 앱이 느려지면 보통을 선택하세요.",
-   "es": ". Tiempo real por defecto. Si un juego u otra aplicación exigente se ralentiza, elija Normal.",
-   "fr": ". Temps réel par défaut. Si un jeu ou une autre application gourmande ralentit, choisissez Normal.",
-   "de": ". Standardmäßig Echtzeit. Wenn ein Spiel oder eine andere anspruchsvolle App langsamer wird, wählen Sie Normal.",
-   "pt-BR": ". Tempo real por padrão. Se um jogo ou outro aplicativo exigente ficar mais lento, escolha Normal.",
-   "ru": ". По умолчанию используется режим «Реальное время». Если игра или другое ресурсоёмкое приложение замедляется, выберите «Обычный»."
   }
  ]
 }
