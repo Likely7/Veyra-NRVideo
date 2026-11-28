@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -33,17 +34,45 @@ std::string utf8(const std::wstring& w) {
     WideCharToMultiByte(CP_UTF8, 0, w.data(), int(w.size()), s.data(), n, nullptr, nullptr);
     return s;
 }
-// A package is extracted with Windows' own tar.exe. The archive is copied to an
-// ASCII name first so the code page never matters.
+// Own a fresh directory for each archive. Re-analyzing an archive must never
+// remove a previously saved analysis or another directory selected by the user.
+class ExtractionDirectory {
+public:
+    ExtractionDirectory() = default;
+    ExtractionDirectory(const ExtractionDirectory&) = delete;
+    ExtractionDirectory& operator=(const ExtractionDirectory&) = delete;
+
+    const fs::path& create() {
+        const auto root = fs::temp_directory_path();
+        const auto prefix = L"VeyraAnalyze-" + std::to_wstring(GetCurrentProcessId())
+                          + L"-" + std::to_wstring(GetTickCount64()) + L"-";
+        for (unsigned n = 0; n < 100; ++n) {
+            const auto candidate = root / (prefix + std::to_wstring(n));
+            if (!fs::create_directory(candidate)) continue;
+            path_ = candidate;
+            return path_;
+        }
+        throw std::runtime_error("no temporary directory available for analysis");
+    }
+
+    ~ExtractionDirectory() {
+        if (!path_.empty()) {
+            std::error_code ec;
+            fs::remove_all(path_, ec);
+        }
+    }
+
+private:
+    fs::path path_;
+};
+
+// Use an ASCII archive name so system tar can handle a non-ASCII input name.
 bool extract(const fs::path& zip, const fs::path& target, std::string& error) {
-    std::error_code ec;
-    fs::remove_all(target, ec);
-    fs::create_directories(target, ec);
-    if (!CopyFileW(zip.c_str(), (target / L"input.zip").c_str(), FALSE)) { error = "cannot copy " + utf8(zip.wstring()); return false; }
+    if (!CopyFileW(zip.c_str(), (target / L"input.zip").c_str(), TRUE)) { error = "cannot copy " + utf8(zip.wstring()); return false; }
     wchar_t system[MAX_PATH]{};
     GetSystemDirectoryW(system, MAX_PATH);
     const std::wstring tar = std::wstring(system) + L"\\tar.exe";
-    std::wstring command = L"\"" + tar + L"\" -x -f input.zip";
+    std::wstring command = L"\"" + tar + L"\" -x -k -f input.zip";
     STARTUPINFOW startup{sizeof(startup)};
     PROCESS_INFORMATION process{};
     if (!CreateProcessW(tar.c_str(), command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW, nullptr, target.c_str(), &startup, &process)) {
@@ -51,19 +80,29 @@ bool extract(const fs::path& zip, const fs::path& target, std::string& error) {
         return false;
     }
     CloseHandle(process.hThread);
-    WaitForSingleObject(process.hProcess, 120000);
+    const auto wait = WaitForSingleObject(process.hProcess, 120000);
+    if (wait != WAIT_OBJECT_0) {
+        TerminateProcess(process.hProcess, 124);
+        WaitForSingleObject(process.hProcess, 5000);
+    }
     DWORD code = 1;
     GetExitCodeProcess(process.hProcess, &code);
     CloseHandle(process.hProcess);
-    fs::remove(target / L"input.zip", ec);
+    if (wait != WAIT_OBJECT_0) { error = "archive extraction did not finish"; return false; }
     if (code) { error = "tar.exe failed to extract " + utf8(zip.wstring()); return false; }
     return true;
 }
-fs::path packageFolder(const fs::path& input, const fs::path& scratch, std::string& error) {
+bool isZip(const fs::path& path) {
+    const auto extension = path.extension().wstring();
+    return CompareStringOrdinal(extension.c_str(), -1, L".zip", -1, TRUE) == CSTR_EQUAL;
+}
+
+fs::path packageFolder(const fs::path& input, ExtractionDirectory& scratch, std::string& error) {
     if (fs::is_directory(input)) return input;
-    if (input.extension() == L".zip" || input.extension() == L".ZIP") {
-        if (!extract(input, scratch, error)) return {};
-        return scratch;
+    if (isZip(input)) {
+        const auto& folder = scratch.create();
+        if (!extract(input, folder, error)) return {};
+        return folder;
     }
     error = "not a folder or .zip: " + utf8(input.wstring());
     return {};
@@ -105,10 +144,11 @@ int wmain(int argc, wchar_t** argv) {
     try {
         if (command == L"analyze" && positional.size() == 1) {
             fs::path input = fs::absolute(positional[0]);
-            if (input.extension() == L".zip") {
-                const fs::path folder = input.parent_path() / (input.stem().wstring() + L".analysis");
-                if (!extract(input, folder, error)) { std::fprintf(stderr, "%s\n", error.c_str()); return 3; }
-                input = folder;
+            ExtractionDirectory scratch;
+            if (isZip(input)) {
+                if (out.empty()) out = input.parent_path() / (input.stem().wstring() + L".analysis");
+                input = packageFolder(input, scratch, error);
+                if (input.empty()) { std::fprintf(stderr, "%s\n", error.c_str()); return 3; }
             }
             if (out.empty()) out = fs::is_directory(input) ? input : input.parent_path() / (input.filename().wstring() + L".analysis");
             const int code = analysis::analyze(input, out, options, error);
@@ -120,9 +160,10 @@ int wmain(int argc, wchar_t** argv) {
             const fs::path a = fs::absolute(positional[0]), b = fs::absolute(positional[1]);
             if (out.empty()) out = a.parent_path() / L"Veyra诊断对比";
             fs::create_directories(out);
-            const fs::path fa = packageFolder(a, out / L"A", error);
+            ExtractionDirectory scratchA, scratchB;
+            const fs::path fa = packageFolder(a, scratchA, error);
             if (fa.empty()) { std::fprintf(stderr, "%s\n", error.c_str()); return 3; }
-            const fs::path fb = packageFolder(b, out / L"B", error);
+            const fs::path fb = packageFolder(b, scratchB, error);
             if (fb.empty()) { std::fprintf(stderr, "%s\n", error.c_str()); return 3; }
             const int code = analysis::compare(fa, fb, out, options, error);
             if (code) { std::fprintf(stderr, "compare failed: %s\n", error.c_str()); return code; }

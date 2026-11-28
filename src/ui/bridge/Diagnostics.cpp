@@ -37,9 +37,18 @@ void QmlPlayerBridge::createPerfDiagnostics() {
         o["dataDirectory"] = perfdiag::redactText(QDir::toNativeSeparators(dataDirectory()));
         o["logFile"] = perfdiag::redactText(QDir::toNativeSeparators(logFile()));
         o["diagnosticsReport"] = perfdiag::redactText(diagnosticsReport());
-        // The saved preferences, with the account name taken out of every path.
-        const QByteArray prefs = QJsonDocument(QJsonObject::fromVariantMap(impl_->prefs)).toJson(QJsonDocument::Compact);
-        o["preferences"] = QJsonDocument::fromJson(perfdiag::redactText(QString::fromUtf8(prefs)).toUtf8()).object();
+        // Compare playback and rendering choices without including source
+        // history, account data, download addresses, or user paths.
+        QJsonObject prefs;
+        for (const auto* key : {"gpuPriority", "decode", "overlayCompat", "uiRenderer",
+                               "networkBuffer", "networkCorrupt", "prewarmEnhancement",
+                               "uiScale", "autoResume", "startFullscreen", "monitorGpu"}) {
+            const auto name = QString::fromLatin1(key);
+            if (!impl_->prefs.contains(name)) continue;
+            const auto value = QJsonValue::fromVariant(impl_->prefs.value(name));
+            if (value.isBool() || value.isDouble() || value.isString()) prefs.insert(name, value);
+        }
+        o["preferences"] = prefs;
         const auto& s = impl_->snapshot;
         o["source"] = QJsonObject{{"running", s.running}, {"capture", s.capture}, {"remotePlay", s.remotePlay}, {"image", s.image},
                                   {"width", int(s.sourceWidth)}, {"height", int(s.sourceHeight)}, {"nominalFps", s.nominalSourceFps},
