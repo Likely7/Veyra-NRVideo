@@ -56,12 +56,18 @@ constexpr auto cpuRuntimeFiles = [] {
 constexpr ModelAsset legacyCpuRuntime{
     "llama-b12240", "https://github.com/ggml-org/llama.cpp/releases/download/b12240/llama-b12240-bin-win-cpu-x64.zip",
     24931979, "ecfd6e90619d44cdb417e073056e48a467086cdf756129e5d75fd50f14e424b6", cpuRuntimeFiles, "", 0, true};
+constexpr ModelSource llamaRuntimeSources[]{
+    {"https://gh-proxy.com/https://github.com/ggml-org/llama.cpp/releases/download/b12240/llama-b12240-bin-win-vulkan-x64.zip"},
+};
+constexpr ModelSource qwenSources[]{
+    {"https://modelscope.cn/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/e8b19c78f775ccbcf6df15ceace6bb5276f09765/qwen2.5-1.5b-instruct-q4_k_m.gguf"},
+};
 constexpr ModelAsset translationAssets[]{
     {"llama-b12240-vulkan", "https://github.com/ggml-org/llama.cpp/releases/download/b12240/llama-b12240-bin-win-vulkan-x64.zip",
-     37892170, "9ea8f113961f32024e0c34409432d3bd350590b040259520bb0b98aeba3a8ac7", runtimeFiles, "", 0, true},
+     37892170, "9ea8f113961f32024e0c34409432d3bd350590b040259520bb0b98aeba3a8ac7", runtimeFiles, "", 0, true, llamaRuntimeSources},
     {"qwen2.5-1.5b-instruct-q4_k_m.gguf",
      "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/91cad51170dc346986eccefdc2dd33a9da36ead9/qwen2.5-1.5b-instruct-q4_k_m.gguf",
-     1117320736, "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e"},
+     1117320736, "6a1a2eb6d15622bf3c96857206351ba97e1af16c30d7a74ee38970e434e9407e", {}, "", 0, false, qwenSources},
 };
 
 bool regularPath(const QString& path, bool directory) {
@@ -326,9 +332,10 @@ void ModelAssets::finishFile() {
     readFile();
     if (!completed || reply_ != completed) return;
     if (completed->error() != QNetworkReply::NoError) {
-        log::warn("model-assets", std::format("download failed host={} http={} network={}",
-            completed->request().url().host().toStdString(),
-            completed->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), int(completed->error())));
+        log::warn("model-assets", std::format("download failed asset={} host={} finalHost={} http={} network={} received={}/{}",
+            assets_[asset_].destination, completed->request().url().host().toStdString(), completed->url().host().toStdString(),
+            completed->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), int(completed->error()),
+            bytes_, expectedBytes_));
         retry(tr("模型下载失败，请检查网络后重试"));
         return;
     }

@@ -167,9 +167,11 @@ void fallbackDownloadChecks(const QString& root, bool domestic, int model) {
     check(finished && loader.installed() && asr::verify(destination, model, true),
           "failed primary falls back and installs only SHA-verified pinned assets");
     const auto labels = origins.join(QStringLiteral(" | "));
+    const auto weightHost = domestic ? QStringLiteral("hf-mirror.com") : QStringLiteral("gh-proxy.com");
+    const auto weightRoute = QString::fromLatin1(selected.back().destination) + QStringLiteral(" · ") + weightHost;
     check(labels.contains(QStringLiteral("gh-proxy.com")) &&
           labels.contains(domestic ? QStringLiteral("cdn.jsdelivr.net") : QStringLiteral("raw.githubusercontent.com")) &&
-          labels.contains(domestic ? QStringLiteral("hf-mirror.com") : QStringLiteral("huggingface.co")),
+          labels.contains(weightRoute),
           "worker exposes active download hosts for runtime, VAD and weights");
     std::printf("model fallback origins %s | status %s\n", qPrintable(labels), qPrintable(loader.status()));
 }

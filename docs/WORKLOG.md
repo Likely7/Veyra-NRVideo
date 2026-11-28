@@ -9,6 +9,11 @@
 HWS PCIe `UHD Video 1` 实测 4K60。Y210 固定 60→30、VFG 高 2× 全屏两轮送显约 59.94 FPS，1% Low 57.63／57.37 FPS，采集回调到 Present P95 38.59／38.80 ms。10 轮合计约 115 秒稳态采集丢帧增量为 0。旧 NV12 和 P010 与基线做同卡对照。用同一帧游戏原始采样验证红色，两种 4:2:2 解码与独立 BT.2020/PQ 参考的最大偏差均为 0.00208 scRGB。该卡未枚举 P210，已用实卡样本无损重排与 GPU 色条验证 P210 解码，仍缺 P210 实卡性能数据。
 
 [测试数据和游戏截图](<E:/项目/Veyra/reports/native-y210-p210-20261128/RESULTS.md>) · [构建回执](<E:/项目/Veyra/logs/codex-native-y210-p210-20261128/build-20261128-004303/receipt.json>) · [回归日志](<E:/项目/Veyra/logs/native-y210-p210-20261128>) · [本地测试入口](<E:/项目/Veyra/tests/native-y210-p210-20261128/Start-Veyra-Y210-P210-test.cmd>)
+## 2026-11-27 实时翻译模型备用下载
+
+在 `codex/asr-download-mirrors-20261127` 给 Qwen 1.12 GB 的 GGUF 加入魔搭官方固定修订，给 Whisper Turbo、Parakeet 压缩归档和 llama.cpp Vulkan 运行库加入 GH-Proxy。原下载入口可在失败后自动切换。失败日志包含资产、起始及最终主机、HTTP 状态和已收到的字节数。模型及运行库继续按需下载并核对大小、SHA-256 和归档成员。2.2.1 的另一起完整下载后校验失败报告由已有的 Windows 解包路径修复覆盖相关路径。 [Issue #369](https://github.com/Likely7/Veyra-NRVideo/issues/369)
+
+四个备用资产本机均完整下载，合计 2,201,443,574 字节，摘要与主线固定值一致。用 `tmp/asr-download-access-20261127/build-local.py` 复用 2.2.2 构建，主程序及实时翻译测试目标通过。实时翻译回归 61 项，下载夹具 16 项。令所有 Whisper 主地址返回 503 后，实际 Qt 下载器切换运行库、VAD 和 563,790,207 字节的 Whisper 归档，解包并验证各成员，通过 26 项。测试使用临时配置。本轮验证来自本机网络。 [镜像完整校验](<E:/项目/Veyra/reports/codex-asr-download-mirrors-20261127/full-hash-verification.json>) · [Whisper 实际下载测试](<E:/项目/Veyra/logs/codex-asr-download-mirrors-20261127/whisper-mirror-e2e.log>)
 
 ## 2026-11-27 Veyra 2.2.2 默认实时优先级与本地安装包
 

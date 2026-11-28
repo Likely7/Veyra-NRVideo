@@ -67,6 +67,9 @@ The optional in-app downloads are [llama.cpp b12240 Windows x64 Vulkan](https://
 (Apache-2.0). The pinned URLs, byte counts and SHA-256 values are in
 `src/ui/TranslationAssets.cpp`. Both downloads live in the selected user's Veyra
 data directory and are independent of the application installer.
+The llama.cpp archive also has a GH-Proxy route. The pinned Qwen GGUF
+is available from an identical file with the same SHA-256.
+[Qwen ModelScope repository](https://modelscope.cn/models/Qwen/Qwen2.5-1.5B-Instruct-GGUF)
 
 ### Local speech recognition
 
@@ -97,7 +100,7 @@ unavailable, the downloader can fetch the same Parakeet members from
 or the same Whisper members from
 [2ca6ff69fc87](https://huggingface.co/csukuangfj/sherpa-onnx-whisper-turbo/tree/2ca6ff69fc878651b770880507669577ac41c2ff).
 Hugging Face and hf-mirror use these same revisions and file digests.
-The sherpa-onnx runtime also has a same-digest GH-Proxy route. The VAD
+The sherpa-onnx runtime and both model archives also have same-digest GH-Proxy routes. The VAD
 fallback is the MIT-licensed Silero V5 ONNX export from
 [5cd2ba54db05](https://github.com/snakers4/silero-vad/tree/5cd2ba54db059f961e7545d4f211b44f005a6dfb),
 pinned to its own SHA-256, available from GitHub Raw or jsDelivr.
