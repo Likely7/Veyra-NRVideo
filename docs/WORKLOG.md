@@ -1,5 +1,15 @@
 # 当前工作日志
 
+## 2026-11-27 固定 60→30 的 VFG 高档送显修复
+
+在 `codex/vfg-stability-20261127` 提交 `538fd8d8`。MCS 4K-T900 的逐帧数据定位到固定 60→30 切换首份画面时的短对。补帧拒绝后，两张原帧被安排在一起，随后出现 29.17 ms 间隔。让短对沿用正常送显相位，并隔离其相位学习。将 VFG 第一次实际插值的冷成本归到预热，预算百分位改用 64 样本内的栈空间。预算结果对拍 117,936 项，差异为 0。
+
+复用 `build/codex-community-pr-followup-20261127`，用 `tmp/vfg-stability-20261127/build-local.py --ffmpeg-9.0.2` 并发 2 编译主程序和相关检查。时序 573 项、呈现调度 253 项、采集启动 31 项、实时预览 57 项、精确等待 9 项通过。通过 `bench.py` 和 `metrics.py` 对比 2.2.1 正式 NVIDIA 包和 2.2.2 测试版。台架为 RTX 5070、MCS 4K-T900、2560×1440p60 NV12、固定 60→30、VFG 2× 全屏。
+
+常规高档配对的 1% Low 为 53.52→53.80 FPS，回调到 Present 的 P95 为 35.64→35.56 ms。启用 CUDA 计时的配对 P95 为 35.90→35.83 ms，单轮 1% Low 为 55.07→54.38 FPS。压力用例每版两轮共约 38 秒，超过 25 ms 的间隔从 13 次降为 1 次，剩余一次为切镜重置。有效生成帧的 A/B 来源、时间中点与重复计数均通过。因失焦及退出全屏作废的轮次保留记录。中档和 Reflex 的显示排队变化在两版复现，并进行了配对复测。 [实卡数据和复测结论](<E:/项目/Veyra/reports/vfg-stability-20261127/VFG_STABILITY.md>) · [构建记录](<E:/项目/Veyra/logs/codex-vfg-stability-20261127/build-20261127-220750/receipt.json>)
+
+运行 `verify-runtime.py`，1440p 的全档全倍数 GPU 夹具到达 230 秒时限，改用 720p 跑完整夹具，8 位与 10 位共 2,521 项通过。测试入口使用私有配置，已启动并正常退出。 [GPU 检查](<E:/项目/Veyra/logs/vfg-stability-20261127/native-vfg-gpu-720p.log>) · [测试版入口](<E:/项目/Veyra/tests/vfg-stability-20261127/Start-Veyra-2.2.2-VFG-test.cmd>)
+
 ## 2026-11-27 VFG 高档批次计时复核
 
 在 MCS 4K-T900、RTX 5070 和 320 Hz 主屏上使用 1440p60 NV12、固定 60→30、VFG 2×、全屏和高 GPU 优先级。用 E:/项目/Veyra/tmp/codex-vfg-high-regression-20261127/bench.py 对 2.2.1 正式 NVIDIA 包和 2.2.2 现有测试 EXE 进行交替对照。高档标准、高档加 NVIDIA 低延迟和中档共 18 轮实卡测试，稳定窗口采集丢帧 0。使用 metrics.py 统计 16 轮的 28,435 次稳态送显，另用独立缓存、不添加逐帧或 GPU 遥测记录复跑两轮。两版加载相同的 VFG 运行组件。 [复测报告和逐轮记录](<E:/项目/Veyra/reports/codex-vfg-high-regression-20261127/VFG_HIGH_RETEST.md>)
