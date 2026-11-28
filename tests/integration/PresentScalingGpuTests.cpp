@@ -8,6 +8,7 @@
 //
 // .raw: "VRAW", int32 width, int32 height, then width*height RGBA float32
 // (linear light). Image mode renders the old and the new blit at each size.
+#include "LanczosReference.h"
 #include <windows.h>
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -119,13 +120,6 @@ View fitView(int srcW, int srcH, int dstW, int dstH)
 }
 double viewUv(int i, int dst, double render, double center) { return ((i + 0.5) / dst - 0.5) * dst / render + center; }
 
-double catmullRom(double x)
-{
-    x = std::abs(x);
-    if (x < 1.0) return (1.5 * x - 2.5) * x * x + 1.0;
-    if (x < 2.0) return ((-0.5 * x + 2.5) * x - 4.0) * x + 2.0;
-    return 0.0;
-}
 double lanczos3(double x)
 {
     x = std::abs(x);
@@ -244,14 +238,14 @@ Image magnifyModel(const Image& src, const View& v)
     return out;
 }
 
-// The shader's minification for SDR-range pictures: Catmull-Rom widened by
+// The shader's minification for SDR-range pictures: Lanczos-2 widened by
 // the shrink factor up to 4:1, and held at its 2:1 width past 4:1. Its
 // anti-ringing hold only acts where a sample exceeds 1.0; the HDR block check
 // covers that.
 Image minifyModel(const Image& src, const View& v)
 {
     const double widest = std::max(src.w / v.renderW, src.h / v.renderH);
-    return separable(src, v, 2.0, catmullRom, widest > 4.001 ? 2.0 : 4.0);
+    return separable(src, v, 2.0, lanczos2, widest > 4.001 ? 2.0 : 4.0);
 }
 
 // What the fine path should produce.

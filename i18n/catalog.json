@@ -39929,17 +39929,17 @@
    "ru": "Яркость за пределами крышки нуждается в сжатии; используйте чтение образца для проверки жесткой обрезки"
   },
   {
-   "zh": "超采样：先超到目标尺寸再精确缩回，更自然、略软；显存更高，降噪和补帧按缩回后尺寸运行。",
+   "zh": "超分到目标尺寸后，以 Lanczos-2 AA 抗混叠缩回。NR 和补帧按缩回后的尺寸处理。",
    "src": "qml/SrStageEditor.qml",
-   "zh-TW": "超取樣：先超到目標尺寸再精確縮回，更自然、略軟；顯示記憶體更高，降噪和補幀按縮回後尺寸執行。",
-   "en": "Supersampling: SR to the target, then an exact shrink. More natural, slightly softer; more video memory. NR and frame generation run at the shrunk size.",
-   "ja": "スーパーサンプリング：目標サイズまで超解像して正確に縮小します。より自然で少し柔らかく、ビデオメモリ使用量が増えます。ノイズ除去とフレーム生成は縮小後のサイズで実行します。",
-   "ko": "목표 크기까지 초해상도를 적용한 뒤 정밀하게 줄이는 슈퍼샘플링 방식입니다. 화면이 더 자연스럽고 약간 부드러워지지만 VRAM을 더 사용합니다. NR과 프레임 생성은 축소한 해상도로 처리합니다.",
-   "es": "Supersampling: SR al objetivo, luego un psiquiatra exacto. Más natural, ligeramente más suave; más memoria de vídeo. NR y la generación de fotogramas corren al tamaño de la camada.",
-   "fr": "Superéchantillonnage: SR à la cible, puis un rétrécissement exact. Plus naturel, légèrement plus doux; plus de mémoire vidéo. NR et la génération d’image fonctionne à la taille réduite.",
-   "de": "Überprobenahme: SR zum Ziel, dann eine genaue Schrumpfung. Natürlicher, etwas weicher; mehr Videospeicher. NR und Frame Generation laufen auf der geschrumpften Größe.",
-   "pt-BR": "Superamplificação: SR para o alvo, então um psiquiatra exato. Mais natural, ligeiramente suave; mais memória de vídeo. NR e geração de quadro executado no tamanho encolhido.",
-   "ru": "Суперсэмплирование: SR к цели, затем точное сокращение. Более естественная, немного мягкая; больше видеопамяти. NR и траектория сжатия сжатия."
+   "zh-TW": "超解析度處理至目標尺寸後，以 Lanczos-2 AA 抗鋸齒縮小。NR 和影格生成以縮小後的尺寸執行。",
+   "en": "Upscale to the target size, then downsample with Lanczos-2 AA. NR and frame generation run at the reduced size.",
+   "ja": "目標サイズまで超解像した後、Lanczos-2 AA で縮小します。NR とフレーム生成は縮小後のサイズで処理します。",
+   "ko": "목표 크기로 업스케일한 뒤 Lanczos-2 AA로 축소합니다. NR과 프레임 생성은 축소된 해상도에서 처리합니다.",
+   "es": "Aumenta la imagen al tamaño objetivo y luego la reduce con Lanczos-2 AA. NR y la generación de fotogramas se aplican al tamaño reducido.",
+   "fr": "Agrandit l’image à la taille cible, puis la réduit avec Lanczos-2 AA. Le NR et la génération d’images traitent la résolution réduite.",
+   "de": "Skaliert auf die Zielgröße hoch und verkleinert anschließend mit Lanczos-2 AA. NR und Frame-Generierung verwenden die reduzierte Auflösung.",
+   "pt-BR": "Amplia para o tamanho desejado e depois reduz com Lanczos-2 AA. O NR e a geração de quadros usam a resolução reduzida.",
+   "ru": "Изображение увеличивается до целевого размера, затем уменьшается с фильтром Lanczos-2 AA. NR и генерация кадров работают в уменьшенном разрешении."
   },
   {
    "zh": "超高",

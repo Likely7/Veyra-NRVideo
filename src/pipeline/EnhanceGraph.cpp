@@ -8,6 +8,7 @@
 // views are created last. Per-frame execution uses the shared command slot
 // ring (NR evaluates on a fresh list - snippet constraint).
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/pipeline/Lanczos2Reduce.h"
 #include "veyra/engine/ProtectionCodec.h"
 #include "HudProtect.h"
 #include "veyra/pipeline/Rdna3NrBackend.h"
@@ -1147,7 +1148,7 @@ bool EnhanceGraph::createResources()
     // RTX Video SR in the final pass (the only pass without double SR) reads and
     // writes RGBA8.
     if(srEnabled_&&engine::rtxVideoSr(finalVideoSrQuality(desc_))){videoSrInput_=makeTexture(context_.device(),srInW_,srInH_,DXGI_FORMAT_R8G8B8A8_UNORM,true);videoSrOutput_=makeTexture(context_.device(),srOutW_,srOutH_,DXGI_FORMAT_R8G8B8A8_UNORM,true);if(!videoSrInput_||!videoSrOutput_)return false;}
-    // Three-step SR: the linear SR input after the exact area shrink.
+    // Three-step SR: the linear SR input after Lanczos-2 AA.
     // Smart SR keeps srIn at the source extent: its render extent is the top-left of these.
     if(srEnabled_&&(srPrescaleActive()||smartSrAuto_)&&!(srPrescaled_=makeTexture(context_.device(),srInW_,srInH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true)))return false;
     if(smartSrAuto_&&!(smartSrMid_=makeTexture(context_.device(),srInW_,srcH_,DXGI_FORMAT_R16G16B16A16_FLOAT,true)))return false;
@@ -2626,12 +2627,19 @@ bool EnhanceGraph::createComputePasses()
     if (!densifyPass_.loadShader("NvofDensify.dxil", cs) ||
         !densifyPass_.create(context_.device(), cs, 7, 5, 2)) return false;
     if(desc_.hdrWorking()&&videoSrInput_&&(!hdrVideoSrPass_.loadShader("HdrVideoSrRestore.dxil",cs)||!hdrVideoSrPass_.create(context_.device(),cs,10,3,1)))return false;
-    // Three-step SR: NrDownsample's exact area shrink before RTX Video SR, SrResolve after it.
+    // Three-step SR: Lanczos-2 AA before and after RTX Video SR.
     if(srPrescaled_&&(!srPrescalePass_.loadShader("NrDownsample.dxil",cs)||!srPrescalePass_.create(context_.device(),cs,2,1,1)))return false;
     if(smartSrAuto_&&(!smartSrPass_.loadShader("SmartSrReduce.dxil",cs)||!smartSrPass_.create(context_.device(),cs,4,1,1,kSmartSrConstants)))return false;
     if(smartSrAuto_&&(!smartSrProbeReducePass_.loadShader("SmartSrProbeReduce.dxil",cs)||!smartSrProbeReducePass_.create(context_.device(),cs,2,1,1,kSmartSrConstants)||
                       !smartSrProbeResidualPass_.loadShader("SmartSrProbeResidual.dxil",cs)||!smartSrProbeResidualPass_.create(context_.device(),cs,3,2,1,16)))return false;
-    if(videoSrOutput_&&srResolveActive()&&(!srResolvePass_.loadShader("SrResolve.dxil",cs)||!srResolvePass_.create(context_.device(),cs,10,3,1)))return false;
+    srResolveSrgb_=false;
+    if(videoSrOutput_&&srResolveActive()){
+        D3D12_FEATURE_DATA_D3D12_OPTIONS3 caps{};
+        srResolveSrgb_=!desc_.hdrWorking()&&SUCCEEDED(context_.device()->CheckFeatureSupport(
+            D3D12_FEATURE_D3D12_OPTIONS3,&caps,sizeof(caps)))&&caps.CastingFullyTypedFormatSupported;
+        const char* shader = srOutW_ == 2*workW_ && srOutH_ == 2*workH_ ? "SrResolve2x.dxil" : "SrResolve.dxil";
+        if(!srResolvePass_.loadShader(shader,cs)||!srResolvePass_.create(context_.device(),cs,10,3,1))return false;
+    }
     if(firstSrInput_&&desc_.hdrWorking()&&(!firstSrRestorePass_.loadShader("HdrVideoSrRestore.dxil",cs)||!firstSrRestorePass_.create(context_.device(),cs,4,3,1)))return false;
     if (!stager_.initialize(context_.device(), 96)) {
         veyra::log::error("graph", "descriptor stager init failed");
@@ -2873,7 +2881,8 @@ bool EnhanceGraph::createViews()
         for(size_t i=0;i<3;++i){
             stagedSrv(bases[i],DXGI_FORMAT_R16G16B16A16_FLOAT,srResolvePass_,sets[i]);
             stagedSrv(videoSrInput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,srResolvePass_,sets[i]+1);
-            stagedSrv(videoSrOutput_.Get(),DXGI_FORMAT_R8G8B8A8_UNORM,srResolvePass_,sets[i]+2);
+            const auto format=srResolveSrgb_?DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:DXGI_FORMAT_R8G8B8A8_UNORM;
+            stagedSrv(videoSrOutput_.Get(),format,srResolvePass_,sets[i]+2);
         }
         makeUav(context_.device(),workRgba_.Get(),DXGI_FORMAT_R16G16B16A16_FLOAT,cpu(srResolvePass_,3));
     }
@@ -3902,7 +3911,7 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         lastSourceColor_.transfer==TransferFunction::PQ,lastSourceColor_.scRgb):SmartSrCoding::None;
     const bool smartRuns=smartCoding!=SmartSrCoding::None;
     const uint32_t smartDomain=smartCoding==SmartSrCoding::Pq?1u:0u;
-    // Double SR reduces the first AI result before the second pass (exact area, linear light).
+    // Double SR reduces the first AI result in linear light before the second pass.
     auto reduceFirstSr=[&]{
         if(!srPrescaled_)return;
         if(smartRuns&&smartSrProbeFrames_++%kSmartSrProbeInterval==0&&!smartSrProbePending_){
@@ -3961,9 +3970,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         }
         tracker_.transition(list,srPrescaleInput(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         tracker_.transition(list,srPrescaled_.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        const float down[8]={uintBits(desc_.dualSr?desc_.firstSrWidth:srcW_),uintBits(desc_.dualSr?desc_.firstSrHeight:srcH_),uintBits(srInW_),uintBits(srInH_),0,0,0,0};
-        srPrescalePass_.bind(list,down,gpuHandleOf(srPrescalePass_,0).ptr,gpuHandleOf(srPrescalePass_,1).ptr);
-        list->Dispatch((srInW_+15)/16,(srInH_+15)/16,1);tracker_.uavBarrier(list,srPrescaled_.Get());
+        const uint32_t fromW = desc_.dualSr ? desc_.firstSrWidth : srcW_;
+        const uint32_t fromH = desc_.dualSr ? desc_.firstSrHeight : srcH_;
+        recordLanczos2Reduce(list,srPrescalePass_,fromW,fromH,srInW_,srInH_,desc_.hdrWorking(),0,1);
+        tracker_.uavBarrier(list,srPrescaled_.Get());
         tracker_.transition(list,srPrescaled_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     };
     // RTX Video SR into the work texture: the single pass, or the second of a double SR.
@@ -3997,8 +4007,8 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
         const UINT restoreSet=prescaled?7:desc_.nrBeforeSr||sourcePostOutput_?4:0;
         if(srResolveActive()){
             tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-            const float fit[8]={uintBits(srOutW_),uintBits(srOutH_),uintBits(workW_),uintBits(workH_),desc_.hdrWorking()?1.0f:0.0f,0,0,0};
-            srResolvePass_.bind(list,fit,gpuHandleOf(srResolvePass_,restoreSet).ptr,gpuHandleOf(srResolvePass_,3).ptr);
+            recordLanczos2Reduce(list,srResolvePass_,srOutW_,srOutH_,workW_,workH_,
+                                 desc_.hdrWorking(),restoreSet,3,srResolveSrgb_);
         }else{
             const float dec[8]={uintBits(workW_),uintBits(workH_),uintBits(workW_),uintBits(workH_),-1,0,0,0};
             if(desc_.hdrWorking()){
@@ -4007,8 +4017,9 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                 tracker_.transition(list,videoSrInput_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 hdrVideoSrPass_.bind(list,hdrDec,gpuHandleOf(hdrVideoSrPass_,restoreSet).ptr,gpuHandleOf(hdrVideoSrPass_,3).ptr);
             }else blitPass_.bind(list,dec,gpuHandleOf(blitPass_,17).ptr,gpuHandleOf(blitPass_,1).ptr);
+            list->Dispatch((workW_+15)/16,(workH_+15)/16,1);
         }
-        list->Dispatch((workW_+15)/16,(workH_+15)/16,1);tracker_.uavBarrier(list,workRgba_.Get());tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+        tracker_.uavBarrier(list,workRgba_.Get());tracker_.transition(list,workRgba_.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
         ++metrics_.srEvaluateCount;
         return true;
     };
@@ -4523,11 +4534,10 @@ bool EnhanceGraph::process(const AVFrame* frame, double ptsMs, bool reset, Frame
                     tracker_.transition(list, layer->input(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 } else {
                     tracker_.transition(list, layer->input(), D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-                    const float down[8] = {uintBits(sourceW), uintBits(sourceH), uintBits(nrW), uintBits(nrH), 0, 0, 0, 0};
                     const UINT layers = UINT(std::max<size_t>(1, nrInstances_.size()));
-                    downsamplePass_.bind(list, down, gpuHandleOf(downsamplePass_, 2u * UINT(layerIndex)).ptr,
-                                         gpuHandleOf(downsamplePass_, 2u * layers + 2u * UINT(layerIndex)).ptr);
-                    list->Dispatch((nrW + 15) / 16, (nrH + 15) / 16, 1);
+                    const UINT layerSlot = 2u * UINT(layerIndex);
+                    recordLanczos2Reduce(list,downsamplePass_,sourceW,sourceH,nrW,nrH,
+                                         desc_.hdrWorking(),layerSlot,2u*layers+layerSlot);
                     tracker_.uavBarrier(list, layer->input());
                     tracker_.transition(list, layer->input(), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 }

@@ -41,7 +41,7 @@ ColumnLayout {
         label: qsTr("超分后缩回到")
         hint: !editor.supported ? qsTr("超分后缩回目前使用 RTX 视频超分")
             : veyra.dualSrEnabled ? qsTr("双重超分开启时不使用；关闭双重超分后恢复。")
-            : qsTr("超采样：先超到目标尺寸再精确缩回，更自然、略软；显存更高，降噪和补帧按缩回后尺寸运行。")
+            : qsTr("超分到目标尺寸后，以 Lanczos-2 AA 抗混叠缩回。NR 和补帧按缩回后的尺寸处理。")
         enabled: editor.supported && !veyra.dualSrEnabled
         opacity: enabled ? 1 : 0.4
         VSelect {

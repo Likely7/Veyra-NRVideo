@@ -83,16 +83,7 @@ float4 CubicWeights(float t)
                   0.5*t+2.0*t2-1.5*t3,-0.5*t2+0.5*t3);
 }
 
-// Catmull-Rom (B = 0, C = 1/2), the same cubic the magnification path uses.
-// Measured on real game frames (2026-11-18) it keeps more detail than the
-// softer Mitchell filter while still removing the aliasing of the old blit.
-float4 CatmullRomWeight4(float4 x)
-{
-    x=abs(x);
-    const float4 inner=(1.5*x-2.5)*x*x+1.0;
-    const float4 outer=((-0.5*x+2.5)*x-4.0)*x+2.0;
-    return select(x<1.0,inner,select(x<2.0,outer,0.0));
-}
+#include "Lanczos2AA.hlsli"
 
 // Up to 2:1 along one source axis the widened kernel covers at most eight
 // texels: two in the left negative lobe, up to four in the positive lobe, two
@@ -104,8 +95,8 @@ void MinifyAxis(float p,float scale,out float4 pos,out float4 weight)
     const float first=floor(p-scale)+1.0;   // first texel of the positive lobe
     const float count=ceil(p+scale)-first;  // texels in it: 1..4
     const float4 start=float4(first-2.0,first,first+2.0,first+count);
-    const float4 a=CatmullRomWeight4((start-p)*invScale)*float4(1.0,1.0,count>=3.0?1.0:0.0,1.0);
-    const float4 b=CatmullRomWeight4((start+1.0-p)*invScale)*float4(1.0,count>=2.0?1.0:0.0,count>=4.0?1.0:0.0,1.0);
+    const float4 a=Lanczos2Weight((start-p)*invScale)*float4(1.0,1.0,count>=3.0?1.0:0.0,1.0);
+    const float4 b=Lanczos2Weight((start+1.0-p)*invScale)*float4(1.0,count>=2.0?1.0:0.0,count>=4.0?1.0:0.0,1.0);
     weight=a+b;
     pos=start+select(weight!=0.0,b/weight,0.0);
 }
@@ -114,7 +105,7 @@ void MinifyAxis(float p,float scale,out float4 pos,out float4 weight)
 // (scRGB output filters linear values, 1.0 = 80 nits) a negative lobe would
 // draw a dark ring, so where any fetched sample exceeds 1.0 the result is held
 // within the range of the positive-lobe samples. SDR-range pictures, and PQ
-// surfaces whose code values never exceed 1.0, keep the full Catmull-Rom.
+// surfaces whose code values never exceed 1.0, keep both Lanczos lobes.
 float4 HoldRinging(float4 value,float4 lo,float4 hi,float peak)
 {
     return peak>1.0?clamp(value,lo,hi):value;
@@ -151,10 +142,10 @@ void MinifyAxis8(float p,float scale,out float4 pos0,out float4 w0,out float4 po
     const float right=first+count;
     const float4 s0=float4(first-4.0,first-2.0,first,first+2.0);
     const float4 s1=float4(first+4.0,first+6.0,right,right+2.0);
-    const float4 a0=CatmullRomWeight4((s0-p)*invScale)*float4(1.0,1.0,1.0,count>=3.0?1.0:0.0);
-    const float4 b0=CatmullRomWeight4((s0+1.0-p)*invScale)*float4(1.0,1.0,count>=2.0?1.0:0.0,count>=4.0?1.0:0.0);
-    const float4 a1=CatmullRomWeight4((s1-p)*invScale)*float4(count>=5.0?1.0:0.0,count>=7.0?1.0:0.0,1.0,1.0);
-    const float4 b1=CatmullRomWeight4((s1+1.0-p)*invScale)*float4(count>=6.0?1.0:0.0,count>=8.0?1.0:0.0,1.0,1.0);
+    const float4 a0=Lanczos2Weight((s0-p)*invScale)*float4(1.0,1.0,1.0,count>=3.0?1.0:0.0);
+    const float4 b0=Lanczos2Weight((s0+1.0-p)*invScale)*float4(1.0,1.0,count>=2.0?1.0:0.0,count>=4.0?1.0:0.0);
+    const float4 a1=Lanczos2Weight((s1-p)*invScale)*float4(count>=5.0?1.0:0.0,count>=7.0?1.0:0.0,1.0,1.0);
+    const float4 b1=Lanczos2Weight((s1+1.0-p)*invScale)*float4(count>=6.0?1.0:0.0,count>=8.0?1.0:0.0,1.0,1.0);
     w0=a0+b0;w1=a1+b1;
     pos0=s0+select(w0!=0.0,b0/w0,0.0);
     pos1=s1+select(w1!=0.0,b1/w1,0.0);
@@ -186,12 +177,9 @@ float4 MinifySampleFast8(float2 p,float2 scale,float2 size)
     return HoldRinging(sum/((dot(wx0,1.0)+dot(wx1,1.0))*(dot(wy0,1.0)+dot(wy1,1.0))),lo,hi,peak);
 }
 
-// Minification (2026-11-18): the bilinear sample this replaced skipped texels
-// once the picture was shrunk (a 4K frame on a 1440p or 1080p screen, or in a
-// window), which showed as jagged, shimmering, "pixelated" detail. scale: source
-// texels per output pixel on each source axis (>= 1); the kernel is widened by
-// it so detail finer than the screen can show is filtered instead of folded
-// back. Weights are normalised and applied in the working frame's own encoding
+// Lanczos-2 AA widens by the source texels per output pixel. Detail finer
+// than the screen can show is filtered before decimation. Weights are
+// normalised and applied in the working frame's own encoding
 // (sRGB code values for SDR output, linear for scRGB HDR, PQ for HDR10). Past
 // 4:1 (a picture shown in a tiny window) taps that far apart miss the texture
 // cache, so the 16-fetch pattern runs at its 2:1 width there: still filtered,

@@ -1,4 +1,5 @@
-#include "veyra/pipeline/GpuPassUtils.h"
+#include "veyra/pipeline/Lanczos2Reduce.h"
+#include "LanczosReference.h"
 #include "veyra/gfx/D3D12DeviceContext.h"
 #include "veyra/gfx/CommandSlotRing.h"
 #include <bit>
@@ -20,11 +21,27 @@ int main(){
     makeSrv(ctx.device(),base.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,0));makeSrv(ctx.device(),low.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,1));makeSrv(ctx.device(),low.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,2));makeUav(ctx.device(),result.Get(),DXGI_FORMAT_R32G32B32A32_FLOAT,cpuHandleOf(residual,3));
     StateTracker states;uint32_t slot;auto* list=ring.acquireNext(slot,status);states.transition(list,base.Get(),D3D12_RESOURCE_STATE_COPY_DEST);
     D3D12_TEXTURE_COPY_LOCATION dst{},src{};dst.pResource=base.Get();dst.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;src.pResource=upload.Get();src.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;src.PlacedFootprint.Footprint={DXGI_FORMAT_R32G32B32A32_FLOAT,16,16,1,256};list->CopyTextureRegion(&dst,0,0,0,&src,nullptr);states.transition(list,base.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);states.transition(list,low.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    float dims[8]={std::bit_cast<float>(16u),std::bit_cast<float>(16u),std::bit_cast<float>(8u),std::bit_cast<float>(8u),0,0,0,0};down.bind(list,dims,gpuHandleOf(down,0).ptr,gpuHandleOf(down,1).ptr);list->Dispatch(1,1,1);states.uavBarrier(list,low.Get());states.transition(list,low.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
+    recordLanczos2Reduce(list,down,16,16,8,8,false,0,1);
+    states.uavBarrier(list,low.Get());states.transition(list,low.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);
     auto copy=[&](ID3D12Resource* texture,unsigned w,unsigned h){D3D12_TEXTURE_COPY_LOCATION a{},b{};a.pResource=texture;a.Type=D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;b.pResource=readback.Get();b.Type=D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;b.PlacedFootprint.Footprint={DXGI_FORMAT_R32G32B32A32_FLOAT,w,h,1,256};list->CopyTextureRegion(&b,0,0,0,&a,nullptr);};
     copy(low.Get(),8,8);if(!ring.submitAndSignal(slot)||!ring.waitIdle())return 2;
-    D3D12_RANGE range{0,16*256};readback->Map(0,&range,&data);values=static_cast<float*>(data);bool ok=true;for(int y=0;y<8;++y)for(int x=0;x<8;++x)ok=ok&&std::abs(values[y*64+x*4]-0.5f)<1e-6f;D3D12_RANGE written{0,0};readback->Unmap(0,&written);
-    std::cout<<"area downsample checkerboard mean="<<ok<<std::endl;
+    const auto checkerAxis = [](int pixel) {
+        const double p = 2*pixel + 0.5;
+        double value = 0, total = 0;
+        for (int i = 2*pixel-3; i <= 2*pixel+4; ++i) {
+            const double w = lanczos2((i-p)/2);
+            value += (std::clamp(i,0,15)%2 ? -w : w);
+            total += w;
+        }
+        return value/total;
+    };
+    D3D12_RANGE range{0,16*256};
+    readback->Map(0,&range,&data);values=static_cast<float*>(data);
+    bool ok=true;
+    for(int y=0;y<8;++y)for(int x=0;x<8;++x)
+        ok &= std::abs(values[y*64+x*4] - (0.5 - 0.25*checkerAxis(x)*checkerAxis(y))) < 1e-5;
+    D3D12_RANGE written{0,0};readback->Unmap(0,&written);
+    std::cout<<"Lanczos-2 AA checkerboard and clamped edges="<<ok<<std::endl;
     for(float strength:{0.0f,1.0f,2.0f}){
         list=ring.acquireNext(slot,status);states.transition(list,low.Get(),D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);states.transition(list,result.Get(),D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         float c[40]={strength,0.5f,1.5f,2,0,0,0,0};residual.bind(list,c,gpuHandleOf(residual,0).ptr,gpuHandleOf(residual,3).ptr);list->Dispatch(1,1,1);states.uavBarrier(list,result.Get());states.transition(list,result.Get(),D3D12_RESOURCE_STATE_COPY_SOURCE);copy(result.Get(),16,16);if(!ring.submitAndSignal(slot)||!ring.waitIdle())return 2;

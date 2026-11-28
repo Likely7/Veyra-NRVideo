@@ -1101,7 +1101,8 @@ private:
     ComputePass amdHdrEncodePass_, amdHdrRestorePass_;
     float toneMapPeakNits_=0; // latched per graph/source; never varies with frame brightness
     ComputePass rgbPass_,hdrVideoSrPass_;
-    ComputePass srPrescalePass_,srResolvePass_; // area shrinks: double SR reduction / supersample shrink after RTX Video SR
+    ComputePass srPrescalePass_,srResolvePass_;
+    bool srResolveSrgb_ = false; // Sampling the SDR SR result decodes sRGB before filtering.
     ComputePass smartSrPass_;                   // SmartSrReduce: descale rows / columns
     ComputePass smartSrProbeReducePass_, smartSrProbeResidualPass_;
     ComputePass firstSrRestorePass_;

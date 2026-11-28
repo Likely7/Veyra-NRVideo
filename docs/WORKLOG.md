@@ -1,5 +1,19 @@
 # 当前工作日志
 
+## 2026-11-27 Lanczos-2 AA 缩小
+
+窗口和全屏送显原先用加宽的 Catmull-Rom，NR 处理尺寸、超分前缩小、双重超分中间缩小和超分后缩回原先用 Area。这些路径改用随缩小倍率加宽的 Lanczos-2 AA。超分页提示写明实际算法。送显通过同号权重配对取样，大于 4:1 的小窗口沿用既有核宽上限。智能超分按检测到的原放大方式反推渲染尺寸。
+
+处理链在线性光中计算。共享纹理块复用解码和 HDR 恢复结果，HDR 高光附近限制负瓣产生的暗圈。2:1 输出使用固定对称权重和较小的共享区。支持 D3D12 同格式族转换时，SDR 超分结果通过 sRGB 视图逐像素解码，其他设备使用原有的着色器解码。配对滤波曾在 SDR 缩回中产生最多 7 个码值的误差，撤回了处理链的配对取样。 [格式兼容依据](https://microsoft.github.io/DirectX-Specs/d3d/RelaxedCasting.html)
+
+使用 `tmp/codex-lanczos2-aa-20261127/build-local.py` 配置 FFmpeg 9.0.2、并发 2，构建主程序、GPU 像素测试、实际播放入口和翻译检查。使用公用测试程序和私有配置。将本轮变化的着色器从构建目录的硬链接单独复制后重新校验，118 个 DXIL 一致。翻译检查 9 种语言均无缺项。 [构建日志](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/build-20261127-161505/compile.log>) · [运行目录核对](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/verified-verify.json>)
+
+RTX 5070 上，送显 GPU 测试检查了 1:1、缩放、旋转、黑边和 HDR 高光。4K→1440p、4K→1080p 两组频率图案相对 Lanczos-3 参考的 RMS 误差比 Catmull-Rom 分别下降约 5.6% 和 8.1%。两组 GPU 送显耗时约 0.20→0.22 ms、0.13→0.13 ms。实际 SDK 的 SDR 8K→4K 超分缩回最大误差为 1 个 8 位码值，SR 阶段本次为 4.99→4.89 ms。另验了 HDR 超分恢复、4K→1080p 双重超分、非整数缩小和智能超分两种反推。 [送显](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/verified-present/result.log>) · [缩回](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/verified-supersample/result.log>) · [双重超分](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/verified-dual/result.log>) · [智能超分](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/verified-smart-hdr/result.log>)
+
+用 `playback-ab.py` 按旧、新、新、旧的顺序回放同一段 GTA。提交约 29.83 FPS，提交间隔 P99 旧版 34.16–34.19 ms、新版 34.23–34.43 ms。送显 GPU 时间中位数分别约 0.085 ms 和 0.085–0.086 ms。启动 NR 后另跑了 GTA 和 4K60 动态测试图，后者提交 59.95 FPS，P99 为 17.78 ms。数据来自文件回放和本机 GPU，范围限于测试显卡和应用提交环节。 [回放数据](<E:/项目/Veyra/reports/codex-lanczos2-aa-20261127/replay-metrics.json>) · [游戏画面对照](<E:/项目/Veyra/reports/codex-lanczos2-aa-20261127/gameplay-1440p-to-1080p.png>)
+
+另将 GTA 素材转为探针要求的 1080p，验证 NR 三层在不同处理尺寸下的连接。3 帧共 9 次 NR 运算，下游读到的当帧纹理与参考全部逐字节一致，D3D12 调试层报错为 0。 [NR 测试](<E:/项目/Veyra/logs/codex-lanczos2-aa-20261127/verified-nr-stack3-1080p/result.log>)
+
 ## 2026-11-27 智能超分 PR #258
 
 circerio 的智能超分在单层 RTX 视频超分（标准）下根据原图留下的放大特征，识别稳定的渲染尺寸，反推后再调用 VSR，默认关闭。双线性和对齐 2× 两种算法共用采样统计和异步回读，支持 SDR 和保留 HDR 输出的 HDR10。普通 4K 源若没有稳定的匹配，仍按该片源原有的超分路径处理。 [PR #258](https://github.com/Likely7/Veyra-NRVideo/pull/258)

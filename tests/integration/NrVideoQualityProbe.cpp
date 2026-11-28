@@ -1,4 +1,5 @@
 #include "veyra/pipeline/EnhanceGraph.h"
+#include "veyra/pipeline/Lanczos2Reduce.h"
 #include "veyra/engine/EffectChain.h"
 #include "veyra/engine/GraphDescription.h"
 #include "veyra/source/MediaFileSource.h"
@@ -327,9 +328,8 @@ int wmain(int argc,wchar_t** argv){
             expectedStates.transition(list,expected,D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
             const auto upstreamDesc=graph.diagnosticNrLayerOutput(layer-1)->GetDesc();
             const auto extent=expected->GetDesc();
-            const float dims[8]={std::bit_cast<float>(uint32_t(upstreamDesc.Width)),std::bit_cast<float>(upstreamDesc.Height),std::bit_cast<float>(uint32_t(extent.Width)),std::bit_cast<float>(extent.Height),0,0,0,0};
-            pass.bind(list,dims,pipeline::gpuHandleOf(pass,0).ptr,pipeline::gpuHandleOf(pass,1).ptr);
-            list->Dispatch((UINT(extent.Width)+15)/16,(extent.Height+15)/16,1);
+            pipeline::recordLanczos2Reduce(list,pass,UINT(upstreamDesc.Width),upstreamDesc.Height,
+                                           UINT(extent.Width),extent.Height,settings.hdrWorking(),0,1);
             expectedStates.uavBarrier(list,expected);expectedStates.transition(list,expected,D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
             if(!ring.submitAndSignal(slot)||!ring.waitIdle()){ok=false;break;}
             std::ostringstream upstream,downstream;
