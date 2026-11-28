@@ -40433,6 +40433,19 @@
    "ru": "Клавиши клавиатуры и мыши"
   },
   {
+   "zh": "键鼠模拟由 3Geeks 开发",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "鍵鼠模擬由 3Geeks 開發",
+   "en": "Keyboard and mouse by 3Geeks",
+   "ja": "キーボード・マウス操作は 3Geeks が開発",
+   "ko": "키보드·마우스 조작은 3Geeks가 개발",
+   "es": "Teclado y ratón desarrollado por 3Geeks",
+   "fr": "Clavier/souris développé par 3Geeks",
+   "de": "Tastatur und Maus entwickelt von 3Geeks",
+   "pt-BR": "Teclado e mouse desenvolvido pela 3Geeks",
+   "ru": "Клавиатура и мышь — разработка 3Geeks"
+  },
+  {
    "zh": "键鼠：步行模式",
    "src": "src/ui/bridge/RemotePlay.cpp",
    "zh-TW": "鍵鼠：步行模式",

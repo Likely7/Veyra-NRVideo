@@ -143,4 +143,25 @@ DialogLayer {
     DialogNote {
         text: qsTr("Ctrl+Alt+Shift+Z 释放键盘和鼠标，这个组合不会按到手柄。GTA 6 在车上用扳机加速刹车：用「切换步行/载具」键切换，屏幕会提示当前模式。鼠标控制右摇杆，游戏里的手柄灵敏度和死区也会影响手感")
     }
+    // Credit of the contributors of this feature (free, just for fun).
+    RowLayout {
+        objectName: "ps5-keys-credit"
+        Layout.alignment: Qt.AlignRight
+        Layout.topMargin: 4
+        spacing: 2
+        Text {
+            Layout.alignment: Qt.AlignVCenter
+            text: qsTr("键鼠模拟由 3Geeks 开发")
+            color: Theme.t3
+            font.family: Theme.fontUi
+            font.pixelSize: 11
+        }
+        VButton {
+            objectName: "ps5-keys-credit-link"
+            text: "3geeks.fr"
+            ghost: true
+            fontSize: 11
+            onClicked: Qt.openUrlExternally("https://3geeks.fr")
+        }
+    }
 }
