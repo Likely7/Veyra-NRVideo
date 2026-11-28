@@ -724,9 +724,11 @@ Window {
     }
     // A click on the picture of a PC stream takes the keyboard and mouse back after a release
     // (Ctrl+Alt+Shift+Z). While captured the clicks belong to the host and never get here.
-    // The same click on a PS5 stream with 键盘鼠标模拟手柄 on makes them the pad.
+    // The same click on a PS5 stream, or on the capture card picture while PS5 手柄控制 is
+    // connected, with 键盘鼠标模拟手柄 on makes them the pad.
     TapHandler {
-        readonly property bool ps5KeyboardMouse: veyra.ps5.active === true && veyra.ps5.keyboardMouse === true
+        readonly property bool ps5KeyboardMouse: veyra.ps5.keyboardMouse === true
+            && (veyra.ps5.active === true || veyra.ps5Control.state === "connected")
         enabled: (ps5KeyboardMouse || (veyra.moonlight && veyra.moonlight.state.streaming === true && !veyra.moonlightCaptured)) && dialogs.dialog === ""
         property bool pressOnCover: false
         property bool pressOnPicture: false

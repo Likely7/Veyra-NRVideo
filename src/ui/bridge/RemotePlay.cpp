@@ -9,8 +9,23 @@ constexpr uint32_t kPs5Bitrates[] = {5000, 10000, 15000, 20000, 30000, 50000, 80
 std::filesystem::path ps5Settings() { return remoteplay::profileDirectory() / L"settings.ini"; }
 #endif
 #ifdef VEYRA_PS5_KEYBOARD_MOUSE
-// 鼠标灵敏度 1..5 as the factor on the mouse speed.
-constexpr double kPs5MouseGain[] = {0.5, 0.75, 1.0, 1.5, 2.25};
+using KbmPad = remoteplay::KeyboardMousePad;
+// The name of a key on this PC's keyboard layout (a scan code is a position: W is Z on AZERTY).
+QString ps5InputName(uint32_t code) {
+    switch (code) {
+    case KbmPad::kMouse + 1: return QmlPlayerBridge::tr("鼠标左键");
+    case KbmPad::kMouse + 2: return QmlPlayerBridge::tr("鼠标中键");
+    case KbmPad::kMouse + 3: return QmlPlayerBridge::tr("鼠标右键");
+    case KbmPad::kMouse + 4: return QmlPlayerBridge::tr("鼠标侧键 1");
+    case KbmPad::kMouse + 5: return QmlPlayerBridge::tr("鼠标侧键 2");
+    case KbmPad::kWheelUp: return QmlPlayerBridge::tr("滚轮向上");
+    case KbmPad::kWheelDown: return QmlPlayerBridge::tr("滚轮向下");
+    default: break;
+    }
+    wchar_t name[64]{};
+    if (GetKeyNameTextW(LONG(((code & 0xffu) << 16) | ((code & 0x100u) << 16)), name, 64) > 0) return QString::fromWCharArray(name);
+    return QStringLiteral("0x%1").arg(code, 0, 16);
+}
 #endif
 }
 QVariantMap QmlPlayerBridge::ps5() const {
@@ -30,6 +45,18 @@ QVariantMap QmlPlayerBridge::ps5() const {
 #ifdef VEYRA_PS5_KEYBOARD_MOUSE
     out["keyboardMouse"] = impl_->prefBool("ps5KeyboardMouse", false);
     out["mouseSensitivity"] = std::clamp(impl_->prefInt("ps5MouseSensitivity", 3), 1, 5);
+    // The key settings menu: every action in order, with the inputs bound to it.
+    KbmPad saved;
+    saved.parse(impl_->prefString("ps5KeyBindings").toStdString());
+    QVariantList keys;
+    for (const auto& a : KbmPad::kActions) {
+        QVariantList inputs;
+        for (const auto& b : saved.bindings())
+            if (b.action == a.id) inputs.append(QVariantMap{{"code", int(b.code)}, {"name", ps5InputName(b.code)}});
+        keys.append(QVariantMap{{"id", QString::fromLatin1(a.id.data(), qsizetype(a.id.size()))}, {"inputs", inputs}});
+    }
+    out["keyBindings"] = keys;
+    out["vehicle"] = impl_->ps5KeyboardMouse.pad.vehicle();
 #endif
 #else
     out["available"] = false;
@@ -356,7 +383,26 @@ bool QmlPlayerBridge::ps5Set(const QString& key, const QVariant& value) {
             return false;
         }
         if (!impl_->prefBool("ps5KeyboardMouse", false)) ps5KeyboardMouse(false);
-        impl_->ps5KeyboardMouse.pad.setSensitivity(kPs5MouseGain[std::clamp(impl_->prefInt("ps5MouseSensitivity", 3), 1, 5) - 1]);
+        impl_->loadPs5KeyboardMouse();
+    } else if (key == QLatin1String("bindKey") || key == QLatin1String("resetKeys")) {
+        // bindKey: {code, action}; an empty action unbinds the input. resetKeys: the GTA VI defaults.
+        KbmPad edited;
+        if (key == QLatin1String("bindKey")) {
+            const auto m = value.toMap();
+            const uint32_t code = m.value("code").toUInt();
+            const auto action = m.value("action").toString().toStdString();
+            if (!KbmPad::validCode(code) || (!action.empty() && !KbmPad::action(action))) return false;
+            edited.parse(impl_->prefString("ps5KeyBindings").toStdString());
+            edited.bind(code, action);
+        }
+        const auto before = impl_->prefs;
+        impl_->prefs[QStringLiteral("ps5KeyBindings")] = QString::fromStdString(edited.serialize());
+        if (!impl_->savePrefs()) {
+            impl_->prefs = before;
+            emit notice(tr("设置保存失败，请查看日志"), true);
+            return false;
+        }
+        impl_->loadPs5KeyboardMouse();
 #endif
     } else if (key == QLatin1String("viewOnly")) impl_->ps5Form[key] = value.toBool();
     else if (key == QLatin1String("host") || key == QLatin1String("account")) impl_->ps5Form[key] = value.toString().trimmed();
@@ -368,9 +414,11 @@ void QmlPlayerBridge::ps5KeyboardMouse(bool on) {
 #ifdef VEYRA_PS5_KEYBOARD_MOUSE
     auto& i = *impl_;
     if (!on) { if (i.ps5KeyboardMouseCapture) i.ps5KeyboardMouseCapture->capture(false); return; }
-    // Only with the setting on, for a running stream whose pad timer forwards input (not 仅观看).
-    if (!i.prefBool("ps5KeyboardMouse", false) || !i.snapshot.remotePlay || !i.snapshot.running || !i.videoWindow
-        || !i.controllerTimer || !i.controllerTimer->isActive()) return;
+    // Only with the setting on, while a pad timer forwards input: a running PS5 stream (not 仅观看),
+    // or PS5 手柄控制 with the picture from the capture card.
+    const bool stream = i.snapshot.remotePlay && i.snapshot.running && i.controllerTimer && i.controllerTimer->isActive();
+    const bool captureCard = !i.snapshot.remotePlay && i.engine.remoteControlRequested() && i.ps5ControlTimer && i.ps5ControlTimer->isActive();
+    if (!i.prefBool("ps5KeyboardMouse", false) || !i.videoWindow || !(stream || captureCard)) return;
     if (!i.ps5KeyboardMouseCapture) {
         i.ps5KeyboardMouseCapture = std::make_unique<ui::MoonlightInputCapture>(i.engine);
         i.ps5KeyboardMouseCapture->setTarget(&i.ps5KeyboardMouse);
@@ -379,11 +427,27 @@ void QmlPlayerBridge::ps5KeyboardMouse(bool on) {
         });
     }
     i.ps5KeyboardMouse.pad.reset();
-    i.ps5KeyboardMouse.pad.setSensitivity(kPs5MouseGain[std::clamp(i.prefInt("ps5MouseSensitivity", 3), 1, 5) - 1]);
+    i.ps5KeyboardMouse.vehicleShown = false;
+    i.loadPs5KeyboardMouse();
     i.ps5KeyboardMouseCapture->setWindow(GetAncestor(i.videoWindow, GA_ROOT));
     if (i.ps5KeyboardMouseCapture->capture(true)) emit notice(tr("键盘鼠标已模拟手柄 · Ctrl+Alt+Shift+Z 释放"), false);
 #else
     (void)on;
+#endif
+}
+// Called by the pad timers: while the keyboard and mouse are captured they are added to the pad.
+void QmlPlayerBridge::applyPs5KeyboardMouse(remoteplay::ControllerState& state) {
+#ifdef VEYRA_PS5_KEYBOARD_MOUSE
+    auto& k = impl_->ps5KeyboardMouse;
+    if (!impl_->ps5KeyboardMouseCapture || !impl_->ps5KeyboardMouseCapture->captured()) return;
+    k.pad.apply(state, remoteplay::monotonic100ns());
+    if (k.pad.vehicle() != k.vehicleShown) {
+        k.vehicleShown = k.pad.vehicle();
+        emit notice(k.vehicleShown ? tr("键鼠：载具模式（前进键油门，后退键刹车，射击键车上射击）") : tr("键鼠：步行模式"), false);
+        emit ps5Changed();
+    }
+#else
+    (void)state;
 #endif
 }
 void QmlPlayerBridge::ps5SelectProfile(const QString& id) {
@@ -521,10 +585,7 @@ bool QmlPlayerBridge::ps5Connect() {
                     if (s.remotePlay && (s.running || s.transport == engine::TransportState::Opening)) {
                         const bool focused = QGuiApplication::focusWindow() != nullptr;
                         auto state = j.controller.poll(focused);
-#ifdef VEYRA_PS5_KEYBOARD_MOUSE
-                        if (j.ps5KeyboardMouseCapture && j.ps5KeyboardMouseCapture->captured())
-                            j.ps5KeyboardMouse.pad.apply(state, remoteplay::monotonic100ns());
-#endif
+                        applyPs5KeyboardMouse(state);
                         j.engine.remotePlayController(state);
                         j.controller.feedback(j.engine.remotePlayFeedback(), focused);
                     } else {
@@ -757,10 +818,13 @@ void QmlPlayerBridge::startPs5Control(bool restart) {
             auto& j = *impl_;
             // A PS5 stream polls the pad with its own timer and takes the slot.
             if (j.snapshot.remotePlay || !j.engine.remoteControlRequested()) {
+                if (!j.snapshot.remotePlay) ps5KeyboardMouse(false);   // a PS5 stream keeps its own capture
                 j.ps5ControlTimer->stop(); j.releasePad(Impl::PadPs5Control); return;
             }
             const bool focused = QGuiApplication::focusWindow() != nullptr || j.prefBool("ps5ControlBackground", false);
-            j.engine.remotePlayController(j.controller.poll(focused));
+            auto state = j.controller.poll(focused);
+            applyPs5KeyboardMouse(state);
+            j.engine.remotePlayController(state);
             j.controller.feedback(j.engine.remotePlayFeedback(), focused);
         });
     }

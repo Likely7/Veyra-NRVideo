@@ -517,6 +517,29 @@ DialogLayer {
             }
         }
         VRow {
+            visible: captureDialog.pcOn && veyra.ps5.keyboardMouse !== undefined
+            label: qsTr("键盘鼠标模拟手柄")
+            hint: qsTr("连接后点击画面接管，Ctrl+Alt+Shift+Z 释放。和「PS5 串流」共用按键设置，默认按 GTA 6")
+            VSwitch {
+                objectName: "capture-ps5-keyboard-mouse"
+                checked: veyra.ps5.keyboardMouse === true
+                onToggled: checked => veyra.ps5Set("keyboardMouse", checked)
+            }
+        }
+        VRow {
+            visible: captureDialog.pcOn && veyra.ps5.keyboardMouse === true
+            label: qsTr("鼠标灵敏度")
+            RowLayout {
+                spacing: 6
+                VSeg {
+                    options: [{ id: "1", label: "1" }, { id: "2", label: "2" }, { id: "3", label: "3" }, { id: "4", label: "4" }, { id: "5", label: "5" }]
+                    current: String(veyra.ps5.mouseSensitivity)
+                    onPicked: id => veyra.ps5Set("mouseSensitivity", Number(id))
+                }
+                VButton { objectName: "capture-ps5-keys"; text: qsTr("按键设置…"); ghost: true; onClicked: dialogHost.open("ps5keys") }
+            }
+        }
+        VRow {
             visible: captureDialog.pcOn
             label: qsTr("后台也转发手柄")
             hint: qsTr("再串流时建议打开：Veyra 不在前台也继续转发。打开后在这台电脑上用别的程序时，手柄也会操作 PS5")

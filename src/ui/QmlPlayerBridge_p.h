@@ -1007,8 +1007,16 @@ struct QmlPlayerBridge::Impl {
         void key(uint32_t, uint32_t scanCode, bool extended, bool down) override { pad.key(scanCode, extended, down); }
         void mouseMove(int dx, int dy) override { pad.mouseMove(dx, dy); }
         void mouseButton(int button, bool down) override { pad.mouseButton(button, down); }
-        void scroll(int, bool) override {}
+        void scroll(int delta, bool horizontal) override { if (!horizontal) pad.wheel(delta); }
+        bool vehicleShown = false;   // the on foot / vehicle notice already given
     } ps5KeyboardMouse;
+    // The saved key bindings and 鼠标灵敏度 (1..5, the factor on the mouse speed) onto the pad.
+    // Missing or unreadable bindings are the GTA VI defaults.
+    void loadPs5KeyboardMouse() {
+        static constexpr double gain[] = {0.5, 0.75, 1.0, 1.5, 2.25};
+        ps5KeyboardMouse.pad.parse(prefString("ps5KeyBindings").toStdString());
+        ps5KeyboardMouse.pad.setSensitivity(gain[std::clamp(prefInt("ps5MouseSensitivity", 3), 1, 5) - 1]);
+    }
     std::unique_ptr<ui::MoonlightInputCapture> ps5KeyboardMouseCapture;   // after its target: destroyed first
 #endif
 #endif

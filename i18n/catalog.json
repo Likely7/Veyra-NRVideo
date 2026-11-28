@@ -2224,6 +2224,19 @@
    "ru": "Ctrl+Alt+Shift+S, чтобы скрыть"
   },
   {
+   "zh": "Ctrl+Alt+Shift+Z 释放键盘和鼠标，这个组合不会按到手柄。GTA 6 在车上用扳机加速刹车：用「切换步行/载具」键切换，屏幕会提示当前模式。鼠标控制右摇杆，游戏里的手柄灵敏度和死区也会影响手感",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "Ctrl+Alt+Shift+Z 釋放鍵盤和滑鼠，這個組合不會按到手把。GTA 6 在車上用扳機加速煞車：用「切換步行/載具」鍵切換，畫面會提示目前模式。滑鼠控制右搖桿，遊戲裡的手把靈敏度和死區也會影響手感",
+   "en": "Ctrl+Alt+Shift+Z releases the keyboard and mouse; the combination presses nothing on the controller. In a vehicle GTA 6 uses the triggers to accelerate and brake: switch with the On foot / Vehicle key, and the screen shows the current mode. The mouse drives the right stick, so the game's own controller sensitivity and deadzone also change the feel",
+   "ja": "Ctrl+Alt+Shift+Z でキーボードとマウスを解放します。この組み合わせはコントローラーには送られません。GTA 6 の車両はトリガーで加速・ブレーキします。「徒歩/車両の切り替え」キーで切り替えると、画面に現在のモードが表示されます。マウスは右スティックを動かすため、ゲーム側のコントローラー感度とデッドゾーンも操作感に影響します",
+   "ko": "Ctrl+Alt+Shift+Z로 키보드와 마우스를 해제합니다. 이 조합은 컨트롤러에 입력되지 않습니다. GTA 6는 차량에서 트리거로 가속·제동합니다. '도보/차량 전환' 키로 바꾸면 화면에 현재 모드가 표시됩니다. 마우스는 오른쪽 스틱을 움직이므로 게임의 컨트롤러 감도와 데드존도 조작감에 영향을 줍니다",
+   "es": "Ctrl+Alt+Shift+Z libera el teclado y el ratón; la combinación no pulsa nada en el mando. En un vehículo GTA 6 acelera y frena con los gatillos: cambia con la tecla A pie / Vehículo y la pantalla muestra el modo actual. El ratón mueve el stick derecho, así que la sensibilidad y la zona muerta del mando en el juego también cambian la sensación",
+   "fr": "Ctrl+Alt+Shift+Z libère le clavier et la souris ; cette combinaison n'appuie sur rien côté manette. En véhicule, GTA 6 accélère et freine avec les gâchettes : bascule avec la touche À pied / Véhicule, l'écran affiche le mode actuel. La souris pilote le stick droit : la sensibilité et la zone morte de la manette dans le jeu changent aussi le ressenti",
+   "de": "Strg+Alt+Umschalt+Z gibt Tastatur und Maus frei; die Kombination drückt am Controller nichts. Im Fahrzeug gibt GTA 6 mit den Triggern Gas und bremst: mit der Taste Zu Fuß / Fahrzeug umschalten, der Bildschirm zeigt den aktuellen Modus. Die Maus steuert den rechten Stick, daher wirken auch Controller-Empfindlichkeit und Totzone im Spiel auf das Gefühl",
+   "pt-BR": "Ctrl+Alt+Shift+Z libera o teclado e o mouse; a combinação não aperta nada no controle. Em veículos, GTA 6 acelera e freia com os gatilhos: alterne com a tecla A pé / Veículo e a tela mostra o modo atual. O mouse move o analógico direito, então a sensibilidade e a zona morta do controle no jogo também mudam a sensação",
+   "ru": "Ctrl+Alt+Shift+Z освобождает клавиатуру и мышь; это сочетание ничего не нажимает на геймпаде. В транспорте GTA 6 газует и тормозит курками: переключайтесь клавишей «Пешком / Транспорт», на экране показывается текущий режим. Мышь управляет правым стиком, поэтому чувствительность и мёртвая зона геймпада в игре тоже влияют на ощущения"
+  },
+  {
    "zh": "Cube LUT (*.cube);;所有文件 (*.*)",
    "src": "src/ui/bridge/Colour.cpp",
    "zh-TW": "Cube LUT (*.cube);;所有檔案 (*.*)",
@@ -3134,6 +3147,58 @@
    "ru": "K сохраняет оригинальную модель; M и L используют DLSS 4.5. L нацелен на более низкие входные разрешения. Качество и время обработки зависят от источника."
   },
   {
+   "zh": "L1 · 收枪（点按）、装备轮盘（按住）",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "L1 · 收槍（點按）、裝備輪盤（按住）",
+   "en": "L1 · Holster (tap), loadout (hold)",
+   "ja": "L1 · 武器をしまう（タップ）、装備ホイール（長押し）",
+   "ko": "L1 · 무기 집어넣기(탭), 장비 휠(길게)",
+   "es": "L1 · Guardar arma (toque), equipamiento (mantener)",
+   "fr": "L1 · Ranger l'arme (appui), équipement (maintien)",
+   "de": "L1 · Waffe wegstecken (tippen), Ausrüstung (halten)",
+   "pt-BR": "L1 · Guardar arma (toque), equipamento (segurar)",
+   "ru": "L1 · Убрать оружие (нажатие), снаряжение (удержание)"
+  },
+  {
+   "zh": "L2 · 瞄准、刹车",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "L2 · 瞄準、煞車",
+   "en": "L2 · Aim, brake",
+   "ja": "L2 · エイム、ブレーキ",
+   "ko": "L2 · 조준, 브레이크",
+   "es": "L2 · Apuntar, frenar",
+   "fr": "L2 · Viser, freiner",
+   "de": "L2 · Zielen, bremsen",
+   "pt-BR": "L2 · Mirar, frear",
+   "ru": "L2 · Прицел, тормоз"
+  },
+  {
+   "zh": "L3 · 奔跑、喇叭和氮气",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "L3 · 奔跑、喇叭和氮氣",
+   "en": "L3 · Run, horn and nitrous",
+   "ja": "L3 · 走る、クラクションとニトロ",
+   "ko": "L3 · 달리기, 경적과 니트로",
+   "es": "L3 · Correr, claxon y nitro",
+   "fr": "L3 · Courir, klaxon et nitro",
+   "de": "L3 · Rennen, Hupe und Nitro",
+   "pt-BR": "L3 · Correr, buzina e nitro",
+   "ru": "L3 · Бег, гудок и нитро"
+  },
+  {
+   "zh": "L3+R3 · 专注（Focus）",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "L3+R3 · 專注（Focus）",
+   "en": "L3+R3 · Focus",
+   "ja": "L3+R3 · フォーカス",
+   "ko": "L3+R3 · 포커스",
+   "es": "L3+R3 · Concentración (Focus)",
+   "fr": "L3+R3 · Concentration (Focus)",
+   "de": "L3+R3 · Fokus",
+   "pt-BR": "L3+R3 · Foco",
+   "ru": "L3+R3 · Фокус"
+  },
+  {
    "zh": "LUT 不可用：%1",
    "src": "src/ui/bridge/Colour.cpp",
    "zh-TW": "LUT 不可用：%1",
@@ -3823,6 +3888,19 @@
    "ru": "OpenAI Whisper · MIT · Рекомендуется быстрый процессор"
   },
   {
+   "zh": "Options · 暂停",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "Options · 暫停",
+   "en": "Options · Pause",
+   "ja": "Options · ポーズ",
+   "ko": "Options · 일시정지",
+   "es": "Options · Pausa",
+   "fr": "Options · Pause",
+   "de": "Options · Pause",
+   "pt-BR": "Options · Pausa",
+   "ru": "Options · Пауза"
+  },
+  {
    "zh": "PC 串流",
    "src": "qml/CineBar.qml",
    "zh-TW": "PC 串流",
@@ -3873,6 +3951,19 @@
    "de": "PNG-Bild (*.png); JPEG-Bild (*.jpg)",
    "pt-BR": "Imagem PNG (*. png);; Imagem JPEG (*. jpg)",
    "ru": "Изображение PNG (*.png); изображение JPEG (*.jpg)"
+  },
+  {
+   "zh": "PS 键",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "PS 鍵",
+   "en": "PS button",
+   "ja": "PS ボタン",
+   "ko": "PS 버튼",
+   "es": "Botón PS",
+   "fr": "Touche PS",
+   "de": "PS-Taste",
+   "pt-BR": "Botão PS",
+   "ru": "Кнопка PS"
   },
   {
    "zh": "PS5 串流",
@@ -4419,6 +4510,45 @@
    "de": "Qwen2.5 1.5B Q4 und GPU/CPU-Laufzeit · %1 GB Download",
    "pt-BR": "Qwen2.5 1.5B Q4 e runtime de GPU/CPU · Download de %1 GB",
    "ru": "Qwen2.5 1.5B Q4 и среда ГП/ЦП · Загрузка %1 ГБ"
+  },
+  {
+   "zh": "R1 · 掩体、快速投掷、车上射击",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "R1 · 掩體、快速投擲、車上射擊",
+   "en": "R1 · Cover, quick throw, shoot from a vehicle",
+   "ja": "R1 · カバー、クイック投てき、車両から射撃",
+   "ko": "R1 · 엄폐, 빠른 투척, 차량 사격",
+   "es": "R1 · Cobertura, lanzamiento rápido, disparar desde vehículo",
+   "fr": "R1 · Couverture, lancer rapide, tir depuis un véhicule",
+   "de": "R1 · Deckung, Schnellwurf, aus dem Fahrzeug schießen",
+   "pt-BR": "R1 · Cobertura, arremesso rápido, atirar do veículo",
+   "ru": "R1 · Укрытие, быстрый бросок, стрельба из транспорта"
+  },
+  {
+   "zh": "R2 · 射击、油门",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "R2 · 射擊、油門",
+   "en": "R2 · Shoot, accelerate",
+   "ja": "R2 · 射撃、アクセル",
+   "ko": "R2 · 사격, 가속",
+   "es": "R2 · Disparar, acelerar",
+   "fr": "R2 · Tirer, accélérer",
+   "de": "R2 · Schießen, Gas",
+   "pt-BR": "R2 · Atirar, acelerar",
+   "ru": "R2 · Стрельба, газ"
+  },
+  {
+   "zh": "R3 · 回头看、瞄准时缩放",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "R3 · 回頭看、瞄準時縮放",
+   "en": "R3 · Look behind, zoom while aiming",
+   "ja": "R3 · 後ろを見る、エイム中ズーム",
+   "ko": "R3 · 뒤돌아보기, 조준 중 확대",
+   "es": "R3 · Mirar atrás, zoom al apuntar",
+   "fr": "R3 · Regarder derrière, zoom en visant",
+   "de": "R3 · Zurückschauen, Zoom beim Zielen",
+   "pt-BR": "R3 · Olhar para trás, zoom ao mirar",
+   "ru": "R3 · Оглянуться, зум при прицеливании"
   },
   {
    "zh": "RIFE 4.26（3X 用 4.22 lite）AI 视频补帧，经 DirectML 在任意 DirectX 12 显卡上运行，只用前后两帧画面；比 AMD FRC 清晰，但 GPU 占用更高、延迟略高",
@@ -5929,6 +6059,45 @@
    "ru": "{} GPU перезагрузить {} время(ы); экспортировать в {} части и соединить без повторного кодирования"
   },
   {
+   "zh": "□ · 近战、推车",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "□ · 近戰、推車",
+   "en": "□ · Melee, shove",
+   "ja": "□ · 近接攻撃、押す",
+   "ko": "□ · 근접 공격, 밀기",
+   "es": "□ · Cuerpo a cuerpo, empujar",
+   "fr": "□ · Corps à corps, pousser",
+   "de": "□ · Nahkampf, schieben",
+   "pt-BR": "□ · Corpo a corpo, empurrar",
+   "ru": "□ · Ближний бой, толкнуть"
+  },
+  {
+   "zh": "△ · 互动、上下车",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "△ · 互動、上下車",
+   "en": "△ · Interact, enter and exit vehicles",
+   "ja": "△ · インタラクト、乗り降り",
+   "ko": "△ · 상호작용, 탑승/하차",
+   "es": "△ · Interactuar, subir y bajar",
+   "fr": "△ · Interagir, monter et descendre",
+   "de": "△ · Interagieren, ein- und aussteigen",
+   "pt-BR": "△ · Interagir, entrar e sair",
+   "ru": "△ · Взаимодействие, сесть и выйти"
+  },
+  {
+   "zh": "○ · 蹲下、车内躲避",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "○ · 蹲下、車內躲避",
+   "en": "○ · Crouch, duck in a vehicle",
+   "ja": "○ · しゃがむ、車内で伏せる",
+   "ko": "○ · 웅크리기, 차내 숙이기",
+   "es": "○ · Agacharse, esconderse en el vehículo",
+   "fr": "○ · S'accroupir, se baisser en véhicule",
+   "de": "○ · Ducken, im Fahrzeug ducken",
+   "pt-BR": "○ · Agachar, abaixar no veículo",
+   "ru": "○ · Присесть, пригнуться в машине"
+  },
+  {
    "zh": "☕ 请作者喝杯咖啡 · US$5",
    "src": "qml/SponsorPanel.qml",
    "zh-TW": "☕ 請作者喝杯咖啡 · US$5",
@@ -5940,6 +6109,19 @@
    "de": "☕ Spendier mir einen Kaffee · 5 US$",
    "pt-BR": "☕ Me pague um café · US$ 5",
    "ru": "☕ Угостите меня кофе · 5 $"
+  },
+  {
+   "zh": "✕ · 跳跃、攀爬、手刹",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "✕ · 跳躍、攀爬、手煞車",
+   "en": "✕ · Jump, climb, handbrake",
+   "ja": "✕ · ジャンプ、よじ登る、ハンドブレーキ",
+   "ko": "✕ · 점프, 오르기, 핸드브레이크",
+   "es": "✕ · Saltar, trepar, freno de mano",
+   "fr": "✕ · Sauter, grimper, frein à main",
+   "de": "✕ · Springen, klettern, Handbremse",
+   "pt-BR": "✕ · Pular, escalar, freio de mão",
+   "ru": "✕ · Прыжок, лазание, ручник"
   },
   {
    "zh": "。RTX Video HDR 未能启动：可在设置里关闭该效果，或更新 NVIDIA 驱动",
@@ -7034,17 +7216,17 @@
    "ru": "Не удалось слить перед переключением размера потока"
   },
   {
-   "zh": "串流时点击画面接管，Ctrl+Alt+Shift+Z 释放。WASD 左摇杆，鼠标右摇杆，左键 R2，右键 L2",
+   "zh": "串流时点击画面接管，Ctrl+Alt+Shift+Z 释放。默认按 GTA 6：WASD 左摇杆，鼠标右摇杆，左键 R2，右键 L2",
    "src": "qml/Ps5SourceDialog.qml",
-   "zh-TW": "串流時點擊畫面接管，Ctrl+Alt+Shift+Z 釋放。WASD 左搖桿，滑鼠右搖桿，左鍵 R2，右鍵 L2",
-   "en": "While streaming, click the picture to take control; Ctrl+Alt+Shift+Z releases. WASD: left stick, mouse: right stick, left click: R2, right click: L2",
-   "ja": "ストリーミング中に画面をクリックすると操作を開始、Ctrl+Alt+Shift+Z で解放。WASD：左スティック、マウス：右スティック、左クリック：R2、右クリック：L2",
-   "ko": "스트리밍 중 화면을 클릭하면 조작을 시작하고 Ctrl+Alt+Shift+Z로 해제합니다. WASD: 왼쪽 스틱, 마우스: 오른쪽 스틱, 왼쪽 클릭: R2, 오른쪽 클릭: L2",
-   "es": "Durante la transmisión, haz clic en la imagen para tomar el control; Ctrl+Alt+Shift+Z lo libera. WASD: stick izquierdo, ratón: stick derecho, clic izquierdo: R2, clic derecho: L2",
-   "fr": "Pendant le streaming, cliquez sur l'image pour prendre la main ; Ctrl+Alt+Shift+Z la rend. WASD (ZQSD en AZERTY) : stick gauche, souris : stick droit, clic gauche : R2, clic droit : L2",
-   "de": "Beim Streaming ins Bild klicken, um die Steuerung zu übernehmen; Ctrl+Alt+Shift+Z gibt sie frei. WASD: linker Stick, Maus: rechter Stick, Linksklick: R2, Rechtsklick: L2",
-   "pt-BR": "Durante a transmissão, clique na imagem para assumir o controle; Ctrl+Alt+Shift+Z libera. WASD: analógico esquerdo, mouse: analógico direito, clique esquerdo: R2, clique direito: L2",
-   "ru": "Во время трансляции щёлкните по изображению, чтобы взять управление; Ctrl+Alt+Shift+Z возвращает его. WASD — левый стик, мышь — правый стик, левая кнопка — R2, правая — L2"
+   "zh-TW": "串流時點擊畫面接管，Ctrl+Alt+Shift+Z 釋放。預設依 GTA 6：WASD 左搖桿，滑鼠右搖桿，左鍵 R2，右鍵 L2",
+   "en": "Click the picture while streaming to take over; Ctrl+Alt+Shift+Z releases. GTA 6 defaults: WASD left stick, mouse right stick, left click R2, right click L2",
+   "ja": "ストリーミング中に映像をクリックで操作開始、Ctrl+Alt+Shift+Z で解放。初期設定は GTA 6：WASD 左スティック、マウス右スティック、左クリック R2、右クリック L2",
+   "ko": "스트리밍 중 화면을 클릭하면 조작 시작, Ctrl+Alt+Shift+Z로 해제. 기본값은 GTA 6: WASD 왼쪽 스틱, 마우스 오른쪽 스틱, 왼쪽 클릭 R2, 오른쪽 클릭 L2",
+   "es": "Haz clic en la imagen durante el streaming para tomar el control; Ctrl+Alt+Shift+Z lo libera. Por defecto GTA 6: WASD stick izquierdo, ratón stick derecho, clic izquierdo R2, clic derecho L2",
+   "fr": "Clique sur l'image pendant le stream pour prendre la main ; Ctrl+Alt+Shift+Z libère. Par défaut GTA 6 : WASD stick gauche, souris stick droit, clic gauche R2, clic droit L2",
+   "de": "Beim Streamen auf das Bild klicken übernimmt die Steuerung; Strg+Alt+Umschalt+Z gibt frei. Standard GTA 6: WASD linker Stick, Maus rechter Stick, Linksklick R2, Rechtsklick L2",
+   "pt-BR": "Clique na imagem durante o streaming para assumir; Ctrl+Alt+Shift+Z libera. Padrão GTA 6: WASD analógico esquerdo, mouse analógico direito, clique esquerdo R2, clique direito L2",
+   "ru": "Щёлкните по картинке во время трансляции, чтобы взять управление; Ctrl+Alt+Shift+Z освобождает. По умолчанию как в GTA 6: WASD левый стик, мышь правый стик, левая кнопка R2, правая L2"
   },
   {
    "zh": "串流设置（只影响串流本身，按主机保存）",
@@ -10465,6 +10647,19 @@
    "de": "Minimal / Pro umschalten",
    "pt-BR": "Alternar Mínimo / Pro",
    "ru": "Переключить Минимальный / Pro"
+  },
+  {
+   "zh": "切换步行/载具（载具时前进键油门、后退键刹车、射击键车上射击）",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "切換步行/載具（載具時前進鍵油門、後退鍵煞車、射擊鍵車上射擊）",
+   "en": "On foot / Vehicle (in a vehicle: forward key accelerates, back key brakes, shoot key shoots from the vehicle)",
+   "ja": "徒歩/車両の切り替え（車両時：前進キーでアクセル、後退キーでブレーキ、射撃キーで車両から射撃）",
+   "ko": "도보/차량 전환(차량: 전진 키 가속, 후진 키 제동, 사격 키 차량 사격)",
+   "es": "A pie / Vehículo (en vehículo: avanzar acelera, retroceder frena, disparar dispara desde el vehículo)",
+   "fr": "À pied / Véhicule (en véhicule : touche avancer = accélérer, reculer = freiner, tir = tir depuis le véhicule)",
+   "de": "Zu Fuß / Fahrzeug (im Fahrzeug: Vorwärts gibt Gas, Rückwärts bremst, Schießen schießt aus dem Fahrzeug)",
+   "pt-BR": "A pé / Veículo (no veículo: avançar acelera, recuar freia, atirar atira do veículo)",
+   "ru": "Пешком / Транспорт (в транспорте: вперёд — газ, назад — тормоз, стрельба — из транспорта)"
   },
   {
    "zh": "列出离散帧率及驱动范围内的候选；设备帧率填 0 时沿用此选择，连接时验证实际值",
@@ -16798,6 +16993,58 @@
    "ru": "Слева внизу"
   },
   {
+   "zh": "左摇杆 上 · 前进",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "左搖桿 上 · 前進",
+   "en": "Left stick up · Forward",
+   "ja": "左スティック上 · 前進",
+   "ko": "왼쪽 스틱 위 · 전진",
+   "es": "Stick izquierdo arriba · Avanzar",
+   "fr": "Stick gauche haut · Avancer",
+   "de": "Linker Stick hoch · Vorwärts",
+   "pt-BR": "Analógico esquerdo cima · Avançar",
+   "ru": "Левый стик вверх · Вперёд"
+  },
+  {
+   "zh": "左摇杆 下 · 后退",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "左搖桿 下 · 後退",
+   "en": "Left stick down · Back",
+   "ja": "左スティック下 · 後退",
+   "ko": "왼쪽 스틱 아래 · 후진",
+   "es": "Stick izquierdo abajo · Retroceder",
+   "fr": "Stick gauche bas · Reculer",
+   "de": "Linker Stick runter · Rückwärts",
+   "pt-BR": "Analógico esquerdo baixo · Recuar",
+   "ru": "Левый стик вниз · Назад"
+  },
+  {
+   "zh": "左摇杆 右",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "左搖桿 右",
+   "en": "Left stick right",
+   "ja": "左スティック右",
+   "ko": "왼쪽 스틱 오른쪽",
+   "es": "Stick izquierdo derecha",
+   "fr": "Stick gauche droite",
+   "de": "Linker Stick rechts",
+   "pt-BR": "Analógico esquerdo direita",
+   "ru": "Левый стик вправо"
+  },
+  {
+   "zh": "左摇杆 左",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "左搖桿 左",
+   "en": "Left stick left",
+   "ja": "左スティック左",
+   "ko": "왼쪽 스틱 왼쪽",
+   "es": "Stick izquierdo izquierda",
+   "fr": "Stick gauche gauche",
+   "de": "Linker Stick links",
+   "pt-BR": "Analógico esquerdo esquerda",
+   "ru": "Левый стик влево"
+  },
+  {
    "zh": "已从上次位置 %1 继续",
    "src": "src/ui/QmlPlayerBridge.cpp",
    "zh-TW": "已從上次位置 %1 繼續",
@@ -20074,6 +20321,19 @@
    "ru": "Постоянное качество: размер зависит от рисунка; оценивается из того, что было написано после начала работы."
   },
   {
+   "zh": "恢复 GTA 6 默认",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "恢復 GTA 6 預設",
+   "en": "Reset to GTA 6 defaults",
+   "ja": "GTA 6 の初期設定に戻す",
+   "ko": "GTA 6 기본값으로 복원",
+   "es": "Restablecer valores de GTA 6",
+   "fr": "Rétablir les touches GTA 6",
+   "de": "GTA-6-Standard wiederherstellen",
+   "pt-BR": "Restaurar padrão do GTA 6",
+   "ru": "Сбросить к настройкам GTA 6"
+  },
+  {
    "zh": "恢复中",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "恢復中",
@@ -21283,6 +21543,19 @@
    "ru": "Перетащите края или переместите рамку обрезки · %1 × %2"
   },
   {
+   "zh": "按下新按键",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "按下新按鍵",
+   "en": "Press the new key",
+   "ja": "新しいキーを押す",
+   "ko": "새 키 누르기",
+   "es": "Pulsa la nueva tecla",
+   "fr": "Appuie sur la nouvelle touche",
+   "de": "Neue Taste drücken",
+   "pt-BR": "Pressione a nova tecla",
+   "ru": "Нажмите новую клавишу"
+  },
+  {
    "zh": "按下新按键…",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "按下新按鍵…",
@@ -21400,6 +21673,19 @@
    "ru": "Выбрать из источника"
   },
   {
+   "zh": "按键",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "按鍵",
+   "en": "Keys",
+   "ja": "キー",
+   "ko": "키",
+   "es": "Teclas",
+   "fr": "Touches",
+   "de": "Tasten",
+   "pt-BR": "Teclas",
+   "ru": "Клавиши"
+  },
+  {
    "zh": "按键可在 设置 → 快捷键 里改",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "按鍵可在 設定 → 快速鍵 裡改",
@@ -21411,6 +21697,32 @@
    "de": "Tasten können unter Einstellungen geändert werden → Shortcuts",
    "pt-BR": "Chaves podem ser alteradas em Configurações → Atalhos",
    "ru": "Ключи можно менять в настройках → ярлыки"
+  },
+  {
+   "zh": "按键盘键，或在这里按鼠标键/滚轮",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "按鍵盤鍵，或在這裡按滑鼠鍵/滾輪",
+   "en": "Press a key, or a mouse button / the wheel here",
+   "ja": "キーを押すか、ここでマウスボタン/ホイール",
+   "ko": "키를 누르거나 여기서 마우스 버튼/휠",
+   "es": "Pulsa una tecla, o aquí un botón del ratón / la rueda",
+   "fr": "Appuie sur une touche, ou ici un bouton de souris / la molette",
+   "de": "Taste drücken, oder hier Maustaste / Mausrad",
+   "pt-BR": "Pressione uma tecla, ou aqui um botão do mouse / a roda",
+   "ru": "Нажмите клавишу или здесь кнопку мыши / колесо"
+  },
+  {
+   "zh": "按键设置…",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "按鍵設定…",
+   "en": "Key settings…",
+   "ja": "キー設定…",
+   "ko": "키 설정…",
+   "es": "Configurar teclas…",
+   "fr": "Réglage des touches…",
+   "de": "Tasteneinstellungen…",
+   "pt-BR": "Configurar teclas…",
+   "ru": "Настройка клавиш…"
   },
   {
    "zh": "按音轨自动对齐",
@@ -22660,6 +22972,58 @@
    "de": "Name des neuen Presets",
    "pt-BR": "Nome da nova predefinição",
    "ru": "Имя нового пресета"
+  },
+  {
+   "zh": "方向键上 · 手机",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "方向鍵上 · 手機",
+   "en": "D-pad up · Phone",
+   "ja": "方向キー上 · スマホ",
+   "ko": "방향키 위 · 휴대폰",
+   "es": "Cruceta arriba · Teléfono",
+   "fr": "Croix haut · Téléphone",
+   "de": "Steuerkreuz hoch · Handy",
+   "pt-BR": "Direcional cima · Celular",
+   "ru": "Крестовина вверх · Телефон"
+  },
+  {
+   "zh": "方向键下 · 目标和小地图",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "方向鍵下 · 目標和小地圖",
+   "en": "D-pad down · Objective and minimap",
+   "ja": "方向キー下 · 目標とミニマップ",
+   "ko": "방향키 아래 · 목표와 미니맵",
+   "es": "Cruceta abajo · Objetivo y minimapa",
+   "fr": "Croix bas · Objectif et mini-carte",
+   "de": "Steuerkreuz runter · Ziel und Minikarte",
+   "pt-BR": "Direcional baixo · Objetivo e minimapa",
+   "ru": "Крестовина вниз · Цель и миникарта"
+  },
+  {
+   "zh": "方向键右 · 同伴菜单",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "方向鍵右 · 同伴選單",
+   "en": "D-pad right · Partner menu",
+   "ja": "方向キー右 · パートナーメニュー",
+   "ko": "방향키 오른쪽 · 파트너 메뉴",
+   "es": "Cruceta derecha · Menú de compañero",
+   "fr": "Croix droite · Menu partenaire",
+   "de": "Steuerkreuz rechts · Partnermenü",
+   "pt-BR": "Direcional direita · Menu do parceiro",
+   "ru": "Крестовина вправо · Меню напарника"
+  },
+  {
+   "zh": "方向键左 · 电台、载具菜单",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "方向鍵左 · 電台、載具選單",
+   "en": "D-pad left · Radio, vehicle menu",
+   "ja": "方向キー左 · ラジオ、車両メニュー",
+   "ko": "방향키 왼쪽 · 라디오, 차량 메뉴",
+   "es": "Cruceta izquierda · Radio, menú del vehículo",
+   "fr": "Croix gauche · Radio, menu véhicule",
+   "de": "Steuerkreuz links · Radio, Fahrzeugmenü",
+   "pt-BR": "Direcional esquerda · Rádio, menu do veículo",
+   "ru": "Крестовина влево · Радио, меню транспорта"
   },
   {
    "zh": "方式",
@@ -28681,6 +29045,32 @@
    "ru": "Шаг клавиатуры для ползунков"
   },
   {
+   "zh": "滚轮向上",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滾輪向上",
+   "en": "Wheel up",
+   "ja": "ホイール上",
+   "ko": "휠 위로",
+   "es": "Rueda arriba",
+   "fr": "Molette haut",
+   "de": "Mausrad hoch",
+   "pt-BR": "Roda para cima",
+   "ru": "Колесо вверх"
+  },
+  {
+   "zh": "滚轮向下",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滾輪向下",
+   "en": "Wheel down",
+   "ja": "ホイール下",
+   "ko": "휠 아래로",
+   "es": "Rueda abajo",
+   "fr": "Molette bas",
+   "de": "Mausrad runter",
+   "pt-BR": "Roda para baixo",
+   "ru": "Колесо вниз"
+  },
+  {
    "zh": "滚降强度 (%)",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "滾降強度 (%)",
@@ -28796,6 +29186,19 @@
    "de": "Klicken Sie auf eine Datei auf der linken Seite zur Vorschau",
    "pt-BR": "Clique em um arquivo à esquerda para visualizar",
    "ru": "Нажмите файл слева для предварительного просмотра"
+  },
+  {
+   "zh": "点按解除这个按键",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "點按解除這個按鍵",
+   "en": "Click to unbind this key",
+   "ja": "クリックでこのキーを解除",
+   "ko": "클릭하여 이 키 해제",
+   "es": "Haz clic para quitar esta tecla",
+   "fr": "Clique pour retirer cette touche",
+   "de": "Klicken, um diese Taste zu lösen",
+   "pt-BR": "Clique para remover esta tecla",
+   "ru": "Нажмите, чтобы отвязать клавишу"
   },
   {
    "zh": "点曲线",
@@ -30707,6 +31110,19 @@
    "de": "Wartet auf Export",
    "pt-BR": "Aguardando exportação",
    "ru": "Ожидает экспорта"
+  },
+  {
+   "zh": "等待按键…",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "等待按鍵…",
+   "en": "Waiting for a key…",
+   "ja": "キー入力待ち…",
+   "ko": "키 입력 대기…",
+   "es": "Esperando una tecla…",
+   "fr": "En attente d'une touche…",
+   "de": "Warte auf Taste…",
+   "pt-BR": "Aguardando uma tecla…",
+   "ru": "Ожидание клавиши…"
   },
   {
    "zh": "等待样本",
@@ -34542,6 +34958,19 @@
    "de": "Bei Hard Cap %1 % · Hervorhebung der Kompression %2 % · Schattenlift %3 %",
    "pt-BR": "Na tampa dura %1 % · compressão de realce %2 % · sombreamento %3 %",
    "ru": "Жесткая крышка %1% · выделение сжатия %2% · поднятие тени %3%"
+  },
+  {
+   "zh": "触摸板 · 地图",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "觸控板 · 地圖",
+   "en": "Touchpad · Map",
+   "ja": "タッチパッド · マップ",
+   "ko": "터치패드 · 지도",
+   "es": "Panel táctil · Mapa",
+   "fr": "Pavé tactile · Carte",
+   "de": "Touchpad · Karte",
+   "pt-BR": "Touchpad · Mapa",
+   "ru": "Сенсорная панель · Карта"
   },
   {
    "zh": "触摸板仅转发按压",
@@ -38418,6 +38847,19 @@
    "ru": "Показывает картинку в главном окне после подключения"
   },
   {
+   "zh": "连接后点击画面接管，Ctrl+Alt+Shift+Z 释放。和「PS5 串流」共用按键设置，默认按 GTA 6",
+   "src": "qml/CaptureSourceDialog.qml",
+   "zh-TW": "連線後點擊畫面接管，Ctrl+Alt+Shift+Z 釋放。和「PS5 串流」共用按鍵設定，預設依 GTA 6",
+   "en": "Once connected, click the picture to take over; Ctrl+Alt+Shift+Z releases. Shares key settings with PS5 streaming; GTA 6 defaults",
+   "ja": "接続後に映像をクリックで操作開始、Ctrl+Alt+Shift+Z で解放。キー設定は「PS5 ストリーミング」と共通、初期設定は GTA 6",
+   "ko": "연결 후 화면을 클릭하면 조작 시작, Ctrl+Alt+Shift+Z로 해제. 'PS5 스트리밍'과 키 설정 공유, 기본값은 GTA 6",
+   "es": "Una vez conectado, haz clic en la imagen para tomar el control; Ctrl+Alt+Shift+Z lo libera. Comparte las teclas con el streaming PS5; valores de GTA 6",
+   "fr": "Une fois connecté, clique sur l'image pour prendre la main ; Ctrl+Alt+Shift+Z libère. Touches partagées avec le stream PS5, par défaut GTA 6",
+   "de": "Nach dem Verbinden aufs Bild klicken übernimmt die Steuerung; Strg+Alt+Umschalt+Z gibt frei. Gleiche Tasten wie PS5-Streaming, Standard GTA 6",
+   "pt-BR": "Após conectar, clique na imagem para assumir; Ctrl+Alt+Shift+Z libera. Compartilha as teclas com o streaming PS5; padrão GTA 6",
+   "ru": "После подключения щёлкните по картинке, чтобы взять управление; Ctrl+Alt+Shift+Z освобождает. Клавиши общие с трансляцией PS5, по умолчанию GTA 6"
+  },
+  {
    "zh": "连接在“{}”阶段失败（错误码 {}）。请确认主机上的 Sunshine 正在运行，并且防火墙放行了 TCP 47984/47989/48010 与 UDP 47998–48010。",
    "src": "src/source/MoonlightSessionSource.cpp",
    "zh-TW": "連接在“{}”階段失敗（錯誤碼 {}）。請確認主機上的 Sunshine 正在執行，並且防火墻放行了 TCP 47984/47989/48010 與 UDP 47998–48010。",
@@ -39966,7 +40408,7 @@
   },
   {
    "zh": "键盘鼠标模拟手柄",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "鍵盤滑鼠模擬手把",
    "en": "Keyboard and mouse as controller",
    "ja": "キーボードとマウスをコントローラーとして使う",
@@ -39976,6 +40418,45 @@
    "de": "Tastatur und Maus als Controller",
    "pt-BR": "Teclado e mouse como controle",
    "ru": "Клавиатура и мышь как контроллер"
+  },
+  {
+   "zh": "键鼠按键设置",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "鍵鼠按鍵設定",
+   "en": "Keyboard and mouse keys",
+   "ja": "キーボード・マウスのキー設定",
+   "ko": "키보드·마우스 키 설정",
+   "es": "Teclas de teclado y ratón",
+   "fr": "Touches clavier et souris",
+   "de": "Tastatur- und Maustasten",
+   "pt-BR": "Teclas de teclado e mouse",
+   "ru": "Клавиши клавиатуры и мыши"
+  },
+  {
+   "zh": "键鼠：步行模式",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "鍵鼠：步行模式",
+   "en": "Keyboard and mouse: on foot",
+   "ja": "キーボード・マウス：徒歩モード",
+   "ko": "키보드·마우스: 도보 모드",
+   "es": "Teclado y ratón: a pie",
+   "fr": "Clavier/souris : à pied",
+   "de": "Tastatur/Maus: zu Fuß",
+   "pt-BR": "Teclado e mouse: a pé",
+   "ru": "Клавиатура и мышь: пешком"
+  },
+  {
+   "zh": "键鼠：载具模式（前进键油门，后退键刹车，射击键车上射击）",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "鍵鼠：載具模式（前進鍵油門，後退鍵煞車，射擊鍵車上射擊）",
+   "en": "Keyboard and mouse: vehicle (forward accelerates, back brakes, shoot shoots from the vehicle)",
+   "ja": "キーボード・マウス：車両モード（前進でアクセル、後退でブレーキ、射撃で車両から射撃）",
+   "ko": "키보드·마우스: 차량 모드(전진 가속, 후진 제동, 사격은 차량 사격)",
+   "es": "Teclado y ratón: vehículo (avanzar acelera, retroceder frena, disparar desde el vehículo)",
+   "fr": "Clavier/souris : véhicule (avancer accélère, reculer freine, tir depuis le véhicule)",
+   "de": "Tastatur/Maus: Fahrzeug (Vorwärts Gas, Rückwärts bremsen, Schießen aus dem Fahrzeug)",
+   "pt-BR": "Teclado e mouse: veículo (avançar acelera, recuar freia, atirar do veículo)",
+   "ru": "Клавиатура и мышь: транспорт (вперёд — газ, назад — тормоз, стрельба из транспорта)"
   },
   {
    "zh": "镜像失败时自动改用 GitHub 直连。",
@@ -42942,6 +43423,19 @@
    "ru": "Звук играет только на этом PC по умолчанию"
   },
   {
+   "zh": "默认按 GTA 6 默认操作方案。按键按键盘上的位置保存：AZERTY 键盘上 WASD 就是 ZQSD",
+   "src": "qml/Ps5KeysDialog.qml",
+   "zh-TW": "預設依 GTA 6 預設操作方案。按鍵依鍵盤上的位置儲存：AZERTY 鍵盤上 WASD 就是 ZQSD",
+   "en": "Defaults follow the GTA 6 default control scheme. Keys are saved by position on the keyboard: WASD is ZQSD on an AZERTY keyboard",
+   "ja": "初期設定は GTA 6 のデフォルト操作方式。キーはキーボード上の位置で保存：AZERTY では WASD が ZQSD",
+   "ko": "기본값은 GTA 6 기본 조작 방식. 키는 키보드 위치로 저장: AZERTY 키보드에서 WASD는 ZQSD",
+   "es": "Por defecto, el esquema de control predeterminado de GTA 6. Las teclas se guardan por posición: en AZERTY, WASD es ZQSD",
+   "fr": "Par défaut, le schéma de commandes par défaut de GTA 6. Les touches sont enregistrées par position : sur AZERTY, WASD devient ZQSD",
+   "de": "Standard ist das GTA-6-Standardschema. Tasten werden nach Position gespeichert: Auf AZERTY ist WASD gleich ZQSD",
+   "pt-BR": "Padrão: o esquema de controle padrão do GTA 6. As teclas são salvas pela posição: no AZERTY, WASD é ZQSD",
+   "ru": "По умолчанию — стандартная схема GTA 6. Клавиши сохраняются по положению: на AZERTY WASD — это ZQSD"
+  },
+  {
    "zh": "默认显示副字幕",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "預設顯示副字幕",
@@ -43007,8 +43501,73 @@
    "ru": "Режим редактирования по умолчанию является недействительным"
   },
   {
+   "zh": "鼠标中键",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滑鼠中鍵",
+   "en": "Middle mouse button",
+   "ja": "マウス中ボタン",
+   "ko": "마우스 가운데 버튼",
+   "es": "Botón central del ratón",
+   "fr": "Clic molette",
+   "de": "Mittlere Maustaste",
+   "pt-BR": "Botão do meio do mouse",
+   "ru": "Средняя кнопка мыши"
+  },
+  {
+   "zh": "鼠标侧键 1",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滑鼠側鍵 1",
+   "en": "Mouse side button 1",
+   "ja": "マウスサイドボタン 1",
+   "ko": "마우스 측면 버튼 1",
+   "es": "Botón lateral 1 del ratón",
+   "fr": "Bouton latéral 1",
+   "de": "Maus-Seitentaste 1",
+   "pt-BR": "Botão lateral 1 do mouse",
+   "ru": "Боковая кнопка мыши 1"
+  },
+  {
+   "zh": "鼠标侧键 2",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滑鼠側鍵 2",
+   "en": "Mouse side button 2",
+   "ja": "マウスサイドボタン 2",
+   "ko": "마우스 측면 버튼 2",
+   "es": "Botón lateral 2 del ratón",
+   "fr": "Bouton latéral 2",
+   "de": "Maus-Seitentaste 2",
+   "pt-BR": "Botão lateral 2 do mouse",
+   "ru": "Боковая кнопка мыши 2"
+  },
+  {
+   "zh": "鼠标右键",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滑鼠右鍵",
+   "en": "Right mouse button",
+   "ja": "マウス右ボタン",
+   "ko": "마우스 오른쪽 버튼",
+   "es": "Botón derecho del ratón",
+   "fr": "Clic droit",
+   "de": "Rechte Maustaste",
+   "pt-BR": "Botão direito do mouse",
+   "ru": "Правая кнопка мыши"
+  },
+  {
+   "zh": "鼠标左键",
+   "src": "src/ui/bridge/RemotePlay.cpp",
+   "zh-TW": "滑鼠左鍵",
+   "en": "Left mouse button",
+   "ja": "マウス左ボタン",
+   "ko": "마우스 왼쪽 버튼",
+   "es": "Botón izquierdo del ratón",
+   "fr": "Clic gauche",
+   "de": "Linke Maustaste",
+   "pt-BR": "Botão esquerdo do mouse",
+   "ru": "Левая кнопка мыши"
+  },
+  {
    "zh": "鼠标灵敏度",
-   "src": "qml/Ps5SourceDialog.qml",
+   "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "滑鼠靈敏度",
    "en": "Mouse sensitivity",
    "ja": "マウス感度",
