@@ -36,6 +36,8 @@ ALLOWED_UNSIGNED_FILES = {
     'Veyra.exe',
     'veyra_qml_ui.exe',
     'veyra_update_worker.exe',
+    # 性能诊断 analyzer (docs/PERF_DIAGNOSTICS.md): own C++ build, no Python inside.
+    'veyra_frame_analyzer.exe',
     'virtualcam/veyra-camera-setup.exe',
     'virtualcam/veyra-virtualcam32.dll',
     'virtualcam/veyra-virtualcam64.dll',
@@ -98,13 +100,16 @@ def validate_payload(name):
     parts = {part.lower() for part in p.parts}
     if p.name.casefold() in FORBIDDEN_FILES:
         raise ValueError('Forbidden third-party or compiler DLL in candidate: ' + name)
-    if 'frame_analyzer' in parts or p.stem.casefold() in {'veyra_frame_analyzer', 'test_frame_analyzer'}:
+    # Only the compiled analyzer ships (性能诊断). The Python analyzer, its tests and
+    # anything frozen from it (PyInstaller) stay out of packages.
+    if name != 'veyra_frame_analyzer.exe' and (
+            'frame_analyzer' in parts or p.stem.casefold() in {'veyra_frame_analyzer', 'test_frame_analyzer'}):
         raise ValueError('Developer frame analyzer in candidate: ' + name)
     if (p.suffix.lower() in FORBIDDEN and name not in MODELS) or parts & {'logs', 'captures', 'qml-tests', '.git', 'third_party_local'}:
         raise ValueError('Forbidden candidate payload: ' + name)
     if any(part.startswith(('user-data', 'qml-preferences', 'last-applied', 'presets.v1')) for part in parts):
         raise ValueError('User data in candidate: ' + name)
-    if p.suffix.lower() == '.exe' and name not in {'veyra_qml_ui.exe', 'virtualcam/veyra-camera-setup.exe',
+    if p.suffix.lower() == '.exe' and name not in {'veyra_qml_ui.exe', 'veyra_frame_analyzer.exe', 'virtualcam/veyra-camera-setup.exe',
                                                   'runtime/amd-nr-rdna3/veyra_amd_nr_worker.exe'}:
         raise ValueError('Unexpected executable: ' + name)
     if any(token in name.lower() for token in ('qt6test', 'qt6quicktest', 'qml/qttest', 'qmltooling/')):
@@ -296,6 +301,7 @@ def main():
 
     # Only compiled production assets come from the current build.
     copy(args.build / 'veyra_qml_ui.exe', 'veyra_qml_ui.exe')
+    copy(args.build / 'veyra_frame_analyzer.exe', 'veyra_frame_analyzer.exe')
     # Open-source libdovi is built externally, never imported from contributor Git history.
     if re.search(r'^VEYRA_ENABLE_LIBDOVI:BOOL=ON$', cache, re.M):
         root_match = re.search(r'^VEYRA_LIBDOVI_ROOT:[^=]+=(.+)$', cache, re.M)

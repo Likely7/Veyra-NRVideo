@@ -148,6 +148,27 @@ add_executable(veyra_private_frame_trace_tests tests/unit/PrivateFrameTraceTests
 target_compile_features(veyra_private_frame_trace_tests PRIVATE cxx_std_20)
 target_link_libraries(veyra_private_frame_trace_tests PRIVATE veyra_base)
 
+# 性能诊断 analysis (docs/PERF_DIAGNOSTICS.md): standard C++ only, shipped as
+# veyra_frame_analyzer.exe next to the player, which runs it as a child process.
+add_library(veyra_frame_analysis STATIC
+  src/diagnostics/FrameAnalysis.cpp
+  src/diagnostics/FrameReport.cpp
+  src/diagnostics/FrameAnalysisInternal.h
+  src/diagnostics/MiniJson.h
+  include/veyra/diagnostics/FrameAnalysis.h)
+target_compile_features(veyra_frame_analysis PUBLIC cxx_std_20)
+target_compile_options(veyra_frame_analysis PRIVATE /utf-8)
+target_compile_definitions(veyra_frame_analysis PRIVATE UNICODE _UNICODE NOMINMAX)
+target_include_directories(veyra_frame_analysis PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+add_executable(veyra_frame_analyzer apps/frame-analyzer/main.cpp)
+target_compile_options(veyra_frame_analyzer PRIVATE /utf-8)
+target_compile_definitions(veyra_frame_analyzer PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
+target_link_libraries(veyra_frame_analyzer PRIVATE veyra_frame_analysis)
+add_executable(veyra_frame_analysis_tests tests/unit/FrameAnalysisTests.cpp)
+target_compile_options(veyra_frame_analysis_tests PRIVATE /utf-8)
+target_compile_definitions(veyra_frame_analysis_tests PRIVATE UNICODE _UNICODE NOMINMAX)
+target_link_libraries(veyra_frame_analysis_tests PRIVATE veyra_frame_analysis)
+
 # On-screen text reading for live translation (OCR passes, cleanup, line timing),
 # with a scripted OCR engine: no GPU, no Windows OCR language needed.
 add_executable(veyra_screen_text_tests tests/unit/ScreenTextTests.cpp src/engine/ScreenText.cpp)
@@ -1485,7 +1506,14 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
     # Custom (Chrome bridge): local HTTP endpoint the browser extension posts to.
     src/ui/bridge/PlaybackServer.cpp
     include/veyra/ui/PlaybackServer.h
+    # 性能诊断 (设置 → 关于): session, system snapshot and sampler.
+    src/ui/bridge/Diagnostics.cpp
+    src/ui/PerfDiagnostics.cpp
+    include/veyra/ui/PerfDiagnostics.h
+    src/ui/PerfDiagnosticsSystem.cpp
+    src/ui/PerfDiagnosticsSystem.h
     src/ui/QmlPlayerBridge_p.h)
+  target_link_libraries(veyra_qml_bridge PRIVATE pdh powrprof dxgi)
   set_target_properties(veyra_qml_bridge PROPERTIES AUTOMOC ON)
   # Interface language (UiLanguage.h): its own small library so the streaming models,
   # which are tested without the player, translate their messages too.
@@ -1614,6 +1642,8 @@ if(VEYRA_BUILD_QML_UI AND Qt6_FOUND)
   add_executable(veyra_qml_ui WIN32 apps/veyra-qml/main.cpp apps/veyra-qml/ProfileInstance.cpp
     src/ui/QmlDataDirectory.cpp src/ui/QmlDiskCache.cpp)
   add_dependencies(veyra_qml_ui veyra_virtualcam_components)
+  # The diagnostics dialog runs it from the program folder.
+  add_dependencies(veyra_qml_ui veyra_frame_analyzer)
   if(VEYRA_UPDATE_PUBLIC_KEY)
     add_dependencies(veyra_qml_ui veyra_portable_launcher veyra_update_worker)
   endif()

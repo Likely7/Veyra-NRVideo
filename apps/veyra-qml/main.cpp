@@ -67,6 +67,7 @@
 #include "veyra/ui/QmlDiskCache.h"
 #include "veyra/ui/PlaybackServer.h"   // Custom: local HTTP endpoint for the browser extension
 #include "veyra/ui/QmlPlayerBridge.h"
+#include "veyra/ui/PerfDiagnostics.h"
 #include "../../src/ui/WinCaptionReader.h"
 #include "../../src/ui/AsrWorker.h"
 #include "veyra/ui/StartupMusic.h"
@@ -944,6 +945,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     //   --exit-after <ms>       quit the app by itself after N ms, so a test run ends
     //                           through the engine's own teardown instead of a kill
     //   --video-probe <normal|hidden|no-region|covers-only>  native-window diagnosis
+    //   --diagnostic-trace <dir>  start a 性能诊断 recording into <dir> at launch
+    //   --diagnostic-seconds <n>  its length (30–1800, default 180)
     const QStringList args = QCoreApplication::arguments();
     QString openPath;
     QVariantMap testOptions;
@@ -953,6 +956,8 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
     QSize testSize;
     // --exit-after: see the switch table. 0 means "run until closed".
     int exitAfterMs = updateProbe ? 350 : 0;
+    QString diagnosticRoot;
+    int diagnosticSeconds = 180;
     for (int i = 1; i < args.size(); ++i) {
         const QString& a = args.at(i);
         const bool hasValue = i + 1 < args.size();
@@ -988,6 +993,10 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
             if (wh.size() == 2) testSize = QSize(wh.at(0).toInt(), wh.at(1).toInt());
         } else if (a == QLatin1String("--motion-probe") && hasValue) {
             testOptions.insert(QStringLiteral("motionProbe"), args.at(++i));
+        } else if (a == QLatin1String("--diagnostic-trace") && hasValue) {
+            diagnosticRoot = args.at(++i);
+        } else if (a == QLatin1String("--diagnostic-seconds") && hasValue) {
+            diagnosticSeconds = args.at(++i).toInt();
         } else if (a == QLatin1String("--exit-after") && hasValue) {
             exitAfterMs = args.at(++i).toInt();
         } else if (a == QLatin1String("--video-probe") && hasValue) {
@@ -1130,6 +1139,17 @@ static int runApplication(int argc, char** argv, QString& restartProgram, QStrin
         veyra::Logger::instance().flush();
         QCoreApplication::quit();
     }, Qt::DirectConnection);
+    // 性能诊断: a recording still running at exit keeps its raw data.
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &bridge, [&bridge] {
+        if (auto* diagnostics = bridge.diagnosticsSession()) diagnostics->shutdown();
+    });
+    if (!diagnosticRoot.isEmpty()) {
+        QTimer::singleShot(0, &app, [&bridge, diagnosticRoot, diagnosticSeconds] {
+            auto* diagnostics = bridge.diagnosticsSession();
+            const bool started = diagnostics && diagnostics->startIn(diagnosticRoot, diagnosticSeconds);
+            veyra::log::info("perf-diagnostics", std::string("command-line recording started=") + (started ? "true" : "false"));
+        });
+    }
     if (exitAfterMs > 0) {
         // Self-terminating test run: the same teardown path as a user closing the
         // window, so the log a harness reads is complete either way.

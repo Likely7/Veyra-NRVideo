@@ -8,6 +8,7 @@ UpdateBanner 1.0 UpdateBanner.qml
 PlaylistWindow 1.0 PlaylistWindow.qml
 PlaybackRateButton 1.0 PlaybackRateButton.qml
 PlaybackRateDialog 1.0 PlaybackRateDialog.qml
+PerfDiagnosticsDialog 1.0 PerfDiagnosticsDialog.qml
 singleton Theme 1.0 Theme.qml
 VAccordion 1.0 VAccordion.qml
 VSubGroup 1.0 VSubGroup.qml

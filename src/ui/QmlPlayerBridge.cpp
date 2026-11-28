@@ -80,6 +80,7 @@ QmlPlayerBridge::QmlPlayerBridge(engine::EngineController& engine, std::filesyst
     auto* checker = new UpdateChecker(version(), this);
     updates_ = checker;
     connect(checker, &UpdateChecker::notice, this, &QmlPlayerBridge::notice);
+    createPerfDiagnostics();
     impl_->playlist = new PlaylistModel(utf8Of((impl_->dataDir / L"playlist.v1.json").wstring()), this);
     connect(impl_->playlist, &PlaylistModel::playRequested, this, [this](const QString& path) {
         openPath(path);

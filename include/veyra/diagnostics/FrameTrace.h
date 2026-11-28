@@ -6,7 +6,9 @@
 
 namespace veyra::diagnostics {
 enum class TraceKind { Submitted, Ready, Present, Gpu, Reset, Cancelled, FrameReady, Discarded, XessSleep, XessBind, XessPresent, ProviderOutput, ProviderDeadline,
-    Source, SourceSkipped, Cpu, GpuUnavailable };
+    Source, SourceSkipped, Cpu, GpuUnavailable,
+    // 性能诊断 additions; appended so earlier numeric values stay unchanged.
+    Mark };
 inline const char* traceKindName(TraceKind kind) {
     switch(kind){
     case TraceKind::Submitted:return "Submitted";
@@ -26,6 +28,7 @@ inline const char* traceKindName(TraceKind kind) {
     case TraceKind::SourceSkipped:return "SourceSkipped";
     case TraceKind::Cpu:return "Cpu";
     case TraceKind::GpuUnavailable:return "GpuUnavailable";
+    case TraceKind::Mark:return "Mark";
     }
     return "Unknown";
 }

@@ -1663,7 +1663,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
             int64_t nextFgDeadlineLog=0;
             std::vector<std::shared_ptr<CompletionWatch>> pendingCompletions;
             std::shared_ptr<FrameFlowWindow> frameFlow;
-            const bool privateTrace=diagnostics::privateFrameTraceActive();
+            // Re-read at every use: 性能诊断 can start or stop mid-session. With
+            // nothing recording this is a relaxed atomic load.
+            struct LiveTraceFlag{explicit operator bool()const noexcept{return diagnostics::privateFrameTraceActive();}};
+            const LiveTraceFlag privateTrace{};
             const bool traceSubframes=GetEnvironmentVariableW(L"VEYRA_TEST_TRACE_SUBFRAMES",nullptr,0)>0;
             pipeline::ResetReason pendingResetCause=pipeline::ResetReason::Open;
             auto traceFrame=[&](diagnostics::TraceKind kind,pipeline::FrameIdentity identity,uint64_t batch,

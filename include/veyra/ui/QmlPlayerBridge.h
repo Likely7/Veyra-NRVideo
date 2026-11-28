@@ -44,6 +44,7 @@ class MoonlightModel;
 class XboxModel;
 class LiveTranslation;
 class PlaybackServer;
+class PerfDiagnostics;
 enum class CaptureControlAction;
 enum class CaptureControlResult;
 
@@ -126,6 +127,8 @@ class QmlPlayerBridge : public QObject {
     // list here could drift from what the package actually contains.
     Q_PROPERTY(QVariantList componentList READ componentList NOTIFY componentListChanged)
     Q_PROPERTY(QObject* updates READ updates CONSTANT)
+    // 设置 → 关于 → 性能诊断 (PerfDiagnostics.h).
+    Q_PROPERTY(QObject* perfDiagnostics READ perfDiagnostics CONSTANT)
 
     // --- capture dialog ----------------------------------------------------
     // Device and format lists come from the source's own enumeration, so the UI
@@ -945,6 +948,9 @@ public:
     // youtube, kofi) in the browser. The addresses live here; any other id does nothing.
     Q_INVOKABLE bool openSponsorLink(const QString& id);
     QObject* updates() const;
+    QObject* perfDiagnostics() const;
+    // The same object for main(): command-line automation and exit handling.
+    PerfDiagnostics* diagnosticsSession() const { return perfDiagnostics_; }
     QVariantList audioDevices() const;
     QVariantList gpuMonitorChoices() const;
     QString computeGpuHint() const;
@@ -1727,6 +1733,8 @@ private:
     QObject* nvidiaVrrProfile_ = nullptr;
     LiveTranslation* liveTranslation_ = nullptr;
     QObject* updates_ = nullptr;
+    PerfDiagnostics* perfDiagnostics_ = nullptr;
+    void createPerfDiagnostics();
 };
 
 } // namespace veyra::ui

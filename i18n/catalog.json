@@ -1054,6 +1054,19 @@
    "ru": "%1 работает. Он подключает как интерфейс, так и видео, что может заморозить Veyra. Перезагрузите Veyra для обеспечения совместимого рендеринга: интерфейс затем рисуется в программном обеспечении и %1 влияет только на видео. Перезагрузите сейчас? Текущее воспроизведение или потоковая передача прекратится."
   },
   {
+   "zh": "%1 注入了 Veyra",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "%1 注入了 Veyra",
+   "en": "%1 is injected into Veyra",
+   "ja": "%1 が Veyra に注入されています",
+   "ko": "%1이(가) Veyra에 주입되어 있습니다",
+   "es": "%1 está inyectado en Veyra",
+   "fr": "%1 est injecté dans Veyra",
+   "de": "%1 ist in Veyra eingeschleust",
+   "pt-BR": "%1 está injetado no Veyra",
+   "ru": "%1 внедрён в Veyra"
+  },
+  {
    "zh": "%1 码流直通",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "%1 位元流直通",
@@ -1418,6 +1431,19 @@
    "ru": "2X - это родной путь; 3X / 4X - экспериментальные разблокировки. Диагностика неудач"
   },
   {
+   "zh": "3 分钟",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "3 分鐘",
+   "en": "3 min",
+   "ja": "3 分",
+   "ko": "3분",
+   "es": "3 min",
+   "fr": "3 min",
+   "de": "3 Min.",
+   "pt-BR": "3 min",
+   "ru": "3 мин"
+  },
+  {
    "zh": "30 FPS 游戏示例",
    "src": "qml/OnboardingGuide.qml",
    "zh-TW": "30 FPS 遊戲範例",
@@ -1429,6 +1455,19 @@
    "de": "Beispiel mit einem 30-FPS-Spiel",
    "pt-BR": "Exemplo de jogo a 30 FPS",
    "ru": "Пример игры с частотой 30 кадров/с"
+  },
+  {
+   "zh": "30 帧游戏可改用“60→30”；或把采集格式改为 NV12/P010 再试自动去重。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "30 幀遊戲可改用“60→30”；或把擷取格式改為 NV12/P010 再試自動去重。",
+   "en": "For 30 fps games use “60→30” instead, or switch the capture format to NV12/P010 and try automatic deduplication again.",
+   "ja": "30fps のゲームは「60→30」を使うか、キャプチャ形式を NV12/P010 にして自動重複除去をもう一度試してください。",
+   "ko": "30fps 게임은 “60→30”을 쓰거나, 캡처 형식을 NV12/P010으로 바꾼 뒤 자동 중복 제거를 다시 시도하세요.",
+   "es": "Para juegos a 30 fps usa «60→30», o cambia el formato de captura a NV12/P010 y vuelve a probar la deduplicación automática.",
+   "fr": "Pour les jeux à 30 i/s, utilisez « 60→30 », ou passez le format de capture en NV12/P010 et réessayez la déduplication automatique.",
+   "de": "Für 30-fps-Spiele „60→30“ verwenden oder das Aufnahmeformat auf NV12/P010 stellen und die automatische Duplikatentfernung erneut testen.",
+   "pt-BR": "Para jogos a 30 fps use “60→30”, ou mude o formato de captura para NV12/P010 e tente de novo a remoção automática de duplicados.",
+   "ru": "Для игр с 30 fps используйте «60→30» или переключите формат захвата на NV12/P010 и снова попробуйте автоудаление дублей."
   },
   {
    "zh": "30 帧游戏，我还是建议采 60 帧",
@@ -2224,6 +2263,19 @@
    "ru": "CBR / VBR нуждается в битрейте; CQ не использует его"
   },
   {
+   "zh": "CPU 不足或引擎线程被拖住",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "CPU 不足或引擎執行緒被拖住",
+   "en": "CPU is short or the engine thread is held up",
+   "ja": "CPU 不足、またはエンジンスレッドが遅れています",
+   "ko": "CPU가 부족하거나 엔진 스레드가 지연됩니다",
+   "es": "Falta CPU o el hilo del motor se retrasa",
+   "fr": "CPU insuffisant ou thread du moteur retardé",
+   "de": "CPU ausgelastet oder Engine-Thread aufgehalten",
+   "pt-BR": "CPU insuficiente ou thread do motor atrasada",
+   "ru": "Не хватает CPU или поток движка задерживается"
+  },
+  {
    "zh": "CPU 软件",
    "src": "qml/Ps5SourceDialog.qml",
    "zh-TW": "CPU 軟體",
@@ -2783,6 +2835,19 @@
    "ru": "Монитор загрузки GPU"
   },
   {
+   "zh": "GPU 处理超时",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "GPU 處理超時",
+   "en": "GPU processing ran late",
+   "ja": "GPU 処理の遅れ",
+   "ko": "GPU 처리 지연",
+   "es": "El procesamiento en la GPU se retrasó",
+   "fr": "Traitement GPU en retard",
+   "de": "GPU-Verarbeitung zu spät",
+   "pt-BR": "Processamento na GPU atrasado",
+   "ru": "Обработка на GPU не успела"
+  },
+  {
    "zh": "GPU 就绪等待",
    "src": "src/ui/bridge/Status.cpp",
    "zh-TW": "GPU 就緒等待",
@@ -2807,6 +2872,19 @@
    "de": "Die GPU wurde zurückgesetzt; die Capture Card automatisch wieder anschließen",
    "pt-BR": "O GPU foi reiniciado; reconectando o cartão de captura automaticamente",
    "ru": "GPU была сброшена; повторное подключение карты захвата автоматически"
+  },
+  {
+   "zh": "GPU 被限制频率（电源、功耗或温度）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "GPU 被限制頻率（電源、功耗或溫度）",
+   "en": "GPU clocks are held down (power source, power limit or temperature)",
+   "ja": "GPU のクロックが制限されています（電源・電力・温度）",
+   "ko": "GPU 클럭이 제한되고 있습니다(전원·전력·온도)",
+   "es": "Los relojes de la GPU están limitados (alimentación, consumo o temperatura)",
+   "fr": "Fréquences GPU limitées (alimentation, consommation ou température)",
+   "de": "GPU-Takt wird begrenzt (Stromquelle, Leistungslimit oder Temperatur)",
+   "pt-BR": "Clocks da GPU limitados (energia, consumo ou temperatura)",
+   "ru": "Частоты GPU ограничены (питание, лимит мощности или температура)"
   },
   {
    "zh": "GPU 设备已移除或驱动已重置；请稍后重新连接，可切换 NR 运行库后重试",
@@ -3836,6 +3914,19 @@
    "ru": "NVIDIA RTX генерация кадров; множитель зависит от того, что поддерживает время выполнения"
   },
   {
+   "zh": "NVIDIA Smooth Motion 正作用于 Veyra",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "NVIDIA Smooth Motion 正作用於 Veyra",
+   "en": "NVIDIA Smooth Motion is acting on Veyra",
+   "ja": "NVIDIA Smooth Motion が Veyra に適用されています",
+   "ko": "NVIDIA Smooth Motion이 Veyra에 적용되어 있습니다",
+   "es": "NVIDIA Smooth Motion está actuando sobre Veyra",
+   "fr": "NVIDIA Smooth Motion agit sur Veyra",
+   "de": "NVIDIA Smooth Motion wirkt auf Veyra",
+   "pt-BR": "O NVIDIA Smooth Motion está atuando no Veyra",
+   "ru": "NVIDIA Smooth Motion применяется к Veyra"
+  },
+  {
    "zh": "NVIDIA VFG 未能启用（需要 Ada / Blackwell 显卡、VFG 运行组件和支持的输出格式），已关闭补帧；原因见日志",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "NVIDIA VFG 未能啟用（需要 Ada / Blackwell 顯示卡、VFG 執行組件和支援的輸出格式），已關閉補幀；原因見日誌",
@@ -3873,6 +3964,19 @@
    "de": "NVIDIA-In-Game-Overlay",
    "pt-BR": "Overlay da NVIDIA no jogo",
    "ru": "Внутриигровой оверлей NVIDIA"
+  },
+  {
+   "zh": "NVIDIA 控制面板 → 管理 3D 设置 → 程序设置：把 veyra_qml_ui.exe 的“垂直同步”改为“使用 3D 应用程序设置”。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "NVIDIA 控制面板 → 管理 3D 設定 → 程式設定：把 veyra_qml_ui.exe 的“垂直同步”改為“使用 3D 應用程式設定”。",
+   "en": "NVIDIA Control Panel → Manage 3D settings → Program Settings: set “Vertical sync” for veyra_qml_ui.exe to “Use the 3D application setting”.",
+   "ja": "NVIDIA コントロールパネル → 3D 設定の管理 → プログラム設定：veyra_qml_ui.exe の「垂直同期」を「3D アプリケーションの設定を使用する」にしてください。",
+   "ko": "NVIDIA 제어판 → 3D 설정 관리 → 프로그램 설정: veyra_qml_ui.exe의 “수직 동기”를 “3D 응용 프로그램 설정 사용”으로 바꾸세요.",
+   "es": "Panel de control de NVIDIA → Administrar configuración 3D → Configuración de programa: pon «Sincronización vertical» de veyra_qml_ui.exe en «Usar la configuración de la aplicación 3D».",
+   "fr": "Panneau de configuration NVIDIA → Gérer les paramètres 3D → Paramètres de programme : pour veyra_qml_ui.exe, réglez « Synchronisation verticale » sur « Utiliser le paramètre de l’application 3D ».",
+   "de": "NVIDIA-Systemsteuerung → 3D-Einstellungen verwalten → Programmeinstellungen: „Vertikale Synchronisierung“ für veyra_qml_ui.exe auf „3D-Anwendungseinstellung verwenden“ setzen.",
+   "pt-BR": "Painel de controle da NVIDIA → Gerenciar as configurações 3D → Configurações do programa: defina “Sincronização vertical” de veyra_qml_ui.exe como “Usar a configuração do aplicativo 3D”.",
+   "ru": "Панель управления NVIDIA → Управление параметрами 3D → Программные настройки: для veyra_qml_ui.exe установите «Вертикальный синхроимпульс» в «Использовать настройку 3D-приложения»."
   },
   {
    "zh": "NVIDIA 新增的性能模式（测试版）：补帧更省 GPU，高倍率更稳，画质可能略降；导出仍用标准模式",
@@ -5253,6 +5357,32 @@
    "ru": "Предустановленный цвет Veyra (*.vpcolor); все файлы (*.*)"
   },
   {
+   "zh": "Veyra诊断_%1",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "Veyra诊断_%1",
+   "en": "Veyra诊断_%1",
+   "ja": "Veyra诊断_%1",
+   "ko": "Veyra诊断_%1",
+   "es": "Veyra诊断_%1",
+   "fr": "Veyra诊断_%1",
+   "de": "Veyra诊断_%1",
+   "pt-BR": "Veyra诊断_%1",
+   "ru": "Veyra诊断_%1"
+  },
+  {
+   "zh": "Veyra诊断_%1-%2",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "Veyra诊断_%1-%2",
+   "en": "Veyra诊断_%1-%2",
+   "ja": "Veyra诊断_%1-%2",
+   "ko": "Veyra诊断_%1-%2",
+   "es": "Veyra诊断_%1-%2",
+   "fr": "Veyra诊断_%1-%2",
+   "de": "Veyra诊断_%1-%2",
+   "pt-BR": "Veyra诊断_%1-%2",
+   "ru": "Veyra诊断_%1-%2"
+  },
+  {
    "zh": "Veyra（PID %1）未响应。结束进程可能丢失正在写入的录制。是否结束它并重新打开 Veyra？",
    "src": "apps/veyra-qml/main.cpp",
    "zh-TW": "Veyra（PID %1）沒有回應。結束處理程序可能遺失正在寫入的錄製。要結束它並重新開啟 Veyra 嗎？",
@@ -6161,6 +6291,19 @@
    "de": "{}GPU-Reset {} time(s); exportiert in {} parts und verbunden ohne erneute Kodierung",
    "pt-BR": "{} GPU reset {} time(s); exportado em {} partes e ligado sem recodificação",
    "ru": "{} GPU перезагрузить {} время(ы); экспортировать в {} части и соединить без повторного кодирования"
+  },
+  {
+   "zh": "“1% low”读数在台阶式跳动，帧时间本身稳定",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "“1% low”讀數在台階式跳動，幀時間本身穩定",
+   "en": "The “1% low” readout jumps in steps while frame times are steady",
+   "ja": "「1% low」の値は段階的に跳ねますが、フレーム時間自体は安定しています",
+   "ko": "“1% low” 수치가 계단식으로 튀지만 프레임 시간 자체는 안정적입니다",
+   "es": "La lectura «1% low» salta por escalones aunque los tiempos de fotograma son estables",
+   "fr": "La valeur « 1% low » saute par paliers alors que les temps d’image sont stables",
+   "de": "Die „1% low“-Anzeige springt stufenweise, die Frametimes selbst sind stabil",
+   "pt-BR": "A leitura “1% low” salta em degraus, embora os tempos de quadro estejam estáveis",
+   "ru": "Показатель «1% low» скачет ступенями, хотя время кадра стабильно"
   },
   {
    "zh": "☕ 请作者喝杯咖啡 · US$5",
@@ -8932,6 +9075,19 @@
    "ru": "Сохранить в"
   },
   {
+   "zh": "保存到：%1",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "儲存到：%1",
+   "en": "Saved to: %1",
+   "ja": "保存先：%1",
+   "ko": "저장 위치: %1",
+   "es": "Se guarda en: %1",
+   "fr": "Enregistré dans : %1",
+   "de": "Speicherort: %1",
+   "pt-BR": "Salvo em: %1",
+   "ru": "Сохраняется в: %1"
+  },
+  {
    "zh": "保存即时回放",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "儲存即時回放",
@@ -9673,6 +9829,19 @@
    "ru": "Частота кадров в полноэкранном режиме"
   },
   {
+   "zh": "全屏播放可减少约一帧的显示延迟，也能避免窗口下补帧被合成器丢帧。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "全螢幕播放可減少約一幀的顯示延遲，也能避免視窗下補幀被合成器丟幀。",
+   "en": "Fullscreen saves about one frame of display latency and keeps the compositor from dropping generated frames.",
+   "ja": "全画面にすると表示遅延が約 1 フレーム減り、ウィンドウ時に合成で生成フレームが落とされるのも防げます。",
+   "ko": "전체 화면으로 재생하면 표시 지연이 약 1프레임 줄고, 창 모드에서 합성기가 생성 프레임을 버리는 것도 막을 수 있습니다.",
+   "es": "La pantalla completa ahorra cerca de un fotograma de latencia y evita que el compositor descarte fotogramas generados.",
+   "fr": "Le plein écran gagne environ une image de latence et évite que le compositeur ne jette des images générées.",
+   "de": "Vollbild spart etwa ein Bild Anzeigelatenz und verhindert, dass der Compositor erzeugte Bilder verwirft.",
+   "pt-BR": "Tela cheia economiza cerca de um quadro de latência e evita que o compositor descarte quadros gerados.",
+   "ru": "Полноэкранный режим снижает задержку примерно на кадр и не даёт компоновщику отбрасывать сгенерированные кадры."
+  },
+  {
    "zh": "全屏显存增长保护",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "全螢幕顯存增長保護",
@@ -9973,6 +10142,32 @@
    "ru": "При выключении запись и воспроизведение по-прежнему получают аудио; звук захвата не воспроизводится локально."
   },
   {
+   "zh": "关闭后台占用 CPU 的程序；同一台电脑上玩游戏时 CPU 可能被游戏占满。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "關閉後台占用 CPU 的程式；同一台電腦上玩遊戲時 CPU 可能被遊戲占滿。",
+   "en": "Close programs that use the CPU in the background; a game running on the same PC can take all of it.",
+   "ja": "バックグラウンドで CPU を使うプログラムを閉じてください。同じ PC でゲームを動かすと CPU を使い切ることがあります。",
+   "ko": "백그라운드에서 CPU를 쓰는 프로그램을 닫으세요. 같은 PC에서 게임을 하면 게임이 CPU를 다 쓸 수 있습니다.",
+   "es": "Cierra los programas que usan la CPU en segundo plano; un juego en el mismo PC puede ocuparla entera.",
+   "fr": "Fermez les programmes qui utilisent le CPU en arrière-plan ; un jeu lancé sur le même PC peut tout prendre.",
+   "de": "Programme schließen, die im Hintergrund CPU belegen; ein Spiel auf demselben PC kann die CPU auslasten.",
+   "pt-BR": "Feche programas que usam a CPU em segundo plano; um jogo no mesmo PC pode ocupá-la toda.",
+   "ru": "Закройте программы, нагружающие CPU в фоне; игра на этом же ПК может занять его полностью."
+  },
+  {
+   "zh": "关闭它，或在它的设置里把 veyra_qml_ui.exe 加入排除列表。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "關閉它，或在它的設定裡把 veyra_qml_ui.exe 加入排除列表。",
+   "en": "Close it, or add veyra_qml_ui.exe to its exclusion list.",
+   "ja": "終了するか、その設定で veyra_qml_ui.exe を除外リストに追加してください。",
+   "ko": "종료하거나 해당 설정에서 veyra_qml_ui.exe를 제외 목록에 추가하세요.",
+   "es": "Ciérralo o añade veyra_qml_ui.exe a su lista de exclusiones.",
+   "fr": "Fermez-le ou ajoutez veyra_qml_ui.exe à sa liste d’exclusions.",
+   "de": "Beenden oder veyra_qml_ui.exe in dessen Ausschlussliste aufnehmen.",
+   "pt-BR": "Feche-o ou adicione veyra_qml_ui.exe à lista de exclusões dele.",
+   "ru": "Закройте её или добавьте veyra_qml_ui.exe в список исключений."
+  },
+  {
    "zh": "关闭弹性与转场",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "關閉彈性與轉場",
@@ -9984,6 +10179,19 @@
    "de": "Federn und Übergänge ausschalten",
    "pt-BR": "Desligar molas e transições",
    "ru": "Отключить пружинные анимации и переходы"
+  },
+  {
+   "zh": "关闭或暂停这些程序（游戏、录屏、壁纸等）后再看；同一台电脑上玩游戏时可限制游戏帧率。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "關閉或暫停這些程式（遊戲、螢幕錄影、壁紙等）後再看；同一台電腦上玩遊戲時可限制遊戲幀率。",
+   "en": "Close or pause these programs (games, recorders, wallpapers…) and check again; when a game runs on the same PC, cap its frame rate.",
+   "ja": "これらのプログラム（ゲーム、録画、壁紙など）を閉じるか一時停止して再確認してください。同じ PC でゲームをする場合はゲームのフレームレートを制限してください。",
+   "ko": "이 프로그램(게임, 녹화, 배경화면 등)을 닫거나 일시 정지한 뒤 다시 확인하세요. 같은 PC에서 게임을 하면 게임 프레임 레이트를 제한하세요.",
+   "es": "Cierra o pausa esos programas (juegos, grabadores, fondos animados…) y vuelve a mirar; si juegas en el mismo PC, limita los fps del juego.",
+   "fr": "Fermez ou mettez en pause ces programmes (jeux, enregistreurs, fonds animés…) puis revérifiez ; si un jeu tourne sur le même PC, limitez ses i/s.",
+   "de": "Diese Programme (Spiele, Rekorder, Hintergründe …) schließen oder pausieren und erneut prüfen; bei einem Spiel auf demselben PC dessen Bildrate begrenzen.",
+   "pt-BR": "Feche ou pause esses programas (jogos, gravadores, papéis de parede…) e confira de novo; se jogar no mesmo PC, limite os fps do jogo.",
+   "ru": "Закройте или приостановите эти программы (игры, запись экрана, обои…) и проверьте снова; если игра идёт на этом же ПК, ограничьте её fps."
   },
   {
    "zh": "关闭时主机保持自己的分辨率，画面由主机缩放",
@@ -10647,6 +10855,19 @@
    "de": "Analysiert Sprach- und Untertitel-Timing in den ersten 30 Minuten",
    "pt-BR": "Analisa o tempo de fala e legenda nos primeiros 30 minutos",
    "ru": "Анализ речи и подзаголовков в первые 30 минут"
+  },
+  {
+   "zh": "分析失败（代码 %1），原始数据已保存",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "分析失敗（代碼 %1），原始資料已儲存",
+   "en": "Analysis failed (code %1); the raw data was kept",
+   "ja": "分析に失敗しました（コード %1）。元データは保存されています",
+   "ko": "분석 실패(코드 %1). 원본 데이터는 저장되었습니다",
+   "es": "El análisis falló (código %1); se guardaron los datos originales",
+   "fr": "Échec de l’analyse (code %1) ; les données brutes sont conservées",
+   "de": "Analyse fehlgeschlagen (Code %1); die Rohdaten sind gespeichert",
+   "pt-BR": "A análise falhou (código %1); os dados brutos foram mantidos",
+   "ru": "Анализ не удался (код %1); исходные данные сохранены"
   },
   {
    "zh": "分段临时文件路径过长",
@@ -11325,6 +11546,19 @@
    "ru": "Не удалось удалить цвет заранее"
   },
   {
+   "zh": "别的程序在大量使用 GPU",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "別的程式在大量使用 GPU",
+   "en": "Another program is using the GPU heavily",
+   "ja": "他のプログラムが GPU を大量に使っています",
+   "ko": "다른 프로그램이 GPU를 많이 사용하고 있습니다",
+   "es": "Otro programa está usando mucho la GPU",
+   "fr": "Un autre programme utilise fortement le GPU",
+   "de": "Ein anderes Programm lastet die GPU stark aus",
+   "pt-BR": "Outro programa está usando muito a GPU",
+   "ru": "Другая программа сильно нагружает GPU"
+  },
+  {
    "zh": "刷新",
    "src": "qml/ControllerConnectionPage.qml",
    "zh-TW": "刷新",
@@ -11884,6 +12118,45 @@
    "ru": "Фильтр одного кадра с сохранением контуров и раздельной регулировкой яркостного и цветового шума."
   },
   {
+   "zh": "卡顿主要发生在 GPU 处理",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "卡頓主要發生在 GPU 處理",
+   "en": "Most stutters happen in GPU processing",
+   "ja": "カクつきは主に GPU 処理で起きています",
+   "ko": "끊김은 주로 GPU 처리에서 발생합니다",
+   "es": "La mayoría de los tirones ocurren en el procesamiento de la GPU",
+   "fr": "La plupart des saccades viennent du traitement GPU",
+   "de": "Die meisten Ruckler entstehen in der GPU-Verarbeitung",
+   "pt-BR": "A maioria dos engasgos acontece no processamento da GPU",
+   "ru": "Большинство рывков возникает при обработке на GPU"
+  },
+  {
+   "zh": "卡顿主要发生在：%1",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "卡頓主要發生在：%1",
+   "en": "Most stutters happen in: %1",
+   "ja": "カクつきは主にここで起きています：%1",
+   "ko": "끊김은 주로 여기서 발생합니다: %1",
+   "es": "La mayoría de los tirones ocurren en: %1",
+   "fr": "La plupart des saccades viennent de : %1",
+   "de": "Die meisten Ruckler entstehen bei: %1",
+   "pt-BR": "A maioria dos engasgos acontece em: %1",
+   "ru": "Большинство рывков возникает здесь: %1"
+  },
+  {
+   "zh": "卡顿按固定周期出现（约每 %1 秒）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "卡頓按固定周期出現（約每 %1 秒）",
+   "en": "Stutters repeat at a fixed period (about every %1 s)",
+   "ja": "カクつきが一定周期で起きています（約 %1 秒ごと）",
+   "ko": "끊김이 일정한 주기로 나타납니다(약 %1초마다)",
+   "es": "Los tirones se repiten con un periodo fijo (cada %1 s aprox.)",
+   "fr": "Les saccades reviennent à intervalle fixe (environ toutes les %1 s)",
+   "de": "Ruckler wiederholen sich periodisch (etwa alle %1 s)",
+   "pt-BR": "Os engasgos se repetem em período fixo (a cada %1 s aprox.)",
+   "ru": "Рывки повторяются с постоянным периодом (примерно каждые %1 с)"
+  },
+  {
    "zh": "即时回放",
    "src": "qml/ProPage.qml",
    "zh-TW": "即時回放",
@@ -12274,6 +12547,19 @@
    "ru": "Удаление дубликатов выключено"
   },
   {
+   "zh": "去重判定不稳定",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "去重判定不穩定",
+   "en": "Deduplication decisions are unstable",
+   "ja": "重複除去の判定が不安定です",
+   "ko": "중복 제거 판정이 불안정합니다",
+   "es": "La detección de duplicados es inestable",
+   "fr": "La détection des doublons est instable",
+   "de": "Die Duplikaterkennung ist instabil",
+   "pt-BR": "A detecção de duplicados está instável",
+   "ru": "Определение дублей нестабильно"
+  },
+  {
    "zh": "去除重复帧",
    "src": "qml/DedupModeRow.qml",
    "zh-TW": "去除重複幀",
@@ -12483,6 +12769,7 @@
   },
   {
    "zh": "双摇杆向内推",
+   "src": null,
    "zh-TW": "雙搖桿向內推",
    "en": "Push both sticks inward",
    "ja": "左右のスティックを内側に倒す",
@@ -12950,6 +13237,7 @@
   },
   {
    "zh": "只检测到 %1 次有效镜头响应。请换到有纹理的静止场景再试。",
+   "src": null,
    "zh-TW": "只偵測到 %1 次有效鏡頭反應。請換到有紋理的靜止場景再試。",
    "en": "Detected only %1 usable camera responses. Try a still scene with visible detail.",
    "ja": "カメラの有効な反応を %1 回しか検出できませんでした。模様のある静止した場所で再試行してください。",
@@ -13076,6 +13364,19 @@
    "de": "Kann gespeichert werden",
    "pt-BR": "Pode ser salvo",
    "ru": "Можно сохранить"
+  },
+  {
+   "zh": "可以关闭这个窗口继续使用。觉得卡时按 Ctrl+Alt+M 标记（已标记 %1 次）。",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "可以關閉這個視窗繼續使用。覺得卡時按 Ctrl+Alt+M 標記（已標記 %1 次）。",
+   "en": "You can close this window and keep using Veyra. Press Ctrl+Alt+M when it stutters (%1 marks so far).",
+   "ja": "このウィンドウを閉じてそのまま使えます。カクついたら Ctrl+Alt+M でマーク（これまで %1 回）。",
+   "ko": "이 창을 닫고 계속 사용해도 됩니다. 끊길 때 Ctrl+Alt+M으로 표시하세요(지금까지 %1회).",
+   "es": "Puedes cerrar esta ventana y seguir usando Veyra. Pulsa Ctrl+Alt+M cuando notes un tirón (%1 marcas hasta ahora).",
+   "fr": "Vous pouvez fermer cette fenêtre et continuer. Appuyez sur Ctrl+Alt+M en cas de saccade (%1 marques pour l’instant).",
+   "de": "Dieses Fenster kann geschlossen werden. Bei Rucklern Strg+Alt+M drücken (bisher %1 Markierungen).",
+   "pt-BR": "Pode fechar esta janela e continuar usando. Pressione Ctrl+Alt+M quando engasgar (%1 marcas até agora).",
+   "ru": "Можно закрыть это окно и продолжать. При рывке нажмите Ctrl+Alt+M (отметок: %1)."
   },
   {
    "zh": "可以用微信或支付宝扫码",
@@ -13635,6 +13936,19 @@
    "de": "Beim Start automatisch fortsetzen",
    "pt-BR": "Retomar automaticamente ao iniciar",
    "ru": "Продолжать автоматически при запуске"
+  },
+  {
+   "zh": "启动或首次开启效果时编译耗时很长",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "啟動或首次開啟效果時編譯耗時很長",
+   "en": "Compiling took a long time at start-up or on first use of an effect",
+   "ja": "起動時またはエフェクト初回使用時のコンパイルに時間がかかりました",
+   "ko": "시작하거나 효과를 처음 켤 때 컴파일이 오래 걸렸습니다",
+   "es": "La compilación tardó mucho al iniciar o al activar un efecto por primera vez",
+   "fr": "La compilation a été longue au démarrage ou au premier usage d’un effet",
+   "de": "Das Kompilieren beim Start oder beim ersten Einschalten eines Effekts dauerte lange",
+   "pt-BR": "A compilação demorou muito ao iniciar ou ao ativar um efeito pela primeira vez",
+   "ru": "Компиляция при запуске или первом включении эффекта заняла много времени"
   },
   {
    "zh": "启动时检测到小飞机（RTSS）、NVIDIA 信息浮窗或游戏加加就改用软件绘制界面，它们只显示在视频上",
@@ -14272,6 +14586,19 @@
    "de": "Kreis ",
    "pt-BR": "Círculo ",
    "ru": "Круг "
+  },
+  {
+   "zh": "在 NVIDIA App → 图形 → 程序设置里对 Veyra（veyra_qml_ui.exe）关闭 Smooth Motion。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "在 NVIDIA App → 圖形 → 程式設定裡對 Veyra（veyra_qml_ui.exe）關閉 Smooth Motion。",
+   "en": "In NVIDIA App → Graphics → Program Settings, turn Smooth Motion off for Veyra (veyra_qml_ui.exe).",
+   "ja": "NVIDIA App → グラフィックス → プログラム設定で Veyra（veyra_qml_ui.exe）の Smooth Motion をオフにしてください。",
+   "ko": "NVIDIA App → 그래픽 → 프로그램 설정에서 Veyra(veyra_qml_ui.exe)의 Smooth Motion을 끄세요.",
+   "es": "En NVIDIA App → Gráficos → Configuración de programa, desactiva Smooth Motion para Veyra (veyra_qml_ui.exe).",
+   "fr": "Dans NVIDIA App → Graphismes → Paramètres de programme, désactivez Smooth Motion pour Veyra (veyra_qml_ui.exe).",
+   "de": "In der NVIDIA App → Grafik → Programmeinstellungen Smooth Motion für Veyra (veyra_qml_ui.exe) ausschalten.",
+   "pt-BR": "No NVIDIA App → Gráficos → Configurações do programa, desative o Smooth Motion para o Veyra (veyra_qml_ui.exe).",
+   "ru": "В NVIDIA App → Графика → Параметры программы отключите Smooth Motion для Veyra (veyra_qml_ui.exe)."
   },
   {
    "zh": "在「NR 画面增强」里添加一层。Veyra 对已采集的画面使用实验性神经渲染，增强光照、材质和视觉细节。",
@@ -15286,6 +15613,19 @@
    "de": "Farbeinstellungen kopieren",
    "pt-BR": "Copiar configurações de cor",
    "ru": "Копировать настройки цвета"
+  },
+  {
+   "zh": "复制路径",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "複製路徑",
+   "en": "Copy path",
+   "ja": "パスをコピー",
+   "ko": "경로 복사",
+   "es": "Copiar ruta",
+   "fr": "Copier le chemin",
+   "de": "Pfad kopieren",
+   "pt-BR": "Copiar caminho",
+   "ru": "Копировать путь"
   },
   {
    "zh": "复制轨道参数",
@@ -18720,6 +19060,19 @@
    "ru": "Предварительный набор с этим именем уже существует; выберите другое имя для сохранения."
   },
   {
+   "zh": "已标记 #%1",
+   "src": "qml/Main.qml",
+   "zh-TW": "已標記 #%1",
+   "en": "Marked #%1",
+   "ja": "マークしました #%1",
+   "ko": "표시함 #%1",
+   "es": "Marcado #%1",
+   "fr": "Marqué n° %1",
+   "de": "Markiert #%1",
+   "pt-BR": "Marcado #%1",
+   "ru": "Отмечено №%1"
+  },
+  {
    "zh": "已检测到 VB-CABLE · 用于转接 Windows 侦听",
    "src": "qml/CaptureSourceDialog.qml",
    "zh-TW": "已檢測到 VB-CABLE · 用於轉接 Windows 偵聽",
@@ -19396,6 +19749,19 @@
    "ru": "Среднее "
   },
   {
+   "zh": "平均 %1 fps · 最慢 1% 平均 %2 fps · 卡顿 %3 次",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "平均 %1 fps · 最慢 1% 平均 %2 fps · 卡頓 %3 次",
+   "en": "Average %1 fps · slowest 1% average %2 fps · %3 stutters",
+   "ja": "平均 %1 fps · 最も遅い 1% の平均 %2 fps · カクつき %3 回",
+   "ko": "평균 %1 fps · 가장 느린 1% 평균 %2 fps · 끊김 %3회",
+   "es": "Media %1 fps · media del 1% más lento %2 fps · %3 tirones",
+   "fr": "Moyenne %1 i/s · moyenne des 1 % plus lents %2 i/s · %3 saccades",
+   "de": "Durchschnitt %1 fps · langsamste 1 % im Mittel %2 fps · %3 Ruckler",
+   "pt-BR": "Média %1 fps · média do 1% mais lento %2 fps · %3 engasgos",
+   "ru": "В среднем %1 fps · медленнейший 1% в среднем %2 fps · рывков: %3"
+  },
+  {
    "zh": "平时隐藏；鼠标碰到窗口顶部时弹下来",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "平時隱藏；滑鼠碰到視窗頂部時彈下來",
@@ -19682,6 +20048,19 @@
    "ru": "Начать / остановить запись"
   },
   {
+   "zh": "开始…",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "開始…",
+   "en": "Start…",
+   "ja": "開始…",
+   "ko": "시작…",
+   "es": "Iniciar…",
+   "fr": "Démarrer…",
+   "de": "Starten …",
+   "pt-BR": "Iniciar…",
+   "ru": "Начать…"
+  },
+  {
    "zh": "开始串流",
    "src": "qml/PcSourceDialog.qml",
    "zh-TW": "開始串流",
@@ -19771,6 +20150,19 @@
    "de": "Sekunden zu sammeln, bevor die Wiedergabe beginnt; \"Follow buffer level\" verwendet den oben gewählten Level. Wird beim nächsten Öffnen eines Netzwerkvideos wirksam",
    "pt-BR": "Segundos para coletar antes da reprodução começar; “Siga o nível de buffer” usa o nível escolhido acima. Faz efeito na próxima vez que um vídeo de rede é aberto",
    "ru": "Секунды для сбора перед началом воспроизведения; «Следующий уровень буфера» использует уровень, выбранный выше. Вступает в силу в следующий раз, когда открывается сетевое видео"
+  },
+  {
+   "zh": "开始诊断",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "開始診斷",
+   "en": "Start diagnostics",
+   "ja": "診断を開始",
+   "ko": "진단 시작",
+   "es": "Iniciar diagnóstico",
+   "fr": "Lancer le diagnostic",
+   "de": "Diagnose starten",
+   "pt-BR": "Iniciar diagnóstico",
+   "ru": "Начать диагностику"
   },
   {
    "zh": "开始键鼠控制",
@@ -19888,6 +20280,19 @@
    "de": "Der Motor verweigerte den Schalter und der gespeicherte Zustand konnte nicht wiederhergestellt werden: ",
    "pt-BR": "O motor recusou o interruptor e o estado salvo não pôde ser restaurado: ",
    "ru": "Двигатель отказался от выключателя и спасенное состояние восстановить не удалось: "
+  },
+  {
+   "zh": "引擎排队（CPU 侧处理晚了）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "引擎排隊（CPU 側處理晚了）",
+   "en": "Engine queue (CPU-side processing late)",
+   "ja": "エンジンの待ち（CPU 側の処理が遅れた）",
+   "ko": "엔진 대기(CPU 쪽 처리 지연)",
+   "es": "Cola del motor (procesamiento en CPU tardío)",
+   "fr": "File du moteur (traitement CPU en retard)",
+   "de": "Engine-Warteschlange (CPU-Verarbeitung zu spät)",
+   "pt-BR": "Fila do motor (processamento na CPU atrasado)",
+   "ru": "Очередь движка (обработка на CPU опоздала)"
   },
   {
    "zh": "引擎未接受 AMD 性能档，原设置保留",
@@ -20761,6 +21166,19 @@
    "ru": "Текущий режим: %1"
   },
   {
+   "zh": "录 3–10 分钟，自动分析卡顿原因并生成报告，反馈时附上",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "錄 3–10 分鐘，自動分析卡頓原因並生成報告，反饋時附上",
+   "en": "Record 3–10 minutes; finds what causes stutters and writes a report to attach to a bug report",
+   "ja": "3〜10 分記録し、カクつきの原因を自動分析してレポートを作成します。報告に添付してください",
+   "ko": "3~10분 기록해 끊김 원인을 자동 분석하고 보고서를 만듭니다. 문제 보고에 첨부하세요",
+   "es": "Graba 3–10 minutos, analiza la causa de los tirones y crea un informe para adjuntar al reportar",
+   "fr": "Enregistre 3 à 10 minutes, analyse l’origine des saccades et crée un rapport à joindre",
+   "de": "Zeichnet 3–10 Minuten auf, analysiert die Ursache von Rucklern und erstellt einen Bericht zum Anhängen",
+   "pt-BR": "Grava de 3 a 10 minutos, analisa a causa dos engasgos e cria um relatório para anexar",
+   "ru": "Запись 3–10 минут: анализ причин рывков и отчёт, который можно приложить к сообщению"
+  },
+  {
    "zh": "录入所选音频输入，不受音量、静音和本机音频监听开关影响；采集卡需选择音频输入",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "錄入所選音訊輸入，不受音量、靜音和本機音訊監聽開關影響；擷取卡需選擇音訊輸入",
@@ -21305,6 +21723,45 @@
    "de": "Leistung und Verarbeitungszeiten",
    "pt-BR": "Desempenho e tempos",
    "ru": "Производительность и время обработки"
+  },
+  {
+   "zh": "性能诊断",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "性能診斷",
+   "en": "Performance diagnostics",
+   "ja": "パフォーマンス診断",
+   "ko": "성능 진단",
+   "es": "Diagnóstico de rendimiento",
+   "fr": "Diagnostic de performances",
+   "de": "Leistungsdiagnose",
+   "pt-BR": "Diagnóstico de desempenho",
+   "ru": "Диагностика производительности"
+  },
+  {
+   "zh": "性能诊断完成，点右上角查看结果",
+   "src": "qml/Main.qml",
+   "zh-TW": "性能診斷完成，點右上角查看結果",
+   "en": "Performance diagnostics finished — click the top-right badge to see the result",
+   "ja": "パフォーマンス診断が完了しました。右上をクリックして結果を表示",
+   "ko": "성능 진단이 끝났습니다. 오른쪽 위를 눌러 결과를 확인하세요",
+   "es": "Diagnóstico terminado: pulsa la etiqueta de arriba a la derecha para ver el resultado",
+   "fr": "Diagnostic terminé : cliquez en haut à droite pour voir le résultat",
+   "de": "Leistungsdiagnose fertig – zum Ergebnis oben rechts klicken",
+   "pt-BR": "Diagnóstico concluído: clique no canto superior direito para ver o resultado",
+   "ru": "Диагностика завершена — нажмите вверху справа, чтобы увидеть результат"
+  },
+  {
+   "zh": "性能诊断已结束，分析没有完成，原始数据已保存",
+   "src": "qml/Main.qml",
+   "zh-TW": "性能診斷已結束，分析沒有完成，原始資料已儲存",
+   "en": "Performance diagnostics ended without an analysis; the raw data was kept",
+   "ja": "パフォーマンス診断は終了しましたが分析は完了していません。元データは保存されています",
+   "ko": "성능 진단이 끝났지만 분석은 완료되지 않았습니다. 원본 데이터는 저장되었습니다",
+   "es": "El diagnóstico terminó sin análisis; se guardaron los datos originales",
+   "fr": "Diagnostic terminé sans analyse ; les données brutes sont conservées",
+   "de": "Leistungsdiagnose beendet, Analyse nicht abgeschlossen; Rohdaten gespeichert",
+   "pt-BR": "O diagnóstico terminou sem análise; os dados brutos foram mantidos",
+   "ru": "Диагностика завершена без анализа; исходные данные сохранены"
   },
   {
    "zh": "总体强度",
@@ -22100,6 +22557,19 @@
    "ru": "Скорость %1 см/с · Правый стик %2%"
   },
   {
+   "zh": "打包失败，文件夹里的数据仍可使用",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "打包失敗，資料夾裡的資料仍可使用",
+   "en": "Packing failed; the data in the folder is still usable",
+   "ja": "パッケージ化に失敗しました。フォルダー内のデータは使えます",
+   "ko": "압축에 실패했습니다. 폴더의 데이터는 그대로 사용할 수 있습니다",
+   "es": "No se pudo empaquetar; los datos de la carpeta siguen siendo útiles",
+   "fr": "Échec de l’archivage ; les données du dossier restent utilisables",
+   "de": "Packen fehlgeschlagen; die Daten im Ordner sind weiter nutzbar",
+   "pt-BR": "Falha ao empacotar; os dados da pasta continuam utilizáveis",
+   "ru": "Не удалось упаковать; данные в папке можно использовать"
+  },
+  {
    "zh": "打开",
    "src": "qml/NetworkSourceDialog.qml",
    "zh-TW": "開啟",
@@ -22189,6 +22659,32 @@
    "de": "Offener Untertiteldecoder",
    "pt-BR": "Abrir o decodificador de legendas",
    "ru": "Открытый декодер субтитров"
+  },
+  {
+   "zh": "打开所在文件夹",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "開啟所在資料夾",
+   "en": "Show in folder",
+   "ja": "フォルダーを開く",
+   "ko": "폴더 열기",
+   "es": "Mostrar en la carpeta",
+   "fr": "Afficher dans le dossier",
+   "de": "Im Ordner zeigen",
+   "pt-BR": "Mostrar na pasta",
+   "ru": "Показать в папке"
+  },
+  {
+   "zh": "打开报告",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "開啟報告",
+   "en": "Open report",
+   "ja": "レポートを開く",
+   "ko": "보고서 열기",
+   "es": "Abrir informe",
+   "fr": "Ouvrir le rapport",
+   "de": "Bericht öffnen",
+   "pt-BR": "Abrir relatório",
+   "ru": "Открыть отчёт"
   },
   {
    "zh": "打开文件 / 导出页",
@@ -23062,6 +23558,19 @@
    "ru": "Обработка повреждённого изображения"
   },
   {
+   "zh": "换 USB 口（直连机身 USB 3）或换线，关闭 USB 选择性暂停；可换一张采集卡对比。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "換 USB 口（直連機身 USB 3）或換線，關閉 USB 選擇性暫停；可換一張擷取卡對比。",
+   "en": "Use another USB port (a USB 3 port on the PC itself) or cable and turn off USB selective suspend; compare with another capture card.",
+   "ja": "別の USB ポート（PC 本体の USB 3）やケーブルに替え、USB のセレクティブサスペンドをオフにしてください。別のキャプチャーカードで比較も有効です。",
+   "ko": "다른 USB 포트(PC 본체의 USB 3)나 케이블로 바꾸고 USB 선택적 절전 모드를 끄세요. 다른 캡처 카드와 비교해 보세요.",
+   "es": "Usa otro puerto USB (USB 3 del propio PC) u otro cable y desactiva la suspensión selectiva de USB; compara con otra capturadora.",
+   "fr": "Changez de port USB (USB 3 directement sur le PC) ou de câble et désactivez la suspension sélective USB ; comparez avec une autre carte.",
+   "de": "Anderen USB-Anschluss (USB 3 direkt am PC) oder anderes Kabel nutzen und selektives USB-Energiesparen ausschalten; mit einer anderen Capture-Karte vergleichen.",
+   "pt-BR": "Troque a porta USB (USB 3 do próprio PC) ou o cabo e desative a suspensão seletiva de USB; compare com outra placa de captura.",
+   "ru": "Используйте другой USB-порт (USB 3 на самом ПК) или кабель и отключите выборочную приостановку USB; сравните с другой картой захвата."
+  },
+  {
    "zh": "排序",
    "src": "qml/PlaylistWindow.qml",
    "zh-TW": "排序",
@@ -23231,6 +23740,19 @@
    "ru": "Компенсация светлой комнаты"
   },
   {
+   "zh": "提前结束",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "提前結束",
+   "en": "End now",
+   "ja": "今すぐ終了",
+   "ko": "지금 종료",
+   "es": "Terminar ahora",
+   "fr": "Terminer maintenant",
+   "de": "Jetzt beenden",
+   "pt-BR": "Encerrar agora",
+   "ru": "Завершить сейчас"
+  },
+  {
    "zh": "提示音设置保存失败",
    "src": "src/ui/bridge/Preferences.cpp",
    "zh-TW": "提示音設定儲存失敗",
@@ -23336,6 +23858,7 @@
   },
   {
    "zh": "摇杆 %1% · 镜头开始转动时按空格保存 · ←／→ 暂停并微调 · Esc 取消",
+   "src": null,
    "zh-TW": "搖桿 %1% · 鏡頭開始轉動時按空白鍵儲存 · ←／→ 暫停並微調 · Esc 取消",
    "en": "Stick %1% · Space saves when the camera starts moving · ←/→ holds and adjusts · Esc cancels",
    "ja": "スティック %1% · カメラが動き始めたら Space で保存 · ←/→ で停止して微調整 · Esc で中止",
@@ -23348,6 +23871,7 @@
   },
   {
    "zh": "摇杆发送到画面提交 · 关闭补帧 %1 ms",
+   "src": null,
    "zh-TW": "搖桿送出到畫面提交 · 關閉補幀 %1 ms",
    "en": "Stick send to frame submission · Frame generation off %1 ms",
    "ja": "スティック送信からフレーム提出まで · フレーム生成オフ %1 ms",
@@ -23971,6 +24495,19 @@
    "ru": "Чем ниже значение, тем быстрее правый стик достигает полного отклонения."
   },
   {
+   "zh": "数据仍可分析；如果反复出现，请缩短诊断时长。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "資料仍可分析；如果反復出現，請縮短診斷時長。",
+   "en": "The data can still be analysed; if this keeps happening, use a shorter recording.",
+   "ja": "データは分析できます。繰り返し起きる場合は記録時間を短くしてください。",
+   "ko": "데이터는 분석할 수 있습니다. 반복되면 진단 시간을 줄이세요.",
+   "es": "Los datos aún se pueden analizar; si se repite, usa una grabación más corta.",
+   "fr": "Les données restent analysables ; si cela se répète, raccourcissez l’enregistrement.",
+   "de": "Die Daten sind trotzdem auswertbar; tritt das öfter auf, kürzer aufzeichnen.",
+   "pt-BR": "Os dados ainda podem ser analisados; se repetir, use uma gravação mais curta.",
+   "ru": "Данные можно проанализировать; если повторяется, сократите запись."
+  },
+  {
    "zh": "整个画面",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "整個畫面",
@@ -24021,6 +24558,19 @@
    "de": "Gesamtstärke",
    "pt-BR": "Intensidade geral",
    "ru": "Общая сила"
+  },
+  {
+   "zh": "整体流畅",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "整體流暢",
+   "en": "Smooth overall",
+   "ja": "全体的に滑らかです",
+   "ko": "전반적으로 매끄럽습니다",
+   "es": "Fluido en general",
+   "fr": "Fluide dans l’ensemble",
+   "de": "Insgesamt flüssig",
+   "pt-BR": "Fluido no geral",
+   "ru": "В целом плавно"
   },
   {
    "zh": "整体观感",
@@ -24959,6 +25509,19 @@
    "ru": "Не удалось создать папку настройки виртуального динамика"
   },
   {
+   "zh": "无法创建诊断文件夹：%1",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "無法建立診斷資料夾：%1",
+   "en": "Cannot create the diagnostics folder: %1",
+   "ja": "診断フォルダーを作成できません：%1",
+   "ko": "진단 폴더를 만들 수 없습니다: %1",
+   "es": "No se puede crear la carpeta de diagnóstico: %1",
+   "fr": "Impossible de créer le dossier de diagnostic : %1",
+   "de": "Diagnoseordner kann nicht erstellt werden: %1",
+   "pt-BR": "Não foi possível criar a pasta de diagnóstico: %1",
+   "ru": "Не удалось создать папку диагностики: %1"
+  },
+  {
    "zh": "无法创建音频线程",
    "src": "src/sink/CaptureAudioSession.cpp",
    "zh-TW": "無法建立音訊執行緒",
@@ -25804,6 +26367,19 @@
    "ru": "Временное накопление"
   },
   {
+   "zh": "时长",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "時長",
+   "en": "Length",
+   "ja": "時間",
+   "ko": "길이",
+   "es": "Duración",
+   "fr": "Durée",
+   "de": "Dauer",
+   "pt-BR": "Duração",
+   "ru": "Длительность"
+  },
+  {
    "zh": "时间",
    "src": "qml/SubtitleSettingsDialog.qml",
    "zh-TW": "時間",
@@ -26025,6 +26601,19 @@
    "ru": "При этом он не изменился %1GB. Восстановление пытаются; см. диагностический журнал для результата. Причина не подтверждена."
   },
   {
+   "zh": "显存紧张",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "顯示記憶體緊張",
+   "en": "Video memory is tight",
+   "ja": "VRAM が不足気味です",
+   "ko": "VRAM이 부족합니다",
+   "es": "Poca memoria de vídeo libre",
+   "fr": "Mémoire vidéo saturée",
+   "de": "Grafikspeicher knapp",
+   "pt-BR": "Memória de vídeo apertada",
+   "ru": "Мало видеопамяти"
+  },
+  {
    "zh": "显示",
    "src": "qml/LiveTranslationDialog.qml",
    "zh-TW": "顯示",
@@ -26205,6 +26794,19 @@
    "de": "Das Display wurde getrennt; wählen Sie das Ziel erneut",
    "pt-BR": "O ecrã foi desligado; escolha novamente o alvo",
    "ru": "Дисплей был отключен; снова выберите цель"
+  },
+  {
+   "zh": "显示器的可变刷新正在跟随 Veyra",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "顯示器的可變刷新正在跟隨 Veyra",
+   "en": "The display's variable refresh is following Veyra",
+   "ja": "ディスプレイの可変リフレッシュが Veyra に追従しています",
+   "ko": "모니터의 가변 주사율이 Veyra를 따라가고 있습니다",
+   "es": "La frecuencia variable del monitor está siguiendo a Veyra",
+   "fr": "Le rafraîchissement variable de l’écran suit Veyra",
+   "de": "Die variable Bildwiederholrate des Monitors folgt Veyra",
+   "pt-BR": "A taxa variável do monitor está acompanhando o Veyra",
+   "ru": "Переменная частота монитора подстраивается под Veyra"
   },
   {
    "zh": "显示在主字幕上方",
@@ -27169,6 +27771,32 @@
    "ru": "VFG Компоненты времени выполнения не были найдены. Проверьте их пути на странице Компоненты."
   },
   {
+   "zh": "未找到分析器 veyra_frame_analyzer.exe，原始数据已保存",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "未找到分析器 veyra_frame_analyzer.exe，原始資料已儲存",
+   "en": "Analyzer veyra_frame_analyzer.exe not found; the raw data was kept",
+   "ja": "解析ツール veyra_frame_analyzer.exe が見つかりません。元データは保存されています",
+   "ko": "분석기 veyra_frame_analyzer.exe를 찾을 수 없습니다. 원본 데이터는 저장되었습니다",
+   "es": "No se encontró el analizador veyra_frame_analyzer.exe; se guardaron los datos originales",
+   "fr": "Analyseur veyra_frame_analyzer.exe introuvable ; les données brutes sont conservées",
+   "de": "Analyseprogramm veyra_frame_analyzer.exe nicht gefunden; Rohdaten gespeichert",
+   "pt-BR": "Analisador veyra_frame_analyzer.exe não encontrado; os dados brutos foram mantidos",
+   "ru": "Анализатор veyra_frame_analyzer.exe не найден; исходные данные сохранены"
+  },
+  {
+   "zh": "未找到分析器（veyra_frame_analyzer.exe），结束后只保存原始数据。",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "未找到分析器（veyra_frame_analyzer.exe），結束後只儲存原始資料。",
+   "en": "Analyzer (veyra_frame_analyzer.exe) not found; only the raw data will be saved.",
+   "ja": "解析ツール（veyra_frame_analyzer.exe）が見つからないため、元データだけを保存します。",
+   "ko": "분석기(veyra_frame_analyzer.exe)가 없어 원본 데이터만 저장합니다.",
+   "es": "No se encontró el analizador (veyra_frame_analyzer.exe); solo se guardarán los datos originales.",
+   "fr": "Analyseur (veyra_frame_analyzer.exe) introuvable ; seules les données brutes seront enregistrées.",
+   "de": "Analyseprogramm (veyra_frame_analyzer.exe) fehlt; es werden nur Rohdaten gespeichert.",
+   "pt-BR": "Analisador (veyra_frame_analyzer.exe) não encontrado; só os dados brutos serão salvos.",
+   "ru": "Анализатор (veyra_frame_analyzer.exe) не найден; будут сохранены только исходные данные."
+  },
+  {
    "zh": "未找到可捕获的窗口或显示器",
    "src": "qml/ScreenSourceDialog.qml",
    "zh-TW": "未找到可擷取的視窗或顯示器",
@@ -27508,6 +28136,7 @@
   },
   {
    "zh": "未确认死区。请在镜头开始移动时按空格保存。",
+   "src": null,
    "zh-TW": "未確認死區。請在鏡頭開始移動時按空白鍵儲存。",
    "en": "Dead zone was not confirmed. Press Space when the camera starts moving to save it.",
    "ja": "デッドゾーンが確定されませんでした。カメラが動き始めたら Space で保存してください。",
@@ -27517,6 +28146,19 @@
    "de": "Totzone nicht bestätigt. Drücke die Leertaste, sobald sich die Kamera bewegt, um sie zu speichern.",
    "pt-BR": "Zona morta não confirmada. Pressione Espaço quando a câmera começar a se mover para salvar.",
    "ru": "Мёртвая зона не подтверждена. Чтобы сохранить её, нажмите пробел, как только камера начнёт двигаться."
+  },
+  {
+   "zh": "未能归因",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "未能歸因",
+   "en": "Not attributed",
+   "ja": "原因を特定できません",
+   "ko": "원인 미확인",
+   "es": "Sin atribuir",
+   "fr": "Non attribué",
+   "de": "Nicht zugeordnet",
+   "pt-BR": "Não atribuído",
+   "ru": "Причина не определена"
   },
   {
    "zh": "未能确认驱动配置",
@@ -28063,6 +28705,19 @@
    "de": "Standard",
    "pt-BR": "Padrão",
    "ru": "Стандарт"
+  },
+  {
+   "zh": "标记",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "標記",
+   "en": "Mark",
+   "ja": "マーク",
+   "ko": "표시",
+   "es": "Marcar",
+   "fr": "Marquer",
+   "de": "Markieren",
+   "pt-BR": "Marcar",
+   "ru": "Отметить"
   },
   {
    "zh": "校准",
@@ -29001,6 +29656,32 @@
    "ru": "Улучшение большого изображения в плитках, сохранение полного размера вывода..."
   },
   {
+   "zh": "正在分析…",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "正在分析…",
+   "en": "Analysing…",
+   "ja": "分析中…",
+   "ko": "분석 중…",
+   "es": "Analizando…",
+   "fr": "Analyse…",
+   "de": "Wird analysiert …",
+   "pt-BR": "Analisando…",
+   "ru": "Анализ…"
+  },
+  {
+   "zh": "正在分析并打包，通常需要几秒到半分钟…",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "正在分析並打包，通常需要幾秒到半分鐘…",
+   "en": "Analysing and packing; this usually takes a few seconds to half a minute…",
+   "ja": "分析とパッケージ化をしています。通常は数秒〜30 秒ほどです…",
+   "ko": "분석하고 압축하는 중입니다. 보통 몇 초에서 30초 정도 걸립니다…",
+   "es": "Analizando y empaquetando; suele tardar de unos segundos a medio minuto…",
+   "fr": "Analyse et archivage en cours ; quelques secondes à une demi-minute…",
+   "de": "Wird analysiert und gepackt; dauert meist einige Sekunden bis eine halbe Minute …",
+   "pt-BR": "Analisando e empacotando; costuma levar de alguns segundos a meio minuto…",
+   "ru": "Анализ и упаковка; обычно от нескольких секунд до полуминуты…"
+  },
+  {
    "zh": "正在初始化GPU与本地运行时…",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "正在初始化GPU與本地執行時…",
@@ -29535,6 +30216,7 @@
   },
   {
    "zh": "正在测量画面响应 %1% · Esc 取消",
+   "src": null,
    "zh-TW": "正在測量畫面反應 %1% · Esc 取消",
    "en": "Measuring video response %1% · Esc cancels",
    "ja": "映像応答を測定中 %1% · Esc で中止",
@@ -29586,6 +30268,7 @@
   },
   {
    "zh": "正在等待游戏画面 · Esc 取消",
+   "src": null,
    "zh-TW": "正在等待遊戲畫面 · Esc 取消",
    "en": "Waiting for game video · Esc cancels",
    "ja": "ゲーム映像を待っています · Esc で中止",
@@ -30469,6 +31152,7 @@
   },
   {
    "zh": "没有检测到足够的镜头转动。确认手柄已连接、角色能转动视角，也可以手动测死区。",
+   "src": null,
    "zh-TW": "沒有偵測到足夠的鏡頭轉動。確認手把已連線、角色能轉動視角，也可以手動測死區。",
    "en": "Too little camera movement was detected. Check the controller connection and make sure you can turn the camera in-game. You can also measure the dead zone manually.",
    "ja": "カメラの回転量が不足しています。コントローラーが接続され、ゲーム内で視点を動かせることを確認してください。デッドゾーンを手動で測ることもできます。",
@@ -31715,6 +32399,19 @@
    "ru": "Окружающая компенсация: добавьте немного в светлую комнату; не используйте в темной комнате"
   },
   {
+   "zh": "生成帧被跳过或丢弃（补帧没赶上）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "生成幀被跳過或丟棄（補幀沒趕上）",
+   "en": "Generated frames skipped or discarded (frame generation fell behind)",
+   "ja": "生成フレームのスキップまたは破棄（フレーム生成が間に合わない）",
+   "ko": "생성 프레임 건너뜀 또는 폐기(프레임 생성이 따라가지 못함)",
+   "es": "Fotogramas generados omitidos o descartados (la generación no llegó a tiempo)",
+   "fr": "Images générées sautées ou abandonnées (génération en retard)",
+   "de": "Erzeugte Bilder übersprungen oder verworfen (Zwischenbilder zu spät)",
+   "pt-BR": "Quadros gerados pulados ou descartados (geração atrasada)",
+   "ru": "Сгенерированные кадры пропущены или отброшены (интерполяция не успела)"
+  },
+  {
    "zh": "生效中",
    "src": "src/ui/bridge/FrameGeneration.cpp",
    "zh-TW": "生效中",
@@ -32106,6 +32803,7 @@
   },
   {
    "zh": "画面尚未就绪。请先进入游戏并确认画面正常播放。",
+   "src": null,
    "zh-TW": "畫面尚未就緒。請先進入遊戲並確認畫面正常播放。",
    "en": "Game video is not ready. Enter the game and make sure the video is playing.",
    "ja": "映像の準備ができていません。ゲームに入り、映像が再生されていることを確認してください。",
@@ -32247,6 +32945,19 @@
    "ru": "Изображение с карты захвата"
   },
   {
+   "zh": "画面由系统合成（窗口模式）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "畫面由系統合成（視窗模式）",
+   "en": "The picture is composed by the system (windowed)",
+   "ja": "画面はシステムで合成されています（ウィンドウモード）",
+   "ko": "화면이 시스템에서 합성되고 있습니다(창 모드)",
+   "es": "La imagen la compone el sistema (modo ventana)",
+   "fr": "L’image est composée par le système (fenêtré)",
+   "de": "Das Bild wird vom System zusammengesetzt (Fenstermodus)",
+   "pt-BR": "A imagem é composta pelo sistema (modo janela)",
+   "ru": "Изображение компонуется системой (оконный режим)"
+  },
+  {
    "zh": "画面调控",
    "src": "qml/NrLayerEditor.qml",
    "zh-TW": "畫面調控",
@@ -32375,6 +33086,19 @@
    "de": "Die Aufnahmesitzung im Schnittstellenzustand ist beschädigt",
    "pt-BR": "A sessão de captura no estado da interface está danificada",
    "ru": "Сеанс захвата в состоянии интерфейса поврежден"
+  },
+  {
+   "zh": "界面的 1% low 取最近 10 秒帧间隔的第 99 百分位；长间隔次数刚好跨过门槛时读数会成台阶跳，不代表变卡。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "介面的 1% low 取最近 10 秒幀間隔的第 99 百分位；長間隔次數剛好跨過門檻時讀數會成台階跳，不代表變卡。",
+   "en": "The interface's 1% low is the 99th percentile of the last 10 s of frame intervals; it jumps in steps when the number of long intervals just crosses the threshold, which does not mean it got worse.",
+   "ja": "画面の 1% low は直近 10 秒のフレーム間隔の 99 パーセンタイルです。長い間隔の回数がちょうど境目を越えると値が段階的に跳ねますが、カクつきが増えたわけではありません。",
+   "ko": "화면의 1% low는 최근 10초 프레임 간격의 99번째 백분위수입니다. 긴 간격의 횟수가 경계를 막 넘으면 수치가 계단식으로 뛰지만 더 끊기는 것은 아닙니다.",
+   "es": "El 1% low de la interfaz es el percentil 99 de los intervalos de los últimos 10 s; salta por escalones cuando el número de intervalos largos cruza el umbral, sin que haya empeorado.",
+   "fr": "Le 1% low de l’interface est le 99e centile des intervalles des 10 dernières secondes ; il saute par paliers quand le nombre d’intervalles longs franchit le seuil, sans dégradation réelle.",
+   "de": "Das 1% low der Oberfläche ist das 99. Perzentil der Bildabstände der letzten 10 s; es springt stufenweise, sobald die Zahl langer Abstände die Schwelle kreuzt – das heißt nicht, dass es schlechter wurde.",
+   "pt-BR": "O 1% low da interface é o percentil 99 dos intervalos dos últimos 10 s; ele salta em degraus quando o número de intervalos longos cruza o limite, sem que tenha piorado.",
+   "ru": "1% low в интерфейсе — 99-й перцентиль интервалов за последние 10 с; он скачет ступенями, когда число длинных интервалов пересекает порог, и это не значит, что стало хуже."
   },
   {
    "zh": "界面绘制",
@@ -32778,6 +33502,19 @@
    "de": "Live",
    "pt-BR": "Ao vivo",
    "ru": "Прямой эфир"
+  },
+  {
+   "zh": "直播伴侣.exe",
+   "src": "src/ui/PerfDiagnosticsSystem.cpp",
+   "zh-TW": "直播伴侣.exe",
+   "en": "直播伴侣.exe",
+   "ja": "直播伴侣.exe",
+   "ko": "直播伴侣.exe",
+   "es": "直播伴侣.exe",
+   "fr": "直播伴侣.exe",
+   "de": "直播伴侣.exe",
+   "pt-BR": "直播伴侣.exe",
+   "ru": "直播伴侣.exe"
   },
   {
    "zh": "直播兼容模式未能启用，已恢复",
@@ -33248,6 +33985,19 @@
    "ru": "Страница, окно и возобновление поведения при запуске."
   },
   {
+   "zh": "程序退出，未分析；原始数据已保存",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "程式退出，未分析；原始資料已儲存",
+   "en": "The program exited before analysis; the raw data was kept",
+   "ja": "プログラムが終了したため分析していません。元データは保存されています",
+   "ko": "프로그램이 종료되어 분석하지 않았습니다. 원본 데이터는 저장되었습니다",
+   "es": "El programa se cerró antes del análisis; se guardaron los datos originales",
+   "fr": "Le programme s’est fermé avant l’analyse ; les données brutes sont conservées",
+   "de": "Programm beendet, keine Analyse; Rohdaten gespeichert",
+   "pt-BR": "O programa fechou antes da análise; os dados brutos foram mantidos",
+   "ru": "Программа закрыта до анализа; исходные данные сохранены"
+  },
+  {
    "zh": "稍后",
    "src": "qml/Main.qml",
    "zh-TW": "稍後",
@@ -33483,6 +34233,7 @@
   },
   {
    "zh": "站在原地，面向有纹理的静止场景。点击下方按钮返回游戏开始测试。",
+   "src": null,
    "zh-TW": "站在原地，面向有紋理的靜止場景。點擊下方按鈕返回遊戲開始測試。",
    "en": "Stand still and face a scene with visible detail. Use the button below to return to the game and start the test.",
    "ja": "その場に立ち止まり、模様のある静止した場所に向いてください。下のボタンでゲームに戻り、テストを開始します。",
@@ -33505,6 +34256,19 @@
    "de": "Endpunkt offen",
    "pt-BR": "Endpoint aberto",
    "ru": "Конечная точка открыта"
+  },
+  {
+   "zh": "笔记本请接电源；Windows 电源模式选“最佳性能”；检查散热。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "筆記本請接電源；Windows 電源模式選“最佳性能”；檢查散熱。",
+   "en": "Plug in the laptop, set the Windows power mode to “Best performance” and check the cooling.",
+   "ja": "ノート PC は電源につなぎ、Windows の電源モードを「最適なパフォーマンス」にして、冷却を確認してください。",
+   "ko": "노트북은 전원을 연결하고 Windows 전원 모드를 “최고 성능”으로 설정한 뒤 냉각을 확인하세요.",
+   "es": "Conecta el portátil a la corriente, pon el modo de energía de Windows en «Máximo rendimiento» y revisa la refrigeración.",
+   "fr": "Branchez le portable, réglez le mode d’alimentation Windows sur « Performances optimales » et vérifiez le refroidissement.",
+   "de": "Laptop ans Netz anschließen, Windows-Energiemodus „Beste Leistung“ wählen und die Kühlung prüfen.",
+   "pt-BR": "Ligue o notebook na tomada, defina o modo de energia do Windows como “Melhor desempenho” e verifique o resfriamento.",
+   "ru": "Подключите ноутбук к сети, выберите режим питания Windows «Макс. производительность» и проверьте охлаждение."
   },
   {
    "zh": "第 %1 / %2 步",
@@ -36198,6 +36962,19 @@
    "ru": "Тон"
   },
   {
+   "zh": "节拍等待",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "節拍等待",
+   "en": "Pacing wait",
+   "ja": "ペーシング待ち",
+   "ko": "페이싱 대기",
+   "es": "Espera de ritmo",
+   "fr": "Attente de cadence",
+   "de": "Takt-Wartezeit",
+   "pt-BR": "Espera de ritmo",
+   "ru": "Ожидание такта"
+  },
+  {
    "zh": "节点",
    "src": "qml/CineBar.qml",
    "zh-TW": "節點",
@@ -36495,6 +37272,19 @@
    "de": "Knoten-Preset: ",
    "pt-BR": "Predefinição de nós: ",
    "ru": "Пресет узлов: "
+  },
+  {
+   "zh": "若画面闪烁或有果冻感：在 NVIDIA 控制面板对 Veyra 设“显示器技术：固定刷新”，或在 Veyra 里开启可变刷新。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "若畫面閃爍或有果凍感：在 NVIDIA 控制面板對 Veyra 設“顯示器技術：固定刷新”，或在 Veyra 裡開啟可變刷新。",
+   "en": "If the picture flickers or looks wobbly: set “Monitor technology: Fixed refresh” for Veyra in the NVIDIA Control Panel, or turn on variable refresh in Veyra.",
+   "ja": "画面がちらつく、または揺れて見える場合：NVIDIA コントロールパネルで Veyra の「モニターテクノロジ」を「固定リフレッシュ」にするか、Veyra で可変リフレッシュをオンにしてください。",
+   "ko": "화면이 깜박이거나 출렁이면 NVIDIA 제어판에서 Veyra의 “모니터 기술”을 “고정 새로 고침”으로 하거나 Veyra에서 가변 주사율을 켜세요.",
+   "es": "Si la imagen parpadea u ondula: en el Panel de control de NVIDIA pon «Tecnología del monitor: Frecuencia fija» para Veyra, o activa la frecuencia variable en Veyra.",
+   "fr": "Si l’image scintille ou ondule : réglez « Technologie de moniteur : Rafraîchissement fixe » pour Veyra dans le Panneau NVIDIA, ou activez le rafraîchissement variable dans Veyra.",
+   "de": "Wenn das Bild flackert oder wabert: in der NVIDIA-Systemsteuerung für Veyra „Monitortechnologie: Feste Bildwiederholrate“ setzen oder in Veyra die variable Bildwiederholrate einschalten.",
+   "pt-BR": "Se a imagem piscar ou parecer gelatinosa: no Painel de controle da NVIDIA defina “Tecnologia do monitor: Atualização fixa” para o Veyra, ou ative a taxa variável no Veyra.",
+   "ru": "Если изображение мерцает или «плывёт»: в панели NVIDIA установите для Veyra «Технология монитора: фиксированная частота» или включите переменную частоту в Veyra."
   },
   {
    "zh": "若系统提供 119.88 Hz，可与当前 120 Hz 对照测试。",
@@ -37199,6 +37989,19 @@
    "ru": "Генерация кадров снижена"
   },
   {
+   "zh": "补帧超出 GPU 预算",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "補幀超出 GPU 預算",
+   "en": "Frame generation exceeds the GPU budget",
+   "ja": "フレーム生成が GPU の予算を超えています",
+   "ko": "프레임 생성이 GPU 예산을 넘습니다",
+   "es": "La generación de fotogramas excede el presupuesto de la GPU",
+   "fr": "La génération d’images dépasse le budget GPU",
+   "de": "Zwischenbilder überschreiten das GPU-Budget",
+   "pt-BR": "A geração de quadros excede o orçamento da GPU",
+   "ru": "Интерполяция не укладывается в бюджет GPU"
+  },
+  {
    "zh": "补帧路径固定 HDR10；需要 Windows HDR 开启",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "補幀路徑固定 HDR10；需要 Windows HDR 開啟",
@@ -37810,6 +38613,71 @@
    "ru": "Запоминать каждый фильм"
   },
   {
+   "zh": "记录一段时间的帧时间、系统负载和日志，结束后自动分析并生成报告。记录期间照常使用，觉得卡的时候按 Ctrl+Alt+M 打个标记。数据只保存在本机，由你决定发给谁。",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "記錄一段時間的幀時間、系統負載和日誌，結束後自動分析並生成報告。記錄期間照常使用，覺得卡的時候按 Ctrl+Alt+M 打個標記。資料只儲存在本機，由你決定發給誰。",
+   "en": "Records frame times, system load and the log for a while, then analyses them and writes a report. Use Veyra as usual meanwhile and press Ctrl+Alt+M when it stutters. The data stays on this PC; you decide whom to send it to.",
+   "ja": "一定時間、フレーム時間・システム負荷・ログを記録し、終了後に自動で分析してレポートを作ります。記録中は普段どおり使い、カクついたら Ctrl+Alt+M でマークしてください。データはこの PC にだけ保存され、誰に送るかはあなたが決めます。",
+   "ko": "일정 시간 동안 프레임 시간, 시스템 부하, 로그를 기록하고 끝나면 자동으로 분석해 보고서를 만듭니다. 기록 중에는 평소처럼 사용하고 끊길 때 Ctrl+Alt+M으로 표시하세요. 데이터는 이 PC에만 저장되며 누구에게 보낼지는 직접 정합니다.",
+   "es": "Graba durante un tiempo los tiempos de fotograma, la carga del sistema y el registro, y luego los analiza y crea un informe. Usa Veyra como siempre y pulsa Ctrl+Alt+M cuando notes un tirón. Los datos se quedan en este PC; tú decides a quién enviarlos.",
+   "fr": "Enregistre un moment les temps d’image, la charge du système et le journal, puis les analyse et crée un rapport. Utilisez Veyra normalement et appuyez sur Ctrl+Alt+M en cas de saccade. Les données restent sur ce PC ; vous décidez à qui les envoyer.",
+   "de": "Zeichnet eine Weile Frametimes, Systemlast und Protokoll auf und erstellt danach automatisch einen Bericht. Veyra wie gewohnt nutzen und bei Rucklern Strg+Alt+M drücken. Die Daten bleiben auf diesem PC; du entscheidest, wem du sie schickst.",
+   "pt-BR": "Grava por um tempo os tempos de quadro, a carga do sistema e o log, depois analisa e cria um relatório. Use o Veyra normalmente e pressione Ctrl+Alt+M quando engasgar. Os dados ficam neste PC; você decide para quem enviar.",
+   "ru": "Записывает время кадров, нагрузку системы и журнал, затем анализирует и создаёт отчёт. Пользуйтесь Veyra как обычно и нажимайте Ctrl+Alt+M при рывках. Данные остаются на этом ПК; вы сами решаете, кому их отправить."
+  },
+  {
+   "zh": "记录不完整",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "記錄不完整",
+   "en": "Recording incomplete",
+   "ja": "記録が不完全です",
+   "ko": "기록이 불완전합니다",
+   "es": "Grabación incompleta",
+   "fr": "Enregistrement incomplet",
+   "de": "Aufzeichnung unvollständig",
+   "pt-BR": "Gravação incompleta",
+   "ru": "Запись неполная"
+  },
+  {
+   "zh": "记录中 %1 / %2",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "記錄中 %1 / %2",
+   "en": "Recording %1 / %2",
+   "ja": "記録中 %1 / %2",
+   "ko": "기록 중 %1 / %2",
+   "es": "Grabando %1 / %2",
+   "fr": "Enregistrement %1 / %2",
+   "de": "Aufzeichnung %1 / %2",
+   "pt-BR": "Gravando %1 / %2",
+   "ru": "Запись %1 / %2"
+  },
+  {
+   "zh": "记录中 %1 / %2 · 觉得卡时按 Ctrl+Alt+M 标记",
+   "src": "qml/SettingsPage.qml",
+   "zh-TW": "記錄中 %1 / %2 · 覺得卡時按 Ctrl+Alt+M 標記",
+   "en": "Recording %1 / %2 · press Ctrl+Alt+M at a stutter",
+   "ja": "記録中 %1 / %2 · カクついたら Ctrl+Alt+M でマーク",
+   "ko": "기록 중 %1 / %2 · 끊기면 Ctrl+Alt+M으로 표시",
+   "es": "Grabando %1 / %2 · pulsa Ctrl+Alt+M en un tirón",
+   "fr": "Enregistrement %1 / %2 · Ctrl+Alt+M en cas de saccade",
+   "de": "Aufzeichnung %1 / %2 · bei Rucklern Strg+Alt+M",
+   "pt-BR": "Gravando %1 / %2 · pressione Ctrl+Alt+M ao engasgar",
+   "ru": "Запись %1 / %2 · при рывке нажмите Ctrl+Alt+M"
+  },
+  {
+   "zh": "记录期间多次改设置或跳转，每次都会重建",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "記錄期間多次改設定或跳轉，每次都會重建",
+   "en": "Settings changed or playback jumped several times; each one rebuilds the pipeline",
+   "ja": "記録中に設定変更やシークが何度もあり、そのたびに再構築されました",
+   "ko": "기록 중 설정 변경이나 이동이 여러 번 있었고 그때마다 다시 구성되었습니다",
+   "es": "Durante la grabación se cambiaron ajustes o se saltó varias veces; cada vez se reconstruye",
+   "fr": "Réglages modifiés ou sauts répétés pendant l’enregistrement ; chacun reconstruit la chaîne",
+   "de": "Während der Aufzeichnung wurden Einstellungen geändert oder gesprungen; jedes Mal wird neu aufgebaut",
+   "pt-BR": "Durante a gravação houve várias mudanças de ajuste ou saltos; cada um reconstrói o processamento",
+   "ru": "Во время записи несколько раз меняли настройки или перематывали; каждый раз всё перестраивается"
+  },
+  {
    "zh": "记忆与自动化",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "記憶與自動化",
@@ -38330,6 +39198,19 @@
    "ru": "Потоки распознавания"
   },
   {
+   "zh": "诊断",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "诊断",
+   "en": "诊断",
+   "ja": "诊断",
+   "ko": "诊断",
+   "es": "诊断",
+   "fr": "诊断",
+   "de": "诊断",
+   "pt-BR": "诊断",
+   "ru": "诊断"
+  },
+  {
    "zh": "诊断信息",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "診斷資訊",
@@ -38369,6 +39250,32 @@
    "ru": "Диагностика скопирована; вставьте их прямо в свой отчет"
   },
   {
+   "zh": "诊断包：%1（反馈时把它发给开发者）",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "診斷包：%1（反饋時把它發給開發者）",
+   "en": "Package: %1 (send it to the developer with your report)",
+   "ja": "診断パッケージ：%1（報告時に開発者へ送ってください）",
+   "ko": "진단 패키지: %1(문제 보고 때 개발자에게 보내세요)",
+   "es": "Paquete: %1 (envíalo al desarrollador con tu reporte)",
+   "fr": "Paquet : %1 (à envoyer au développeur avec votre signalement)",
+   "de": "Paket: %1 (mit der Meldung an den Entwickler schicken)",
+   "pt-BR": "Pacote: %1 (envie ao desenvolvedor junto com o relato)",
+   "ru": "Пакет: %1 (отправьте его разработчику вместе с сообщением)"
+  },
+  {
+   "zh": "诊断完成 · 查看结果",
+   "src": "qml/Main.qml",
+   "zh-TW": "診斷完成 · 查看結果",
+   "en": "Diagnostics done · view result",
+   "ja": "診断完了 · 結果を表示",
+   "ko": "진단 완료 · 결과 보기",
+   "es": "Diagnóstico listo · ver resultado",
+   "fr": "Diagnostic terminé · voir le résultat",
+   "de": "Diagnose fertig · Ergebnis ansehen",
+   "pt-BR": "Diagnóstico pronto · ver resultado",
+   "ru": "Диагностика готова · результат"
+  },
+  {
    "zh": "诊断文件",
    "src": "include/veyra/base/LauncherDiagnostics.h",
    "zh-TW": "診斷檔案",
@@ -38380,6 +39287,45 @@
    "de": "Diagnoseprotokoll",
    "pt-BR": "Log de diagnóstico",
    "ru": "Журнал диагностики"
+  },
+  {
+   "zh": "诊断记录中 %1 / %2 · Ctrl+Alt+M 标记",
+   "src": "qml/Main.qml",
+   "zh-TW": "診斷記錄中 %1 / %2 · Ctrl+Alt+M 標記",
+   "en": "Diagnostics recording %1 / %2 · Ctrl+Alt+M to mark",
+   "ja": "診断記録中 %1 / %2 · Ctrl+Alt+M でマーク",
+   "ko": "진단 기록 중 %1 / %2 · Ctrl+Alt+M 표시",
+   "es": "Diagnóstico grabando %1 / %2 · Ctrl+Alt+M para marcar",
+   "fr": "Diagnostic en cours %1 / %2 · Ctrl+Alt+M pour marquer",
+   "de": "Diagnose läuft %1 / %2 · Strg+Alt+M markiert",
+   "pt-BR": "Diagnóstico gravando %1 / %2 · Ctrl+Alt+M para marcar",
+   "ru": "Идёт запись диагностики %1 / %2 · Ctrl+Alt+M — отметка"
+  },
+  {
+   "zh": "诊断记录无法开始（可能已有一次记录在进行）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "診斷記錄無法開始（可能已有一次記錄在進行）",
+   "en": "Diagnostics could not start (another recording may be running)",
+   "ja": "診断の記録を開始できません（別の記録が進行中の可能性があります）",
+   "ko": "진단 기록을 시작할 수 없습니다(다른 기록이 진행 중일 수 있음)",
+   "es": "No se pudo iniciar el diagnóstico (puede haber otra grabación en curso)",
+   "fr": "Impossible de lancer le diagnostic (un autre enregistrement est peut-être en cours)",
+   "de": "Diagnose konnte nicht starten (eventuell läuft schon eine Aufzeichnung)",
+   "pt-BR": "Não foi possível iniciar o diagnóstico (talvez outra gravação esteja em andamento)",
+   "ru": "Не удалось начать диагностику (возможно, уже идёт другая запись)"
+  },
+  {
+   "zh": "诊断：正在分析…",
+   "src": "qml/Main.qml",
+   "zh-TW": "診斷：正在分析…",
+   "en": "Diagnostics: analysing…",
+   "ja": "診断：分析中…",
+   "ko": "진단: 분석 중…",
+   "es": "Diagnóstico: analizando…",
+   "fr": "Diagnostic : analyse…",
+   "de": "Diagnose: wird analysiert …",
+   "pt-BR": "Diagnóstico: analisando…",
+   "ru": "Диагностика: анализ…"
   },
   {
    "zh": "译文显示位置",
@@ -38978,6 +39924,19 @@
    "de": "Video oder Bild öffnen",
    "pt-BR": "Abra um vídeo ou uma imagem",
    "ru": "Откройте видео или изображение"
+  },
+  {
+   "zh": "请把诊断包发给开发者以便定位。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "請把診斷包發給開發者以便定位。",
+   "en": "Please send the package to the developer so the cause can be found.",
+   "ja": "原因の特定のため、診断パッケージを開発者に送ってください。",
+   "ko": "원인을 찾을 수 있도록 진단 패키지를 개발자에게 보내 주세요.",
+   "es": "Envía el paquete al desarrollador para localizar la causa.",
+   "fr": "Envoyez le paquet au développeur pour trouver la cause.",
+   "de": "Bitte das Paket an den Entwickler schicken, damit die Ursache gefunden werden kann.",
+   "pt-BR": "Envie o pacote ao desenvolvedor para localizar a causa.",
+   "ru": "Отправьте пакет разработчику, чтобы найти причину."
   },
   {
    "zh": "请按 Win + Ctrl + L 打开系统字幕",
@@ -40189,6 +41148,19 @@
    "ru": "Вход драйвера"
   },
   {
+   "zh": "路径已复制",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "路徑已複製",
+   "en": "Path copied",
+   "ja": "パスをコピーしました",
+   "ko": "경로를 복사했습니다",
+   "es": "Ruta copiada",
+   "fr": "Chemin copié",
+   "de": "Pfad kopiert",
+   "pt-BR": "Caminho copiado",
+   "ru": "Путь скопирован"
+  },
+  {
    "zh": "跳转失败",
    "src": "src/engine/EngineController.cpp",
    "zh-TW": "跳轉失敗",
@@ -40642,6 +41614,19 @@
    "de": "Eingangs-Bildrate zu niedrig",
    "pt-BR": "Taxa de quadros de entrada insuficiente",
    "ru": "Недостаточная частота кадров на входе"
+  },
+  {
+   "zh": "输入断档（采集或解码没按时送来新画面）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "輸入斷檔（擷取或解碼沒按時送來新畫面）",
+   "en": "Input gap (capture or decoding did not deliver a new frame on time)",
+   "ja": "入力の途切れ（キャプチャーやデコードが新しい画面を間に合わせられない）",
+   "ko": "입력 끊김(캡처나 디코딩이 새 화면을 제때 주지 못함)",
+   "es": "Hueco de entrada (la captura o la decodificación no entregó un fotograma a tiempo)",
+   "fr": "Trou d’entrée (capture ou décodage sans nouvelle image à temps)",
+   "de": "Eingabelücke (Aufnahme oder Dekodierung lieferte kein neues Bild rechtzeitig)",
+   "pt-BR": "Falha de entrada (captura ou decodificação não entregou um quadro a tempo)",
+   "ru": "Пропуск входа (захват или декодирование не дали новый кадр вовремя)"
   },
   {
    "zh": "输入时间线异常",
@@ -41308,6 +42293,7 @@
   },
   {
    "zh": "返回游戏开始测试",
+   "src": null,
    "zh-TW": "返回遊戲開始測試",
    "en": "Return to game and start test",
    "ja": "ゲームに戻ってテスト開始",
@@ -41694,6 +42680,32 @@
    "de": "Diese Kurve passt auch zum vollen Preset %1",
    "pt-BR": "Esta curva também corresponde à predefinição completa %1",
    "ru": "Эта кривая также соответствует полной предустановке %1"
+  },
+  {
+   "zh": "这段记录里没有发现明显问题。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "這段記錄裡沒有發現明顯問題。",
+   "en": "No obvious problem in this recording.",
+   "ja": "この記録には目立った問題はありません。",
+   "ko": "이번 기록에서는 뚜렷한 문제가 없습니다.",
+   "es": "No hay problemas evidentes en esta grabación.",
+   "fr": "Aucun problème évident dans cet enregistrement.",
+   "de": "In dieser Aufzeichnung gibt es keine auffälligen Probleme.",
+   "pt-BR": "Nenhum problema evidente nesta gravação.",
+   "ru": "В этой записи явных проблем нет."
+  },
+  {
+   "zh": "这类停顿是正常的重建过程；比较流畅度时请看不改设置的一段。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "這類停頓是正常的重建過程；比較流暢度時請看不改設定的一段。",
+   "en": "These pauses are normal rebuilds; to judge smoothness, look at a stretch without setting changes.",
+   "ja": "この停止は通常の再構築です。滑らかさを比べるときは設定を変えていない区間を見てください。",
+   "ko": "이런 멈춤은 정상적인 재구성입니다. 부드러움을 비교할 때는 설정을 바꾸지 않은 구간을 보세요.",
+   "es": "Estas pausas son reconstrucciones normales; para juzgar la fluidez mira un tramo sin cambios de ajustes.",
+   "fr": "Ces pauses sont des reconstructions normales ; pour juger la fluidité, regardez une période sans changement de réglage.",
+   "de": "Diese Pausen sind normale Neuaufbauten; für die Flüssigkeit einen Abschnitt ohne Einstellungsänderung ansehen.",
+   "pt-BR": "Essas pausas são reconstruções normais; para avaliar a fluidez, veja um trecho sem mudanças de ajuste.",
+   "ru": "Эти паузы — обычная перестройка; для оценки плавности смотрите отрезок без смены настроек."
   },
   {
    "zh": "这里和 PS5 串流窗口是同一份设置，下次连接时一起保存到该主机的配对档案。",
@@ -42086,6 +43098,19 @@
    "ru": "Назад"
   },
   {
+   "zh": "送显调用阻塞（驱动、系统或叠加层）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "送顯調用阻塞（驅動、系統或疊加層）",
+   "en": "Present call blocked (driver, system or overlay)",
+   "ja": "Present 呼び出しのブロック（ドライバー・システム・オーバーレイ）",
+   "ko": "Present 호출 차단(드라이버·시스템·오버레이)",
+   "es": "Llamada a Present bloqueada (controlador, sistema u overlay)",
+   "fr": "Appel Present bloqué (pilote, système ou overlay)",
+   "de": "Present-Aufruf blockiert (Treiber, System oder Overlay)",
+   "pt-BR": "Chamada de Present bloqueada (driver, sistema ou overlay)",
+   "ru": "Вызов Present заблокирован (драйвер, система или оверлей)"
+  },
+  {
    "zh": "适应",
    "src": "qml/ProDisplayPanel.qml",
    "zh-TW": "適應",
@@ -42256,6 +43281,7 @@
   },
   {
    "zh": "选择方向后回到游戏，镜头刚开始移动时按空格保存。",
+   "src": null,
    "zh-TW": "選擇方向後回到遊戲，鏡頭剛開始移動時按空白鍵儲存。",
    "en": "Pick an axis and return to the game. Press Space to save as soon as the camera moves.",
    "ja": "方向を選んでゲームに戻り、カメラが動き始めたら Space で保存します。",
@@ -42395,6 +43421,19 @@
    "de": "Progressiv",
    "pt-BR": "Progressivo",
    "ru": "прогрессивный"
+  },
+  {
+   "zh": "通常是输出帧率与屏幕刷新率不成整数倍造成的拍频：让输出帧率等于刷新率或其整数分之一，或开启可变刷新。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "通常是輸出幀率與螢幕更新率不成整數倍造成的拍頻：讓輸出幀率等於更新率或其整數分之一，或開啟可變刷新。",
+   "en": "Usually a beat between the output frame rate and a refresh rate that is not a whole multiple: make the output rate equal to the refresh rate or a whole fraction of it, or turn on variable refresh.",
+   "ja": "多くは出力フレームレートとリフレッシュレートが整数倍でないことによるうなりです。出力をリフレッシュレートかその整数分の 1 に合わせるか、可変リフレッシュをオンにしてください。",
+   "ko": "대개 출력 프레임 레이트와 주사율이 정수배가 아니어서 생기는 맥놀이입니다. 출력을 주사율이나 그 정수분의 1로 맞추거나 가변 주사율을 켜세요.",
+   "es": "Suele ser un batido entre los fps de salida y una frecuencia que no es múltiplo entero: iguala la salida a la frecuencia o a una fracción entera, o activa la frecuencia variable.",
+   "fr": "En général un battement entre la fréquence de sortie et un rafraîchissement non multiple : réglez la sortie sur le rafraîchissement ou une fraction entière, ou activez le rafraîchissement variable.",
+   "de": "Meist eine Schwebung zwischen Ausgabebildrate und einer nicht ganzzahlig passenden Bildwiederholrate: Ausgabe auf die Bildwiederholrate oder einen ganzzahligen Bruchteil davon stellen oder die variable Bildwiederholrate einschalten.",
+   "pt-BR": "Geralmente é um batimento entre a taxa de saída e uma taxa de atualização que não é múltiplo inteiro: iguale a saída à taxa ou a uma fração inteira dela, ou ative a taxa variável.",
+   "ru": "Обычно это биения между выходной частотой кадров и некратной частотой обновления: сделайте выходную частоту равной частоте обновления или её целой доле либо включите переменную частоту."
   },
   {
    "zh": "部分 Intel 核显花屏时可尝试。关闭软件解码后重新连接生效。",
@@ -42839,6 +43878,19 @@
    "ru": "Как выбрать карту захвата"
   },
   {
+   "zh": "采集卡时钟与系统时钟漂移",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "擷取卡時鐘與系統時鐘漂移",
+   "en": "The capture card's clock drifts against the system clock",
+   "ja": "キャプチャーカードの時計がシステム時計とずれています",
+   "ko": "캡처 카드 시계가 시스템 시계와 어긋나고 있습니다",
+   "es": "El reloj de la capturadora se desvía del reloj del sistema",
+   "fr": "L’horloge de la carte de capture dérive par rapport à celle du système",
+   "de": "Die Uhr der Capture-Karte driftet gegenüber der Systemuhr",
+   "pt-BR": "O relógio da placa de captura se desvia do relógio do sistema",
+   "ru": "Часы карты захвата расходятся с системными"
+  },
+  {
    "zh": "采集卡未连接",
    "src": "qml/ControllerConnectionPage.qml",
    "zh-TW": "擷取卡未連線",
@@ -42928,6 +43980,19 @@
    "de": "Kein Bild nach zwei erneuten Verbindungen. Das Gerät wird vor dem nächsten Versuch freigegeben.",
    "pt-BR": "Sem vídeo após duas reconexões. Liberando o dispositivo antes de tentar novamente.",
    "ru": "Изображения нет после двух переподключений. Устройство освобождается перед повторной попыткой."
+  },
+  {
+   "zh": "采集卡送帧时间不均匀",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "擷取卡送幀時間不均勻",
+   "en": "The capture card delivers frames unevenly",
+   "ja": "キャプチャーカードのフレーム到着が不均一です",
+   "ko": "캡처 카드의 프레임 도착이 고르지 않습니다",
+   "es": "La capturadora entrega los fotogramas de forma irregular",
+   "fr": "La carte de capture livre les images de façon irrégulière",
+   "de": "Die Capture-Karte liefert Bilder ungleichmäßig",
+   "pt-BR": "A placa de captura entrega quadros de forma irregular",
+   "ru": "Карта захвата отдаёт кадры неравномерно"
   },
   {
    "zh": "采集卡送来的帧率低于信号帧率。USB 采集卡请直接插在主板背部的 USB 3.0 及以上接口，不要经过扩展坞、延长线或前置接口。同时确认主机输出帧率与所选采集格式一致。",
@@ -43424,6 +44489,19 @@
    "ru": "Переименовать профиль"
   },
   {
+   "zh": "重建（改设置、切换或跳转）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "重建（改設定、切換或跳轉）",
+   "en": "Rebuild (setting change, switch or seek)",
+   "ja": "再構築（設定変更・切り替え・シーク）",
+   "ko": "재구성(설정 변경·전환·이동)",
+   "es": "Reconstrucción (cambio de ajuste, cambio o salto)",
+   "fr": "Reconstruction (réglage, changement ou saut)",
+   "de": "Neuaufbau (Einstellung, Wechsel oder Sprung)",
+   "pt-BR": "Reconstrução (ajuste, troca ou salto)",
+   "ru": "Перестройка (смена настроек, переключение или перемотка)"
+  },
+  {
    "zh": "重新打开同一个文件时从上次位置继续",
    "src": "qml/SettingsPage.qml",
    "zh-TW": "重新開啟同一個檔案時從上次位置繼續",
@@ -43789,6 +44867,7 @@
   },
   {
    "zh": "镜头转动速度不稳定。可以换个场景再试，或手动测死区。",
+   "src": null,
    "zh-TW": "鏡頭轉動速度不穩定。可以換個場景再試，或手動測死區。",
    "en": "Camera rotation speed was inconsistent. Try a different scene or measure the dead zone manually.",
    "ja": "カメラの回転速度が不安定でした。場所を変えて再試行するか、デッドゾーンを手動で測ってください。",
@@ -43824,6 +44903,19 @@
    "de": "Lange Zeit kein vollständiges Bild. Das Netzwerk ist sehr instabil oder die Bitrate ist zu hoch eingestellt.",
    "pt-BR": "Nenhum quadro completo por muito tempo. A rede é muito instável, ou a taxa de bits é muito alta.",
    "ru": "Долгое время не было полной картины. Сеть очень нестабильна, или битрейт установлен слишком высоко."
+  },
+  {
+   "zh": "长时间运行后若帧率减半，拔插采集卡即可恢复；可向采集卡厂商反馈。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "長時間執行後若幀率減半，拔插擷取卡即可恢復；可向擷取卡廠商反饋。",
+   "en": "If the frame rate halves after hours, unplug and replug the capture card; you can also report it to the card's maker.",
+   "ja": "長時間の使用でフレームレートが半分になったら、キャプチャーカードを抜き差しすると戻ります。メーカーへの報告も検討してください。",
+   "ko": "오래 사용한 뒤 프레임 레이트가 절반이 되면 캡처 카드를 뽑았다 꽂으면 복구됩니다. 제조사에 알릴 수도 있습니다.",
+   "es": "Si tras horas los fps se reducen a la mitad, desconecta y vuelve a conectar la capturadora; también puedes avisar al fabricante.",
+   "fr": "Si la fréquence d’images chute de moitié après des heures, débranchez puis rebranchez la carte ; vous pouvez aussi le signaler au fabricant.",
+   "de": "Halbiert sich die Bildrate nach Stunden, die Capture-Karte ab- und wieder anstecken; man kann es auch dem Hersteller melden.",
+   "pt-BR": "Se após horas a taxa de quadros cair pela metade, desconecte e reconecte a placa; você também pode avisar o fabricante.",
+   "ru": "Если через несколько часов частота кадров падает вдвое, переподключите карту захвата; можно сообщить производителю."
   },
   {
    "zh": "阅读 Reddit 原帖",
@@ -43930,6 +45022,32 @@
    "ru": "Гироскоп"
   },
   {
+   "zh": "降低增强档位或分辨率；报告的“GPU 阶段”里可以看到哪一步最耗时。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "降低增強檔位或解析度；報告的“GPU 階段”裡可以看到哪一步最耗時。",
+   "en": "Lower the enhancement tier or resolution; the report's “GPU stages” shows which step costs the most.",
+   "ja": "強化の段階や解像度を下げてください。レポートの「GPU 段階」でどの処理が重いか分かります。",
+   "ko": "향상 단계나 해상도를 낮추세요. 보고서의 “GPU 단계”에서 어느 단계가 가장 무거운지 볼 수 있습니다.",
+   "es": "Baja el nivel de mejora o la resolución; en «Etapas de GPU» del informe se ve qué paso cuesta más.",
+   "fr": "Baissez le niveau d’amélioration ou la résolution ; « Étapes GPU » du rapport montre l’étape la plus coûteuse.",
+   "de": "Verbesserungsstufe oder Auflösung senken; im Bericht unter „GPU-Stufen“ steht, welcher Schritt am meisten kostet.",
+   "pt-BR": "Reduza o nível de melhoria ou a resolução; em “Etapas da GPU” do relatório dá para ver qual etapa pesa mais.",
+   "ru": "Понизьте уровень улучшения или разрешение; в разделе отчёта «Этапы GPU» видно, какой шаг самый дорогой."
+  },
+  {
+   "zh": "降低处理分辨率或补帧档位，关闭同时运行的游戏或其他占用显存的程序。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "降低處理解析度或補幀檔位，關閉同時執行的遊戲或其他占用顯示記憶體的程式。",
+   "en": "Lower the processing resolution or the frame generation tier, and close games or other programs using video memory.",
+   "ja": "処理解像度かフレーム生成の段階を下げ、同時に動くゲームや VRAM を使う他のプログラムを閉じてください。",
+   "ko": "처리 해상도나 프레임 생성 단계를 낮추고, 함께 실행 중인 게임이나 VRAM을 쓰는 프로그램을 닫으세요.",
+   "es": "Baja la resolución de procesamiento o el nivel de generación de fotogramas y cierra juegos u otros programas que usen memoria de vídeo.",
+   "fr": "Baissez la résolution de traitement ou le niveau de génération d’images, et fermez les jeux ou programmes utilisant la mémoire vidéo.",
+   "de": "Verarbeitungsauflösung oder Zwischenbild-Stufe senken und Spiele oder andere Programme schließen, die Grafikspeicher belegen.",
+   "pt-BR": "Reduza a resolução de processamento ou o nível de geração de quadros e feche jogos ou outros programas que usam memória de vídeo.",
+   "ru": "Понизьте разрешение обработки или уровень интерполяции и закройте игры и другие программы, занимающие видеопамять."
+  },
+  {
    "zh": "降低的是基础超分后的画面，不是原始输入；选项必须小于基础结果和第二次超分目标。",
    "src": "qml/SrStageEditor.qml",
    "zh-TW": "降低的是基礎超分後的畫面，不是原始輸入；選項必須小於基礎結果和第二次超分目標。",
@@ -43943,6 +45061,19 @@
    "ru": "Это уменьшает исходный результат SR, а не исходный ввод. Выберите размер ниже базового результата и второй цели SR."
   },
   {
+   "zh": "降低补帧档位（VFG 高→中）或倍数，或少开一层 NR、把内部处理分辨率降到 1080p 或自动。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "降低補幀檔位（VFG 高→中）或倍數，或少開一層 NR、把內部處理解析度降到 1080p 或自動。",
+   "en": "Lower the frame generation tier (VFG High → Medium) or multiplier, use one NR layer less, or set the internal processing resolution to 1080p or Auto.",
+   "ja": "フレーム生成の段階（VFG 高→中）か倍率を下げるか、NR を 1 層減らす、または内部処理解像度を 1080p か自動にしてください。",
+   "ko": "프레임 생성 단계(VFG 높음→보통)나 배수를 낮추거나, NR을 한 층 줄이거나, 내부 처리 해상도를 1080p 또는 자동으로 하세요.",
+   "es": "Baja el nivel de generación de fotogramas (VFG Alto → Medio) o el multiplicador, usa una capa de NR menos o pon la resolución interna en 1080p o Automática.",
+   "fr": "Baissez le niveau de génération d’images (VFG Élevé → Moyen) ou le multiplicateur, retirez une couche de NR, ou réglez la résolution interne sur 1080p ou Auto.",
+   "de": "Zwischenbild-Stufe (VFG Hoch → Mittel) oder Multiplikator senken, eine NR-Ebene weniger nutzen oder die interne Verarbeitungsauflösung auf 1080p oder Automatisch stellen.",
+   "pt-BR": "Reduza o nível de geração de quadros (VFG Alto → Médio) ou o multiplicador, use uma camada de NR a menos ou defina a resolução interna como 1080p ou Automática.",
+   "ru": "Понизьте уровень интерполяции (VFG высокий → средний) или множитель, уберите один слой NR или поставьте внутреннее разрешение 1080p либо «Авто»."
+  },
+  {
    "zh": "降噪强度超出范围",
    "src": "src/engine/EffectChain.cpp",
    "zh-TW": "降噪強度超出範圍",
@@ -43954,6 +45085,19 @@
    "de": "Die Entrauschungsstärke liegt außerhalb des gültigen Bereichs",
    "pt-BR": "Intensidade de redução de ruído fora da faixa",
    "ru": "Сила шумоподавления вне допустимого диапазона"
+  },
+  {
+   "zh": "隐藏",
+   "src": "qml/PerfDiagnosticsDialog.qml",
+   "zh-TW": "隱藏",
+   "en": "Hide",
+   "ja": "隠す",
+   "ko": "숨기기",
+   "es": "Ocultar",
+   "fr": "Masquer",
+   "de": "Ausblenden",
+   "pt-BR": "Ocultar",
+   "ru": "Скрыть"
   },
   {
    "zh": "隐藏播放条",
@@ -44412,6 +45556,7 @@
   },
   {
    "zh": "静止时画面也在移动。请面向有纹理的静止场景，松开手柄后重试。",
+   "src": null,
    "zh-TW": "靜止時畫面也在移動。請面向有紋理的靜止場景，放開手把後重試。",
    "en": "The image moved with the stick centered. Face a still scene with visible detail, release the controller, and try again.",
    "ja": "スティックが中央にある間も映像が動いていました。模様のある静止した場所に向き、コントローラーから手を離して再試行してください。",
@@ -44450,6 +45595,7 @@
   },
   {
    "zh": "面向有纹理的静止场景。测试会自动转动镜头，约 20 秒。",
+   "src": null,
    "zh-TW": "面向有紋理的靜止場景。測試會自動轉動鏡頭，約 20 秒。",
    "en": "Face a still scene with visible detail. The test turns the camera automatically and takes about 20 seconds.",
    "ja": "模様のある静止した場所に向いてください。テストは自動でカメラを回転させ、約 20 秒かかります。",
@@ -46099,6 +47245,19 @@
    "ru": "Первое использование: PS5 Настройки → Система Remote Play → Устройство связи; введите идентификатор учетной записи и 8-значный код сопряжения, затем пара."
   },
   {
+   "zh": "首次运行或驱动更新后会重新编译着色器，等一次跑完即可；每次都很慢请检查驱动的着色器缓存设置。",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "首次執行或驅動更新後會重新編譯著色器，等一次跑完即可；每次都很慢請檢查驅動的著色器快取設定。",
+   "en": "Shaders are recompiled on first run or after a driver update; let it finish once. If it is slow every time, check the driver's shader cache setting.",
+   "ja": "初回起動やドライバー更新後はシェーダーを再コンパイルします。一度終われば大丈夫です。毎回遅い場合はドライバーのシェーダーキャッシュ設定を確認してください。",
+   "ko": "처음 실행하거나 드라이버를 업데이트하면 셰이더를 다시 컴파일합니다. 한 번 끝나면 됩니다. 매번 느리면 드라이버의 셰이더 캐시 설정을 확인하세요.",
+   "es": "Los shaders se recompilan en el primer uso o tras actualizar el controlador; deja que termine una vez. Si siempre es lento, revisa la caché de shaders del controlador.",
+   "fr": "Les shaders sont recompilés au premier lancement ou après une mise à jour du pilote ; laissez finir une fois. Si c’est lent à chaque fois, vérifiez le cache de shaders du pilote.",
+   "de": "Shader werden beim ersten Start oder nach einem Treiberupdate neu kompiliert; einmal durchlaufen lassen. Ist es jedes Mal langsam, die Shader-Cache-Einstellung des Treibers prüfen.",
+   "pt-BR": "Os shaders são recompilados na primeira execução ou após atualizar o driver; deixe terminar uma vez. Se for lento sempre, verifique o cache de shaders do driver.",
+   "ru": "Шейдеры перекомпилируются при первом запуске или после обновления драйвера; дождитесь один раз. Если медленно каждый раз, проверьте кэш шейдеров в драйвере."
+  },
+  {
    "zh": "首次进入为空白画布，之后保留上次的节点链",
    "src": "qml/ProPage.qml",
    "zh-TW": "首次進入為空白畫布，之後保留上次的節點鏈",
@@ -46136,6 +47295,19 @@
    "de": "Home = die Seite für die Auswahl einer Quelle (Klick auf das Logo oben kehrt auch hier zurück)",
    "pt-BR": "Home = a página para escolher uma fonte (clique no logotipo no topo também retorna aqui)",
    "ru": "Home = страница для выбора источника (нажатие на логотип вверху также возвращается здесь)"
+  },
+  {
+   "zh": "驱动可能强制关闭了垂直同步（会撕裂）",
+   "src": "src/ui/PerfDiagnostics.cpp",
+   "zh-TW": "驅動可能強制關閉了垂直同步（會撕裂）",
+   "en": "The driver may be forcing V-Sync off (tearing)",
+   "ja": "ドライバーが垂直同期を強制オフにしている可能性があります（ティアリング）",
+   "ko": "드라이버가 수직 동기를 강제로 끈 것 같습니다(티어링)",
+   "es": "Puede que el controlador fuerce la sincronización vertical desactivada (tearing)",
+   "fr": "Le pilote force peut-être la synchronisation verticale désactivée (déchirement)",
+   "de": "Der Treiber erzwingt möglicherweise V-Sync aus (Tearing)",
+   "pt-BR": "O driver pode estar forçando a sincronização vertical desligada (tearing)",
+   "ru": "Драйвер, возможно, принудительно отключает вертикальную синхронизацию (разрывы)"
   },
   {
    "zh": "驱动报告系统资源不足。另一个 Veyra（PID {}）可能正在使用采集卡，请关闭后重试。",

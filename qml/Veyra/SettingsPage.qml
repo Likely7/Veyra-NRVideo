@@ -1618,6 +1618,28 @@ VPage {
                             hint: qsTr("打开 GitHub Issues，诊断信息已自动复制")
                             VButton { text: qsTr("打开"); onClicked: veyra.openFeedbackPage() }
                         }
+                        // 性能诊断: records frame times, system load and the log for a few
+                        // minutes, then writes a report and a package (PerfDiagnostics.h).
+                        VRow {
+                            objectName: "set-perf-diagnostics"
+                            readonly property var diag: veyra.perfDiagnostics
+                            function clock(seconds) {
+                                const s = Math.max(0, Math.floor(seconds))
+                                return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0")
+                            }
+                            label: qsTr("性能诊断")
+                            hint: !diag ? ""
+                                  : diag.state === "recording" ? qsTr("记录中 %1 / %2 · 觉得卡时按 Ctrl+Alt+M 标记").arg(clock(diag.elapsedSeconds)).arg(clock(diag.durationSeconds))
+                                  : diag.state === "analyzing" ? qsTr("正在分析…")
+                                  : diag.state === "done" ? diag.headline
+                                  : diag.state === "failed" ? diag.message
+                                  : qsTr("录 3–10 分钟，自动分析卡顿原因并生成报告，反馈时附上")
+                            VButton {
+                                objectName: "set-perf-diagnostics-open"
+                                text: parent.diag && parent.diag.state === "idle" ? qsTr("开始…") : qsTr("查看")
+                                onClicked: root.requestPage("perf-diagnostics")
+                            }
+                        }
                         VRow {
                             label: qsTr("赞助作者")
                             hint: qsTr("Patreon、微信与支付宝")

@@ -295,6 +295,13 @@ private:
             if (down) QMetaObject::invokeMethod(&owner, &StreamInputCapture::quickReferenceRequested, Qt::QueuedConnection);
             return;
         }
+        // 性能诊断 mark (Ctrl+Alt+M) stays with the program, like F7–F10.
+        if (!preview && key == 'M' && (mods & Mapper::Ctrl) && (mods & Mapper::Alt)) {
+            if (down) QMetaObject::invokeMethod(&owner, [&capture = owner] {
+                emit capture.applicationHotkeyRequested(QStringLiteral("Ctrl+Alt+M"));
+            }, Qt::QueuedConnection);
+            return;
+        }
         if (!preview && key >= VK_F7 && key <= VK_F10) {
             if (down) QMetaObject::invokeMethod(&owner, [&capture = owner, chord] {
                 emit capture.applicationHotkeyRequested(bindingLabel(chord));

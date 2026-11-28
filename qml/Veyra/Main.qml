@@ -340,7 +340,8 @@ Window {
             fullscreenBackground: ultrawideBackground
             fullscreenDisplays: root.fullscreenDisplays
             onRequestPage: p => {
-                if (p === "translation" || p === "update" || p === "xbox") dialogs.open(p)
+                if (p === "perf-diagnostics") perfDialog.open()
+                else if (p === "translation" || p === "update" || p === "xbox") dialogs.open(p)
                 else root.goPage(p)
             }
         }
@@ -870,6 +871,7 @@ Window {
     Connections {
         target: veyra.ps5Input
         function onApplicationHotkeyRequested(chord) {
+            if (chord === "Ctrl+Alt+M" && veyra.perfDiagnostics && veyra.perfDiagnostics.state === "recording") veyra.perfDiagnostics.mark()
             if (chord === veyra.shortcuts.screenshot) veyra.takeScreenshot()
             if (chord === veyra.shortcuts.record) veyra.toggleRecording("shortcut")
             if (chord === veyra.shortcuts.replay) veyra.saveReplay("shortcut")
@@ -1128,6 +1130,67 @@ Window {
             font.pixelSize: 12
             wrapMode: Text.WordWrap
             horizontalAlignment: Text.AlignHCenter
+        }
+    }
+
+    // 性能诊断 (设置 → 关于): the dialog, a timer pill over the picture while it
+    // records (also in fullscreen), and Ctrl+Alt+M to mark a stutter.
+    PerfDiagnosticsDialog { id: perfDialog }
+    Rectangle {
+        id: perfPill
+        objectName: "videoCover"
+        property real coverRadius: 9
+        readonly property var diag: veyra.perfDiagnostics
+        readonly property bool recording: diag && diag.state === "recording"
+        readonly property bool finished: diag && (diag.state === "analyzing" || diag.state === "done")
+        z: 31
+        visible: recording || finished
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.topMargin: 12
+        anchors.rightMargin: 16
+        width: perfPillRow.implicitWidth + 20
+        height: perfPillRow.implicitHeight + 12
+        radius: 9
+        color: "#1C1A26"
+        border.width: 1
+        border.color: recording ? Qt.rgba(1, 0.365, 0.42, 0.55) : Theme.stroke2
+        function clock(seconds) {
+            const s = Math.max(0, Math.floor(seconds))
+            return String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0")
+        }
+        Row {
+            id: perfPillRow
+            anchors.centerIn: parent
+            spacing: 8
+            Rectangle { width: 8; height: 8; radius: 4; anchors.verticalCenter: parent.verticalCenter
+                        color: perfPill.recording ? "#FF5D6C" : "#3DDC84"; visible: perfPill.recording || perfPill.diag.state === "done" }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                color: "#ECEAF2"; font.family: Theme.fontUi; font.pixelSize: 12
+                text: !perfPill.diag ? ""
+                      : perfPill.recording ? qsTr("诊断记录中 %1 / %2 · Ctrl+Alt+M 标记").arg(perfPill.clock(perfPill.diag.elapsedSeconds)).arg(perfPill.clock(perfPill.diag.durationSeconds))
+                      : perfPill.diag.state === "analyzing" ? qsTr("诊断：正在分析…")
+                      : qsTr("诊断完成 · 查看结果")
+            }
+        }
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: perfDialog.open()
+        }
+    }
+    Shortcut {
+        sequence: "Ctrl+Alt+M"
+        context: Qt.ApplicationShortcut
+        enabled: veyra.perfDiagnostics && veyra.perfDiagnostics.state === "recording"
+        onActivated: veyra.perfDiagnostics.mark()
+    }
+    Connections {
+        target: veyra.perfDiagnostics
+        function onMarked(number) { toast.show(qsTr("已标记 #%1").arg(number), false) }
+        function onFinished(ok) {
+            toast.show(ok ? qsTr("性能诊断完成，点右上角查看结果") : qsTr("性能诊断已结束，分析没有完成，原始数据已保存"), !ok, ok)
         }
     }
 
