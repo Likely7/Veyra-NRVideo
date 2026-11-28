@@ -1,5 +1,16 @@
 # 当前工作日志
 
+## 2026-11-27 2.2.2 主线整合与实卡版本对照
+
+基线是 `f5c56a58`。核对 2.2.1 以来的 82 个工作树，保留主线里的 Antigravity 启动和打包修复 `72cc0161`。从 Claude 原工作树的私有索引取性能诊断源码，集成于 `19e11bcd`。修复诊断 ZIP 解包目录复用和设置导出范围，最终构建源码为 `9fd7c244`。源变更和实测范围见 [2.2.2 整合记录](INTEGRATION_2.2.2.md)。
+
+复用 `build/codex-community-pr-followup-20261127`，运行 `tmp/codex-2.2.2-integration-perf-20261127/build-local.py --ffmpeg-9.0.2`，并发 2。主程序、性能分析器、便携启动器、更新工作器和 Qt Quick 编译通过。共用测试程序核对 118 个 DXIL。第一次从共用目录直接运行时缺 Qt QML 模块，改用项目现有 Qt 路径及独立档案启动脚本。入口实测打开并正常退出。 [构建记录](<E:/项目/Veyra/logs/codex-2.2.2-integration-perf-20261127/build-20261127-191226/receipt.json>) · [启动日志](<E:/项目/Veyra/logs/codex-2.2.2-integration-perf-20261127/user-launch-smoke.log>)
+
+`run-final-qa.py` 验证逐帧采样 13 项、分析器 20 项、实时帧时序 568 项、GPU 缩放 36 项。Qt Quick 基础 306 项通过、1 项可选栅格对照跳过，补跑新增性能诊断界面 3 项。翻译提取 3736 项，九种语言与占位符检查均无遗漏。真实文件播放自动生成 597 条送显记录及诊断 ZIP，重分析与两份 ZIP 对比保留已有目录中的笔记。 [最终测试回执](<E:/项目/Veyra/reports/codex-2.2.2-integration-perf-20261127/validation-unit-20261127-192038.json>) · [新增界面测试](<E:/项目/Veyra/logs/codex-2.2.2-integration-perf-20261127/diagnostics-ui/qml-results.txt>) · [实际诊断回执](<E:/项目/Veyra/reports/codex-2.2.2-integration-perf-20261127/validation-diagnostics-20261127-192236.json>)
+
+`capture-bench-full.py` 同画面 HDMI 环回实测。预检时修正 Win32 DPI 导致馈送窗口未覆盖整个 HDMI 输出的问题，按各包原始入口启动。正式测量 13 轮，T900 全部协商到 2560×1440p60 NV12。固定档的 2.2.2 高档全屏约 60 FPS 送显，1% Low 54.6–55.8 FPS，中档窗体为 53.2 FPS，三个测量窗口采集均无丢帧。相对 2.2.1，高档 GPU 批次 P95 增加 1.0–1.3 ms，兼容档仍有低帧波动。ETW 访问被拒，保留软件 Present 与 DXGI 统计。 [逐轮结果](<E:/项目/Veyra/reports/codex-2.2.2-integration-perf-20261127/capture-matrix.json>)
+
+
 ## 2026-11-27 Lanczos-2 AA 缩小
 
 窗口和全屏送显原先用加宽的 Catmull-Rom，NR 处理尺寸、超分前缩小、双重超分中间缩小和超分后缩回原先用 Area。这些路径改用随缩小倍率加宽的 Lanczos-2 AA。超分页提示写明实际算法。送显通过同号权重配对取样，大于 4:1 的小窗口沿用既有核宽上限。智能超分按检测到的原放大方式反推渲染尺寸。
