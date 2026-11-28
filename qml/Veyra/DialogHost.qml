@@ -91,6 +91,10 @@ Item {
     Ps5SourceDialog {
         id: ps5Dialog
         dialogHost: host    }
+    // Keyboard and mouse as the PS5 pad: the key bindings (from the PS5 and the capture card panels).
+    Ps5KeysDialog {
+        dialogHost: host
+    }
 
     // --- PC 串流（Sunshine / GameStream） ----------------------------------
     // Hosts, pairing, the host's apps and the stream-core settings. The effect chain is not here: once

@@ -37,6 +37,7 @@
 #include "veyra/ui/PlayerUiFacade.h"
 
 class QQmlEngine;
+namespace veyra::remoteplay { struct ControllerState; }
 namespace veyra::ui {
 
 class MoonlightModel;
@@ -870,6 +871,10 @@ public:
     Q_INVOKABLE void ps5SendLoginPin(const QString& pin);
     Q_INVOKABLE void ps5Cancel();
     Q_INVOKABLE void ps5Calibrate();
+    // A PS5 stream, or PS5 手柄控制 with a capture card, with 键盘鼠标模拟手柄 on: the keyboard
+    // and mouse become the pad until Ctrl+Alt+Shift+Z or a focus loss. Off releases them.
+    // The key settings go through ps5Set("bindKey", {code, action}) and ps5Set("resetKeys").
+    Q_INVOKABLE void ps5KeyboardMouse(bool on);
     // key: enabled | background (saved preferences ps5CaptureControl / ps5ControlBackground).
     Q_INVOKABLE void ps5ControlSet(const QString& key, const QVariant& value);
     Q_INVOKABLE void ps5ControlRestart();
@@ -1651,6 +1656,7 @@ private:
     void tickPs5Control(bool force = false);
     // restart: replace a running session (another pairing, or the user asked).
     void startPs5Control(bool restart);
+    void applyPs5KeyboardMouse(remoteplay::ControllerState& state);
     void stopPs5Control();
     bool captureCardLive() const;
     void tickMoonlight();

@@ -86,6 +86,7 @@ CaptureGuideDialog 1.0 CaptureGuideDialog.qml
 OnboardingGuide 1.0 OnboardingGuide.qml
 DynamicHudRow 1.0 DynamicHudRow.qml
 Ps5SourceDialog 1.0 Ps5SourceDialog.qml
+Ps5KeysDialog 1.0 Ps5KeysDialog.qml
 PcSourceDialog 1.0 PcSourceDialog.qml
 XboxSourceDialog 1.0 XboxSourceDialog.qml
 ScreenSourceDialog 1.0 ScreenSourceDialog.qml

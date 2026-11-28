@@ -6,6 +6,8 @@
 // window. Ctrl+Alt+Shift+Z releases the capture, +Q asks to end the session, +S toggles the stats.
 // Not captured: the Windows key, Alt+Tab and Ctrl+Alt+Del (the system keeps them; losing the focus
 // releases the capture and everything held on the host).
+// With setTarget() the captured input goes to another consumer instead of the Moonlight host
+// (a PS5 stream: the keyboard and mouse become the pad).
 #include <QAbstractNativeEventFilter>
 #include <QObject>
 #include <windows.h>
@@ -23,6 +25,7 @@ public:
     ~MoonlightInputCapture() override;
 
     void setWindow(HWND topLevel) { window_ = topLevel; }
+    void setTarget(moonlight::InputSink* target) { target_ = target; }   // not owned; outlives the capture
     bool captured() const { return captured_; }
     // Returns false when it cannot start (no window, or the window is not in the foreground).
     bool capture(bool on);
@@ -44,6 +47,7 @@ private:
 
     engine::EngineController& engine_;
     moonlight::InputRouter router_;
+    moonlight::InputSink* target_ = nullptr;
     HWND window_ = nullptr;
     bool captured_ = false;
 };

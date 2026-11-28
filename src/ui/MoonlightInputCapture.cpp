@@ -43,7 +43,7 @@ bool MoonlightInputCapture::capture(bool on) {
         ClipCursor(nullptr);
         SetCursor(LoadCursorW(nullptr, IDC_ARROW));
         router_.reset();
-        engine_.moonlightReleaseInput();   // nothing stays pressed on the host
+        if (!target_) engine_.moonlightReleaseInput();   // nothing stays pressed on the host
     }
     emit capturedChanged(captured_);
     return true;
@@ -107,9 +107,9 @@ bool MoonlightInputCapture::nativeEventFilter(const QByteArray& eventType, void*
     return consumed;
 }
 
-void MoonlightInputCapture::key(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) { engine_.moonlightKey(virtualKey, scanCode, extended, down); }
-void MoonlightInputCapture::mouseMove(int dx, int dy) { engine_.moonlightMouseMove(dx, dy); }
-void MoonlightInputCapture::mouseButton(int button, bool down) { engine_.moonlightMouseButton(button, down); }
-void MoonlightInputCapture::scroll(int delta, bool horizontal) { engine_.moonlightScroll(delta, horizontal); }
+void MoonlightInputCapture::key(uint32_t virtualKey, uint32_t scanCode, bool extended, bool down) { if (target_) target_->key(virtualKey, scanCode, extended, down); else engine_.moonlightKey(virtualKey, scanCode, extended, down); }
+void MoonlightInputCapture::mouseMove(int dx, int dy) { if (target_) target_->mouseMove(dx, dy); else engine_.moonlightMouseMove(dx, dy); }
+void MoonlightInputCapture::mouseButton(int button, bool down) { if (target_) target_->mouseButton(button, down); else engine_.moonlightMouseButton(button, down); }
+void MoonlightInputCapture::scroll(int delta, bool horizontal) { if (target_) target_->scroll(delta, horizontal); else engine_.moonlightScroll(delta, horizontal); }
 
 } // namespace veyra::ui
