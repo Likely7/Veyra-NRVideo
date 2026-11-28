@@ -93,7 +93,9 @@ std::string WebRtcSession::describeCodecs(const std::string& sdp) {
     return out;
 }
 
-bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono::milliseconds timeout) {
+bool WebRtcSession::start(Signaling& signaling, std::string* error, std::chrono::milliseconds timeout,
+                          StreamResolution resolution) {
+    resolution_ = resolution;
     const auto fail = [&](const std::string& why) {
         if (error) *error = why;
         log::warn("xbox", "webrtc start failed: " + why);
@@ -274,9 +276,10 @@ bool WebRtcSession::sendClientConfig() {
     sent &= sendMessageJson(message("/streaming/characteristics/orientationchanged", {{"orientation", 0}}));
     sent &= sendMessageJson(message("/streaming/characteristics/touchinputenabledchanged", {{"touchInputEnabled", false}}));
     sent &= sendMessageJson(message("/streaming/characteristics/clientdevicecapabilities", json::object()));
+    const auto [width, height] = streamExtent(resolution_);
     sent &= sendMessageJson(message("/streaming/characteristics/dimensionschanged", {
-        {"horizontal", 1920}, {"vertical", 1080}, {"preferredWidth", 1920}, {"preferredHeight", 1080},
-        {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", 1920}, {"safeAreaBottom", 1080}, {"supportsCustomResolution", true}}));
+        {"horizontal", width}, {"vertical", height}, {"preferredWidth", width}, {"preferredHeight", height},
+        {"safeAreaLeft", 0}, {"safeAreaTop", 0}, {"safeAreaRight", width}, {"safeAreaBottom", height}, {"supportsCustomResolution", true}}));
     return sent;
 }
 
@@ -295,6 +298,16 @@ void WebRtcSession::onMessageChannel(const std::string& text) {
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", false}}.dump());
         initialized &= sendControl(json{{"message", "gamepadChanged"}, {"gamepadIndex", 0}, {"wasAdded", true}}.dump());
+        if (resolution_ != StreamResolution::Auto) {
+            // The home console honors explicit requests after both messages.
+            // Protocol reference: Greenlight PR #1752, tested on a real console.
+            const auto [width, height] = streamExtent(resolution_);
+            const json extent = {{"width", width}, {"height", height}};
+            initialized &= sendControl(json{{"message", "VideoPreference"}, {"type", "VideoPreference"},
+                {"resolution", extent}, {"dimensions", extent}, {"maxFPS", 60}}.dump());
+            initialized &= sendControl(json{{"message", "userRequestedResolutionUpdate"},
+                {"resolutionAlias", std::to_string(height)}}.dump());
+        }
         if (input_ && input_->isOpen()) {
             const auto report = clientMetadataReport(0, nowMs(), 1);
             initialized &= sendBinary(input_,report.data(),report.size());

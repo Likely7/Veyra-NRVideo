@@ -37040,6 +37040,32 @@
    "ru": "График программного обеспечения: лучшая совместимость, отсутствие видеопамяти, отсутствие конкуренции с видео для GPU; некоторые тени и размытия упрощены."
   },
   {
+   "zh": "串流分辨率",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "串流解析度",
+   "en": "Stream resolution",
+   "ja": "ストリーム解像度",
+   "ko": "스트림 해상도",
+   "es": "Resolución de la transmisión",
+   "fr": "Résolution du flux",
+   "de": "Stream-Auflösung",
+   "pt-BR": "Resolução da transmissão",
+   "ru": "Разрешение трансляции"
+  },
+  {
+   "zh": "重新连接后生效。1440p 需要 Xbox Series X|S、支持的系统版本，以及 1440p 或 4K 主机显示设置。实际分辨率请查看串流统计。",
+   "src": "qml/XboxSourceDialog.qml",
+   "zh-TW": "重新連線後生效。1440p 需要 Xbox Series X|S、支援的系統版本，以及 1440p 或 4K 主機顯示設定。實際解析度請查看串流統計。",
+   "en": "Reconnect to apply. 1440p requires an Xbox Series X|S with supported firmware and its display set to 1440p or 4K. Stream statistics show the decoded resolution.",
+   "ja": "再接続後に反映されます。1440p には Xbox Series X|S、対応するシステムバージョン、本体の 1440p または 4K 表示設定が必要です。実際の解像度はストリーム統計で確認できます。",
+   "ko": "다시 연결하면 적용됩니다. 1440p에는 Xbox Series X|S, 지원되는 시스템 버전, 콘솔의 1440p 또는 4K 디스플레이 설정이 필요합니다. 실제 해상도는 스트림 통계에서 확인하세요.",
+   "es": "Se aplica al volver a conectar. 1440p requiere una Xbox Series X|S con firmware compatible y la pantalla de la consola configurada en 1440p o 4K. Las estadísticas de la transmisión muestran la resolución decodificada.",
+   "fr": "Prend effet après reconnexion. Le 1440p nécessite une Xbox Series X|S avec un système compatible et un affichage console réglé en 1440p ou 4K. Les statistiques du flux indiquent la résolution décodée.",
+   "de": "Wird nach dem erneuten Verbinden wirksam. 1440p erfordert eine Xbox Series X|S mit unterstützter Systemversion und eine Konsolenanzeige mit 1440p oder 4K. Die Stream-Statistik zeigt die decodierte Auflösung.",
+   "pt-BR": "Aplica-se ao reconectar. 1440p requer um Xbox Series X|S com sistema compatível e a tela do console configurada para 1440p ou 4K. As estatísticas da transmissão mostram a resolução decodificada.",
+   "ru": "Применяется после повторного подключения. Для 1440p нужна Xbox Series X|S с поддерживаемой версией системы и экран консоли в режиме 1440p или 4K. Фактическое разрешение показано в статистике трансляции."
+  },
+  {
    "zh": "软件视频解码",
    "src": "qml/XboxSourceDialog.qml",
    "zh-TW": "軟體視訊解碼",

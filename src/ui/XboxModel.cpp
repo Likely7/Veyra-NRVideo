@@ -10,6 +10,7 @@
 #include <QSaveFile>
 #include <QUrl>
 #include <chrono>
+#include <optional>
 
 #include "veyra/Log.h"
 #include "veyra/xbox/StreamApi.h"
@@ -49,6 +50,15 @@ QString typeText(const std::string& type) {
 
 QString settingsPath() { return QString::fromStdWString((xbox::dataDirectory() / L"settings.json").wstring()); }
 
+std::optional<xbox::StreamResolution> streamResolution(int value) {
+    switch (value) {
+    case 0: return xbox::StreamResolution::Auto;
+    case 1080: return xbox::StreamResolution::FullHd;
+    case 1440: return xbox::StreamResolution::QuadHd;
+    default: return std::nullopt;
+    }
+}
+
 } // namespace
 
 XboxModel::XboxModel(QObject* parent) : QObject(parent) {
@@ -65,6 +75,7 @@ void XboxModel::loadSettings() {
     lastName_ = o.value("lastName").toString();
     gamepad_ = o.value("gamepad").toBool(true);
     softwareDecode_ = o.value("softwareDecode").toBool(false);
+    resolution_ = streamResolution(o.value("resolution").toInt()).value_or(xbox::StreamResolution::Auto);
 }
 
 void XboxModel::saveSettings() const {
@@ -72,7 +83,8 @@ void XboxModel::saveSettings() const {
     std::filesystem::create_directories(xbox::dataDirectory(), ec);
     QSaveFile file(settingsPath());
     if (!file.open(QIODevice::WriteOnly)) return;
-    file.write(QJsonDocument(QJsonObject{{"lastConsole", lastId_}, {"lastName", lastName_}, {"gamepad", gamepad_}, {"softwareDecode", softwareDecode_}}).toJson());
+    file.write(QJsonDocument(QJsonObject{{"lastConsole", lastId_}, {"lastName", lastName_}, {"gamepad", gamepad_},
+        {"softwareDecode", softwareDecode_}, {"resolution", int(resolution_)}}).toJson());
     file.commit();
 }
 
@@ -81,6 +93,7 @@ QVariantMap XboxModel::state() const {
         {"signedIn", account_->signedIn()}, {"busy", busy_}, {"status", status_}, {"code", code_},
         {"verificationUri", verificationUri_}, {"signingIn", signingIn_}, {"selected", selected_}, {"gamepad", gamepad_},
         {"streaming", streamActive_}, {"stream", stream_}, {"lastLabel", lastName_}, {"softwareDecode", softwareDecode_},
+        {"resolution", int(resolution_)},
     };
 }
 
@@ -206,6 +219,15 @@ void XboxModel::select(const QString& id) {
 bool XboxModel::set(const QString& key, const QVariant& value) {
     if (key == "gamepad") { gamepad_ = value.toBool(); saveSettings(); emit changed(); return true; }
     if (key == "softwareDecode") { softwareDecode_ = value.toBool(); saveSettings(); emit changed(); return true; }
+    if (key == "resolution") {
+        bool valid = false;
+        const auto selected = streamResolution(value.toInt(&valid));
+        if (!valid || !selected) return false;
+        resolution_ = *selected;
+        saveSettings();
+        emit changed();
+        return true;
+    }
     return false;
 }
 
@@ -218,6 +240,7 @@ bool XboxModel::launchConsole(const QString& id, const QString& name) {
     launch.desc.consoleName = name.toStdString();
     launch.desc.gamepad = gamepad_;
     launch.desc.softwareDecode = softwareDecode_;
+    launch.desc.resolution = resolution_;
     launch.label = name.isEmpty() ? QStringLiteral("Xbox") : name;
     if (!launch_(std::move(launch))) { status_ = tr("无法开始串流，请查看日志。"); emit changed(); return false; }
     lastId_ = id;

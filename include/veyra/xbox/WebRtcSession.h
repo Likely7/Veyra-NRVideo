@@ -63,7 +63,8 @@ public:
     void setBindAddress(std::string address) { bindAddress_ = std::move(address); }
 
     // Offer, signalling, ICE; returns once connected, false (with `error`) on failure or timeout.
-    bool start(Signaling& signaling, std::string* error, std::chrono::milliseconds timeout = std::chrono::seconds(20));
+    bool start(Signaling& signaling, std::string* error, std::chrono::milliseconds timeout = std::chrono::seconds(20),
+        StreamResolution resolution = StreamResolution::Auto);
     // True once the console acknowledged the message-channel handshake (input is accepted from then on).
     bool ready() const { return handshakeDone_.load(); }
     bool waitReady(std::chrono::milliseconds timeout);
@@ -105,6 +106,7 @@ private:
     std::chrono::steady_clock::time_point origin_ = std::chrono::steady_clock::now();
     std::string failure_;
     std::string bindAddress_;
+    StreamResolution resolution_ = StreamResolution::Auto;
 };
 
 } // namespace veyra::xbox

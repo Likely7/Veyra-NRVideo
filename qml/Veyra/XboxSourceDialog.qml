@@ -139,6 +139,17 @@ DialogLayer {
             VSwitch { objectName: "xbox-gamepad"; checked: xbDialog.st.gamepad !== false; onToggled: checked => xbDialog.xb.set("gamepad", checked) }
         }
         VRow {
+            label: qsTr("串流分辨率")
+            hint: qsTr("重新连接后生效。1440p 需要 Xbox Series X|S、支持的系统版本，以及 1440p 或 4K 主机显示设置。实际分辨率请查看串流统计。")
+            VSelect {
+                objectName: "xbox-stream-resolution"
+                implicitWidth: 138
+                value: xbDialog.st.resolution ? xbDialog.st.resolution + "p" : qsTr("自动")
+                options: [{ id: "0", label: qsTr("自动") }, { id: "1080", label: "1080p" }, { id: "1440", label: "1440p" }]
+                onPicked: id => xbDialog.xb.set("resolution", Number(id))
+            }
+        }
+        VRow {
             label: qsTr("软件视频解码")
             hint: qsTr("兼容选项：画面出现持续花屏时尝试开启，断开后重新连接生效。可能增加 CPU 占用和延迟；超分和补帧仍使用 GPU。")
             VSwitch { objectName: "xbox-software-decode"; checked: xbDialog.st.softwareDecode === true; onToggled: checked => xbDialog.xb.set("softwareDecode", checked) }

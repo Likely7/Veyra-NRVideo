@@ -244,7 +244,10 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
         log::info("xbox", "streaming region " + access.regionName + " host " + access.host);
 
         setState(XboxStats::State::Starting, L"正在唤醒主机并准备串流…");
-        p.sessionId = p.api->play(p.desc.serverId, p.desc.locale);
+        const auto [requestWidth, requestHeight] = xbox::streamExtent(p.desc.resolution);
+        log::info("xbox", "requested stream resolution " +
+            (p.desc.resolution == xbox::StreamResolution::Auto ? std::string("auto") : std::format("{}x{}", requestWidth, requestHeight)));
+        p.sessionId = p.api->play(p.desc.serverId, p.desc.locale, p.desc.resolution);
         log::info("xbox", "session " + p.sessionId);
         bool connectSent = false;
         const auto deadline = Clock::now() + std::chrono::seconds(120);
@@ -346,7 +349,7 @@ void XboxSessionSource::run(XboxConnectDesc desc) {
 
         ApiSignaling signaling(*p.api, p.sessionId);
         std::string error;
-        if (!p.rtc.start(signaling, &error)) {
+        if (!p.rtc.start(signaling, &error, std::chrono::seconds(20), p.desc.resolution)) {
             // SDP/service failures happen before an ICE/UDP connection is attempted.
             // Keep the actual stage instead of diagnosing every failure as a firewall.
             fail(L"Xbox 连接失败：" + widen(error));
