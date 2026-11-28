@@ -1,16 +1,17 @@
 #pragma once
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <deque>
 #include <optional>
-#include <vector>
 
 namespace veyra::engine {
 // Revision-scoped costs survive temporal-history resets. Old GPU pressure
 // expires by wall time, rather than requiring successful FG to replace it.
 class FgRecoveryBudget {
     struct Sample {int64_t time;double ms;};
+    static constexpr size_t kMaxSamples=64;
     std::deque<Sample> base_,fg_,warmup_;
     std::optional<std::deque<Sample>> first_,midpoint_;
     bool limited_=false;
@@ -22,15 +23,17 @@ class FgRecoveryBudget {
     }
     static void add(std::deque<Sample>& values,int64_t now,double ms){
         if(!std::isfinite(ms)||ms<0)return;
-        while(!values.empty()&&(values.size()>=64||values.front().time<now-10000000))values.pop_front();
+        while(!values.empty()&&(values.size()>=kMaxSamples||values.front().time<now-10000000))values.pop_front();
         values.push_back({now,ms});
     }
     static std::optional<double> p95(const std::deque<Sample>& values,int64_t now,int64_t age){
-        std::vector<double> current;
-        for(const auto& sample:values)if(sample.time>=now-age)current.push_back(sample.ms);
-        if(current.empty())return {};
-        const auto index=(current.size()*95+99)/100-1;
-        std::nth_element(current.begin(),current.begin()+index,current.end());return current[index];
+        std::array<double,kMaxSamples> current;
+        size_t count=0;
+        for(const auto& sample:values)if(sample.time>=now-age)current[count++]=sample.ms;
+        if(!count)return {};
+        const auto index=(count*95+99)/100-1;
+        std::nth_element(current.begin(),current.begin()+index,current.begin()+count);
+        return current[index];
     }
 public:
     void reset(){base_.clear();fg_.clear();warmup_.clear();first_.reset();midpoint_.reset();limited_=false;recoveryPairs_=0;}
@@ -173,8 +176,11 @@ public:
             return false;
         }
         if(!evaluated)return false;
+        // An A=B reset warms the history seed. The first interpolation is still cold.
+        const bool first=lastEvaluated_==0;
         const bool idle=lastEvaluated_&&now-lastEvaluated_>=kIdle100ns;
         lastEvaluated_=now;
+        if(first)return true;
         if(idle){left_=kEvaluations;recorded_=0;probing_=true;}
         if(left_){--left_;return true;}
         if(probing_&&++recorded_>=kProbeGroups){probing_=false;failures_=0;}

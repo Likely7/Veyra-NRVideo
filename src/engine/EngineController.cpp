@@ -1814,10 +1814,11 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         watch.presentationGeneration==presentationGeneration.load();
                     const auto vfgHeldUntil=vfgCostSettling.holdUntil();
                     const bool costSettling=currentCost&&isCapture&&!legacyLivePacing&&options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&
-                        vfgCostSettling.observe((batch.fgCandidates>0&&batch.fgEvaluated==0)||batch.fgFastForBudget,batch.fgEvaluated>0&&!batch.fgFast,host100ns());
+                        vfgCostSettling.observe((batch.fgCandidates>0&&batch.fgEvaluated==0)||batch.fgFastForBudget,
+                            batch.fgEvaluated>0&&!batch.fgFast&&!batch.historyReset&&!batch.fgRecovery,host100ns());
                     // Each model's own time. The steady time is the low envelope: an
                     // evaluation after skips can cost 1.7x (see FgCostSettling).
-                    if(currentCost&&watch.fgExecutionMs&&batch.fgEvaluated>0&&!batch.fgReduced&&!batch.historyReset&&!batch.fgRecovery){
+                    if(currentCost&&watch.fgExecutionMs&&batch.fgEvaluated>0&&!batch.fgReduced&&!batch.historyReset&&!batch.fgRecovery&&!costSettling){
                         auto& cost=batch.fgFast?vfgFastFgMs:vfgChosenFgMs;const double ms=*watch.fgExecutionMs;
                         cost=cost>0&&ms>=cost?cost+.1*(ms-cost):ms;
                         if(!batch.fgFast){vfgChosenAt=host100ns();++vfgChosenPairs;}
@@ -1832,7 +1833,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     }
                     if(options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg&&currentCost){
                         if(batch.historyReset)vfgOverload.reset();
-                        if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&batch.fgEvaluated+1==options.fgMultiplier)
+                        if(!batch.historyReset&&!batch.fgRecovery&&!batch.fgReduced&&!costSettling&&batch.fgEvaluated+1==options.fgMultiplier)
                             vfgOverload.observe(watch.fgExecutionMs,watch.firstFgExecutionMs,host100ns());
                     }
                     // A group whose frames were all evaluated but then marked a content
@@ -3233,6 +3234,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const int64_t driverPts100ns=pkt.pts.isUnknown()?0:pkt.pts.to100ns();
                 const auto capturePeriod=liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps);
                 bool captureClockCorrected=false;
+                bool halfRatePhaseMoved=false;
                 int64_t dedupHoldInterval100ns=0,dedupLateSampleLag=0;
                 if(physicalCapture&&!nativeCapture&&!captureSource.compressedVideo()&&!rereadCached&&
                    CaptureHalfRate::supported(activeSource->info().averageFps)&&!pkt.pts.isUnknown()&&pkt.arrivalHost100ns>0){
@@ -3315,7 +3317,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         traceSourceSkip(pkt,"CaptureHalfRate",options.settings.revision);
                         std::lock_guard lock(mutex_);++snapshot_.captureRateSkipped;continue;
                     }
-                    if(captureSampler.shifts()!=shifts||(picture&&captureSampler.gridKept()%600==0))
+                    halfRatePhaseMoved=captureSampler.shifts()!=shifts;
+                    if(halfRatePhaseMoved||(picture&&captureSampler.gridKept()%600==0))
                         veyra::log::info("capture-rate",std::format("60->30 phase: mode={} shifts={} keptOnGrid={} secondCopiesKept={} repeatsSkipped={} repeatsHeld={}",
                             halfRateMode,captureSampler.shifts(),captureSampler.gridKept(),captureSampler.secondCopiesKept(),captureSampler.repeatsSkipped(),captureSampler.repeatsHeld()));
                     pkt.duration={interval*2,10000000};
@@ -3579,6 +3582,16 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 const auto transportInterval=smoothContentAnchor?
                     liveSourceInterval100ns(pipeline::Rational::unknown(),activeSource->info().averageFps):0;
                 const bool marginPair=adaptiveCapturePhase&&options.fg&&!presentSinkFrameGeneration(options.settings.frameGenerationBackend);
+                // Admission overwrites liveTimeline for the incoming pair.
+                // Retain the preceding deadline for an isolated first-copy
+                // correction on fixed half-rate VFG.
+                std::optional<PresentationScheduler> precedingHalfRatePair;
+                if(halfRatePhaseMoved&&std::abs(liveInterval-capturePeriod)<=capturePeriod/4&&
+                   !skipHalfRateRepeats&&cardTiming&&marginPair&&smoothTransportAnchor&&
+                   !historyReset&&!gapCandidate&&!transaction&&previewFgMultiplier==2&&
+                   presentationEffective.outputRate!=OutputRateMode::Custom&&
+                   options.settings.frameGenerationBackend==FrameGenerationBackend::Vfg)
+                    precedingHalfRatePair=liveTimeline;
                 const int64_t pairExtra=marginPair?deadlineMargin.extra():0;
                 // Room for the generated frames' own interpolation past interval + base cost.
                 // Deduplicated pairs keep only their content-clock allowance: it already
@@ -3600,8 +3613,10 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                     if(slewCapturePhase)reserve=contentLagReserve.peak();
                 }
                 const auto phaseAllowance=std::max({transportInterval/2,fgPhaseAllowance,reserve});
+                // Keep the normal content phase through a one-slot correction.
                 auto pairDelay=marginPair?
-                    pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier,phaseAllowance,slewCapturePhase)+pairExtra:legacyPairDelay;
+                    pairLatency.select(host100ns(),legacyPairDelay,liveInterval,previewFgMultiplier,phaseAllowance,
+                        slewCapturePhase,!precedingHalfRatePair)+pairExtra:legacyPairDelay;
                 // Keep any phase above the new cap while it is slewing down.
                 const auto phaseLimit=slewCapturePhase?std::max(legacyPairDelay+phaseAllowance,pairDelay-pairExtra):
                     legacyPairDelay+phaseAllowance;
@@ -3640,12 +3655,13 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const bool adjustPhase=marginPair&&pairAnchoredLive&&!warmingHistory&&!historyReset&&!held;
                         const auto neededPhase=earliest-liveInputReady+batch.b100ns-lastGenerated-pairExtra;
                         if(adjustPhase){
-                            pairDelay=pairLatency.enforceAdmissionFloor(neededPhase,phaseLimit)+pairExtra;
+                            const auto transient=precedingHalfRatePair?std::optional{pairDelay-pairExtra}:std::nullopt;
+                            pairDelay=pairLatency.enforceAdmissionFloor(neededPhase,phaseLimit,transient)+pairExtra;
                             liveTimeline.resetPair(batch.identity.epoch,batch.b100ns,liveInputReady,pairDelay);
                         }
                         const auto deadline=liveTimeline.deadline(lastGenerated);
                         const bool admitted=!held&&fgBudget.admitBy(deadline,earliest);
-                        if(adjustPhase&&!admitted)pairLatency.observe(now,neededPhase);
+                        if(adjustPhase&&!admitted&&!precedingHalfRatePair)pairLatency.observe(now,neededPhase);
                         logAdmission(batch,now,deadline,elapsed,presentP95,admitted,warmingHistory,pairAnchoredLive?(isStream?"decoded-pair":"capture-pair"):"continuous");
                         auto decision=admitted?pipeline::EnhanceGraph::FgDecision::Evaluate:pipeline::EnhanceGraph::FgDecision::Skip;
                         // A slower RIFE 3X pair may still meet the original
@@ -3973,6 +3989,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 // File playback replay without a simulated card clock still
                 // needs its continuous PTS anchor.
                 const bool paceSourcePts=livePacesSourcePts(options.fg,cardTiming,isScreen);
+                bool paceRephasedReal=false;
                 if(captureDue){
                     liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,captureDue,0);
                 }else if(isCapture&&!rereadCached&&(isStream||pairPacing||!liveTimeline.anchored(out.batch.identity.epoch,paceSourcePts))){
@@ -3996,6 +4013,8 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                         const auto presentAnchor=fgHeld?liveInputReady:smoothedAnchor;
                         liveGeneratedGrace=liveGeneratedGrace100ns(liveInputReady,presentAnchor);
                         liveTimeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,presentAnchor,options.fg&&!fgHeld?pairDelay:0,paceSourcePts);
+                        paceRephasedReal=!fgHeld&&precedingHalfRatePair&&precedingHalfRatePair->anchored(out.batch.identity.epoch)&&
+                            capturePairDecision==pipeline::EnhanceGraph::FgDecision::Skip&&out.batch.count==1;
                         const bool smoothedCapacity=smoothTransportAnchor||smoothContentAnchor;
                         if(smoothedCapacity&&host100ns()>=nextLiveAnchorLog){
                             nextLiveAnchorLog=host100ns()+10000000;
@@ -4008,13 +4027,23 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                 double frameWaitMs=0,framePresentMs=0;
                 double gpuWaitMs=0;
                 if(liveScheduler){
-                    const auto timeline=liveTimeline;
+                    auto timeline=liveTimeline;
+                    if(paceRephasedReal){
+                        const auto oldDue=timeline.deadline(out.batch.b100ns);
+                        const auto previousDue=precedingHalfRatePair->deadline(out.batch.a100ns);
+                        const auto due=fixedHalfRateRephaseDeadline(oldDue,previousDue,capturePeriod);
+                        if(due!=oldDue){
+                            timeline.resetPair(out.batch.identity.epoch,out.batch.b100ns,due,0);
+                            veyra::log::info("capture-rate",std::format("source={} realDeadlineShiftMs={:.3f} originalSpacingMs={:.3f} pacedSpacingMs={:.3f}",
+                                pkt.sequence,double(due-oldDue)/10000,double(oldDue-previousDue)/10000,double(due-previousDue)/10000));
+                        }
+                    }
                     const uint64_t jobGeneration=presentationGeneration.load();
                     auto watch=std::make_shared<CompletionWatch>();watch->output=out;watch->flow=frameFlow;watch->processStart=processStart;watch->real=!rereadCached;
                     watch->predictedGpuStart100ns=std::chrono::duration_cast<std::chrono::nanoseconds>(processStart.time_since_epoch()).count()/100+int64_t(queuedGpuMs*10000);
                     watch->captureArrival=captureArrival;watch->presentationGeneration=jobGeneration;
                     // Learn enough phase for early content-clock deadlines on late capture slots.
-                    watch->phaseAnchor=smoothContentAnchor?presentAnchorFor(out.batch.b100ns):captureArrival;
+                    watch->phaseAnchor=precedingHalfRatePair?0:smoothContentAnchor?presentAnchorFor(out.batch.b100ns):captureArrival;
                     // Readiness is already late by contentLag on the beat itself.
                     // Train for that late pair even when the current B arrived on time.
                     watch->phaseReserve=std::max<int64_t>(0,reserve-contentLag);
@@ -4059,7 +4088,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
 #ifdef VEYRA_ENABLE_XBOX
                         &xb,
 #endif
-                        &seekDecoded,&seekStarted,&seekDemuxDone,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&processingGraph,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&observeFrameReady,&traceSubframe,&traceCpu,&captureStarting,&rawFirstPresent,&lastRawPresent,&firstEnhancedRevision,&retiredCapturePreview,&capturePreviewWindow,&rawSurfaceRevealed,privateTrace,traceSubframes,watch,step,timeline,captureArrival,sourceArrivalHost=pkt.arrivalHost100ns,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothedCapacity=smoothTransportAnchor||smoothContentAnchor,halfRate,captureClockCorrected,driverPts100ns,flow=frameFlow,&deadlineMargin,marginPair,pairExtra](int64_t now)->LiveGpuScheduler::Step{
+                        &seekDecoded,&seekStarted,&seekDemuxDone,&audio,&audioPipe,&audioStarted,&cadence,&ctx,&fileAudioAlignPending,&fileAwaitingVideo,&fileInputEnded,&generatedDropCap,&generatedDropCapacity,&generatedDropDeadline,&playbackRate,&frameFlow,&graph,&host100ns,&isCapture,&isImage,&liveArrival,&livePresent,&liveScheduler,&nextFgDeadlineLog,&nowMs,&options,&pendingCompletions,&physicalCapture,&processingGraph,&presentEntryDeviation,&presentReturnDeviation,&presentationEffective,&presentationGeneration,&presentationSkippedGenerated,&presenter,&ring,&runSessionId,&seekPreviewPending,&observeFrameReady,&traceSubframe,&traceCpu,&captureStarting,&rawFirstPresent,&lastRawPresent,&firstEnhancedRevision,&retiredCapturePreview,&capturePreviewWindow,&rawSurfaceRevealed,privateTrace,traceSubframes,watch,step,timeline,captureArrival,sourceArrivalHost=pkt.arrivalHost100ns,baselineReady,delayEnhanced,activeSeekId,lineage,jobGeneration,rereadCached,sourceIntervalMs,submitThenPresent,generatedGrace=liveGeneratedGrace,smoothedCapacity=smoothTransportAnchor||smoothContentAnchor,halfRate,captureClockCorrected,driverPts100ns,flow=frameFlow,&deadlineMargin,learnDeadlineMargin=marginPair&&!precedingHalfRatePair,pairExtra](int64_t now)->LiveGpuScheduler::Step{
 
                         using State=LiveGpuScheduler::State;auto& batch=watch->output;auto& s=*step;
                         auto updatePending=[&](LiveStepState*){
@@ -4313,7 +4342,7 @@ void EngineController::run(HWND window,std::wstring path,PlayerOptions options,s
                             // saw unfinished (so its completion was seen as it happened); a frame
                             // first looked at after its deadline (the thread was busy) says
                             // nothing about the GPU. Warmup and recovery pairs are not steady.
-                            if(didPresent&&generated&&marginPair&&flow==frameFlow&&timeline.paced()&&!batch.historyReset&&!batch.fgRecovery){
+                            if(didPresent&&generated&&learnDeadlineMargin&&flow==frameFlow&&timeline.paced()&&!batch.historyReset&&!batch.fgRecovery){
                                 const auto deadline=timeline.deadline(item.pts100ns),ready=watch->frameReadyObserved[s.next];
                                 if(ready>0&&(ready<=deadline||s.seenUnfinished[s.next]))deadlineMargin.observe(host100ns(),deadline,ready,pairExtra);
                             }

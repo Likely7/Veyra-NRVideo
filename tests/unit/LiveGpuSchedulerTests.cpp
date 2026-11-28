@@ -181,7 +181,8 @@ int main(){
     {
         using veyra::engine::FgCostSettling;
         FgCostSettling settling;const int64_t pair=333667;int64_t t=100000000;
-        check(!settling.observe(false,true,t),"the first evaluation is a steady sample");
+        check(!settling.observe(false,false,t-pair),"the history seed is not an interpolation sample");
+        check(settling.observe(false,true,t),"the first interpolation is a warmup sample");
         check(!settling.observe(false,true,t+=pair),"continuous evaluations are steady samples");
         check(!settling.observe(true,false,t+=pair)&&!settling.observe(false,true,t+=pair),"one skipped pair hides nothing");
         check(!settling.observe(false,false,t+=pair),"a group without FG is no sample of FG");
@@ -206,7 +207,7 @@ int main(){
         t+=FgCostSettling::kIdle100ns;
         settling.observe(false,true,t);settling.observe(false,true,t+=pair);settling.observe(false,true,t+=pair);settling.observe(true,false,t+=pair);
         check(settling.holdUntil()-t==20000000,"the next failed probe starts over at 2 s");
-        settling.reset();check(!settling.holding(t)&&!settling.observe(false,true,t+FgCostSettling::kIdle100ns),"settings revision reset clears everything");
+        settling.reset();check(!settling.holding(t)&&settling.observe(false,true,t+FgCostSettling::kIdle100ns),"settings revision reset rearms the first interpolation");
         // Field log 2026-10-31, 4K30 VFG High on an RTX 5060 Ti: base 3.4 ms with FG and
         // 1.45 ms without, 23.1 ms running continuously, 39.6 ms (fullscreen) or 28.5 ms
         // (window) after 2 s of skipping. One second of FG at 33 ms starts it, as a
@@ -257,6 +258,15 @@ int main(){
     phase.observe(10000201,415000); // legacy 420000 minus the 0.5 ms margin
     check(phase.select(10000202,420000,333333,4)==420000,"slow batch immediately restores conservative phase");
     check(phase.select(21000000,420000,333333,4)==420000,"stale readiness retains the previous phase");
+    {
+        veyra::engine::LivePairLatency steady;
+        constexpr int64_t time=22500000,period=333334,slot=period/2;
+        const auto normal=steady.select(time,350000,period,2);
+        const auto shortPhase=steady.select(time+slot,173000,slot,2,0,false,false);
+        check(normal==350000&&shortPhase==173000,"the first-copy span has its own short-pair phase limit");
+        check(steady.enforceAdmissionFloor(180000,173000,shortPhase)==173000,"the short pair retains its admission limit");
+        check(steady.select(time+3*slot,350000,period,2)==normal,"the next regular pair retains its phase after an isolated correction");
+    }
     {
         using namespace veyra::engine;
         LivePairLatency adaptive;

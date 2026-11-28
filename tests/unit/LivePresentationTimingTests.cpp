@@ -422,6 +422,18 @@ int main(){
     // Caller passes reset||skipped: a span across frames the player dropped is
     // not the source cadence (60 Hz capture, 100 ms gap -> keep 16.7 ms phase).
     check(veyra::engine::capturePairInterval100ns({166667,10000000},60,1000,1100,true)==166667,"skip gap does not stretch the presentation phase");
+    {
+        using veyra::engine::fixedHalfRateRephaseDeadline;
+        constexpr int64_t previous=1000000,slot=166667;
+        // T900 source 1933 -> 1934: the rejected short pair put B 1.60 ms
+        // before the preceding real A.
+        const auto due=fixedHalfRateRephaseDeadline(previous-16000,previous,slot);
+        check(due==previous+slot,"an isolated first-copy correction preserves the preceding presentation phase");
+        check(fixedHalfRateRephaseDeadline(previous+20000,previous,slot)==previous+slot,"an early real frame cannot bunch even when its deadline is ordered");
+        check(fixedHalfRateRephaseDeadline(previous+2*slot,previous,slot)==previous+2*slot,"normally spaced deadlines remain unchanged");
+        check(fixedHalfRateRephaseDeadline(previous,0,slot)==previous,"no prior pair leaves the deadline unchanged");
+        check(fixedHalfRateRephaseDeadline(previous-48000,previous,slot)==previous+slot,"a compressed short-pair deadline keeps one slot of spacing under GPU load");
+    }
     constexpr auto drop=static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Drop);
     constexpr auto resize=static_cast<veyra::pipeline::FrameFlags>(veyra::pipeline::FrameFlagBits::Resize);
     check(veyra::pipeline::breaksHistory(drop),"mailbox overwrite resets temporal history");

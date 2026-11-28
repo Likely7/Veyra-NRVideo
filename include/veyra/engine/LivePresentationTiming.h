@@ -24,6 +24,13 @@ inline int64_t capturePairInterval100ns(pipeline::Rational duration,double nomin
     if(!reset&&std::isfinite(span)&&span>=1&&span<=100)return int64_t(std::llround(span*10000));
     return liveSourceInterval100ns(duration,nominalFps);
 }
+// A first-copy correction can keep two adjacent transport samples. When
+// the short pair only outputs B, place it one slot after the preceding real
+// frame using the preceding pair's presentation phase.
+inline int64_t fixedHalfRateRephaseDeadline(int64_t deadline,int64_t previousDeadline,int64_t transportPeriod){
+    if(previousDeadline<=0||transportPeriod<=0)return deadline;
+    return std::max(deadline,previousDeadline+transportPeriod);
+}
 // File replay has no arrival clock and keeps its PTS anchor; FG keeps the A/B
 // pair phase; streams re-anchor every frame. The default for physical and screen
 // capture without FG is ready-driven. A first-sample anchor would carry a late
