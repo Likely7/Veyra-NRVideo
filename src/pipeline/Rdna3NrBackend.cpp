@@ -83,7 +83,13 @@ struct Rdna3NrBackend::Impl {
 };
 Rdna3NrBackend::Rdna3NrBackend():impl_(std::make_unique<Impl>()){}
 Rdna3NrBackend::~Rdna3NrBackend(){close();}
+bool Rdna3NrBackend::nativeD3d12RuntimeAvailable(const std::filesystem::path& p){
+    std::error_code ec;
+    return std::filesystem::is_regular_file(p/L"veyra_amd_nr_worker.exe",ec)
+        && std::filesystem::is_regular_file(p/L"mochi/dlssnr-amd/aco/rdna3/d3d12_outer.nra",ec);
+}
 bool Rdna3NrBackend::runtimeAvailable(const std::filesystem::path& p){
+    if(nativeD3d12RuntimeAvailable(p))return true;
     std::error_code ec;
     for(const auto* n:{L"veyra_amd_nr_worker.exe",L"nvngx_dlssnr.dll",L"zluda/nvcuda.dll",L"zluda/nvngx.dll",L"zluda/nvapi64.dll",L"zluda/zluda_real.dll",L"kernels/kernels.txt",L"cache/ComputeCache/coverage.txt",L"cache/ComputeCache/zluda2.db"})
         if(!std::filesystem::is_regular_file(p/n,ec))return false;

@@ -91,11 +91,12 @@ static QVariantMap scanEffectCapabilities() {
         {"reason",gpu.deviceId!=0x2f04?QObject::tr("自动 NR 当前仅验证 RTX 5070"):!out.value("nr0").toMap().value("available").toBool()?QObject::tr("当前包缺少此功能的运行组件"):QString{}}};
     add("nr3", H::NvidiaNr50, exists(nr / "nr-original/nvngx_dlssnr.dll"), QObject::tr("需要 NVIDIA RTX 50 / Blackwell"));
     const auto rdna3Directory=(nr/"../amd-nr-rdna3").lexically_normal();
+    const bool nativeD3d12=gpu.rx7000&&pipeline::Rdna3NrBackend::nativeD3d12RuntimeAvailable(rdna3Directory);
     const bool amdNrFiles=gpu.rx7000?pipeline::Rdna3NrBackend::runtimeAvailable(rdna3Directory):exists(nr / "../amd-nr/LmxxfNrRuntime.dll");
     add("nr4", H::AmdNr, amdNrFiles, QObject::tr("需要 AMD RX 7000 / 9000"));
     if(gpu.rx7000&&!amdNrFiles){auto cap=out.value("nr4").toMap();cap["reason"]=QObject::tr("当前包缺少 RX 7000 NR 运行组件");out["nr4"]=cap;}
     wchar_t systemDir[MAX_PATH]{};
-    const bool hipMissing=gpu.rx7000?!pipeline::Rdna3NrBackend::hipRuntimeAvailable():
+    const bool hipMissing=gpu.rx7000?(!nativeD3d12&&!pipeline::Rdna3NrBackend::hipRuntimeAvailable()):
         GetSystemDirectoryW(systemDir, MAX_PATH)&&!exists(std::filesystem::path(systemDir)/"amdhip64_7.dll")&&!GetModuleHandleW(L"amdhip64_7.dll");
     if (hipMissing) {
         auto cap = out.value("nr4").toMap();
