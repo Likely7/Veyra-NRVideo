@@ -36,6 +36,13 @@ public:
     // Records the conversion of that subframe into `output` (UNORDERED_ACCESS,
     // same format as initialize()).
     bool copyOutput(ID3D12GraphicsCommandList*, ID3D12Resource* output, unsigned sub, unsigned of);
+    // Arbitrary fractional phase API for single-pass adaptive target-FPS
+    // interpolation: updates slot `slot` (< slotCount()) with any t in (0, 1),
+    // then runs RIFE and unpacks that slot without reloading the model.
+    unsigned slotCount() const;
+    bool setTimestep(ID3D12GraphicsCommandList*, unsigned slot, float t);
+    bool generateSlot(unsigned slot);
+    bool copyOutputSlot(ID3D12GraphicsCommandList*, ID3D12Resource* output, unsigned slot);
     // Drops the previous frame: the next capture starts a new pair.
     void reset();
     // A previous frame exists, so generate() has a real pair.

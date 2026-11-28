@@ -9,6 +9,7 @@
 #include <wrl/client.h>
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <format>
@@ -322,17 +323,49 @@ bool RifeDmlBackend::capture(ID3D12GraphicsCommandList* list, ID3D12Resource* co
     return true;
 }
 
+unsigned RifeDmlBackend::slotCount() const {
+    return p_->ok ? p_->steps() : 0u;
+}
+
+bool RifeDmlBackend::setTimestep(ID3D12GraphicsCommandList* list, unsigned slot, float t) {
+    auto& p = *p_;
+    if (!p.ok || !list || slot >= p.steps() || !std::isfinite(t) || t <= 0.0f || t >= 1.0f) return false;
+    uint32_t f[8] = {p.width, p.height, p.pw, p.ph, 1, 0, 1, 0};
+    std::memcpy(&f[5], &t, 4);
+    p.dispatch(list, p.pack, f, p.gpu(p.pack, 3), p.gpu(p.pack, 4 + slot), p.pw, p.ph);
+    D3D12_RESOURCE_BARRIER uav{};
+    uav.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+    uav.UAV.pResource = p.times[slot].buffer.Get();
+    list->ResourceBarrier(1, &uav);
+    // Mark fixed integer timestep cache dirty so any later integer generate()
+    // call refills standard k/multiplier planes cleanly on the next capture().
+    p.timesFilled = false;
+    return true;
+}
+
+bool RifeDmlBackend::generateSlot(unsigned slot) {
+    auto& p = *p_;
+    if (!p.ok || !p.havePrevious || slot >= p.steps()) return false;
+    return p.check(p.rt->api->RunWithBinding(p.session, nullptr, p.bindings[p.current * p.steps() + slot]), "RunWithBinding");
+}
+
 bool RifeDmlBackend::generate(unsigned sub, unsigned of) {
     auto& p = *p_;
     const int s = p.step(sub, of);
-    if (!p.ok || !p.havePrevious || s < 0) return false;
-    return p.check(p.rt->api->RunWithBinding(p.session, nullptr, p.bindings[p.current * p.steps() + unsigned(s)]), "RunWithBinding");
+    if (s < 0) return false;
+    return generateSlot(unsigned(s));
 }
 
 bool RifeDmlBackend::copyOutput(ID3D12GraphicsCommandList* list, ID3D12Resource* output, unsigned sub, unsigned of) {
     auto& p = *p_;
     const int s = p.step(sub, of);
-    if (!p.ok || s < 0) return false;
+    if (s < 0) return false;
+    return copyOutputSlot(list, output, unsigned(s));
+}
+
+bool RifeDmlBackend::copyOutputSlot(ID3D12GraphicsCommandList* list, ID3D12Resource* output, unsigned s) {
+    auto& p = *p_;
+    if (!p.ok || !list || !output || s >= p.steps()) return false;
     const auto key = output;
     auto it = p.outputSlots.find(key);
     UINT slot = 0;
@@ -349,7 +382,7 @@ bool RifeDmlBackend::copyOutput(ID3D12GraphicsCommandList* list, ID3D12Resource*
             pipeline::makeUav(p.device, output, p.format, p.cpu(p.unpack, base + 1));
         }
     } else slot = it->second;
-    const UINT base = 1 + (slot * 3 + unsigned(s)) * 2;
+    const UINT base = 1 + (slot * 3 + s) * 2;
     const uint32_t c[8] = {p.width, p.height, p.pw, p.ph, 0, 0, 0, 0};
     // Across a shot change the network would morph two unrelated pictures: the
     // conversion is skipped and the subframe shows the new frame instead.
@@ -399,6 +432,10 @@ bool RifeDmlBackend::initialize(ID3D12Device*, ID3D12CommandQueue*, uint32_t, ui
 bool RifeDmlBackend::capture(ID3D12GraphicsCommandList*, ID3D12Resource*) { return false; }
 bool RifeDmlBackend::generate(unsigned, unsigned) { return false; }
 bool RifeDmlBackend::copyOutput(ID3D12GraphicsCommandList*, ID3D12Resource*, unsigned, unsigned) { return false; }
+unsigned RifeDmlBackend::slotCount() const { return 0; }
+bool RifeDmlBackend::setTimestep(ID3D12GraphicsCommandList*, unsigned, float) { return false; }
+bool RifeDmlBackend::generateSlot(unsigned) { return false; }
+bool RifeDmlBackend::copyOutputSlot(ID3D12GraphicsCommandList*, ID3D12Resource*, unsigned) { return false; }
 void RifeDmlBackend::reset() {}
 bool RifeDmlBackend::hasPair() const { return false; }
 bool RifeDmlBackend::ready() const { return false; }
