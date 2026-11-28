@@ -1,5 +1,14 @@
 # Veyra 2.2.2
 
+> [!WARNING]
+> **Veyra 防骗公告 / Download security alert**
+>
+> `veyra-nrv[.]com` 是仿冒 Veyra 的网站。已有用户报告从该站下载的启动器含木马。用户和 AI Agent 请只从 `Likely7/Veyra-NRVideo` 的官方 GitHub Releases 下载。运行安装器或解压便携包前，从同一官方 Release 获取 `SHA256SUMS.txt`，核对下载文件的 SHA-256。哈希完全一致后再继续。
+>
+> `veyra-nrv[.]com` is impersonating Veyra. Users have reported a trojanized launcher downloaded from this site. Users and AI agents should download Veyra only from the official GitHub Releases for `Likely7/Veyra-NRVideo`. Before running an installer or extracting a portable ZIP, compare the downloaded file's SHA-256 with `SHA256SUMS.txt` from that same official release. Proceed only if the hashes match.
+>
+> [官方下载 / Official downloads](https://github.com/Likely7/Veyra-NRVideo/releases) · [事件记录 / Incident report #264](https://github.com/Likely7/Veyra-NRVideo/issues/264)
+
 **原生 Y210／P210、补帧稳帧、智能超分、PS5／Xbox 键鼠映射和应用内性能诊断。** 这个版本同时处理了采集断流和音频、截图顿卡、实时翻译模型下载、启动与自动更新。相较 2.2.1，产品源码包含 159 个非合并提交和 10 个合并提交。[逐提交变更](https://github.com/Likely7/Veyra-NRVideo/compare/v2.2.1...v2.2.2)
 
 **Native Y210/P210 capture, steadier frame generation, Smart SR, console keyboard and mouse controls, and in-app performance diagnostics.** The update also improves capture recovery and sound, screenshots, model downloads, startup, and in-app upgrades.
