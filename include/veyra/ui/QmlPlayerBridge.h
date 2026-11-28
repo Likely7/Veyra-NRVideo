@@ -1469,6 +1469,7 @@ public:
     Q_INVOKABLE void cancelExport();
     Q_INVOKABLE void pauseExport(bool paused);
     Q_INVOKABLE void quit();
+    Q_INVOKABLE void applyPreparedUpdate();
     Q_INVOKABLE void restartApplication();
     Q_INVOKABLE void restartForOverlayCompatibility();
     // Returns this page's controls to the engine defaults (the design's

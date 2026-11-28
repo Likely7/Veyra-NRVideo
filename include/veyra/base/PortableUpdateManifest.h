@@ -29,7 +29,13 @@ std::optional<DownloadRoute> parseDownloadRoute(const QString& name);
 QUrl releaseApiUrl(DownloadRoute route = DownloadRoute::GitHub);
 QUrl assetUrl(const QString& version, const QString& asset, DownloadRoute route = DownloadRoute::GitHub);
 bool allowedRedirect(const QUrl& url);
+bool allowedApiRedirect(const QUrl& url, DownloadRoute route);
 QString packageAssetName(const QString& version, const QString& flavor);
+QString sanitizeReleaseNotes(const QString& body);
+// A GitHub asset digest is optional. When the release lists assets, an unlisted
+// name or a different sha256 is rejected. The signed manifest remains the checksum.
+bool publishedDigestAgrees(bool inventoryComplete, bool listed, const QByteArray& published,
+                           const QByteArray& actual);
 std::optional<UpdatePackage> readUpdateManifest(
     const QByteArray& envelope, const QString& flavor, const QString& installed,
     const QString& selectedVersion, const QByteArray& publicKey);

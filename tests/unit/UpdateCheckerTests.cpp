@@ -1,5 +1,6 @@
 #include "veyra/ui/UpdateChecker.h"
 #include <QCoreApplication>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -18,7 +19,7 @@ QByteArray release(QString tag = QStringLiteral("v2.0.8"), bool prerelease = fal
 }
 class Server : public QTcpServer {
 public:
-    QByteArray body = release(), request;
+    QByteArray body = release(), request, extra;
     int status = 200, requests = 0;
     bool hang = false;
     Server() {
@@ -34,7 +35,8 @@ public:
                     socket->disconnect(socket, &QTcpSocket::readyRead, nullptr, nullptr);
                     ++requests; request = *header;
                     if (hang) return;
-                    socket->write("HTTP/1.1 " + QByteArray::number(status) + " Test\r\nContent-Type: application/json\r\nContent-Length: "
+                    socket->write("HTTP/1.1 " + QByteArray::number(status) + " Test\r\n" + extra
+                                  + "Content-Type: application/json\r\nContent-Length: "
                                   + QByteArray::number(body.size()) + "\r\nConnection: close\r\n\r\n" + body);
                     socket->disconnectFromHost();
                 });
@@ -69,6 +71,26 @@ private slots:
         QTest::newRow("other-repo") << QStringLiteral("2.0.7") << release("v2.0.8", false, false, "https://github.com/other/repo/releases/tag/v2.0.8") << 200 << QStringLiteral("invalid-release");
         QTest::newRow("mismatched-tag") << QStringLiteral("2.0.7") << release("v2.0.8", false, false, "https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.9") << 200 << QStringLiteral("invalid-release");
         QTest::newRow("overflow") << QStringLiteral("2.0.7") << release("v2.0.2147483648") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("leading-zero") << QStringLiteral("2.0.7") << release("v2.0.01") << 200 << QStringLiteral("invalid-release");
+        QTest::newRow("above-65535") << QStringLiteral("2.0.7") << release("v2.0.65536") << 200 << QStringLiteral("invalid-release");
+        // A name that cannot be a published file is ignored. It must not hide a
+        // real release, and it is not an installable asset name.
+        QTest::newRow("asset-traversal") << QStringLiteral("2.0.7")
+            << QByteArray("{\"tag_name\":\"v2.0.8\",\"draft\":false,\"prerelease\":false,"
+                          "\"html_url\":\"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8\","
+                          "\"assets\":[{\"name\":\"../evil.zip\"}]}")
+            << 200 << QStringLiteral("available");
+        QTest::newRow("odd-name-beside-real-asset") << QStringLiteral("2.0.7")
+            << QByteArray("{\"tag_name\":\"v2.0.8\",\"draft\":false,\"prerelease\":false,"
+                          "\"html_url\":\"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8\","
+                          "\"assets\":[{\"name\":\"Release Notes.txt\"},{\"name\":\"Veyra-portable-update-v1.json\","
+                          "\"digest\":\"sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]}")
+            << 200 << QStringLiteral("available");
+        QTest::newRow("bad-digest") << QStringLiteral("2.0.7")
+            << QByteArray("{\"tag_name\":\"v2.0.8\",\"draft\":false,\"prerelease\":false,"
+                          "\"html_url\":\"https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.0.8\","
+                          "\"assets\":[{\"name\":\"Veyra-portable-update-v1.json\",\"digest\":\"sha256:ABCD\"}]}")
+            << 200 << QStringLiteral("invalid-release");
         QTest::newRow("unknown-local") << QStringLiteral("dev") << release() << 200 << QStringLiteral("invalid-release");
         QTest::newRow("404") << QStringLiteral("2.0.7") << release() << 404 << QStringLiteral("http-404-network-203");
         QTest::newRow("rate-limit") << QStringLiteral("2.0.7") << release() << 403 << QStringLiteral("http-403-network-201");
@@ -125,6 +147,79 @@ private slots:
         checker.startAutomaticCheck(); checker.check(true);
         QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
         QTest::qWait(2700); QCOMPARE(server.requests, 1);
+    }
+    void rateLimitRedirectAndFixture() {
+        {
+            Server server;
+            server.status = 429;
+            server.extra = "retry-after: 7\r\n";
+            UpdateChecker checker("2.0.7", nullptr, server.endpoint(), 1000);
+            QSignalSpy done(&checker, &UpdateChecker::completed);
+            checker.check(true);
+            QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+            QCOMPARE(done[0][0].toString(), QString("rate-limited"));
+            QCOMPARE(checker.outcome(), QString("rate-limited"));
+            QVERIFY(checker.latestVersion().isEmpty());
+        }
+        {
+            Server server;
+            server.status = 403;
+            server.extra = "x-ratelimit-remaining: 0\r\n";
+            UpdateChecker checker("2.0.7", nullptr, server.endpoint(), 1000);
+            QSignalSpy done(&checker, &UpdateChecker::completed);
+            checker.check(false);
+            QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+            QCOMPARE(done[0][0].toString(), QString("rate-limited"));
+        }
+        {
+            Server server;
+            server.status = 302;
+            server.body.clear();
+            server.extra = "Location: https://evil.example/latest\r\n";
+            UpdateChecker checker("2.0.7", nullptr, server.endpoint(), 1000);
+            QSignalSpy done(&checker, &UpdateChecker::completed);
+            checker.check(true);
+            QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+            QCOMPARE(done[0][0].toString(), QString("redirect-rejected"));
+            QVERIFY(checker.latestVersion().isEmpty());
+            QVERIFY(!checker.statusText().contains(QStringLiteral("evil.example")));
+        }
+        {
+            Server server;
+            server.body = QByteArray("[{\"tag_name\":\"v9.9.9\",\"draft\":false,\"prerelease\":false}]");
+            server.extra = "Link: <https://api.github.com/repos/Likely7/Veyra-NRVideo/releases?page=2>; rel=\"next\"\r\n";
+            UpdateChecker checker("2.0.7", nullptr, server.endpoint(), 1000);
+            QSignalSpy done(&checker, &UpdateChecker::completed), available(&checker, &UpdateChecker::updateAvailable);
+            checker.check(true);
+            QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+            QCOMPARE(done[0][0].toString(), QString("invalid-release"));
+            QCOMPARE(available.size(), 0);
+            QCOMPARE(server.requests, 1);
+        }
+        {
+            Server server;
+            server.extra = "Link: <https://api.github.com/repos/Likely7/Veyra-NRVideo/releases?page=2>; rel=\"next\"\r\n";
+            UpdateChecker checker("2.0.7", nullptr, server.endpoint(), 1000);
+            QSignalSpy done(&checker, &UpdateChecker::completed);
+            checker.check(false);
+            QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+            QCOMPARE(done[0][0].toString(), QString("available"));
+            QCOMPARE(server.requests, 1);
+        }
+        QFile fixture(QStringLiteral(VEYRA_UPDATE_FIXTURE));
+        QVERIFY(fixture.open(QIODevice::ReadOnly));
+        Server server;
+        server.body = fixture.readAll();
+        UpdateChecker checker("2.0.7", nullptr, server.endpoint(), 1000);
+        QSignalSpy done(&checker, &UpdateChecker::completed);
+        checker.check(true);
+        QTRY_COMPARE_WITH_TIMEOUT(done.size(), 1, 3000);
+        QCOMPARE(done[0][0].toString(), QString("available"));
+        QCOMPARE(checker.latestVersion(), QString("2.0.8"));
+        QVERIFY(checker.notesSummary().contains(QStringLiteral("Fixes capture audio")));
+        QVERIFY(checker.notesSummary().contains(QStringLiteral("<b>")));
+        QVERIFY(!checker.notesSummary().contains(QChar(1)));
+        QCOMPARE(checker.portableUpdate()->blockReason(), QString("not-managed"));
     }
     void destructionInFlight() {
         Server server; server.hang = true;
