@@ -7,6 +7,8 @@ struct PreviewView {
     float zoom=1,centerX=.5f,centerY=.5f;
     // Preserve UI IDs 0=fit, 1=native pixels, 2=fill; append stretch/ratios.
     int mode=0;
+    int adaptivePreservation=87;
+    int adaptiveZoom=0;
     double displayAspect=0;
     // Container display rotation, clockwise. View centers live in the oriented
     // picture; processing/protection and estimated motion keep coded coordinates.
@@ -39,7 +41,11 @@ struct PreviewView {
         if(cw<=0||ch<=0||iw<=0||ih<=0)return {0,0};
         const float orientedH=(quarterTurns()&1)?iw:ih;
         if(mode==1)return {(quarterTurns()&1?ih:iw)*zoom,orientedH*zoom};
-        if(mode==3)return {cw*zoom,ch*zoom};
+        if(mode==7){
+        const float az=1.0f+float(std::clamp(adaptiveZoom,0,15))/100.0f;
+        return {cw*zoom*az,ch*zoom*az};
+    }
+    if(mode==3)return {cw*zoom,ch*zoom};
         const float virtualW=float(aspect(iw,ih))*orientedH;
         const float scale=(mode==2?std::max(cw/virtualW,ch/orientedH):std::min(cw/virtualW,ch/orientedH))*zoom;
         return {virtualW*scale,orientedH*scale};

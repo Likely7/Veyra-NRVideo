@@ -645,6 +645,8 @@ struct QmlPlayerBridge::Impl {
     bool compareBase = false;
     double compareSplit = 0.5;
     int aspectMode = 0, aspectApplied = 0;
+    int adaptivePreservation = 87;
+    int adaptiveZoom = 0;
     uint64_t aspectSession = 0;
     std::jthread gpuSampler;                 // joined before gpuUtil goes away
     std::filesystem::path prefsFile() const { return dataDir / L"qml-preferences.v1.json"; }

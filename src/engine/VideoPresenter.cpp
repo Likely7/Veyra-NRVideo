@@ -455,6 +455,22 @@ bool VideoPresenter::present(gfx::D3D12DeviceContext& ctx,gfx::CommandSlotRing& 
         dims[13]=float(effective.peakCapNits);
     }
     dims[14]=0.0f;dims[15]=0.0f;
+
+    // Adaptive Ultrawide V1: native NVIDIA presentation.
+    if(view.mode==7 && !sink_.xess() && view.quarterTurns()==0){
+        const float sourceAspect =
+            float(graph.workWidth()) / float(graph.workHeight());
+
+        const float targetAspect =
+            float(rc.right) / float(rc.bottom);
+
+        const float stretch = targetAspect / sourceAspect;
+
+        if(stretch > 1.0f){
+            dims[14] = (float(std::clamp(view.adaptivePreservation,0,100))/100.0f) * (1.0f - 1.0f / stretch);
+            dims[15] = 1.0f;
+        }
+    }
     if(traceDovi){
         // Gated trace: proves the per-frame curve reached the blit constants.
         // Throttled like the source-side dovi-probe so a long file stays small.
