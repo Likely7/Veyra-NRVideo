@@ -26,7 +26,7 @@
 <!-- veyra-creator-and-tutorials:end -->
 
 <!-- veyra-main-pr-integration -->
-**Veyra 2.2.1 已发布** · [下载和完整更新](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
+**Veyra 2.2.2** · [下载和完整更新](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2)
 
 
 <p align="center"><img src="assets/veyra-wordmark-sun.gif" alt="Veyra NR · 透明字标与太阳动效" width="480"></p>
@@ -47,7 +47,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 **Veyra Windows 免安装软件包累计下载 17.8 万+ 次**（截至 2026-11-18 美西时间，178,996 次，包含早期 `.7z` 软件包及虚拟摄像头版本）；**GitHub Release 全部附件累计下载 21.4 万+ 次**（214,277 次，包含源码包、校验文件及图片等）。[GitHub Releases](https://github.com/Likely7/Veyra-NRVideo/releases) · 下载次数不是独立用户数。
 
-[下载 Veyra 2.2.1](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
+[下载 Veyra 2.2.2](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2) · [📖 英文使用文档 / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki) · [完整更新（中文/English）](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2) · [反馈](https://github.com/Likely7/Veyra-NRVideo/issues)
 
 
 **本机新增效果开销示例：** RTX5070，4K标准测试抗锯齿FXAA约0.15ms、SMAA/MLAA约0.30ms；最终网格美颜一张脸1080p约0.93ms、4K约1.42ms。不同素材/显卡会变化；AMD新模型没有本机实卡性能百分比。[条件与限制](docs/history/releases/RELEASE_NOTES_2.1.0.md)。
@@ -56,13 +56,13 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 **📖 [English Documentation / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)**：供海外用户查看英文安装指南、采集卡兼容性、常见故障与群友实测经验。
 
-## 最新更新 · 2.2.1
+## 最新更新 · 2.2.2
 
-- 采集冷启动先播原画，改善采集恢复，增加两档 60→30，修复奇数裁剪录制和即时回放。
-- 增加视频降噪、NVIDIA NIS、AMD VideoSR、ANR 下载和 RIFE 支持，改进准星及 HUD 保护。
-- 实时字幕出句更快，样式可调。修复 PS5 串流、虚拟摄像机安装和播放控件问题。
+- 原生 Y210／P210，修复固定 60→30 的 VFG 帧节奏，改善采集重连和声音。
+- Lanczos-2 AA 缩小、智能超分，以及 PS5／Xbox 图形化键鼠映射。
+- 新增应用内性能诊断，改善更新进度和字幕模型下载。
 
-[查看完整更新与实测数据](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
+[查看完整更新与实测数据](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2)
 
 ## 功能重点
 
@@ -76,7 +76,7 @@ Windows 视频、图片、采集卡与串流增强工具。在同一处理链组
 
 ## 下载、启动与升级
 
-1. 按 Veyra 实际使用的显卡下载 [2.2.1 安装器或便携 ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)。安装版直接运行安装器，便携版用 Windows 或 7-Zip 完整解压到可写的新目录，运行根目录的 **Veyra.exe**。运行只需一个显卡包，源码包仅供重编译。
+1. 按 Veyra 实际使用的显卡下载 [2.2.2 安装器或便携 ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2)。安装版直接运行安装器，便携版用 Windows 或 7-Zip 完整解压到可写的新目录，运行根目录的 **Veyra.exe**。运行只需一个显卡包，源码包仅供重编译。
 2. Windows 11 x64、DirectX 12；无需安装 Qt、Python 或开发 SDK。显卡/采集卡驱动仍需安装。后端各有硬件要求，主要实测显卡为 RTX 5070。
 3. 先关闭效果确认基础画面和声音，再逐项开启。8K、多层 NR 和补帧会增加显存与处理时间，不保证所有组合实时运行。
 4. **1.4.4 教程不再适用。** 2.0 使用独立配置目录，保留旧版用于回退；不要直接复制旧 `veyra.ini`、整个 `runtime_local` 或混装 DLL 覆盖新版。
@@ -182,7 +182,7 @@ ANR 自写适配源码可追溯，公开包继续遵守上游 Beta 运行组件�
 
 [RX 7000 实验 NR 接入](docs/AMD_RDNA3_NR_PLAN_2026-10-29.md)支持 Small / Original 与内部百分比，保留 RX 9000 和 NVIDIA 路径。本地协议和界面回归已完成，RX 7000 实卡推理尚待验收。
 
-Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.2.1 构建与对应源码](docs/BUILD_2.2.1.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
+Veyra 原有代码 GPL-3.0；含 Chiaki 串流的组合程序同时适用 AGPL-3.0 与上游 OpenSSL 例外（见 licenses/remoteplay）。[第三方来源与许可](THIRD_PARTY_NOTICES.md)、[2.2.2 构建与对应源码](docs/BUILD_2.2.2.md)。源码与运行库/模型分离；Release manifest 用于发行审计，不用哈希锁阻止用户替换 DLL。
 
 ## 支持与反馈
 

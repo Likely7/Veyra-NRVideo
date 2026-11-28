@@ -30,7 +30,7 @@
 <!-- veyra-creator-and-tutorials:end -->
 
 <!-- veyra-main-pr-integration -->
-**Veyra 2.2.1** · [Download and release notes](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
+**Veyra 2.2.2** · [Download and release notes](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2)
 
 
 ### Real-time GPU Video Enhancement for Windows
@@ -117,13 +117,13 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 **📖 [English User Guide / GitHub Wiki](https://github.com/Likely7/Veyra-NRVideo/wiki)** — installation, software setup, capture card compatibility, troubleshooting, and community-tested solutions. [中文知识库（飞书）](https://qcnv4i7tnd7l.feishu.cn/wiki/space/7688258025282358221?ccm_open_type=lark_wiki_spaceLink&open_tab_from=wiki_home).
 
-## Latest update · 2.2.1
+## Latest update · 2.2.2
 
-- Capture shows the original picture while enhancement loads. Improved capture recovery, two 60-to-30 modes, and odd-crop recording and replay.
-- Added video denoise, NVIDIA Image Scaling, AMD VideoSR, downloadable ANR and RIFE support. Refined crosshair and HUD compositing.
-- Faster live captions with adjustable styling, plus fixes for PS5 streaming, virtual camera setup and player controls.
+- Native Y210/P210 capture, steadier VFG at fixed 60-to-30, and better capture recovery and sound.
+- Lanczos-2 AA downscaling, Smart SR and hands-on PS5/Xbox keyboard and mouse mapping.
+- Performance diagnostics, signed in-app update progress, and fallback downloads for translation models.
 
-[Full 2.2.1 changes and test results](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1)
+[Full 2.2.2 changes and test results](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2)
 
 ## Highlights
 
@@ -137,7 +137,7 @@ Turn local video, capture cards and game streaming into one real-time GPU enhanc
 
 ## Install and upgrade
 
-Download the [Veyra 2.2.1 Setup EXE or portable ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.1) for Veyra's active GPU. Run Setup, or extract the portable ZIP with Windows or 7-Zip into a new writable folder and launch **Veyra.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
+Download the [Veyra 2.2.2 Setup EXE or portable ZIP](https://github.com/Likely7/Veyra-NRVideo/releases/tag/v2.2.2) for Veyra's active GPU. Run Setup, or extract the portable ZIP with Windows or 7-Zip into a new writable folder and launch **Veyra.exe**. You need one GPU package to run the application; source assets are only for rebuilding. Windows 11 x64 and DirectX 12 are required; Qt and approved runtimes are included, while GPU/capture drivers are installed separately. Backend hardware requirements vary; most local tests used an RTX 5070.
 
 Start with effects off, check picture/sound, then enable effects individually. High resolution, layered NR and frame generation increase GPU/VRAM requirements.
 
@@ -242,7 +242,7 @@ ANR host source is traceable; beta runtime files are excluded under upstream res
 
 Developer entry: [current documentation](docs/README.md), [build and validation](docs/DEVELOPMENT.md), [UI code responsibilities](docs/ARCHITECTURE.md). Historical task notes are indexed separately.
 
-Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.2.1 build and corresponding source](docs/BUILD_2.2.1.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
+Original code: GPL-3.0. The combined Chiaki streaming application is also subject to AGPL-3.0 and its OpenSSL exception (licenses/remoteplay). [Third-party notices](THIRD_PARTY_NOTICES.md), [2.2.2 build and corresponding source](docs/BUILD_2.2.2.md). Source Git excludes proprietary runtimes/models. Release manifests audit publisher files, not hash-lock user DLL replacements.
 
 ## Support
 
