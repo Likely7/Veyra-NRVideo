@@ -48558,17 +48558,17 @@
    "ru": "; см. журнал для деталей"
   },
   {
-   "zh": "；默认“高”，同时运行游戏或其他重负载程序变慢时可改为“普通”",
+   "zh": "。默认使用“实时”。同时运行游戏或其他重负载程序变慢时，可选择“普通”。",
    "src": "qml/SettingsPage.qml",
-   "zh-TW": "；預設“高”，同時執行遊戲或其他重負載程式變慢時可改為“普通”",
-   "en": "; High by default. If a game or other heavy program running alongside slows down, choose Normal",
-   "ja": "；既定は「高」。同時に動かすゲームや重い処理が遅くなる場合は「通常」に変更してください",
-   "ko": "; 기본값은 높음입니다. 함께 실행하는 게임이나 무거운 작업이 느려지면 보통으로 바꾸세요.",
-   "es": "; Alto por defecto. Si un juego u otro programa pesado que corre al lado desacelera, elija Normal",
-   "fr": "; Haute par défaut. Si un jeu ou un autre programme lourd à côté ralentit, choisissez Normal",
-   "de": "Hoch standardmäßig. Wenn ein Spiel oder ein anderes schweres Programm, das nebenbei läuft, langsamer wird, wählen Sie Normal",
-   "pt-BR": "; Alta por padrão. Se um jogo ou outro programa pesado em execução ao lado desacelera, escolha Normal",
-   "ru": "; высокий по умолчанию. Если игра или другая тяжелая программа, работающая рядом, замедляется, выберите Normal."
+   "zh-TW": "。預設使用「即時」。同時執行遊戲或其他重負載程式變慢時，可選擇「普通」。",
+   "en": ". Realtime by default. If a game or other demanding app slows down, choose Normal.",
+   "ja": "。既定は「リアルタイム」です。同時に実行しているゲームや負荷の高いアプリが遅くなる場合は「通常」を選択してください。",
+   "ko": ". 기본값은 실시간입니다. 함께 실행하는 게임이나 무거운 앱이 느려지면 보통을 선택하세요.",
+   "es": ". Tiempo real por defecto. Si un juego u otra aplicación exigente se ralentiza, elija Normal.",
+   "fr": ". Temps réel par défaut. Si un jeu ou une autre application gourmande ralentit, choisissez Normal.",
+   "de": ". Standardmäßig Echtzeit. Wenn ein Spiel oder eine andere anspruchsvolle App langsamer wird, wählen Sie Normal.",
+   "pt-BR": ". Tempo real por padrão. Se um jogo ou outro aplicativo exigente ficar mais lento, escolha Normal.",
+   "ru": ". По умолчанию используется режим «Реальное время». Если игра или другое ресурсоёмкое приложение замедляется, выберите «Обычный»."
   }
  ]
 }

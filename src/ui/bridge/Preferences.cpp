@@ -496,9 +496,9 @@ void QmlPlayerBridge::applyPreference(const QString& key) {
     }
     if(key==QLatin1String("gpuPriority")){
         const auto value=impl_->prefString("gpuPriority");
-        // Unset means High (user default, 2026-11-13); saved choices stay explicit.
+        // Fresh profiles request the Realtime scheduling class.
         gfx::requestGpuPriority(value==QLatin1String("normal")?gfx::GpuPriority::Normal:
-                                value==QLatin1String("realtime")?gfx::GpuPriority::Realtime:gfx::GpuPriority::High);
+                                value==QLatin1String("high")?gfx::GpuPriority::High:gfx::GpuPriority::Realtime);
     }
     if(key==QLatin1String("overlayCompat"))updateLiveCompanionCompat();
     if(key==QLatin1String("fullscreenMemoryProtection")){impl_->engine.setFullscreenMemoryProtection(impl_->prefBool("fullscreenMemoryProtection",false));emit snapshotChanged();}
