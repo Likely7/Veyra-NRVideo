@@ -64,7 +64,7 @@ ColumnLayout {
     }
     readonly property var sizeChoices: [
         {id:"2",label:"480p"}, {id:"3",label:"720p"}, {id:"4",label:"900p"},
-        {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""}, {id:"1",label:qsTr("原生"),disabled:amdNr,note:amdNr ? qsTr("AMD NR 最高 1080p 像素预算") : ""},
+        {id:"0",label:qsTr("1080p · 默认")}, {id:"5",label:"1440p",note:amdNr ? qsTr("AMD NR 最高 1440p 像素预算") : ""}, {id:"1",label:qsTr("原生"),note:amdNr ? qsTr("AMD NR 最高 1440p 像素预算") : ""},
         {id:"6",label:qsTr("自动（按负载）"),disabled:autoReason.length>0,note:autoReason},
         {id:"manual",label:qsTr("手动")}
     ]
@@ -184,7 +184,7 @@ ColumnLayout {
     Text {
         Layout.fillWidth: true
         visible: editor.manualSize
-        text: editor.amdNr ? qsTr("手动比例以最高 1080p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。")
+        text: editor.amdNr ? qsTr("手动比例以最高 1440p 预算内的输入为基准；适用于预览与视频导出，输出尺寸不变。")
                           : qsTr("手动比例缩放该层输入的宽高；50% 约为四分之一像素。适用于预览与视频导出，输出尺寸不变。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap
@@ -199,7 +199,7 @@ ColumnLayout {
     }
     Text {
         Layout.fillWidth: true
-        text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1080p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
+        text: editor.amdNr ? qsTr("AMD NR 预览与视频导出最高按内部 1440p 处理，视频保持输出尺寸；图片导出仍需符合模型尺寸预算。")
                           : qsTr("预览与视频导出都按所选内部分辨率处理，保留比例且不放大小输入，输出尺寸不变；图片导出仍完整处理。")
         color: Theme.t3; font.family: Theme.fontUi; font.pixelSize: 11
         wrapMode: Text.WordWrap

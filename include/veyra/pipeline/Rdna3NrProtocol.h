@@ -20,6 +20,6 @@ struct Init {
 struct Evaluate {Header h{kMagic,kVersion,sizeof(Evaluate),Op::Evaluate,0};float intensity=1; /* host transfer strength, not feature recreation */ uint32_t reset=1;};
 struct Reply {Header h{kMagic,kVersion,sizeof(Reply),Op::Reply,0};int32_t result=0;std::array<char,768> message{};};
 constexpr bool validHeader(const Header& h,Op op,uint32_t bytes){return h.magic==kMagic&&h.version==kVersion&&h.op==op&&h.bytes==bytes;}
-constexpr bool validExtent(uint32_t w,uint32_t h){return w&&h&&w<=2560&&h<=1080&&uint64_t(w)*h<=1920ull*1080;}
+constexpr bool validExtent(uint32_t w,uint32_t h){return w&&h&&w<=2560&&h<=1440&&uint64_t(w)*h<=2560ull*1440;}
 static_assert(std::is_trivially_copyable_v<Init> && sizeof(Init)<16384);
 }

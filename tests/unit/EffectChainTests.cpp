@@ -2053,8 +2053,8 @@ int main() {
             StageRequest r;r.nr=true;r.exportJob=true;r.nvidiaAdapter=false;r.amdNr=true;r.width=source.width;r.height=source.height;
             pipeline::EnhanceGraphDesc d;const auto plan=describeStages(r,frozen,d);
             check(d.enableNr&&plan.output==source&&d.workWidth==source.width&&d.workHeight==source.height,"high-resolution AMD export keeps native output and enabled NR");
-            check(d.nrLayersExtent.size()==2&&std::all_of(d.nrLayersExtent.begin(),d.nrLayersExtent.end(),[](auto e){return e.height<=1080&&uint64_t(e.width)*e.height<=1920ull*1080;}),"every offline AMD model input fits the actual budget");
-            check(d.validateFixedExecutionPlan().empty()&&d.nrLayersSizePolicy[0]==pipeline::NrSizePolicy::Realtime,"bounded AMD processing matches the fixed shared execution plan");
+            check(d.nrLayersExtent.size()==2&&std::all_of(d.nrLayersExtent.begin(),d.nrLayersExtent.end(),[](auto e){return e.height<=1440&&uint64_t(e.width)*e.height<=2560ull*1440;}),"every offline AMD model input fits the 1440p budget");
+            check(d.validateFixedExecutionPlan().empty()&&d.nrLayersSizePolicy[0]==pipeline::NrSizePolicy::P1440,"bounded AMD processing matches the fixed shared execution plan");
             s.nrRuntime=NrRuntime::NvidiaOriginal;for(auto& n:s.nrLayers)n.runtime=s.nrRuntime;
             r.nvidiaAdapter=true;r.amdNr=false;describeStages(r,s,d);
             check(d.nrLayersExtent[0]==source&&d.nrLayersExtent[1]==source,"NVIDIA export preserves native NR input dimensions");
